@@ -48,6 +48,7 @@ If a status doc says something is green but a live command fails, the live comma
 | `docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md` | Primary member tier and role access authority | Product      |
 | `docs/03_product/DISCORD_COMMAND_CATALOG.md`      | Live Discord command registry                 | Product      |
 | `docs/03_product/*CONTRACT.md`                    | Product-surface contracts                     | Product      |
+| `docs/03_product/*/intent.md`                     | Product intent — what a product is for and must do; indexes the canonical contracts that govern it, reconciles contradictions by correcting them in place, and marks gaps. Not a contract, not a gate, introduces no threshold. Where it disagrees with a canonical contract, the contract wins. | Product      |
 | `docs/discord/*.md`                               | Discord message, embed, and cadence contracts | Product      |
 | `docs/03_contracts/*.md`                          | Domain consumer contracts                     | Architecture |
 

@@ -1,0 +1,160 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1857
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1857
+  objective: Register the app-root CLAUDE.md files and docs/03_product in the
+    governance lane allowlist
+  acceptance_criteria:
+    - |-
+      ## Why
+
+      `.lane/lanes/governance.yml` enumerates every path a governance/doc-reconciliation lane may touch. Three paths a doc lane legitimately needs are in none of its globs:
+
+      * `apps/api/CLAUDE.md`
+      * `apps/smart-form/CLAUDE.md`
+      * `docs/03_product/**`
+
+      `packages/db/CLAUDE.md` and `packages/contracts/CLAUDE.md` were admitted by UTV2-1199, but no app-root `CLAUDE.md` ever was — even though those are the files an agent working in `apps/` reads first. And the product-intent layer that sits between `docs/mission/**` (admitted by [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude)) and `docs/05_operations/**` was in no lane's allowlist, so it could be pointed at and never authored.
+
+      ## The concrete cost, measured
+
+      PR #1521 ([UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds), T2, Smart Form product intent) has all four required checks green and is blocked on exactly one file. `File scope lock` on head `aec346c6e` reports a single violation:
+
+      ```
+      - .lane/lanes/governance.yml is not declared by UTV2-1843 (claude/utv2-1843-smart-form-product-intent)
+      ```
+
+      `file_scope_lock` is pinned at lane-start and cannot be widened by an agent, so [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) cannot register the paths it needs from inside its own lane. Dropping the hunk does not help: the three paths are genuinely absent from `main`, so the failure would simply move onto them via `Lane authority`. The only two exits are a CODEOWNERS `scope-override/v1` pinned to an exact head, or landing the registration separately first — which is what this issue does.
+
+      ## Scope
+
+      Add the three entries to `allowed_path_globs` in `.lane/lanes/governance.yml`, with the same bounded shape and inline justification UTV2-1199 used. **Byte-identical to the hunk already reviewed on #1521**, so that once this merges, resyncing #1521 makes the file drop out of its changed-file set entirely — no revert commit and no proof re-anchor on that lane.
+
+      Admits no glob over `apps/**`. Bounded to the two named files plus `docs/03_product/**`.
+
+      ## Not in scope
+
+      No change to merge authority, the merge gate, CODEOWNERS, branch protection, tiering, or any required check. This is an allowlist registration of documentation paths, the same mechanism [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude) used for `docs/mission/**` and that `.lane/lanes/governance.yml`'s own comments record eight prior times.
+
+      ## Classification
+
+      `classifyMechanicalMinimum(['.lane/lanes/governance.yml'])` returns `{"mechanicalMinimum":"T3","matches":[]}` — no Tier C prefix or exact match. **T3.**
+
+      ## Acceptance
+
+      1. The three entries are present in `allowed_path_globs` on `main`.
+      2. `git diff` of `.lane/lanes/governance.yml` between this branch and #1521's branch is empty, so a resync of #1521 removes the file from its changed-file set.
+      3. After this merges and #1521 resyncs, #1521's `File scope lock` and `Lane authority` are green with no scope override.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why
+      `.lane/lanes/governance.yml` enumerates every path a governance/doc-reconciliation lane may touch. Three paths a doc lane legitimately needs are in none of its globs:
+
+      * `apps/api/CLAUDE.md`
+      * `apps/smart-form/CLAUDE.md`
+      * `docs/03_product/**`
+
+      `packages/db/CLAUDE.md` and `packages/contracts/CLAUDE.md` were admitted by UTV2-1199, but no app-root `CLAUDE.md` ever was — even though those are the files an agent working in `apps/` reads first. And the product-intent layer that sits between `docs/mission/**` (admitted by [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude)) and `docs/05_operations/**` was in no lane's allowlist, so it could be pointed at and never authored.
+    - |-
+      The concrete cost, measured
+      PR #1521 ([UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds), T2, Smart Form product intent) has all four required checks green and is blocked on exactly one file. `File scope lock` on head `aec346c6e` reports a single violation:
+
+      ```
+      - .lane/lanes/governance.yml is not declared by UTV2-1843 (claude/utv2-1843-smart-form-product-intent)
+      ```
+
+      `file_scope_lock` is pinned at lane-start and cannot be widened by an agent, so [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) cannot register the paths it needs from inside its own lane. Dropping the hunk does not help: the three paths are genuinely absent from `main`, so the failure would simply move onto them via `Lane authority`. The only two exits are a CODEOWNERS `scope-override/v1` pinned to an exact head, or landing the registration separately first — which is what this issue does.
+    - >-
+      Scope
+
+      Add the three entries to `allowed_path_globs` in
+      `.lane/lanes/governance.yml`, with the same bounded shape and inline
+      justification UTV2-1199 used. **Byte-identical to the hunk already
+      reviewed on #1521**, so that once this merges, resyncing #1521 makes the
+      file drop out of its changed-file set entirely — no revert commit and no
+      proof re-anchor on that lane.
+
+
+      Admits no glob over `apps/**`. Bounded to the two named files plus
+      `docs/03_product/**`.
+    - |-
+      Not in scope
+      No change to merge authority, the merge gate, CODEOWNERS, branch protection, tiering, or any required check. This is an allowlist registration of documentation paths, the same mechanism [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude) used for `docs/mission/**` and that `.lane/lanes/governance.yml`'s own comments record eight prior times.
+    - >-
+      Classification
+
+      `classifyMechanicalMinimum(['.lane/lanes/governance.yml'])` returns
+      `{"mechanicalMinimum":"T3","matches":[]}` — no Tier C prefix or exact
+      match. **T3.**
+    - >-
+      Acceptance
+
+      1. The three entries are present in `allowed_path_globs` on `main`.
+
+      2. `git diff` of `.lane/lanes/governance.yml` between this branch and
+      #1521's branch is empty, so a resync of #1521 removes the file from its
+      changed-file set.
+
+      3. After this merges and #1521 resyncs, #1521's `File scope lock` and
+      `Lane authority` are green with no scope override.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the
+    title: Register the app-root CLAUDE.md files and docs/03_product in the
+      governance lane allowlist
+    description: |-
+      ## Why
+
+      `.lane/lanes/governance.yml` enumerates every path a governance/doc-reconciliation lane may touch. Three paths a doc lane legitimately needs are in none of its globs:
+
+      * `apps/api/CLAUDE.md`
+      * `apps/smart-form/CLAUDE.md`
+      * `docs/03_product/**`
+
+      `packages/db/CLAUDE.md` and `packages/contracts/CLAUDE.md` were admitted by UTV2-1199, but no app-root `CLAUDE.md` ever was — even though those are the files an agent working in `apps/` reads first. And the product-intent layer that sits between `docs/mission/**` (admitted by [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude)) and `docs/05_operations/**` was in no lane's allowlist, so it could be pointed at and never authored.
+
+      ## The concrete cost, measured
+
+      PR #1521 ([UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds), T2, Smart Form product intent) has all four required checks green and is blocked on exactly one file. `File scope lock` on head `aec346c6e` reports a single violation:
+
+      ```
+      - .lane/lanes/governance.yml is not declared by UTV2-1843 (claude/utv2-1843-smart-form-product-intent)
+      ```
+
+      `file_scope_lock` is pinned at lane-start and cannot be widened by an agent, so [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) cannot register the paths it needs from inside its own lane. Dropping the hunk does not help: the three paths are genuinely absent from `main`, so the failure would simply move onto them via `Lane authority`. The only two exits are a CODEOWNERS `scope-override/v1` pinned to an exact head, or landing the registration separately first — which is what this issue does.
+
+      ## Scope
+
+      Add the three entries to `allowed_path_globs` in `.lane/lanes/governance.yml`, with the same bounded shape and inline justification UTV2-1199 used. **Byte-identical to the hunk already reviewed on #1521**, so that once this merges, resyncing #1521 makes the file drop out of its changed-file set entirely — no revert commit and no proof re-anchor on that lane.
+
+      Admits no glob over `apps/**`. Bounded to the two named files plus `docs/03_product/**`.
+
+      ## Not in scope
+
+      No change to merge authority, the merge gate, CODEOWNERS, branch protection, tiering, or any required check. This is an allowlist registration of documentation paths, the same mechanism [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude) used for `docs/mission/**` and that `.lane/lanes/governance.yml`'s own comments record eight prior times.
+
+      ## Classification
+
+      `classifyMechanicalMinimum(['.lane/lanes/governance.yml'])` returns `{"mechanicalMinimum":"T3","matches":[]}` — no Tier C prefix or exact match. **T3.**
+
+      ## Acceptance
+
+      1. The three entries are present in `allowed_path_globs` on `main`.
+      2. `git diff` of `.lane/lanes/governance.yml` between this branch and #1521's branch is empty, so a resync of #1521 removes the file from its changed-file set.
+      3. After this merges and #1521 resyncs, #1521's `File scope lock` and `Lane authority` are green with no scope override.
+    captured_at: 2026-09-08T11:46:22.697Z
+    description_sha256: 6585499fed1e230ebaae2b1a84ed4ca36468609f5b442e87f0f9f90117f37b2f
+  contract_hash: 675637dd383b32228a5bb22b312148fbb5810e591bd9633e930f210d57634abd

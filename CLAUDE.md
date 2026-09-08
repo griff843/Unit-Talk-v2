@@ -158,6 +158,23 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Executor result schema | `docs/05_operations/schemas/executor-result-v1.md` |
 | PM verdict schema | `docs/05_operations/schemas/pm-verdict-v1.md` |
 | Proof template | `docs/06_status/proof/PROOF-TEMPLATE.md` |
+| **Smart Form product intent** | `docs/03_product/smart-form/intent.md` |
+
+### Product intent — required reading when you touch a product surface
+
+A product's intent document is required reading before any task that changes how that product
+behaves for its operator — **including backend work** in `apps/api`, `packages/domain` or the
+pipeline that changes what the product can do or what it records. Read it alongside the canonical
+contracts it indexes, and carry the applicable acceptance criteria into any delegated packet.
+
+| Product | Intent |
+|---|---|
+| Smart Form (operator pick intake) | `docs/03_product/smart-form/intent.md` |
+| Command Center | *written when that product is next worked* |
+| Pipeline (grading, settlement, CLV) | *written when that product is next worked* |
+
+These are product intent, not gates. They add no check, no approval artifact and no lane type, and
+no work waits on one being written.
 
 ---
 
