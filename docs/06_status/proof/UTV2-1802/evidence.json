@@ -7,19 +7,19 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "aab575f64311070f069ce961ed4da1f2d13da5dd",
+    "verified_source_sha": "d7bf9b06fe459dbb49275517bbada79a1d7a5621",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS \u2014 tsc -b tsconfig.json exits 0 with no diagnostics, re-measured at this anchor after the origin/main resync.",
-      "pnpm_test": "PASS \u2014 tests 6004, pass 6004, fail 0, exit 0, re-measured at this anchor after the origin/main resync. This supersedes the 6043 recorded at the previous anchor ef38423d; the two were measured against different bases and no attempt is made here to reconcile them. The count is the sum of 100 suite blocks in which tests == pass and fail == 0 throughout, and it includes this lane's own two new files \u2014 apps/command-center/src/lib/data/management-sql.test.ts and storage-health.test.ts are matched by the src/lib/data/*.test.ts glob in test:command-center, verified by locating three of their subtest names in the run output.",
-      "pnpm_test_db": "set-by-ci \u2014 the previous receipt was bound to the pre-resync head and no longer certifies what will merge. The required `Writable DB proof (staging only)` job re-runs on this head; that run is the authoritative result and no local PASS is claimed.",
-      "r_level_check": "PASS \u2014 `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head aab575f64` reports Verdict: PASS, Changed files: 11, Rules matched: operator-ui. Explicit SHAs are required: the script forces cwd to the root checkout, so --head HEAD would measure main rather than this lane.",
-      "pnpm_verify": "set-by-ci \u2014 the previous receipt (head 8f6dbcd17, run 34001056027) is bound to a head that is no longer this PR's. The required `verify` check re-runs on this head and is the authoritative result."
+      "pnpm_type_check": "PASS — tsc -b tsconfig.json exits 0 with no diagnostics, re-measured at this anchor after the second origin/main resync.",
+      "pnpm_test": "PASS — tests 6096, pass 6096, fail 0, re-measured at this anchor. This supersedes the 6004 recorded at the previous anchor aab575f64 and the 6043 before that; all three were measured against different bases and no attempt is made to reconcile them. The delta from 6004 is imported main work, not this lane's diff, which is unchanged since aab575f64.",
+      "pnpm_test_db": "set-by-ci — the required `Writable DB proof (staging only)` job re-runs on this head; that run is the authoritative result and no local PASS is claimed.",
+      "r_level_check": "PASS — `npx tsx scripts/ci/r-level-check.ts --base c3679fda71de97c29e3750d92046943365345e96 --head d7bf9b06fe459dbb49275517bbada79a1d7a5621` reports Verdict: PASS, Changed files: 11, Rules matched: operator-ui — identical to the previous anchor's receipt, which is the expected result since the resync imported main work and changed no lane file. Explicit SHAs are required: the script forces cwd to the root checkout, so --head HEAD would measure main rather than this lane.",
+      "pnpm_verify": "set-by-ci — the required `verify` check re-runs on this head and is the authoritative result. The previous receipt (head 8f6dbcd17, run 34001056027) is bound to a head that is two resyncs stale."
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-06T23:17:48.000Z",
-    "anchor_note": "aab575f64311070f069ce961ed4da1f2d13da5dd is the merge of origin/main into this branch, made with `pnpm ops:merge-wrapper git-merge-main` because the PR was 10 commits BEHIND and strict freshness means it cannot merge in that state; merging BEHIND would be an admin exemption rather than permission. It is the anchor because the imported delta carries apps/smart-form/**, scripts/ops/** and .github/workflows/deploy.yml, none of which are in PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43), so the merge commit is now the last commit on this branch outside those prefixes. The previous anchor ef38423dc0c9650db928ee2ea55d5d97063b9590 could not be kept by argument. Every receipt above was re-executed at this commit rather than carried forward. The resync changed no lane file and no scope declaration, and `Lane authority` and `File scope lock` \u2014 both red before it \u2014 went green on this head with no other edit, which establishes that those two reds were artifacts of the BEHIND state rather than real scope violations. Commits made after this one are confined to docs/06_status/proof/ and docs/06_status/lanes/ and do not move the anchor."
+    "bound_at": "2026-09-08T11:20:00.000Z",
+    "anchor_note": "d7bf9b06fe459dbb49275517bbada79a1d7a5621 is the merge of origin/main into this branch, made with `pnpm ops:merge-wrapper git-merge-main` because the PR was BEHIND again and strict freshness means it cannot merge in that state; merging BEHIND would be an admin exemption rather than permission. `main-sync` refuses a diverged branch outright — it will not choose a history-rewriting verb — so the explicit git-merge-main verb is the sanctioned path and it preserves every existing SHA. It is the anchor because the imported delta carries apps/**, packages/** and scripts/** paths, none of which are in PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43), so the merge commit is the last commit on this branch outside those prefixes. It supersedes aab575f64311070f069ce961ed4da1f2d13da5dd, which superseded ef38423dc0c9650db928ee2ea55d5d97063b9590. Every receipt above was re-executed at this commit rather than carried forward. The resync changed no lane file and no scope declaration, and the lane's own diff is byte-identical to what it was at the previous anchor. Commits made after this one are confined to docs/06_status/proof/ and docs/06_status/lanes/ and do not move the anchor."
   },
   "static_proof": {
     "status": "PASS",
@@ -31,7 +31,7 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test",
-      "tests": 6043,
+      "tests": 6096,
       "failures": 0
     },
     "targeted_test": {
@@ -46,28 +46,27 @@
       "command": "four inversions applied one at a time to apps/command-center/src/lib/data/storage-health.ts, each followed by a byte-for-byte restore, re-running npx tsx --test src/lib/data/storage-health.test.ts",
       "expected": "each inversion fails the assertion that names the property it breaks",
       "observed": "baseline 10 pass / 0 fail. (1) remove assertManagementPlaneEnabled() from fetchManagementJson -> 9 pass / 1 fail, 'fetchManagementJson lost its management-plane gate'. (2) remove it from runManagementQuery -> 9 pass / 1 fail, 'runManagementQuery lost its management-plane gate'. (3) remove the getStorageHealth short-circuit -> 9 pass / 1 fail, 'getStorageHealth lost its management-plane gate'. (4) weaken the predicate from === 'true' to any non-empty string -> 9 pass / 1 fail, 'is shut for every value that is not exactly \"true\"'. After restoration git diff reports no change and the suite returns 10 pass / 0 fail.",
-      "detail": "Inversion 4 is what distinguishes 'a check exists' from 'the right check exists'; it catches the common regression where a gate is simplified to a truthiness test and silently opens on \"false\". Inversion 3 is caught by the structural assertion and NOT by the behavioural absence-of-request assertion \u2014 with the short-circuit gone, authentication still refuses first and no request is issued for that other reason. That is stated explicitly so the bundle is not read as claiming the behavioural test alone is guard-sensitive."
+      "detail": "Inversion 4 is what distinguishes 'a check exists' from 'the right check exists'; it catches the common regression where a gate is simplified to a truthiness test and silently opens on \"false\". Inversion 3 is caught by the structural assertion and NOT by the behavioural absence-of-request assertion — with the short-circuit gone, authentication still refuses first and no request is issued for that other reason. That is stated explicitly so the bundle is not read as claiming the behavioural test alone is guard-sensitive."
     },
     "r_level": {
       "status": "PASS",
-      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "observed": "Verdict: PASS; 9 changed files; rules matched: operator-ui"
+      "command": "npx tsx scripts/ci/r-level-check.ts --base c3679fda71de97c29e3750d92046943365345e96 --head d7bf9b06fe459dbb49275517bbada79a1d7a5621",
+      "observed": "Verdict: PASS; Changed files: 11; Rules matched: operator-ui"
     },
     "local_verify_limitation": {
       "status": "EXPECTED",
-      "detail": "pnpm verify cannot complete on this checkout by design. Its `ci:assert-staging` step refuses off-CI \u2014 'REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)' \u2014 because local.env pins SUPABASE_URL to http://127.0.0.1:1 under containment. Every step before it passed: env:check, lint, type-check, build, and pnpm test at 6043/6043. The authoritative pnpm verify result is the required `verify` check in CI, recorded in ci_verify below."
+      "detail": "pnpm verify cannot complete on this checkout by design. Its `ci:assert-staging` step refuses off-CI — 'REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)' — because local.env pins SUPABASE_URL to http://127.0.0.1:1 under containment. Every step before it passed: env:check, lint, type-check, build, and pnpm test at 6096/6096. The authoritative pnpm verify result is the required `verify` check in CI, recorded in ci_verify below."
     },
     "ci_verify": {
-      "status": "PASS",
+      "status": "set-by-ci",
       "check": "verify",
-      "head_sha": "8f6dbcd17c62bbd3ed34b3aedf4a176196f2d5d2",
-      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34001056027/job/101400905372",
-      "detail": "Run 34001056027. The head it ran on differs from verified_source_sha ef38423dc only by 8f6dbcd17, a lane-manifest-only commit (docs/06_status/lanes/UTV2-1802.json, 3 insertions 3 deletions) that binds the manifest to PR #1513. No source file differs between the two, so the anchor remains the last non-proof commit that changed code."
+      "head_sha": "d7bf9b06fe459dbb49275517bbada79a1d7a5621",
+      "detail": "The previous receipt (head 8f6dbcd17, run 34001056027) is bound to a head two resyncs stale and is not carried forward. The required `verify` check is re-running on d7bf9b06fe459dbb49275517bbada79a1d7a5621; that run is the authoritative result."
     }
   },
   "runtime_proof": {
     "kind": "app-runtime",
-    "harness": "The change is confined to apps/command-center's data layer. It opens no database connection, runs no migration, changes no schema and alters no repository call; its entire runtime effect is on outbound HTTPS requests to https://api.supabase.com/. getStorageHealth is a privileged boundary whose first statement is `await assertPrivilegedRequestAuthenticated()`, which resolves the current Next request through headers() and fails closed outside a request scope, so a unit test cannot drive its body end to end. next/headers cannot be module-mocked here either: node:test's mock.module requires --experimental-test-module-mocks, which this runner does not set \u2014 measured, not assumed ('import_node_test.mock.module is not a function'). Rather than add an unauthenticated export purely to make the boundary testable \u2014 a real security regression bought for a convenience \u2014 the property is established behaviourally on a globalThis.fetch recorder and structurally per chokepoint, in the idiom privileged-boundary-guard.test.ts already uses. No live-database observation is offered and none is claimed.",
+    "harness": "The change is confined to apps/command-center's data layer. It opens no database connection, runs no migration, changes no schema and alters no repository call; its entire runtime effect is on outbound HTTPS requests to https://api.supabase.com/. getStorageHealth is a privileged boundary whose first statement is `await assertPrivilegedRequestAuthenticated()`, which resolves the current Next request through headers() and fails closed outside a request scope, so a unit test cannot drive its body end to end. next/headers cannot be module-mocked here either: node:test's mock.module requires --experimental-test-module-mocks, which this runner does not set — measured, not assumed ('import_node_test.mock.module is not a function'). Rather than add an unauthenticated export purely to make the boundary testable — a real security regression bought for a convenience — the property is established behaviourally on a globalThis.fetch recorder and structurally per chokepoint, in the idiom privileged-boundary-guard.test.ts already uses. No live-database observation is offered and none is claimed.",
     "queries": [
       {
         "name": "a shut gate issues zero management-plane requests",

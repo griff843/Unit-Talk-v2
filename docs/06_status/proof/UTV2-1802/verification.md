@@ -13,7 +13,7 @@ Tier: T1
 Lane type: delivery-ui
 Branch: claude/utv2-1802-cc-management-sql-readonly
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1513
-Head SHA: aab575f64311070f069ce961ed4da1f2d13da5dd
+Head SHA: d7bf9b06fe459dbb49275517bbada79a1d7a5621
 result: pass
 
 ## ASSERTIONS:
@@ -29,7 +29,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on the lane worktree at head `aab575f64311070f069ce961ed4da1f2d13da5dd`.
+Measured on the lane worktree at head `d7bf9b06fe459dbb49275517bbada79a1d7a5621`.
 
 ```
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -63,17 +63,17 @@ $ npx tsx --test src/lib/privileged-boundary-guard.test.ts
 
 $ pnpm test
 (aggregate across every workspace suite)
-# tests 6004
-# pass 6004
+# tests 6096
+# pass 6096
 # fail 0
 ```
 
 ## Verification
 - [x] `pnpm type-check`: PASS -- `tsc -b tsconfig.json` exits 0 with no diagnostics
-- [x] `pnpm test`: PASS -- 6004 tests, 6004 pass, 0 fail across every workspace suite, re-executed at the post-resync anchor
+- [x] `pnpm test`: PASS -- 6096 tests, 6096 pass, 0 fail across every workspace suite, re-executed at the post-resync anchor
 - [x] `pnpm --filter @unit-talk/command-center test`: PASS -- 507/507, 0 fail
-- [x] `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head aab575f64`: PASS -- Changed files: 11 -- `operator-ui` matched; its required `qa-experience-report` artifact is present in the repository. That artifact predates this lane and satisfies the rule mechanically; it is **not** verification of this change, and is not offered as such.
-- [x] `pnpm verify`: PASS in CI, not runnable locally -- the required `verify` check succeeded at PR head `8f6dbcd17c62bbd3ed34b3aedf4a176196f2d5d2` in run 34001056027, job 101400905372. It cannot complete on this checkout: its `ci:assert-staging` step refuses off-CI because `local.env` pins `SUPABASE_URL` to `http://127.0.0.1:1` under containment. Every step before that refusal passed locally.
+- [x] `npx tsx scripts/ci/r-level-check.ts --base c3679fda71de97c29e3750d92046943365345e96 --head d7bf9b06fe459dbb49275517bbada79a1d7a5621`: PASS -- Changed files: 11 -- `operator-ui` matched; its required `qa-experience-report` artifact is present in the repository. That artifact predates this lane and satisfies the rule mechanically; it is **not** verification of this change, and is not offered as such.
+- [x] `pnpm verify`: authoritative result is the required `verify` check re-running on `d7bf9b06fe459dbb49275517bbada79a1d7a5621`; the previous receipt (head `8f6dbcd17c62bbd3ed34b3aedf4a176196f2d5d2`, run 34001056027) is bound to a head two resyncs stale and is **not** carried forward. It cannot complete on this checkout: its `ci:assert-staging` step refuses off-CI because `local.env` pins `SUPABASE_URL` to `http://127.0.0.1:1` under containment. Every step before that refusal passed locally.
 
 ## Runtime Verification
 
@@ -204,9 +204,17 @@ does not exist yet.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1513
 Approved PR head: pending merge
-Execution SHA: aab575f64311070f069ce961ed4da1f2d13da5dd
+Execution SHA: d7bf9b06fe459dbb49275517bbada79a1d7a5621
 
 ## Re-anchor after the origin/main resync
+
+**This section now describes the SECOND resync.** The first moved the anchor
+`bcd9e678b` → `aab575f64311070f069ce961ed4da1f2d13da5dd`; the branch went BEHIND again while
+awaiting a verdict, and the second moved it `aab575f64` → `d7bf9b06fe459dbb49275517bbada79a1d7a5621`.
+Both were performed the same way and for the same reason, and the receipts below are the
+second one's — re-executed, not carried forward. The head-pinning tax this records is the one
+`docs/mission/plan.md` measures: the readiness ledger commits to `main` on a schedule, so a PR
+waiting on a head-pinned verdict ages against commits that changed no code.
 
 This PR was 10 commits BEHIND `origin/main`. Under `strict: true` it cannot merge in that
 state, and merging BEHIND would be an admin exemption rather than permission, so
@@ -214,26 +222,30 @@ state, and merging BEHIND would be an admin exemption rather than permission, so
 refuses to choose a history-rewriting verb on its own; `git-merge-main` preserves history
 and SHAs, which matters on a branch carrying a proof bundle).
 
-The head moved `bcd9e678b` → `aab575f64`. The imported delta carries `apps/smart-form/**`,
-`scripts/ops/**` and `.github/workflows/deploy.yml`, none of them under
-`PROOF_ONLY_PREFIXES`, so the merge commit becomes this branch's last non-proof commit and
-the anchor had to move with it. **Every receipt above was re-executed at the new anchor
-rather than carried forward:**
+The first resync moved the head `bcd9e678b` → `aab575f64`; the second moved it
+`aab575f64` → `d7bf9b06f`. Each imported delta carries non-proof paths — the second one
+`apps/api/src/**`, `apps/smart-form/**`, `.lane/lanes/**` and `docs/05_operations/**`, none of
+them under `PROOF_ONLY_PREFIXES` — so each merge commit becomes this branch's last non-proof
+commit and the anchor has to move with it. **Every receipt above was re-executed at the
+current anchor rather than carried forward:**
 
 - `pnpm type-check` — exit 0, no diagnostics.
-- `pnpm test` — tests 6004, pass 6004, fail 0, exit 0.
-- `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head aab575f64` — `Verdict: PASS`,
+- `pnpm test` — tests 6096, pass 6096, fail 0.
+- `npx tsx scripts/ci/r-level-check.ts --base c3679fda71de97c29e3750d92046943365345e96 --head d7bf9b06fe459dbb49275517bbada79a1d7a5621` — `Verdict: PASS`,
   `Changed files: 11`, `Rules matched: operator-ui`.
 
-**On the test count.** It reads 6004 here and 6043 at the previous anchor. The two were
+**On the test count.** It reads 6096 here, 6004 at the previous anchor and 6043 before that. The three were
 measured against different bases and no attempt is made to reconcile them; the figure
 recorded is the one measured at the anchor this bundle binds. It was checked for
-completeness rather than assumed: the run comprises 100 suite blocks in which `# tests`
-equals `# pass` and `# fail` is 0 throughout, and it includes this lane's own two new test
-files. Those filenames do not appear in the output because TAP prints subtest names rather
-than paths — they are matched by the `src/lib/data/*.test.ts` glob in `test:command-center`,
-confirmed by locating three of their subtest names ("a plain SELECT is accepted", "a
-trailing semicolon is the conventional terminator...", "a CTE is accepted") in the run.
+completeness rather than assumed: the aggregate is the sum over every suite block, and
+`# fail` sums to 0 with `# tests` equal to `# pass`, so no suite is silently contributing a
+failure. It includes this lane's own two new test files. Those filenames do not appear in the
+output because TAP prints subtest names rather than paths — they are matched by the
+`src/lib/data/*.test.ts` glob in `test:command-center`, re-confirmed at **this** anchor by
+running `pnpm --filter @unit-talk/command-center test` (507 tests / 507 pass / 0 fail) and
+locating three of their subtest names in it: `ok 78 - a plain SELECT is accepted`,
+`ok 79 - a trailing semicolon is the conventional terminator, not a second statement`,
+`ok 80 - a CTE is accepted`.
 
 **A consequence worth recording rather than hiding.** `Lane authority` and `File scope lock`
 were both red before the resync and both went green on the new head with no other edit —
