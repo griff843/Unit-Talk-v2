@@ -919,6 +919,14 @@ function stubParticipantsClient(rows: StubParticipantRow[]) {
             if (column === 'in:external_id') {
               return (value as string[]).includes(row.external_id ?? '');
             }
+            // UTV2-1854: the proof-fixture exclusion is a pushed-down predicate,
+            // so the stub must evaluate it the way PostgREST would -- otherwise
+            // these tests would silently stop covering the filtered read.
+            if (column === 'is:metadata->>proofIssue' && value === null) {
+              const metadata = row.metadata as Record<string, unknown> | null;
+              const marker = metadata ? metadata['proofIssue'] : undefined;
+              return marker === undefined || marker === null;
+            }
             return (row as unknown as Record<string, unknown>)[column] === value;
           }),
         );
@@ -947,6 +955,9 @@ function stubParticipantsClient(rows: StubParticipantRow[]) {
         }) as never),
         in: chain(((column: string, values: unknown) => {
           record.filters.push([`in:${column}`, values]);
+        }) as never),
+        is: chain(((column: string, value: unknown) => {
+          record.filters.push([`is:${column}`, value]);
         }) as never),
         order: chain(() => {}),
         limit: chain(((count: number) => {

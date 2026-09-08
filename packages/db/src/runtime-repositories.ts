@@ -2385,6 +2385,10 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         (row) =>
           row.participant_type === 'player' &&
           row.sport === sportId &&
+          // UTV2-1854 PROOF_FIXTURE_EXCLUSION -- applied before `slice`, for the
+          // same reason the database path pushes it into the query: a fixture
+          // must not consume the limit and displace a real player.
+          !isConfirmedProofFixture(row.metadata) &&
           row.display_name.toLowerCase().includes(lowerQuery),
       )
       .slice(0, limit)
@@ -6699,7 +6703,13 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     // every sport as having no teams -- a regression in the availability surface,
     // introduced by a search change, and invisible to any test that passes a query.
     const needle = normalizeSearchText(query);
-    const rows = data ?? [];
+    // UTV2-1854 PROOF_FIXTURE_EXCLUSION. No team participant carries the marker
+    // today (measured against production 2026-09-07: 0 of 124), so this is a
+    // no-op on current data -- it is present so a fixture team cannot become
+    // selectable or set `teamsAvailable` the way the 26 player fixtures would
+    // have. This read is unlimited and bounded by the sport's 30-32 teams, so
+    // filtering in process here is exact rather than page-dependent.
+    const rows = (data ?? []).filter((row) => !isConfirmedProofFixture(row.metadata));
     if (needle.length === 0) {
       return rows
         .filter((row) => typeof row.display_name === 'string' && row.display_name.length > 0)
@@ -6765,6 +6775,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       .select('id,display_name,metadata')
       .eq('participant_type', 'player')
       .eq('sport', sportId)
+      // UTV2-1854 PROOF_FIXTURE_EXCLUSION -- pushed down, not post-filtered, so
+      // fixtures cannot consume `limit` and push a real player out of the page.
+      .is(PROOF_FIXTURE_METADATA_PATH, null)
       .ilike('display_name', `%${query}%`)
       .order('display_name')
       .limit(limit);
@@ -9350,6 +9363,48 @@ function teamSearchHaystacks(row: Record<string, unknown>): string[] {
  * player participants carry the key and all 1497 resolve; 26 carry none, and those
  * are represented as a null team rather than a guessed one.
  */
+/**
+ * UTV2-1854 PROOF_FIXTURE_EXCLUSION.
+ *
+ * A participant row whose `metadata` carries a `proofIssue` value is a proof
+ * fixture: a row created by a T1 proof run to exercise a code path, not an
+ * observation of a real athlete. 26 such rows exist in production (13 from
+ * UTV2-614 and 13 from UTV2-618, created 2026-05-28/29, before the staging
+ * isolation work moved proof runs off production). Rows are preserved -- this
+ * excludes them from operator-facing selection and from availability, and
+ * deletes nothing.
+ *
+ * The predicate is deliberately the marker, NOT "has no team". Measured against
+ * production 2026-09-07: the 26 fixtures are *exactly* the 26 players with no
+ * `team_external_id`, and there are zero legitimate team-less players today. So
+ * a "drop players with no team" implementation would agree with every current
+ * production observation and still be wrong -- it would silently drop the first
+ * legitimate team-less player ingestion produces. Those are two different
+ * predicates that today's data cannot tell apart, which is why the preservation
+ * case is asserted against a constructed row rather than a production one.
+ *
+ * A `proofIssue` that is JSON `null` names no issue and is therefore not a
+ * *confirmed* fixture; such a row is kept and, if it carries no team key, gets
+ * the same honest `teamId: null` as any other. `PROOF_FIXTURE_METADATA_PATH`
+ * below is the PostgREST spelling of this same predicate, kept beside it so the
+ * pushed-down and in-process forms cannot drift.
+ */
+function isConfirmedProofFixture(metadata: unknown): boolean {
+  if (typeof metadata !== 'object' || metadata === null) return false;
+  const value = (metadata as Record<string, unknown>)['proofIssue'];
+  return value !== undefined && value !== null;
+}
+
+/**
+ * The pushed-down form of `isConfirmedProofFixture`, used with `.is(..., null)`.
+ * Player search applies `limit` in the query, so this exclusion MUST be a
+ * predicate rather than a post-filter: filtering after the fact would let
+ * fixtures consume the limit and push real players out of the result, which is
+ * a false negative of exactly the class the UTV2-1672 sport-scope guard exists
+ * to prevent.
+ */
+const PROOF_FIXTURE_METADATA_PATH = 'metadata->>proofIssue';
+
 function readTeamExternalId(metadata: unknown): string | null {
   if (typeof metadata !== 'object' || metadata === null) return null;
   const value = (metadata as Record<string, unknown>)['team_external_id'];

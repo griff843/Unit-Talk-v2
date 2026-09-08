@@ -115,6 +115,10 @@ import {
   type RepositoryBundle,
 } from '@unit-talk/db';
 import { submitPickController } from './controllers/submit-pick-controller.js';
+import {
+  handleGetReferenceDataAvailability,
+  handleSearchPlayers,
+} from './handlers/reference-data.js';
 
 function hasSupabaseEnv(): boolean {
   try {
@@ -649,6 +653,151 @@ test(
 // therefore share selection/eventName without the acceptance being observed as an
 // idempotent replay. Assert the refusal REASON, not merely a non-201, so a
 // refusal for an unrelated reason cannot pass as this control.
+
+// ===========================================================================
+// UTV2-1854 PROOF_FIXTURE_EXCLUSION -- demonstrated through the search/API path.
+//
+// 26 rows in the production `participants` table carry `metadata.proofIssue`
+// (13 `UTV2-614`, 13 `UTV2-618`, created 2026-05-28/29, before proof runs were
+// moved off production). They are proof fixtures, not athletes, and before this
+// lane they were ordinary selectable players and could set `playersAvailable`
+// on their own. No row is deleted anywhere -- the repair is exclusion from
+// operator-facing selection and from availability.
+//
+// The predicate is the MARKER, never "has no team". Measured read-only against
+// production 2026-09-07: the 26 marked rows are *exactly* the 26 players with no
+// `team_external_id`, and there are zero legitimate team-less players today. So
+// a "drop players with no team" implementation would agree with every current
+// production observation and still be wrong. That is why the preservation case
+// below is a CONSTRUCTED row rather than a production one: today's data cannot
+// tell the two predicates apart, and only a row that carries no marker AND no
+// team can.
+//
+// Both rows live in this run's own sport namespace, so the two availability
+// assertions are answers about these rows and not about whatever else the
+// database happens to hold.
+// ===========================================================================
+
+/**
+ * Narrows an `ApiResponse` to its success payload, failing loudly with the error
+ * body rather than letting an unexpected error response reach a `deepEqual`
+ * against `[]` and pass as an exclusion result.
+ */
+function okData<T>(body: { ok: true; data: T } | { ok: false; error: { code: string; message: string } }): T {
+  if (!body.ok) {
+    throw new Error(`expected a success response, got ${body.error.code}: ${body.error.message}`);
+  }
+  return body.data;
+}
+
+const FIXTURE_SPORT = `UTV21854-${RUN_ID}`;
+const FIXTURE_PLAYER_QUERY = 'utv2-1854';
+
+async function createFixturePlayer(
+  suffix: string,
+  metadata: Record<string, unknown>,
+): Promise<string> {
+  const externalId = `utv2-1854-${RUN_ID}-${suffix}`;
+  const resp = await fetch(`${supabaseUrl}/rest/v1/participants`, {
+    method: 'POST',
+    headers: { ...authHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify([
+      {
+        external_id: externalId,
+        participant_type: 'player',
+        sport: FIXTURE_SPORT,
+        display_name: `UTV2-1854 ${suffix} ${RUN_ID}`,
+        metadata,
+      },
+    ]),
+  });
+  const body = (await resp.json()) as Array<{ id: string; external_id: string }>;
+  assert.ok(resp.ok, `fixture player creation failed: ${JSON.stringify(body)}`);
+  assert.equal(body.length, 1);
+  fixtureParticipantExternalIds.push(body[0]!.external_id);
+  return body[0]!.id;
+}
+
+test(
+  'UTV2-1854 live DB: a confirmed proof fixture is neither selectable nor able to establish availability',
+  { skip: skipReason },
+  async () => {
+    // Marked exactly as the 26 production rows are: a non-null `proofIssue`.
+    await createFixturePlayer('fixture-player', {
+      proofIssue: 'UTV2-1854',
+      proof_run: RUN_ID,
+    });
+
+    const search = await handleSearchPlayers(
+      { sport: FIXTURE_SPORT, q: FIXTURE_PLAYER_QUERY },
+      repositories.referenceData,
+    );
+    assert.equal(search.status, 200);
+    assert.deepEqual(
+      okData(search.body),
+      [],
+      'a confirmed proof fixture must not appear as a selectable player',
+    );
+
+    // The second half of the requirement, and it is a distinct claim: exclusion
+    // from search would be worthless if the fixture still made the sport look
+    // covered. `handleGetReferenceDataAvailability` derives `playersAvailable`
+    // from `searchPlayers(sport, '', 100)`, so this exercises the same
+    // repository method through the empty-query availability probe.
+    const availability = await handleGetReferenceDataAvailability(
+      { sport: FIXTURE_SPORT },
+      repositories.referenceData,
+    );
+    assert.equal(availability.status, 200);
+    assert.equal(
+      okData(availability.body).playersAvailable,
+      false,
+      'a proof fixture must not establish operational player availability',
+    );
+  },
+);
+
+test(
+  'UTV2-1854 live DB: a legitimate player with no team relationship is preserved and reports teamId null',
+  { skip: skipReason },
+  async () => {
+    // No `proofIssue` and no `team_external_id`. Under a "drop players with no
+    // team" implementation this row disappears; under the marker predicate it
+    // survives with an honest `teamId: null`. The fixture from the previous test
+    // is still present in this sport, so this also asserts the two are separated
+    // rather than the whole sport being either kept or dropped.
+    const legitimateId = await createFixturePlayer('teamless-player', {
+      proof_run: RUN_ID,
+    });
+
+    const search = await handleSearchPlayers(
+      { sport: FIXTURE_SPORT, q: FIXTURE_PLAYER_QUERY },
+      repositories.referenceData,
+    );
+    assert.equal(search.status, 200);
+    const rows = okData(search.body);
+    assert.deepEqual(
+      rows.map((row) => row.participantId),
+      [legitimateId],
+      'the unmarked team-less player must be kept and the marked one still excluded',
+    );
+    assert.equal(
+      rows[0]!.teamId,
+      null,
+      'a missing team relationship is reported honestly, never fabricated',
+    );
+
+    const availability = await handleGetReferenceDataAvailability(
+      { sport: FIXTURE_SPORT },
+      repositories.referenceData,
+    );
+    assert.equal(
+      okData(availability.body).playersAvailable,
+      true,
+      'a legitimate player -- team-less or not -- does establish availability',
+    );
+  },
+);
 
 after(async () => {
   // A SEPARATE hook from the arming-event cleanup above, deliberately: that one

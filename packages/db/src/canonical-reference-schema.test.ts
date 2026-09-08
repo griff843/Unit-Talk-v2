@@ -25,7 +25,11 @@ test('canonical schema metadata includes expected owners for backbone tables', (
   assert.equal(assignments.owner, 'api');
 });
 
-import { DatabaseReferenceDataRepository } from './runtime-repositories.js';
+import {
+  DatabaseReferenceDataRepository,
+  InMemoryReferenceDataRepository,
+} from './runtime-repositories.js';
+import { V1_REFERENCE_DATA } from '@unit-talk/contracts';
 
 // ---------------------------------------------------------------------------
 // UTV2-1854 — reference-data search must answer from `participants`
@@ -63,13 +67,28 @@ function recordingBuilder(
   calls: Array<[string, unknown[]]>,
   rows: Array<Record<string, unknown>>,
 ): unknown {
-  const result = { data: rows, error: null };
+  // PostgREST semantics are emulated for exactly one predicate: the
+  // `metadata->>proofIssue IS NULL` proof-fixture exclusion. Recording the call
+  // proves the predicate is *sent*; applying it proves the rows it excludes are
+  // the ones intended. Without this the exclusion tests would assert against
+  // rows the real database would never have returned.
+  let current = rows;
+  const result = () => ({ data: current, error: null });
   const builder: Record<string, unknown> = {
-    then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
+    then: (resolve: (value: ReturnType<typeof result>) => unknown) =>
+      Promise.resolve(result()).then(resolve),
   };
-  for (const method of ['select', 'eq', 'ilike', 'order', 'in', 'limit']) {
+  for (const method of ['select', 'eq', 'ilike', 'order', 'in', 'is', 'limit']) {
     builder[method] = (...args: unknown[]) => {
       calls.push([method, args]);
+      if (method === 'is' && args[0] === 'metadata->>proofIssue' && args[1] === null) {
+        current = current.filter((row) => {
+          const metadata = row.metadata;
+          if (typeof metadata !== 'object' || metadata === null) return true;
+          const marker = (metadata as Record<string, unknown>)['proofIssue'];
+          return marker === undefined || marker === null;
+        });
+      }
       return builder;
     };
   }
@@ -142,7 +161,7 @@ test('searchPlayers resolves teamId through participants.external_id and reports
   const repository = harness((table) => {
     assert.equal(table, 'participants');
     const builder: Record<string, unknown> = {};
-    for (const method of ['select', 'eq', 'ilike', 'order']) {
+    for (const method of ['select', 'eq', 'is', 'ilike', 'order']) {
       builder[method] = () => builder;
     }
     builder.limit = () =>
@@ -228,4 +247,159 @@ test('searchTeams finds a team by its city and its abbreviation, not only its ni
     }>;
     assert.deepEqual(results.map((row) => row.participantId), expected, `query "${query}"`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1854 PROOF_FIXTURE_EXCLUSION
+//
+// 26 player participants in production carry `metadata.proofIssue` (13 from
+// UTV2-614, 13 from UTV2-618, created 2026-05-28/29 before staging isolation
+// moved proof runs off production). They are real rows in the observation layer
+// but they are not athletes, so they must not be selectable and must not set
+// `playersAvailable`. Nothing is deleted; the rows are preserved and excluded.
+//
+// The measurement that shapes these tests: those 26 fixtures are EXACTLY the 26
+// players with no `team_external_id`, and production contains zero legitimate
+// team-less players. The two predicates are indistinguishable in current data,
+// so the preservation case below is built from a constructed row -- a test that
+// used production's shape could not tell a correct implementation from one that
+// drops every team-less player.
+// ---------------------------------------------------------------------------
+
+test('searchPlayers excludes confirmed proof fixtures as a query predicate, before the limit', async () => {
+  const calls: Array<[string, unknown[]]> = [];
+  const repository = harness(() => recordingBuilder(calls, []));
+
+  await repository.searchPlayers('NBA', 'a', 10);
+
+  const isCall = calls.find(([m, a]) => m === 'is' && a[0] === 'metadata->>proofIssue');
+  assert.ok(isCall, 'the fixture exclusion must be pushed into the query');
+  assert.equal(isCall![1][1], null);
+
+  // Order is the load-bearing part, not merely presence. `searchPlayers` applies
+  // `limit` in the query, so an exclusion applied after the rows come back would
+  // let fixtures consume the page and displace real players -- a false negative
+  // of the same class the UTV2-1672 sport-scope guard exists to prevent.
+  const isIndex = calls.findIndex(([m, a]) => m === 'is' && a[0] === 'metadata->>proofIssue');
+  const limitIndex = calls.findIndex(([m]) => m === 'limit');
+  assert.ok(limitIndex >= 0, 'searchPlayers still bounds its read');
+  assert.ok(isIndex < limitIndex, 'the exclusion must be applied before the limit');
+});
+
+test('searchTeams excludes confirmed proof fixtures without dropping ordinary teams', async () => {
+  // No team participant carries the marker in production today (0 of 124), so
+  // this guard is a no-op on current data. It is asserted anyway: a fixture team
+  // would otherwise become selectable and set `teamsAvailable`, which is the same
+  // defect the 26 player fixtures produce on the sibling path.
+  const repository = harness(() =>
+    recordingBuilder([], [
+      { id: 't-real', display_name: 'Knicks', external_id: 'NEW_YORK_KNICKS_NBA', metadata: {} },
+      {
+        id: 't-fixture',
+        display_name: 'Knicks Proof',
+        external_id: 'PROOF_TEAM_NBA',
+        metadata: { proofIssue: 'UTV2-614' },
+      },
+    ]),
+  );
+
+  const results = (await repository.searchTeams('NBA', 'knick', 25)) as Array<{
+    participantId: string;
+  }>;
+
+  assert.deepEqual(results.map((row) => row.participantId), ['t-real']);
+});
+
+test('searchPlayers preserves a legitimate team-less player while excluding a fixture', async () => {
+  // The distinguishing case production cannot supply. Both rows lack
+  // `team_external_id`; only one is marked. A "drop players with no team"
+  // implementation returns [] here and still agrees with every production
+  // observation, which is precisely why this row is constructed.
+  const rows = [
+    { id: 'p-legit', display_name: 'Rookie Callup', metadata: {} },
+    { id: 'p-fixture', display_name: 'Rookie Proof', metadata: { proofIssue: 'UTV2-618' } },
+  ];
+  const repository = harness((table) =>
+    // The batched team lookup finds nothing, because neither row names a team.
+    recordingBuilder([], table === 'participants' ? rows : []),
+  );
+
+  const results = (await repository.searchPlayers('NBA', 'rookie', 10)) as Array<{
+    participantId: string;
+    teamId: string | null;
+  }>;
+
+  assert.deepEqual(
+    results.map((row) => row.participantId),
+    ['p-legit'],
+    'the marked row is excluded and the unmarked one is kept',
+  );
+  assert.equal(results[0]!.teamId, null, 'missing team coverage stays honest, not fabricated');
+});
+
+test('a proofIssue that names no issue is not a confirmed fixture', async () => {
+  // JSON `null` carries no issue identity, so it does not confirm anything. The
+  // pushed-down predicate (`metadata->>proofIssue IS NULL`) and the in-process
+  // one must agree on this, or the database and in-memory paths would disagree
+  // about the same row.
+  const repository = harness((table) =>
+    recordingBuilder(
+      [],
+      table === 'participants'
+        ? [{ id: 'p-null-marker', display_name: 'Ambiguous Row', metadata: { proofIssue: null } }]
+        : [],
+    ),
+  );
+
+  const results = (await repository.searchPlayers('NBA', 'ambiguous', 10)) as Array<{
+    participantId: string;
+  }>;
+
+  assert.deepEqual(results.map((row) => row.participantId), ['p-null-marker']);
+});
+
+test('the in-memory repository applies the same proof-fixture exclusion, before its limit', async () => {
+  // The in-memory repository is what the contained Playwright harness and every
+  // fail-open runtime answer from, so an exclusion that existed only on the
+  // database path would let a fixture reappear wherever the credential is
+  // absent -- exactly the environments an operator uses to check the form.
+  const participant = (
+    id: string,
+    displayName: string,
+    metadata: Record<string, string>,
+  ) => ({
+    id,
+    display_name: displayName,
+    external_id: id,
+    league: null,
+    sport: 'NBA',
+    participant_type: 'player',
+    metadata,
+    created_at: '2026-09-07T00:00:00Z',
+    updated_at: '2026-09-07T00:00:00Z',
+  });
+
+  const repository = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
+    participants: [
+      // Sorts first, so with a limit of 1 a post-filter implementation would
+      // return nothing at all and the real player would be unreachable.
+      participant('p-fixture', 'Aaa Fixture Player', { proofIssue: 'UTV2-618' }),
+      participant('p-legit', 'Zzz Real Player', {}),
+    ],
+  });
+
+  const unlimited = await repository.searchPlayers('NBA', 'player', 25);
+  assert.deepEqual(
+    unlimited.map((row) => row.participantId),
+    ['p-legit'],
+    'the marked row is excluded and the unmarked one kept',
+  );
+  assert.equal(unlimited[0]!.teamId, null, 'a missing team is reported honestly');
+
+  const limited = await repository.searchPlayers('NBA', 'player', 1);
+  assert.deepEqual(
+    limited.map((row) => row.participantId),
+    ['p-legit'],
+    'a fixture must not consume the limit and displace a real player',
+  );
 });
