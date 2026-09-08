@@ -468,14 +468,20 @@ test('manual provenance treats punctuation and case differences as the same part
   );
 });
 
-test('a canonical player prop is refused without a canonical event', () => {
+test('a canonical player prop is admitted without a canonical event', () => {
+  // UTV2-1859. This asserted the opposite until UTV2-1856 taught the server to
+  // resolve team membership from the provider observation edge instead of from an
+  // event browse. The client guard outlived the server rule it mirrored, so the
+  // browser refused a submission the server would have accepted and the request
+  // was never sent. The refusal that remains is the server's, and it is narrower:
+  // only a player whose team relationship the database cannot establish.
   const noEvent = evaluateSubmissionGuards({
     sportId: 'NBA',
     identityMode: 'structured-fallback',
     canonicalEventId: null,
     selectedPlayerId: 'player-123',
   });
-  assert.equal(noEvent?.code, 'canonical-player-requires-event');
+  assert.equal(noEvent, null);
 
   // Inversion: the same player prop with its matchup selected is accepted.
   assert.equal(
