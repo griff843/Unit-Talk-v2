@@ -1466,7 +1466,19 @@ test('a structured-fallback player prop with no scheduled event submits', async 
 
   await expect.poll(() => submissionRequests).toBe(1);
 
-  const payload = submittedPayload as unknown as Record<string, any>;
+  const payload = submittedPayload as unknown as Record<string, unknown> & {
+    metadata?: Record<string, unknown> & {
+      distributionMode?: string;
+      eventId?: string | null;
+      participantResolution?: {
+        resolution?: string;
+        eventId?: string | null;
+        away?: { participantId?: string };
+        home?: { participantId?: string };
+        player?: { participantId?: string; teamId?: string | null };
+      };
+    };
+  };
   // Track Only: the pilot must not be able to create member delivery.
   expect(payload.metadata?.distributionMode).toBe('track-only');
 

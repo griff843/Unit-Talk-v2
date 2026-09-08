@@ -15,7 +15,8 @@
       "pnpm_type_check": "PASS - exit 0, no diagnostics. Measured locally in the lane worktree at this anchor.",
       "pnpm_test": "PASS - the two touched suites report tests 58, pass 58, fail 0, exit 0 (pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts apps/smart-form/test/api-client.test.ts). The full suite runs in the required `verify` check on this PR, which is the authoritative result; no local full-suite PASS is claimed.",
       "playwright_e2e": "PASS - npx playwright test -c playwright.config.ts e2e/smart-form-submission.spec.ts --workers=1: 14 passed (2.3m), exit 0. This is the run that demonstrates the browser now issues POST /api/submissions for a canonical player prop with no scheduled event.",
-      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1859: Verdict PASS, Changed files 3, Rules matched (none) - no R-level artifacts required for this diff. Recorded exactly as produced; the count reads 3 where the working tree shows 4 modified files, and the discrepancy is reported rather than reconciled to the convenient number."
+      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1859: Verdict PASS, Changed files 3, Rules matched (none) - no R-level artifacts required for this diff. Recorded exactly as produced; the count reads 3 where the working tree shows 4 modified files, and the discrepancy is reported rather than reconciled to the convenient number.",
+      "pnpm_lint": "PASS - exit 0, no findings. Added after the first CI run failed on it: the initial attestation ran pnpm type-check and the touched suites but never pnpm lint, which verify:static runs, so it claimed a green tree that had not been fully measured. See the lint_regression entry in static_proof."
     },
     "anchor_note": "1cbdbc88d is the implementation commit and the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES. Every command recorded here was run against that tree. Rule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD`, so any later commit must stay inside docs/06_status/proof/ or docs/06_status/lanes/ for this anchor to remain valid; the only commits after it are the lane manifest binding and this bundle, both of which do.",
     "bound_at": "2026-09-08T15:05:00.000Z"
@@ -47,12 +48,22 @@
     "server_rule_citations_verified": {
       "status": "PASS",
       "detail": "All three // SERVER-RULE: fragments cited by apps/smart-form/lib/form-utils.ts were confirmed present in origin/main's apps/api/src/smart-form-validation.ts, so the coupling test is not vacuous and this lane is green on a main base independently of the open server PR."
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "lint_regression_corrected": {
+      "status": "PASS",
+      "detail": "The first CI run on this branch failed verify at apps/smart-form/e2e/smart-form-submission.spec.ts:1469:65 with '@typescript-eslint/no-explicit-any: Unexpected any'. The payload assertion used Record<string, any>; it is now an explicit shape naming distributionMode, eventId and the participantResolution fields the test actually reads, which is a better assertion target than `any` independently of the rule. Recorded rather than quietly amended: the local gate for this lane was type-check plus the touched suites, and lint was never re-run after the code was written -- preflight's verify:quick ran at lane-start, before the code existed.",
+      "reverification": "pnpm lint exit 0, pnpm type-check exit 0, and the browser suite re-run after the retype: 14 passed (1.1m), exit 0. The retype changes the exact object the Track Only and provenance assertions destructure, so the suite was re-run rather than assumed unaffected."
     }
   },
   "runtime_proof": {
     "status": "PASS",
     "kind": "browser",
-    "detail": "A Playwright run drives the form's own code in a real browser and asserts exactly one POST /api/submissions is issued for a canonical player prop with no scheduled event, then asserts on the captured payload that metadata.distributionMode is track-only, that participant resolution is canonical, that the event id is null on both the resolution and the metadata, and that the resolved player carries its teamId. The submission endpoint and all reference data are intercepted, so no live server is contacted and no credential is placed in the Playwright environment.",
+    "detail": "A Playwright run drives the form's own code in a real browser and asserts exactly one POST /api/submissions is issued for a canonical player prop with no scheduled event, then asserts on the captured payload that metadata.distributionMode is track-only, that participant resolution is canonical, that the event id is null on both the resolution and the metadata, and that the resolved player carries its teamId. The submission endpoint and all reference data are intercepted, so no live server is contacted and no credential is placed in the Playwright environment. Re-run after the payload retype: 14 passed (1.1m), exit 0.",
     "mutations": [
       {
         "name": "stale SERVER-RULE citation",

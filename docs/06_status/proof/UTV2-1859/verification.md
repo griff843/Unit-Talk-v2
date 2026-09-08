@@ -19,7 +19,7 @@ new behaviour, the client tests asserted the client's old behaviour, and nothing
 green `pnpm verify`, a complete proof bundle and a merged server repair all coexisted with a form
 that refused.
 
-## Commands run
+## Verification
 
 All commands were run in the lane worktree
 `.out/worktrees/claude__utv2-1859-client-submission-guard` at the branch head, after
@@ -64,6 +64,30 @@ canonical player selected from search, Points Over 27.5 at -110, conviction 8, S
 exactly one `POST /api/submissions` is issued and, on the captured payload,
 `metadata.distributionMode === 'track-only'`, canonical participant resolution, a null event id on
 both the resolution and the metadata, and the resolved player's `teamId`.
+
+### `pnpm lint`
+
+```
+> eslint . --cache --cache-location .cache/eslint/
+exit=0
+```
+
+**Added after CI caught what this bundle had not measured.** The first `verify` run on this branch
+failed at `apps/smart-form/e2e/smart-form-submission.spec.ts:1469:65` with
+`@typescript-eslint/no-explicit-any: Unexpected any` — the payload assertion used
+`Record<string, any>`. It is now an explicit shape naming `distributionMode`, `eventId` and the
+`participantResolution` fields the test actually reads, which is a better assertion target than
+`any` regardless of the rule.
+
+This is recorded rather than quietly amended, because the interesting part is not the rule but the
+gap: the local gate on this lane was `pnpm type-check` plus the two touched suites, and `pnpm lint`
+was never re-run after the code was written. Preflight's `verify:quick` ran at lane-start, before
+the code existed. The first attestation therefore described a green tree that had not been fully
+measured, which is the same failure mode this lane exists to close, committed against itself.
+
+After the retype: `pnpm lint` exit 0, `pnpm type-check` exit 0, and the browser suite re-run —
+**14 passed (1.1m)**, exit 0. The retype changes the exact object the Track Only and provenance
+assertions destructure, so the suite was re-run rather than assumed unaffected.
 
 ### `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1859`
 
