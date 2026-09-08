@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1859",
+  "lane_type": "delivery-ui",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1859-client-submission-guard",
+  "branch": "claude/utv2-1859-client-submission-guard",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/smart-form/e2e/smart-form-submission.spec.ts",
+    "apps/smart-form/lib/form-utils.ts",
+    "apps/smart-form/test/api-client.test.ts",
+    "apps/smart-form/test/form-utils.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1859/diff-summary.md",
+    "docs/06_status/proof/UTV2-1859/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-09-08T14:13:37.107Z",
+  "heartbeat_at": "2026-09-08T14:13:37.107Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1859-client-submission-guard.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1859-client-submission-guard",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
