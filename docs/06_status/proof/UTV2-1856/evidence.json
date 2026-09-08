@@ -18,7 +18,13 @@
     "status": "PASS",
     "command": "pnpm verify",
     "measured_at_sha": "413823a85052500d0a62ba26c4dbc92c2532e567",
-    "ci_receipt": null,
+    "ci_receipt": {
+      "run_id": "34277374399",
+      "job_id": "102236250239",
+      "check": "verify",
+      "conclusion": "success",
+      "head_sha": "740f027704cbab3f94edefe370b67328a74230f7"
+    },
     "detail": "Local commands re-measured at 413823a85052500d0a62ba26c4dbc92c2532e567 (the in-memory parity repair): The CI receipt for this head is pending; see ci_receipt_status. Locally at this head: `pnpm lint` exit 0, `pnpm type-check` exit 0. The three suites this lane changes were run together: 111 tests, 96 pass, 15 fail, 0 skipped. **The 15 failures are the live-DB proof suite and every one is `TypeError: fetch failed`** \u2014 a contained workstation resolves Supabase to http://127.0.0.1:1 by policy, so that suite cannot execute here at all. Excluding it, the same command over the two suites that can run locally reports 96 tests / 96 pass / 0 fail / 0 skipped, exit 0. The live-DB suite's authoritative receipt is the green `Writable DB proof (staging only)` job recorded under runtime_proof, obtained at this same head. This is the route-B deferral working exactly as ratified: the live-DB evidence is obtained in CI rather than on the workstation, and it is obtained. `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1856` returns `Verdict: PASS`, `Changed files: 10`, `Rules matched: (none)`.",
     "local_run_exit_code": 1,
     "local_run_exit_code_cause": "The failing local step is the live-DB suite, refused by containment before it can connect (`TypeError: fetch failed` against http://127.0.0.1:1; `scripts/ci/assert-staging-target.ts` likewise REFUSES with host=127.0.0.1, ref=unidentified, expected=xskgrzbteyqdufktjrjx). That is the precondition this lane defers under route B, and it is discharged by the two green CI receipts recorded here \u2014 not waived.",
@@ -122,7 +128,7 @@
       "head_sha": "83f4ea04c4defb3b2755a292be486a5bd8ca9277",
       "note": "Taken at 83f4ea04c4defb3b2755a292be486a5bd8ca9277, the previous anchor \u2014 a tree without the in-memory parity repair. Retained as superseded evidence; it is not a receipt for the current anchor."
     },
-    "ci_receipt_status": "PENDING at 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901 \u2014 the run at this head has not concluded. No green CI receipt is claimed for this head until run and job ids from that run are recorded here."
+    "ci_receipt_status": "Recorded from gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs after the run at this head concluded."
   },
   "runtime_proof": {
     "status": "PASS",
@@ -284,7 +290,16 @@
         "observed": 0
       }
     ],
-    "measured_at_sha": "413823a85052500d0a62ba26c4dbc92c2532e567"
+    "measured_at_sha": "413823a85052500d0a62ba26c4dbc92c2532e567",
+    "ci_receipt": {
+      "run_id": "34277374399",
+      "job_id": "102233606034",
+      "check": "Writable DB proof (staging only)",
+      "conclusion": "success",
+      "head_sha": "740f027704cbab3f94edefe370b67328a74230f7",
+      "tap": "1..14 / # tests 14 / # pass 14 / # fail 0 / # skipped 0"
+    },
+    "ci_receipt_status": "Recorded from gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs after the run at this head concluded. This is the first live-DB receipt taken on a tree that includes the in-memory parity repair."
   },
   "browser_proof": {
     "status": "PASS \u2014 the un-intercepted player prop reaches the API and persists",

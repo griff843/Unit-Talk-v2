@@ -302,9 +302,48 @@ browser evidence below exercises this lane's server change and the client change
 
 ### CI receipts at the current anchor
 
-Recorded from `gh api .../commits/5fbf28c99b47fcdeac9376c8eedee8d45c0bd901/check-runs` once the run
-at this head concludes, and not before. Nothing in this bundle claims a green CI receipt for this
-head until this section carries the run and job ids that produced it.
+Recorded from `gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs` after the run
+at this head concluded. This is the first live-DB receipt taken on a tree that contains the
+in-memory / Database parity repair.
+
+```
+$ gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs
+  verify                            completed  success   run 34277374399  job 102236250239
+  Writable DB proof (staging only)  completed  success   run 34277374399  job 102233606034
+    1..14   # tests 14   # pass 14   # fail 0   # skipped 0
+    ok  8 - UTV2-1856 live DB: browse resolves the player team from participants while
+             teams and player_team_assignments stay empty
+    ok  9 - UTV2-1856 live DB: a canonical-event TEAM pick submits, persists its participant
+             ids and values, and creates no delivery row
+    ok 10 - UTV2-1856 live DB: a canonical-event PLAYER PROP submits, persists both
+             participant ids and its values, and creates no delivery row
+    ok 11 - UTV2-1856 live DB: the canonical player-prop path still refuses a player who is
+             not on the named team
+    ok 12 - UTV2-1856 live DB: a confirmed proof fixture attached to an event cannot be
+             submitted as a player prop
+    ok 13 - UTV2-1856 live DB: a structured NO-EVENT player prop resolves the team from
+             participants, persists honest no-event provenance, and creates no delivery row
+    ok 14 - UTV2-1856 live DB: a structured NO-EVENT player prop is refused when the player
+             is on neither entered side
+```
+
+Tests 11, 12 and 14 are the controls that matter for this revision: the parity repair made a
+canonical player prop *resolvable*, and these three prove it did not make the server *permissive*.
+A player who is not on the named team, a confirmed proof fixture, and a player on neither entered
+side are each still refused against the live staging database.
+
+The `verify` receipt is the authoritative full-suite result. No local full-suite PASS is claimed;
+the live-DB suite cannot execute on a contained workstation at all, which is exactly the condition
+route B defers to CI.
+
+### Non-required checks at this head
+
+Read from `gh pr checks 1536` rather than assumed: `Close eligibility preflight`, `T1 Proof Gate`,
+`Proof Auditor Gate`, `Runtime Verifier Gate`, `Lane authority`, `File scope lock`,
+`R-Level Compliance Check`, `Executor Result Validator`, `P0 Protocol`, `Sync tier label`,
+`Require live-DB proof for runtime changes` and `WFR-v2 Validators` all pass. Three are red and each
+is read below rather than classified by status: `Merge Gate` (no T1 approval artifact on this head),
+`Check issue references`, and `Return review packet`.
 
 - [x] `pnpm lint`: exit 0
 - [x] `pnpm type-check`: exit 0, no diagnostics
