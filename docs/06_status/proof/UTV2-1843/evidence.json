@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1843",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "54ae783b726ae9cd181be24f21789149ae2895df",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "54ae783b726ae9cd181be24f21789149ae2895df",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS - exit 0, no diagnostics, re-measured locally at this anchor (pnpm type-check).",
+      "pnpm_test": "PASS - tests 6069, pass 6069, fail 0, exit 0, re-measured locally at this anchor (pnpm test). Identical to the count at the previous anchor 1cbc55c3f, and that is the expected result rather than a carried-forward value: the resync that produced this anchor brought in three files (.ops/sync/UTV2-1858.yml, docs/06_status/lanes/UTV2-1858.json, docs/mission/plan.md) and zero code, so a moved test count would have indicated something unexplained. The suite was re-run rather than assumed.",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passes; the run then reaches test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
+      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Verdict PASS, Changed files 13, Rules matched operator-ui, every triggered required[] artifact present. The count has now read 20, then 14, then 16, and now 13 across successive anchors. It moves in BOTH directions -- it grows when a resync imports main's files into the branch diff and shrinks when a merge makes those same files common ancestry -- which is exactly why it is regenerated at every anchor move instead of carried forward."
+    },
+    "sha_type": "pending_merge",
+    "anchor_note": "54ae783b7 is the merge of origin/main into this branch, taken with `ops:merge-wrapper git-merge-main` rather than a rebase because this branch carries a proof bundle and a rebase would rewrite the history the bundle is bound to. It is the current PR head and the tree every command above was run against.\n\nThis is the seventh anchor on this lane. The wrapper itself warned that the sync moves the head SHA and invalidates every head-pinned governance artifact, and that warning was followed rather than worked around: verify re-run on the new head, then a fresh EXECUTOR_RESULT pinned to it, then approval last, so the artifact that authorises the merge certifies the head that actually merges.\n\nWhat the resync brought in is measurable and small: `git diff 1cbc55c3f...origin/main --name-only` was three files -- .ops/sync/UTV2-1858.yml, docs/06_status/lanes/UTV2-1858.json and docs/mission/plan.md -- and no code at all. The type-check and test receipts are therefore identical to the previous anchor's, and that identity is evidence rather than an omission: the suite was re-run and returned the same numbers because nothing it measures changed. The r-level count did move, 16 to 13, because the merge turned imported files into common ancestry and shrank the branch-versus-main diff.\n\nRule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD`, so any commit after this anchor must stay inside PROOF_ONLY_PREFIXES for the binding to hold. The only commit after it is this bundle update, which does.",
+    "bound_at": "2026-09-08T15:40:00.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5962,
+      "failures": 0,
+      "detail": "tests 5962, pass 5962, fail 0, exit 0"
+    },
+    "citation_remeasurement": {
+      "status": "PASS",
+      "detail": "Every file:line citation carried into docs/03_product/smart-form/intent.md was re-read against the branch head rather than copied from the source audits. Recorded in full under 'Every file:line citation re-measured against the branch head' in verification.md."
+    },
+    "contradictions_reconciled": {
+      "status": "PASS",
+      "count": 3,
+      "detail": "The mobile signed-odds prescription in SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md, acceptance criterion 11 on confidence against apps/smart-form/lib/form-utils.ts, and the stale runtime instructions in apps/smart-form/CLAUDE.md. Each contradiction was confirmed to exist on the branch before it was corrected, not assumed from the audit that reported it."
+    },
+    "no_new_gate": {
+      "status": "PASS",
+      "command": "git diff origin/main --name-only -- .github/",
+      "observed": "empty",
+      "significance": "No workflow, check, label or lane type is added by this diff. verify, Executor Result Validation, Merge Gate and P0 Protocol are unchanged."
+    },
+    "state_vocabulary_applied": {
+      "status": "PASS",
+      "detail": "Section 8 states an explicit state vocabulary and applies it to every row. Submission reads 'Implemented; blocked in the deployed flow', not 'Done'. Five rows would have read Done on merged code and green tests, and an operator can perform none of the five today."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Static-proof governance lane. It changes documents and agent instruction files; it adds no runtime code path and no database access, so there is no runtime behaviour for a live-DB run to observe."
+  },
+  "known_gaps": [
+    "File scope lock and Return review packet are red. .lane/lanes/governance.yml is outside this lane's pinned file_scope_lock, and the supported remedy under existing policy is a CODEOWNERS scope-override/v1 pinned to this head, requested in the PR description. That these are not required checks is not authorization to merge past them: without the override this PR is parked, not merged.",
+    "QA Experience Regression (Advisory) fails on a 403 while posting its PR comment -- a permissions defect in that workflow, unrelated to this diff. Its own verdict was advisory NEEDS_REVIEW.",
+    "Command Center and pipeline product-intent documents are deliberately not written here. Section 10 records the approach to be applied when those products are worked, written then rather than ahead of them."
+  ]
+}
