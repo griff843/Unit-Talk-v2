@@ -1,7 +1,8 @@
 # PT1 — the T1 live-DB precondition, and where it should bind
 
-**Status:** DECISION PACKET — Part 1 applied, Part 2 prepared and **not** applied. Part 2 requires
-PM authority.
+**Status:** **RATIFIED 2026-09-06 — route B.** Part 1 applied (UTV2-1845). Part 2 applied in two
+lanes: UTV2-1851 (edits 1 and 2, plus the token/manifest bridge) and its T1 successor (edit 3).
+See §8, which records the ratification, its binding conditions, and where each is enforced.
 **Issue:** UTV2-1845
 **Prepared:** 2026-09-06
 **Blocks:** UTV2-1842 (Smart Form submission repair), and every future T1 lane opened from a
@@ -252,6 +253,90 @@ Both were executed, not reasoned about. The controls that must keep failing on t
 — a real-but-unreachable host reporting `infra_error`, an absent credential reporting `fail` — are
 asserted directly and pass.
 
+## 6a. What UTV2-1848 added — the enforcement half of Part 2, landed before the decision
+
+Part 2 above has two halves that do not have to land together, and they carry very different
+authority:
+
+| Half | What it does | Authority |
+|---|---|---|
+| **Enforcement** — record the deferral and refuse closeout without the receipt | Adds a fail-closed obligation. Admits nothing | Ordinary engineering |
+| **Admission** — let `blocked_by_containment` issue a token | Changes which lanes may open | **Reserved.** `intent.md` § "Changes to the operating model" |
+
+UTV2-1848 landed the enforcement half only. It is **inert on `main`**: nothing writes
+`t1_live_db_precondition`, no manifest carries it, and `G6` reports `skip` on every lane. Landing it
+first is what turns the reserved decision from a review of a proposal into a review of a two-line
+diff against protection that already exists and is already tested.
+
+**What landed:**
+
+- `scripts/ops/shared.ts` — `T1_LIVE_DB_PRECONDITION_DEFERRED` (a one-member union, not a boolean)
+  and the optional `LaneManifest.t1_live_db_precondition` field; `validateManifest` refuses any
+  other value and refuses the field at any tier other than `T1`.
+- `scripts/ops/truth-check-lib.ts` — `T1_DEFERRAL_RECEIPT_CONTEXTS` and
+  `evaluateT1LiveDbPreconditionDeferral`, wired into the run as check `G6`.
+- Tests in `scripts/ops/shared.test.ts` and `scripts/ops/truth-check-lib.test.ts`, both already
+  wired into `test:ops`.
+- Spec: `TRUTH_CHECK_SPEC.md` §4.2 `G6`, `LANE_MANIFEST_SPEC.md` §4.3.
+
+**Mutation evidence — executed, not reasoned about:**
+
+| Mutation | Result |
+|---|---|
+| `if (!input.receiptChecks.passed)` made unreachable (receipt fail-open) | 1 test fails — the deferral is not self-satisfying |
+| `if (!input.receiptChecks)` made unreachable (unreadable checks treated as fine) | 2 tests fail |
+| `addCheck(g6.id, ...)` removed, leaving the evaluator exported but unwired | 1 test fails — the wiring assertion |
+
+The third mutation is the load-bearing one. Without it, every other assertion here would still pass
+with the check unreachable — the exact failure recorded for the executor-result validator, where the
+tested copy was not the copy that gated anything.
+
+**G6 cannot be routed around.** It is evaluated after the `G1`–`G4` block, and both earlier exits
+that skip it — no GitHub token (`verdict: infra_error`, exit 3) and no `pr_url` (`verdict: fail`,
+exit 1) — already end the run without a passing verdict. A lane carrying the field cannot reach
+`pass` without `G6` having run.
+
+### The exact remaining admission diff
+
+This is the whole of what PM is being asked to approve for route B. Three edits, all in the
+lane-open path; nothing here touches the merge gate, CODEOWNERS, branch protection, tier semantics
+or any required check.
+
+**1. `scripts/ops/preflight.ts` — `resolveVerdict` (currently `:1468-1477`).** Stop folding
+`blocked_by_containment` into `INFRA`:
+
+```diff
+-  if (
+-    checks.some(
+-      (check) => check.status === 'infra_error' || check.status === 'blocked_by_containment',
+-    )
+-  ) {
++  if (checks.some((check) => check.status === 'infra_error')) {
+     return 'INFRA';
+   }
+```
+
+`infra_error` still resolves to `INFRA`, so a real-but-unreachable host is unaffected — the control
+still fails on the condition it names.
+
+**2. `scripts/ops/preflight.ts` — token emission.** When any check reports
+`blocked_by_containment`, write `t1_live_db_precondition: "deferred_to_ci"` onto the preflight
+token. This is what makes the deferral a record rather than a silence.
+
+**3. `scripts/ops/lane-start.ts` — manifest creation.** Copy that field from the validated token
+onto the manifest, unchanged. `validateManifest` already refuses it at any tier other than `T1`, so
+a mis-copy fails closed at creation rather than at closeout.
+
+**Non-secret success criterion, unchanged from §5** — and note that its third item is *already
+satisfied and tested* on `main`: `ops:truth-check` on a lane carrying the deferral fails when the
+merge-SHA receipt is absent and passes when it is green. Only items 1 and 2 depend on the diff
+above.
+
+**What this still does not do.** It does not make an absent Supabase credential pass (`fail`,
+unchanged), does not admit a genuinely unreachable real host (`infra_error`, unchanged), and does
+not lower any tier or waive any proof artifact. It changes exactly one thing: whether a T1 lane may
+*open* on a workstation whose containment placeholder is doing what containment mandates.
+
 ## 7. Why this document lives in `docs/governance/`
 
 `docs/05_operations/` would be the ordinary home, and it was the first choice. It is unavailable to
@@ -261,3 +346,60 @@ overlaps that lease and `ops:lane-start` refuses with `lease_conflict`. `docs/go
 admitted to governance lanes by `.lane/lanes/governance.yml`, is free of active leases, and is a
 defensible home for a packet about lane admission. Recorded here so the placement is a stated
 decision rather than an unexplained one; moving it later is a one-line change.
+
+---
+
+## 8. Ratification — route B, 2026-09-06
+
+PM ratified route B on 2026-09-06 for the deliberately contained PT1 case described above. The
+ratification is **policy authorization for the bounded admission change through the governed PR
+path** — it is not a merge approval, not a deployment approval, and not a containment change. Every
+merge still runs through the ordinary gates, and nothing here unparks anything.
+
+### The binding conditions, and where each is mechanically enforced
+
+Recorded as a table rather than prose because each one is a control that can be pointed at, and a
+condition with no enforcement site is a condition that will drift.
+
+| # | Condition as stated | Enforced by |
+|---|---|---|
+| 1 | All other applicable preflight checks must still pass | `resolveVerdict` is otherwise untouched: any `fail` still returns `FAIL`, a `PL2`/`PL3` fail still returns `NOT_APPLICABLE`, and a genuine `infra_error` still returns `INFRA`. Asserted in `preflight.test.ts` — *"PT1 containment is admitted, and nothing else is relaxed"* |
+| 2 | Record the deferral in the generated token **and** the manifest | Token: `createToken` writes `t1_live_db_precondition` when and only when PT1 reported `blocked_by_containment`. Manifest: `lane-start` copies it (the T1 successor lane), and the bridge below makes that copy mandatory rather than optional |
+| 3 | Preserve required staging verification before merge | Unchanged. Route B defers the *precondition*, never the proof. The four required checks are untouched, and `verify` on the merge SHA still binds the staging receipt |
+| 4 | Retain G6 at closeout | Unchanged. `ops:truth-check` G6 (UTV2-1848) still refuses a lane carrying the field unless the merge SHA carries a green `verify` **and** a green `Writable DB proof (staging only)` |
+| 5 | Missing or malformed deferral information cannot silently discard the obligation | `validateT1LiveDbPreconditionAgainstToken` in `scripts/ops/shared.ts`. See below |
+| 6 | Do not hand-generate substitute passing tokens | No token is written by hand anywhere in this change. `ops:preflight` remains the only writer, and it writes only on a genuine `PASS` |
+
+### Condition 5 is the load-bearing one, and it needed a control that did not exist
+
+The obligation is recorded in two places — the token, which `ops:preflight` writes, and the
+manifest, which G6 reads at closeout. Between the two lanes that implement route B there is a window
+in which PT1 admits but `lane-start` does not yet copy the field. A manifest that simply **omitted**
+the field would make G6 evaluate `skip`, and the obligation would vanish with nothing red anywhere.
+
+`validateManifest` therefore refuses the disagreement itself, for any lane whose status still
+requires its token to exist:
+
+| Token | Manifest | Result |
+|---|---|---|
+| deferred | silent | **error** — this is the discard the control exists to prevent |
+| silent | deferred | **error** — a manifest cannot assert a deferral preflight never granted |
+| unreadable / not JSON / not an object / unrecognised value | any | **error** — never summarised as "no deferral" |
+| silent | silent | no error — every ordinary lane, unchanged |
+
+Measured against the real corpus rather than fixtures alone: all **753** lane manifests on `main`
+produce **zero** errors attributable to this rule.
+
+Mutation-checked four ways, each turning exactly one distinct assertion red: reverting the
+`resolveVerdict` admission; making `createToken` drop the field; unwiring the bridge from
+`validateManifest`; and — the one that matters most — making an unparseable token read as "no
+deferral", which is condition 5's own failure mode written as code.
+
+### Scope bounds carried in the implementation
+
+- **Only PT1 is admitted.** Any other check reporting `blocked_by_containment` still returns
+  `INFRA`, so a future emitter cannot inherit this admission without its own review.
+- **The deferral is a one-member enum.** A second deferral basis must be named and reviewed, never
+  expressed by flipping a flag.
+- **Nothing reserved is touched.** No required check, no branch protection, no CODEOWNERS, no merge
+  gate, no tier semantics, no containment setting.

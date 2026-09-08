@@ -1,0 +1,194 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1842",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
+    "verified_source_sha": "215fd9fac360c1ed1411fc10664dd5e4bf361f95",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS - required `verify` check completed success at 215fd9fac360c1ed1411fc10664dd5e4bf361f95 (https://github.com/griff843/Unit-Talk-v2/actions/runs/34129880790/job/101770407801)",
+      "pnpm_test_db": "PASS - 'Writable DB proof (staging only)' job 101767960316 succeeded against staging in run 34129880790 at this exact anchor SHA. `ci:assert-staging` logged 'OK: target is the approved staging project'; `pnpm test:db` reported '# tests 7 / # pass 7 / # fail 0 / # skipped 0', duration_ms 105284.032055; the `test:t1-proof:live` chain then ran with '# skipped 0' throughout, including this lane's own new suite at 3/3, duration_ms 23573.388474. https://github.com/griff843/Unit-Talk-v2/actions/runs/34129880790/job/101767960316",
+      "r_level_check": "PASS - https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964897/job/101613260148"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-07T20:23:21.936Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "command": "pnpm verify:static",
+    "detail": "Measured locally at a6711c6475c87b304696ecde62139ce04d0dcc2f, the last commit of this branch's own work: `pnpm type-check` exit 0, `pnpm lint` exit 0, `scripts/ci/db-writer-inventory.ts` ok=true with 51 credentialed tests and 0 errors, `pnpm lane:check --lane runtime` PASS files=15, and the three suites this lane changed at 166/166. The anchor 215fd9fac is a merge of main carrying UTV2-1850 in; `git diff a6711c647 215fd9fac` changes nothing under apps/api/**, scripts/**, .lane/** or the root package.json, so those local measurements describe this lane's code at the anchor unchanged. `pnpm verify:static` was measured green in full locally at the earlier anchor 9c4c8485cde9b58d5c4b6f697462280c2e919514 (all eleven stages exit 0; `pnpm test` 6008/6008). It was NOT re-measured locally at this anchor -- the re-run was killed by the low-memory monitor -- so the authority for the full chain at THIS head is the CI receipt below rather than a local claim. Note that local `pnpm lint` reports a spurious failure on apps/smart-form/next-env.d.ts unless that tracked-but-Next-generated file is restored first; CI checks out clean and never sees it.",
+    "ci_receipt": "The required `verify` check reproduced the identical verify:static chain in CI at 215fd9fac360c1ed1411fc10664dd5e4bf361f95 and passed: every TAP block in job 101770407801 totals 6650 tests, 6650 pass, 0 fail, 0 skipped. https://github.com/griff843/Unit-Talk-v2/actions/runs/34129880790/job/101770407801"
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 9472.87ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 8902.81ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 9444.79ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 9327.68ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 66.42ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 9086.72ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 9057.81ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-07T17:07:38.515Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 34146186542, job 101818611504), which ran immediately before the smoke-test step in the same job, on head 40b0f19f479790770c3e71769a61df4dc40e3efc. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 34146186542,
+      "run_attempt": 1,
+      "job_id": 101818611504,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34146186542/job/101818611504",
+      "target_head_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
+      "target_merge_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  },
+  "mutation_controls": [
+    {
+      "id": 1,
+      "mutation": "drop 'manual-coverage-gap' from the kind check in waivesEventExistenceGate",
+      "result": "not ok x2 - UTV2-1842: manual coverage-gap outcome waives the event existence gate; UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail-closed",
+      "totals": "151 pass / 2 fail",
+      "suites": "apps/api/src/submission-service.test.ts + apps/api/src/smart-form-validation.test.ts"
+    },
+    {
+      "id": 2,
+      "mutation": "drop 'structured-team-fallback' from the kind check in waivesEventExistenceGate",
+      "result": "not ok x2 - UTV2-1842: structured team fallback outcome waives the event existence gate; UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail-closed",
+      "totals": "151 pass / 2 fail",
+      "suites": "apps/api/src/submission-service.test.ts + apps/api/src/smart-form-validation.test.ts"
+    },
+    {
+      "id": 3,
+      "mutation": "replace the whole predicate body with `return outcome?.kind !== 'canonical-event'` (the fail-open inversion)",
+      "result": "not ok x5 - including the PRE-EXISTING 'event gate: pick with unknown eventName is rejected when events repo is populated', which predates this lane",
+      "totals": "148 pass / 5 fail",
+      "suites": "apps/api/src/submission-service.test.ts + apps/api/src/smart-form-validation.test.ts",
+      "significance": "The second catch is a test this lane did not write. That is the control which fails if the predicate is ever rewritten into a fail-open."
+    },
+    {
+      "id": 4,
+      "mutation": "controller stops passing the outcome to processSubmission (unwire)",
+      "result": "not ok - UTV2-1842: a manual coverage-gap Track Only pick persists while the events catalog holds only other events",
+      "totals": "12 pass / 1 fail",
+      "suites": "apps/api/src/controllers/submit-pick-controller.test.ts",
+      "significance": "Neither unit suite can see this mutation. Without the controller-level test the wiring could be deleted with every other test in the repository still green."
+    },
+    {
+      "id": 5,
+      "mutation": "drop the Track Only conjunct - `return outcome.distributionMode === 'track-only'` becomes `return true`",
+      "result": "not ok x3 - UTV2-1842: a delivery-eligible manual-coverage-gap outcome does NOT waive the event existence gate; the same for structured-team-fallback; and waivesEventExistenceGate is the whole predicate, and it is fail-closed",
+      "totals": "150 pass / 3 fail",
+      "suites": "apps/api/src/submission-service.test.ts + apps/api/src/smart-form-validation.test.ts",
+      "significance": "This is the in-process counterpart of live test 3. It is the control for the restriction that keeps the waiver from admitting a delivery-eligible pick naming no canonical event into member delivery."
+    }
+  ],
+  "scope": {
+    "declared_file_scope": [
+      "apps/api/src/**"
+    ],
+    "files_changed": [
+      "apps/api/src/smart-form-validation.ts",
+      "apps/api/src/smart-form-validation.test.ts",
+      "apps/api/src/submission-service.ts",
+      "apps/api/src/submission-service.test.ts",
+      "apps/api/src/controllers/submit-pick-controller.ts",
+      "apps/api/src/controllers/submit-pick-controller.test.ts",
+      "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
+      "package.json",
+      "docs/05_operations/db-writer-classification.json",
+      ".lane/lanes/runtime.yml"
+    ],
+    "detail": "Seven files inside the pinned lock, plus this lane's own manifest, .ops/sync file and proof bundle. THREE files are outside it and are declared above rather than left to be discovered: adding a live-DB proof has two mandatory registration points, neither of which lives under apps/api/src, and admitting the second of those into the runtime lane's allowlist is the third. A file_scope_lock is pinned at lane-start and cannot be widened by an agent, so these need a CODEOWNERS scope-override/v1; the non-required 'File scope lock' check reporting them is a correct check reporting a real scope question, not a defective one. No workflow, no merge control, no branch protection, no containment setting, no deploy path and no migration is touched.",
+    "out_of_scope_files": {
+      "package.json": "Wires the new t1-proof suite into `test:t1-proof:live`. `pnpm verify` fails closed with WIRING_TEST_UNWIRED_NEW on any test file unreachable from a package script, and this is the only wiring point for a live-DB proof.",
+      "docs/05_operations/db-writer-classification.json": "Registers the new suite as a credentialed DB test with owner `api` and its single executing command. `verify`'s 'Enforce DB writer classification' step fails closed without it.",
+      ".lane/lanes/runtime.yml": "Admits docs/05_operations/db-writer-classification.json into the runtime lane's allowed_path_globs as one exact file. Without it `Lane authority` fails with `outside_allowed_paths` and no runtime lane can legally carry its own live-DB proof. Allowlist admission correction only -- no taxonomy change, no executor-policy change, no change to any required check."
+    }
+  },
+  "limits": [
+    "The live proof exercises the manual coverage-gap branch only. The structured team-fallback branch is NOT proven against a live database: doing so needs a canonical team catalog with coverage on exactly one side of a matchup, and populating one is reference-data seeding under a reserved provider decision. That branch is proven in process and by mutation control 2.",
+    "This lane does not prove Milestone 1 step 4 end to end. It removes the API-side refusal that blocked it and proves the persistence and non-delivery halves against staging. Reaching the deployed form, authenticating as griff843 and submitting a real pick remain a separate run against the deployed system.",
+    "The proof is against STAGING, not production. `assert-staging-target.ts` pins the target to xskgrzbteyqdufktjrjx and the job holds no production credential. Nothing here establishes production behaviour beyond the fact that it is the same code.",
+    "The non-required 'Shadow Parity Check' is red because no mechanically read-only production credential is provisioned; it refuses service-role credentials by design, so it compared nothing and reached no parity conclusion. Provisioning that credential is a reserved secrets decision.",
+    "The non-required 'Return review packet' is red on scope bleed naming this bundle's own diff-summary.md and verification.md, both written by ops:proof-generate into this lane's proof directory. expected_proof_paths is settable only at manifest create and sameIssueLaneMetadataPaths carries no proof glob (pr-review-packet.ts:487-491). Recorded defect, correct work.",
+    "'Close eligibility preflight' CEP-E7 requires non-empty runtime_proof.queries and row_counts. Those are derived mechanically AFTER the merge by ci-db-proof-harvest.ts from the ci-db-proof-receipt/v2 artifact and the [seed-staging] log lines, via post-merge-lane-close.yml running ops:proof-generate --merge-sha; pre-merge it returns no_merge_sha and writes nothing. They have deliberately NOT been hand-authored here. CEP-C1's prediction that lane-close will fail on CEP-E7 is a false pre-merge prediction of the same class as the recorded UTV2-1846 CEP-E1 finding."
+  ],
+  "generated_at": "2026-09-07T14:12:00Z",
+  "mutation_controls_note": "Every mutation above was re-applied and re-run at a6711c6475c87b304696ecde62139ce04d0dcc2f and reverted, with `git diff` asserted clean after each. The totals are from that re-run, not carried forward: the earlier binding recorded 142/1 against a suite composition that has since gained ten tests, and mutations 1 and 2 are now each caught twice rather than once."
+}

@@ -8,11 +8,59 @@ import { ApiError } from './errors.js';
 
 const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'SOCCER']);
 
+// UTV2-1842 SMART_FORM_OUTCOME_START
+// The event-existence gate in submission-service.ts refuses any human-source pick whose
+// eventName matches no row once the events repository is populated. Under containment the
+// canonical event catalog is deliberately not being filled, so a Smart Form submission that
+// legitimately took a fallback path -- an explicit manual coverage-gap override, or the
+// structured team fallback for a team sport with no canonical event -- is refused by a gate
+// that is asking a question the fallback has already answered a different way.
+//
+// This validator is the only place that knows *which* path admitted the submission, and it
+// knows it only after the full server-side check for that path has passed. Returning that
+// decision lets the gate waive itself for exactly those two outcomes and for nothing else.
+// The waiver is therefore gated on server-validated fallback eligibility, never on a bare
+// null eventId.
+//
+// The outcome carries the submission's `distributionMode` because the waiver is only
+// authorized for Track Only. An authenticated capper is server-pinned to `track-only` by
+// handlers/submit-pick.ts, but an operator or service-role caller reaches this same validator
+// with `delivery-eligible` and is *not* pinned, and a qualified delivery-eligible result
+// proceeds to the controller's outbox-enqueue path. Waiving on the fallback kind alone would
+// therefore admit a pick naming no canonical event into member delivery -- the opposite of
+// what this contained repair is for. The mode travels with the outcome rather than being
+// re-read at the gate so the gate cannot disagree with the validator about which submission
+// it is looking at.
+export type SmartFormDistributionMode = 'track-only' | 'delivery-eligible';
+
+export type SmartFormValidationOutcome =
+  | { kind: 'not-smart-form' }
+  | { kind: 'manual-coverage-gap'; distributionMode: SmartFormDistributionMode }
+  | { kind: 'structured-team-fallback'; distributionMode: SmartFormDistributionMode }
+  | { kind: 'canonical-event'; eventId: string; distributionMode: SmartFormDistributionMode };
+
+/**
+ * The single predicate the event-existence gate consults.
+ *
+ * Both halves are load-bearing and both are affirmative. The kind must be one of the two
+ * paths that were fully server-validated *without* a canonical event, and the submission
+ * must be Track Only. An absent outcome is `undefined` and satisfies neither, so the gate
+ * stays enforcing by default for every caller that does not pass one.
+ */
+export function waivesEventExistenceGate(outcome: SmartFormValidationOutcome | undefined): boolean {
+  if (!outcome) return false;
+  if (outcome.kind !== 'manual-coverage-gap' && outcome.kind !== 'structured-team-fallback') {
+    return false;
+  }
+  return outcome.distributionMode === 'track-only';
+}
+// UTV2-1842 SMART_FORM_OUTCOME_END
+
 export async function validateSmartFormRelationships(
   payload: SubmissionPayload,
   referenceData: ReferenceDataRepository,
-): Promise<void> {
-  if (payload.source !== 'smart-form') return;
+): Promise<SmartFormValidationOutcome> {
+  if (payload.source !== 'smart-form') return { kind: 'not-smart-form' };
 
   // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_START
   // `smart-form` predates this product as a generic submission source, and
@@ -23,14 +71,22 @@ export async function validateSmartFormRelationships(
   // handlers/submit-pick.ts guarantees it -- or a participantResolution, so
   // keying on the presence of either covers all real Smart Form traffic
   // without retrofitting the contract onto the legacy label.
-  if (!carriesSmartFormFields(payload)) return;
+  if (!carriesSmartFormFields(payload)) return { kind: 'not-smart-form' };
   // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_END
 
+  // UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_CALL_START
+  // Placed after the trigger-scope guard above, so it governs exactly the
+  // traffic the Smart Form itself produces and leaves the legacy `smart-form`
+  // service-role label untouched.
+  assertSmartFormNumericBounds(payload);
+  // UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_CALL_END
+
   const metadata = payload.metadata;
-  const distributionMode = metadata?.['distributionMode'];
-  if (distributionMode !== 'track-only' && distributionMode !== 'delivery-eligible') {
+  const rawDistributionMode = metadata?.['distributionMode'];
+  if (rawDistributionMode !== 'track-only' && rawDistributionMode !== 'delivery-eligible') {
     fail('distributionMode must be track-only or delivery-eligible');
   }
+  const distributionMode: SmartFormDistributionMode = rawDistributionMode;
 
   const resolution = readResolution(metadata?.['participantResolution']);
   if (!resolution) fail('participantResolution must use the typed canonical or manual contract');
@@ -58,23 +114,23 @@ export async function validateSmartFormRelationships(
 
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
-    return;
+    return { kind: 'manual-coverage-gap', distributionMode };
   }
 
   const eventId = readOptionalString(resolution.eventId);
   if (!eventId) {
     assertFlatMetadataIdentity(payload, resolution);
-    if (TEAM_SPORTS.has(sportId.toUpperCase())) {
-      await validateStructuredTeamFallback(resolution, sportId, referenceData);
-    } else {
+    if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
-    return;
+    await validateStructuredTeamFallback(payload, resolution, sportId, referenceData);
+    return { kind: 'structured-team-fallback', distributionMode };
   }
 
   const event = await referenceData.getEventBrowse(eventId);
   if (!event) fail(`canonical event was not found: ${eventId}`);
   validateCanonicalEvent(payload, resolution, sportId, event);
+  return { kind: 'canonical-event', eventId, distributionMode };
 }
 
 async function validateManualResolution(
@@ -108,6 +164,14 @@ async function validateManualResolution(
   }
   if (payload.eventName && normalize(payload.eventName) !== normalize(resolution.enteredEventName)) {
     fail('manual enteredEventName does not match submission eventName');
+  }
+  // UTV2-1842: the flat metadata copy is bound too. This outcome now waives the
+  // event-existence gate, and an unchecked `metadata.eventName` is the same fabrication
+  // surface the structured path was flagged for -- a different field carrying a name the
+  // server never agreed to.
+  const flatManualEventName = readOptionalString(payload.metadata?.['eventName']);
+  if (flatManualEventName && normalize(flatManualEventName) !== normalize(resolution.enteredEventName)) {
+    fail('manual enteredEventName does not match metadata eventName');
   }
 
   // UTV2-1672 MANUAL_COVERAGE_GAP_PROOF_GUARD_START
@@ -179,6 +243,7 @@ async function validateManualResolution(
 }
 
 async function validateStructuredTeamFallback(
+  payload: SubmissionPayload,
   resolution: Extract<SmartFormParticipantResolution, { resolution: 'canonical' }>,
   sportId: string,
   referenceData: ReferenceDataRepository,
@@ -203,6 +268,79 @@ async function validateStructuredTeamFallback(
   if (resolution.player) {
     fail('canonical player selection requires a canonical event so team membership can be verified');
   }
+
+  // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_START
+  // The checks above verify the two *identities*. They say nothing about the name the
+  // submission carries, and the name is what is persisted and later read by a human. Without
+  // this block a payload with genuine DB-backed away/home IDs and an arbitrary
+  // `eventName: "Fake Finals"` passes every identity check, and -- now that this outcome
+  // waives the event-existence gate -- the fabricated name is persisted with provenance
+  // claiming it was server-validated. It was not.
+  //
+  // So the name is bound to the sides that *were* verified: it must name exactly those two
+  // teams, away first, using the canonical display names `validateSearchBackedTeam` has
+  // already pinned to the reference-data rows. The Smart Form derives the field this way
+  // itself (`setDerivedMatchupName`, "Away @ Home"), so this refuses fabrication without
+  // refusing anything the form can produce.
+  validateStructuredMatchupName(payload, resolution);
+  // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_END
+}
+
+/**
+ * Separators a matchup name may use between its two sides. Each requires surrounding
+ * whitespace, so a team name that merely contains one of these letter sequences -- "Atlanta"
+ * for `at`, for instance -- is never split.
+ */
+const MATCHUP_SEPARATOR = /\s+(?:@|vs\.?|v\.?|at)\s+/iu;
+
+function validateStructuredMatchupName(
+  payload: SubmissionPayload,
+  resolution: Extract<SmartFormParticipantResolution, { resolution: 'canonical' }>,
+) {
+  const away = resolution.away;
+  const home = resolution.home;
+  // Narrowing only; validateStructuredTeamFallback has already failed without both sides.
+  if (!away || !home) return;
+
+  // All three places a matchup name can travel. They are checked against the same verified
+  // sides rather than against each other, so agreeing on a fabricated name is not a way past
+  // this: consistency between the payload and the resolution metadata is a consequence of
+  // both binding to the teams, not a substitute for it.
+  const named: Array<{ field: string; value: string }> = [];
+  const push = (field: string, value: unknown) => {
+    const text = readOptionalString(value);
+    if (text) named.push({ field, value: text });
+  };
+  push('eventName', payload.eventName);
+  push('metadata.eventName', payload.metadata?.['eventName']);
+  push('participantResolution.eventName', resolution.eventName);
+
+  for (const { field, value } of named) {
+    const sides = splitMatchupSides(value);
+    if (!sides) {
+      fail(
+        `${field} "${value}" does not name a matchup; a structured fallback without a canonical event must name its two verified sides as "${away.displayName} @ ${home.displayName}"`,
+      );
+    }
+    if (normalize(sides.away) !== normalize(away.displayName) || normalize(sides.home) !== normalize(home.displayName)) {
+      fail(
+        `${field} "${value}" does not match the verified structured matchup "${away.displayName} @ ${home.displayName}"`,
+      );
+    }
+  }
+}
+
+function splitMatchupSides(value: string): { away: string; home: string } | null {
+  // Canonical event names carry a "· Game N" disambiguator for doubleheaders;
+  // matchesCanonicalEventName strips it on the canonical path and the same name can reach
+  // the fallback path, so it is stripped here rather than treated as a mismatch.
+  const withoutGameNumber = value.trim().replace(/\s*·\s*game\s+\d+$/iu, '');
+  const parts = withoutGameNumber.split(MATCHUP_SEPARATOR);
+  if (parts.length !== 2) return null;
+  const away = parts[0]?.trim() ?? '';
+  const home = parts[1]?.trim() ?? '';
+  if (!away || !home) return null;
+  return { away, home };
 }
 
 async function validateSearchBackedTeam(
@@ -505,12 +643,15 @@ async function findCanonicalCoverage(
   const enteredTokens = aliasTokens(displayName);
   if (enteredTokens.length === 0) return null;
 
-  // The catalog first, and not only as an optimisation. `searchTeams` reads the
-  // `teams` table and `searchPlayers` joins current assignments; both are empty
-  // in production today, so a search-only proof returns null for every name in
-  // every sport and the guard degrades to accepting whatever it is told. The
-  // catalog reads `participants`, which is populated, so this is the branch
-  // that actually carries the refusal.
+  // The catalog first, and not only as an optimisation. All three reference-data
+  // reads now agree on one populated source: `getCatalog`, `searchTeams` and
+  // `searchPlayers` all read `participants` (UTV2-1854). Before that, `searchTeams`
+  // read the canonical `teams` table and `searchPlayers` joined
+  // `player_team_assignments`, both of which are empty under parked provider
+  // ingestion -- so a search-only proof returned null for every name in every sport
+  // and this guard degraded to accepting whatever it was told. The catalog is still
+  // tried first because it is one read of the whole sport and an exact alias match
+  // over the same rows the searches then rank.
   const catalog = await referenceData.getCatalog();
   const sport = catalog.sports.find((candidate) => candidate.id === sportId);
   for (const team of sport?.teams ?? []) {
@@ -564,6 +705,108 @@ function matchesCanonicalEventName(submitted: string, canonical: string) {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+// UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_START
+// SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md fixes these bounds and states, under
+// "Server-Side Enforcement", that a value the form rejects must also be rejected by the
+// API. Today only the browser enforces them, so a modified client, a replayed request, or
+// a direct POST carrying source:'smart-form' persists values the product contract forbids.
+//
+// The literals are duplicated from apps/smart-form/lib/form-schema.ts rather than shared:
+// packages never import from apps and apps never import from apps (root CLAUDE.md core
+// invariant 8), so no module may legally hold the single copy. The duplication is made
+// self-policing instead -- smart-form-validation.test.ts reads form-schema.ts and asserts
+// each literal below still appears in it, the same drift-test shape UTV2-1688 used for the
+// executor-result regexes.
+export const SMART_FORM_ODDS_MIN_MAGNITUDE = 100;
+export const SMART_FORM_ODDS_MAX_MAGNITUDE = 50000;
+export const SMART_FORM_UNITS_MIN = 0.5;
+export const SMART_FORM_UNITS_MAX = 5;
+export const SMART_FORM_UNITS_STEP = 0.5;
+export const SMART_FORM_LINE_MAX_MAGNITUDE = 999.5;
+export const SMART_FORM_CONVICTION_MIN = 1;
+export const SMART_FORM_CONVICTION_MAX = 10;
+
+/**
+ * A numeric bound violation is not a relationship failure. Reusing
+ * SMART_FORM_RELATIONSHIP_INVALID would report "this selection does not resolve to a
+ * canonical participant" for a submission whose participants resolved perfectly and whose
+ * odds were 7 -- a misdiagnosis an operator would act on.
+ */
+function failBound(message: string): never {
+  throw new ApiError(422, 'SMART_FORM_GUARDRAIL_INVALID', message);
+}
+
+function assertSmartFormNumericBounds(payload: SubmissionPayload): void {
+  const { odds, stakeUnits, line } = payload;
+
+  // Presence is deliberately NOT asserted. `odds` and `stakeUnits` are optional in
+  // SubmissionPayload (packages/contracts/src/submission.ts:21-22) and submit-pick.ts reads
+  // both through readOptionalNumber. This guard bounds the values a submission does carry;
+  // making either mandatory would be a field-presence contract change, which belongs with
+  // that contract rather than in a bounds guard.
+  if (odds !== undefined) {
+    if (!Number.isFinite(odds)) {
+      failBound('odds must be a finite number when provided');
+    }
+    if (!Number.isInteger(odds)) {
+      failBound(`odds must be a whole number in American format (received ${odds})`);
+    }
+    const oddsMagnitude = Math.abs(odds);
+    if (
+      oddsMagnitude < SMART_FORM_ODDS_MIN_MAGNITUDE ||
+      oddsMagnitude > SMART_FORM_ODDS_MAX_MAGNITUDE
+    ) {
+      failBound(
+        `odds must be American format between ${SMART_FORM_ODDS_MIN_MAGNITUDE} and ` +
+          `${SMART_FORM_ODDS_MAX_MAGNITUDE} in magnitude (received ${odds})`,
+      );
+    }
+  }
+
+  if (stakeUnits !== undefined) {
+    if (!Number.isFinite(stakeUnits)) {
+      failBound('stakeUnits must be a finite number when provided');
+    }
+    if (stakeUnits < SMART_FORM_UNITS_MIN || stakeUnits > SMART_FORM_UNITS_MAX) {
+      failBound(
+        `stakeUnits must be between ${SMART_FORM_UNITS_MIN} and ${SMART_FORM_UNITS_MAX} ` +
+          `(received ${stakeUnits})`,
+      );
+    }
+    // Compared as a quotient of the step so 1.5 is exact rather than a float remainder.
+    if (!Number.isInteger(stakeUnits / SMART_FORM_UNITS_STEP)) {
+      failBound(
+        `stakeUnits must be a multiple of ${SMART_FORM_UNITS_STEP} (received ${stakeUnits})`,
+      );
+    }
+  }
+
+  // `line` is deliberately not required: a moneyline pick legitimately carries none, which
+  // is what the contract's "where required" qualifier means.
+  if (line !== undefined) {
+    if (!Number.isFinite(line)) failBound('line must be a finite number when provided');
+    if (Math.abs(line) > SMART_FORM_LINE_MAX_MAGNITUDE) {
+      failBound(
+        `line must be within +/-${SMART_FORM_LINE_MAX_MAGNITUDE} in magnitude (received ${line})`,
+      );
+    }
+  }
+
+  const conviction = payload.metadata?.['capperConviction'];
+  if (conviction !== undefined) {
+    if (typeof conviction !== 'number' || !Number.isInteger(conviction)) {
+      failBound('capperConviction must be a whole number when provided');
+    }
+    if (conviction < SMART_FORM_CONVICTION_MIN || conviction > SMART_FORM_CONVICTION_MAX) {
+      failBound(
+        `capperConviction must be between ${SMART_FORM_CONVICTION_MIN} and ` +
+          `${SMART_FORM_CONVICTION_MAX} (received ${conviction})`,
+      );
+    }
+  }
+}
+// UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_END
 
 function fail(message: string): never {
   throw new ApiError(422, 'SMART_FORM_RELATIONSHIP_INVALID', message);
