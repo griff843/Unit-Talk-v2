@@ -7,9 +7,9 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "1cbdbc88d271295d71d1967f0cb4a4cd0e76c534",
+    "verified_source_sha": "2902c3e923015ba16ab54e343ef8938e744f664c",
     "evidence_commit_sha": null,
-    "current_pr_head_sha": "1cbdbc88d271295d71d1967f0cb4a4cd0e76c534",
+    "current_pr_head_sha": "2902c3e923015ba16ab54e343ef8938e744f664c",
     "sha_type": "pending_merge",
     "ci_sentinels": {
       "pnpm_type_check": "PASS - exit 0, no diagnostics. Measured locally in the lane worktree at this anchor.",
@@ -18,8 +18,8 @@
       "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1859: Verdict PASS, Changed files 3, Rules matched (none) - no R-level artifacts required for this diff. Recorded exactly as produced; the count reads 3 where the working tree shows 4 modified files, and the discrepancy is reported rather than reconciled to the convenient number.",
       "pnpm_lint": "PASS - exit 0, no findings. Added after the first CI run failed on it: the initial attestation ran pnpm type-check and the touched suites but never pnpm lint, which verify:static runs, so it claimed a green tree that had not been fully measured. See the lint_regression entry in static_proof."
     },
-    "anchor_note": "1cbdbc88d is the implementation commit and the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES. Every command recorded here was run against that tree. Rule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD`, so any later commit must stay inside docs/06_status/proof/ or docs/06_status/lanes/ for this anchor to remain valid; the only commits after it are the lane manifest binding and this bundle, both of which do.",
-    "bound_at": "2026-09-08T15:05:00.000Z"
+    "anchor_note": "2902c3e92 is the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES, and every command recorded here was run against that tree. It replaced the previous anchor 1cbdbc88d for a reason worth naming rather than hiding: the first CI run failed `verify` on a lint rule the local gate never exercised, so the code changed and the anchor had to follow it. An anchor that stayed at 1cbdbc88d would have been bound to a tree that does not pass CI.\n\nRule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD`, so every commit after this one must stay inside docs/06_status/proof/ or docs/06_status/lanes/. The only commit after it is this re-anchor, which does.",
+    "bound_at": "2026-09-08T16:10:00.000Z"
   },
   "static_proof": {
     "status": "PASS",
