@@ -12,7 +12,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1856-browse-participant-identity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1536
-Head SHA: f2ee3eacb7760d25cda36fe2274ae5882ac73a38
+Head SHA: 83f4ea04c4defb3b2755a292be486a5bd8ca9277
 result: pass
 
 ## ASSERTIONS:
@@ -122,15 +122,17 @@ result: pass
   canonical player in structured-fallback mode. **Live event ingestion is therefore not a
   prerequisite for contained Track Only submission**, and the only change needed was the one
   server-side refusal.
-- [x] `pnpm verify` is green **in CI on this head** (run 34245842781, job 102133851361), which is
+- [x] `pnpm verify` is green **in CI on this head** (run 34250974852, job 102150517971), which is
   the authoritative full-suite result. **Corrected at the rebind:** this bullet previously cited a
   local full-suite count of 6074/6074 measured at the earlier anchor `762a97afe`. That run was real,
-  but it was not re-performed after the five `main` resyncs, and a count carried across a tree change
-  is a stale receipt. What was re-measured locally at this head is `pnpm lint` exit 0,
-  `pnpm type-check` exit 0, and the three suites this lane changes; see "Verification".
+  but it was not re-performed after the six `main` resyncs, and a count carried across a tree change
+  is a stale receipt. What was measured locally — at `f2ee3eacb`, the fifth resync, and not restated
+  as the anchor — is `pnpm lint` exit 0, `pnpm type-check` exit 0, and the three suites this lane
+  changes; see "Verification" for exactly which receipt was taken at which tree.
 - [x] **The submission is issued and answered without interception, and the saved pick is read
-  back.** `phase-one.spec.ts` — which stubs `POST /api/submissions` nowhere — passes 12/12 at this
-  head; its no-event structured fallback asserts HTTP 201, `outboxEnqueued: false`, the persisted
+  back.** `phase-one.spec.ts` — which stubs `POST /api/submissions` nowhere — passes 12/12 at
+  `f2ee3eacb`, a tree differing from the anchor only by an automated readiness-ledger JSON; its
+  no-event structured fallback asserts HTTP 201, `outboxEnqueued: false`, the persisted
   line, odds, `distributionMode: 'track-only'`, `eventId: null` and both canonical side ids via
   `GET /api/picks`, and `outboxId: null` via `GET /api/qa/pick-status/<pickId>`.
 - [x] **The un-intercepted player prop issues its request and the server refuses on its own
@@ -224,9 +226,9 @@ $ # UTV2-1856 — the picks.player_id mutation was performed by CI before the re
     verify                             success
 
 # ...and the live-DB half, obtained where the credential actually lives, on this exact head:
-$ gh api .../commits/f2ee3eacb7760d25cda36fe2274ae5882ac73a38/check-runs
-  verify                              completed  success   run 34245842781  job 102133851361
-  Writable DB proof (staging only)    completed  success   run 34245842781  job 102127468963
+$ gh api .../commits/83f4ea04c4defb3b2755a292be486a5bd8ca9277/check-runs
+  verify                              completed  success   run 34250974852  job 102150517971
+  Writable DB proof (staging only)    completed  success   run 34250974852  job 102145137124
     1..14   # tests 14   # pass 14   # fail 0   # skipped 0
     ok  8 - UTV2-1856 live DB: browse resolves the player team from participants while
              teams and player_team_assignments stay empty
@@ -246,12 +248,25 @@ $ gh api .../commits/f2ee3eacb7760d25cda36fe2274ae5882ac73a38/check-runs
 
 ## Verification
 
-Every command in this section was re-run at `f2ee3eacb7760d25cda36fe2274ae5882ac73a38` after five
-`main` resyncs, rather than carried forward from the earlier anchor `762a97afea7fabe1d7e5b92901bb9580203fdd37`.
-This lane's implementation has not changed since that earlier commit, but the resyncs changed the
-**tree** — and a receipt names a tree, not a changeset. One of them matters on its own terms:
-UTV2-1859 (`9abb4ac62`) is now in this branch, so the browser evidence below exercises this lane's
-server change and the client change that unblocks it **in one tree**.
+The anchor is `83f4ea04c4defb3b2755a292be486a5bd8ca9277`, the sixth `main` resync merge and the last
+commit on this branch touching any path outside `docs/06_status/proof/UTV2-1856/`. It is not the
+commit this lane's implementation was written on: that is
+`762a97afea7fabe1d7e5b92901bb9580203fdd37`, and the implementation has not changed since. The
+resyncs changed the **tree**, and a receipt names a tree rather than a changeset, so the receipts
+below were re-obtained rather than carried forward. One resync matters on its own terms: UTV2-1859
+(`9abb4ac62`) is now in this branch, so the browser evidence below exercises this lane's server
+change and the client change that unblocks it **in one tree**.
+
+**Where each receipt was actually taken, stated exactly rather than collapsed onto the anchor.**
+The two CI receipts — `verify` and `Writable DB proof (staging only)` — were taken at the anchor
+`83f4ea04c4defb3b2755a292be486a5bd8ca9277` itself. The local commands below, and the browser runs
+further down, were run at `f2ee3eacb7760d25cda36fe2274ae5882ac73a38`, the fifth resync, and are
+**not** restated as having been re-run at the anchor. The whole difference between those two trees
+is `docs/06_status/readiness/readiness-score.json`, an automated ledger refresh:
+`git diff --name-only f2ee3eacb 83f4ea04c` returns that one path and nothing under `apps/`,
+`packages/`, `scripts/` or `.github/`. The anchor still had to move, because
+`scripts/ci/proof-binding-validator.ts` rule 4 admits only `docs/06_status/proof/` and
+`docs/06_status/lanes/` between `verified_source_sha` and HEAD, and that file is neither.
 
 - [x] `pnpm lint`: exit 0
 - [x] `pnpm type-check`: exit 0, no diagnostics
@@ -262,7 +277,7 @@ server change and the client change that unblocks it **in one tree**.
       locally the same command reports **96 tests / 96 pass / 0 fail / 0 skipped, exit 0**. The
       live-DB suite's receipt is the green `Writable DB proof (staging only)` job below, obtained
       at this same head — which is the route-B deferral working as ratified rather than a gap.
-- [x] `pnpm verify`: **green in CI on this head** (run 34245842781, job 102133851361) — that is the
+- [x] `pnpm verify`: **green in CI on this head** (run 34250974852, job 102150517971) — that is the
       authoritative full-suite result and it is what is claimed here. No local full-suite pass is
       claimed at this head: locally the run was lint, type-check and the touched suites, and
       `test:live-db` is refused under containment as described above.
@@ -438,7 +453,7 @@ reconstructs the allowed scope from `expected_proof_paths` as an exact list rath
 read as scope bleed while the required `File scope lock` check passes on the identical diff.
 
 `Close eligibility preflight`, `T1 Proof Gate`, `Proof Auditor Gate` and `Runtime Verifier Gate`
-were red on the head that carried no proof bundle and are **green on `f2ee3eacb7760d25cda36fe2274ae5882ac73a38`**, read
+were red on the head that carried no proof bundle and are **green on `83f4ea04c4defb3b2755a292be486a5bd8ca9277`**, read
 from `gh pr checks 1536` rather than assumed.
 
 `Check issue references` is **red on this head, deliberately and knowingly**, and this is the one
@@ -457,7 +472,7 @@ not a claim of scope over another issue.
 
 Removing it requires rewriting `90d558454`'s message, which changes that commit's SHA and every
 SHA after it. That would discard the CI receipts this bundle is bound to — including the
-`Writable DB proof (staging only)` staging write cycle on `f2ee3eacb7760d25cda36fe2274ae5882ac73a38`, and including the
+`Writable DB proof (staging only)` staging write cycle on `83f4ea04c4defb3b2755a292be486a5bd8ca9277`, and including the
 mutation evidence recorded above, which is *itself* a pair of CI conclusions at `52e086f86`
 (failure) and `90d558454` (success). The receipt is worth more than the green non-required check.
 
@@ -474,4 +489,4 @@ real.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1536
 Approved PR head: pending merge
-Execution SHA: f2ee3eacb7760d25cda36fe2274ae5882ac73a38
+Execution SHA: 83f4ea04c4defb3b2755a292be486a5bd8ca9277
