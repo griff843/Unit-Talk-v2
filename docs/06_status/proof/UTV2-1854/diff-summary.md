@@ -6,7 +6,7 @@ Lane type: runtime
 Branch: claude/utv2-1854-reference-data-participants
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1535
 Head SHA: 869c0d2c382dda22eb3f57ab71a6ddc9f1ddd8f7
-Merge SHA: N/A
+Merge SHA: 79fe3d292ae49348e1d29910716199f1b47a8938
 Diff base: 07fbefd8e99a41af9a0cd523f4ed7098a97385be
 Diff target: 869c0d2c382dda22eb3f57ab71a6ddc9f1ddd8f7
 
@@ -52,4 +52,4 @@ M	packages/db/src/runtime-repositories.ts
 
 ## SHA Binding
 Head SHA: 869c0d2c382dda22eb3f57ab71a6ddc9f1ddd8f7
-Merge SHA: N/A
+Merge SHA: 79fe3d292ae49348e1d29910716199f1b47a8938
