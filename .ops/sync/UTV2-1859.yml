@@ -1,0 +1,103 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1859
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1859
+  objective: "Smart Form client: the player-prop submission guard mirrors a server
+    rule UTV2-1856 removed, so the browser refuses before issuing a request"
+  acceptance_criteria:
+    - "A structured-fallback player prop with no scheduled event submits from
+      the browser and persists, with `distributionMode: track-only`, honest
+      `participantResolution`, and **zero** `distribution_outbox` rows."
+    - "The refusals that are still true are kept and demonstrated: a player
+      whose team relationship the server cannot establish is still refused, and
+      the operator sees the server's own message rather than silence."
+    - "The duplicated-rule class is closed mechanically, not by comment:
+      something fails when the client guard and its cited server rule disagree.
+      A `file:line` citation is documentation of the coupling, never enforcement
+      of it."
+    - An end-to-end browser test covers this path and is executed by a wired
+      execution site, not left opt-in.
+    - No change to any gate, required check, workflow, label, approval artifact
+      or lane type.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Measured, not inferred
+
+      Reproduced 2026-09-08 in the `apps/smart-form` Playwright harness (real
+      local API process, in-memory persistence): structured fallback, no
+      scheduled event, NBA player prop, canonical player chosen from the search
+      results, complete valid ticket. Pressing **Submit** issues **no** `POST
+      /api/submissions` **at all**. The form refuses first:
+
+
+      > **Select a canonical matchup** — "A canonical player prop needs the
+      matchup it belongs to. Select a matchup, or use the verified coverage-gap
+      path."
+    - |-
+      Cause
+      `evaluateSubmissionGuards`' `canonical-player-requires-event` branch, `apps/smart-form/lib/form-utils.ts:662-670`. Its own comment names the rule it mirrors:
+
+      > `smart-form-validation.ts:203` — `validateStructuredTeamFallback` refuses any canonical player selection without a canonical event, because team membership cannot be verified.
+
+      [UTV2-1856](https://linear.app/unit-talk-v2/issue/UTV2-1856/event-browse-resolves-participant-identity-from-the-empty-canonical) **(#1536) removed that server rule.** `smart-form-validation.ts:269-286` now resolves team membership from the participants observation edge and keeps the refusal only for a player whose relationship genuinely cannot be established. The client mirror was not removed with it, so the client refuses what the server accepts — and does so before the request exists.
+    - |-
+      Why every existing signal stayed green
+      The server tests assert the server's new behaviour; the client tests assert the client's old behaviour; nothing compares the two. A green `verify`, a complete T1 proof bundle, live-DB evidence and a merged repair all coexisted with a form that refuses. **Server-side evidence cannot detect this class**, because the defect is that no request is sent.
+
+      Same shape as [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace): one rule stored twice, one copy changed, each copy tested against itself.
+    - |-
+      Not in scope
+      The deploy dispatch (reserved decision 8) and [UTV2-1856](https://linear.app/unit-talk-v2/issue/UTV2-1856/event-browse-resolves-participant-identity-from-the-empty-canonical)'s own server diff.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1859/smart-form-client-the-player-prop-submission-guard-mirrors-a-server
+    title: "Smart Form client: the player-prop submission guard mirrors a server
+      rule UTV2-1856 removed, so the browser refuses before issuing a request"
+    description: |-
+      ## Measured, not inferred
+
+      Reproduced 2026-09-08 in the `apps/smart-form` Playwright harness (real local API process, in-memory persistence): structured fallback, no scheduled event, NBA player prop, canonical player chosen from the search results, complete valid ticket. Pressing **Submit** issues **no** `POST /api/submissions` **at all**. The form refuses first:
+
+      > **Select a canonical matchup** — "A canonical player prop needs the matchup it belongs to. Select a matchup, or use the verified coverage-gap path."
+
+      ## Cause
+
+      `evaluateSubmissionGuards`' `canonical-player-requires-event` branch, `apps/smart-form/lib/form-utils.ts:662-670`. Its own comment names the rule it mirrors:
+
+      > `smart-form-validation.ts:203` — `validateStructuredTeamFallback` refuses any canonical player selection without a canonical event, because team membership cannot be verified.
+
+      [UTV2-1856](https://linear.app/unit-talk-v2/issue/UTV2-1856/event-browse-resolves-participant-identity-from-the-empty-canonical) **(#1536) removed that server rule.** `smart-form-validation.ts:269-286` now resolves team membership from the participants observation edge and keeps the refusal only for a player whose relationship genuinely cannot be established. The client mirror was not removed with it, so the client refuses what the server accepts — and does so before the request exists.
+
+      ## Why every existing signal stayed green
+
+      The server tests assert the server's new behaviour; the client tests assert the client's old behaviour; nothing compares the two. A green `verify`, a complete T1 proof bundle, live-DB evidence and a merged repair all coexisted with a form that refuses. **Server-side evidence cannot detect this class**, because the defect is that no request is sent.
+
+      Same shape as [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace): one rule stored twice, one copy changed, each copy tested against itself.
+
+      ## Acceptance criteria
+
+      1. A structured-fallback player prop with no scheduled event submits from the browser and persists, with `distributionMode: track-only`, honest `participantResolution`, and **zero** `distribution_outbox` rows.
+      2. The refusals that are still true are kept and demonstrated: a player whose team relationship the server cannot establish is still refused, and the operator sees the server's own message rather than silence.
+      3. The duplicated-rule class is closed mechanically, not by comment: something fails when the client guard and its cited server rule disagree. A `file:line` citation is documentation of the coupling, never enforcement of it.
+      4. An end-to-end browser test covers this path and is executed by a wired execution site, not left opt-in.
+      5. No change to any gate, required check, workflow, label, approval artifact or lane type.
+
+      ## Not in scope
+
+      The deploy dispatch (reserved decision 8) and [UTV2-1856](https://linear.app/unit-talk-v2/issue/UTV2-1856/event-browse-resolves-participant-identity-from-the-empty-canonical)'s own server diff.
+    captured_at: 2026-09-08T14:13:23.656Z
+    description_sha256: 0bd72aefca4eb9c707f7731acb185540117bd15488211a3d1e159e82355e885e
+  contract_hash: b9822af31bbe2aa82c793b55c26f6acaee9ebed6ab2cb2e1f9cf7043ddc37430
