@@ -1,8 +1,40 @@
-# UTV2-1859 — Verification
+# PROOF: UTV2-1859 — remove the stale client submission guard
 
 **Issue:** UTV2-1859 · **Lane:** claude · **Tier:** T2 · **Lane type:** delivery-ui
 **Branch:** `claude/utv2-1859-client-submission-guard`
-**MERGE_SHA:** pending merge
+MERGE_SHA: pending merge
+
+**Verified source SHA:** `c10f289cbc654c2f5ba2ac152c5685b49d57a3dc`
+
+## ASSERTIONS:
+
+- [x] **A1 —** The `canonical-player-requires-event` branch is removed from
+      `evaluateSubmissionGuards` (`apps/smart-form/lib/form-utils.ts`), and its code is removed from
+      the `SubmissionGuardFailure['code']` union so it cannot be reintroduced by accident.
+- [x] **A2 —** A canonical player prop with no scheduled event is admitted by the client:
+      `evaluateSubmissionGuards({sportId:'NBA', identityMode:'structured-fallback',
+      canonicalEventId:null, selectedPlayerId:'player-123'})` returns `null`.
+- [x] **A3 —** A real browser now issues exactly one `POST /api/submissions` for that ticket. The
+      Playwright case at `apps/smart-form/e2e/smart-form-submission.spec.ts:1366` drives the form to
+      Submit and asserts `expect.poll(() => submissionRequests).toBe(1)`.
+- [x] **A4 —** The captured payload is truthful: `metadata.distributionMode` is `track-only`,
+      participant resolution is canonical, the event id is `null` on both the resolution and the
+      metadata, and the resolved player carries its `teamId`.
+- [x] **A5 —** Every remaining client guard that exists only because a server rule exists cites that
+      rule as a quoted `// SERVER-RULE:` fragment, and a test reads
+      `apps/api/src/smart-form-validation.ts` as text and fails when a cited fragment is no longer
+      there. All three fragments were confirmed present on `origin/main`, so the control is not
+      vacuous.
+- [x] **A6 —** Three mutations each turn a distinct assertion red — a stale citation, the restored
+      guard against the unit tests, and the restored guard against the browser. The third reproduces
+      the originally reported symptom exactly (`Expected: 1, Received: 0`).
+- [x] **A7 —** Scope is four files, all under `apps/smart-form/`, matching `file_scope_lock`. No
+      server file, no contract, and nothing under `.github/` is touched: no gate, required check,
+      workflow, label, approval artifact or lane type is added.
+
+## EVIDENCE:
+
+Every command below was re-run at the verified source SHA above, after the second `main` resync.
 
 ## What was actually wrong
 
@@ -22,8 +54,11 @@ that refused.
 ## Verification
 
 All commands were run in the lane worktree
-`.out/worktrees/claude__utv2-1859-client-submission-guard` at the branch head, after
-`CI=true pnpm install --frozen-lockfile`.
+`.out/worktrees/claude__utv2-1859-client-submission-guard` at the verified source SHA
+`c10f289cbc654c2f5ba2ac152c5685b49d57a3dc`, after `CI=true pnpm install --frozen-lockfile`. That
+SHA is the second `main` resync merge; every command in this section was re-run against it rather
+than carried forward from the pre-resync anchor, and both resyncs brought documentation only —
+zero application code — which is why the counts below do not move.
 
 ### `pnpm type-check`
 
@@ -54,9 +89,14 @@ No local full-suite PASS is claimed here.
 NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS=1 npx playwright test -c playwright.config.ts \
   e2e/smart-form-submission.spec.ts --workers=1 --reporter=line
 
-14 passed (2.3m)
+14 passed (1.1m)
 E2E_EXIT=0
 ```
+
+Run three times on this lane in total: **14 passed (2.3m)** at the first implementation anchor,
+**14 passed (1.1m)** after the lint retype, and **14 passed (1.1m)** at the verified source SHA
+above. The wall-clock figure moves with machine load and carries no information; the pass count and
+the exit code are the receipt.
 
 The new test at `e2e/smart-form-submission.spec.ts:1366` drives the deployed form's own code in a
 real browser: NBA, a date with no scheduled event, manual matchup fallback, a canonical team and a
@@ -93,13 +133,18 @@ assertions destructure, so the suite was re-run rather than assumed unaffected.
 
 ```
 Verdict: PASS
-Changed files: 3
-Rules matched: (none) — no R-level artifacts required for this diff
+Changed files: 9
+Rules matched: operator-ui
 ```
 
-Recorded exactly as produced. The count reads 3 where the working tree shows 4 modified files; the
-verdict is PASS with no triggered `required[]` artifacts either way, and the discrepancy is reported
-rather than reconciled to the convenient number.
+**This output changed across the resyncs and is recorded as it now reads, not as it first read.** At
+the pre-resync anchor it reported `Changed files: 3` and `Rules matched: (none)`. At the verified
+source SHA it reports 9 changed files and matches `operator-ui`, because the check compares against
+`main` and the two resync merges pulled UTV2-1843's documentation into the comparison. The verdict
+is `PASS` in both readings — every `required[]` artifact triggered by `operator-ui` is present —
+but the earlier numbers would have been a stale receipt for this head, so they are superseded here
+rather than left standing. The count still does not equal the four files this lane actually changed;
+that discrepancy is reported rather than reconciled to a convenient number.
 
 ## Mutation testing — three mutations, three distinct assertions
 

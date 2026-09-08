@@ -7,19 +7,19 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "2902c3e923015ba16ab54e343ef8938e744f664c",
+    "verified_source_sha": "c10f289cbc654c2f5ba2ac152c5685b49d57a3dc",
     "evidence_commit_sha": null,
-    "current_pr_head_sha": "2902c3e923015ba16ab54e343ef8938e744f664c",
+    "current_pr_head_sha": "c10f289cbc654c2f5ba2ac152c5685b49d57a3dc",
     "sha_type": "pending_merge",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS - exit 0, no diagnostics. Measured locally in the lane worktree at this anchor.",
-      "pnpm_test": "PASS - the two touched suites report tests 58, pass 58, fail 0, exit 0 (pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts apps/smart-form/test/api-client.test.ts). The full suite runs in the required `verify` check on this PR, which is the authoritative result; no local full-suite PASS is claimed.",
-      "playwright_e2e": "PASS - npx playwright test -c playwright.config.ts e2e/smart-form-submission.spec.ts --workers=1: 14 passed (2.3m), exit 0. This is the run that demonstrates the browser now issues POST /api/submissions for a canonical player prop with no scheduled event.",
-      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1859: Verdict PASS, Changed files 3, Rules matched (none) - no R-level artifacts required for this diff. Recorded exactly as produced; the count reads 3 where the working tree shows 4 modified files, and the discrepancy is reported rather than reconciled to the convenient number.",
-      "pnpm_lint": "PASS - exit 0, no findings. Added after the first CI run failed on it: the initial attestation ran pnpm type-check and the touched suites but never pnpm lint, which verify:static runs, so it claimed a green tree that had not been fully measured. See the lint_regression entry in static_proof."
+      "pnpm_type_check": "PASS - exit 0, no diagnostics. Re-measured in the lane worktree at this anchor after the second main resync.",
+      "pnpm_test": "PASS - the two touched suites report tests 58, pass 58, fail 0, exit 0 (pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts apps/smart-form/test/api-client.test.ts), re-measured at this anchor. The full suite runs in the required `verify` check on this PR, which is the authoritative result; no local full-suite PASS is claimed.",
+      "playwright_e2e": "PASS - npx playwright test -c apps/smart-form/playwright.config.ts apps/smart-form/e2e/smart-form-submission.spec.ts --workers=1: 14 passed (1.1m), exit 0, re-run at this anchor. This is the run that demonstrates the browser now issues POST /api/submissions for a canonical player prop with no scheduled event.",
+      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1859 at this anchor: Verdict PASS, Changed files 9, Rules matched operator-ui. This supersedes the pre-resync reading (Changed files 3, Rules matched none): the check compares against main, and the two resync merges pulled UTV2-1843 documentation into the comparison. PASS in both readings; the earlier numbers are superseded rather than left standing. The count still does not equal the four files this lane changed, and that is reported rather than reconciled.",
+      "pnpm_lint": "PASS - exit 0, no findings, re-measured at this anchor. Added after the first CI run failed on it: the initial attestation ran pnpm type-check and the touched suites but never pnpm lint, which verify:static runs, so it claimed a green tree that had not been fully measured. See the lint_regression entry in static_proof."
     },
-    "anchor_note": "2902c3e92 is the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES, and every command recorded here was run against that tree. It replaced the previous anchor 1cbdbc88d for a reason worth naming rather than hiding: the first CI run failed `verify` on a lint rule the local gate never exercised, so the code changed and the anchor had to follow it. An anchor that stayed at 1cbdbc88d would have been bound to a tree that does not pass CI.\n\nRule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD`, so every commit after this one must stay inside docs/06_status/proof/ or docs/06_status/lanes/. The only commit after it is this re-anchor, which does.",
-    "bound_at": "2026-09-08T16:10:00.000Z"
+    "anchor_note": "c10f289cbc654c2f5ba2ac152c5685b49d57a3dc is the second main-resync merge commit and the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES. Every command recorded here was re-run against that tree rather than carried forward. It replaced 2902c3e92, which replaced 1cbdbc88d; the first replacement was forced by a CI lint failure that changed the code, and the two after it by main resyncs required because branch protection is strict. Both resyncs brought documentation only and zero application code, which is why every count except the r-level file count is unchanged -- and the r-level count moved because that check compares against main, not because this lane changed.\\n\\nRule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD`, so every commit after this one must stay inside docs/06_status/proof/ or docs/06_status/lanes/. The only commit after it is the bundle re-anchor, which does.",
+    "bound_at": "2026-09-08T15:05:00.000Z"
   },
   "static_proof": {
     "status": "PASS",
@@ -33,7 +33,7 @@
       "command": "pnpm test",
       "tests": 58,
       "failures": 0,
-      "detail": "the two touched suites: tests 58, pass 58, fail 0, exit 0"
+      "detail": "the two touched suites at the verified source SHA: tests 58, pass 58, fail 0, exit 0"
     },
     "no_new_gate": {
       "status": "PASS",
@@ -63,7 +63,7 @@
   "runtime_proof": {
     "status": "PASS",
     "kind": "browser",
-    "detail": "A Playwright run drives the form's own code in a real browser and asserts exactly one POST /api/submissions is issued for a canonical player prop with no scheduled event, then asserts on the captured payload that metadata.distributionMode is track-only, that participant resolution is canonical, that the event id is null on both the resolution and the metadata, and that the resolved player carries its teamId. The submission endpoint and all reference data are intercepted, so no live server is contacted and no credential is placed in the Playwright environment. Re-run after the payload retype: 14 passed (1.1m), exit 0.",
+    "detail": "A Playwright run drives the form's own code in a real browser and asserts exactly one POST /api/submissions is issued for a canonical player prop with no scheduled event, then asserts on the captured payload that metadata.distributionMode is track-only, that participant resolution is canonical, that the event id is null on both the resolution and the metadata, and that the resolved player carries its teamId. The submission endpoint and all reference data are intercepted, so no live server is contacted and no credential is placed in the Playwright environment. Re-run after the payload retype and again at the verified source SHA: 14 passed (1.1m), exit 0, both times.",
     "mutations": [
       {
         "name": "stale SERVER-RULE citation",

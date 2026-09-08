@@ -3,7 +3,8 @@
 **Issue:** UTV2-1859 — remove the stale client submission guard that refuses a canonical player prop without a canonical event
 **Lane:** claude · **Tier:** T2 · **Lane type:** delivery-ui
 **Branch:** `claude/utv2-1859-client-submission-guard`
-**MERGE_SHA:** pending merge
+MERGE_SHA: pending merge
+**Verified source SHA:** `c10f289cbc654c2f5ba2ac152c5685b49d57a3dc`
 
 ## What changed
 
