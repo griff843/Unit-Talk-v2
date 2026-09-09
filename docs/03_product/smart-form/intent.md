@@ -13,6 +13,10 @@ file says so and the contract is corrected in place — never shadowed here.
 
 Nothing in this document is a prerequisite for the Smart Form repair currently in flight.
 
+**Coverage companion:** `docs/03_product/smart-form/acceptance-matrix.md` records, per market family
+and per participant-resolution path, what is actually proven about a submission today and by which
+test. It is measurement, not intent — read it before generalising from any single submission.
+
 ---
 
 ## 1. What the Smart Form is
