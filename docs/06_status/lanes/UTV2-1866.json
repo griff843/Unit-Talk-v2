@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1866-results-only-blast-radius",
   "branch": "claude/utv2-1866-results-only-blast-radius",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "9bef2bd3b5886e64ca6a813941852251bb3b52d6",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1544",
   "files_changed": [],
   "file_scope_lock": [
@@ -15,14 +15,22 @@
     "scripts/backfill-sgo-history.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-09T08:53:49.555Z",
-  "heartbeat_at": "2026-09-09T09:02:52.253Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-09T09:35:45.046Z",
+  "closed_at": "2026-09-09T09:35:45.046Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1866-results-only-blast-radius.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-09T09:35:42.644Z",
+      "verdict": "pass",
+      "merge_sha": "9bef2bd3b5886e64ca6a813941852251bb3b52d6",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
