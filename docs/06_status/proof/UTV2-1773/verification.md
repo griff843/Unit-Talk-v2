@@ -1,6 +1,6 @@
 # PROOF: UTV2-1773 — canonical reference bootstrap
 
-MERGE_SHA: null
+MERGE_SHA: pending merge
 
 Execution SHA: `73937e1c844419bab3a873149669f168954158a3`
 
@@ -153,7 +153,13 @@ hash, and remeasures event/team resolution against the same source fingerprint.
 
 ## Merge SHA Binding
 
-Merge SHA: null (pre-merge)
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1484
+Execution SHA: 73937e1c844419bab3a873149669f168954158a3
 
-Post-merge proof generation must replace the null merge binding with GitHub's
-authoritative merge SHA.
+`pending merge` is the ratified pre-merge anchor (UTV2-1825): merge authority
+does not exist until the merge does, so the row states that rather than
+presenting a SHA it could not have. Execution identity lives in
+`sha_binding.verified_source_sha` in `evidence.json`, which already carries it.
+Post-merge proof generation replaces this anchor with GitHub's authoritative
+merge SHA.
