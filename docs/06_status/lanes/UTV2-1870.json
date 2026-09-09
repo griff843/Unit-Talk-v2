@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1870-results-backfill-packet",
   "branch": "claude/utv2-1870-results-backfill-packet",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "caeb4527b9d3d701507099da84a378a0ad0599cb",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1548",
   "files_changed": [],
   "file_scope_lock": [
@@ -15,14 +15,22 @@
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-09T14:59:14.815Z",
-  "heartbeat_at": "2026-09-09T15:09:35.528Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-09T15:31:05.873Z",
+  "closed_at": "2026-09-09T15:31:05.873Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1870-results-backfill-packet.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-09T15:31:02.897Z",
+      "verdict": "pass",
+      "merge_sha": "caeb4527b9d3d701507099da84a378a0ad0599cb",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
