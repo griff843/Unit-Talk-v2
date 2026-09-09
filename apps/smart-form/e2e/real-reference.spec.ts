@@ -24,11 +24,26 @@ async function readRows(
   return payload.data ?? [];
 }
 
+// The only route fulfilled in this file is the Auth.js session endpoint. That is
+// authentication plumbing, not reference data: canonical identity moved to a server
+// session fetch, so without it the page never renders and these specs would assert
+// nothing. Every reference-data read below goes to the real API un-intercepted, which
+// is the property this file exists to hold and what its skip messages claim. Do not
+// add a route handler for any /api/reference-data/** path here.
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      user: { name: 'Griff Test' },
+      capperId: 'griff843',
+      expires: new Date(Date.now() + 3_600_000).toISOString(),
+    }),
+  }));
   await installCapperSession(page);
 });
 
-test('real-reference UI reports the connected environment honestly without route interception', async ({ page }) => {
+test('real-reference UI reports the connected environment honestly without reference-data route interception', async ({ page }) => {
   await page.goto('/submit');
   await expect(page.getByRole('heading', { name: 'Canonical pick entry' })).toBeVisible();
   await page.screenshot({ path: `${proofDirectory}/real-01-authenticated-shell.png`, fullPage: true });
@@ -74,10 +89,9 @@ test('real-reference UI reports the connected environment honestly without route
   await expect(page.getByLabel('Player', { exact: true })).toBeDisabled();
   await page.screenshot({ path: `${proofDirectory}/real-06-team-player-dependency.png`, fullPage: true });
 
-  await page.getByRole('button', { name: "Can't find participants? Add manually" }).click();
-  await expect(page.getByText('Manual participant override', { exact: true })).toBeVisible();
-  await expect(page.getByText(/explicitly tagged unresolved/i)).toBeVisible();
-  await page.screenshot({ path: `${proofDirectory}/real-07-manual-unresolved.png`, fullPage: true });
+  await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
+  await expect(page.getByText('Manual participant override', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: `${proofDirectory}/real-07-coverage-gap-gated.png`, fullPage: true });
 
   await expect(page.getByText('Internal Tracking · Track Only', { exact: true })).toBeVisible();
   await page.screenshot({ path: `${proofDirectory}/real-08-track-only.png`, fullPage: true });

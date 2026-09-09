@@ -1,8 +1,11 @@
+import { assertPrivilegedRequestAuthenticated } from '../request-auth';
+
 function resolveApiBaseUrl() {
   return process.env.UNIT_TALK_API_URL?.trim() || process.env.API_BASE_URL?.trim() || 'http://localhost:4000';
 }
 
 async function proxyToApi(path: string): Promise<unknown> {
+  await assertPrivilegedRequestAuthenticated();
   const res = await fetch(`${resolveApiBaseUrl()}${path}`, { cache: 'no-store' });
   return res.json() as unknown;
 }

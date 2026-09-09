@@ -123,6 +123,15 @@ Routing triggers (see `scripts/ops/execution-packet.ts`'s `SKILL_ROUTING_SPECS` 
 | Proof bundle creation or correction | `/proof-authoring` |
 | A control claimed by tests | `/mutation-test` |
 
+**Product intent goes into the packet, and so do the acceptance criteria.** If the issue's declared
+file scope touches a product surface — `apps/smart-form/**`, `apps/command-center/**`, or the
+`apps/api` handlers, validation and guards behind them — the executor prompt must name that
+product's intent document (`docs/03_product/<product>/intent.md`) and the canonical contracts it
+indexes as required reading, and must **quote the applicable acceptance criteria inline** rather
+than citing them by number. An executor should not have to resolve a cross-document numbering to
+learn what it must satisfy. This is packet content, not a gate: nothing checks for it, and no
+dispatch is blocked by its absence.
+
 Multiple skills may be selected when triggers genuinely overlap (e.g. a ghost lane whose PR is also head-mismatched selects both `/lane-recovery` and `/pr-unblock`). If the packet refuses with `INSUFFICIENT_TASK_CONTRACT`, the issue's Linear description is missing where-to-look, definition-of-done, or verification/self-check content — fix the issue description before dispatching; do not fabricate the missing section on the executor's behalf.
 
 ### Phase 2: Validate prerequisites (for each target)

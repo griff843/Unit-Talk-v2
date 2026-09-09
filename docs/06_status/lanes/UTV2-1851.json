@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1851",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1851-pt1-route-b-admission",
+  "branch": "claude/utv2-1851-pt1-route-b-admission",
+  "base_branch": "main",
+  "commit_sha": "fae78e3a7156944d893d19f9c3d8816e176c2850",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1528",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/schemas/preflight_token_v1.schema.json",
+    "docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md",
+    "scripts/ops/preflight.test.ts",
+    "scripts/ops/preflight.ts",
+    "scripts/ops/shared.test.ts",
+    "scripts/ops/shared.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-09-07T01:26:06.981Z",
+  "heartbeat_at": "2026-09-07T03:12:21.916Z",
+  "closed_at": "2026-09-07T03:12:21.916Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-07T03:12:19.173Z",
+      "verdict": "pass",
+      "merge_sha": "fae78e3a7156944d893d19f9c3d8816e176c2850",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1851-pt1-route-b-admission",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

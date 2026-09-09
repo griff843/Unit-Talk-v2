@@ -81,7 +81,7 @@ export async function getMarketUniverseStaleness(
 ): Promise<MarketUniverseStalenessRow[]> {
   if (universeIds.length === 0) return [];
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     const { data, error } = await client
       .from('market_universe')
       .select('id, canonical_market_key, sport_key, event_id, is_stale, last_offer_snapshot_at')
@@ -109,7 +109,7 @@ export async function getMarketUniverseStalenessByMarketKey(params: {
   limit?: number;
 }): Promise<MarketUniverseStalenessRow[]> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     let query = client
       .from('market_universe')
       .select('id, canonical_market_key, sport_key, event_id, is_stale, last_offer_snapshot_at');
@@ -231,7 +231,7 @@ export async function getPropOffers(params: {
   limit?: number;
 }): Promise<PropOffersResponse | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     const limit = Math.min(params.limit ?? 50, 200);
     const offset = params.offset ?? 0;
 
@@ -296,7 +296,7 @@ export async function getResearchLines(params: {
   market?: string;
 }): Promise<ResearchLinesResult | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
 
     let query = client
       .from('provider_offer_current')
@@ -335,7 +335,7 @@ export async function getResearchMatchups(params: {
   eventId?: string;
 }): Promise<ResearchMatchupsResult | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
 
     let query = client
       .from('events')
@@ -387,7 +387,7 @@ export async function getResearchPlayers(params: {
   q?: string;
 }): Promise<ResearchPlayersResult | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
 
     let query = client
       .from('participants')

@@ -1,0 +1,206 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1856
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1856
+  objective: Event browse resolves participant identity from the empty canonical
+    tables, so every canonical-event player prop is rejected
+  acceptance_criteria:
+    - |-
+      ## Measured production behaviour, 2026-09-08 (read-only)
+
+      `DatabaseReferenceDataRepository.getEventBrowse` (`packages/db/src/runtime-repositories.ts:6559`) resolves participant identity through two loaders that read the **canonical** tables rather than the populated `participants` observation layer:
+
+      * `loadCanonicalTeamsByParticipantIds` (`:6935`) — `provider_entity_aliases` filtered `entity_kind='team'`, then `teams`
+      * `loadCurrentAssignments` (`:6991`) — `player_team_assignments`
+
+      Production row counts:
+
+      | table | rows |
+      | -- | -- |
+      | `teams` | 0 |
+      | `player_team_assignments` | 0 |
+      | `provider_entity_aliases` where `entity_kind='team'` | 0 — all 840 rows are `entity_kind='player'`, with `team_id` and `player_id` null in every row |
+
+      Both loaders therefore return empty maps unconditionally. Every team participant is emitted with `canonicalId: null, teamId: null`; every player with `teamId: null`.
+
+      ## Consequence — not cosmetic
+
+      For a player prop the form sends both `team` and `player` in one canonical resolution (`apps/smart-form/app/submit/components/BetForm.tsx:1977-1986`), with `player.teamId` falling back to the selected team id. The server rejects it at two independent guards in `apps/api/src/smart-form-validation.ts`:
+
+      * `:448` — `if (identity.teamId && row.teamId !== identity.teamId) fail('participant team relationship mismatch for ...')`. The client sends a team id; the server-derived `row.teamId` is null. **This fires first.**
+      * `:403` — `if (!player.teamId || !teamIds.has(player.teamId)) fail('player X is not assigned to team Y')`. Would fire regardless.
+
+      So **every canonical-event player-prop submission is rejected in production today.** This is on the Milestone 1 path.
+
+      ## The edge that satisfies it already exists
+
+      [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) established the real player→team relationship: `participants(player).metadata->>'team_external_id'` matched to `participants(team).external_id`. Measured: **1497 of 1523 players resolve through it**, and the 26 that do not are exactly the confirmed proof fixtures [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) excluded from selection and availability.
+
+      `searchTeams`/`searchPlayers` use that edge. `getEventBrowse` does not. That is the id-space disagreement, stated as its consequence rather than as a naming observation.
+
+      ## Scope
+
+      Make `getEventBrowse` (and the player half of `searchBrowse`) resolve participant identity from `participants` on the same edge `searchPlayers` uses, preserving honest `null` where coverage is genuinely absent. Confirmed proof fixtures stay excluded, consistent with [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables).
+
+      **Explicitly not seeding.** This is the read-side repair. It does not populate `teams` or `player_team_assignments`, does not overlap [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) (canonical reference bootstrap, Blocked Internal), and removes the pilot's dependency on it. No production write of any kind; production data changes remain reserved.
+
+      ## Acceptance
+
+      1. A canonical-event player prop naming both a team and a player passes validation against real data, with the player's team resolved from the participants edge.
+      2. A player with genuinely no team relationship still reports `teamId: null` and is not fabricated a team.
+      3. **A confirmed proof fixture is excluded from operational browse and picker results, demonstrated on a constructed case.** Ratified by PM 2026-09-08, correcting an earlier draft of this criterion that proposed dropping it: production currently holds 26 fixture participants and **0** of them sit in any `event_participants` row, but *"current data does not exercise it"* is not a reason to leave the path unproven. The isolated live test therefore **constructs** a marked participant attached to its own event, alongside a legitimate participant on the same event, and demonstrates that operational browse/picker results exclude the marked one while retaining the legitimate one. If an **existing** control already guarantees this, the lane proves that control rather than adding a second filter. [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables)'s exclusion in `searchPlayers`/`searchTeams` stays exactly as merged; nothing there is relaxed.
+      4. Mutation coverage: removing the participants-backed resolution turns a distinct assertion red.
+      5. Demonstrated on the live-DB (staging) suite, not only in-memory.
+      6. **Completion is the whole submission path, not the relationship lookup.** Ratified by PM 2026-09-08. Under the actual contained reference-data conditions, **both** a team-side pick **and** a player prop are demonstrated end to end: submitted, **persisted** with the participant identities and values they were given, and shown to create **no delivery record**. A repaired relationship lookup alone does not close this issue.
+
+      ## Classification
+
+      `packages/db/src/runtime-repositories.ts` is a Tier C exact path (`scripts/ops/merge-risk.ts`), so `classifyMechanicalMinimum` floors this at **T1**. Opens under ratified route B with `t1_live_db_precondition: "deferred_to_ci"`, as [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) did.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Measured production behaviour, 2026-09-08 (read-only)
+
+      `DatabaseReferenceDataRepository.getEventBrowse`
+      (`packages/db/src/runtime-repositories.ts:6559`) resolves participant
+      identity through two loaders that read the **canonical** tables rather
+      than the populated `participants` observation layer:
+
+
+      * `loadCanonicalTeamsByParticipantIds` (`:6935`) —
+      `provider_entity_aliases` filtered `entity_kind='team'`, then `teams`
+
+      * `loadCurrentAssignments` (`:6991`) — `player_team_assignments`
+
+
+      Production row counts:
+
+
+      | table | rows |
+
+      | -- | -- |
+
+      | `teams` | 0 |
+
+      | `player_team_assignments` | 0 |
+
+      | `provider_entity_aliases` where `entity_kind='team'` | 0 — all 840 rows
+      are `entity_kind='player'`, with `team_id` and `player_id` null in every
+      row |
+
+
+      Both loaders therefore return empty maps unconditionally. Every team
+      participant is emitted with `canonicalId: null, teamId: null`; every
+      player with `teamId: null`.
+    - >-
+      Consequence — not cosmetic
+
+      For a player prop the form sends both `team` and `player` in one canonical
+      resolution
+      (`apps/smart-form/app/submit/components/BetForm.tsx:1977-1986`), with
+      `player.teamId` falling back to the selected team id. The server rejects
+      it at two independent guards in `apps/api/src/smart-form-validation.ts`:
+
+
+      * `:448` — `if (identity.teamId && row.teamId !== identity.teamId)
+      fail('participant team relationship mismatch for ...')`. The client sends
+      a team id; the server-derived `row.teamId` is null. **This fires first.**
+
+      * `:403` — `if (!player.teamId || !teamIds.has(player.teamId))
+      fail('player X is not assigned to team Y')`. Would fire regardless.
+
+
+      So **every canonical-event player-prop submission is rejected in
+      production today.** This is on the Milestone 1 path.
+    - |-
+      The edge that satisfies it already exists
+      [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) established the real player→team relationship: `participants(player).metadata->>'team_external_id'` matched to `participants(team).external_id`. Measured: **1497 of 1523 players resolve through it**, and the 26 that do not are exactly the confirmed proof fixtures [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) excluded from selection and availability.
+
+      `searchTeams`/`searchPlayers` use that edge. `getEventBrowse` does not. That is the id-space disagreement, stated as its consequence rather than as a naming observation.
+    - |-
+      Scope
+      Make `getEventBrowse` (and the player half of `searchBrowse`) resolve participant identity from `participants` on the same edge `searchPlayers` uses, preserving honest `null` where coverage is genuinely absent. Confirmed proof fixtures stay excluded, consistent with [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables).
+
+      **Explicitly not seeding.** This is the read-side repair. It does not populate `teams` or `player_team_assignments`, does not overlap [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) (canonical reference bootstrap, Blocked Internal), and removes the pilot's dependency on it. No production write of any kind; production data changes remain reserved.
+    - |-
+      Acceptance
+      1. A canonical-event player prop naming both a team and a player passes validation against real data, with the player's team resolved from the participants edge.
+      2. A player with genuinely no team relationship still reports `teamId: null` and is not fabricated a team.
+      3. **A confirmed proof fixture is excluded from operational browse and picker results, demonstrated on a constructed case.** Ratified by PM 2026-09-08, correcting an earlier draft of this criterion that proposed dropping it: production currently holds 26 fixture participants and **0** of them sit in any `event_participants` row, but *"current data does not exercise it"* is not a reason to leave the path unproven. The isolated live test therefore **constructs** a marked participant attached to its own event, alongside a legitimate participant on the same event, and demonstrates that operational browse/picker results exclude the marked one while retaining the legitimate one. If an **existing** control already guarantees this, the lane proves that control rather than adding a second filter. [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables)'s exclusion in `searchPlayers`/`searchTeams` stays exactly as merged; nothing there is relaxed.
+      4. Mutation coverage: removing the participants-backed resolution turns a distinct assertion red.
+      5. Demonstrated on the live-DB (staging) suite, not only in-memory.
+      6. **Completion is the whole submission path, not the relationship lookup.** Ratified by PM 2026-09-08. Under the actual contained reference-data conditions, **both** a team-side pick **and** a player prop are demonstrated end to end: submitted, **persisted** with the participant identities and values they were given, and shown to create **no delivery record**. A repaired relationship lookup alone does not close this issue.
+    - |-
+      Classification
+      `packages/db/src/runtime-repositories.ts` is a Tier C exact path (`scripts/ops/merge-risk.ts`), so `classifyMechanicalMinimum` floors this at **T1**. Opens under ratified route B with `t1_live_db_precondition: "deferred_to_ci"`, as [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) did.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1856/event-browse-resolves-participant-identity-from-the-empty-canonical
+    title: Event browse resolves participant identity from the empty canonical
+      tables, so every canonical-event player prop is rejected
+    description: |-
+      ## Measured production behaviour, 2026-09-08 (read-only)
+
+      `DatabaseReferenceDataRepository.getEventBrowse` (`packages/db/src/runtime-repositories.ts:6559`) resolves participant identity through two loaders that read the **canonical** tables rather than the populated `participants` observation layer:
+
+      * `loadCanonicalTeamsByParticipantIds` (`:6935`) — `provider_entity_aliases` filtered `entity_kind='team'`, then `teams`
+      * `loadCurrentAssignments` (`:6991`) — `player_team_assignments`
+
+      Production row counts:
+
+      | table | rows |
+      | -- | -- |
+      | `teams` | 0 |
+      | `player_team_assignments` | 0 |
+      | `provider_entity_aliases` where `entity_kind='team'` | 0 — all 840 rows are `entity_kind='player'`, with `team_id` and `player_id` null in every row |
+
+      Both loaders therefore return empty maps unconditionally. Every team participant is emitted with `canonicalId: null, teamId: null`; every player with `teamId: null`.
+
+      ## Consequence — not cosmetic
+
+      For a player prop the form sends both `team` and `player` in one canonical resolution (`apps/smart-form/app/submit/components/BetForm.tsx:1977-1986`), with `player.teamId` falling back to the selected team id. The server rejects it at two independent guards in `apps/api/src/smart-form-validation.ts`:
+
+      * `:448` — `if (identity.teamId && row.teamId !== identity.teamId) fail('participant team relationship mismatch for ...')`. The client sends a team id; the server-derived `row.teamId` is null. **This fires first.**
+      * `:403` — `if (!player.teamId || !teamIds.has(player.teamId)) fail('player X is not assigned to team Y')`. Would fire regardless.
+
+      So **every canonical-event player-prop submission is rejected in production today.** This is on the Milestone 1 path.
+
+      ## The edge that satisfies it already exists
+
+      [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) established the real player→team relationship: `participants(player).metadata->>'team_external_id'` matched to `participants(team).external_id`. Measured: **1497 of 1523 players resolve through it**, and the 26 that do not are exactly the confirmed proof fixtures [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) excluded from selection and availability.
+
+      `searchTeams`/`searchPlayers` use that edge. `getEventBrowse` does not. That is the id-space disagreement, stated as its consequence rather than as a naming observation.
+
+      ## Scope
+
+      Make `getEventBrowse` (and the player half of `searchBrowse`) resolve participant identity from `participants` on the same edge `searchPlayers` uses, preserving honest `null` where coverage is genuinely absent. Confirmed proof fixtures stay excluded, consistent with [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables).
+
+      **Explicitly not seeding.** This is the read-side repair. It does not populate `teams` or `player_team_assignments`, does not overlap [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) (canonical reference bootstrap, Blocked Internal), and removes the pilot's dependency on it. No production write of any kind; production data changes remain reserved.
+
+      ## Acceptance
+
+      1. A canonical-event player prop naming both a team and a player passes validation against real data, with the player's team resolved from the participants edge.
+      2. A player with genuinely no team relationship still reports `teamId: null` and is not fabricated a team.
+      3. **A confirmed proof fixture is excluded from operational browse and picker results, demonstrated on a constructed case.** Ratified by PM 2026-09-08, correcting an earlier draft of this criterion that proposed dropping it: production currently holds 26 fixture participants and **0** of them sit in any `event_participants` row, but *"current data does not exercise it"* is not a reason to leave the path unproven. The isolated live test therefore **constructs** a marked participant attached to its own event, alongside a legitimate participant on the same event, and demonstrates that operational browse/picker results exclude the marked one while retaining the legitimate one. If an **existing** control already guarantees this, the lane proves that control rather than adding a second filter. [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables)'s exclusion in `searchPlayers`/`searchTeams` stays exactly as merged; nothing there is relaxed.
+      4. Mutation coverage: removing the participants-backed resolution turns a distinct assertion red.
+      5. Demonstrated on the live-DB (staging) suite, not only in-memory.
+      6. **Completion is the whole submission path, not the relationship lookup.** Ratified by PM 2026-09-08. Under the actual contained reference-data conditions, **both** a team-side pick **and** a player prop are demonstrated end to end: submitted, **persisted** with the participant identities and values they were given, and shown to create **no delivery record**. A repaired relationship lookup alone does not close this issue.
+
+      ## Classification
+
+      `packages/db/src/runtime-repositories.ts` is a Tier C exact path (`scripts/ops/merge-risk.ts`), so `classifyMechanicalMinimum` floors this at **T1**. Opens under ratified route B with `t1_live_db_precondition: "deferred_to_ci"`, as [UTV2-1854](https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables) did.
+    captured_at: 2026-09-08T08:53:19.826Z
+    description_sha256: da3160ecc8c75bcdde422a8a191358931380cceb871d445b1acbda71328c51fe
+  contract_hash: 6f425389e43822871ce65b41a4f301b1d3f14b02c1e90dff30a7928a7725c5bf

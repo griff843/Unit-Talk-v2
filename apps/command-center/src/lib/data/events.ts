@@ -10,7 +10,7 @@ interface EventStreamResponse {
 }
 
 export async function getEventStream(limit = 250): Promise<EventStreamResponse> {
-  const client = getDataClient() as Client;
+  const client = (await getDataClient()) as Client;
   const boundedLimit = Math.min(Math.max(limit, 25), 500);
 
   const { data, error } = await client

@@ -5,6 +5,14 @@ import path from 'node:path';
 import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
+
+/**
+ * The only legal value of `LaneManifest.t1_live_db_precondition` (UTV2-1848).
+ * Deliberately a one-member union rather than a boolean: a future second
+ * deferral basis must be named and reviewed, not expressed by flipping a flag.
+ */
+export const T1_LIVE_DB_PRECONDITION_DEFERRED = 'deferred_to_ci';
+export type T1LiveDbPrecondition = typeof T1_LIVE_DB_PRECONDITION_DEFERRED;
 export type LaneManifestStatus =
   | 'started'
   | 'in_progress'
@@ -139,6 +147,23 @@ const VALID_LANE_MANIFEST_SCHEMA_VERSIONS: readonly LaneManifestSchemaVersion[] 
 export interface LaneManifest {
   schema_version: LaneManifestSchemaVersion;
   issue_id: string;
+  /**
+   * The tracker key for this lane, or `null` when the lane has no tracker
+   * issue (tracker independence, ratified 2026-09-05).
+   *
+   * Three-valued on purpose:
+   *   - a string  -- this lane corresponds to that tracker issue
+   *   - `null`    -- this lane deliberately has no tracker issue; every
+   *                  tracker-dependent check SKIPS rather than failing
+   *   - `undefined` (absent) -- a manifest written before this field existed.
+   *                  `resolveTrackerRef` falls back to `issue_id` for those,
+   *                  so historical lanes keep the exact behaviour they had.
+   *
+   * A missing field must never be read as `null`: that would silently turn
+   * every pre-existing lane's tracker checks into skips, which is the
+   * unconditional-skip failure mode acceptance criterion 4 exists to refuse.
+   */
+  tracker_ref?: string | null;
   lane_type: LaneType;
   executor?: LaneExecutor;
   tier: LaneTier;
@@ -172,6 +197,31 @@ export interface LaneManifest {
    * ScopeReleaseHistoryEntry and validateScopeReleaseHistory.
    */
   scope_release_history?: ScopeReleaseHistoryEntry[];
+  /**
+   * Records that this lane's T1 live-DB precondition (preflight PT1) was not
+   * satisfied at lane-open and was deferred to the CI staging receipt at the
+   * merge SHA instead (UTV2-1848).
+   *
+   * Three-valued on purpose, and the absent case is the only one that exists
+   * on `main` today:
+   *   - `undefined` (absent) -- PT1 was satisfied at lane-open, or the lane is
+   *                  not T1. Every closeout behaves exactly as it did before
+   *                  this field existed. This is the normal case.
+   *   - `'deferred_to_ci'` -- the obligation moved to closeout, where G6
+   *                  refuses unless the merge SHA carries a green `verify` and
+   *                  a green `Writable DB proof (staging only)`.
+   *   - anything else -- rejected. An unrecognised value must never be read as
+   *                  "no deferral"; that would turn a typo into a silently
+   *                  dropped obligation.
+   *
+   * NOTE ON AUTHORITY: nothing in this repository currently *writes* this
+   * field. Admitting a T1 lane on `blocked_by_containment` is a reserved PM
+   * decision recorded in docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md
+   * and deliberately not taken here. This field and its closeout check are the
+   * enforcement half, landed first so the admission decision is a review of a
+   * diff whose protection already exists rather than one that promises it.
+   */
+  t1_live_db_precondition?: T1LiveDbPrecondition;
   stale?: boolean;
   orphaned?: boolean;
   override?: {
@@ -226,6 +276,17 @@ export interface PreflightToken {
   baseline_cache_hit?: boolean;
   preflight_run_id?: string;
   required_docs_checked?: string[];
+  /**
+   * UTV2-1851 (route B). Written by `ops:preflight` when, and only when, PT1
+   * was admitted on `blocked_by_containment` -- i.e. the T1 live-DB health ping
+   * could not run because containment deliberately withholds its input.
+   *
+   * The token is the ORIGIN of the obligation and the manifest is its carrier.
+   * `validateManifest` refuses any manifest that disagrees with its own token,
+   * in either direction, so the obligation cannot be dropped by a manifest that
+   * simply omits it -- see `validateT1LiveDbPreconditionAgainstToken` below.
+   */
+  t1_live_db_precondition?: T1LiveDbPrecondition;
 }
 
 export interface MachineResult<T> {
@@ -237,7 +298,11 @@ export interface MachineResult<T> {
 
 export interface CheckResult {
   id: string;
-  status: 'pass' | 'fail' | 'skip' | 'waived' | 'infra_error';
+  // UTV2-1845: `blocked_by_containment` is neither an infrastructure fault nor a policy
+  // refusal -- it is a check that cannot run because containment deliberately withholds its
+  // input. It resolves to the same verdict as `infra_error` today; the separation exists so a
+  // deliberate policy state stops being reported as a broken dependency.
+  status: 'pass' | 'fail' | 'skip' | 'waived' | 'infra_error' | 'blocked_by_containment';
   detail: string;
 }
 
@@ -362,14 +427,41 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
   'required_ci_checks_v1.schema.json',
 );
 
-const ISSUE_PATTERN = /^(?:UTV2|UNI)-\d+$/;
+// Tracker independence (ratified 2026-09-05). `issue_id` is REPO-OWNED work
+// identity, not a tracker key. `WORK-###` is the repo-minted namespace for work
+// that has no tracker issue at all; `UTV2-###`/`UNI-###` remain legal and, when
+// a lane genuinely corresponds to a Linear issue, the tracker key is carried
+// explicitly and nullably in `tracker_ref` rather than being inferred from this
+// field. See LaneManifest.tracker_ref.
+//
+// KNOWN BOUND: `merge-gate.yml`, `p0-protocol.yml` and
+// `executor-result-validator.yml` are RESERVED surfaces under the same
+// ratification and still resolve a lane by `UTV2-###`. A `WORK-###` lane is
+// therefore fully usable for discovery, delegation, verification, PR and
+// closeout, and is NOT yet mergeable. Do not widen those workflows here.
+// The single source of truth for which identifier namespaces name a unit of work.
+// `branch-discipline-guard.ts` kept its own copy of this alternation and was not
+// widened when `WORK-###` was minted, which silently made an issue-ID-free task
+// unable to pass preflight PX2. Derive both patterns here so they cannot drift again.
+export const ISSUE_ID_NAMESPACES = ['UTV2', 'UNI', 'WORK'] as const;
+const ISSUE_NAMESPACE_ALTERNATION = ISSUE_ID_NAMESPACES.join('|');
+
+/** Scans free text for every work identifier it contains. Global and case-insensitive. */
+export function issueIdScanPattern(): RegExp {
+  return new RegExp(`\\b(?:${ISSUE_NAMESPACE_ALTERNATION})-\\d+\\b`, 'gi');
+}
+
+const ISSUE_PATTERN = new RegExp(`^(?:${ISSUE_NAMESPACE_ALTERNATION})-\\d+$`);
 // verification_target is intentionally narrower than the general ISSUE_PATTERN above (which
 // also accepts UNI-###): the manifest schema (lane_manifest_v1.schema.json) and
 // LANE_MANIFEST_SPEC.md §16 both document verification_target as UTV2-### only, and
 // requireIssueId()/ISSUE_PATTERN's UNI- acceptance let a UNI-### target silently pass
 // validation while disagreeing with the documented JSON schema (Codex review, PR #1215).
-const VERIFICATION_TARGET_PATTERN = /^UTV2-\d+$/;
-const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>(?:utv2|uni)-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
+const VERIFICATION_TARGET_PATTERN = /^(?:UTV2|WORK)-\d+$/;
+// A tracker key is a Linear issue identifier. `WORK-###` is deliberately NOT
+// one: it is repo-minted and no tracker issue exists by that name.
+const TRACKER_REF_PATTERN = /^(?:UTV2|UNI)-\d+$/;
+const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>(?:utv2|uni|work)-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN = 'dispatch-auto';
 /**
  * UTV2-1619 capability 13: capacity is a MATRIX, not one flat set.
@@ -653,10 +745,32 @@ export function requireIssueId(issueId: string): string {
  * UNI-### value pass despite disagreeing with the documented JSON schema (Codex review,
  * PR #1215).
  */
+/**
+ * Resolve the tracker key a lane's tracker-dependent checks should use.
+ *
+ * Tracker independence (ratified 2026-09-05). Returns `null` exactly when the
+ * lane declares it has no tracker issue. Absence of the field is NOT absence of
+ * a tracker: every manifest written before `tracker_ref` existed falls back to
+ * `issue_id`, so historical lanes keep the behaviour they had.
+ *
+ * A tracker key that is not a legal tracker identifier (for example a
+ * repo-minted `WORK-###` used as `issue_id`) also resolves to `null` -- there is
+ * no issue by that name to look up, and inventing one would produce a lookup
+ * that always fails rather than a check that correctly skips.
+ */
+export function resolveTrackerRef(
+  manifest: Pick<LaneManifest, 'issue_id'> & { tracker_ref?: string | null },
+): string | null {
+  if (manifest.tracker_ref === null) return null;
+  const candidate = (manifest.tracker_ref ?? manifest.issue_id ?? '').trim();
+  if (!candidate) return null;
+  return TRACKER_REF_PATTERN.test(candidate.toUpperCase()) ? candidate.toUpperCase() : null;
+}
+
 export function requireVerificationTarget(value: string): string {
   const normalized = value.toUpperCase();
   if (!VERIFICATION_TARGET_PATTERN.test(normalized)) {
-    throw new Error(`verification_target must match UTV2-### (got "${value}")`);
+    throw new Error(`verification_target must match UTV2-### or WORK-### (got "${value}")`);
   }
 
   return normalized;
@@ -818,6 +932,99 @@ export function deriveDeliveryUiApp(fileScopeLock: string[]): string | null {
     apps.add(match[0]);
   }
   return apps.size === 1 ? [...apps][0]! : null;
+}
+
+/**
+ * UTV2-1851 (route B). Reads the `t1_live_db_precondition` recorded on a
+ * preflight token.
+ *
+ * FAIL-CLOSED BY CONSTRUCTION: every outcome that is not "the token was read
+ * and says X" is reported as an error rather than as absence. An unreadable,
+ * unparseable, non-object or wrongly-valued token must never be summarised as
+ * "no deferral" -- that is precisely how a real closeout obligation would be
+ * discarded silently.
+ */
+export function readPreflightTokenT1LiveDbPrecondition(
+  normalizedTokenPath: string,
+): { ok: true; value: T1LiveDbPrecondition | undefined } | { ok: false; reason: string } {
+  const absolute = path.join(ROOT, normalizedTokenPath);
+  let raw: string;
+  try {
+    raw = fs.readFileSync(absolute, 'utf8');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `preflight token could not be read (${message})` };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `preflight token is not valid JSON (${message})` };
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: 'preflight token is not a JSON object' };
+  }
+  const value = (parsed as { t1_live_db_precondition?: unknown }).t1_live_db_precondition;
+  if (value === undefined) {
+    return { ok: true, value: undefined };
+  }
+  if (value !== T1_LIVE_DB_PRECONDITION_DEFERRED) {
+    return {
+      ok: false,
+      reason:
+        `preflight token t1_live_db_precondition must be "${T1_LIVE_DB_PRECONDITION_DEFERRED}" `
+        + `(got ${JSON.stringify(value)})`,
+    };
+  }
+  return { ok: true, value: T1_LIVE_DB_PRECONDITION_DEFERRED };
+}
+
+/**
+ * UTV2-1851 (route B). The bridge that makes the manifest copy MANDATORY
+ * rather than optional.
+ *
+ * Route B admits a T1 lane whose live-DB precondition was deferred to CI. The
+ * obligation is recorded twice on purpose: on the token, which `ops:preflight`
+ * writes, and on the manifest, which closeout check G6 reads. Between those two
+ * writes there is a window in which a manifest could simply omit the field --
+ * G6 would then evaluate `skip` and the obligation would vanish with nothing
+ * red anywhere. This function closes that window by refusing the disagreement
+ * itself:
+ *
+ *   token says deferred, manifest silent  -> error (the discard this prevents)
+ *   manifest says deferred, token silent  -> error (unbacked claim)
+ *   token unreadable / malformed          -> error (never read as "no deferral")
+ *   both silent                           -> no error (every ordinary lane)
+ *
+ * It runs only for statuses that require the token file to still exist; a
+ * merged or done lane's token is allowed to have been reaped.
+ */
+export function validateT1LiveDbPreconditionAgainstToken(
+  manifest: LaneManifest,
+  normalizedTokenPath: string,
+  sourcePath: string,
+): string[] {
+  const token = readPreflightTokenT1LiveDbPrecondition(normalizedTokenPath);
+  if (!token.ok) {
+    return [`${sourcePath}: ${token.reason}`];
+  }
+  const onManifest = manifest.t1_live_db_precondition;
+  if (token.value !== undefined && onManifest === undefined) {
+    return [
+      `${sourcePath}: preflight token ${normalizedTokenPath} records `
+        + `t1_live_db_precondition "${token.value}" but the manifest does not. The closeout `
+        + 'obligation (G6) is carried by the manifest, so omitting it here would discard it.',
+    ];
+  }
+  if (token.value === undefined && onManifest !== undefined) {
+    return [
+      `${sourcePath}: manifest records t1_live_db_precondition `
+        + `${JSON.stringify(onManifest)} but preflight token ${normalizedTokenPath} does not. `
+        + 'The deferral originates at preflight; a manifest cannot assert one that was never granted.',
+    ];
+  }
+  return [];
 }
 
 export function validatePreflightTokenPathValue(
@@ -1646,9 +1853,17 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
     errors.push(`${sourcePath}: preflight_token is required`);
   } else {
     try {
-      validatePreflightTokenPathValue(manifest.preflight_token, {
+      const normalizedTokenPath = validatePreflightTokenPathValue(manifest.preflight_token, {
         requireExistingFile: ACTIVE_LOCK_STATUSES.has(manifest.status),
       });
+      // UTV2-1851: the token/manifest agreement check runs only where the token
+      // file is still required to exist. A reaped token on a merged or done lane
+      // is not evidence that a deferral was dropped.
+      if (ACTIVE_LOCK_STATUSES.has(manifest.status)) {
+        errors.push(
+          ...validateT1LiveDbPreconditionAgainstToken(manifest, normalizedTokenPath, sourcePath),
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (
@@ -1751,6 +1966,23 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
       if (!mr.override.reason || !mr.override.reason.trim()) {
         errors.push(`${sourcePath}: model_routing.override.reason is required when override is present`);
       }
+    }
+  }
+
+  if (manifest.t1_live_db_precondition !== undefined) {
+    if (manifest.t1_live_db_precondition !== T1_LIVE_DB_PRECONDITION_DEFERRED) {
+      // Refused, not ignored. Reading an unrecognised value as "no deferral"
+      // would convert a typo into a silently dropped closeout obligation --
+      // the exact failure mode this field exists to make impossible.
+      errors.push(
+        `${sourcePath}: t1_live_db_precondition must be "${T1_LIVE_DB_PRECONDITION_DEFERRED}" `
+          + `(got ${JSON.stringify(manifest.t1_live_db_precondition)})`,
+      );
+    } else if (manifest.tier !== 'T1') {
+      errors.push(
+        `${sourcePath}: t1_live_db_precondition is present but tier is "${manifest.tier}" -- `
+          + 'the T1 live-DB precondition only exists at T1',
+      );
     }
   }
 
@@ -2232,6 +2464,45 @@ export function createManifest(input: {
   if (!VALID_LANE_MANIFEST_SCHEMA_VERSIONS.includes(schemaVersion)) {
     throw new Error(`Invalid schema_version: ${String(schemaVersion)}`);
   }
+
+  // UTV2-1851: the deferral is CARRIED FORWARD FROM THE TOKEN, here, rather
+  // than being passed in by the caller.
+  //
+  // This is the T1 transition, and it is the whole reason the route B bootstrap
+  // works. Once `ops:preflight` admits a contained PT1 and writes
+  // `t1_live_db_precondition` into the token, an UNCHANGED `ops:lane-start`
+  // constructs its manifest without that field -- and `validateManifest`'s
+  // token/manifest agreement rule then refuses the manifest. The lane would not
+  // open. That is fail-closed, but it is also a deadlock: the very lane that
+  // would teach `lane-start` to copy the field is itself T1, so it could never
+  // be opened either.
+  //
+  // Deriving it here breaks the deadlock without weakening anything, because
+  // `createManifest` is the single constructor every lane-start path already
+  // funnels through (five call sites in lane-start.ts, all passing
+  // `preflight_token`). Two properties follow, and both matter:
+  //
+  //   - A caller CANNOT ASSERT a deferral: there is no input field for it, so
+  //     the only source is a token `ops:preflight` actually wrote.
+  //   - A caller CANNOT DROP one: it is set unconditionally from the token, and
+  //     `validateManifest` independently refuses any active lane whose manifest
+  //     and token disagree in either direction.
+  //
+  // A token file that is not required to exist is a test fixture, not a lane;
+  // in that case nothing is derived, and the `validateManifest` bridge remains
+  // the enforcement point regardless.
+  let t1LiveDbPrecondition: T1LiveDbPrecondition | undefined;
+  if (fs.existsSync(path.join(ROOT, preflightToken))) {
+    const fromToken = readPreflightTokenT1LiveDbPrecondition(preflightToken);
+    if (!fromToken.ok) {
+      // Fail closed. An unreadable or malformed token is never read as "no
+      // deferral" -- that is precisely the silent discard this lane forbids.
+      throw new Error(
+        `cannot create lane manifest for ${input.issue_id}: ${fromToken.reason}`,
+      );
+    }
+    t1LiveDbPrecondition = fromToken.value;
+  }
   const isCodexExecutor = input.executor === 'codex-cli' || input.executor === 'codex-cloud';
   if (isCodexExecutor && schemaVersion === 2 && !input.model_routing) {
     throw new Error(
@@ -2286,6 +2557,7 @@ export function createManifest(input: {
     reopen_history: [],
     ...(input.model_routing ? { model_routing: input.model_routing } : {}),
     ...(input.verification_target ? { verification_target: input.verification_target } : {}),
+    ...(t1LiveDbPrecondition ? { t1_live_db_precondition: t1LiveDbPrecondition } : {}),
   };
 }
 

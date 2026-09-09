@@ -1,0 +1,192 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1835
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1835
+  objective: Deploy retry overwrites the configuration snapshot for the
+    still-running release
+  acceptance_criteria:
+    - |-
+      Follow-up defect on [UTV2-1834](https://linear.app/unit-talk-v2/issue/UTV2-1834/deployrollbacksh-rolls-back-code-but-not-configuration-no-env-snapshot) (#1507), reproduced executably against the real `deploy.yml` snapshot body.
+
+      ## The defect
+
+      `.github/workflows/deploy.yml` — `Snapshot outgoing configuration for rollback`, present identically in the `canary` and `promote` jobs — copies each env file unconditionally:
+
+      ```
+      cp -p "$f" "$f.$OUTGOING"
+      ```
+
+      `$OUTGOING` is read from `.unit-talk-release`, which is only advanced **after** the env writes. So if a deploy fails anywhere after `Write .env.production to server` / `Write Next.js service env files to server` but before the release record advances, `.unit-talk-release` still names the *previous, still-running* release — and the retry's `cp` overwrites that release's snapshot with the already-replaced configuration.
+
+      Rollback to the running release then restores the configuration that broke it.
+
+      Second, smaller: the 5-deep prune is mtime-ordered (`ls -1t "$f".* | tail -n +6`), so repeated failed retries can evict the one genuine rollback target.
+
+      ## Reproducer (executed, not read)
+
+      Extracting the real `SNAPSHOT_REMOTE` heredoc from `promote` and running it twice against a temp host directory, with an env rewrite in between and no release-record advance:
+
+      ```
+      deploy #1 snapshot: 0
+      deploy #2 (retry) snapshot: 0
+      snapshot for the RUNNING release now contains: "ALLOWED_CAPPER_EMAILS=NEW-SHAPE-ADMITS-NOBODY\n"
+      DEFECT — original snapshot destroyed
+      ```
+
+      ## Why it matters now
+
+      This is the exact failure mode the Milestone 1 deploy is exposed to. `ALLOWED_CAPPER_EMAILS` is validated non-empty and shape-validated nowhere, the smart-form healthcheck (`curl -fsS localhost:4400/login`) returns 200 with an allow-list that admits nobody, and `deploy.yml` is the only writer of `.env.smart-form`. A shape defect therefore ships green, and configuration rollback is the recovery path — the one this defect destroys on the second attempt.
+
+      ## Fix
+
+      The snapshot is immutable history keyed on the release that ran with it: first writer wins. Never overwrite an existing `$f.$OUTGOING`, and never prune the snapshot matching the current `.unit-talk-release`. Both jobs.
+
+      ## Scope
+
+      * `.github/workflows/deploy.yml` (both snapshot steps)
+      * `scripts/ci/deploy-config-rollback.test.ts` (failure-and-retry coverage)
+
+      No merge-authority, branch-protection or containment surface. No production deploy is dispatched by this work.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Follow-up defect on [UTV2-1834](https://linear.app/unit-talk-v2/issue/UTV2-1834/deployrollbacksh-rolls-back-code-but-not-configuration-no-env-snapshot) (#1507), reproduced executably against the real `deploy.yml` snapshot body.
+    - >-
+      The defect
+
+      `.github/workflows/deploy.yml` — `Snapshot outgoing configuration for
+      rollback`, present identically in the `canary` and `promote` jobs — copies
+      each env file unconditionally:
+
+
+      ```
+
+      cp -p "$f" "$f.$OUTGOING"
+
+      ```
+
+
+      `$OUTGOING` is read from `.unit-talk-release`, which is only advanced
+      **after** the env writes. So if a deploy fails anywhere after `Write
+      .env.production to server` / `Write Next.js service env files to server`
+      but before the release record advances, `.unit-talk-release` still names
+      the *previous, still-running* release — and the retry's `cp` overwrites
+      that release's snapshot with the already-replaced configuration.
+
+
+      Rollback to the running release then restores the configuration that broke
+      it.
+
+
+      Second, smaller: the 5-deep prune is mtime-ordered (`ls -1t "$f".* | tail
+      -n +6`), so repeated failed retries can evict the one genuine rollback
+      target.
+    - >-
+      Reproducer (executed, not read)
+
+      Extracting the real `SNAPSHOT_REMOTE` heredoc from `promote` and running
+      it twice against a temp host directory, with an env rewrite in between and
+      no release-record advance:
+
+
+      ```
+
+      deploy #1 snapshot: 0
+
+      deploy #2 (retry) snapshot: 0
+
+      snapshot for the RUNNING release now contains:
+      "ALLOWED_CAPPER_EMAILS=NEW-SHAPE-ADMITS-NOBODY\n"
+
+      DEFECT — original snapshot destroyed
+
+      ```
+    - >-
+      Why it matters now
+
+      This is the exact failure mode the Milestone 1 deploy is exposed to.
+      `ALLOWED_CAPPER_EMAILS` is validated non-empty and shape-validated
+      nowhere, the smart-form healthcheck (`curl -fsS localhost:4400/login`)
+      returns 200 with an allow-list that admits nobody, and `deploy.yml` is the
+      only writer of `.env.smart-form`. A shape defect therefore ships green,
+      and configuration rollback is the recovery path — the one this defect
+      destroys on the second attempt.
+    - >-
+      Fix
+
+      The snapshot is immutable history keyed on the release that ran with it:
+      first writer wins. Never overwrite an existing `$f.$OUTGOING`, and never
+      prune the snapshot matching the current `.unit-talk-release`. Both jobs.
+    - >-
+      Scope
+
+      * `.github/workflows/deploy.yml` (both snapshot steps)
+
+      * `scripts/ci/deploy-config-rollback.test.ts` (failure-and-retry coverage)
+
+
+      No merge-authority, branch-protection or containment surface. No
+      production deploy is dispatched by this work.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1835/deploy-retry-overwrites-the-configuration-snapshot-for-the-still
+    title: Deploy retry overwrites the configuration snapshot for the still-running
+      release
+    description: |-
+      Follow-up defect on [UTV2-1834](https://linear.app/unit-talk-v2/issue/UTV2-1834/deployrollbacksh-rolls-back-code-but-not-configuration-no-env-snapshot) (#1507), reproduced executably against the real `deploy.yml` snapshot body.
+
+      ## The defect
+
+      `.github/workflows/deploy.yml` — `Snapshot outgoing configuration for rollback`, present identically in the `canary` and `promote` jobs — copies each env file unconditionally:
+
+      ```
+      cp -p "$f" "$f.$OUTGOING"
+      ```
+
+      `$OUTGOING` is read from `.unit-talk-release`, which is only advanced **after** the env writes. So if a deploy fails anywhere after `Write .env.production to server` / `Write Next.js service env files to server` but before the release record advances, `.unit-talk-release` still names the *previous, still-running* release — and the retry's `cp` overwrites that release's snapshot with the already-replaced configuration.
+
+      Rollback to the running release then restores the configuration that broke it.
+
+      Second, smaller: the 5-deep prune is mtime-ordered (`ls -1t "$f".* | tail -n +6`), so repeated failed retries can evict the one genuine rollback target.
+
+      ## Reproducer (executed, not read)
+
+      Extracting the real `SNAPSHOT_REMOTE` heredoc from `promote` and running it twice against a temp host directory, with an env rewrite in between and no release-record advance:
+
+      ```
+      deploy #1 snapshot: 0
+      deploy #2 (retry) snapshot: 0
+      snapshot for the RUNNING release now contains: "ALLOWED_CAPPER_EMAILS=NEW-SHAPE-ADMITS-NOBODY\n"
+      DEFECT — original snapshot destroyed
+      ```
+
+      ## Why it matters now
+
+      This is the exact failure mode the Milestone 1 deploy is exposed to. `ALLOWED_CAPPER_EMAILS` is validated non-empty and shape-validated nowhere, the smart-form healthcheck (`curl -fsS localhost:4400/login`) returns 200 with an allow-list that admits nobody, and `deploy.yml` is the only writer of `.env.smart-form`. A shape defect therefore ships green, and configuration rollback is the recovery path — the one this defect destroys on the second attempt.
+
+      ## Fix
+
+      The snapshot is immutable history keyed on the release that ran with it: first writer wins. Never overwrite an existing `$f.$OUTGOING`, and never prune the snapshot matching the current `.unit-talk-release`. Both jobs.
+
+      ## Scope
+
+      * `.github/workflows/deploy.yml` (both snapshot steps)
+      * `scripts/ci/deploy-config-rollback.test.ts` (failure-and-retry coverage)
+
+      No merge-authority, branch-protection or containment surface. No production deploy is dispatched by this work.
+    captured_at: 2026-09-05T21:23:10.807Z
+    description_sha256: 982a1ee9c65d0b3c68091233bbf6ef2ab0df00a730c9264e6bdd7be5efb05840
+  contract_hash: 4a21ca2c2ecf10759267d779d59a209efc41827fa1f6e7102d12e87f61bd3775

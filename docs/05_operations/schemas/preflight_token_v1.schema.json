@@ -32,7 +32,11 @@
       },
       "additionalProperties": false
     },
-    "status": { "const": "pass" }
+    "status": { "const": "pass" },
+    "t1_live_db_precondition": {
+      "description": "UTV2-1851 (route B). Present when, and only when, PT1 was admitted on `blocked_by_containment` -- the T1 live-DB health ping could not run because containment deliberately withholds its input. The obligation is not waived: it moves to closeout, where G6 refuses unless the merge SHA carries a green `verify` and a green `Writable DB proof (staging only)`. A one-member enum on purpose: a second deferral basis must be named and reviewed, never expressed by flipping a flag. `validateManifest` refuses any lane manifest that disagrees with its own token in either direction, so the obligation cannot be dropped by omission.",
+      "enum": ["deferred_to_ci"]
+    }
   },
   "additionalProperties": true
 }

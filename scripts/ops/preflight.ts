@@ -5,6 +5,7 @@ import path from 'node:path';
 import { loadEnvironment } from '@unit-talk/config';
 import { requireDelegationActive } from './delegation-state.js';
 import { readAllLeases } from './lease-registry.js';
+import { classifyMechanicalMinimum, maxTier } from './tier-classifier.js';
 import { readMergeLock } from './merge-mutex.js';
 import {
   type CheckResult,
@@ -20,6 +21,7 @@ import {
   PREFLIGHT_BASELINE_CACHE_PATH,
   ROOT,
   TRUTH_CHECK_RESULT_SCHEMA_PATH,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
   branchExists,
   currentHeadSha,
   getFlag,
@@ -437,6 +439,9 @@ async function main(): Promise<number> {
           baseline.cacheHit,
           collectCheckedDocs(requireDocs, tier, linearState.labels),
           readmissionContext,
+          checks.some(
+            (check) => check.id === 'PT1' && check.status === 'blocked_by_containment',
+          ),
         ),
       );
       if (baseline.updatedCache) {
@@ -1115,7 +1120,7 @@ function runGateEquivalentChecks(
   void headSha;
 }
 
-async function runLinearChecks(
+export async function runLinearChecks(
   issueId: string,
   tier: LaneTier,
   env: ReturnType<typeof loadEnvironment> | null,
@@ -1127,12 +1132,52 @@ async function runLinearChecks(
 ): Promise<{ labels: string[]; stateName: string }> {
   const token = env?.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
   if (!token) {
-    addCheck('PE2', 'fail', 'LINEAR_API_TOKEN or LINEAR_API_KEY must be present and non-empty');
-    addCheck('PL1', 'infra_error', 'Linear credentials missing');
-    addCheck('PL2', 'infra_error', 'Linear issue unavailable');
-    addCheck('PL3', 'infra_error', 'Linear issue unavailable');
-    addCheck('PL4', 'infra_error', 'Linear issue unavailable');
-    addCheck('PL5', 'infra_error', 'Linear issue unavailable');
+    // Tracker independence (ratified 2026-09-05, `docs/mission/intent.md`
+    // "Execution must not depend on the tracker"). An absent tracker
+    // credential is not an infrastructure failure and not a policy refusal --
+    // it is the tracker being optional. Reporting it as `infra_error` made
+    // `resolveVerdict` return INFRA, which wrote no token, which made
+    // `ops:lane-start` fail with "validated preflight token is unavailable".
+    // That cascade is the single hard block on the whole open->PR path.
+    //
+    // What must NOT be lost with the tracker is the tier decision PL2
+    // otherwise carries. Without Linear there is no label to read, so the
+    // declared `--tier` stands -- but only when it is at or above the
+    // MECHANICAL FLOOR computed from the declared file scope. The floor is a
+    // floor in both directions: it can raise a declared tier's requirement
+    // and refuse, and it can never lower one. `classifyMechanicalMinimum` is
+    // pure -- no Linear, no network, no git -- so it is computable in exactly
+    // the situation this branch exists for.
+    //
+    // The floor is binary (T1 or T3) and blind to semantic risk, so it is
+    // used ONLY to refuse a declared tier beneath it, never to set a tier.
+    const { mechanicalMinimum, matches } = classifyMechanicalMinimum(candidateFiles);
+    const declaredMeetsFloor = maxTier(tier, mechanicalMinimum) === tier;
+    if (!declaredMeetsFloor) {
+      const offending = matches
+        .map((match) => match.path)
+        .slice(0, 5)
+        .join(', ');
+      addCheck(
+        'PE2',
+        'fail',
+        `no tracker credential, and declared --tier ${tier} is below the mechanical floor ` +
+          `${mechanicalMinimum} implied by the declared file scope (${offending}). ` +
+          'A tier is never lowered to avoid tracker bookkeeping.',
+      );
+    } else {
+      addCheck(
+        'PE2',
+        'skip',
+        'no tracker credential; tracker checks are optional and non-blocking. ' +
+          `Declared --tier ${tier} satisfies the mechanical floor ${mechanicalMinimum}.`,
+      );
+    }
+    addCheck('PL1', 'skip', 'PL1 skipped: no tracker credential');
+    addCheck('PL2', 'skip', `PL2 skipped: no tracker credential; --tier ${tier} stands above floor ${mechanicalMinimum}`);
+    addCheck('PL3', 'skip', 'PL3 skipped: no tracker credential');
+    addCheck('PL4', 'skip', 'PL4 skipped: no tracker credential');
+    addCheck('PL5', 'skip', 'PL5 skipped: no tracker credential');
     addCheck('PL6', 'skip', 'PL6 skipped without issue context');
     return { labels: [], stateName: '' };
   }
@@ -1268,7 +1313,7 @@ function runRequiredDocChecks(
   }
 }
 
-async function runT1Checks(
+export async function runT1Checks(
   env: ReturnType<typeof loadEnvironment> | null,
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
 ): Promise<void> {
@@ -1276,7 +1321,22 @@ async function runT1Checks(
     addCheck('PT1', 'fail', 'SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL are required for T1 health ping');
   } else {
     const ping = await runSupabaseHealthPing(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-    addCheck('PT1', ping.ok ? 'pass' : 'infra_error', ping.detail);
+    if (ping.ok) {
+      addCheck('PT1', 'pass', ping.detail);
+    } else if (isContainmentPlaceholderSupabaseUrl(env.SUPABASE_URL)) {
+      // UTV2-1845: same verdict as infra_error, different cause. This admits no lane that could
+      // not open before -- whether it should is a PM decision, recorded in
+      // docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md and deliberately not taken here.
+      addCheck(
+        'PT1',
+        'blocked_by_containment',
+        'SUPABASE_URL resolves to the documented containment placeholder, so the T1 live-DB health '
+          + 'ping cannot run. This is containment, not an infrastructure fault. Admitting a T1 lane '
+          + 'on this outcome is a PM decision -- see docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md',
+      );
+    } else {
+      addCheck('PT1', 'infra_error', ping.detail);
+    }
   }
 
   const generatorPath = path.join(ROOT, 'scripts', 'evidence-bundle', 'new-bundle.mjs');
@@ -1409,8 +1469,24 @@ function applyWaivers(
   }
 }
 
-function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
+export function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
   if (checks.some((check) => check.status === 'infra_error')) {
+    return 'INFRA';
+  }
+  // UTV2-1851 (route B, ratified 2026-09-06). PT1's `blocked_by_containment` no longer forces
+  // INFRA: a T1 lane opened from a deliberately contained workstation is admitted, and the
+  // live-DB obligation MOVES to closeout rather than being waived. It is recorded on the token
+  // by `createToken` below, copied to the manifest, and enforced at closeout by G6, which
+  // refuses unless the merge SHA carries a green `verify` and a green
+  // `Writable DB proof (staging only)`. See docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md.
+  //
+  // Scope is deliberately narrow in two ways:
+  //   - Only PT1 is admitted. Any OTHER check reporting `blocked_by_containment` still returns
+  //     INFRA, so a future emitter cannot inherit this admission without its own review.
+  //   - Nothing else is relaxed. The `fail` handling below is untouched, so every other
+  //     applicable preflight check must still pass for this to reach PASS.
+  const containmentBlocked = checks.filter((check) => check.status === 'blocked_by_containment');
+  if (containmentBlocked.some((check) => check.id !== 'PT1')) {
     return 'INFRA';
   }
   if (
@@ -1428,7 +1504,7 @@ function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
   return 'PASS';
 }
 
-function createToken(
+export function createToken(
   issueId: string,
   tier: LaneTier,
   branch: string,
@@ -1438,6 +1514,7 @@ function createToken(
   baselineCacheHit: boolean,
   requiredDocsChecked: string[],
   readmissionContext: ExistingBranchReadmissionContext | null = null,
+  t1LiveDbPreconditionDeferred = false,
 ): PreflightToken | ExistingBranchReadmissionToken {
   const ttlMinutes = tier === 'T1' ? 15 : 30;
   const token: PreflightToken = {
@@ -1458,6 +1535,12 @@ function createToken(
     baseline_cache_hit: baselineCacheHit,
     preflight_run_id: crypto.randomUUID(),
     required_docs_checked: requiredDocsChecked,
+    // UTV2-1851: recorded when and only when PT1 was admitted on
+    // `blocked_by_containment`. The token is the origin of the obligation;
+    // `validateManifest` refuses any manifest that disagrees with it.
+    ...(t1LiveDbPreconditionDeferred
+      ? { t1_live_db_precondition: T1_LIVE_DB_PRECONDITION_DEFERRED }
+      : {}),
   };
   return readmissionContext ? { ...token, ...readmissionContext } : token;
 }
@@ -1707,6 +1790,36 @@ async function fetchLinearIssue(
     addCheck('PL1', 'infra_error', error instanceof Error ? error.message : String(error));
     return null;
   }
+}
+
+/**
+ * UTV2-1845: distinguishes the documented containment placeholder from a real Supabase host.
+ *
+ * `local.env` declares itself `# CONTAINMENT PLACEHOLDER -- NOT production credentials` and sets
+ * `SUPABASE_URL=http://127.0.0.1:1`, deliberately pointing every client at an unroutable address so
+ * no local run can reach a real database. PT1's ping is therefore *designed* to fail here, and
+ * reporting that as `infra_error` reports a policy state as a broken dependency.
+ *
+ * The test is exact, not heuristic: it matches only loopback and unspecified hosts, which no
+ * Supabase project URL can be. A real host that happens to be unreachable still fails the ping and
+ * is still reported as `infra_error`, which is the inversion this predicate must not break.
+ */
+export function isContainmentPlaceholderSupabaseUrl(supabaseUrl: string): boolean {
+  let host: string;
+  try {
+    host = new URL(supabaseUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  // URL() preserves the brackets on an IPv6 literal.
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+
+  if (bare === 'localhost' || bare === '::1' || bare === '::' || bare === '0.0.0.0') {
+    return true;
+  }
+
+  return /^127(?:\.\d{1,3}){3}$/.test(bare);
 }
 
 async function runSupabaseHealthPing(

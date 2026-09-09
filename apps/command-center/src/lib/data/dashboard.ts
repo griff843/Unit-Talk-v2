@@ -801,7 +801,7 @@ const INTERVENTION_ACTIONS = [
 ];
 
 export async function getInterventionAudit(): Promise<InterventionAuditRow[]> {
-  const client = getDataClient();
+  const client = await getDataClient();
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await client
@@ -855,7 +855,7 @@ export function buildUtcDayWindows(days: number, now = new Date()): UtcDayWindow
  */
 export async function getDailyPickCounts(days = 7): Promise<DailyPickCount[] | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     const windows = buildUtcDayWindows(days);
 
     return await Promise.all(windows.map(async (window) => {

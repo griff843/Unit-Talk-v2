@@ -305,7 +305,7 @@ export function buildApiHealthCards(
 }
 
 export async function getApiHealthData(): Promise<ApiHealthPageData> {
-  const client = getDataClient();
+  const client = await getDataClient();
   const observedAt = new Date().toISOString();
   const [providerHealthResult, runsResult] = await Promise.all([
     getProviderHealth(),

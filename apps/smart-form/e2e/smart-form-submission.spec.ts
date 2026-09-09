@@ -4,6 +4,15 @@ import { expect, test } from '@playwright/test';
 // must not be cited as proof of connected canonical-reference data.
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      user: { name: 'Griff Test' },
+      capperId: 'griff843',
+      expires: new Date(Date.now() + 3_600_000).toISOString(),
+    }),
+  }));
   await page.route('**/api/reference-data/availability?**', async (route) => {
     const sportId = new URL(route.request().url()).searchParams.get('sport') ?? '';
     await route.fulfill({
@@ -493,7 +502,7 @@ test('live-offer search flow supports canonical entity selection and successful 
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-1/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-1/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -630,7 +639,7 @@ test('manual fallback surfaces structured canonical participant selection', asyn
   await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: 'Manual fallback' }).click();
 
-  await expect(page.getByText('Build canonical matchup', { exact: true })).toBeVisible();
+  await expect(page.getByText('Build matchup from teams', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Away Team')).toBeVisible();
   await expect(page.getByLabel('Home Team')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
@@ -653,7 +662,7 @@ test('selected matchup constrains player props to matchup teams and valid stat t
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-1/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-1/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -726,7 +735,7 @@ test('player-prop flow binds matchup and narrows players once a matchup team is 
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -827,7 +836,7 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -934,7 +943,7 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1005,7 +1014,7 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1078,7 +1087,7 @@ test('spread fallback keeps the selected matchup compact when live offers are mi
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1126,7 +1135,7 @@ test('total fallback keeps the selected matchup compact when live offers are mis
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1174,7 +1183,7 @@ test('team total fallback keeps the selected matchup compact when live offers ar
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1248,7 +1257,7 @@ test('alternate live books surface when selected sportsbook has no coverage for 
   await page.route('**/api/reference-data/matchups?**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(nbaLookupMatchupsResponse) });
   });
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(noFanaticsPropsResponse) });
   });
   await page.route('**/api/reference-data/search?**', async (route) => {
@@ -1300,7 +1309,7 @@ test('nhl moneyline uses the same guided game-market flow as nba', async ({ page
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-kraken/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-kraken/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1344,4 +1353,145 @@ test('nhl moneyline uses the same guided game-market flow as nba', async ({ page
   expect(submittedPayload).not.toBeNull();
   expect(submittedPayload?.market).toBe('moneyline');
   expect(submittedPayload?.selection).toContain('Kraken');
+});
+
+// UTV2-1859 — the Milestone 1 step-4 path, driven end to end in a browser.
+//
+// This is the case Griff found refused: a player prop on a sport with no
+// scheduled event, resolved through the structured canonical fallback. Before
+// this lane the browser refused it locally with "Select a canonical matchup" and
+// issued no POST at all, so no server-side evidence could see the defect. The
+// assertion that matters is therefore that the request is *sent*, and sent with
+// truthful structured provenance and Track Only distribution.
+test('a structured-fallback player prop with no scheduled event submits', async ({ page }) => {
+  let submittedPayload: Record<string, unknown> | null = null;
+  let submissionRequests = 0;
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  // No scheduled events for this sport and date — the containment condition the
+  // pilot actually runs under, with provider ingestion parked.
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/teams?**', async (route) => {
+    const query = new URL(route.request().url()).searchParams.get('query')?.toLowerCase() ?? '';
+    const teams = [
+      { participantId: 'team-celtics', displayName: 'Celtics', participantType: 'team' },
+      { participantId: 'team-knicks', displayName: 'Knicks', participantType: 'team' },
+    ].filter((team) => team.displayName.toLowerCase().includes(query));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: teams }),
+    });
+  });
+
+  // teamId is the provider observation edge UTV2-1856 taught the server to read.
+  // It is what makes membership verifiable with no event row involved.
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'player-tatum',
+            displayName: 'Jayson Tatum',
+            participantType: 'player',
+            teamId: 'team-celtics',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api/submissions', async (route) => {
+    submissionRequests += 1;
+    submittedPayload = JSON.parse(route.request().postData() ?? '{}') as Record<string, unknown>;
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { id: 'sub-utv2-1859', status: 'accepted' } }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: 'Manual fallback' }).click();
+
+  await page.getByLabel('Away Team').fill('Knicks');
+  await page.getByRole('button', { name: /Knicks/i }).first().click();
+  await page.getByLabel('Home Team').fill('Celtics');
+  await page.getByRole('button', { name: /Celtics/i }).first().click();
+
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+
+  await page.getByLabel('Team', { exact: true }).fill('Celtics');
+  await page.getByRole('button', { name: 'Celtics team' }).click();
+
+  await page.getByLabel('Player', { exact: true }).fill('Jays');
+  await page.getByRole('button', { name: /^Jayson Tatum/ }).click();
+
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await page.getByRole('option', { name: 'Points', exact: true }).click();
+  await page.getByLabel('Over / Under').click();
+  await page.getByRole('option', { name: 'Over', exact: true }).click();
+  await page.getByLabel('Line').fill('27.5');
+  await page.getByLabel('Odds').fill('-110');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Submit Pick' }).first().click();
+
+  await expect.poll(() => submissionRequests).toBe(1);
+
+  const payload = submittedPayload as unknown as Record<string, unknown> & {
+    metadata?: Record<string, unknown> & {
+      distributionMode?: string;
+      eventId?: string | null;
+      participantResolution?: {
+        resolution?: string;
+        eventId?: string | null;
+        away?: { participantId?: string };
+        home?: { participantId?: string };
+        player?: { participantId?: string; teamId?: string | null };
+      };
+    };
+  };
+  // Track Only: the pilot must not be able to create member delivery.
+  expect(payload.metadata?.distributionMode).toBe('track-only');
+
+  // Truthful provenance: canonical participants, and no canonical event claimed.
+  const resolution = payload.metadata?.participantResolution;
+  expect(resolution?.resolution).toBe('canonical');
+  expect(resolution?.eventId ?? null).toBeNull();
+  expect(resolution?.away?.participantId).toBe('team-knicks');
+  expect(resolution?.home?.participantId).toBe('team-celtics');
+  expect(resolution?.player?.participantId).toBe('player-tatum');
+  // The provider observation edge UTV2-1856 reads instead of an event browse.
+  // Without it the server refuses, and refusing here would be the same defect
+  // this lane repaired, one rule later.
+  expect(resolution?.player?.teamId).toBe('team-celtics');
+  expect(payload.metadata?.eventId ?? null).toBeNull();
 });

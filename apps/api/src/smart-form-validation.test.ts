@@ -324,25 +324,110 @@ test('accepts a Soccer structured fallback backed by canonical team search', asy
   await validateSmartFormRelationships(soccer, repository);
 });
 
-test('structured no-event fallback rejects a player whose team relationship cannot be verified', async () => {
-  const invalid = payload();
-  const resolution = invalid.metadata?.['participantResolution'] as Record<string, unknown>;
-  resolution['eventId'] = null;
-  resolution['player'] = {
-    participantId: 'player-mlb-injection',
-    displayName: 'Cross Sport Player',
-    participantType: 'player',
-    teamId: 'team-tcu',
-  };
+/**
+ * UTV2-1856: the structured no-event fallback used to refuse EVERY player selection, on the
+ * premise that team membership needed a canonical event to be verifiable. That premise held
+ * only while `player_team_assignments` was the sole source of the relationship. It is no
+ * longer the sole source, so the five tests below pin what is now verified instead: the
+ * relationship is taken from reference data the server read itself, and the caller's own
+ * `teamId` is compared against it rather than believed.
+ */
+function structuredNoEventRepository(options: {
+  playerTeamId?: string | null;
+  playerName?: string;
+} = {}): ReferenceDataRepository {
   const repository = referenceData();
   repository.searchTeams = async (_sportId, query) => [{
     participantId: query === 'TCU' ? 'team-tcu' : 'team-unc',
     displayName: query,
     sport: 'NCAAF',
-  }];
+  } as never];
+  repository.searchPlayers = async (_sportId, query) =>
+    query === (options.playerName ?? 'Structured Player')
+      ? [{
+          participantId: 'player-structured',
+          displayName: options.playerName ?? 'Structured Player',
+          participantType: 'player',
+          teamId: options.playerTeamId === undefined ? 'team-tcu' : options.playerTeamId,
+        } as never]
+      : [];
+  return repository;
+}
+
+function structuredNoEventPayload(player: Record<string, unknown> | null): SubmissionPayload {
+  const built = payload();
+  const resolution = built.metadata?.['participantResolution'] as Record<string, unknown>;
+  resolution['eventId'] = null;
+  resolution['eventName'] = null;
+  built.eventName = 'TCU @ UNC';
+  if (player) resolution['player'] = player;
+  return built;
+}
+
+const structuredPlayer = {
+  participantId: 'player-structured',
+  displayName: 'Structured Player',
+  participantType: 'player',
+  teamId: 'team-tcu',
+};
+
+test('structured no-event fallback accepts a player whose team relationship reference data confirms', async () => {
+  await validateSmartFormRelationships(
+    structuredNoEventPayload({ ...structuredPlayer }),
+    structuredNoEventRepository(),
+  );
+});
+
+test('structured no-event fallback rejects a player whose team relationship cannot be verified', async () => {
   await assert.rejects(
-    () => validateSmartFormRelationships(invalid, repository),
-    /player selection requires a canonical event/,
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({ ...structuredPlayer, teamId: null }),
+        structuredNoEventRepository({ playerTeamId: null }),
+      ),
+    /has no verifiable team relationship without a canonical event; use explicit manual override/,
+  );
+});
+
+test('structured no-event fallback rejects a player who is on neither side of the entered matchup', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({ ...structuredPlayer, teamId: 'team-elsewhere' }),
+        structuredNoEventRepository({ playerTeamId: 'team-elsewhere' }),
+      ),
+    /is not on either side of the structured matchup/,
+  );
+});
+
+test('structured no-event fallback does not believe a caller-supplied team relationship', async () => {
+  // Reference data says the player is on team-unc; the caller claims team-tcu, which IS a
+  // legitimate side of this matchup and IS the selected team, so every check except the
+  // comparison against resolved truth would pass. This is the test that fails if the
+  // caller's `teamId` is ever used as the source rather than the claim.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({ ...structuredPlayer, teamId: 'team-tcu' }),
+        structuredNoEventRepository({ playerTeamId: 'team-unc' }),
+      ),
+    /is not assigned to team team-tcu/,
+  );
+});
+
+test('structured no-event fallback rejects a player reference data does not know at all', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({
+          participantId: 'player-mlb-injection',
+          displayName: 'Cross Sport Player',
+          participantType: 'player',
+          teamId: 'team-tcu',
+        }),
+        structuredNoEventRepository(),
+      ),
+    /is not canonical for sport NCAAF/,
   );
 });
 
@@ -860,113 +945,159 @@ test('mutation control: removing CANONICAL_SPORT_ID_GUARD makes the whole covera
 // UTV2-1672 review round 5, P2 (confirmed): DatabaseReferenceDataRepository
 // .searchPlayers fetched an unordered global `limit * 5` batch of name matches
 // and only then filtered by sport, so a sport whose players fell outside that
-// arbitrary slice reported no availability even though canonical players
-// existed. Availability is a refusal input for Smart Form coverage, so that is
-// a wrong answer rather than a slow one.
+// arbitrary slice reported no availability even though players existed.
+// Availability is a refusal input for Smart Form coverage, so that is a wrong
+// answer rather than a slow one.
 //
-// The fixture below is built so the old implementation is provably wrong: 250
-// MLB players sort ahead of the single NBA player, and the old code capped at
-// limit * 5 = 100 rows. The NBA player is row 251 of the name match, so it was
-// never in the batch and NBA reported unavailable.
+// UTV2-1854 keeps that property and changes how it is held. The read moved off
+// the canonical `players` table -- empty under parked provider ingestion, so it
+// answered `[]` for every query in every sport -- onto `participants`, which is
+// the populated observation layer the catalog and availability probes already
+// read. `participants.sport` is a column, so sport is now a predicate in the
+// query itself and `limit` bounds sport-matching rows directly. There is no
+// batch boundary for sport to fall outside of.
+//
+// That is a stronger guarantee than the paging loop provided, so these tests
+// assert the *mechanism* as well as the result: removing `.eq('sport', ...)`
+// must turn the first test red. Without that, the tests would record that the
+// paging loop was deleted while proving nothing about what replaced it.
 // ---------------------------------------------------------------------------
 
-interface StubPlayerRow {
+interface StubParticipantRow {
   id: string;
   display_name: string;
+  sport: string;
+  participant_type: 'team' | 'player';
+  metadata: Record<string, unknown> | null;
+  external_id?: string;
 }
 
-function stubReferenceDataClient(players: StubPlayerRow[], assignments: Map<string, string>) {
-  const pageRequests: Array<[number, number]> = [];
+interface RecordedQuery {
+  table: string;
+  filters: Array<[string, unknown]>;
+  limit: number | null;
+}
+
+/**
+ * A recording stub for the two `participants` reads `searchPlayers` performs.
+ * Every builder method is both chainable and awaitable, so a chain that ends
+ * without `.limit()` still resolves -- a builder that only chained would hang
+ * the team-resolution lookup, which ends on `.in(...)`.
+ */
+function stubParticipantsClient(rows: StubParticipantRow[]) {
+  const queries: RecordedQuery[] = [];
   const client = {
     from(table: string) {
-      if (table === 'players') {
-        return {
-          select: () => ({
-            ilike: (_column: string, pattern: string) => {
-              const needle = pattern.replace(/%/gu, '').toLowerCase();
-              return {
-                // The old implementation called .limit(); the new one orders
-                // and pages. Both are exposed so this fixture cannot silently
-                // pass by the method simply being absent.
-                limit: async (count: number) => ({
-                  data: players
-                    .filter((row) => row.display_name.toLowerCase().includes(needle))
-                    .slice(0, count),
-                  error: null,
-                }),
-                order: () => ({
-                  range: async (from: number, to: number) => {
-                    pageRequests.push([from, to]);
-                    const matched = players
-                      .filter((row) => row.display_name.toLowerCase().includes(needle))
-                      .sort((left, right) =>
-                        left.display_name.localeCompare(right.display_name),
-                      );
-                    return { data: matched.slice(from, to + 1), error: null };
-                  },
-                }),
-              };
-            },
-          }),
-        };
+      if (table !== 'participants') {
+        throw new Error(`unexpected table ${table}`);
       }
-      if (table === 'player_team_assignments') {
-        return {
-          select: () => ({
-            in: (_column: string, ids: string[]) => ({
-              is: async () => ({
-                data: ids
-                  .filter((id) => assignments.has(id))
-                  .map((id) => ({
-                    player_id: id,
-                    team_id: `team-${assignments.get(id)}`,
-                    league_id: `league-${assignments.get(id)}`,
-                    effective_until: null,
-                  })),
-                error: null,
-              }),
-            }),
+      const record: RecordedQuery = { table, filters: [], limit: null };
+      queries.push(record);
+
+      const resolve = () => {
+        let matched = rows.filter((row) =>
+          record.filters.every(([column, value]) => {
+            if (column === 'ilike:display_name') {
+              const needle = String(value).replace(/%/gu, '').toLowerCase();
+              return row.display_name.toLowerCase().includes(needle);
+            }
+            if (column === 'in:external_id') {
+              return (value as string[]).includes(row.external_id ?? '');
+            }
+            // UTV2-1854: the proof-fixture exclusion is a pushed-down predicate,
+            // so the stub must evaluate it the way PostgREST would -- otherwise
+            // these tests would silently stop covering the filtered read.
+            if (column === 'is:metadata->>proofIssue' && value === null) {
+              const metadata = row.metadata as Record<string, unknown> | null;
+              const marker = metadata ? metadata['proofIssue'] : undefined;
+              return marker === undefined || marker === null;
+            }
+            return (row as unknown as Record<string, unknown>)[column] === value;
           }),
+        );
+        matched = matched.sort((left, right) =>
+          left.display_name.localeCompare(right.display_name),
+        );
+        if (record.limit !== null) {
+          matched = matched.slice(0, record.limit);
+        }
+        return { data: matched, error: null };
+      };
+
+      const builder: Record<string, unknown> = {};
+      const chain = (fn: (...args: never[]) => void) =>
+        (...args: never[]) => {
+          fn(...args);
+          return builder;
         };
-      }
-      if (table === 'leagues') {
-        return {
-          select: () => ({
-            in: async (_column: string, ids: string[]) => ({
-              data: ids.map((id) => ({
-                id,
-                sport_id: id.replace(/^league-/u, ''),
-              })),
-              error: null,
-            }),
-          }),
-        };
-      }
-      throw new Error(`unexpected table ${table}`);
+      Object.assign(builder, {
+        select: chain(() => {}),
+        eq: chain(((column: string, value: unknown) => {
+          record.filters.push([column, value]);
+        }) as never),
+        ilike: chain(((column: string, pattern: string) => {
+          record.filters.push([`ilike:${column}`, pattern]);
+        }) as never),
+        in: chain(((column: string, values: unknown) => {
+          record.filters.push([`in:${column}`, values]);
+        }) as never),
+        is: chain(((column: string, value: unknown) => {
+          record.filters.push([`is:${column}`, value]);
+        }) as never),
+        order: chain(() => {}),
+        limit: chain(((count: number) => {
+          record.limit = count;
+        }) as never),
+        then: (onFulfilled: (value: unknown) => unknown) =>
+          Promise.resolve(resolve()).then(onFulfilled),
+      });
+      return builder;
     },
   };
-  return { client, pageRequests };
+  return { client, queries };
 }
 
-function buildCrossSportFixture() {
-  const players: StubPlayerRow[] = [];
-  const assignments = new Map<string, string>();
+function buildCrossSportParticipants() {
+  const rows: StubParticipantRow[] = [
+    {
+      id: 'team-nba-1',
+      display_name: 'Knicks',
+      sport: 'NBA',
+      participant_type: 'team',
+      metadata: null,
+      external_id: 'NEW_YORK_KNICKS_NBA',
+    },
+  ];
   // 250 MLB players whose names sort ahead of the NBA player.
   for (let index = 0; index < 250; index += 1) {
-    const id = `mlb-${String(index).padStart(3, '0')}`;
-    players.push({ id, display_name: `AAA Jordan Filler ${String(index).padStart(3, '0')}` });
-    assignments.set(id, 'MLB');
+    rows.push({
+      id: `mlb-${String(index).padStart(3, '0')}`,
+      display_name: `AAA Jordan Filler ${String(index).padStart(3, '0')}`,
+      sport: 'MLB',
+      participant_type: 'player',
+      metadata: null,
+    });
   }
   const nbaId = 'nba-target';
-  players.push({ id: nbaId, display_name: 'ZZZ Jordan Target' });
-  assignments.set(nbaId, 'NBA');
-  return { players, assignments, nbaId };
+  rows.push({
+    id: nbaId,
+    display_name: 'ZZZ Jordan Target',
+    sport: 'NBA',
+    participant_type: 'player',
+    metadata: { team_external_id: 'NEW_YORK_KNICKS_NBA' },
+  });
+  return { rows, nbaId };
 }
 
-test('searchPlayers finds an NBA player that sorts beyond the former global cap', async () => {
+function participantsRepository(rows: StubParticipantRow[]) {
+  const { client, queries } = stubParticipantsClient(rows);
+  return { client, queries };
+}
+
+test('searchPlayers finds a player that sorts beyond the former global cap', async () => {
   const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
-  const { players, assignments, nbaId } = buildCrossSportFixture();
-  const { client } = stubReferenceDataClient(players, assignments);
+  const { rows, nbaId } = buildCrossSportParticipants();
+  const { client, queries } = participantsRepository(rows);
 
   const repository = new DatabaseReferenceDataRepository(
     { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
@@ -975,19 +1106,37 @@ test('searchPlayers finds an NBA player that sorts beyond the former global cap'
 
   const results = await repository.searchPlayers('NBA', 'Jordan', 20);
 
-  // The old implementation fetched limit*5 = 100 rows and filtered afterwards.
-  // The NBA player is match number 251, so it returned [] and the Smart Form
-  // reported playersAvailable:false for a sport that has a canonical player.
+  // The old implementation fetched limit*5 = 100 unordered rows and filtered by
+  // sport afterwards. The NBA player is name-match number 251, so it returned []
+  // and Smart Form reported playersAvailable:false for a sport that has players.
   assert.equal(results.length, 1);
   assert.equal(results[0]?.participantId, nbaId);
   assert.equal(results[0]?.sport, 'NBA');
-  assert.equal(results[0]?.teamId, 'team-NBA');
+  // Team identity is resolved through participants too, never through the empty
+  // canonical `player_team_assignments` join.
+  assert.equal(results[0]?.teamId, 'team-nba-1');
+
+  // The mechanism, not just the outcome: sport is a predicate in the query. If
+  // this assertion is removed, deleting `.eq('sport', sportId)` still returns
+  // one row here by luck of the name filter, and the guarantee stops being pinned.
+  const playerQuery = queries[0];
+  assert.ok(playerQuery, 'no participants query was issued');
+  assert.ok(
+    playerQuery.filters.some(([column, value]) => column === 'sport' && value === 'NBA'),
+    'searchPlayers did not scope the query by sport',
+  );
+  assert.ok(
+    playerQuery.filters.some(
+      ([column, value]) => column === 'participant_type' && value === 'player',
+    ),
+    'searchPlayers did not scope the query to player participants',
+  );
 });
 
 test('searchPlayers still returns the requested sport and never leaks another', async () => {
   const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
-  const { players, assignments } = buildCrossSportFixture();
-  const { client } = stubReferenceDataClient(players, assignments);
+  const { rows } = buildCrossSportParticipants();
+  const { client } = participantsRepository(rows);
 
   const repository = new DatabaseReferenceDataRepository(
     { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
@@ -997,26 +1146,509 @@ test('searchPlayers still returns the requested sport and never leaks another', 
   const mlb = await repository.searchPlayers('MLB', 'Jordan', 20);
   assert.equal(mlb.length, 20);
   assert.ok(mlb.every((row) => row.sport === 'MLB'));
+  // A player with no team key gets a null team -- honest partial coverage, never
+  // a guessed team.
+  assert.ok(mlb.every((row) => row.teamId === null));
+
   // Positive control: the sport filter is doing work, not just passing
   // everything through. A sport with no players must still return nothing.
   const nhl = await repository.searchPlayers('NHL', 'Jordan', 20);
   assert.deepEqual(nhl, []);
 });
 
-test('searchPlayers stops paging once the limit is satisfied', async () => {
+test('searchPlayers reads participants once for the players and once for their teams', async () => {
   const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
-  const { players, assignments } = buildCrossSportFixture();
-  const { client, pageRequests } = stubReferenceDataClient(players, assignments);
+  const { rows } = buildCrossSportParticipants();
+  const { client, queries } = participantsRepository(rows);
 
   const repository = new DatabaseReferenceDataRepository(
     { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
     client as never,
   );
 
+  // No player in this result carries a team key, so no team lookup is needed
+  // and the common case must stay a single round trip. The deterministic paging
+  // loop UTV2-1672 needed is gone; this asserts it did not come back.
   await repository.searchPlayers('MLB', 'Jordan', 5);
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0]?.limit, 5);
 
-  // 251 matches fit in the first 500-row page, and the limit is met there, so
-  // the common case must not have become a multi-round-trip search.
-  assert.equal(pageRequests.length, 1);
-  assert.deepEqual(pageRequests[0], [0, 499]);
+  // One player with a team key adds exactly one batched lookup, never one per row.
+  const second = participantsRepository(rows);
+  const repository2 = new DatabaseReferenceDataRepository(
+    { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
+    second.client as never,
+  );
+  await repository2.searchPlayers('NBA', 'Jordan', 20);
+  assert.equal(second.queries.length, 2);
+  assert.ok(
+    second.queries[1]?.filters.some(([column]) => column === 'in:external_id'),
+    'the team lookup was not batched by external id',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1842: the validator now reports *which* path admitted the submission.
+//
+// submission-service.ts waives the event-existence gate for exactly two of
+// these four outcomes. That waiver is only sound if each outcome is produced
+// after — never instead of — the full server-side check for its path, so these
+// tests pin the mapping. Every payload below is one the existing tests above
+// already prove is validated; what is new is the value that comes back.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1842: a canonical event resolution reports canonical-event with its event id', async () => {
+  const outcome = await validateSmartFormRelationships(payload(), referenceData());
+  assert.deepEqual(outcome, { kind: 'canonical-event', eventId: event.eventId, distributionMode: 'track-only' });
+});
+
+test('UTV2-1842: a validated manual coverage gap reports manual-coverage-gap', async () => {
+  const manual = payload({
+    sport: 'MMA',
+    participantResolution: {
+      resolution: 'manual',
+      sportId: 'MMA',
+      eventId: null,
+      manualOverride: true,
+      reason: 'canonical-coverage-gap',
+      enteredEventName: 'Fighter A vs Fighter B',
+      enteredParticipants: [
+        { role: 'competitor', displayName: 'Fighter A', canonicalParticipantId: null },
+        { role: 'competitor', displayName: 'Fighter B', canonicalParticipantId: null },
+      ],
+    },
+  });
+  manual.eventName = 'Fighter A vs Fighter B';
+
+  const outcome = await validateSmartFormRelationships(manual, referenceData());
+  assert.deepEqual(outcome, { kind: 'manual-coverage-gap', distributionMode: 'track-only' });
+});
+
+test('UTV2-1842: a search-backed structured team fallback reports structured-team-fallback', async () => {
+  const soccer = payload({
+    sport: 'Soccer',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'Soccer',
+      eventId: null,
+      eventName: 'Arsenal @ Chelsea',
+      away: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+      home: { participantId: 'team-chelsea', displayName: 'Chelsea', participantType: 'team' },
+      team: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+    },
+  });
+  soccer.eventName = 'Arsenal @ Chelsea';
+  soccer.selection = 'Arsenal';
+  const repository = referenceData();
+  repository.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'Soccer');
+    return [{
+      participantId: query === 'Arsenal' ? 'team-arsenal' : 'team-chelsea',
+      displayName: query,
+      sport: 'Soccer',
+    }];
+  };
+
+  const outcome = await validateSmartFormRelationships(soccer, repository);
+  assert.deepEqual(outcome, { kind: 'structured-team-fallback', distributionMode: 'track-only' });
+});
+
+test('UTV2-1842: an unvalidated legacy smart-form shape reports not-smart-form', async () => {
+  // This shape is admitted by the carriesSmartFormFields escape without any
+  // relationship validation at all. It must therefore report the outcome that
+  // does NOT waive the event gate — see the matching test in
+  // submission-service.test.ts.
+  const legacy: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'nfl-spread',
+    selection: 'legacy submission',
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 70,
+    metadata: { proof_fixture_id: 'legacy-shape' },
+  };
+
+  const outcome = await validateSmartFormRelationships(legacy, referenceData());
+  assert.deepEqual(outcome, { kind: 'not-smart-form' });
+});
+
+test('UTV2-1842: a non-team sport with no event still fails rather than reporting a fallback', async () => {
+  // The waiver must be unreachable for a sport the structured fallback cannot
+  // verify. If this ever returns an outcome instead of throwing, a submission
+  // with no canonical event and no manual override would skip the event gate.
+  const mma = payload({
+    sport: 'MMA',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'MMA',
+      eventId: null,
+      eventName: 'Fighter A vs Fighter B',
+      away: { participantId: 'fighter-a', displayName: 'Fighter A', participantType: 'player' },
+      home: { participantId: 'fighter-b', displayName: 'Fighter B', participantType: 'player' },
+    },
+  });
+  mma.eventName = 'Fighter A vs Fighter B';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(mma, referenceData()),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.match(err.message, /explicit manual override/);
+      return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1842 review corrections — the two findings on PR #1529.
+//
+// 1. The waiver was not restricted to Track Only. The outcome now carries the
+//    submission's distributionMode so submission-service.ts can require it; the
+//    tests that the waiver itself honours it live in submission-service.test.ts.
+// 2. The structured fallback validated the away/home *identities* and never
+//    bound the submitted matchup *name* to them, so a payload with genuine
+//    DB-backed team IDs and an arbitrary eventName was reported fully
+//    server-validated and — via the new waiver — persisted the fabricated name.
+// ---------------------------------------------------------------------------
+
+function structuredFallback(overrides: Record<string, unknown> = {}) {
+  const soccer = payload({
+    sport: 'Soccer',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'Soccer',
+      eventId: null,
+      eventName: 'Arsenal @ Chelsea',
+      away: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+      home: { participantId: 'team-chelsea', displayName: 'Chelsea', participantType: 'team' },
+      team: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+    },
+    eventName: 'Arsenal @ Chelsea',
+    ...overrides,
+  });
+  soccer.eventName = 'Arsenal @ Chelsea';
+  soccer.selection = 'Arsenal';
+  const repository = referenceData();
+  repository.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'Soccer');
+    return [{
+      participantId: query === 'Arsenal' ? 'team-arsenal' : 'team-chelsea',
+      displayName: query,
+      sport: 'Soccer',
+    }];
+  };
+  return { soccer, repository };
+}
+
+test('UTV2-1842: the outcome reports delivery-eligible when the submission is delivery-eligible', async () => {
+  // The waiver is decided from this value. If the validator ever hard-codes
+  // 'track-only' here, or drops the field, a delivery-eligible operator
+  // submission would be waived — which is finding 1 restored.
+  const { soccer, repository } = structuredFallback({ distributionMode: 'delivery-eligible' });
+  const outcome = await validateSmartFormRelationships(soccer, repository);
+  assert.deepEqual(outcome, { kind: 'structured-team-fallback', distributionMode: 'delivery-eligible' });
+});
+
+test('UTV2-1842: a fabricated structured matchup name is refused', async () => {
+  // The exact case in the review: real away/home IDs, an invented event name.
+  const { soccer, repository } = structuredFallback();
+  soccer.eventName = 'Fake Finals';
+  (soccer.metadata as Record<string, unknown>)['eventName'] = 'Fake Finals';
+  ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Fake Finals';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(soccer, repository),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.match(err.message, /does not name a matchup/);
+      return true;
+    },
+  );
+});
+
+test('UTV2-1842: a structured matchup name naming the wrong teams is refused', async () => {
+  // Well-formed as a matchup, so it survives the shape check, and wrong. This
+  // is the assertion that goes red if the binding is weakened to "looks like
+  // A @ B" without comparing the sides.
+  const { soccer, repository } = structuredFallback();
+  soccer.eventName = 'Arsenal @ Tottenham';
+  (soccer.metadata as Record<string, unknown>)['eventName'] = 'Arsenal @ Tottenham';
+  ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Arsenal @ Tottenham';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(soccer, repository),
+    /does not match the verified structured matchup/,
+  );
+});
+
+test('UTV2-1842: a structured matchup name with the sides reversed is refused', async () => {
+  // Away and home are not interchangeable: the persisted name would assert the
+  // wrong venue for a pick whose line depends on it.
+  const { soccer, repository } = structuredFallback();
+  soccer.eventName = 'Chelsea @ Arsenal';
+  (soccer.metadata as Record<string, unknown>)['eventName'] = 'Chelsea @ Arsenal';
+  ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Chelsea @ Arsenal';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(soccer, repository),
+    /does not match the verified structured matchup/,
+  );
+});
+
+test('UTV2-1842: each field carrying a matchup name is bound independently', async () => {
+  // Binding only `payload.eventName` would leave two other fields as
+  // fabrication surfaces. Each is checked against the verified sides rather
+  // than against the others, so agreeing on a wrong name is not a way past it.
+  for (const mutate of [
+    (p: SubmissionPayload) => { p.eventName = 'Fake Finals'; },
+    (p: SubmissionPayload) => { (p.metadata as Record<string, unknown>)['eventName'] = 'Fake Finals'; },
+    (p: SubmissionPayload) => {
+      ((p.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Fake Finals';
+    },
+  ]) {
+    const { soccer, repository } = structuredFallback();
+    (soccer.metadata as Record<string, unknown>)['eventName'] = 'Arsenal @ Chelsea';
+    mutate(soccer);
+    await assert.rejects(
+      () => validateSmartFormRelationships(soccer, repository),
+      /does not name a matchup|does not match the verified structured matchup/,
+    );
+  }
+});
+
+test('UTV2-1842: the matchup name the Smart Form derives is accepted', async () => {
+  // setDerivedMatchupName in BetForm.tsx writes exactly `${away} @ ${home}`
+  // from the same canonical display names. A binding that refused this would
+  // block the pilot rather than protect it, so the accept case is asserted
+  // alongside the refusals — including the separator and doubleheader-suffix
+  // variants the canonical path already tolerates.
+  for (const name of [
+    'Arsenal @ Chelsea',
+    'Arsenal vs Chelsea',
+    'Arsenal vs. Chelsea',
+    'Arsenal at Chelsea',
+    'arsenal @ chelsea',
+    'Arsenal @ Chelsea · Game 2',
+  ]) {
+    const { soccer, repository } = structuredFallback();
+    soccer.eventName = name;
+    (soccer.metadata as Record<string, unknown>)['eventName'] = name;
+    ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = name;
+    const outcome = await validateSmartFormRelationships(soccer, repository);
+    assert.deepEqual(
+      outcome,
+      { kind: 'structured-team-fallback', distributionMode: 'track-only' },
+      `${name} must still be accepted`,
+    );
+  }
+});
+
+test('UTV2-1842: a manual coverage gap binds its flat metadata event name too', async () => {
+  const manual = payload({
+    sport: 'MMA',
+    eventName: 'Fighter A vs Fighter B',
+    participantResolution: {
+      resolution: 'manual',
+      sportId: 'MMA',
+      eventId: null,
+      manualOverride: true,
+      reason: 'canonical-coverage-gap',
+      enteredEventName: 'Fighter A vs Fighter B',
+      enteredParticipants: [
+        { role: 'competitor', displayName: 'Fighter A', canonicalParticipantId: null },
+        { role: 'competitor', displayName: 'Fighter B', canonicalParticipantId: null },
+      ],
+    },
+  });
+  manual.eventName = 'Fighter A vs Fighter B';
+  (manual.metadata as Record<string, unknown>)['eventName'] = 'Totally Different Card';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(manual, referenceData()),
+    /does not match metadata eventName/,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1853 -- server-side numeric guardrails
+//
+// SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md: "A value accepted by the form must be
+// accepted by the API; a value rejected by the form must also be rejected by the API."
+// Before this lane only the browser enforced the bounds, so a modified client, a replayed
+// request, or a direct POST persisted values the contract forbids.
+// ---------------------------------------------------------------------------
+
+/** A payload whose *top-level* numeric fields can be overridden, unlike `payload()`. */
+function numericPayload(overrides: Partial<SubmissionPayload> = {}): SubmissionPayload {
+  return { ...payload(), ...overrides };
+}
+
+async function guardrailError(p: SubmissionPayload): Promise<{ status: number; code: string; message: string }> {
+  try {
+    await validateSmartFormRelationships(p, referenceData());
+  } catch (error) {
+    const e = error as { status?: number; code?: string; message?: string };
+    return { status: e.status ?? 0, code: e.code ?? '', message: e.message ?? '' };
+  }
+  throw new Error('expected the submission to be refused, but it was accepted');
+}
+
+test('UTV2-1853: a contract-legal submission is still accepted (non-vacuity control)', async () => {
+  // Without this the whole block could pass with a guard that refuses everything.
+  const outcome = await validateSmartFormRelationships(
+    numericPayload({ odds: -110, stakeUnits: 1.5, line: -3.5 }),
+    referenceData(),
+  );
+  assert.equal(outcome.kind, 'canonical-event');
+});
+
+test('UTV2-1853: an absent odds or stakeUnits is accepted -- this guard bounds, it does not require', async () => {
+  // `odds` and `stakeUnits` are optional in SubmissionPayload
+  // (packages/contracts/src/submission.ts:21-22) and submit-pick.ts reads both through
+  // readOptionalNumber. A bounds guard must not silently promote either to mandatory:
+  // doing so is a field-presence contract change, and it refused three pre-existing
+  // http-integration cases that post a legitimate odds-less Smart Form body.
+  const noOdds = numericPayload({ stakeUnits: 1.5 });
+  delete (noOdds as { odds?: number }).odds;
+  assert.equal((await validateSmartFormRelationships(noOdds, referenceData())).kind, 'canonical-event');
+
+  const noStake = numericPayload({ odds: -110 });
+  delete (noStake as { stakeUnits?: number }).stakeUnits;
+  assert.equal((await validateSmartFormRelationships(noStake, referenceData())).kind, 'canonical-event');
+});
+
+test('UTV2-1853: a non-finite odds or stakeUnits is still refused when it IS provided', async () => {
+  // The complement of the test above: optional means "may be absent", never
+  // "may be NaN". Without this pair, relaxing presence could be over-relaxed to
+  // skipping validation entirely and every bounds test would still pass.
+  const oddsErr = await guardrailError(numericPayload({ odds: Number.NaN }));
+  assert.equal(oddsErr.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(oddsErr.message, /odds must be a finite number when provided/);
+
+  const stakeErr = await guardrailError(numericPayload({ stakeUnits: Number.NaN }));
+  assert.equal(stakeErr.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(stakeErr.message, /stakeUnits must be a finite number when provided/);
+});
+
+test('UTV2-1853: odds below the American minimum magnitude are refused', async () => {
+  const err = await guardrailError(numericPayload({ odds: 7 }));
+  assert.equal(err.status, 422);
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(err.message, /odds must be American format/);
+});
+
+test('UTV2-1853: odds above the American maximum magnitude are refused', async () => {
+  const err = await guardrailError(numericPayload({ odds: -50001 }));
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+});
+
+test('UTV2-1853: fractional odds are refused', async () => {
+  const err = await guardrailError(numericPayload({ odds: 110.5 }));
+  assert.match(err.message, /whole number/);
+});
+
+test('UTV2-1853: both American boundary values are accepted', async () => {
+  for (const odds of [100, -100, 50000, -50000]) {
+    const outcome = await validateSmartFormRelationships(numericPayload({ odds }), referenceData());
+    assert.equal(outcome.kind, 'canonical-event', `odds ${odds} should be accepted`);
+  }
+});
+
+test('UTV2-1853: a stake above the contract maximum is refused', async () => {
+  // The shape a modified client produces: 500u at long odds.
+  const err = await guardrailError(numericPayload({ stakeUnits: 500 }));
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(err.message, /stakeUnits must be between/);
+});
+
+test('UTV2-1853: a stake below the contract minimum is refused', async () => {
+  const err = await guardrailError(numericPayload({ stakeUnits: 0.25 }));
+  assert.match(err.message, /stakeUnits must be between/);
+});
+
+test('UTV2-1853: a stake off the 0.5 step is refused', async () => {
+  const err = await guardrailError(numericPayload({ stakeUnits: 2.3 }));
+  assert.match(err.message, /multiple of/);
+});
+
+test('UTV2-1853: every legal 0.5 step from 0.5 to 5.0 is accepted', async () => {
+  for (let units = 0.5; units <= 5.0000001; units += 0.5) {
+    const outcome = await validateSmartFormRelationships(
+      numericPayload({ stakeUnits: Number(units.toFixed(1)) }),
+      referenceData(),
+    );
+    assert.equal(outcome.kind, 'canonical-event', `stake ${units} should be accepted`);
+  }
+});
+
+test('UTV2-1853: a line beyond the contract magnitude is refused', async () => {
+  const err = await guardrailError(numericPayload({ line: 100000 }));
+  assert.match(err.message, /line must be within/);
+});
+
+test('UTV2-1853: the line boundary is accepted and an absent line is not required', async () => {
+  for (const line of [999.5, -999.5, undefined]) {
+    const outcome = await validateSmartFormRelationships(
+      numericPayload({ line }),
+      referenceData(),
+    );
+    assert.equal(outcome.kind, 'canonical-event', `line ${String(line)} should be accepted`);
+  }
+});
+
+test('UTV2-1853: conviction outside 1-10 is refused', async () => {
+  const err = await guardrailError(payload({ capperConviction: 11 }));
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(err.message, /capperConviction must be between/);
+});
+
+test('UTV2-1853: the full 1-10 conviction range is accepted', async () => {
+  for (let c = 1; c <= 10; c += 1) {
+    const outcome = await validateSmartFormRelationships(
+      payload({ capperConviction: c }),
+      referenceData(),
+    );
+    assert.equal(outcome.kind, 'canonical-event', `conviction ${c} should be accepted`);
+  }
+});
+
+test('UTV2-1853: the guard does not reach the legacy service-role smart-form label', async () => {
+  // The UTV2-1672 trigger-scope guard runs first. A caller using `smart-form` as a plain
+  // source label, carrying none of the Smart Form fields, must stay exempt -- otherwise
+  // this lane silently retrofits the contract onto traffic it never governed.
+  const legacy: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'moneyline',
+    selection: 'TCU',
+    odds: 7,
+    stakeUnits: 500,
+  };
+  const outcome = await validateSmartFormRelationships(legacy, referenceData());
+  assert.equal(outcome.kind, 'not-smart-form');
+});
+
+test('UTV2-1853: the API bounds have not drifted from the client form schema', async () => {
+  // packages never import from apps and apps never import from apps, so the bounds cannot
+  // live in one shared module. This asserts the two copies still agree, the same way
+  // UTV2-1688 bound the executor-result regexes to their workflow copy.
+  const schemaPath = fileURLToPath(
+    new URL('../../smart-form/lib/form-schema.ts', import.meta.url),
+  );
+  const schema = await readFile(schemaPath, 'utf8');
+
+  const {
+    SMART_FORM_ODDS_MIN_MAGNITUDE,
+    SMART_FORM_ODDS_MAX_MAGNITUDE,
+    SMART_FORM_UNITS_MIN,
+    SMART_FORM_UNITS_MAX,
+    SMART_FORM_CONVICTION_MIN,
+    SMART_FORM_CONVICTION_MAX,
+  } = await import('./smart-form-validation.js');
+
+  assert.ok(schema.includes(String(SMART_FORM_ODDS_MIN_MAGNITUDE)), 'odds min drifted');
+  assert.ok(schema.includes(String(SMART_FORM_ODDS_MAX_MAGNITUDE)), 'odds max drifted');
+  assert.ok(schema.includes(`min(${SMART_FORM_UNITS_MIN}`), 'units min drifted');
+  assert.ok(schema.includes(`max(${SMART_FORM_UNITS_MAX.toFixed(1)}`), 'units max drifted');
+  assert.ok(schema.includes(`min(${SMART_FORM_CONVICTION_MIN}`), 'conviction min drifted');
+  assert.ok(schema.includes(`max(${SMART_FORM_CONVICTION_MAX}`), 'conviction max drifted');
 });

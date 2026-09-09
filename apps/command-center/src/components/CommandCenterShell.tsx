@@ -7,6 +7,10 @@ import { TopBar } from '@/components/TopBar';
 import { SidebarHealthStatus, SidebarNavGroup, WorkspaceSidebar } from '@/components/WorkspaceSidebar';
 import type { CommandEntry } from '@/lib/command-palette-model';
 import {
+  retainPrivilegedHealthAcrossPublicLiveness,
+  type GlobalHealth,
+} from '@/lib/global-health-contract';
+import {
   getPrimaryCommandCenterRoutes,
   getPrimaryRouteForPath,
   getRouteMeta,
@@ -14,7 +18,10 @@ import {
   type CommandCenterRoute,
 } from '@/lib/command-center-nav';
 
-type CommandCenterShellProps = { children: React.ReactNode };
+type CommandCenterShellProps = {
+  children: React.ReactNode;
+  initialHealth: GlobalHealth | null;
+};
 
 function icon(path: React.ReactNode) {
   return (
@@ -69,11 +76,15 @@ function resolveChrome(pathname: string, routeEntry: CommandCenterRoute | null) 
   };
 }
 
-function useGlobalHealth(): { status: SidebarHealthStatus; label: string; pending: boolean } {
-  const [state, setState] = useState<{ status: SidebarHealthStatus; label: string }>({
-    status: 'warning',
-    label: 'checking…',
-  });
+function displayHealth(health: GlobalHealth | null): { status: SidebarHealthStatus; label: string } {
+  if (health?.status === 'healthy') return { status: 'healthy', label: 'healthy' };
+  if (health?.status === 'degraded') return { status: 'warning', label: 'degraded' };
+  if (health?.status === 'down') return { status: 'critical', label: 'down' };
+  return { status: 'warning', label: health ? 'unknown' : 'unavailable' };
+}
+
+function useGlobalHealth(initialHealth: GlobalHealth | null): { status: SidebarHealthStatus; label: string; pending: boolean } {
+  const [health, setHealth] = useState<GlobalHealth | null>(initialHealth);
   const [pending, setPending] = useState(true);
 
   useEffect(() => {
@@ -82,18 +93,18 @@ function useGlobalHealth(): { status: SidebarHealthStatus; label: string; pendin
       setPending(true);
       try {
         const response = await fetch('/api/health', { cache: 'no-store' });
-        const body = (await response.json()) as { status?: string };
+        const body: unknown = await response.json();
         if (cancelled) return;
-        const next = body.status === 'healthy'
-          ? { status: 'healthy' as const, label: 'healthy' }
-          : body.status === 'degraded'
-            ? { status: 'warning' as const, label: 'degraded' }
-            : body.status === 'down'
-              ? { status: 'critical' as const, label: 'down' }
-              : { status: 'warning' as const, label: 'unknown' };
-        setState(next);
-      } catch {
-        if (!cancelled) setState({ status: 'warning', label: 'unavailable' });
+        if (!response.ok) {
+          throw new Error(`Health request failed: ${response.status}`);
+        }
+        // Bearer-authenticated navigations cannot safely expose their secret to
+        // browser JavaScript. In that deployment the public endpoint returns
+        // liveness only, so retain the privileged server-rendered snapshot.
+        setHealth((current) => retainPrivilegedHealthAcrossPublicLiveness(current, body));
+      } catch (error) {
+        console.error('Command Center health refresh failed', error);
+        if (!cancelled) setHealth(null);
       } finally {
         if (!cancelled) setPending(false);
       }
@@ -106,7 +117,7 @@ function useGlobalHealth(): { status: SidebarHealthStatus; label: string; pendin
     };
   }, []);
 
-  return { ...state, pending };
+  return { ...displayHealth(health), pending };
 }
 
 function RouteDispositionNotice({ routeEntry }: { routeEntry: CommandCenterRoute | null }) {
@@ -124,7 +135,7 @@ function RouteDispositionNotice({ routeEntry }: { routeEntry: CommandCenterRoute
   );
 }
 
-export function CommandCenterShell({ children }: CommandCenterShellProps) {
+export function CommandCenterShell({ children, initialHealth }: CommandCenterShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -132,7 +143,7 @@ export function CommandCenterShell({ children }: CommandCenterShellProps) {
   const navigation = useMemo(buildNavigation, []);
   const routeEntry = getRouteMeta(pathname);
   const chrome = resolveChrome(pathname, routeEntry);
-  const health = useGlobalHealth();
+  const health = useGlobalHealth(initialHealth);
 
   useEffect(() => {
     setMobileOpen(false);

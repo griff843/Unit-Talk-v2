@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
-  resolveOperatorIdentity,
 } from '@/lib/server-api';
+import { resolveActorOrRefusal } from '@/lib/require-actor';
 
 export type SettleResult =
   | { ok: true; settlementRecordId: string }
@@ -30,7 +30,11 @@ export async function settlePick(
   result: 'win' | 'loss' | 'push' | 'void',
 ): Promise<SettleResult> {
   const apiUrl = resolveApiBaseUrl();
-  const operatorActor = resolveOperatorIdentity();
+  const actorResolution = await resolveActorOrRefusal();
+  if (!actorResolution.ok) {
+    return { ok: false, error: actorResolution.error };
+  }
+  const operatorActor = actorResolution.actor;
   const headers = resolveCommandCenterApiHeaders();
 
   const res = await fetch(`${apiUrl}/api/picks/${pickId}/settle`, {

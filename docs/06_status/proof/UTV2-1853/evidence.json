@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1853",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "59b6d51ec3909e1e10cf1b7f6141844ec21889c6",
+    "verified_source_sha": "208446676c06e86e30faaafed76919a8f4508097",
+    "evidence_commit_sha": "208446676c06e86e30faaafed76919a8f4508097",
+    "current_pr_head_sha": "10e31597b48d05b3a0ee88bf9f4265dc8fa31b20",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_lint": "PASS — exit 0, no findings, measured locally at this anchor.",
+      "pnpm_test": "PASS — tests 6035, pass 6035, fail 0, skipped 0, exit 0, measured locally at this anchor.",
+      "pnpm_verify": "EXIT non-zero locally, and not because anything failed. The run reaches test:live-db, which refuses under containment where local.env points every Supabase client at http://127.0.0.1:1 by design. No local PASS is claimed. The authoritative result is the required `verify` check on this exact head: success, run 34153950859.",
+      "r_level_check": "PASS — npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: Verdict PASS, 4 changed files, no rules matched, so no R-level artifacts are required for this diff."
+    },
+    "sha_type": "verified_source_sha",
+    "anchor_note": "208446676c06e86e30faaafed76919a8f4508097 is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1853/, and it is the tree every command above was run against. Commits after it touch this proof bundle only and are inside PROOF_ONLY_PREFIXES, so rule 4 of scripts/ci/proof-binding-validator.ts (a two-dot git diff verified_source_sha..HEAD) keeps the anchor here.",
+    "bound_at": "2026-09-07T19:55:00.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 6035,
+      "failures": 0,
+      "detail": "tests 6035, pass 6035, fail 0, skipped 0, exit 0"
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "count": 3,
+      "baseline": "pnpm exec tsx --test apps/api/src/smart-form-validation.test.ts — tests 74, pass 74, fail 0",
+      "mutations": [
+        {
+          "name": "unwire the call site",
+          "command": "assertSmartFormNumericBounds(payload) -> void assertSmartFormNumericBounds",
+          "observed": "tests 74, pass 65, fail 9",
+          "significance": "The one that matters. Without it the entire guard could be deleted with every behavioural test still green — the failure mode the executor-result-validator duplication produced."
+        },
+        {
+          "name": "delete the odds finite check",
+          "command": "remove smart-form-validation.ts:746-748 (the !Number.isFinite(odds) branch)",
+          "observed": "tests 74, pass 73, fail 1"
+        },
+        {
+          "name": "widen the units maximum",
+          "command": "SMART_FORM_UNITS_MAX = 5 -> 999",
+          "observed": "tests 74, pass 72, fail 2"
+        }
+      ],
+      "honest_reading": "Mutations 2 and 3 show the individual bounds are each load-bearing rather than jointly asserted by one broad case. The working tree was restored byte-for-byte after each; git status was clean before the proof bundle was staged."
+    },
+    "bounds_not_presence": {
+      "status": "PASS",
+      "detail": "The guard bounds values it is given and does not newly require them. odds and stakeUnits are declared `?: number | undefined` in packages/contracts/src/submission.ts:21-22 and read through readOptionalNumber in apps/api/src/handlers/submit-pick.ts:153.",
+      "regression_found_and_reverted": "An earlier revision of this lane asserted presence and turned three existing apps/api/src/http-integration.test.ts cases red with 'odds is required on a Smart Form submission'. That was a field-presence contract change smuggled into a bounds lane. It was reverted; making either field mandatory remains a change to packages/contracts/src/submission.ts and is not made here.",
+      "inverse_asserted": "Two tests lock both directions: an absent odds or stakeUnits is accepted, and a non-finite one is still refused when it IS provided."
+    },
+    "contract_alignment": {
+      "status": "PASS",
+      "detail": "Bounds are taken from SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md:172-215 — units 0.5-5.0 step 0.5, American odds integer with magnitude 100-50000, line magnitude <= 999.5 — and from T1_SMART_FORM_V1_CONTRACT.md:91-95 for conviction integer 1-10. They are exported as named constants and the tests assert from the constants, not from copied literals."
+    },
+    "containment_untouched": {
+      "status": "PASS",
+      "command": "git diff origin/main...HEAD -- . ':(exclude)docs/06_status/proof/**' | grep -E \"trackOnly|distributionMode\"",
+      "observed": "exit 1, no matches",
+      "significance": "This lane changes no delivery, distribution or Track Only behaviour. The proof directory is excluded because this bundle now names both identifiers and the unscoped form would match its own text."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 22031.29ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 20373.68ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 19962.87ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 21612.31ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 129.00ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 25370.64ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 22281.03ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 2,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 22,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 2,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-07T21:29:39.464Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 34163184455, job 101868994715), which ran immediately before the smoke-test step in the same job, on head 59b6d51ec3909e1e10cf1b7f6141844ec21889c6. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 34163184455,
+      "run_attempt": 1,
+      "job_id": 101868994715,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34163184455/job/101868994715",
+      "target_head_sha": "59b6d51ec3909e1e10cf1b7f6141844ec21889c6",
+      "target_merge_sha": "59b6d51ec3909e1e10cf1b7f6141844ec21889c6",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  },
+  "known_gaps": [
+    "This lane does NOT repair the Smart Form submission blocker. A canonical or structured-fallback submission still fails before persistence for reasons this diff does not address — the reference-data identity defects are tracked separately. Bounding the numerics is necessary and is not sufficient.",
+    "It does NOT verify the browser -> API -> persisted-pick flow. No CI workflow runs apps/smart-form/e2e/, so no green check on this PR is evidence about it.",
+    "It does NOT re-prove Track Only non-delivery. Those guards are unchanged and already mutation-tested; this diff touches none of them."
+  ]
+}

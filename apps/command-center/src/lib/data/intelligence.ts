@@ -56,7 +56,7 @@ function resolveProviderOfferFreshnessThresholdMinutes(): number {
 }
 
 export async function getIntelligenceCoverage(window?: string): Promise<{ ok: true; data: unknown }> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const { label, days } = parseWindowDays(window);
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
@@ -124,7 +124,7 @@ export async function getIntelligenceCoverage(window?: string): Promise<{ ok: tr
 }
 
 export async function getProviderHealth(): Promise<{ ok: true; data: unknown }> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const staleThresholdMinutes = resolveProviderOfferFreshnessThresholdMinutes();
 
   const [offersResult, runsResult, latestOfferResult] = await Promise.all([

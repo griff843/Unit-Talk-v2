@@ -23,6 +23,7 @@ import {
   LINEAR_CANDIDATE_QUERY,
   linearCandidateMaxPages,
   parseQueueCandidates,
+  hasTrackerSource,
   resolveCandidateSource,
   runMaximizerCli,
 } from './lane-maximizer.js';
@@ -1468,14 +1469,19 @@ test('UTV2-1699 AC1: a bare invocation queries the canonical Linear candidate so
   // parseCandidatesArg() does a blocking read of fd 0, so a test that only
   // observed the resulting empty board would hang rather than fail. The source
   // selection is the control, so it is checked directly.
+  //
+  // UTV2-1837: the tracker-credential argument is passed EXPLICITLY here. It
+  // defaults to probing the environment, so leaving it implicit would make this
+  // assertion depend on whether the machine running the tests happens to have a
+  // credential configured -- passing locally and flipping to 'queue' in CI.
   assert.equal(
-    resolveCandidateSource([]),
+    resolveCandidateSource([], true),
     'linear',
     'a bare argv must select the canonical Linear candidate source, never an argv/stdin parse',
   );
-  assert.equal(resolveCandidateSource(['--from-queue']), 'queue');
-  assert.equal(resolveCandidateSource(['--candidates', '[]']), 'explicit');
-  assert.equal(resolveCandidateSource(['--from-linear']), 'linear');
+  assert.equal(resolveCandidateSource(['--from-queue'], true), 'queue');
+  assert.equal(resolveCandidateSource(['--candidates', '[]'], true), 'explicit');
+  assert.equal(resolveCandidateSource(['--from-linear'], true), 'linear');
 
   const outcome = await runMaximizerCli([], {
     linear: fakeLinearDeps([[candidateIssueNode('UTV2-9001')]]),
@@ -2428,3 +2434,57 @@ test('UTV2-1820: the shipped query requests the inverse edge', () => {
     'the prerequisite edge must be in the real query text, not just in the mapper',
   );
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence in discovery.
+//
+// `fetchLinearCandidates` throws 'LINEAR_API_TOKEN or LINEAR_API_KEY not set'
+// with no credential, so the FIRST step of an ordinary task depended on the
+// tracker. The queue file is a repo-owned, PR-reviewable population and is now
+// selected when no credential exists. This is a source selection, not a silent
+// degradation: `candidate_source` is already reported on every outcome.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1837: a bare invocation with no tracker credential selects the repo-owned queue', () => {
+  assert.equal(resolveCandidateSource([], false), 'queue');
+});
+
+test('UTV2-1837 AC4 inversion: with a credential the tracker is still preferred', () => {
+  assert.equal(resolveCandidateSource([], true), 'linear');
+});
+
+test('UTV2-1837: an explicit source always outranks the credential probe', () => {
+  for (const hasCredential of [true, false]) {
+    assert.equal(resolveCandidateSource(['--from-queue'], hasCredential), 'queue');
+    assert.equal(resolveCandidateSource(['--candidates', '[]'], hasCredential), 'explicit');
+    assert.equal(resolveCandidateSource(['--from-stdin'], hasCredential), 'explicit');
+  }
+});
+
+// UTV2-1837 — the source decision must come from the deps the caller supplied,
+// not from whatever credential the machine happens to hold. Getting this wrong
+// is not hypothetical: probing only `process.env` made sixteen pre-existing
+// tests that inject a fake tracker pass locally and fail in CI, where they
+// silently stopped exercising the Linear path at all.
+test('UTV2-1837: injected Linear deps ARE a tracker source', () => {
+  assert.equal(
+    hasTrackerSource({ linear: fakeLinearDeps([[candidateIssueNode('UTV2-9001')]]) }),
+    true,
+    'a caller that supplies a tracker in place of the wire has a tracker source',
+  );
+});
+
+test('UTV2-1837: with no deps and no credential the CLI reads the queue, not an unreachable tracker', async () => {
+  assert.equal(resolveCandidateSource([], false), 'queue');
+  assert.equal(
+    resolveCandidateSource(['--from-linear'], false),
+    'linear',
+    'an EXPLICIT --from-linear is still honoured; the fallback is a default, never an override',
+  );
+});
+
+test('UTV2-1837 inversion: an explicit flag beats the credential probe in both directions', () => {
+  assert.equal(resolveCandidateSource(['--from-queue'], true), 'queue');
+  assert.equal(resolveCandidateSource(['--candidates', '[]'], false), 'explicit');
+});
+

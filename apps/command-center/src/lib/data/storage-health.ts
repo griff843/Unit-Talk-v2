@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
 import type { DbRuntimeHealth, StorageDomainHealth, StorageGrowthSource } from '../types.js';
+import { assertPrivilegedRequestAuthenticated } from '../request-auth';
 
 interface DiskConfigResponse {
   attributes?: {
@@ -288,6 +289,7 @@ function summarizeDomain(
 }
 
 export async function getStorageHealth(): Promise<DbRuntimeHealth> {
+  await assertPrivilegedRequestAuthenticated();
   const now = new Date();
   const [
     diskConfig,

@@ -2,22 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { CheckResult, PreflightToken } from './shared.js';
 import {
   ROOT,
   PREFLIGHT_RESULT_SCHEMA_PATH,
   PREFLIGHT_TOKEN_SCHEMA_PATH,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
   preflightResultPathForBranch,
   preflightTokenPathForBranch,
   validatePreflightSchemaDependencies,
 } from './shared.js';
 import {
   branchContainsExactIssue,
+  createToken,
   FULL_VERIFY_THROTTLE_DIR,
   FULL_VERIFY_THROTTLE_STALE_MS,
   configuredFullVerifyConcurrency,
   isContinuationEligibleLinearState,
   isTerminalLinearState,
+  isContainmentPlaceholderSupabaseUrl,
   parseAheadBehind,
+  resolveVerdict,
+  runLinearChecks,
+  runT1Checks,
 } from './preflight.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
 
@@ -323,4 +330,337 @@ test('readmission invalidates a prior token after terminal or infrastructure pre
     cleanupCall > nonPassReadmissionCleanup && cleanupCall < finalReturn,
     'a stale readmission token must be removed before NOT_APPLICABLE or INFRA returns',
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence. Ratified 2026-09-05, `docs/mission/intent.md`
+// "Execution must not depend on the tracker".
+//
+// The measured cascade these tests pin: no credential -> PL1-PL5 `infra_error`
+// -> `resolveVerdict` returns INFRA -> no preflight token is written -> every
+// `ops:lane-start` fails with "validated preflight token is unavailable".
+// Each step is asserted separately so a future regression names which link
+// broke rather than only that the chain broke.
+// ---------------------------------------------------------------------------
+
+const collectChecks = (): {
+  checks: CheckResult[];
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void;
+  byId: (id: string) => CheckResult | undefined;
+} => {
+  const checks: CheckResult[] = [];
+  return {
+    checks,
+    addCheck: (id, status, detail) => {
+      checks.push({ id, status, detail });
+    },
+    byId: (id) => checks.find((check) => check.id === id),
+  };
+};
+
+test('UTV2-1837 AC1: with no tracker credential, PL1-PL5 skip instead of infra_error', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    const state = await runLinearChecks(
+      'UTV2-1837',
+      'T2',
+      null,
+      ['docs/06_status/CURRENT_STATE.md'],
+      false,
+      sink.addCheck,
+    );
+    assert.deepEqual(state, { labels: [], stateName: '' });
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+
+  for (const id of ['PL1', 'PL2', 'PL3', 'PL4', 'PL5', 'PL6']) {
+    assert.equal(sink.byId(id)?.status, 'skip', `${id} must skip without a tracker credential`);
+  }
+  assert.equal(sink.byId('PE2')?.status, 'skip');
+  assert.equal(
+    sink.checks.some((check) => check.status === 'infra_error'),
+    false,
+    'an absent optional tracker is not an infrastructure error',
+  );
+});
+
+test('UTV2-1837 AC1: those skips produce verdict PASS, which is what writes the token', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    await runLinearChecks('UTV2-1837', 'T2', null, ['README.md'], false, sink.addCheck);
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+  assert.equal(resolveVerdict(sink.checks), 'PASS');
+});
+
+test('UTV2-1837 AC5: a declared tier BELOW the mechanical floor is refused, not skipped', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    // packages/domain is a Tier C path: its mechanical minimum is T1, so a
+    // declared T3 is below the floor and must fail rather than pass through.
+    await runLinearChecks(
+      'UTV2-1837',
+      'T3',
+      null,
+      ['packages/domain/src/scoring.ts'],
+      false,
+      sink.addCheck,
+    );
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+  const pe2 = sink.byId('PE2');
+  assert.equal(pe2?.status, 'fail');
+  assert.match(pe2?.detail ?? '', /below the mechanical floor T1/u);
+  assert.equal(resolveVerdict(sink.checks), 'FAIL');
+});
+
+test('UTV2-1837 AC5: a declared tier AT OR ABOVE the floor is accepted', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    await runLinearChecks(
+      'UTV2-1837',
+      'T1',
+      null,
+      ['packages/domain/src/scoring.ts'],
+      false,
+      sink.addCheck,
+    );
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+  assert.equal(sink.byId('PE2')?.status, 'skip');
+  assert.equal(resolveVerdict(sink.checks), 'PASS');
+});
+
+test('UTV2-1837 AC4 inversion: the skip is conditional on absence, never unconditional', async () => {
+  const sink = collectChecks();
+  // A present-but-invalid credential must NOT take the skip path. If it did,
+  // supplying a token would silently disable every tracker check -- the exact
+  // unconditional-skip failure mode acceptance criterion 4 exists to refuse.
+  await runLinearChecks(
+    'UTV2-1837',
+    'T2',
+    { LINEAR_API_TOKEN: 'lin_api_not_a_real_token' } as never,
+    ['README.md'],
+    false,
+    sink.addCheck,
+  );
+  assert.notEqual(
+    sink.byId('PL1')?.status,
+    'skip',
+    'PL1 must not skip when a credential IS present',
+  );
+});
+
+
+// UTV2-1845: PT1 pinged live Supabase and could only answer `pass` or `infra_error`. Under
+// containment the ping is *designed* to fail -- `local.env` declares itself a containment
+// placeholder and points SUPABASE_URL at an unroutable address -- so a deliberate policy state was
+// reported as a broken database. resolveVerdict maps infra_error to INFRA, which writes no token,
+// which makes ops:lane-start refuse. PT1 runs only at T1 and is waivable at no tier, so every T1
+// lane was unopenable on a contained workstation. These tests lock the classification. They do NOT
+// lock any admission change: `blocked_by_containment` still resolves to INFRA.
+
+test('UTV2-1845: the containment placeholder is recognised exactly, not heuristically', () => {
+  for (const url of [
+    'http://127.0.0.1:1',
+    'http://127.0.0.1:54321',
+    'http://127.1.2.3:1',
+    'http://localhost:54321',
+    'http://[::1]:1',
+    'http://0.0.0.0:1',
+  ]) {
+    assert.equal(isContainmentPlaceholderSupabaseUrl(url), true, url);
+  }
+});
+
+test('UTV2-1845 inversion: a real host is never mistaken for the containment placeholder', () => {
+  // If any of these returned true, a genuinely broken production or staging database would be
+  // reported as containment -- the exact false negative this predicate must not introduce.
+  for (const url of [
+    'https://zfzdnfwdarxucxtaojxm.supabase.co',
+    'https://xskgrzbteyqdufktjrjx.supabase.co',
+    'https://db.example.com',
+    'https://127.0.0.1.example.com',
+    'not-a-url',
+    '',
+  ]) {
+    assert.equal(isContainmentPlaceholderSupabaseUrl(url), false, url);
+  }
+});
+
+test("UTV2-1845: the predicate agrees with an independent reading of the repo's own SUPABASE_URL", () => {
+  // Binds the predicate to the actual value this repository runs with rather than to a value
+  // invented here. It asserts agreement, not a fixed verdict: under local containment that value is
+  // the loopback placeholder and the expected answer is true, while in CI `local.env` is written
+  // from the staging-ci environment and the expected answer is false. An earlier version of this
+  // test asserted `true` unconditionally and was red in CI for exactly that reason -- it had
+  // encoded one environment's value as if it were the contract.
+  const localEnvPath = path.join(ROOT, 'local.env');
+  if (!fs.existsSync(localEnvPath)) {
+    return;
+  }
+  const line = fs
+    .readFileSync(localEnvPath, 'utf8')
+    .split('\n')
+    .find((entry) => entry.startsWith('SUPABASE_URL='));
+  if (!line) {
+    return;
+  }
+  const value = line.slice('SUPABASE_URL='.length).trim().replace(/^['"]|['"]$/g, '');
+
+  // Computed here without calling the function under test, so the two can disagree.
+  let expected = false;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    expected =
+      bare === 'localhost' ||
+      bare === '::1' ||
+      bare === '::' ||
+      bare === '0.0.0.0' ||
+      /^127(?:\.\d{1,3}){3}$/.test(bare);
+  } catch {
+    expected = false;
+  }
+
+  assert.equal(
+    isContainmentPlaceholderSupabaseUrl(value),
+    expected,
+    `predicate disagrees with an independent loopback reading of local.env SUPABASE_URL (${value})`,
+  );
+});
+
+test('UTV2-1845: PT1 reports blocked_by_containment for the placeholder host', async () => {
+  const sink = collectChecks();
+  await runT1Checks(
+    { SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'placeholder-key' } as never,
+    sink.addCheck,
+  );
+  assert.equal(sink.byId('PT1')?.status, 'blocked_by_containment');
+});
+
+test('UTV2-1845 inversion: a real but unreachable host still reports infra_error', async () => {
+  // This is the control. The .invalid TLD never resolves, so the ping fails for the same reason
+  // the placeholder ping fails -- and the outcome must still be infra_error, because the cause is
+  // an unreachable database and not containment.
+  const sink = collectChecks();
+  await runT1Checks(
+    {
+      SUPABASE_URL: 'https://unreachable-host.invalid',
+      SUPABASE_SERVICE_ROLE_KEY: 'placeholder-key',
+    } as never,
+    sink.addCheck,
+  );
+  assert.equal(sink.byId('PT1')?.status, 'infra_error');
+});
+
+test('UTV2-1845 inversion: an absent credential still fails, and is not containment', async () => {
+  const sink = collectChecks();
+  await runT1Checks({ SUPABASE_URL: 'http://127.0.0.1:1' } as never, sink.addCheck);
+  assert.equal(sink.byId('PT1')?.status, 'fail');
+});
+
+// UTV2-1851 (route B, ratified by PM 2026-09-06). This test previously asserted the OPPOSITE --
+// that PT1's `blocked_by_containment` still resolved to INFRA, admitting nothing. That was the
+// correct assertion for UTV2-1845, which deliberately landed the classification without the
+// admission. The admission is now ratified, so the assertion inverts; the surrounding controls do
+// not, and they are what keep the change bounded.
+test('UTV2-1851: PT1 containment is admitted, and nothing else is relaxed', () => {
+  // The ratified change: PT1 containment alone no longer blocks a verdict.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'pass', detail: '' },
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+    ]),
+    'PASS',
+  );
+
+  // BINDING CONDITION -- "all other applicable preflight checks must still pass". A containment
+  // admission does not carry an unrelated failure through with it.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'fail', detail: '' },
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+    ]),
+    'FAIL',
+  );
+  assert.equal(
+    resolveVerdict([
+      { id: 'PL2', status: 'fail', detail: '' },
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+    ]),
+    'NOT_APPLICABLE',
+  );
+
+  // A genuine infrastructure fault is untouched: it still returns INFRA and writes no token.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'pass', detail: '' },
+      { id: 'PT1', status: 'infra_error', detail: '' },
+    ]),
+    'INFRA',
+  );
+  assert.equal(
+    resolveVerdict([
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+      { id: 'PE2', status: 'infra_error', detail: '' },
+    ]),
+    'INFRA',
+  );
+
+  // SCOPE CONTROL: the admission is PT1's alone. `blocked_by_containment` from any other check
+  // still returns INFRA, so a future emitter cannot inherit this admission without its own review.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'blocked_by_containment', detail: '' },
+      { id: 'PT1', status: 'pass', detail: '' },
+    ]),
+    'INFRA',
+  );
+});
+
+test('UTV2-1851: the admitted token records the deferral, and an ordinary token does not', () => {
+  const generatedAt = new Date().toISOString();
+  const admitted = createToken(
+    'UTV2-1851',
+    'T1',
+    'claude/utv2-1851-example',
+    'a'.repeat(40),
+    generatedAt,
+    [],
+    false,
+    [],
+    null,
+    true,
+  ) as PreflightToken;
+  assert.equal(admitted.t1_live_db_precondition, T1_LIVE_DB_PRECONDITION_DEFERRED);
+
+  // Control: the field is not written unconditionally. Every lane that did not hit containment
+  // produces a token with no deferral at all, which is what keeps `validateManifest`'s bridge
+  // silent for ordinary lanes.
+  const ordinary = createToken(
+    'UTV2-1851',
+    'T1',
+    'claude/utv2-1851-example',
+    'a'.repeat(40),
+    generatedAt,
+    [],
+    false,
+    [],
+    null,
+    false,
+  ) as PreflightToken;
+  assert.equal('t1_live_db_precondition' in ordinary, false);
 });

@@ -11,6 +11,7 @@ import {
   ensureAttestedPrHeadAvailable,
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
+  guardCloseAgainstMainCheckout,
   guardRepairAgainstMainCheckout,
   implementationFilesFromTrustedRepair,
   manifestForFailedRepairClose,
@@ -4238,4 +4239,147 @@ test('UTV2-1828: the tolerant ordinary path also offers diff-summary.md, and its
       ['unchanged', 'unchanged', 'missing'],
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence at closeout.
+//
+// The tracker transition sits AFTER `leaseTransition.commit()`, so before this
+// a missing credential or an unreachable tracker left the lane half-closed:
+// leases released, manifest written, closeout thrown out of. The write is to a
+// system this repository does not own, so its outcome is recorded rather than
+// raised.
+// ---------------------------------------------------------------------------
+
+async function closeWithTracker(
+  repoRoot: string,
+  overrides: Parameters<typeof completeSuccessfulLaneClose>[3],
+): Promise<Awaited<ReturnType<typeof completeSuccessfulLaneClose>>> {
+  // The five completion conditions must all hold, or the tracker block never
+  // runs and every assertion below is vacuous. `createMissingBindingManifest`
+  // delivers nothing, so scope truth is supplied explicitly here; the lock
+  // entry is a plain prefix because the eligibility check is a path-prefix
+  // test rather than a glob match.
+  const manifest = createMissingBindingManifest({
+    files_changed: ['scripts/ops/lane-close.ts'],
+    // The repair appends the lane's own proof paths to files_changed, so the
+    // lock must admit them too or scope truth fails on the repair's own output.
+    file_scope_lock: ['scripts/ops', 'docs/06_status/proof/UTV2-1585'],
+  });
+  const pr = createTrustedRepairPr(manifest);
+  const repair = repairMergedLaneManifest(manifest, { validatedPr: pr });
+  const truthCheck = createTruthCheckResult({
+    issue_id: manifest.issue_id,
+    tier: manifest.tier,
+    merge_sha: pr.mergeSha,
+    pr_url: pr.url,
+  });
+  return completeSuccessfulLaneClose(manifest.issue_id, repair.manifest, truthCheck, {
+    trustedBindingRepair: true,
+    repoRoot,
+    // The tracker transition only runs for a lane that is eligible to complete
+    // its issue, and completion intent is a deliberate explicit declaration
+    // rather than an inference from lane state. Without it the whole tracker
+    // block is bypassed and every assertion below would read `not_eligible`
+    // regardless of tracker behaviour -- a vacuous test.
+    completionIntent: true,
+    finalizeManifest: () => ({
+      ...repair.manifest,
+      status: 'done',
+      closed_at: '2026-09-06T00:00:00.000Z',
+    }),
+    beginLeaseRelease: () => ({
+      warnings: [],
+      commit: () => undefined,
+      rollback: () => undefined,
+    }),
+    releaseLocks: () => ({ warnings: [] }),
+    cleanupWorktree: () => 'removed',
+    ...overrides,
+  });
+}
+
+test('UTV2-1837: a tracker write failure is recorded as tracker_sync skipped, not thrown', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-skip-'));
+  try {
+    const completion = await closeWithTracker(repoRoot, {
+      transitionLinear: async () => {
+        throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY is required to close the Linear issue');
+      },
+    } as never);
+    assert.strictEqual(completion.manifest.status, 'done', 'the lane still closes');
+    assert.strictEqual(completion.tracker_sync, 'skipped');
+    assert.ok(
+      completion.warnings.some((warning) => warning.includes('tracker_sync: skipped')),
+      'the skipped transition is surfaced, never silent',
+    );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1837 AC4 inversion: a working tracker still transitions and reports synced', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-sync-'));
+  try {
+    let called = 0;
+    const completion = await closeWithTracker(repoRoot, {
+      transitionLinear: async () => {
+        called += 1;
+      },
+    } as never);
+    assert.strictEqual(called, 1, 'the transition is still attempted when a tracker exists');
+    assert.strictEqual(completion.tracker_sync, 'synced');
+    assert.deepStrictEqual(completion.warnings, []);
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+// UTV2-1838 -- the plain close path was unguarded on `main`.
+//
+// `guardRepairAgainstMainCheckout` (UTV2-1542) sits inside `if (repairMerged)`.
+// A plain `pnpm ops:lane-close <ID>` from the root checkout while on `main`
+// therefore reached `runTruthCheck` (truth_check_history append + heartbeat
+// write) and `finalizeLaneCloseManifest` (`status: done`) with no main-checkout
+// guard at all, leaving tracked files dirty on `main` -- the exact
+// shared-checkout condition behind the direct-main-push incidents.
+test('guardCloseAgainstMainCheckout refuses a plain close from a checkout on main', () => {
+  const blocked = guardCloseAgainstMainCheckout({
+    issueId: 'UTV2-1838',
+    currentBranch: 'main',
+  });
+
+  assert.ok(blocked, 'a close from main must be refused');
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, 'close_refused_on_main_checkout');
+  assert.equal(blocked.outcome, 'blocked');
+  assert.equal(blocked.issue_id, 'UTV2-1838');
+  assert.equal(blocked.current_branch, 'main');
+  assert.match(blocked.remediation, /worktree/);
+});
+
+test('guardCloseAgainstMainCheckout permits a lane worktree and trusted automation', () => {
+  assert.equal(
+    guardCloseAgainstMainCheckout({
+      issueId: 'UTV2-1838',
+      currentBranch: 'claude/utv2-1838-closeout-safe-to-repeat',
+    }),
+    null,
+  );
+  // The trusted post-merge workflow runs on `main` by design; it is exempt from
+  // this guard exactly as it is exempt from the repair guard.
+  assert.equal(
+    guardCloseAgainstMainCheckout({
+      issueId: 'UTV2-1838',
+      currentBranch: 'main',
+      trustedPostMerge: true,
+    }),
+    null,
+  );
+});
+
+test('close_refused_on_main_checkout carries actionable remediation', () => {
+  const remediation = remediationForCode('close_refused_on_main_checkout');
+  assert.match(remediation, /DIRECT_MAIN_BYPASS_POLICY\.md/);
+  assert.match(remediation, /\.out\/worktrees\//);
 });

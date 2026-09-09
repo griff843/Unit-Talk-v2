@@ -1,0 +1,78 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1844",
+  "tier": "T2",
+  "lane_type": "operator-ui",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "b5ee99e17c5053c42cfe29dd95973d59ade6761f",
+    "verified_source_sha": "65ebfd24b84b3ef2667e8a15f351ade704674bb8",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS — tests 5977, pass 5977, fail 0, exit 0, measured locally at this anchor.",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
+      "r_level_check": "PASS — npx tsx scripts/ci/r-level-check.ts --issue UTV2-1844: Changed files 16, rules matched operator-ui, every triggered required[] artifact present."
+    },
+    "sha_type": "merge_sha",
+    "anchor_note": "65ebfd24b84b3ef2667e8a15f351ade704674bb8 is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1844/, and it is the tree every command above was run against. It is the commit that resynced this branch onto origin/main after #1522 (UTV2-1845, 9a233bd90) merged and made this PR BEHIND under strict:true; that resync carries non-proof files, so rule 4 of scripts/ci/proof-binding-validator.ts (a two-dot git diff verified_source_sha..HEAD) forces the anchor onto it. Commits after it touch this proof bundle only and are inside PROOF_ONLY_PREFIXES.",
+    "bound_at": "2026-09-06T21:00:14.047Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5977,
+      "failures": 0,
+      "detail": "tests 5977, pass 5977, fail 0, exit 0"
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "count": 1,
+      "command": "revert nextSignedInputValue to return parsed unconditionally, run pnpm exec tsx --test apps/smart-form/test/control-plane-boundary.test.ts, restore byte-for-byte",
+      "observed": "# pass 7 / # fail 2 — 'a signed decimal stays enterable one keystroke at a time' and 'a signed field preserves a leading minus that Number() would erase'.",
+      "honest_reading": "The mutation is exactly the behaviour this lane found and repaired: coercing every keystroke through Number() makes -3.5 unenterable one character at a time and erases the sign in -0.5. Two tests stay green under it on purpose — coercion is correct for a complete value, and the repair must not break that. That inverse is asserted separately as 'a fully typed signed number is handed on as a number, not a string'."
+    },
+    "keypad_inversion": {
+      "status": "PASS",
+      "detail": "The rendering test asserts type=\"text\", inputmode=\"text\" and the exact signed pattern, and additionally doesNotMatch(/inputmode=\"(?:numeric|decimal)\"/), so a regression to a numeric keypad without a minus key fails rather than passing silently.",
+      "why_text_input": "Mobile numeric and decimal keypads commonly omit the minus key, which is the defect this lane repairs. The signed pattern preserves browser validation semantics and the Zod form schema remains authoritative for numeric ranges."
+    },
+    "rejection_control": {
+      "status": "PASS",
+      "detail": "nextSignedInputValue returns null for input that is not a number at all — asserted over 'abc', '-1-2', '1.2.3', '--5' — and the component reads null as 'reject this keystroke', leaving the field unchanged rather than writing a partial value through."
+    },
+    "identity_mode_three_valued": {
+      "status": "PASS",
+      "detail": "apps/smart-form/lib/form-utils.ts replaces the binary manualOverride boolean with SmartFormIdentityMode ('canonical' | 'structured-fallback' | 'manual'), adds the canonical-requires-event guard code, and rewords two fallback descriptions away from 'use manual participant override' to 'use the verified coverage-gap path'. BetForm.tsx threads the mode through every selector."
+    },
+    "containment_untouched": {
+      "status": "PASS",
+      "command": "git diff origin/main...HEAD -- . ':(exclude)docs/06_status/proof/**' ':(exclude).ops/sync/**' | grep -E \"trackOnly|distributionMode\"",
+      "observed": "exit 1, no matches",
+      "significance": "This lane changes no delivery, distribution or Track Only behaviour. The proof bundle is excluded from the diff because this bundle now describes both identifiers, so the unscoped form matches its own text (4 hits, all proof-bundle lines) and is no longer reproducible."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Static-proof frontend lane. It changes a browser input control and client-side form utilities; it adds no database access and no server route, so there is nothing for a live-DB run to observe. The end-to-end browser flow is a separate, explicitly disclaimed verification -- see known_gaps."
+  },
+  "known_gaps": [
+    "This lane does not verify the combined browser -> API -> persisted-pick flow. apps/smart-form/e2e/ carries four specs and no CI workflow runs them, so any e2e result must be reported as a local run with its command and output and never as a green check.",
+    "It covers UTV2-1842 defect D in full and defect B only in part: the three-valued identity mode is the client-side half. The server-validated classification the event-existence gate must consult (defect A) and per-side resolved / not-found / search-failed state (defect C) are the backend half and are blocked on UTV2-1842's admission.",
+    "The lane was dispatched to Codex, which aborted with EXECUTION_SILENT during its verify phase. The returned work was reviewed rather than accepted: the keystroke regression recorded in mutation_control was found in that review and repaired here. Codex's own tests could not see it because they asserted rendered markup rather than post-keystroke behaviour."
+  ]
+}
