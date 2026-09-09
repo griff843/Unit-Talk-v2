@@ -356,11 +356,10 @@ In dependency order. None of these needs Griff and none touches a reserved surfa
 1. **Land UTV2-1861 — admit Track Only picks to the grading population.** Layer 1 above. Narrow
    by measurement rather than by hope: exactly **one** `validated` pick in production is Track Only,
    so admitting `validated AND isTrackOnlyPickMetadata` admits one row today, where admitting all
-   `validated` would sweep 21,364. **Blocked only by #1479**, whose `file_scope_lock` holds
-   `apps/api/src/grading-service.ts` and `settlement-service.ts`; a lock cannot be widened by an
-   agent, so the lane cannot open until that PR merges. A drafted implementation is ready.
+   `validated` would sweep 21,364. **Not blocked — see the correction below.** A drafted
+   implementation is ready.
 2. **Then layer 2 — make moneyline and spread gradeable.** Needs the score-provenance design for
-   attaching a side to `points-all-game-ml`, not a classifier tweak. Same file, so same block.
+   attaching a side to `points-all-game-ml`, not a classifier tweak.
 3. **Submit again, twice, through the deployed form.** Condition 1 is a claim about repeatability
    and only repetition tests it. Different market shapes — a player prop (now that UTV2-1859
    removed the client-side refusal), a spread — because condition 2's provenance guarantee is
@@ -372,11 +371,11 @@ In dependency order. None of these needs Griff and none touches a reserved surfa
    records `started_at`→`finished_at` of ~240ms while consecutive runs are 88–152 minutes apart, so
    the time is spent inside the pass before the record opens. The 14,984 stale `awaiting_approval`
    picks are therefore not merely what keeps the drift monitor red — **they are the grading
-   cadence.** Same file, so same block as items 1 and 2.
+   cadence.**
 6. **Persist the skip histogram.** `grading-service.ts:368` records only
    `{picksGraded, failed}`, discarding the per-pick `outcome: 'skipped'` + `reason` it already
    computed. A pass that examined 15,000 picks and graded none is byte-identical to one that
-   examined zero — which is precisely why the measurement above needed direct SQL. Same file.
+   examined zero — which is precisely why the measurement above needed direct SQL.
 7. **Repair `governance.awaiting-approval-drift`'s classification** so a real drift becomes visible
    again. Its own payload already carries `countIncreased: false`. The monitor is a SQL function,
    so landing the migration is ordinary work and *applying* it is production DDL — reserved
@@ -401,7 +400,33 @@ any test flag, and **6 of them `settled`**. That predicate yields a plausible-lo
 settled record made entirely of fixtures, which is exactly the failure mode this section exists to
 prevent.
 
-Item 1 is the only one that advances the milestone, and it is the one that is blocked.
+**Correction, made before this reconciliation merged: item 1 is not blocked, and an earlier draft
+of this section said it was.** The draft asserted that #1479's `file_scope_lock` holds
+`apps/api/src/grading-service.ts`, so preflight `PL6` would refuse a UTV2-1861 lane until that PR
+merged. Measured rather than assumed, all three legs of that are false:
+
+- **`docs/06_status/lanes/UTV2-1815.json` does not exist on `main`.** It lives only on #1479's
+  branch, and its status there is `in_review`. `PL6` reads the manifests in the checkout, and **no
+  manifest on `main` is `in_progress`, `blocked` or `started`** — so it sees nothing to overlap.
+- **The lease is not held either.** All four `.ops/leases/` entries that were `active` on
+  2026-09-09 belonged to lanes already `done` on `main`, and all four have been released.
+- **The diffs do not even touch the same code.** #1479's `grading-service.ts` hunks are at `:2`,
+  `:601-638` and `:973-1010` — the settlement-recap and `readSubmittedBy` region. UTV2-1861 changes
+  `runGradingPass`'s population at `:96-100`. Zero overlapping lines; git merges both cleanly.
+
+What remains is an ordinary sequencing preference, not a block: a second lane on the same file
+means whichever PR lands second resyncs, and #1479 is head-pinned to an `EXECUTOR_RESULT` and a
+staging DB receipt, so it is cheaper for it to land first. That is a reason to prefer an order, not
+a reason to leave the milestone's only executable step unstarted.
+
+**The generalisable error is worth naming, because this plan has now made it twice in two days.**
+A `file_scope_lock` is a property of an *active manifest in the checkout*, not of a PR. Reading a
+PR's declared scope and concluding that it locks a file conflates the artifact with the enforcement
+that reads it — the same shape as the 2026-09-08 correction, where a tier floor was treated as a
+given rather than as something computed from a file list. **The check is `PL6` against the
+manifests on `main`, and it costs one command to run.**
+
+So item 1 advances the milestone and is available now.
 
 
 ## Concurrent session ownership — Claude and Codex, 2026-09-07
@@ -1470,10 +1495,10 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 
 ## Requires Griff
 
-Consolidated from Wave 0, in dependency order. **One item now blocks Milestone 2's critical path,
-which is a change from the previous reconciliation.** Item 1 releases the file lock that stops
-UTV2-1861 — the lifecycle admission that is the only executable step advancing the milestone.
-Every other item still blocks only itself.
+Consolidated from Wave 0, in dependency order. **Nothing on this list blocks Milestone 2's
+critical path.** An earlier draft of this reconciliation said item 0 did; that was measured and
+withdrawn before merge — see the correction at the end of "Executable now". Each item below blocks
+only itself.
 
 0. **Approve #1479** (UTV2-1815, T1, modeling) — null and zero stakes no longer compute as if they
    were a real unit size. `verify` and `Writable DB proof (staging only)` both green at
@@ -1482,10 +1507,11 @@ Every other item still blocks only itself.
    non-required and all previously diagnosed** — the live-DB proof guard reads the PR *diff* while
    this lane's proof already sits on `main`; `Shadow Parity Check` needs a read-only production
    credential, which is a secret; and `Check issue references` names foreign refs in pre-existing
-   commits, clearable only by a history rewrite that would move every bound anchor. **Beyond its
-   own merits, this is the merge that unblocks Milestone 2**: its `file_scope_lock` holds
-   `apps/api/src/grading-service.ts` and `settlement-service.ts`, and a lock cannot be widened by
-   an agent, so items 1, 2, 5 and 6 of "Executable now" cannot open until it lands.
+   commits, clearable only by a history rewrite that would move every bound anchor. It is listed
+   first because it is the one item here whose *timing* interacts with Milestone 2: it shares
+   `apps/api/src/grading-service.ts` with UTV2-1861, and landing it first spares a resync of a
+   head-pinned T1 PR. It does **not** block that lane — its manifest is not on `main`, so `PL6`
+   sees no overlap, and the two diffs share no lines.
 1. **Approve #1513** (UTV2-1802, T1) — the Command Center management token can no longer be handed
    arbitrary SQL. Green `verify`. Pre-deployment hardening: the Command Center is in no production
    compose service and behind no Caddy route, so this closes a surface #1496 would create rather
