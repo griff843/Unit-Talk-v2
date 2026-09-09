@@ -6,11 +6,11 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "0432f9d62cfd1487e43bdfe66903d8cb9813622c",
     "verified_source_sha": "e26a7e2a38d2943d775c5289a8b74cc3a1f5405a",
-    "evidence_commit_sha": null,
-    "current_pr_head_sha": null,
-    "sha_type": "verified_source_sha",
+    "evidence_commit_sha": "e26a7e2a38d2943d775c5289a8b74cc3a1f5405a",
+    "current_pr_head_sha": "95a6b4de9020a4b8b5a2d7e86e3ec3138395b21b",
+    "sha_type": "merge_sha",
     "ci_sentinels": {
       "pnpm_type_check": "PASS - pnpm exec tsc -b tsconfig.json, exit 0, no diagnostics.",
       "pnpm_test": "PASS - 100 test files, node:test + tsx --test, fail 0 in every file, exit 0.",
@@ -19,7 +19,7 @@
       "pnpm_verify": "Not runnable locally: ci:assert-staging-target fails closed outside CI by design. verify is a required check and is green on this PR's head."
     },
     "anchor_note": "e26a7e2a3 is the second main-resync merge commit and the last commit on this branch touching any path outside docs/06_status/proof/. The only commit after it is this evidence bundle, so the bundle is anchored to a tree in which every recorded command was run. The earlier anchor 2af53643c named in the first draft of verification.md is superseded rather than left standing: it predates two main resyncs that branch protection's strict mode required.",
-    "bound_at": "2026-09-09T13:30:00.000Z"
+    "bound_at": "2026-09-09T13:47:38.695Z"
   },
   "static_proof": {
     "status": "PASS",
