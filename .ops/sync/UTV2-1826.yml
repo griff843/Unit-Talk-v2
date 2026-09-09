@@ -1,0 +1,138 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1826
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1826
+  objective: Post-merge migration-profile validation still reads
+    verified_source_sha as merge authority, so no schema-v2 migration bundle can
+    truth-close
+  acceptance_criteria:
+    - A schema-v2 migration bundle whose `merge_sha` is the attested merge SHA
+      and whose `verified_source_sha` is a PR-contributed commit passes
+      post-merge validation.
+    - A bundle whose declared `merge_sha` is not the GitHub-recorded merge SHA
+      still fails, and the failure names `sha_binding.merge_sha`.
+    - A bundle whose `verified_source_sha` is neither the merge SHA nor
+      contributed by the attested PR still fails.
+    - A bundle that declares no merge slot behaves exactly as before.
+    - "A mutation control proves the fix: reverting the authority field to
+      `verified_source_sha` makes the regression fail."
+    - "[UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-12\
+      7-remote-migration-versions-into-baseline-safe-local) then truth-closes
+      through the sanctioned `post-merge-lane-close` path with no hand-edit of
+      `main` and no admin bypass."
+  guardrails:
+    - Proof/gate tooling only. No production DDL, database mutation, deployment,
+      ingestion, delivery, implementation-code, or branch-protection change. Do
+      not solve it by loosening the attestation requirement or by allowing a
+      branch SHA in an authoritative merge field.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Incident (live, 2026-09-02)
+      [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) merged as `1817eddc17ae4954cdd5876372763e1524e427fd`. The sanctioned `post-merge-lane-close` `workflow_dispatch` recovery (run 33652083109) deferred proof mutation to `ops:lane-close --repair-merged`, which repaired the manifest and rebound the proof correctly — P1–P5, P3 ("proof files reference the merge SHA"), P10 and R3 (`verifier_provenance_bound_merge_slot`) all passed — and then failed truth-check on five checks that all carry one message:
+
+      ```
+      [FAIL] C6 runtime-proof closeout requires evidence valid for the manifest-declared proof profile
+      [FAIL] P6 shared evidence contract failed: sha_binding.verified_source_sha: sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA
+      [FAIL] P9 proof does not satisfy its declared runtime/migration/static evidence profile
+      [FAIL] R1 declared proof profile failed: sha_binding.verified_source_sha: ...
+      [FAIL] R2 declared proof profile failed: sha_binding.verified_source_sha: ...
+      ```
+
+      The lane is merged, its proof is correctly bound, and it cannot be closed.
+    - |-
+      Root cause — one stale caller inside `scripts/ops/proof-schema.ts`
+      The migration profile's post-merge branch resolves the GitHub merged-PR attestation from the wrong field:
+
+      * `verifyPostMergeMigrationReceiptBinding(receiptHead, verifiedSourceSha, ...)` calls `resolveMergedPrAttestation(verifiedSourceSha, context)`, taking the default `authorityField = 'sha_binding.verified_source_sha'`.
+      * `resolveMergedPrAttestation` then requires that value to equal the GitHub-recorded merge SHA.
+
+      Under the ratified [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result) identity contract that is exactly backwards: `sha_binding.merge_sha` is merge authority and `sha_binding.verified_source_sha` is execution identity, which is *supposed* to be a commit the PR contributed rather than the merge commit. `verifyDeclaredMergeSlotBinding` already reads the declared slot (`resolveMergedPrAttestation(slotValue, context, 'sha_binding.merge_sha')`) — that is why P10/R3 pass on the same bundle in the same run. The migration receipt path was never migrated with it.
+
+      Consequence: any schema-v2 migration-profile bundle with an honest split identity is structurally unclosable post-merge. Making it pass would require writing the merge SHA into `verified_source_sha`, which the pre-merge validator rejects and which would falsify execution identity.
+
+      Live values on [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local): `verified_source_sha = b5414f8c0679e8292df65dcbdc80d80e8f66dfc7`, `runtime_proof.head = b5414f8c…`, attested PR head `535624650009d74f080e536bbcc6520f7f7259d7`, merge `1817eddc…`.
+    - >-
+      Required contract
+
+      1. When a bundle declares `sha_binding.merge_sha`, the migration profile's
+      post-merge check must resolve merge authority from that slot and report
+      mismatches against it, exactly as the external-verifier path already does.
+
+      2. Bundles that do not declare the slot keep the historical behaviour
+      unchanged.
+
+      3. Execution identity keeps its own obligation: when the merge slot is the
+      authority and `verified_source_sha` differs from the merge SHA,
+      `verified_source_sha` must still be a commit the attested PR contributed
+      (reachable from the attested head, not already on the base-side
+      reference).
+
+      4. Receipt-head ancestry rules are unchanged — a receipt still has to
+      reach the attested head or the verified source by a proof-only path.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1826/post-merge-migration-profile-validation-still-reads-verified-source
+    title: Post-merge migration-profile validation still reads verified_source_sha
+      as merge authority, so no schema-v2 migration bundle can truth-close
+    description: |-
+      ## Incident (live, 2026-09-02)
+
+      [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) merged as `1817eddc17ae4954cdd5876372763e1524e427fd`. The sanctioned `post-merge-lane-close` `workflow_dispatch` recovery (run 33652083109) deferred proof mutation to `ops:lane-close --repair-merged`, which repaired the manifest and rebound the proof correctly — P1–P5, P3 ("proof files reference the merge SHA"), P10 and R3 (`verifier_provenance_bound_merge_slot`) all passed — and then failed truth-check on five checks that all carry one message:
+
+      ```
+      [FAIL] C6 runtime-proof closeout requires evidence valid for the manifest-declared proof profile
+      [FAIL] P6 shared evidence contract failed: sha_binding.verified_source_sha: sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA
+      [FAIL] P9 proof does not satisfy its declared runtime/migration/static evidence profile
+      [FAIL] R1 declared proof profile failed: sha_binding.verified_source_sha: ...
+      [FAIL] R2 declared proof profile failed: sha_binding.verified_source_sha: ...
+      ```
+
+      The lane is merged, its proof is correctly bound, and it cannot be closed.
+
+      ## Root cause — one stale caller inside `scripts/ops/proof-schema.ts`
+
+      The migration profile's post-merge branch resolves the GitHub merged-PR attestation from the wrong field:
+
+      * `verifyPostMergeMigrationReceiptBinding(receiptHead, verifiedSourceSha, ...)` calls `resolveMergedPrAttestation(verifiedSourceSha, context)`, taking the default `authorityField = 'sha_binding.verified_source_sha'`.
+      * `resolveMergedPrAttestation` then requires that value to equal the GitHub-recorded merge SHA.
+
+      Under the ratified [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result) identity contract that is exactly backwards: `sha_binding.merge_sha` is merge authority and `sha_binding.verified_source_sha` is execution identity, which is *supposed* to be a commit the PR contributed rather than the merge commit. `verifyDeclaredMergeSlotBinding` already reads the declared slot (`resolveMergedPrAttestation(slotValue, context, 'sha_binding.merge_sha')`) — that is why P10/R3 pass on the same bundle in the same run. The migration receipt path was never migrated with it.
+
+      Consequence: any schema-v2 migration-profile bundle with an honest split identity is structurally unclosable post-merge. Making it pass would require writing the merge SHA into `verified_source_sha`, which the pre-merge validator rejects and which would falsify execution identity.
+
+      Live values on [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local): `verified_source_sha = b5414f8c0679e8292df65dcbdc80d80e8f66dfc7`, `runtime_proof.head = b5414f8c…`, attested PR head `535624650009d74f080e536bbcc6520f7f7259d7`, merge `1817eddc…`.
+
+      ## Required contract
+
+      1. When a bundle declares `sha_binding.merge_sha`, the migration profile's post-merge check must resolve merge authority from that slot and report mismatches against it, exactly as the external-verifier path already does.
+      2. Bundles that do not declare the slot keep the historical behaviour unchanged.
+      3. Execution identity keeps its own obligation: when the merge slot is the authority and `verified_source_sha` differs from the merge SHA, `verified_source_sha` must still be a commit the attested PR contributed (reachable from the attested head, not already on the base-side reference).
+      4. Receipt-head ancestry rules are unchanged — a receipt still has to reach the attested head or the verified source by a proof-only path.
+
+      ## Acceptance criteria
+
+      * A schema-v2 migration bundle whose `merge_sha` is the attested merge SHA and whose `verified_source_sha` is a PR-contributed commit passes post-merge validation.
+      * A bundle whose declared `merge_sha` is not the GitHub-recorded merge SHA still fails, and the failure names `sha_binding.merge_sha`.
+      * A bundle whose `verified_source_sha` is neither the merge SHA nor contributed by the attested PR still fails.
+      * A bundle that declares no merge slot behaves exactly as before.
+      * A mutation control proves the fix: reverting the authority field to `verified_source_sha` makes the regression fail.
+      * [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) then truth-closes through the sanctioned `post-merge-lane-close` path with no hand-edit of `main` and no admin bypass.
+
+      ## Guardrails
+
+      Proof/gate tooling only. No production DDL, database mutation, deployment, ingestion, delivery, implementation-code, or branch-protection change. Do not solve it by loosening the attestation requirement or by allowing a branch SHA in an authoritative merge field.
+    captured_at: 2026-09-02T16:07:13.192Z
+    description_sha256: eb8ea6cfc788928874e8af26aa1b4941637e1c20be81678cec2ca8713257e875
+  contract_hash: 2a509a6c64e6a59a93ecca6c2ed081319e599d91b8d8ca335c5bc0b6aa514f88

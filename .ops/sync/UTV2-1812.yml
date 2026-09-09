@@ -1,0 +1,252 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1812
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1812
+  objective: >-
+    **Determine the full affected route surface.** Enumerate every route, server
+    action, API handler and static-adjacent path reachable without the
+    middleware. Do not assume `/picks/[id]` is the only one — derive it from the
+    matcher regex against the actual route tree.
+
+    **Prove anonymous requests cannot bypass authentication** on any privileged
+    surface. A matcher change alone is likely insufficient; consider
+    handler-level or layout-level enforcement so the middleware is not the
+    single point of failure.
+
+    **Make the injected identity load-bearing or remove it.** A header that
+    nothing reads gives a false impression of an authenticated request context.
+
+    **Prove each control by making it fail on the condition it names.** A test
+    that issues `GET /picks/anything.json` anonymously and asserts refusal, and
+    an equivalent Server Action POST — both must fail if the guard is removed.
+
+    Preserve the correctly-configured path: a properly authenticated request
+    must still succeed.
+  acceptance_criteria:
+    - |-
+      ## PRE-DEPLOYMENT BLOCKER
+
+      **This issue is a hard blocker for any future Command Center production deployment.** The Command Center must not be deployed through the production workflow until this is resolved and proven.
+
+      ## Verified defect
+
+      `apps/command-center/src/middleware.ts:90` declares:
+
+      ```ts
+      export const config = {
+        matcher: ['/((?!.*\\..*).*)', '/icon.svg'],
+      };
+      ```
+
+      The negative lookahead `(?!.*\..*)` excludes **every path containing a dot anywhere** from the middleware. Next.js middleware only runs on paths its matcher selects, so any dotted path never enters the authentication gate at all.
+
+      `apps/command-center/src/app/picks/[id]/page.tsx` is a dynamic segment, so a dotted value satisfies it. Therefore:
+
+      ```
+      GET /picks/anything.json
+      ```
+
+      resolves to the pick-detail page **without entering the middleware**. That page mounts `SettlementForm`, `CorrectionForm` and `InterventionAction` (lines 4-7) — i.e. server actions. A Server Action POST to that same dotted URL carrying the `Next-Action` header executes outside the middleware.
+
+      ## Why there is no defence in depth behind it
+
+      Verified independently, not assumed:
+
+      1. **The identity the middleware injects is decorative. **`git grep x-command-center-actor` across the repo returns only `middleware.ts:78` (where it is set), the [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) test, and documentation. **No application code reads it.** A request that skips the middleware is indistinguishable downstream from one that passed it.
+      2. **Server actions do no authorization of their own. **`apps/command-center/src/app/actions/execution.ts:24-26` and its siblings call `resolveCommandCenterApiHeaders()`, which attaches the app's own privileged `UNIT_TALK_CC_API_KEY` to the backend call.
+      3. **Service-role data reads are not caller-authenticated. **`apps/command-center/src/lib/data/client.ts:55-57` asserts only that credentials are *configured*, never that the caller presented any — so on a correctly configured deployment it serves service-role database reads to a middleware-bypassing request.
+      4. **API route handlers have no handler-level auth** — e.g. `apps/command-center/src/app/api/events/route.ts`, `apps/command-center/src/app/api/governance/lanes/route.ts`. Those two *are* matcher-covered; the point is that the middleware is the single point of failure.
+
+      ## Relationship to [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)
+
+      [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) corrected a different defect — the auth-*mode* precedence bug, where `COMMAND_CENTER_AUTH_MODE=fail_open` could downgrade a deployed environment to fail-open. That fix is sound and is verified for the auth decision function.
+
+      This issue is the **request surface**: which routes reach that decision function at all. It is pre-existing, was **not** introduced by [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open), and was deliberately left out of that lane's scope by PM decision rather than fixed there.
+
+      ## Required outcome
+
+      1. **Determine the full affected route surface.** Enumerate every route, server action, API handler and static-adjacent path reachable without the middleware. Do not assume `/picks/[id]` is the only one — derive it from the matcher regex against the actual route tree.
+      2. **Prove anonymous requests cannot bypass authentication** on any privileged surface. A matcher change alone is likely insufficient; consider handler-level or layout-level enforcement so the middleware is not the single point of failure.
+      3. **Make the injected identity load-bearing or remove it.** A header that nothing reads gives a false impression of an authenticated request context.
+      4. **Prove each control by making it fail on the condition it names.** A test that issues `GET /picks/anything.json` anonymously and asserts refusal, and an equivalent Server Action POST — both must fail if the guard is removed.
+      5. Preserve the correctly-configured path: a properly authenticated request must still succeed.
+
+      ## Non-goals
+
+      * No change to the [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) auth-mode precedence logic.
+      * No Command Center deployment, no provisioning, no unpark.
+      * Not a redesign of the Command Center auth model beyond closing the bypass.
+
+      ## Note for whoever deploys
+
+      Separately verified and recorded in [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)'s proof bundle: **no** `COMMAND_CENTER_AUTH_*` **value is provisioned anywhere in the deploy path** (`deploy/`, `.github/workflows/deploy.yml`, both compose files), while `deploy.yml` writes `UNIT_TALK_APP_ENV=production`. Since [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) makes a deployed environment unconditionally auth-required, the first deployment must provision `COMMAND_CENTER_AUTH_TOKEN` or basic credentials in the same change, or every route returns `503 COMMAND_CENTER_AUTH_MISCONFIGURED`.
+
+      ## Current blast radius
+
+      **None today. **`docker-compose.prod.yml:77-83` places the Command Center behind an opt-in `profiles: [command-center]`, and no workflow under `.github/workflows/` deploys it. This is a latent defect on a surface the production path does not currently start — which is exactly why it must be closed *before* that changes.
+
+      ## Provenance
+
+      Found by independent adversarial review of PR #1474 ([UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)) on 2026-09-01 and verified directly against source at head `4b3bff9c`: matcher regex read from `middleware.ts:90`, dynamic route confirmed present, and `git grep x-command-center-actor` confirming no consumer. Filed as a separate bounded issue per PM decision rather than widening [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open).
+  guardrails: []
+  non_goals:
+    - No change to the
+      [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)
+      auth-mode precedence logic.
+    - No Command Center deployment, no provisioning, no unpark.
+    - Not a redesign of the Command Center auth model beyond closing the bypass.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      PRE-DEPLOYMENT BLOCKER
+
+      **This issue is a hard blocker for any future Command Center production
+      deployment.** The Command Center must not be deployed through the
+      production workflow until this is resolved and proven.
+    - >-
+      Verified defect
+
+      `apps/command-center/src/middleware.ts:90` declares:
+
+
+      ```ts
+
+      export const config = {
+        matcher: ['/((?!.*\\..*).*)', '/icon.svg'],
+      };
+
+      ```
+
+
+      The negative lookahead `(?!.*\..*)` excludes **every path containing a dot
+      anywhere** from the middleware. Next.js middleware only runs on paths its
+      matcher selects, so any dotted path never enters the authentication gate
+      at all.
+
+
+      `apps/command-center/src/app/picks/[id]/page.tsx` is a dynamic segment, so
+      a dotted value satisfies it. Therefore:
+
+
+      ```
+
+      GET /picks/anything.json
+
+      ```
+
+
+      resolves to the pick-detail page **without entering the middleware**. That
+      page mounts `SettlementForm`, `CorrectionForm` and `InterventionAction`
+      (lines 4-7) — i.e. server actions. A Server Action POST to that same
+      dotted URL carrying the `Next-Action` header executes outside the
+      middleware.
+    - |-
+      Why there is no defence in depth behind it
+      Verified independently, not assumed:
+
+      1. **The identity the middleware injects is decorative. **`git grep x-command-center-actor` across the repo returns only `middleware.ts:78` (where it is set), the [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) test, and documentation. **No application code reads it.** A request that skips the middleware is indistinguishable downstream from one that passed it.
+      2. **Server actions do no authorization of their own. **`apps/command-center/src/app/actions/execution.ts:24-26` and its siblings call `resolveCommandCenterApiHeaders()`, which attaches the app's own privileged `UNIT_TALK_CC_API_KEY` to the backend call.
+      3. **Service-role data reads are not caller-authenticated. **`apps/command-center/src/lib/data/client.ts:55-57` asserts only that credentials are *configured*, never that the caller presented any — so on a correctly configured deployment it serves service-role database reads to a middleware-bypassing request.
+      4. **API route handlers have no handler-level auth** — e.g. `apps/command-center/src/app/api/events/route.ts`, `apps/command-center/src/app/api/governance/lanes/route.ts`. Those two *are* matcher-covered; the point is that the middleware is the single point of failure.
+    - |-
+      Relationship to [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)
+      [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) corrected a different defect — the auth-*mode* precedence bug, where `COMMAND_CENTER_AUTH_MODE=fail_open` could downgrade a deployed environment to fail-open. That fix is sound and is verified for the auth decision function.
+
+      This issue is the **request surface**: which routes reach that decision function at all. It is pre-existing, was **not** introduced by [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open), and was deliberately left out of that lane's scope by PM decision rather than fixed there.
+    - |-
+      Note for whoever deploys
+      Separately verified and recorded in [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)'s proof bundle: **no** `COMMAND_CENTER_AUTH_*` **value is provisioned anywhere in the deploy path** (`deploy/`, `.github/workflows/deploy.yml`, both compose files), while `deploy.yml` writes `UNIT_TALK_APP_ENV=production`. Since [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) makes a deployed environment unconditionally auth-required, the first deployment must provision `COMMAND_CENTER_AUTH_TOKEN` or basic credentials in the same change, or every route returns `503 COMMAND_CENTER_AUTH_MISCONFIGURED`.
+    - >-
+      Current blast radius
+
+      **None today. **`docker-compose.prod.yml:77-83` places the Command Center
+      behind an opt-in `profiles: [command-center]`, and no workflow under
+      `.github/workflows/` deploys it. This is a latent defect on a surface the
+      production path does not currently start — which is exactly why it must be
+      closed *before* that changes.
+    - |-
+      Provenance
+      Found by independent adversarial review of PR #1474 ([UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)) on 2026-09-01 and verified directly against source at head `4b3bff9c`: matcher regex read from `middleware.ts:90`, dynamic route confirmed present, and `git grep x-command-center-actor` confirming no consumer. Filed as a separate bounded issue per PM decision rather than widening [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1812/command-center-middleware-matcher-excludes-dotted-paths-so-privileged
+    title: Command Center middleware matcher excludes dotted paths, so privileged
+      routes are reachable without authentication
+    description: |-
+      ## PRE-DEPLOYMENT BLOCKER
+
+      **This issue is a hard blocker for any future Command Center production deployment.** The Command Center must not be deployed through the production workflow until this is resolved and proven.
+
+      ## Verified defect
+
+      `apps/command-center/src/middleware.ts:90` declares:
+
+      ```ts
+      export const config = {
+        matcher: ['/((?!.*\\..*).*)', '/icon.svg'],
+      };
+      ```
+
+      The negative lookahead `(?!.*\..*)` excludes **every path containing a dot anywhere** from the middleware. Next.js middleware only runs on paths its matcher selects, so any dotted path never enters the authentication gate at all.
+
+      `apps/command-center/src/app/picks/[id]/page.tsx` is a dynamic segment, so a dotted value satisfies it. Therefore:
+
+      ```
+      GET /picks/anything.json
+      ```
+
+      resolves to the pick-detail page **without entering the middleware**. That page mounts `SettlementForm`, `CorrectionForm` and `InterventionAction` (lines 4-7) — i.e. server actions. A Server Action POST to that same dotted URL carrying the `Next-Action` header executes outside the middleware.
+
+      ## Why there is no defence in depth behind it
+
+      Verified independently, not assumed:
+
+      1. **The identity the middleware injects is decorative. **`git grep x-command-center-actor` across the repo returns only `middleware.ts:78` (where it is set), the [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) test, and documentation. **No application code reads it.** A request that skips the middleware is indistinguishable downstream from one that passed it.
+      2. **Server actions do no authorization of their own. **`apps/command-center/src/app/actions/execution.ts:24-26` and its siblings call `resolveCommandCenterApiHeaders()`, which attaches the app's own privileged `UNIT_TALK_CC_API_KEY` to the backend call.
+      3. **Service-role data reads are not caller-authenticated. **`apps/command-center/src/lib/data/client.ts:55-57` asserts only that credentials are *configured*, never that the caller presented any — so on a correctly configured deployment it serves service-role database reads to a middleware-bypassing request.
+      4. **API route handlers have no handler-level auth** — e.g. `apps/command-center/src/app/api/events/route.ts`, `apps/command-center/src/app/api/governance/lanes/route.ts`. Those two *are* matcher-covered; the point is that the middleware is the single point of failure.
+
+      ## Relationship to [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)
+
+      [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) corrected a different defect — the auth-*mode* precedence bug, where `COMMAND_CENTER_AUTH_MODE=fail_open` could downgrade a deployed environment to fail-open. That fix is sound and is verified for the auth decision function.
+
+      This issue is the **request surface**: which routes reach that decision function at all. It is pre-existing, was **not** introduced by [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open), and was deliberately left out of that lane's scope by PM decision rather than fixed there.
+
+      ## Required outcome
+
+      1. **Determine the full affected route surface.** Enumerate every route, server action, API handler and static-adjacent path reachable without the middleware. Do not assume `/picks/[id]` is the only one — derive it from the matcher regex against the actual route tree.
+      2. **Prove anonymous requests cannot bypass authentication** on any privileged surface. A matcher change alone is likely insufficient; consider handler-level or layout-level enforcement so the middleware is not the single point of failure.
+      3. **Make the injected identity load-bearing or remove it.** A header that nothing reads gives a false impression of an authenticated request context.
+      4. **Prove each control by making it fail on the condition it names.** A test that issues `GET /picks/anything.json` anonymously and asserts refusal, and an equivalent Server Action POST — both must fail if the guard is removed.
+      5. Preserve the correctly-configured path: a properly authenticated request must still succeed.
+
+      ## Non-goals
+
+      * No change to the [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) auth-mode precedence logic.
+      * No Command Center deployment, no provisioning, no unpark.
+      * Not a redesign of the Command Center auth model beyond closing the bypass.
+
+      ## Note for whoever deploys
+
+      Separately verified and recorded in [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)'s proof bundle: **no** `COMMAND_CENTER_AUTH_*` **value is provisioned anywhere in the deploy path** (`deploy/`, `.github/workflows/deploy.yml`, both compose files), while `deploy.yml` writes `UNIT_TALK_APP_ENV=production`. Since [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) makes a deployed environment unconditionally auth-required, the first deployment must provision `COMMAND_CENTER_AUTH_TOKEN` or basic credentials in the same change, or every route returns `503 COMMAND_CENTER_AUTH_MISCONFIGURED`.
+
+      ## Current blast radius
+
+      **None today. **`docker-compose.prod.yml:77-83` places the Command Center behind an opt-in `profiles: [command-center]`, and no workflow under `.github/workflows/` deploys it. This is a latent defect on a surface the production path does not currently start — which is exactly why it must be closed *before* that changes.
+
+      ## Provenance
+
+      Found by independent adversarial review of PR #1474 ([UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)) on 2026-09-01 and verified directly against source at head `4b3bff9c`: matcher regex read from `middleware.ts:90`, dynamic route confirmed present, and `git grep x-command-center-actor` confirming no consumer. Filed as a separate bounded issue per PM decision rather than widening [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open).
+    captured_at: 2026-09-03T17:27:24.238Z
+    description_sha256: 86a13733df192120cc6c3f390a2af3e6f01dde8f58d424ce5773fb755c0aa487
+  contract_hash: 486684bbd7fc780a12dea9ac56fd82cdc370e67bdaa8ced9ff3286b4fa48a2a2

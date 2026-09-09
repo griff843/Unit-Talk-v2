@@ -507,20 +507,6 @@ export async function routeRequest(
     return handlePicksQuery(request, response, runtime);
   }
 
-  const traceMatch =
-    method === 'GET'
-      ? /^\/api\/picks\/([^/]+)\/trace$/.exec(url.pathname)
-      : null;
-
-  if (traceMatch) {
-    return handleTracePickRoute(
-      request,
-      response,
-      runtime,
-      traceMatch[1] ?? '',
-    );
-  }
-
   const routingPreviewMatch =
     method === 'GET'
       ? /^\/api\/picks\/([^/]+)\/routing-preview$/.exec(url.pathname)
@@ -606,7 +592,26 @@ export async function routeRequest(
   // kill-switch GET is also gated — its response reveals staff-only
   // operational state (who killed a target and why), not public delivery
   // truth like the other unauthenticated GET routes. ---
-  if (method === 'POST' || url.pathname === '/api/discord/kill-switch') {
+  //
+  // UTV2-1823 extends that same standard to the pick trace GET. Its response
+  // is the full lifecycle aggregate for one pick: the PickRecord including
+  // metadata (distributionMode, submittedBy, eventId, promotion scores),
+  // submission events, promotion history, outbox entries and distribution
+  // receipts (delivery targets and external ids), settlement records, audit
+  // log entries and lifecycle events. That is staff-only operational state by
+  // exactly the standard UTV2-1427 set, and it was readable by any anonymous
+  // caller who knew or guessed a pick UUID.
+  //
+  // The route match is declared here rather than above the gate, and the
+  // handler moved below it, because every route dispatched before this block
+  // returns before the gate ever runs — the same reason the kill-switch GET
+  // handler lives below it.
+  const traceMatch =
+    method === 'GET'
+      ? /^\/api\/picks\/([^/]+)\/trace$/.exec(url.pathname)
+      : null;
+
+  if (method === 'POST' || url.pathname === '/api/discord/kill-switch' || traceMatch) {
     const auth = await authenticateRequest(request, runtime.authConfig);
     if (!auth) {
       requestLogger.warn('api auth denied', {
@@ -623,7 +628,19 @@ export async function routeRequest(
         },
       });
     }
-    if (!authorizeRoute(auth, url.pathname)) {
+    // `authorizeRoute` resolves its policy from ROUTE_ROLES in
+    // apps/api/src/auth.ts and denies by default when no pattern matches. No
+    // pattern covers the trace route, so routing it through authorizeRoute
+    // would answer every authenticated operator with 403. auth.ts is a Tier C
+    // exact path this lane is not authorized to edit, so the trace route's
+    // role policy is stated here instead: operator only, the same role the
+    // kill-switch GET requires for the same class of operational state. It
+    // belongs in ROUTE_ROLES and should move there when a lane is authorized
+    // to touch auth.ts.
+    const routeAuthorized = traceMatch
+      ? auth.role === 'operator'
+      : authorizeRoute(auth, url.pathname);
+    if (!routeAuthorized) {
       requestLogger.warn('api auth forbidden', {
         authOutcome: 'role_denied',
         actor: auth.identity,
@@ -661,6 +678,15 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/discord/kill-switch') {
     return handleKillSwitchList(request, response, runtime);
+  }
+
+  if (traceMatch) {
+    return handleTracePickRoute(
+      request,
+      response,
+      runtime,
+      traceMatch[1] ?? '',
+    );
   }
 
   if (method === 'POST' && url.pathname === '/api/submissions') {

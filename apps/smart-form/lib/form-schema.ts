@@ -8,6 +8,31 @@ import {
 export { MARKET_TYPE_IDS, MARKET_TYPE_LABELS };
 export type { MarketTypeId };
 
+/**
+ * Operator numeric guardrails for the units field, declared once so the schema and every
+ * control that edits the field derive their bounds from the same place. Before UTV2-1855 the
+ * stepper buttons in BetForm carried their own literals and the increment one was 10, which let
+ * the operator reach a value the schema below rejects.
+ */
+// The API keeps its own copy of these bounds (packages never import from apps and
+// apps never import from apps), and `apps/api/src/smart-form-validation.test.ts`
+// asserts the two still agree by scraping this file for the literal `min(...)` /
+// `max(...)` arguments below. Keep those numeric literals in the zod chain; these
+// constants restate them for the client-side clamp and stepper, and this app's own
+// test asserts the constants and the literals have not diverged.
+export const UNITS_MIN = 0.5;
+export const UNITS_MAX = 5.0;
+export const UNITS_STEP = 0.5;
+
+/** Snap to the nearest step and clamp into [UNITS_MIN, UNITS_MAX]. */
+export function clampUnits(value: number): number {
+  if (!Number.isFinite(value)) {
+    return UNITS_MIN;
+  }
+  const snapped = Math.round(value / UNITS_STEP) * UNITS_STEP;
+  return Math.min(UNITS_MAX, Math.max(UNITS_MIN, snapped));
+}
+
 export const betFormSchema = z
   .object({
     sport: z.string().min(1, 'Sport is required'),
@@ -32,8 +57,8 @@ export const betFormSchema = z
       }),
     units: z.coerce
       .number({ invalid_type_error: 'Units must be a number' })
-      .min(0.5, 'Units must be at least 0.5')
-      .max(5.0, 'Units cannot exceed 5.0'),
+      .min(0.5, `Units must be at least ${UNITS_MIN}`)
+      .max(5.0, `Units cannot exceed ${UNITS_MAX.toFixed(1)}`),
     capperConviction: z.coerce
       .number({ invalid_type_error: 'Conviction must be a number' })
       .int('Conviction must be a whole number')

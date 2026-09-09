@@ -1,0 +1,163 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1828
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1828
+  objective: Merge-SHA rebinders skip diff-summary.md, so no bundle carrying one
+    can truth-close through the sanctioned replay
+  acceptance_criteria:
+    - A bundle containing `evidence.json`, `verification.md` and
+      `diff-summary.md` has the merge anchor rewritten in all three by
+      `ops:proof-rebind --apply` and by `ops:lane-close --repair-merged`.
+    - A bundle with no `diff-summary.md` still rebinds successfully and is
+      unchanged in behaviour.
+    - A `diff-summary.md` with no `MERGE_SHA:` line is refused rather than
+      invented into shape.
+    - "A mutation control proves the fix: restoring either file list to the
+      two-file form makes the regression fail."
+    - "[UTV2-1826](https://linear.app/unit-talk-v2/issue/UTV2-1826/post-merge-m\
+      igration-profile-validation-still-reads-verified-source) then truth-closes
+      through the sanctioned `post-merge-lane-close` `workflow_dispatch` replay,
+      with no hand-edit of `main` and no admin bypass."
+  guardrails:
+    - Proof/gate tooling only. No production DDL, database mutation, deployment,
+      ingestion, delivery, implementation-code, or branch-protection change. Do
+      not solve it by removing `diff-summary.md` from the bundle, by exempting
+      it from P3/C4, or by weakening either check.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Incident (live, 2026-09-02)
+      [UTV2-1826](https://linear.app/unit-talk-v2/issue/UTV2-1826/post-merge-migration-profile-validation-still-reads-verified-source) merged as `ef27ab62c90d8fb9bd6ee6d7688c836411a0753b` (PR #1486) and cannot be closed.
+
+      Measured on that lane:
+
+      ```
+      before the diff-summary.md anchor is set
+        pnpm ops:truth-check UTV2-1826  ->  fail (39 checks, 2 failures)
+                                            P3 and C4, both naming
+                                            docs/06_status/proof/UTV2-1826/diff-summary.md
+      after
+        pnpm ops:truth-check UTV2-1826  ->  pass (39 checks, 0 failures)
+      ```
+    - >-
+      Root cause — two rebinder file lists that disagree with the done-gate
+
+      * `scripts/ops/proof-rebind.ts:522` — `CANONICAL_PROOF_ARTIFACTS =
+      ['evidence.json', 'verification.md']`
+
+      * `scripts/ops/lane-close.ts:1239` — `const files =
+      [structuralCandidate!.evidencePath,
+      structuralCandidate!.verificationPath]`
+
+
+      `ops:truth-check` P3 ("proof files missing merge SHA reference") and C4
+      ("proof artifacts missing required SHA binding") scan the whole proof
+      directory, `diff-summary.md` included. So any bundle that ships a
+      `diff-summary.md` merges and then cannot close: the manifest binds
+      correctly, every other gate passes, and closeout dies on those two.
+
+
+      `ops:proof-generate` is not affected — its `STANDARD_PROOF_FILES`
+      (`scripts/ops/proof-generate.ts:193`) already lists `diff-summary.md`. But
+      `post-merge-lane-close.yml` skips that step entirely on
+      `workflow_dispatch` ("Deferring proof mutation to GitHub-attested
+      lane-close repair") and delegates binding to `ops:lane-close
+      --repair-merged`, which uses the two-file list. The replay therefore never
+      reaches the code that would fix the file.
+
+
+      `rebindProofBundle` already dispatches per extension (`.json` ->
+      `planEvidenceRebind`, `.md` -> `planVerificationRebind`), and
+      `planVerificationRebind` needs only a single unfenced `MERGE_SHA:` line —
+      which CEP-E5 already requires every markdown proof artifact to carry. So
+      no new rebinding machinery is needed.
+    - >-
+      Why this cannot be repaired by a PR on the affected lane
+
+      `proof-schema.ts` forces phase `pre-merge` for an open PR, so required
+      `Executor Result Validation` rejects any bundle naming a merge SHA. Once a
+      lane has merged, its on-main bundle legitimately carries one — so every
+      subsequent PR for that lane fails ERV. PR #1489 was closed for exactly
+      this reason. The fix must land under a different issue, and the affected
+      lane must then close through the `workflow_dispatch` replay.
+    - >-
+      Required contract
+
+      1. Both rebinders cover `diff-summary.md` when it is present in the
+      bundle.
+
+      2. Absence stays legal — a bundle with no `diff-summary.md` rebinds
+      exactly as before, and no rebinder ever creates a proof artifact
+      (`rebindProofBundle` already refuses: "missing — refusing to create a
+      proof artifact during a rebind").
+
+      3. Byte fidelity and refusal behaviour for the covered file are the same
+      as for `verification.md`: no invented `MERGE_SHA:` line, ambiguity
+      refused, fenced lines never rewritten.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1828/merge-sha-rebinders-skip-diff-summarymd-so-no-bundle-carrying-one-can
+    title: Merge-SHA rebinders skip diff-summary.md, so no bundle carrying one can
+      truth-close through the sanctioned replay
+    description: |-
+      ## Incident (live, 2026-09-02)
+
+      [UTV2-1826](https://linear.app/unit-talk-v2/issue/UTV2-1826/post-merge-migration-profile-validation-still-reads-verified-source) merged as `ef27ab62c90d8fb9bd6ee6d7688c836411a0753b` (PR #1486) and cannot be closed.
+
+      Measured on that lane:
+
+      ```
+      before the diff-summary.md anchor is set
+        pnpm ops:truth-check UTV2-1826  ->  fail (39 checks, 2 failures)
+                                            P3 and C4, both naming
+                                            docs/06_status/proof/UTV2-1826/diff-summary.md
+      after
+        pnpm ops:truth-check UTV2-1826  ->  pass (39 checks, 0 failures)
+      ```
+
+      ## Root cause — two rebinder file lists that disagree with the done-gate
+
+      * `scripts/ops/proof-rebind.ts:522` — `CANONICAL_PROOF_ARTIFACTS = ['evidence.json', 'verification.md']`
+      * `scripts/ops/lane-close.ts:1239` — `const files = [structuralCandidate!.evidencePath, structuralCandidate!.verificationPath]`
+
+      `ops:truth-check` P3 ("proof files missing merge SHA reference") and C4 ("proof artifacts missing required SHA binding") scan the whole proof directory, `diff-summary.md` included. So any bundle that ships a `diff-summary.md` merges and then cannot close: the manifest binds correctly, every other gate passes, and closeout dies on those two.
+
+      `ops:proof-generate` is not affected — its `STANDARD_PROOF_FILES` (`scripts/ops/proof-generate.ts:193`) already lists `diff-summary.md`. But `post-merge-lane-close.yml` skips that step entirely on `workflow_dispatch` ("Deferring proof mutation to GitHub-attested lane-close repair") and delegates binding to `ops:lane-close --repair-merged`, which uses the two-file list. The replay therefore never reaches the code that would fix the file.
+
+      `rebindProofBundle` already dispatches per extension (`.json` -> `planEvidenceRebind`, `.md` -> `planVerificationRebind`), and `planVerificationRebind` needs only a single unfenced `MERGE_SHA:` line — which CEP-E5 already requires every markdown proof artifact to carry. So no new rebinding machinery is needed.
+
+      ## Why this cannot be repaired by a PR on the affected lane
+
+      `proof-schema.ts` forces phase `pre-merge` for an open PR, so required `Executor Result Validation` rejects any bundle naming a merge SHA. Once a lane has merged, its on-main bundle legitimately carries one — so every subsequent PR for that lane fails ERV. PR #1489 was closed for exactly this reason. The fix must land under a different issue, and the affected lane must then close through the `workflow_dispatch` replay.
+
+      ## Required contract
+
+      1. Both rebinders cover `diff-summary.md` when it is present in the bundle.
+      2. Absence stays legal — a bundle with no `diff-summary.md` rebinds exactly as before, and no rebinder ever creates a proof artifact (`rebindProofBundle` already refuses: "missing — refusing to create a proof artifact during a rebind").
+      3. Byte fidelity and refusal behaviour for the covered file are the same as for `verification.md`: no invented `MERGE_SHA:` line, ambiguity refused, fenced lines never rewritten.
+
+      ## Acceptance criteria
+
+      * A bundle containing `evidence.json`, `verification.md` and `diff-summary.md` has the merge anchor rewritten in all three by `ops:proof-rebind --apply` and by `ops:lane-close --repair-merged`.
+      * A bundle with no `diff-summary.md` still rebinds successfully and is unchanged in behaviour.
+      * A `diff-summary.md` with no `MERGE_SHA:` line is refused rather than invented into shape.
+      * A mutation control proves the fix: restoring either file list to the two-file form makes the regression fail.
+      * [UTV2-1826](https://linear.app/unit-talk-v2/issue/UTV2-1826/post-merge-migration-profile-validation-still-reads-verified-source) then truth-closes through the sanctioned `post-merge-lane-close` `workflow_dispatch` replay, with no hand-edit of `main` and no admin bypass.
+
+      ## Guardrails
+
+      Proof/gate tooling only. No production DDL, database mutation, deployment, ingestion, delivery, implementation-code, or branch-protection change. Do not solve it by removing `diff-summary.md` from the bundle, by exempting it from P3/C4, or by weakening either check.
+    captured_at: 2026-09-02T20:28:04.180Z
+    description_sha256: 2865096a41ef1b9b0eabac4ace6e6bf045cbf9c3c6fe91f2bcba2e4df845d399
+  contract_hash: 425ea0b0eb2837444b5a861b25b7a073111adb2a89dc1e018052a95158467adb

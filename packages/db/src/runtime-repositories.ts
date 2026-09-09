@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { loadEnvironment } from '@unit-talk/config';
 import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
 import { PickCandidatesSchemaCacheDriftError } from './repositories.js';
 import {
@@ -350,6 +351,42 @@ function mapLifecycleEventToRecord(event: LifecycleEvent): PickLifecycleRecord {
   };
 }
 
+/**
+ * `picks.player_id` is a foreign key into the CANONICAL `players` table.
+ * `metadata.playerId` carries whatever identity the submitting surface had, and
+ * for the Smart Form that is a `participants.id` from the provider observation
+ * layer -- a different id space. Writing it through unchecked makes every player
+ * prop fail on `picks_player_id_fkey` for as long as canonical player coverage is
+ * absent, which it is under parked provider ingestion.
+ *
+ * Resolving it the way `capperId` is already resolved -- an existence check that
+ * yields `null` on a miss -- is what makes the column honest rather than
+ * fabricated. No identity is lost by the null: the observation-layer id is
+ * carried by `picks.participant_id` (FK -> `participants`, which the same value
+ * satisfies) and by `metadata.participantResolution`.
+ */
+async function resolveCanonicalPlayerId(
+  client: UnitTalkSupabaseClient,
+  pick: CanonicalPick,
+): Promise<string | null> {
+  const candidate = extractPlayerId(pick);
+  if (!candidate) {
+    return null;
+  }
+
+  const { data, error } = await client
+    .from('players')
+    .select('id')
+    .eq('id', candidate)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to resolve player foreign key: ${error.message}`);
+  }
+
+  return data?.id ?? null;
+}
+
 async function resolvePickForeignKeys(
   client: UnitTalkSupabaseClient,
   pick: CanonicalPick,
@@ -357,14 +394,17 @@ async function resolvePickForeignKeys(
   capperId: string | null;
   sportId: string | null;
   marketTypeId: string | null;
+  playerId: string | null;
 }> {
   const candidates = derivePickForeignKeyCandidates(pick);
+  const playerId = await resolveCanonicalPlayerId(client, pick);
 
   if (!candidates.capperCandidate) {
     return {
       capperId: null,
       sportId: candidates.sportId,
       marketTypeId: candidates.marketTypeId,
+      playerId,
     };
   }
 
@@ -382,6 +422,7 @@ async function resolvePickForeignKeys(
     capperId: data?.id ?? null,
     sportId: candidates.sportId,
     marketTypeId: candidates.marketTypeId,
+    playerId,
   };
 }
 
@@ -2368,10 +2409,27 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       .filter((t) => t.toLowerCase().includes(lowerQuery))
       .slice(0, limit)
       .map((t) => ({
-        participantId: `team:${sportId}:${t}`,
+        // UTV2-1856 -- the database path returns `participants.id`, a real
+        // participant identifier, and `validateSearchBackedPlayer` compares a
+        // player's resolved `teamId` against the team the operator selected.
+        // A synthetic `team:<sport>:<name>` id can never equal a participant
+        // id, so a seeded team must answer with its own row id. The synthetic
+        // form is kept only for a catalog with no seeded team participants,
+        // where there is no real id to return and no player to match it.
+        participantId: this.findSeededTeamId(sportId, t) ?? `team:${sportId}:${t}`,
         displayName: t,
         sport: sportId,
       }));
+  }
+
+  private findSeededTeamId(sportId: string, displayName: string): string | null {
+    const match = this.participants.find(
+      (row) =>
+        row.participant_type === 'team' &&
+        row.sport === sportId &&
+        row.display_name === displayName,
+    );
+    return match ? match.id : null;
   }
 
   async searchPlayers(
@@ -2385,15 +2443,37 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         (row) =>
           row.participant_type === 'player' &&
           row.sport === sportId &&
+          // UTV2-1854 PROOF_FIXTURE_EXCLUSION -- applied before `slice`, for the
+          // same reason the database path pushes it into the query: a fixture
+          // must not consume the limit and displace a real player.
+          !isConfirmedProofFixture(row.metadata) &&
           row.display_name.toLowerCase().includes(lowerQuery),
       )
       .slice(0, limit)
-      .map((row) => ({
-        participantId: row.id,
-        displayName: row.display_name,
-        sport: row.sport ?? sportId,
-        teamId: null,
-      }));
+      .map((row) => {
+        // UTV2-1856 -- mirrors DatabaseReferenceDataRepository.searchPlayers:
+        // resolve the team through `metadata.team_external_id` against a team
+        // participant in the same sport. A player carrying no team key, or one
+        // naming no seeded team, gets a null team. That is honest partial
+        // coverage; never substitute a guessed team.
+        const externalId = readTeamExternalId(row.metadata);
+        return {
+          participantId: row.id,
+          displayName: row.display_name,
+          sport: row.sport ?? sportId,
+          teamId: externalId === null ? null : this.findSeededTeamIdByExternalId(sportId, externalId),
+        };
+      });
+  }
+
+  private findSeededTeamIdByExternalId(sportId: string, externalId: string): string | null {
+    const match = this.participants.find(
+      (row) =>
+        row.participant_type === 'team' &&
+        row.sport === sportId &&
+        row.external_id === externalId,
+    );
+    return match ? match.id : null;
   }
 
   async listEvents(
@@ -2949,7 +3029,7 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
         id: pick.id,
         submission_id: pick.submissionId,
         participant_id: extractParticipantId(pick),
-        player_id: extractPlayerId(pick),
+        player_id: foreignKeys.playerId,
         capper_id: foreignKeys.capperId,
         sport_id: foreignKeys.sportId,
         market_type_id: foreignKeys.marketTypeId,
@@ -3044,7 +3124,7 @@ export class DatabasePickRepository implements PickRepository {
         id: pick.id,
         submission_id: pick.submissionId,
         participant_id: extractParticipantId(pick),
-        player_id: extractPlayerId(pick),
+        player_id: foreignKeys.playerId,
         capper_id: foreignKeys.capperId,
         sport_id: foreignKeys.sportId,
         market_type_id: foreignKeys.marketTypeId,
@@ -6593,10 +6673,53 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       Array.from(teamMap.values()).map((team) => [team.id, team.display_name]),
     );
 
+    // UTV2-1856: the two loaders above read the CANONICAL layer -- `teams` via
+    // `provider_entity_aliases` where `entity_kind='team'`, and
+    // `player_team_assignments`. Measured read-only on production 2026-09-08:
+    // `teams` 0 rows, `player_team_assignments` 0 rows, and all 840
+    // `provider_entity_aliases` rows are `entity_kind='player'`. Both maps are
+    // therefore empty unconditionally, so every player was emitted with
+    // `teamId: null` -- which `apps/api/src/smart-form-validation.ts:448`
+    // rejected as a relationship mismatch on every canonical-event player prop,
+    // and which made `BetForm.tsx` `allowedPlayerIds`/`groupedPlayers` hide every
+    // player once a team was selected.
+    //
+    // The fallback is the same provider edge UTV2-1854 established for
+    // `searchPlayers`: participants(player).metadata->>'team_external_id' matched
+    // to participants(team).external_id. It is resolved against THIS EVENT's own
+    // team participants rather than by a second global lookup, because
+    // `EventParticipantBrowseResult.teamId` is consumed as "which side of this
+    // event" -- a player whose team is not in the event correctly stays null.
+    //
+    // Canonical data still wins wherever it exists; this only fills the gap, and
+    // it fabricates nothing.
+    const eventTeamsByExternalId = new Map<string, ParticipantRow>();
+    for (const participant of participantMap.values()) {
+      if (participant.participant_type !== 'team') continue;
+      const externalId = participant.external_id;
+      if (typeof externalId === 'string' && externalId.length > 0) {
+        eventTeamsByExternalId.set(externalId, participant);
+      }
+    }
+
     const participants: EventParticipantBrowseResult[] = [];
     for (const row of eventParticipantRows) {
       const participant = participantMap.get(row.participant_id as string);
       if (!participant) {
+        continue;
+      }
+
+      // UTV2-1856: a confirmed proof fixture must not be selectable here either.
+      // UTV2-1854 excluded fixtures from `searchPlayers`/`searchTeams`, and
+      // `handleSearchPlayers`/`handleSearchTeams` only ever INTERSECT those
+      // already-filtered results with this event's participants -- so the search
+      // endpoints were already covered by that existing control. This browse
+      // result is NOT reached through them: `BetForm.tsx` renders
+      // `eventBrowse.participants` directly as the player picker, so without this
+      // predicate a fixture attached to an event would be pickable and
+      // submittable. Same predicate, applied at the second operational entry
+      // point, rather than a second differently-shaped filter.
+      if (isConfirmedProofFixture(participant.metadata)) {
         continue;
       }
 
@@ -6615,16 +6738,22 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       }
 
       const assignment = currentAssignments.get(participant.id) ?? null;
+      const participantsEdgeTeam = assignment
+        ? null
+        : resolveTeamFromParticipantsEdge(
+            participant.metadata,
+            eventTeamsByExternalId,
+          );
       participants.push({
         participantId: participant.id,
         canonicalId: participant.id,
         participantType: 'player',
         displayName: participant.display_name,
         role: row.role as string,
-        teamId: assignment?.teamId ?? null,
+        teamId: assignment?.teamId ?? participantsEdgeTeam?.id ?? null,
         teamName: assignment?.teamId
           ? (teamNameMap.get(assignment.teamId) ?? null)
-          : null,
+          : (participantsEdgeTeam?.display_name ?? null),
       });
     }
 
@@ -6665,25 +6794,82 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     query: string,
     limit = 20,
   ): Promise<TeamSearchResult[]> {
-    const leagues = await this.listLeagues(sportId);
-    const leagueIds = leagues.map((league) => league.id);
-    if (leagueIds.length === 0) {
-      return [];
-    }
-
-    const { data, error } = await this.fromUntyped('teams')
-      .select('id,display_name,league_id')
-      .in('league_id', leagueIds)
-      .ilike('display_name', `%${query}%`)
-      .limit(limit);
+    // UTV2-1854: this used to resolve leagues for the sport and then read the
+    // canonical `teams` table. Every other reference-data surface -- getCatalog,
+    // getEventBrowse, and every consumer in apps/api/src/handlers/reference-data.ts
+    // -- is written against `participants` ids, and `handleSearchTeams` filters
+    // these results against `event.participants[].participantId`. Answering with a
+    // canonical `teams.id` therefore put a different id space behind the same field
+    // name. `teams` is also empty under parked provider ingestion, so this returned
+    // [] for every query in every sport -- a false refusal, not an honest absence.
+    //
+    // The whole sport is read and matched in process rather than pushed down as an
+    // `ilike`, for two measured reasons:
+    //   1. There are 30-32 team participants per sport (NBA 30, MLB 30, NFL 32,
+    //      NHL 32 as of 2026-09-07), so this is a bounded read, not a table scan.
+    //   2. `display_name` holds the nickname alone -- "Bucks", "Knicks" -- while the
+    //      city lives in `external_id` ("MILWAUKEE_BUCKS_NBA") and the short code in
+    //      `metadata.abbreviation`. A `display_name`-only `ilike` finds nothing for
+    //      "milwaukee" or "mil", which is exactly the search an operator types.
+    // Matching in process also keeps the operator's query out of PostgREST's filter
+    // grammar entirely, so widening the match widens no injection surface.
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,display_name,external_id,metadata')
+      .eq('participant_type', 'team')
+      .eq('sport', sportId);
 
     if (error) throw new Error(`Failed to search teams: ${error.message}`);
 
-    const teamRows = (data ?? []) as CanonicalTeamRow[];
+    // An EMPTY query means "what is available?", not "nothing matches".
+    // `handleGetReferenceDataAvailability` (apps/api/src/handlers/reference-data.ts:32)
+    // calls `searchTeams(sport, '', 1)` purely to set `teamsAvailable`, and the
+    // `ilike '%%'` this replaces matched every row. Returning [] here would report
+    // every sport as having no teams -- a regression in the availability surface,
+    // introduced by a search change, and invisible to any test that passes a query.
+    const needle = normalizeSearchText(query);
+    // UTV2-1854 PROOF_FIXTURE_EXCLUSION. No team participant carries the marker
+    // today (measured against production 2026-09-07: 0 of 124), so this is a
+    // no-op on current data -- it is present so a fixture team cannot become
+    // selectable or set `teamsAvailable` the way the 26 player fixtures would
+    // have. This read is unlimited and bounded by the sport's 30-32 teams, so
+    // filtering in process here is exact rather than page-dependent.
+    const rows = (data ?? []).filter((row) => !isConfirmedProofFixture(row.metadata));
+    if (needle.length === 0) {
+      return rows
+        .filter((row) => typeof row.display_name === 'string' && row.display_name.length > 0)
+        .map((row) => ({
+          participantId: row.id as string,
+          displayName: row.display_name as string,
+          sport: sportId,
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName))
+        .slice(0, limit);
+    }
 
-    return teamRows.map((row) => ({
-      participantId: row.id as string,
-      displayName: row.display_name as string,
+    const scored: Array<{ score: number; displayName: string; participantId: string }> = [];
+    for (const row of rows) {
+      const displayName = typeof row.display_name === 'string' ? row.display_name : '';
+      if (displayName.length === 0) continue;
+      const haystacks = teamSearchHaystacks(row);
+      // Rank so that a nickname prefix beats a city or abbreviation hit; the
+      // operator typing "buc" should see Bucks first, not a team whose external id
+      // happens to contain the letters.
+      let score = -1;
+      const normalizedName = normalizeSearchText(displayName);
+      if (normalizedName.startsWith(needle)) score = 0;
+      else if (normalizedName.includes(needle)) score = 1;
+      else if (haystacks.some((value) => value.startsWith(needle))) score = 2;
+      else if (haystacks.some((value) => value.includes(needle))) score = 3;
+      if (score < 0) continue;
+      scored.push({ score, displayName, participantId: row.id as string });
+    }
+
+    scored.sort((a, b) => a.score - b.score || a.displayName.localeCompare(b.displayName));
+
+    return scored.slice(0, limit).map((row) => ({
+      participantId: row.participantId,
+      displayName: row.displayName,
       sport: sportId,
     }));
   }
@@ -6694,56 +6880,60 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     limit = 20,
   ): Promise<PlayerSearchResult[]> {
     // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_START
-    // This previously fetched an unordered global `limit * 5` batch of
-    // name-matching players and only then filtered by sport. A sport whose
-    // players fell outside that arbitrary slice reported no availability even
-    // though canonical players existed, and because the batch was unordered
-    // the result was not even stable between calls. Availability is a refusal
-    // input for Smart Form coverage, so a false negative there is a wrong
-    // answer, not a slow one.
+    // The property this guard exists for: a sport-scoped player search must never
+    // report a false negative because sport was applied after an arbitrary batch
+    // boundary. Availability is a refusal input for Smart Form coverage, so a false
+    // negative there is a wrong answer, not a slow one.
     //
-    // The name match is now paged through in a deterministic order and the
-    // sport filter is applied per page, so the search is bounded by how many
-    // players actually match the query rather than by a fixed cross-sport cap.
-    // Paging stops as soon as `limit` sport-matching players are collected or
-    // the match set is exhausted, so the common case is still one round trip.
-    const PAGE_SIZE = 500;
-    const results: PlayerSearchResult[] = [];
-    let offset = 0;
+    // UTV2-1672 held that property with a deterministic paging loop, because sport
+    // could only be learned by joining canonical assignments after the name match.
+    // UTV2-1854 holds it *by construction* instead: `participants.sport` is a column,
+    // so sport is a predicate in the query itself and `limit` bounds sport-matching
+    // rows directly. There is no batch boundary for sport to fall outside of, and the
+    // paging loop is no longer needed to preserve the guarantee -- removing it does
+    // not relax the property, it removes the reason the property could be violated.
+    //
+    // The read also moves off the canonical `players` table, which is empty under
+    // parked provider ingestion, for the same reason as searchTeams above.
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,display_name,metadata')
+      .eq('participant_type', 'player')
+      .eq('sport', sportId)
+      // UTV2-1854 PROOF_FIXTURE_EXCLUSION -- pushed down, not post-filtered, so
+      // fixtures cannot consume `limit` and push a real player out of the page.
+      .is(PROOF_FIXTURE_METADATA_PATH, null)
+      .ilike('display_name', `%${query}%`)
+      .order('display_name')
+      .limit(limit);
 
-    while (results.length < limit) {
-      const { data, error } = await this.fromUntyped('players')
-        .select('id,display_name')
-        .ilike('display_name', `%${query}%`)
-        .order('display_name')
-        .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw new Error(`Failed to search players: ${error.message}`);
 
-      if (error) throw new Error(`Failed to search players: ${error.message}`);
+    const playerRows = data ?? [];
+    const teamExternalIds = [
+      ...new Set(
+        playerRows
+          .map((row) => readTeamExternalId(row.metadata))
+          .filter((value): value is string => value !== null),
+      ),
+    ];
+    const teamIdsByExternalId = await this.loadTeamParticipantIdsByExternalId(
+      sportId,
+      teamExternalIds,
+    );
 
-      const playerRows = (data ?? []) as CanonicalPlayerRow[];
-      if (playerRows.length === 0) break;
-
-      const currentAssignments = await this.loadCurrentAssignments(
-        playerRows.map((row) => row.id as string),
-      );
-
-      for (const row of playerRows) {
-        const assignment = currentAssignments.get(row.id as string);
-        if (assignment?.sportId !== sportId) continue;
-        results.push({
-          participantId: row.id as string,
-          displayName: row.display_name as string,
-          sport: sportId,
-          teamId: assignment.teamId ?? null,
-        });
-        if (results.length === limit) break;
-      }
-
-      if (playerRows.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
-    }
-
-    return results;
+    return playerRows.map((row) => {
+      const externalId = readTeamExternalId(row.metadata);
+      return {
+        participantId: row.id,
+        displayName: row.display_name,
+        sport: sportId,
+        // A player whose metadata carries no team key, or whose key names no team
+        // participant in this sport, gets a null team. That is honest partial
+        // coverage; never substitute a guessed team.
+        teamId: externalId === null ? null : (teamIdsByExternalId.get(externalId) ?? null),
+      };
+    });
     // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_END
   }
 
@@ -6861,6 +7051,31 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       ),
     );
     const assignments = await this.loadCurrentAssignments(playerIds);
+
+    // UTV2-1856: the same participants-edge fallback getEventBrowse applies, for
+    // the same reason -- `assignments` reads `player_team_assignments`, which is
+    // empty under parked ingestion, so every suggestion carried `teamId: null`
+    // and `BetForm.tsx:1603` set `selectedTeamId` to null straight from it.
+    //
+    // The map is keyed PER EVENT, not globally: `participantMap` spans every
+    // matched event here, and a global external_id map could relate a player to a
+    // same-named team from a different matchup.
+    const teamParticipantsByEvent = new Map<
+      string,
+      Map<string, ParticipantRow>
+    >();
+    for (const row of playerParticipantRows) {
+      const participant = participantMap.get(row.participant_id as string);
+      if (!participant || participant.participant_type !== 'team') continue;
+      const externalId = participant.external_id;
+      if (typeof externalId !== 'string' || externalId.length === 0) continue;
+      const eventId = row.event_id as string;
+      const forEvent =
+        teamParticipantsByEvent.get(eventId) ??
+        new Map<string, ParticipantRow>();
+      forEvent.set(externalId, participant);
+      teamParticipantsByEvent.set(eventId, forEvent);
+    }
     const teamIds = Array.from(
       new Set(
         Array.from(assignments.values())
@@ -6899,17 +7114,35 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         continue;
       }
 
+      // UTV2-1856: a confirmed proof fixture is not a selectable suggestion.
+      // The search ENDPOINTS were already covered -- handleSearchPlayers starts
+      // from `searchPlayers`, whose UTV2-1854 exclusion is a query predicate, and
+      // the event filter only intersects that set. This browse suggestion path
+      // does not go through them, so it needs the predicate applied here.
+      if (isConfirmedProofFixture(participant.metadata)) {
+        continue;
+      }
+
       const assignment = assignments.get(participant.id) ?? null;
+      const edgeTeam = assignment
+        ? null
+        : resolveTeamFromParticipantsEdge(
+            participant.metadata,
+            teamParticipantsByEvent.get(row.event_id as string) ??
+              EMPTY_TEAM_PARTICIPANTS,
+          );
+      const resolvedTeamId = assignment?.teamId ?? edgeTeam?.id ?? null;
+      const resolvedTeamName = assignment?.teamId
+        ? (teamNameMap.get(assignment.teamId) ?? null)
+        : (edgeTeam?.display_name ?? null);
       const matchupLabel = formatBrowseMatchup(matchup);
       pushBrowseSearchResult(results, seen, {
         resultType: 'player',
         participantId: participant.id,
         displayName: participant.display_name,
-        contextLabel: `${assignment?.teamId ? (teamNameMap.get(assignment.teamId) ?? 'Unassigned') : 'Unassigned'} · ${matchupLabel} · ${buildMatchupContext(matchup)}`,
-        teamId: assignment?.teamId ?? null,
-        teamName: assignment?.teamId
-          ? (teamNameMap.get(assignment.teamId) ?? null)
-          : null,
+        contextLabel: `${resolvedTeamName ?? 'Unassigned'} · ${matchupLabel} · ${buildMatchupContext(matchup)}`,
+        teamId: resolvedTeamId,
+        teamName: resolvedTeamName,
         matchup,
       });
     }
@@ -6986,6 +7219,36 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
           : [];
       }),
     );
+  }
+
+  /**
+   * Resolve `participants(player).metadata->>'team_external_id'` to the id of the
+   * team participant carrying that `external_id`, in one batched round trip rather
+   * than one per player. `external_id` is unique across team participants (measured
+   * 124 distinct of 124 rows on production, 2026-09-07), so this is a 1:1 lookup.
+   */
+  private async loadTeamParticipantIdsByExternalId(
+    sportId: string,
+    externalIds: string[],
+  ): Promise<Map<string, string>> {
+    const resolved = new Map<string, string>();
+    if (externalIds.length === 0) return resolved;
+
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,external_id')
+      .eq('participant_type', 'team')
+      .eq('sport', sportId)
+      .in('external_id', externalIds);
+
+    if (error) throw new Error(`Failed to resolve team participants: ${error.message}`);
+
+    for (const row of data ?? []) {
+      if (typeof row.external_id === 'string' && row.external_id.length > 0) {
+        resolved.set(row.external_id, row.id);
+      }
+    }
+    return resolved;
   }
 
   private async loadCurrentAssignments(playerIds: string[]) {
@@ -8740,10 +9003,44 @@ function isMissingSchemaCacheColumn(message: string, column: string): boolean {
   );
 }
 
+/**
+ * UTV2-1856 -- whether this in-memory bundle carries QA player fixtures.
+ *
+ * Default is **off**, so the blank in-memory runtime every unit test builds is
+ * unchanged: teams from the catalog, no players, `playersAvailable: false`.
+ * It turns on only under the repository's existing QA-seed flag, which is what
+ * the contained Playwright harness sets and what `apps/api/src/routes/qa-seed.ts`
+ * already gates on. It is refused outright under `NODE_ENV=production`, so a
+ * production fail-open fallback can never serve fixture players even if the
+ * flag were somehow present.
+ *
+ * Failing to read the environment seeds nothing — the safe direction is the
+ * blank bundle, never fixture data appearing unasked.
+ */
+function qaReferenceSeedingEnabled(): boolean {
+  if (process.env['NODE_ENV'] === 'production') return false;
+  try {
+    const environment = loadEnvironment(process.cwd()) as {
+      UNIT_TALK_QA_SEED_ENABLED?: string;
+    };
+    return environment.UNIT_TALK_QA_SEED_ENABLED === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
   const seededTeams = createSeededTeamParticipants();
+  const seededPlayers = qaReferenceSeedingEnabled()
+    ? createSeededPlayerParticipants(seededTeams)
+    : [];
+  // UTV2-1856 -- one array, two repositories. The participant repository and
+  // the reference-data repository must agree about which rows exist and what
+  // their ids are, or a team selected from `searchTeams` can never equal the
+  // `teamId` a player resolves to.
+  const seededParticipants = [...seededTeams, ...seededPlayers];
   const providerOffers = new InMemoryProviderOfferRepository();
-  const participants = new InMemoryParticipantRepository(seededTeams);
+  const participants = new InMemoryParticipantRepository(seededParticipants);
   const events = new InMemoryEventRepository();
   const eventParticipants = new InMemoryEventParticipantRepository();
   const picks = new InMemoryPickRepository();
@@ -8768,7 +9065,9 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     gradeResults: new InMemoryGradeResultRepository(),
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
-    referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
+    referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
+      participants: seededParticipants,
+    }),
     tiers: new InMemoryMemberTierRepository(),
     reviews: new InMemoryPickReviewRepository(),
     marketUniverse: new InMemoryMarketUniverseRepository(),
@@ -9143,13 +9442,22 @@ export function createDatabaseIngestorRepositoryBundle(
   };
 }
 
+function seededTeamExternalId(sportId: string, team: string): string {
+  return `${sportId.toLowerCase()}:${team.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
 function createSeededTeamParticipants(): ParticipantRow[] {
   const now = new Date().toISOString();
   return V1_REFERENCE_DATA.sports.flatMap((sport) =>
     sport.teams.map((team) => ({
       id: crypto.randomUUID(),
       display_name: team,
-      external_id: null,
+      // UTV2-1856 -- a team with no external id can never be the target of a
+      // player's `metadata.team_external_id`, so every seeded player would
+      // resolve to a null team and no canonical player prop could pass
+      // `validateSearchBackedPlayer`. The value is a deterministic key derived
+      // from the catalog, not a provider identifier.
+      external_id: seededTeamExternalId(sport.id, team),
       league: sport.id.toUpperCase(),
       metadata: toJsonObject({}),
       participant_type: 'team',
@@ -9158,6 +9466,60 @@ function createSeededTeamParticipants(): ParticipantRow[] {
       updated_at: now,
     })),
   );
+}
+
+/**
+ * UTV2-1856 -- an isolated, internally consistent player fixture for the
+ * in-memory bundle.
+ *
+ * The names are deliberately and obviously synthetic. They exist so the
+ * in-memory reference-data repository can answer a player search with a row
+ * whose team relationship actually resolves, which is what the database path
+ * does and what `validateSearchBackedPlayer` requires. They are never a claim
+ * about a real athlete, and this bundle is only ever reached by the fail-open
+ * runtime, never by a configured database.
+ *
+ * One player per sport carries no team key, so the honest-null branch of
+ * `searchPlayers` stays exercised by real data rather than only by tests.
+ */
+function createSeededPlayerParticipants(teams: ParticipantRow[]): ParticipantRow[] {
+  const now = new Date().toISOString();
+  const rows: ParticipantRow[] = [];
+  for (const sport of V1_REFERENCE_DATA.sports) {
+    const sportKey = sport.id.toUpperCase();
+    for (const team of sport.teams) {
+      const externalId = seededTeamExternalId(sport.id, team);
+      const owner = teams.find(
+        (row) => row.sport === sportKey && row.external_id === externalId,
+      );
+      if (!owner) continue;
+      for (const slot of ['Starter', 'Reserve']) {
+        rows.push({
+          id: crypto.randomUUID(),
+          display_name: `${team} ${slot}`,
+          external_id: `${externalId}:${slot.toLowerCase()}`,
+          league: sportKey,
+          metadata: toJsonObject({ team_external_id: externalId }),
+          participant_type: 'player',
+          sport: sportKey,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+    rows.push({
+      id: crypto.randomUUID(),
+      display_name: `${sport.id} Unaffiliated Player`,
+      external_id: `${sport.id.toLowerCase()}:unaffiliated`,
+      league: sportKey,
+      metadata: toJsonObject({}),
+      participant_type: 'player',
+      sport: sportKey,
+      created_at: now,
+      updated_at: now,
+    });
+  }
+  return rows;
 }
 
 function toJsonObject(value: Record<string, unknown>): Json {
@@ -9230,16 +9592,123 @@ type CanonicalLeagueRow = {
   active?: boolean | null;
 };
 
+/**
+ * Fold a name into a comparable form: lowercase, every run of non-alphanumerics
+ * collapsed to a single space. Used on both sides of every reference-data search
+ * comparison, so `MILWAUKEE_BUCKS_NBA`, "Milwaukee Bucks" and "milwaukee  bucks"
+ * are the same string before anything is matched.
+ */
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, ' ')
+    .trim()
+    .replace(/\s+/gu, ' ');
+}
+
+/**
+ * Every string a team row can honestly be found by. `external_id` carries the
+ * city ("MILWAUKEE_BUCKS_NBA") that `display_name` omits, and
+ * `metadata.abbreviation` carries the three-letter code an operator may type.
+ */
+function teamSearchHaystacks(row: Record<string, unknown>): string[] {
+  const values: string[] = [];
+  if (typeof row.display_name === 'string') values.push(normalizeSearchText(row.display_name));
+  if (typeof row.external_id === 'string') values.push(normalizeSearchText(row.external_id));
+  const metadata = row.metadata;
+  if (typeof metadata === 'object' && metadata !== null) {
+    const abbreviation = (metadata as Record<string, unknown>)['abbreviation'];
+    if (typeof abbreviation === 'string') values.push(normalizeSearchText(abbreviation));
+  }
+  return values.filter((value) => value.length > 0);
+}
+
+/**
+ * UTV2-1854: `participants` has no `team_id` column. The player -> team edge is
+ * `participants(player).metadata->>'team_external_id'` matched against
+ * `participants(team).external_id`. Measured on production 2026-09-07: 1497 of 1523
+ * player participants carry the key and all 1497 resolve; 26 carry none, and those
+ * are represented as a null team rather than a guessed one.
+ */
+/**
+ * UTV2-1854 PROOF_FIXTURE_EXCLUSION.
+ *
+ * A participant row whose `metadata` carries a `proofIssue` value is a proof
+ * fixture: a row created by a T1 proof run to exercise a code path, not an
+ * observation of a real athlete. 26 such rows exist in production (13 from
+ * UTV2-614 and 13 from UTV2-618, created 2026-05-28/29, before the staging
+ * isolation work moved proof runs off production). Rows are preserved -- this
+ * excludes them from operator-facing selection and from availability, and
+ * deletes nothing.
+ *
+ * The predicate is deliberately the marker, NOT "has no team". Measured against
+ * production 2026-09-07: the 26 fixtures are *exactly* the 26 players with no
+ * `team_external_id`, and there are zero legitimate team-less players today. So
+ * a "drop players with no team" implementation would agree with every current
+ * production observation and still be wrong -- it would silently drop the first
+ * legitimate team-less player ingestion produces. Those are two different
+ * predicates that today's data cannot tell apart, which is why the preservation
+ * case is asserted against a constructed row rather than a production one.
+ *
+ * A `proofIssue` that is JSON `null` names no issue and is therefore not a
+ * *confirmed* fixture; such a row is kept and, if it carries no team key, gets
+ * the same honest `teamId: null` as any other. `PROOF_FIXTURE_METADATA_PATH`
+ * below is the PostgREST spelling of this same predicate, kept beside it so the
+ * pushed-down and in-process forms cannot drift.
+ */
+function isConfirmedProofFixture(metadata: unknown): boolean {
+  if (typeof metadata !== 'object' || metadata === null) return false;
+  const value = (metadata as Record<string, unknown>)['proofIssue'];
+  return value !== undefined && value !== null;
+}
+
+/**
+ * The pushed-down form of `isConfirmedProofFixture`, used with `.is(..., null)`.
+ * Player search applies `limit` in the query, so this exclusion MUST be a
+ * predicate rather than a post-filter: filtering after the fact would let
+ * fixtures consume the limit and push real players out of the result, which is
+ * a false negative of exactly the class the UTV2-1672 sport-scope guard exists
+ * to prevent.
+ */
+const PROOF_FIXTURE_METADATA_PATH = 'metadata->>proofIssue';
+
+/**
+ * UTV2-1856: resolves a player's team through the provider observation edge --
+ * `participants(player).metadata->>'team_external_id'` matched to
+ * `participants(team).external_id` -- against a caller-supplied set of team
+ * participants.
+ *
+ * It returns null rather than guessing in both of the cases that matter, and
+ * they are DIFFERENT cases that today's production data cannot tell apart: a
+ * player carrying no `team_external_id` at all (26 of 1523 on production), and a
+ * player whose key names a team that is not among the teams supplied. Neither is
+ * repaired into a team, because a "pick some team" implementation would agree
+ * with every current observation and still be wrong the first time ingestion
+ * produces a genuinely team-less player.
+ */
+/** Shared empty map, so the per-event lookup above allocates nothing on a miss. */
+const EMPTY_TEAM_PARTICIPANTS: ReadonlyMap<string, ParticipantRow> = new Map();
+
+function resolveTeamFromParticipantsEdge(
+  metadata: unknown,
+  teamsByExternalId: ReadonlyMap<string, ParticipantRow>,
+): ParticipantRow | null {
+  const externalId = readTeamExternalId(metadata);
+  if (!externalId) return null;
+  return teamsByExternalId.get(externalId) ?? null;
+}
+
+function readTeamExternalId(metadata: unknown): string | null {
+  if (typeof metadata !== 'object' || metadata === null) return null;
+  const value = (metadata as Record<string, unknown>)['team_external_id'];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 type CanonicalTeamRow = {
   id: string;
   league_id: string;
   display_name: string;
   metadata: unknown;
-};
-
-type CanonicalPlayerRow = {
-  id: string;
-  display_name: string;
 };
 
 type PlayerTeamAssignmentRow = {

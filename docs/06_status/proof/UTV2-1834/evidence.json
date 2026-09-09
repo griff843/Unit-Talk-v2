@@ -1,0 +1,138 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1834",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "1d76b75e1296871346284c50032b706009416fc6",
+    "verified_source_sha": "901bce784354ee4b2098611bc0278c04c13209da",
+    "evidence_commit_sha": "901bce784354ee4b2098611bc0278c04c13209da",
+    "current_pr_head_sha": "901bce784354ee4b2098611bc0278c04c13209da",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_test": "PASS (5485 tests, 0 failures, 0 'not ok' lines, exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_lint": "Deferred to the required CI `verify` context. Not measured locally and not restated as a local run.",
+      "pnpm_build": "Deferred to the required CI `verify` context. Not measured locally and not restated as a local run.",
+      "pnpm_verify": "Deferred to the required CI `verify` context on this branch.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T17:53:28.948Z"
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5485,
+      "failures": 0
+    },
+    "lint": {
+      "status": "DEFERRED",
+      "command": "pnpm lint",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "build": {
+      "status": "DEFERRED",
+      "command": "pnpm build",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "scope_controls": [
+      {
+        "assertion": "A1 — the snapshot step precedes the first env write in BOTH deploy jobs, measured by step index rather than presence",
+        "command": "python3 -c \"import yaml;d=yaml.safe_load(open('.github/workflows/deploy.yml'));[print(j, [s.get('name') for s in d['jobs'][j]['steps']].index('Snapshot outgoing configuration for rollback') < [s.get('name') for s in d['jobs'][j]['steps']].index('Write .env.production to server')) for j in ('canary','promote')]\"",
+        "expected": "canary True; promote True",
+        "observed": "canary: snapshot@3 < envwrite@4 -> True; promote: snapshot@3 < envwrite@4 -> True",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A2 — the snapshot is keyed on the outgoing release tag, not the incoming image tag",
+        "command": "the SNAPSHOT_REMOTE heredoc is asserted to match /cat \\.unit-talk-release/ and to NOT match /IMAGE_TAG|UNIT_TALK_IMAGE_TAG|github\\.sha/",
+        "expected": "reads .unit-talk-release; no reference to the incoming tag",
+        "observed": "OUTGOING=\"$(cat .unit-talk-release)\"; no incoming-tag reference in the heredoc",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A7 — functional round trip: snapshot, overwrite, roll back, restore byte-identically at mode 0600",
+        "command": "pnpm exec tsx --test scripts/ci/deploy-config-rollback.test.ts",
+        "expected": "9 tests, 0 failures, including the round-trip and no-snapshot-warning cases",
+        "observed": "# tests 9 / # pass 9 / # fail 0. The round-trip test executes the workflow's own SNAPSHOT_REMOTE heredoc via `bash -s -- <tmpdir>` and the rollback script's own `--dry-run` emitted remote command, with only the two `docker compose` lines removed.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A8 — the pre-existing rollback-dry-run CI job still passes against the modified script",
+        "command": "bash deploy/rollback.sh --dry-run --tag \"$(git rev-parse HEAD)\"",
+        "expected": "exit 0",
+        "observed": "exit 0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A11 — the new .env.*.<tag> snapshot files cannot be consumed by docker compose, because every env_file entry is an explicit path with no glob",
+        "command": "grep -n 'env_file' -A 2 deploy/production/docker-compose.yml",
+        "expected": "no glob patterns among the env_file entries",
+        "observed": "8 env_file blocks, every entry an explicit literal path; no glob",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A12 — no application code, schema, gate, tier or merge-authority surface is touched",
+        "command": "git diff --name-only origin/main..HEAD | grep -cE '^(apps/|packages/|supabase/|\\.lane/|CODEOWNERS|\\.github/workflows/merge-gate\\.yml)'",
+        "expected": "0",
+        "observed": "0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A5 — no R-level artifact is required for this diff",
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "expected": "PASS",
+        "observed": "Verdict: PASS; Changed files: 9; Rules matched: (none)",
+        "status": "PASS"
+      }
+    ],
+    "control_mutations": [
+      {
+        "id": "M1",
+        "mutation": "snapshot step moved after the promote job's first env write",
+        "failing_test": "promote: snapshots the outgoing configuration before overwriting it",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M2",
+        "mutation": "keyed on $UNIT_TALK_IMAGE_TAG instead of $(cat .unit-talk-release)",
+        "failing_test": "canary/promote: keys the snapshot on the outgoing release, not the incoming tag",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M3",
+        "mutation": ".env.smart-form dropped from the snapshot loop",
+        "failing_test": "canary/promote: snapshots every configuration file the deploy overwrites",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M4",
+        "mutation": "restore loop deleted from deploy/rollback.sh",
+        "failing_test": "rollback.sh restores the configuration snapshot for the tag it rolls back to",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M5",
+        "mutation": "WARNING: no configuration snapshot text downgraded",
+        "failing_test": "rolling back to a tag with no snapshot warns and still rolls the code back",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M6",
+        "mutation": "snapshot step deleted from the canary job only",
+        "failing_test": "both canary: tests; promote unaffected",
+        "status": "CAUGHT"
+      }
+    ],
+    "control_corrected_by_mutation": "M2 and M3 initially produced an identical failure set, because one test carried both the keying assertion and the file-coverage assertion and stopped at the first. The coverage assertion was split into its own test so the two defects are now distinguishable by name. The correction came out of executing the mutations, not out of reading the tests."
+  },
+  "runtime_proof": null,
+  "runtime_proof_rationale": "No runtime proof against the production host is claimed and none is possible within this lane's authority: verifying the snapshot on the real host requires dispatching a Deploy run, which is a reserved action. The shell logic itself is nonetheless executed rather than described — assertion A7 runs the workflow's own snapshot heredoc and the rollback script's own emitted remote command against a temp directory and asserts byte-identical restoration at mode 0600."
+}

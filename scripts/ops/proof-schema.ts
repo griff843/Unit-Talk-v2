@@ -12,6 +12,8 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 export const PROOF_SCHEMA_VERSION = 2 as const;
 
@@ -250,7 +252,19 @@ type MigrationReceiptBindingResult =
   | { status: 'not-ancestor' }
   | { status: 'non-proof-delta'; paths: string[] }
   | { status: 'attestation-mismatch'; detail: string }
+  | { status: 'source-not-in-pr'; detail: string }
   | { status: 'unverified'; detail: string };
+
+/**
+ * The SHA a migration bundle offers as merge authority, plus the evidence field
+ * it was drawn from so a mismatch names the field that lied. UTV2-1783 moved
+ * merge authority into `sha_binding.merge_sha`; bundles that predate that slot
+ * keep offering `verified_source_sha` and keep the historical meaning.
+ */
+interface MigrationMergeAuthority {
+  sha: string;
+  field: 'sha_binding.merge_sha' | 'sha_binding.verified_source_sha';
+}
 
 type MergedPrAttestationResolution =
   | { status: 'pass'; attestation: MergedPrAttestation; mainRef: string }
@@ -523,6 +537,7 @@ function resolveMergedPrAttestation(
 function verifyPostMergeMigrationReceiptBinding(
   receiptHead: string,
   verifiedSourceSha: string,
+  mergeAuthority: MigrationMergeAuthority,
   issueId: string,
   context: EvidenceContractContext,
 ): MigrationReceiptBindingResult {
@@ -533,9 +548,43 @@ function verifyPostMergeMigrationReceiptBinding(
   const receiptUnavailable = verifyCommitAvailable(receiptHead, 'migration receipt head', context);
   if (receiptUnavailable) return receiptUnavailable;
 
-  const resolution = resolveMergedPrAttestation(verifiedSourceSha, context);
+  // UTV2-1826: merge authority comes from `mergeAuthority`, never from the
+  // execution identity. This path used to hand `verified_source_sha` to the
+  // attestation resolver, which requires whatever value it is given to equal
+  // the GitHub-recorded merge SHA. Under the UTV2-1783 contract those two
+  // fields are deliberately different -- the declared slot carries merge
+  // authority, and the verified source is a commit the PR contributed -- so
+  // every honest schema-v2 migration bundle failed post-merge and its lane
+  // could not be truth-closed.
+  const resolution = resolveMergedPrAttestation(mergeAuthority.sha, context, mergeAuthority.field);
   if (resolution.status !== 'pass') return resolution;
   const { attestation, mainRef } = resolution;
+
+  // Execution identity keeps its own obligation once it is no longer what
+  // grants merge authority: it must still be the merge commit itself, or a
+  // commit the attested PR actually contributed. Without this, moving merge
+  // authority to the declared slot would leave `verified_source_sha` entirely
+  // unconstrained, and a bundle could name a commit carrying none of the
+  // lane's work.
+  if (
+    mergeAuthority.field === 'sha_binding.merge_sha' &&
+    verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()
+  ) {
+    const sourceInPr = verifiedSourceIsContributedByAttestedPr(
+      verifiedSourceSha,
+      attestation.head_sha,
+      mainRef,
+      context,
+    );
+    if (typeof sourceInPr === 'string') return { status: 'unverified', detail: sourceInPr };
+    if (!sourceInPr) {
+      return {
+        status: 'source-not-in-pr',
+        detail: `sha_binding.verified_source_sha ${verifiedSourceSha} is neither the GitHub-recorded merge SHA ` +
+          `nor a commit contributed by the attested PR (head ${attestation.head_sha}, base ${mainRef})`,
+      };
+    }
+  }
 
   if (receiptHead.toLowerCase() === attestation.head_sha.toLowerCase()) {
     return { status: 'pass' };
@@ -1055,36 +1104,62 @@ function validateProfileEvidence(
           message: 'pre-merge migration receipt head must equal sha_binding.verified_source_sha',
         });
       } else if (context.gate === 'post-merge-read') {
-        const ancestry = verifyPostMergeMigrationReceiptBinding(
-          receiptHead,
-          verifiedSourceSha,
-          String(bundle['issue_id'] ?? ''),
-          context,
-        );
-        if (ancestry.status === 'not-ancestor') {
+        // UTV2-1826: prefer the declared merge slot, which is where UTV2-1783
+        // put merge authority. A bundle that predates the slot keeps offering
+        // its verified source and keeps the historical behaviour. A bundle that
+        // declares the slot but has not had it bound to a real merge SHA is a
+        // post-merge contradiction, and is reported as exactly that rather than
+        // being silently re-routed onto the legacy field.
+        const mergeSlot = readEvidenceMergeSlot(binding);
+        const slotValue = mergeSlot.declared ? mergeSlot.value : undefined;
+        if (mergeSlot.declared && (typeof slotValue !== 'string' || !SHA_RE.test(slotValue))) {
           failures.push({
-            code: 'migration_receipt_not_ancestor',
-            field: 'runtime_proof.head',
-            message: 'migration receipt head is not connected by a proof-only path to the attested PR head or merge SHA',
+            code: 'migration_receipt_merge_slot_invalid',
+            field: 'sha_binding.merge_sha',
+            message: 'post-merge migration evidence requires sha_binding.merge_sha to be a full 40-character Git SHA',
           });
-        } else if (ancestry.status === 'non-proof-delta') {
-          failures.push({
-            code: 'migration_receipt_non_proof_delta',
-            field: 'runtime_proof.head',
-            message: `non-proof commits exist between the migration receipt and rebound source: ${ancestry.paths.join(', ')}`,
-          });
-        } else if (ancestry.status === 'attestation-mismatch') {
-          failures.push({
-            code: 'migration_receipt_merge_attestation_mismatch',
-            field: 'sha_binding.verified_source_sha',
-            message: ancestry.detail,
-          });
-        } else if (ancestry.status === 'unverified') {
-          failures.push({
-            code: 'migration_receipt_ancestry_unverified',
-            field: 'runtime_proof.head',
-            message: `migration receipt ancestry could not be mechanically verified: ${ancestry.detail}`,
-          });
+        } else {
+          const mergeAuthority: MigrationMergeAuthority = typeof slotValue === 'string'
+            ? { sha: slotValue, field: 'sha_binding.merge_sha' }
+            : { sha: verifiedSourceSha, field: 'sha_binding.verified_source_sha' };
+          const ancestry = verifyPostMergeMigrationReceiptBinding(
+            receiptHead,
+            verifiedSourceSha,
+            mergeAuthority,
+            String(bundle['issue_id'] ?? ''),
+            context,
+          );
+          if (ancestry.status === 'not-ancestor') {
+            failures.push({
+              code: 'migration_receipt_not_ancestor',
+              field: 'runtime_proof.head',
+              message: 'migration receipt head is not connected by a proof-only path to the attested PR head or merge SHA',
+            });
+          } else if (ancestry.status === 'non-proof-delta') {
+            failures.push({
+              code: 'migration_receipt_non_proof_delta',
+              field: 'runtime_proof.head',
+              message: `non-proof commits exist between the migration receipt and rebound source: ${ancestry.paths.join(', ')}`,
+            });
+          } else if (ancestry.status === 'attestation-mismatch') {
+            failures.push({
+              code: 'migration_receipt_merge_attestation_mismatch',
+              field: mergeAuthority.field,
+              message: ancestry.detail,
+            });
+          } else if (ancestry.status === 'source-not-in-pr') {
+            failures.push({
+              code: 'migration_receipt_source_not_in_merged_pr',
+              field: 'sha_binding.verified_source_sha',
+              message: ancestry.detail,
+            });
+          } else if (ancestry.status === 'unverified') {
+            failures.push({
+              code: 'migration_receipt_ancestry_unverified',
+              field: 'runtime_proof.head',
+              message: `migration receipt ancestry could not be mechanically verified: ${ancestry.detail}`,
+            });
+          }
         }
       }
     }
@@ -1359,4 +1434,369 @@ export function isProofStale(proof: ProofSchemaV2, currentHeadSha: string): bool
   if (!SHA_RE.test(currentHeadSha)) return false;
   if (!SHA_RE.test(proof.source_sha)) return true;
   return proof.source_sha !== currentHeadSha;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-/post-merge proof identity contract (UTV2-1783)
+// ---------------------------------------------------------------------------
+
+/**
+ * The canonical reconciliation of the two pre-merge consumers of a proof
+ * bundle's identity fields.
+ *
+ * The defect this replaces: `verification.md`'s top-level `MERGE_SHA:` row was
+ * overloaded with two incompatible meanings, and each consumer picked one.
+ *
+ *   proof-binding-validator  required the row to be the literal `pending merge`
+ *                            (correct: a branch SHA is not merge authority)
+ *   Executor Result Validation
+ *                            required the row to be a real 7-40 hex SHA that is
+ *                            an ancestor of the PR head (correct: execution
+ *                            provenance has to be a real commit)
+ *
+ * Both requirements are individually right about a *different* fact, and no
+ * single value satisfies them, so any lane where both consumers ran was
+ * unmergeable. That was invisible for ordinary lanes only because
+ * proof-binding-validator is reached solely through
+ * `migration-reversibility-gate.yml`'s path filter; migration lanes trip both.
+ *
+ * The repair separates the two facts rather than picking a winner. Schema v2
+ * already carries them in distinct fields:
+ *
+ *   sha_binding.merge_sha           merge authority — null until GitHub merges
+ *   sha_binding.verified_source_sha execution/source identity — a real commit
+ *
+ * So the markdown row stops being an identity carrier and becomes what it
+ * always read as in the merged artifact: a presentation of merge authority.
+ * Pre-merge that is the placeholder word; post-merge it is the merge SHA. The
+ * SHA a caller must ancestry-check is returned as `provenanceAnchorSha` and is
+ * read from `verified_source_sha`, never from the markdown row.
+ *
+ * Historical compatibility is deliberately narrow (contract item 6) and keys on
+ * the DECLARED schema version, never on the incidental presence of a
+ * `sha_binding` object. 157 bundles in this repository declare
+ * `schema_version: 1` and still carry a `sha_binding` block (UTV2-1554 among
+ * them); classifying those as v2 would retroactively fail every one of them on
+ * placeholder and binding-section rules that did not exist when they were
+ * written. A bundle is v2 only when it says it is. Everything else keeps the
+ * legacy rule unchanged — the row itself must be a real hex SHA and is the
+ * anchor. Absent or older evidence never relaxes a rule; it selects the older,
+ * stricter-on-the-row contract.
+ *
+ * The phase is NOT inferred for a caller that knows it. A validator running on
+ * an open pull request knows the PR is unmerged, and inferring `post-merge`
+ * from the bundle's own merge slot would let an untrusted bundle assert merge
+ * authority that GitHub never granted: fill both markdown merge rows with a
+ * plausible SHA and the identity check falls silent. Such callers pass
+ * `phase: 'pre-merge'` explicitly, and the CLI *requires* `--phase` so a
+ * workflow cannot forget it.
+ */
+export type ProofIdentityMode = 'schema-v2' | 'legacy-anchor';
+
+export type ProofIdentityPhase = 'pre-merge' | 'post-merge';
+
+export type ProofIdentityFailureCode =
+  | 'merge_row_count'
+  | 'merge_row_not_placeholder'
+  | 'merge_row_not_merge_authority'
+  | 'merge_row_not_git_sha'
+  | 'binding_section_count'
+  | 'binding_section_merge_row'
+  | 'binding_section_pr_row'
+  | 'premature_merge_authority'
+  | 'execution_identity_invalid';
+
+export interface ProofIdentityFailure {
+  code: ProofIdentityFailureCode;
+  field: string;
+  message: string;
+}
+
+export interface ProofIdentityResult {
+  mode: ProofIdentityMode;
+  phase: ProofIdentityPhase;
+  failures: ProofIdentityFailure[];
+  /**
+   * The commit a caller must prove is an ancestor of the PR head. Null when the
+   * bundle failed to declare a usable one — callers must treat null as a
+   * failure to verify, never as "nothing to check".
+   */
+  provenanceAnchorSha: string | null;
+}
+
+/** The only value accepted where merge authority does not yet exist. */
+export const MERGE_AUTHORITY_PLACEHOLDER = 'pending merge';
+
+const SHORT_SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+function unfencedLines(markdown: string): string[] {
+  const lines = markdown.split(/\r?\n/u);
+  const fenced = markdownFencedLineIndexes(markdown);
+  return lines.map((line, index) => (fenced.has(index) ? '' : line));
+}
+
+function isPlaceholder(value: string): boolean {
+  return value.trim().toLowerCase() === MERGE_AUTHORITY_PLACEHOLDER;
+}
+
+export interface ProofIdentityInput {
+  /** Raw `verification.md` content. */
+  verificationMarkdown: string;
+  /** Parsed `evidence.json`, or null/undefined when the bundle carries none. */
+  evidence?: unknown;
+  /**
+   * The phase, when the caller knows it. Any validator running on an open pull
+   * request MUST pass `'pre-merge'`: the PR is unmerged by definition, so merge
+   * authority cannot exist, and inferring the phase from the bundle would let
+   * the bundle grant itself authority GitHub never gave it.
+   *
+   * Omit it only when the phase genuinely is a property of the bundle rather
+   * than of the caller — a post-merge reader inspecting a historical artifact.
+   * Inference then reads the declared merge slot.
+   */
+  phase?: ProofIdentityPhase;
+}
+
+export function validateProofMergeShaIdentity(input: ProofIdentityInput): ProofIdentityResult {
+  const failures: ProofIdentityFailure[] = [];
+  const active = unfencedLines(input.verificationMarkdown);
+
+  const bundle =
+    input.evidence && typeof input.evidence === 'object' && !Array.isArray(input.evidence)
+      ? (input.evidence as Record<string, unknown>)
+      : null;
+  const binding = bundle?.['sha_binding'];
+  const hasBinding = Boolean(binding) && typeof binding === 'object' && !Array.isArray(binding);
+
+  // The declared schema version is the discriminator, not the presence of a
+  // sha_binding object: 157 historical bundles declare schema_version 1 and
+  // carry one anyway, and reading those as v2 would fail them retroactively.
+  const declaredV2 = Number(bundle?.['schema_version']) === PROOF_SCHEMA_VERSION;
+  const mode: ProofIdentityMode = declaredV2 && hasBinding ? 'schema-v2' : 'legacy-anchor';
+
+  const bindingRecord = mode === 'schema-v2' ? (binding as Record<string, unknown>) : {};
+  const mergeSlot = mode === 'schema-v2' ? readEvidenceMergeSlot(binding) : { declared: false };
+  const mergeAuthority =
+    typeof mergeSlot.value === 'string' && SHA_RE.test(mergeSlot.value) ? mergeSlot.value : null;
+
+  const topRows = active
+    .map((line) => line.match(/^MERGE_SHA:\s*(.*)$/u))
+    .filter((match): match is RegExpMatchArray => match !== null);
+
+  if (topRows.length !== 1) {
+    failures.push({
+      code: 'merge_row_count',
+      field: 'verification.md MERGE_SHA',
+      message: `verification.md must contain exactly one top-level MERGE_SHA: row (found ${topRows.length})`,
+    });
+  }
+  const rowValue = topRows.length === 1 ? (topRows[0]?.[1] ?? '').trim() : null;
+
+  if (mode === 'legacy-anchor') {
+    // Narrow, explicit legacy path. No sha_binding block exists, so the row is
+    // still the only identity the bundle carries and the pre-UTV2-1783 rule
+    // applies to it unchanged.
+    const phase: ProofIdentityPhase = input.phase ?? 'pre-merge';
+    if (rowValue !== null && !SHORT_SHA_RE.test(rowValue)) {
+      failures.push({
+        code: 'merge_row_not_git_sha',
+        field: 'verification.md MERGE_SHA',
+        message:
+          `Proof MERGE_SHA is not a valid git SHA: "${rowValue}". This bundle declares no ` +
+          'schema-v2 sha_binding block, so the legacy contract applies and the row itself ' +
+          'must be a real commit. Add a sha_binding block to use the schema-v2 contract.',
+      });
+    }
+    return {
+      mode,
+      phase,
+      failures,
+      provenanceAnchorSha: rowValue !== null && SHORT_SHA_RE.test(rowValue) ? rowValue : null,
+    };
+  }
+
+  const phase: ProofIdentityPhase = input.phase ?? (mergeAuthority ? 'post-merge' : 'pre-merge');
+
+  // Merge authority. Pre-merge the slot must be an explicit null: a branch or
+  // execution SHA parked here is the failure this contract exists to name.
+  // Reached whenever the phase is pre-merge, including when the caller forced
+  // it over a bundle that claims otherwise. That is the case the check exists
+  // for: an open PR whose bundle names a merge SHA is asserting authority that
+  // does not exist yet, and it must fail rather than be believed.
+  if (phase === 'pre-merge' && mergeSlot.declared && mergeSlot.value !== null) {
+    failures.push({
+      code: 'premature_merge_authority',
+      field: 'sha_binding.merge_sha',
+      message:
+        `pre-merge evidence requires sha_binding.merge_sha to be null (found ` +
+        `${JSON.stringify(mergeSlot.value)}); a branch or execution SHA is never merge authority ` +
+        'and belongs in sha_binding.verified_source_sha',
+    });
+  }
+
+  // Execution/source identity — the only ancestry anchor.
+  const verifiedSourceSha = bindingRecord['verified_source_sha'];
+  let provenanceAnchorSha: string | null = null;
+  if (typeof verifiedSourceSha === 'string' && SHA_RE.test(verifiedSourceSha)) {
+    provenanceAnchorSha = verifiedSourceSha;
+  } else {
+    failures.push({
+      code: 'execution_identity_invalid',
+      field: 'sha_binding.verified_source_sha',
+      message:
+        'sha_binding.verified_source_sha must be a full 40-character Git SHA; it is the execution ' +
+        `identity every consumer ancestry-checks (found ${JSON.stringify(verifiedSourceSha ?? null)})`,
+    });
+  }
+
+  // The markdown row presents merge authority and nothing else.
+  if (rowValue !== null) {
+    if (phase === 'pre-merge') {
+      if (!isPlaceholder(rowValue)) {
+        failures.push({
+          code: 'merge_row_not_placeholder',
+          field: 'verification.md MERGE_SHA',
+          message:
+            `verification.md MERGE_SHA must be "${MERGE_AUTHORITY_PLACEHOLDER}" before merge ` +
+            `(found "${rowValue}"); it presents merge authority, which does not exist yet. ` +
+            'Execution identity lives in sha_binding.verified_source_sha.',
+        });
+      }
+    } else if (rowValue !== mergeAuthority) {
+      failures.push({
+        code: 'merge_row_not_merge_authority',
+        field: 'verification.md MERGE_SHA',
+        message:
+          `verification.md MERGE_SHA must present the authoritative merge SHA after merge ` +
+          `(sha_binding.merge_sha ${mergeAuthority ?? 'null'}, found "${rowValue}")`,
+      });
+    }
+  }
+
+  // `## Merge SHA Binding` section.
+  const headingIndexes = active.flatMap((line, index) =>
+    /^## Merge SHA Binding\s*$/u.test(line) ? [index] : [],
+  );
+  if (headingIndexes.length !== 1) {
+    failures.push({
+      code: 'binding_section_count',
+      field: 'verification.md ## Merge SHA Binding',
+      message: `verification.md must contain exactly one "## Merge SHA Binding" section (found ${headingIndexes.length})`,
+    });
+    return { mode, phase, failures, provenanceAnchorSha };
+  }
+
+  const start = headingIndexes[0]! + 1;
+  const endOffset = active.slice(start).findIndex((line) => /^##\s+/u.test(line));
+  const section = active.slice(start, endOffset === -1 ? undefined : start + endOffset);
+  const mergeRows = section
+    .map((line) => line.match(/^Merge SHA:\s*(.*)$/u))
+    .filter((match): match is RegExpMatchArray => match !== null);
+  const prRows = section
+    .map((line) => line.match(/^PR:\s*(.*)$/u))
+    .filter((match): match is RegExpMatchArray => match !== null);
+
+  const sectionValue = mergeRows.length === 1 ? (mergeRows[0]?.[1] ?? '').trim() : null;
+  const sectionOk =
+    sectionValue !== null &&
+    (phase === 'pre-merge' ? isPlaceholder(sectionValue) : sectionValue === mergeAuthority);
+  if (!sectionOk) {
+    failures.push({
+      code: 'binding_section_merge_row',
+      field: 'verification.md ## Merge SHA Binding > Merge SHA',
+      message:
+        phase === 'pre-merge'
+          ? `Merge SHA Binding section requires exactly one "Merge SHA: ${MERGE_AUTHORITY_PLACEHOLDER}" row before merge`
+          : `Merge SHA Binding section requires exactly one "Merge SHA: ${mergeAuthority ?? '<merge sha>'}" row after merge`,
+    });
+  }
+  if (prRows.length !== 1 || !(prRows[0]?.[1] ?? '').trim()) {
+    failures.push({
+      code: 'binding_section_pr_row',
+      field: 'verification.md ## Merge SHA Binding > PR',
+      message: 'Merge SHA Binding section requires exactly one non-empty PR: row',
+    });
+  }
+
+  return { mode, phase, failures, provenanceAnchorSha };
+}
+
+// ---------------------------------------------------------------------------
+// CLI entry
+// ---------------------------------------------------------------------------
+
+/**
+ * `proof-identity` subcommand. Exists so that
+ * `.github/workflows/executor-result-validator.yml` executes this exact module
+ * instead of hand-reimplementing the contract in inline workflow JavaScript.
+ * A copy in the workflow is what let the two consumers drift apart in the first
+ * place, and a test against a reimplementation would only prove the copy agrees
+ * with itself.
+ *
+ * Emits the ProofIdentityResult as JSON on stdout and exits 0 whenever the
+ * contract could be evaluated — a contract failure is data for the caller to
+ * fold into its own error list, not a process failure. Exit 2 is reserved for
+ * inputs that could not be read at all.
+ */
+export function runProofIdentityCli(argv: readonly string[]): number {
+  const arg = (name: string): string | null => {
+    const index = argv.indexOf(name);
+    return index === -1 ? null : (argv[index + 1] ?? null);
+  };
+  const verificationPath = arg('--verification');
+  const evidencePath = arg('--evidence');
+  const phaseArg = arg('--phase');
+  if (!verificationPath) {
+    process.stderr.write(
+      'usage: proof-schema.ts proof-identity --phase <pre-merge|post-merge> --verification <path> [--evidence <path>]\n',
+    );
+    return 2;
+  }
+  // --phase is REQUIRED and has no default. A default would be a fail-open
+  // waiting to happen: the one caller that matters validates open pull
+  // requests, where the phase is always pre-merge, and a forgotten flag would
+  // silently restore inference from the untrusted bundle's own merge slot.
+  if (phaseArg !== 'pre-merge' && phaseArg !== 'post-merge') {
+    process.stderr.write(
+      `--phase is required and must be "pre-merge" or "post-merge" (got ${JSON.stringify(phaseArg)}). ` +
+        'A validator running on an open pull request passes "pre-merge".\n',
+    );
+    return 2;
+  }
+  const phase: ProofIdentityPhase = phaseArg;
+
+  let verificationMarkdown: string;
+  try {
+    verificationMarkdown = readFileSync(verificationPath, 'utf8');
+  } catch (error) {
+    process.stderr.write(`cannot read ${verificationPath}: ${(error as Error).message}\n`);
+    return 2;
+  }
+
+  // An unreadable or unparseable evidence file must never silently degrade into
+  // the legacy path — that would let a lane escape the schema-v2 contract by
+  // corrupting its own evidence.json.
+  let evidence: unknown = null;
+  if (evidencePath) {
+    try {
+      evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
+    } catch (error) {
+      process.stderr.write(`cannot read evidence ${evidencePath}: ${(error as Error).message}\n`);
+      return 2;
+    }
+  }
+
+  process.stdout.write(
+    `${JSON.stringify(validateProofMergeShaIdentity({ verificationMarkdown, evidence, phase }))}\n`,
+  );
+  return 0;
+}
+
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const [subcommand, ...rest] = process.argv.slice(2);
+  if (subcommand !== 'proof-identity') {
+    process.stderr.write(`unknown subcommand ${JSON.stringify(subcommand ?? null)}; expected "proof-identity"\n`);
+    process.exit(2);
+  }
+  process.exit(runProofIdentityCli(rest));
 }

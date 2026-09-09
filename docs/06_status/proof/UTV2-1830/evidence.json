@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1830",
+  "tier": "T3",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "1cb31a43e8764a1e0df5f0c271f55f3b0f6d2229",
+    "verified_source_sha": "77b4709f6fa01d9b208243c91e41cf8735da0a48",
+    "evidence_commit_sha": "77b4709f6fa01d9b208243c91e41cf8735da0a48",
+    "current_pr_head_sha": "0d8ca0882943488fb97a3bc6128462cbd3184622",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS (exit 0)",
+      "pnpm_lint": "PASS (exit 0)",
+      "pnpm_build": "PASS (exit 0)",
+      "pnpm_test": "PASS (5611 tests, 0 failures) measured locally at this anchor",
+      "pnpm_verify": "NOT YET COMPLETE at authoring time. Every static stage passed locally (env:check, lint, type-check, build, test, verify:commands); the chain then reaches test:live-db, where ci:assert-staging refuses any non-staging target under local containment by design. The authoritative receipt is the required `verify` check on this lane PR, run in the staging-ci environment. Recorded as pending rather than PASS on purpose.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T03:10:16.616Z"
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "build": {
+      "status": "PASS",
+      "command": "pnpm build",
+      "detail": "executed as a stage of pnpm verify"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5611,
+      "failures": 0
+    },
+    "scope_controls": [
+      {
+        "assertion": "A1 — no file changed outside CLAUDE.md, docs/mission/**, or this lane's own control-plane paths",
+        "command": "git diff --name-only origin/main..HEAD | grep -vE '^(CLAUDE\\.md|docs/mission/|\\.ops/sync/UTV2-1830\\.yml$|docs/06_status/lanes/UTV2-1830\\.json$|docs/06_status/proof/UTV2-1830/)'",
+        "expected": "no output",
+        "observed": "no output",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A2 — no executable or governance-mechanical surface is touched, which is what backs the PM constraint 'do not create a new contract, governance program, or issue family'",
+        "command": "git diff --name-only origin/main..HEAD | grep -cE '^(\\.github/|\\.claude/|\\.agents/|scripts/|\\.lane/|apps/|packages/|eslint\\.config|package\\.json)'",
+        "expected": "0",
+        "observed": "0. No scope-override/v1 record was needed either: docs/mission/** was admitted to .lane/lanes/governance.yml by #1499 (merged d70df077) and is on main, so unlike UTV2-1829 this lane touches no path outside its own file_scope_lock.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A3 — CLAUDE.md is a pure insertion and a pointer, not procedural detail",
+        "command": "git diff --numstat origin/main..HEAD -- CLAUDE.md",
+        "expected": "deletion column 0",
+        "observed": "4\t0\tCLAUDE.md — one bullet appended under 'Session discipline' that states the rule in one clause and names docs/mission/intent.md as authoritative. No existing instruction modified or removed.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A4 — intent.md changed in exactly one place, the 'Stop conditions' section",
+        "command": "git diff --numstat origin/main..HEAD -- docs/mission/intent.md; git diff origin/main..HEAD -- docs/mission/intent.md | grep -E '^@@'",
+        "expected": "a single hunk",
+        "observed": "27\t2\tdocs/mission/intent.md, one hunk at @@ -181,10 +181,35 @@. The two deleted lines are the terse prior stop-condition statement the ratified text replaces; no other section of the owner's intent document is touched.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A5 — the recorded text reproduces the ratified correction clause for clause and adds no authority the PM did not grant",
+        "command": "sed -n '/^These are explicitly \\*\\*not\\*\\* stop conditions:/,/^Between stop conditions/p' docs/mission/intent.md | grep -c '^- \\*\\*'",
+        "expected": "4 — one per enumerated non-stop-condition",
+        "observed": "4 (waiting on CI/review/a PR; finishing a lane or PR; having something to report; a question, correction or steering from Griff), alongside the 'a reserved gate blocks only the work that depends on it' rule and the 'do not return control merely because you have something to report' clause. The section adds one limit the PM's message implies but did not state, and it narrows rather than widens: continuing without stopping is not permission to change how the system works, and continuous execution runs inside the existing lane, tier, proof and merge-authority contracts.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A6 — every factual claim added to plan.md is read from a source outside this branch",
+        "command": "git log origin/main -3; gh pr list --state open; gh pr view <n> --json statusCheckRollup; gh pr view 1477 1485 1488 1497 1499 1501 --json state,mergedAt,mergeCommit; git show origin/main:docs/06_status/readiness/readiness-score.json | jq; gh secret list | grep -i capper; gh run list --workflow=deploy.yml",
+        "expected": "each reconciled value traceable to a command whose output this branch does not control",
+        "observed": "main 85f63c696; 11 open PRs (1429,1451,1479,1484,1491,1492,1493,1494,1495,1496,1498) with Merge Gate FAILURE on all 11 and verify SUCCESS on 8; readiness-score.json on main generated 2026-09-05T02:37:43.611Z reports verdict=RED, observability=degraded, deployed_sha=e48106fc9a5eb5904b322833d0968da5ae0b0665, main_sha=9797bcbee4a3255bdb64911fac5a9407cc5df826; #1477 merged 2026-09-05T01:43:16Z at 1734bf20, #1501 merged 2026-09-03T19:26:57Z at b7d9fc07, #1499 merged 2026-09-04T03:54:58Z at d70df077, #1497 CLOSED unmerged; ALLOWED_CAPPER_EMAILS last updated 2026-09-03T17:29:12Z; latest Deploy run 33513608611 success 2026-09-01T13:28:39Z at e48106fc.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A7 — no secret value is recorded and none was read",
+        "command": "gh secret list --repo griff843/Unit-Talk-v2 | grep -i capper; git diff -U0 origin/main..HEAD | grep '^+' | grep -iE '@[a-z0-9.-]+\\.(com|net|org)' | grep -v noreply@anthropic",
+        "expected": "the listing returns a name and timestamp only; zero address-shaped additions in the diff",
+        "observed": "the listing returned 'ALLOWED_CAPPER_EMAILS\t2026-09-03T17:29:12Z' — GitHub's secret listing carries no value, and none was separately requested, printed or written. The diff grep produced no output.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A8 — no R-level artifact is required for this diff",
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "expected": "PASS",
+        "observed": "Verdict: PASS; changed files 6; rules matched: none",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A9 — the branch is not behind main and the anchor is the last non-proof commit; the sync ran before the bundle was authored, not after",
+        "command": "pnpm ops:merge-wrapper git-rebase-main --issue UTV2-1830 --branch claude/utv2-1830-mission-stop-conditions",
+        "expected": "a successful non-conflicting sync onto origin/main, performed while no head-pinned artifact existed",
+        "observed": "'Successfully rebased and updated refs/heads/claude/utv2-1830-mission-stop-conditions', head 841fefb2 -> a27ef005. git-rebase-main was chosen over the usual git-merge-main deliberately: the standing preference for merge protects branches carrying head-pinned governance artifacts, and at the moment of the sync this branch carried none — no PR, no proof bundle, no EXECUTOR_RESULT, no verdict. The wrapper still printed its full invalidation warning; that warning is unconditional, not a measurement, and nothing was in fact invalidated.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A10 — lane contract check passes for the governance lane",
+        "command": "pnpm exec tsx scripts/lane-check.ts --lane governance --base origin/main --head HEAD",
+        "expected": "PASS",
+        "observed": "lane:check PASS lane=governance files=6",
+        "status": "PASS"
+      }
+    ]
+  },
+  "runtime_proof": null,
+  "runtime_proof_rationale": "Not applicable and not claimed. Assertions A1 and A2 measure that this diff adds no code path, schema, workflow, or runtime behavior; it changes one agent instruction file and two mission documents only."
+}

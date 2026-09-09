@@ -1,0 +1,144 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1841
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1841
+  objective: Deploy verifies on Node 20 while the repo requires >=22 and every
+    image is node:22-alpine
+  acceptance_criteria:
+    - "`deploy.yml` verifies on Node 22, matching `engines.node`, `ci.yml`, and
+      every runtime image."
+    - "**The authentication assertion is preserved byte-for-byte.** The
+      `instanceof PrivilegedAccessDeniedError` check and the
+      `COMMAND_CENTER_AUTH_REQUIRED` code assertion must not be weakened,
+      loosened, or replaced with a duck-typed check. The behavioural protection
+      is the point of the test."
+    - Verified through the deployment's own `pnpm verify:static` path, not a
+      substitute command.
+    - A control shows the test still fails on the condition it names, rather
+      than merely passing.
+    - No change to required-check configuration, branch protection, merge
+      authority, or any bypass. No change to the runtime images.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Defect
+
+      `.github/workflows/deploy.yml:48` pins `node-version: 20` for the `verify`
+      job. Nothing else in the deploy path uses Node 20:
+
+
+      * `package.json` `engines.node` is `">=22.0.0"` — the run logs `WARN
+      Unsupported engine: wanted: {"node":">=22.0.0"} (current:
+      {"node":"v20.20.2"})` repeatedly.
+
+      * `.github/workflows/ci.yml` uses `node-version: 22` at both call sites
+      (`:55`, `:196`).
+
+      * Every production image is Node 22: `Dockerfile` (`node:22-alpine` for
+      builder/api/worker/ingestor/discord-bot),
+      `deploy/production/Dockerfile.nextjs` (`ARG NODE_VERSION=22-alpine`),
+      `apps/command-center/Dockerfile`.
+
+
+      So the release gate ran on a runtime production does not run, and it is
+      the only Node 20 in the pipeline.
+    - >-
+      Impact — measured
+
+      Deploy run `34031708984` (candidate
+      `391d4345c499f75255a749f73ce26cae7d44cce7`) failed at `verify` → `pnpm
+      verify:static`. `build`, `Canary deploy`, `Promote production` and the
+      post-deploy smoke all skipped, so production stayed at `e48106fc`. 479/480
+      tests passed; the single failure was
+      `apps/command-center/src/lib/data/client-cache-auth.test.ts:55`, "cached
+      service-role client reauthenticates every request".
+
+
+      **This blocks the Milestone 1 Smart Form pilot**, because the deploy that
+      ships the canonical-identity fix (#1488) and the authenticated `GET
+      /api/picks/:id/trace` (#1501) cannot get past its own gate.
+    - |-
+      Root cause — reproduced on both runtimes, not inferred
+      The test asserts that `getDataClient()` rejects with `PrivilegedAccessDeniedError` / `COMMAND_CENTER_AUTH_REQUIRED` when the request carries no authorization header. Instrumented probe:
+
+      ```
+      Node 20.20.2: threw PrivilegedAccessDeniedError  code=COMMAND_CENTER_AUTH_REQUIRED  instanceof=false  -> FAIL
+      Node 22.22.1: threw PrivilegedAccessDeniedError  code=COMMAND_CENTER_AUTH_REQUIRED  instanceof=true   -> pass
+      ```
+
+      **This is not a fail-open.** The authentication guard fires correctly on both runtimes, throwing the correct error type with the correct code. What differs is class identity: under Node 20's loader `../request-auth` resolves to two distinct module instances, so `error instanceof PrivilegedAccessDeniedError` compares against a different copy of the same class and is false. The assertion is correctly reporting an unsupported runtime.
+    - >-
+      Required change
+
+      One line — `.github/workflows/deploy.yml:48`, `node-version: 20` ->
+      `node-version: 22`.
+    - >-
+      Notes
+
+      Tier C by mechanical classification
+      (`classifyMechanicalMinimum(['.github/workflows/deploy.yml'])` returns
+      `T1`, rule `tier-c-prefix`), and CODEOWNERS assigns
+      `/.github/workflows/**` to @griff843 — so this requires T1 approval.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1841/deploy-verifies-on-node-20-while-the-repo-requires-22-and-every-image
+    title: Deploy verifies on Node 20 while the repo requires >=22 and every image
+      is node:22-alpine
+    description: |-
+      ## Defect
+
+      `.github/workflows/deploy.yml:48` pins `node-version: 20` for the `verify` job. Nothing else in the deploy path uses Node 20:
+
+      * `package.json` `engines.node` is `">=22.0.0"` — the run logs `WARN Unsupported engine: wanted: {"node":">=22.0.0"} (current: {"node":"v20.20.2"})` repeatedly.
+      * `.github/workflows/ci.yml` uses `node-version: 22` at both call sites (`:55`, `:196`).
+      * Every production image is Node 22: `Dockerfile` (`node:22-alpine` for builder/api/worker/ingestor/discord-bot), `deploy/production/Dockerfile.nextjs` (`ARG NODE_VERSION=22-alpine`), `apps/command-center/Dockerfile`.
+
+      So the release gate ran on a runtime production does not run, and it is the only Node 20 in the pipeline.
+
+      ## Impact — measured
+
+      Deploy run `34031708984` (candidate `391d4345c499f75255a749f73ce26cae7d44cce7`) failed at `verify` → `pnpm verify:static`. `build`, `Canary deploy`, `Promote production` and the post-deploy smoke all skipped, so production stayed at `e48106fc`. 479/480 tests passed; the single failure was `apps/command-center/src/lib/data/client-cache-auth.test.ts:55`, "cached service-role client reauthenticates every request".
+
+      **This blocks the Milestone 1 Smart Form pilot**, because the deploy that ships the canonical-identity fix (#1488) and the authenticated `GET /api/picks/:id/trace` (#1501) cannot get past its own gate.
+
+      ## Root cause — reproduced on both runtimes, not inferred
+
+      The test asserts that `getDataClient()` rejects with `PrivilegedAccessDeniedError` / `COMMAND_CENTER_AUTH_REQUIRED` when the request carries no authorization header. Instrumented probe:
+
+      ```
+      Node 20.20.2: threw PrivilegedAccessDeniedError  code=COMMAND_CENTER_AUTH_REQUIRED  instanceof=false  -> FAIL
+      Node 22.22.1: threw PrivilegedAccessDeniedError  code=COMMAND_CENTER_AUTH_REQUIRED  instanceof=true   -> pass
+      ```
+
+      **This is not a fail-open.** The authentication guard fires correctly on both runtimes, throwing the correct error type with the correct code. What differs is class identity: under Node 20's loader `../request-auth` resolves to two distinct module instances, so `error instanceof PrivilegedAccessDeniedError` compares against a different copy of the same class and is false. The assertion is correctly reporting an unsupported runtime.
+
+      ## Required change
+
+      One line — `.github/workflows/deploy.yml:48`, `node-version: 20` -> `node-version: 22`.
+
+      ## Acceptance criteria
+
+      * `deploy.yml` verifies on Node 22, matching `engines.node`, `ci.yml`, and every runtime image.
+      * **The authentication assertion is preserved byte-for-byte.** The `instanceof PrivilegedAccessDeniedError` check and the `COMMAND_CENTER_AUTH_REQUIRED` code assertion must not be weakened, loosened, or replaced with a duck-typed check. The behavioural protection is the point of the test.
+      * Verified through the deployment's own `pnpm verify:static` path, not a substitute command.
+      * A control shows the test still fails on the condition it names, rather than merely passing.
+      * No change to required-check configuration, branch protection, merge authority, or any bypass. No change to the runtime images.
+
+      ## Notes
+
+      Tier C by mechanical classification (`classifyMechanicalMinimum(['.github/workflows/deploy.yml'])` returns `T1`, rule `tier-c-prefix`), and CODEOWNERS assigns `/.github/workflows/**` to @griff843 — so this requires T1 approval.
+    captured_at: 2026-09-06T12:28:11.503Z
+    description_sha256: 01e1ef4c370eaaab1902e2a3657b09f349dc166f4750aaa1f9672d9fa63529d8
+  contract_hash: c025e2433dce9d9e3ed02f6a8988ecbd112b9eeea39b58bbfe30041e6bfef9fc

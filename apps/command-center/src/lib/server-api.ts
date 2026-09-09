@@ -282,6 +282,18 @@ export function logCommandCenterAuthFailure(input: {
   });
 }
 
+export function logCommandCenterDevBypass(input: {
+  route: string;
+  method: string;
+  requestId?: string | undefined;
+}): void {
+  console.warn('command_center.dev_bypass', {
+    route: input.route,
+    method: input.method,
+    requestId: input.requestId ?? null,
+  });
+}
+
 export function logCommandCenterPrivilegedAction(input: {
   route: string;
   method: string;
@@ -298,7 +310,48 @@ export function logCommandCenterPrivilegedAction(input: {
   });
 }
 
+/** Environments where the Command Center is served to something other than the
+ * developer who started it. Authentication is not negotiable here. */
+const DEPLOYED_ENVIRONMENTS = new Set(['production', 'staging']);
+
+/** Environments a runtime has positively identified as a developer's own
+ * machine or an offline test process. Only these may honour a bypass. An
+ * unset or unrecognised environment is NOT one of these: absence of evidence
+ * that we are in development is not evidence that we are. */
+const DEVELOPMENT_ENVIRONMENTS = new Set(['development', 'test', 'local']);
+
+function readEnvironmentNames(env: EnvReader): string[] {
+  return [
+    readEnv(env, 'UNIT_TALK_APP_ENV')?.toLowerCase(),
+    readEnv(env, 'NODE_ENV')?.toLowerCase(),
+  ].filter((value): value is string => Boolean(value));
+}
+
+function isDeployedEnvironment(env: EnvReader): boolean {
+  return readEnvironmentNames(env).some((name) =>
+    DEPLOYED_ENVIRONMENTS.has(name),
+  );
+}
+
+function isDevelopmentEnvironment(env: EnvReader): boolean {
+  const names = readEnvironmentNames(env);
+  return (
+    names.length > 0 && names.every((name) => DEVELOPMENT_ENVIRONMENTS.has(name))
+  );
+}
+
 function isCommandCenterAuthRequired(env: EnvReader): boolean {
+  // The deployment environment decides FIRST, and nothing overrides it. The
+  // previous order read the mode before the environment, so a single
+  // COMMAND_CENTER_AUTH_MODE=fail_open -- the exact value this app's own
+  // .env.example shipped -- served the whole operator console, including every
+  // privileged write route behind the middleware, to anonymous callers in
+  // production. An environment variable that a deployment can carry must never
+  // be able to switch authentication off in production or staging.
+  if (isDeployedEnvironment(env)) {
+    return true;
+  }
+
   const explicitMode = (
     readEnv(env, 'UNIT_TALK_COMMAND_CENTER_AUTH_MODE') ||
     readEnv(env, 'COMMAND_CENTER_AUTH_MODE') ||
@@ -306,19 +359,20 @@ function isCommandCenterAuthRequired(env: EnvReader): boolean {
     ''
   ).toLowerCase();
 
-  if (explicitMode === 'fail_open' || explicitMode === 'disabled') {
-    return false;
-  }
-
   if (explicitMode === 'fail_closed' || explicitMode === 'required') {
     return true;
   }
 
-  const appEnv = readEnv(env, 'UNIT_TALK_APP_ENV')?.toLowerCase();
-  const nodeEnv = readEnv(env, 'NODE_ENV')?.toLowerCase();
-  return (
-    appEnv === 'production' || appEnv === 'staging' || nodeEnv === 'production'
-  );
+  if (explicitMode === 'fail_open' || explicitMode === 'disabled') {
+    // The bypass survives only as a local-development affordance, and only
+    // where the runtime has positively named itself development or test.
+    return !isDevelopmentEnvironment(env);
+  }
+
+  // No mode, and no environment we recognise. Require authentication: an
+  // unlabelled runtime is far more likely to be a misconfigured deployment
+  // than a developer's laptop, and the cost of being wrong is asymmetric.
+  return true;
 }
 
 function denied(code: string, message: string): CommandCenterAuthResult {

@@ -327,7 +327,7 @@ export async function getReviewQueue(
   params: Record<string, string>,
 ): Promise<{ picks: ReviewPick[]; total: number; degraded: string | null }> {
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
 
     const limit = Math.min(Math.max(Number(params['limit'] ?? 50), 1), 200);
     const offset = Math.max(Number(params['offset'] ?? 0), 0);
@@ -376,7 +376,7 @@ export async function getHeldQueue(
   params: Record<string, string>,
 ): Promise<{ picks: HeldPick[]; total: number; degraded: string | null }> {
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
 
     const limit = Math.min(Math.max(Number(params['limit'] ?? 50), 1), 200);
     const offset = Math.max(Number(params['offset'] ?? 0), 0);
@@ -473,7 +473,7 @@ export async function searchPicks(
   const offset = Math.max(Number(params['offset'] ?? 0), 0);
 
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
 
     const selectCols = [
       'id',
@@ -568,7 +568,7 @@ export async function searchPicks(
 
 export async function getPickDetail(pickId: string): Promise<PickDetailViewResponse | null> {
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
 
     // 1. Fetch pick from picks_current_state
     const pickResult = await client

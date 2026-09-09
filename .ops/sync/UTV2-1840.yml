@@ -1,0 +1,183 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1840
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1840
+  objective: "Tracker independence exit condition 1: branch-discipline-guard still
+    hard-requires a UTV2-### identifier"
+  acceptance_criteria:
+    - A credential-free `ops:preflight WORK-### ...` reports `PX2 pass`.
+    - "**Controls, all still refusing:** a branch with no work identifier; a
+      cross-issue reference (`multiple_issue_references`); a branch naming two
+      identifiers. Widening the namespace must not weaken any protection the
+      guard provides."
+    - "`shared.ts` and the guard derive from one exported source, so the
+      alternation cannot drift again."
+    - "**Inversion, required:** restoring the guard's private regex must fail
+      the new tests."
+    - "`scripts/ops/shared.test.ts` and `workflow-hardening.test.ts` unaffected."
+  guardrails: []
+  non_goals:
+    - Merge authority, `merge-gate.yml`, its policy inputs, CODEOWNERS and
+      branch protection are untouched. A `WORK-###` lane remains **not
+      mergeable** by design; `shared.ts:383-391` says so and that stays true.
+      This makes the repo-minted identifier usable for discovery, delegation,
+      verification, PR and closeout only.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Completes the tracker-independence cutover ratified by Griff on 2026-09-05 (`docs/mission/intent.md` § "Execution must not depend on the tracker"). [UTV2-1837](https://linear.app/unit-talk-v2/issue/UTV2-1837/tracker-independence-make-linear-optional-and-non-blocking-across) (#1516) removed the Linear **API** dependency; this removes the remaining **identifier** dependency. Bounded to that.
+    - >-
+      Measured on `main` 7231dc9c7, 2026-09-06
+
+      Probed from a worktree with no `local.env` — unsetting `LINEAR_API_KEY`
+      alone proves nothing, because `loadEnvironment` reads the file before
+      falling back to `process.env` — with both tracker variables unset:
+
+
+      ```
+
+      env -u LINEAR_API_KEY -u LINEAR_API_TOKEN \
+        pnpm ops:preflight WORK-901 --tier T3 --branch claude/work-901-... --files ...
+      ```
+
+
+      **Exit condition 2 holds.** `PE2` and `PL1`–`PL6` all report `skip` ("no
+      tracker credential; tracker checks are optional and non-blocking"), there
+      is no `infra_error` and no `INFRA` verdict, and a preflight token path is
+      produced.
+
+
+      **Exit condition 1 fails:**
+
+
+      ```
+
+      PX2 fail  Branch discipline FAILED: PR branch "claude/work-901-..."
+                must include exactly one UTV2-### or UNI-### issue ID
+      ```
+
+
+      Isolated from the probe environment, with a control:
+
+
+      ```
+
+      $ pnpm ops:branch-discipline -- --branch claude/work-901-demo   ... FAILED
+
+      $ pnpm ops:branch-discipline -- --branch claude/utv2-1838-x     ... OK
+
+      ```
+
+
+      `PX1`/`PB1`/`PB2` also fail, but only on `Missing env file: local.env` —
+      an artifact of the deliberately credential-free worktree, not a defect.
+    - |-
+      Cause
+      Two `ISSUE_PATTERN` constants exist and they drifted:
+
+      ```
+      scripts/ops/shared.ts:394                  /^(?:UTV2|UNI|WORK)-\d+$/   (widened by UTV2-1837)
+      scripts/ops/branch-discipline-guard.ts:19  /\b(?:UTV2|UNI)-\d+\b/gi    (never widened)
+      ```
+
+      They are not interchangeable — one anchors to validate a single id, the other scans free text — which is what justified the copy and why nobody updated it. Because `preflight` runs the guard as `PX2`, and `lane-start` refuses without a validated preflight token, a `WORK-###` task cannot open a lane. The guard is the only file in `scripts/` or `.github/workflows/` still emitting that refusal.
+    - >-
+      Scope
+
+      Share the **alternation**, not the regex: export `ISSUE_ID_NAMESPACES` and
+      an `issueIdScanPattern()` from `shared.ts`, have the guard import it, and
+      update its three message strings. Add the guard's missing test file.
+    - >-
+      Prototype status
+
+      Repair prototyped and mutation-tested in a throwaway worktree, not yet in
+      a lane: `PX2` flips to pass, all three controls still refuse, 159 existing
+      tests unaffected, a new 8-test suite passes, and restoring the old regex
+      fails 5 of 8. The guard currently has **no** test file at all, which is
+      why the drift went unnoticed.
+    - |-
+      Related evidence — the tracker is still a hard closeout gate too
+      [UTV2-1838](https://linear.app/unit-talk-v2/issue/UTV2-1838/closeout-safe-to-repeat-unmask-the-finalize-enoent-halt-without)'s own post-merge closeout failed at `truth-check` L3: *"Linear state Ready for Claude (type unstarted) is not an active or closeout state"*. The lane ran start-to-merge with its tracker state untouched and nothing surfaced until closeout refused. Recorded here as evidence for the same workstream; L1/L3/L4/C1/C7 currently skip only when `tracker_ref` is null, not when the tracker is merely stale.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1840/tracker-independence-exit-condition-1-branch-discipline-guard-still
+    title: "Tracker independence exit condition 1: branch-discipline-guard still
+      hard-requires a UTV2-### identifier"
+    description: |-
+      Completes the tracker-independence cutover ratified by Griff on 2026-09-05 (`docs/mission/intent.md` § "Execution must not depend on the tracker"). [UTV2-1837](https://linear.app/unit-talk-v2/issue/UTV2-1837/tracker-independence-make-linear-optional-and-non-blocking-across) (#1516) removed the Linear **API** dependency; this removes the remaining **identifier** dependency. Bounded to that.
+
+      ## Measured on `main` 7231dc9c7, 2026-09-06
+
+      Probed from a worktree with no `local.env` — unsetting `LINEAR_API_KEY` alone proves nothing, because `loadEnvironment` reads the file before falling back to `process.env` — with both tracker variables unset:
+
+      ```
+      env -u LINEAR_API_KEY -u LINEAR_API_TOKEN \
+        pnpm ops:preflight WORK-901 --tier T3 --branch claude/work-901-... --files ...
+      ```
+
+      **Exit condition 2 holds.** `PE2` and `PL1`–`PL6` all report `skip` ("no tracker credential; tracker checks are optional and non-blocking"), there is no `infra_error` and no `INFRA` verdict, and a preflight token path is produced.
+
+      **Exit condition 1 fails:**
+
+      ```
+      PX2 fail  Branch discipline FAILED: PR branch "claude/work-901-..."
+                must include exactly one UTV2-### or UNI-### issue ID
+      ```
+
+      Isolated from the probe environment, with a control:
+
+      ```
+      $ pnpm ops:branch-discipline -- --branch claude/work-901-demo   ... FAILED
+      $ pnpm ops:branch-discipline -- --branch claude/utv2-1838-x     ... OK
+      ```
+
+      `PX1`/`PB1`/`PB2` also fail, but only on `Missing env file: local.env` — an artifact of the deliberately credential-free worktree, not a defect.
+
+      ## Cause
+
+      Two `ISSUE_PATTERN` constants exist and they drifted:
+
+      ```
+      scripts/ops/shared.ts:394                  /^(?:UTV2|UNI|WORK)-\d+$/   (widened by UTV2-1837)
+      scripts/ops/branch-discipline-guard.ts:19  /\b(?:UTV2|UNI)-\d+\b/gi    (never widened)
+      ```
+
+      They are not interchangeable — one anchors to validate a single id, the other scans free text — which is what justified the copy and why nobody updated it. Because `preflight` runs the guard as `PX2`, and `lane-start` refuses without a validated preflight token, a `WORK-###` task cannot open a lane. The guard is the only file in `scripts/` or `.github/workflows/` still emitting that refusal.
+
+      ## Scope
+
+      Share the **alternation**, not the regex: export `ISSUE_ID_NAMESPACES` and an `issueIdScanPattern()` from `shared.ts`, have the guard import it, and update its three message strings. Add the guard's missing test file.
+
+      ## Acceptance criteria
+
+      1. A credential-free `ops:preflight WORK-### ...` reports `PX2 pass`.
+      2. **Controls, all still refusing:** a branch with no work identifier; a cross-issue reference (`multiple_issue_references`); a branch naming two identifiers. Widening the namespace must not weaken any protection the guard provides.
+      3. `shared.ts` and the guard derive from one exported source, so the alternation cannot drift again.
+      4. **Inversion, required:** restoring the guard's private regex must fail the new tests.
+      5. `scripts/ops/shared.test.ts` and `workflow-hardening.test.ts` unaffected.
+
+      ## Explicitly out of scope — reserved
+
+      Merge authority, `merge-gate.yml`, its policy inputs, CODEOWNERS and branch protection are untouched. A `WORK-###` lane remains **not mergeable** by design; `shared.ts:383-391` says so and that stays true. This makes the repo-minted identifier usable for discovery, delegation, verification, PR and closeout only.
+
+      ## Prototype status
+
+      Repair prototyped and mutation-tested in a throwaway worktree, not yet in a lane: `PX2` flips to pass, all three controls still refuse, 159 existing tests unaffected, a new 8-test suite passes, and restoring the old regex fails 5 of 8. The guard currently has **no** test file at all, which is why the drift went unnoticed.
+
+      ## Related evidence — the tracker is still a hard closeout gate too
+
+      [UTV2-1838](https://linear.app/unit-talk-v2/issue/UTV2-1838/closeout-safe-to-repeat-unmask-the-finalize-enoent-halt-without)'s own post-merge closeout failed at `truth-check` L3: *"Linear state Ready for Claude (type unstarted) is not an active or closeout state"*. The lane ran start-to-merge with its tracker state untouched and nothing surfaced until closeout refused. Recorded here as evidence for the same workstream; L1/L3/L4/C1/C7 currently skip only when `tracker_ref` is null, not when the tracker is merely stale.
+    captured_at: 2026-09-06T05:20:07.485Z
+    description_sha256: d8956952dee86830cdc450644e0289c3173d1f56ef12d227bf7ea8cabe07a005
+  contract_hash: 938eb242ef6c0b76e4d1f4dc83c865ee7ea9da91a888300d86b9336567b645b8

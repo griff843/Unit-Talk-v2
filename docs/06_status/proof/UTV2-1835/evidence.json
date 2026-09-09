@@ -1,0 +1,109 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1835",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "ce3b87bf8e2a53f4e025a2c5fd0db7f38c676c4c",
+    "verified_source_sha": "f1681e6e0849c04db6d107cc594b71bfb12c0aae",
+    "evidence_commit_sha": "f1681e6e0849c04db6d107cc594b71bfb12c0aae",
+    "current_pr_head_sha": "dc293de7661272890adf6541e47c0cfc7805c2c9",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_test": "PASS (exit 0, full suite) measured locally in the lane worktree at this anchor",
+      "pnpm_lint": "Not run locally. A stage of `pnpm verify`, covered by CI run 33993972213 (head 91b56ad37, conclusion success).",
+      "pnpm_build": "Not run locally. A stage of `pnpm verify`, covered by CI run 33993972213 (head 91b56ad37, conclusion success).",
+      "pnpm_verify": "PASS - executed by the required CI `verify` context on this branch, run 33993972213, head 91b56ad37, conclusion success. Not run locally. The earlier run at the execution SHA f1681e6e0 (33993517660) was superseded and its conclusion is `cancelled`; it is not cited. Only this lane's manifest and proof bundle differ between f1681e6e0 and 91b56ad37, so no implementation file is uncovered.",
+      "r_level_check": "PASS (Verdict: PASS, 5 changed files, no R-level artifacts required for this diff)"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T22:39:04.989Z",
+    "anchor_note": "All measurement ran at f1681e6e0849c04db6d107cc594b71bfb12c0aae, the implementation commit on claude/utv2-1835-deploy-snapshot-retry. Later commits on this branch add only the proof bundle and change no implementation file, so the anchor remains the correct execution identity and is an ancestor of the PR head. merge_sha is null because no merge exists yet; post-merge-lane-close.yml rebinds it."
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "failures": 0
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ci/deploy-config-rollback.test.ts",
+      "tests": 19,
+      "failures": 0
+    },
+    "lint": {
+      "status": "DEFERRED",
+      "command": "pnpm lint",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "build": {
+      "status": "DEFERRED",
+      "command": "pnpm build",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "control_mutations": [
+      {
+        "id": "M1",
+        "mutation": "copy guard broken toward always-overwrite - the original UTV2-1834 defect",
+        "refused_by": "{canary,promote}: a retry after a failed deploy does not overwrite the running release's snapshot",
+        "observed": "17 pass / 2 fail",
+        "status": "PASS"
+      },
+      {
+        "id": "M2",
+        "mutation": "copy guard broken toward never-refresh (drop the INFLIGHT test)",
+        "refused_by": "{canary,promote}: redeploying the same tag after a completed deploy refreshes the snapshot",
+        "observed": "17 pass / 2 fail",
+        "status": "PASS"
+      },
+      {
+        "id": "M3",
+        "mutation": "prune exclusion removed (grep -vxF deleted)",
+        "refused_by": "{canary,promote}: pruning never evicts the snapshot for the release on the host",
+        "observed": "17 pass / 2 fail",
+        "status": "PASS"
+      },
+      {
+        "id": "M4",
+        "mutation": "release step stops clearing the in-flight marker",
+        "refused_by": "{canary,promote}: the in-flight marker is raised by the snapshot and cleared at the release record",
+        "observed": "17 pass / 2 fail",
+        "status": "PASS"
+      }
+    ],
+    "scope_controls": [
+      {
+        "assertion": "A1 - no implementation file changed outside the declared file_scope_lock",
+        "command": "git diff --name-only origin/main...HEAD",
+        "expected": ".github/workflows/deploy.yml and scripts/ci/deploy-config-rollback.test.ts, plus this lane's own manifest, sync file and proof bundle",
+        "observed": "exactly those",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A2 - no merge-authority, branch-protection or CODEOWNERS surface is touched",
+        "command": "git diff --name-only origin/main...HEAD | grep -cE '^(\\.github/workflows/merge-gate|\\.lane/|\\.agents/|CODEOWNERS)'",
+        "expected": "0",
+        "observed": "0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A3 - no production deploy is dispatched; deploy.yml remains workflow_dispatch-only",
+        "command": "grep -n 'workflow_dispatch' .github/workflows/deploy.yml",
+        "expected": "workflow_dispatch is the only trigger",
+        "observed": "workflow_dispatch is the only trigger",
+        "status": "PASS"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "claimed": false,
+    "reason": "This diff ships no code path, query or configuration into any running container. The repair is proven by executing the workflow's own SNAPSHOT_REMOTE body against a temporary directory - the highest fidelity available without dispatching a production deploy, which is a reserved action."
+  }
+}

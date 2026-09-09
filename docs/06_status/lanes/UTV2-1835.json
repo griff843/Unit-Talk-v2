@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1835",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1835-deploy-snapshot-retry",
+  "branch": "claude/utv2-1835-deploy-snapshot-retry",
+  "base_branch": "main",
+  "commit_sha": "ce3b87bf8e2a53f4e025a2c5fd0db7f38c676c4c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1511",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/deploy.yml",
+    "scripts/ci/deploy-config-rollback.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1835/diff-summary.md",
+    "docs/06_status/proof/UTV2-1835/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-05T21:23:22.169Z",
+  "heartbeat_at": "2026-09-05T22:39:07.992Z",
+  "closed_at": "2026-09-05T22:39:07.992Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-05T22:39:06.261Z",
+      "verdict": "pass",
+      "merge_sha": "ce3b87bf8e2a53f4e025a2c5fd0db7f38c676c4c",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1835-deploy-snapshot-retry",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

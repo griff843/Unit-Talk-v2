@@ -12,6 +12,27 @@ Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Clau
 
 ---
 
+## Mission — mandatory context
+
+Before planning, executing, reviewing, delegating, or resuming work, read:
+
+@docs/mission/intent.md
+@docs/mission/spec.md
+@docs/mission/plan.md
+@docs/05_operations/STANDING_GUARDRAILS.md
+
+These define the current mission.
+
+- `intent.md` is Griff-owned. Do not change its intent without Griff ratification.
+- `spec.md` defines the required outcome and points to canonical contracts.
+- `plan.md` is Claude-owned. Reconcile it against live GitHub/runtime truth and update it as reality changes.
+- Live evidence establishes current state.
+- Relevant canonical contracts remain authoritative for their governed domains.
+
+Claude owns orchestration from this context. Do not require Griff to restate the mission in chat.
+
+---
+
 ## Commands
 
 ```bash
@@ -71,12 +92,11 @@ Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH
 
 ---
 
-## Build status — Phase 7A: Governance Brake (SHIPPED)
+## Current build status
 
-**Ratification:** `docs/06_status/PHASE7R_RATIFICATION.md`
-**Execution plan:** `docs/06_status/PHASE7E_EXECUTION_PLAN.md`
+Deliberately not recorded here. This file is stable and pointer-based; a "current focus" paragraph goes stale the moment it is written and is then read as truth.
 
-Phase 7A shipped: `awaiting_approval` lifecycle state + governance brake on autonomous sources. Phases 1–7A closed; boundary rules are in production. Current focus: system hardening, live-proof gating, and infrastructure provisioning (Hetzner, SGO).
+Current state, what is executable, what is blocked, and what requires Griff: **`docs/mission/plan.md`**, reconciled against live GitHub and runtime truth.
 
 ---
 
@@ -138,6 +158,23 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Executor result schema | `docs/05_operations/schemas/executor-result-v1.md` |
 | PM verdict schema | `docs/05_operations/schemas/pm-verdict-v1.md` |
 | Proof template | `docs/06_status/proof/PROOF-TEMPLATE.md` |
+| **Smart Form product intent** | `docs/03_product/smart-form/intent.md` |
+
+### Product intent — required reading when you touch a product surface
+
+A product's intent document is required reading before any task that changes how that product
+behaves for its operator — **including backend work** in `apps/api`, `packages/domain` or the
+pipeline that changes what the product can do or what it records. Read it alongside the canonical
+contracts it indexes, and carry the applicable acceptance criteria into any delegated packet.
+
+| Product | Intent |
+|---|---|
+| Smart Form (operator pick intake) | `docs/03_product/smart-form/intent.md` |
+| Command Center | *written when that product is next worked* |
+| Pipeline (grading, settlement, CLV) | *written when that product is next worked* |
+
+These are product intent, not gates. They add no check, no approval artifact and no lane type, and
+no work waits on one being written.
 
 ---
 
@@ -179,6 +216,10 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 - Never self-certify Done. The done-gate is `ops:truth-check`, not narrative.
 - PM reviews artifacts, not narrative summaries. T1 approval is a GitHub label, not a chat message.
 - Prefer code over docs for truth. If uncertain, say "check actual implementation" and check.
+- The mission runs continuously. Waiting on CI, finishing a lane or PR, and having a status to report are
+  not stop conditions; a reserved gate blocks only the work that depends on it, so surface it and continue
+  every other safe executable path. The authoritative list of what does and does not end a session is
+  `docs/mission/intent.md` § "Stop conditions" — read it there rather than inferring from this line.
 
 ---
 

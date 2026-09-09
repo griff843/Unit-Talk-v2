@@ -1,9 +1,50 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
-// Fixture-backed UI behavior tests. Canonical reference rows below are test fixtures,
-// not evidence that the connected API environment is populated.
+// Reference-data behavior remains fixture-backed. Connected submission cases below
+// exercise the real local API and read back its isolated in-memory repository.
+
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000';
+
+async function assertIsolatedApiReady(request: APIRequestContext) {
+  const response = await request.get(`${apiBaseUrl}/api/health/runtime`);
+  expect(response.status(), 'The local API runtime endpoint must be reachable').toBe(200);
+  expect(await response.json()).toMatchObject({
+    service: 'api',
+    persistenceMode: 'in_memory',
+    runtimeMode: 'fail_open',
+  });
+}
+
+async function readPersistedPick(request: APIRequestContext, pickId: string) {
+  const response = await request.get(`${apiBaseUrl}/api/picks?status=validated&limit=200`);
+  expect(response.status(), 'Persisted-pick lookup must return HTTP 200').toBe(200);
+  const payload = await response.json() as { picks?: Array<Record<string, unknown>> };
+  const pick = payload.picks?.find((candidate) => candidate['id'] === pickId);
+  expect(pick, `Pick ${pickId} must be readable from the API repository after submission`).toBeTruthy();
+  return pick as Record<string, unknown>;
+}
+
+async function assertTrackOnlyHasNoOutbox(request: APIRequestContext, pickId: string) {
+  const response = await request.get(`${apiBaseUrl}/api/qa/pick-status/${pickId}`);
+  expect(response.status(), 'Track Only delivery-state lookup must return HTTP 200').toBe(200);
+  expect(await response.json()).toMatchObject({
+    pickId,
+    status: 'validated',
+    outboxId: null,
+    outboxStatus: null,
+  });
+}
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      user: { name: 'Griff Test' },
+      capperId: 'griff843',
+      expires: new Date(Date.now() + 3_600_000).toISOString(),
+    }),
+  }));
   await page.route('**/api/reference-data/availability?**', async (route) => {
     const sportId = new URL(route.request().url()).searchParams.get('sport') ?? '';
     await route.fulfill({
@@ -25,6 +66,7 @@ test.beforeEach(async ({ page }) => {
 const catalog = {
   data: {
     sports: [
+      { id: 'NBA', name: 'NBA', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Points', 'Assists'], teams: [] },
       { id: 'NCAAF', name: 'NCAAF', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Passing Yards', 'Rushing Yards', 'Receiving Yards'], teams: [] },
       { id: 'MLB', name: 'MLB', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Hits', 'Total Bases', 'Pitching Strikeouts'], teams: [] },
     ],
@@ -69,7 +111,13 @@ async function routeNcaaf(page: Page, submitted: { value: Record<string, unknown
       body: JSON.stringify({ data: sport === 'NCAAF' ? [ncaafMatchup] : [] }),
     });
   });
-  await page.route('**/api/reference-data/events/event-ncaaf/browse', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: ncaafBrowse }) }));
+  await page.route('**/api/reference-data/events/event-ncaaf/browse*', (route) => {
+    expect(
+      new URL(route.request().url()).searchParams.get('recentSince'),
+      'A past-start scheduled event must request only recent offers instead of silently using stale prices',
+    ).toBeTruthy();
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: ncaafBrowse }) });
+  });
   await page.route('**/api/submissions', async (route) => {
     submitted.value = route.request().postDataJSON() as Record<string, unknown>;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { submissionId: 'sub-ncaaf', pickId: 'pick-ncaaf', lifecycleState: 'validated' } }) });
@@ -178,7 +226,7 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   };
   await page.route('**/api/reference-data/catalog', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
   await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [mlbMatchup] }) }));
-  await page.route('**/api/reference-data/events/event-mlb/browse', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ...mlbMatchup, participants: [
+  await page.route('**/api/reference-data/events/event-mlb/browse*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ...mlbMatchup, participants: [
     { participantId: 'team-yankees', canonicalId: 'team-yankees', participantType: 'team', displayName: 'Yankees', role: 'away', teamId: 'team-yankees', teamName: 'Yankees' },
     { participantId: 'team-red-sox', canonicalId: 'team-red-sox', participantType: 'team', displayName: 'Red Sox', role: 'home', teamId: 'team-red-sox', teamName: 'Red Sox' },
   ], offers: [] } }) }));
@@ -214,30 +262,127 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   });
 });
 
-test('manual participant override submits unresolved provenance without canonical IDs', async ({ page }) => {
-  let submittedPayload: Record<string, unknown> | null = null;
+test('structured fallback persists canonical side IDs with signed spread values and no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  await page.route('**/api/reference-data/catalog', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(catalog),
+  }));
+  await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [] }),
+  }));
+  await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [
+      { participantId: 'team:NBA:Celtics', displayName: 'Celtics', participantType: 'team' },
+      { participantId: 'team:NBA:Knicks', displayName: 'Knicks', participantType: 'team' },
+    ] }),
+  }));
+  await page.route('**/api/reference-data/search?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [] }),
+  }));
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await expect(page.getByText('Select a matchup, or build one from away and home teams — the matchup name is generated automatically.')).toBeVisible();
+  await page.getByLabel('Away Team').fill('Celtics');
+  await page.getByRole('button', { name: /Celtics\s+team/i }).click();
+  await page.getByLabel('Home Team').fill('Knicks');
+  await page.getByRole('button', { name: /Knicks\s+team/i }).click();
+  await expect(page.getByText('Celtics @ Knicks', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: /Spread/i }).first().click();
+  await expect(page.getByLabel('Matchup')).toHaveValue('Celtics @ Knicks');
+  await expect(page.getByLabel('Matchup')).toHaveAttribute('readonly', '');
+  await page.getByLabel('Team', { exact: true }).fill('Celtics');
+  await page.getByRole('button', { name: /Celtics\s+team/i }).last().click();
+
+  const lineInput = page.locator('input[name="line"]');
+  const oddsInput = page.locator('input[name="odds"]');
+  await expect(lineInput).toHaveAttribute('inputmode', 'text');
+  await expect(lineInput).toHaveAttribute('pattern');
+  await expect(oddsInput).toHaveAttribute('inputmode', 'text');
+  await expect(oddsInput).toHaveAttribute('pattern');
+  await lineInput.fill('-3.5');
+  await oddsInput.fill('+105');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  const submissionResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  const submissionResponse = await submissionResponsePromise;
+  expect(submissionResponse.status(), 'Browser submission must reach the real local API').toBe(201);
+  const submission = await submissionResponse.json() as {
+    data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
+  };
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+
+  expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+  const persistedPick = await readPersistedPick(request, submission.data.pickId);
+  expect(persistedPick['line']).toBe(-3.5);
+  expect(persistedPick['odds']).toBe(105);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
+  expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
+    eventId: null,
+    teamId: 'team:NBA:Celtics',
+    playerId: null,
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'NBA',
+      eventId: null,
+      eventName: 'Celtics @ Knicks',
+      away: { participantId: 'team:NBA:Celtics', displayName: 'Celtics' },
+      home: { participantId: 'team:NBA:Knicks', displayName: 'Knicks' },
+      team: { participantId: 'team:NBA:Celtics', displayName: 'Celtics' },
+      player: null,
+    },
+  });
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
+});
+
+test('manual participant override persists honest unresolved provenance without canonical IDs', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
   await page.route('**/api/reference-data/catalog', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
   await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
-  await page.route('**/api/submissions', async (route) => {
-    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { submissionId: 'sub-manual', pickId: 'pick-manual', lifecycleState: 'validated' } }) });
-  });
+  await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByRole('button', { name: 'Manual fallback' }).click();
-  await page.getByRole('button', { name: "Can't find participants? Add manually" }).click();
+  await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
+  await page.getByLabel('Away Team').fill('Temple');
+  await expect(page.getByText('No canonical team found for “Temple”.', { exact: true })).toBeVisible();
+  await page.getByLabel('Home Team').fill('Navy');
+  await expect(page.getByText('No canonical team found for “Navy”.', { exact: true })).toBeVisible();
+  await page.getByTestId('coverage-gap-manual-entry').click();
   await expect(page.getByText('Manual participant override', { exact: true })).toBeVisible();
   await expect(page.getByText('Manual identities are explicitly tagged unresolved and never stored as canonical IDs.')).toBeVisible();
   await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1787/07-manual-participant-override.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
-  await page.getByLabel('Matchup').fill('Temple @ Navy');
-  await page.getByPlaceholder('Type a team name').fill('Navy');
+  await expect(page.getByLabel('Matchup')).toHaveValue('Temple @ Navy');
+  await page.getByLabel('Team to Win').fill('Navy');
   await page.locator('input[name="odds"]').fill('-120');
   await page.getByRole('button', { name: '8', exact: true }).click();
+  const submissionResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
   await page.getByTestId('smart-form-submit-button').first().click();
+  const submissionResponse = await submissionResponsePromise;
+  expect(submissionResponse.status(), 'Browser submission must reach the real local API').toBe(201);
+  const submission = await submissionResponse.json() as {
+    data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
+  };
   await expect(page.getByText('Pick Submitted')).toBeVisible();
 
-  const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
+  expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+  const persistedPick = await readPersistedPick(request, submission.data.pickId);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
   expect(metadata['distributionMode']).toBe('track-only');
   expect(metadata['eventId']).toBeNull();
   expect(metadata['teamId']).toBeNull();
@@ -250,6 +395,102 @@ test('manual participant override submits unresolved provenance without canonica
     reason: 'canonical-coverage-gap',
     enteredEventName: 'Temple @ Navy',
   });
+  // UTV2-1850: this test already typed `-120` into the odds control and then asserted
+  // nothing about it. Filling a control proves the control accepts the keystrokes; it
+  // does not prove the sign survived the schema, the request body, the API and the
+  // repository. Assert the persisted value, and assert it is negative on its own so a
+  // regression that drops the sign fails here rather than in a matchObject that would
+  // still pass on `120`.
+  expect(persistedPick['odds']).toBe(-120);
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
+});
+
+// UTV2-1850 -- UTV2-1842 acceptance 8: "Signed American odds (-110) are enterable on a
+// mobile browser and persist as -110. Verified through the browser control and the
+// persisted row."
+//
+// Neither half was asserted anywhere before this test. The structured-fallback case
+// above asserts a *positive* value (`+105` -> `105`), which cannot fail on a dropped
+// minus sign, and the manual case above filled `-120` without reading it back at all.
+// The defect UTV2-1842 recorded is specifically mobile: `inputMode="numeric"` renders a
+// digits-only keypad with no minus key, so `-110` is unenterable on a phone. The
+// browser-control half of the assertion is therefore `inputmode="text"` plus a pattern
+// that admits a sign, measured on a phone-sized viewport; the persisted half is the row
+// read back out of the API's own repository.
+test('mobile manual coverage-gap submission persists signed negative odds and creates no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  await page.route('**/api/reference-data/catalog', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
+  await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NCAAF' }).click();
+  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByLabel('Away Team').fill('Temple');
+  await expect(page.getByText('No canonical team found for \u201cTemple\u201d.', { exact: true })).toBeVisible();
+  await page.getByLabel('Home Team').fill('Navy');
+  await expect(page.getByText('No canonical team found for \u201cNavy\u201d.', { exact: true })).toBeVisible();
+  await page.getByTestId('coverage-gap-manual-entry').click();
+
+  await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
+  await expect(page.getByLabel('Matchup')).toHaveValue('Temple @ Navy');
+  await page.getByLabel('Team to Win').fill('Navy');
+
+  // The browser-control half. `inputmode="numeric"` is the defect; anything that admits
+  // a sign is the fix, so assert the attribute that governs the mobile keypad rather
+  // than assuming the fill below could only have succeeded one way.
+  const oddsInput = page.locator('input[name="odds"]');
+  await expect(oddsInput, 'a numeric inputmode renders a keypad with no minus key on a phone').toHaveAttribute('inputmode', 'text');
+  await expect(oddsInput).toHaveAttribute('pattern');
+  await oddsInput.fill('-110');
+  await expect(oddsInput, 'the control must retain the sign it was given').toHaveValue('-110');
+
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await expect(page.getByText('Internal Tracking \u00b7 Track Only', { exact: true })).toBeVisible();
+  const submissionResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
+  // The phone viewport renders the mobile submit control, not the desktop one carrying
+  // `data-testid="smart-form-submit-button"`, so address it by role the way the other
+  // mobile cases in this file do.
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  const submissionResponse = await submissionResponsePromise;
+  expect(submissionResponse.status(), 'Browser submission must reach the real local API').toBe(201);
+  const submission = await submissionResponse.json() as {
+    data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
+  };
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+
+  // The persisted half.
+  const persistedPick = await readPersistedPick(request, submission.data.pickId);
+  expect(persistedPick['odds'], 'the minus sign must survive schema, request, API and repository').toBe(-110);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
+  expect(metadata['distributionMode']).toBe('track-only');
+  expect(metadata['participantResolution']).toMatchObject({
+    resolution: 'manual',
+    manualOverride: true,
+    reason: 'canonical-coverage-gap',
+  });
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
+});
+
+test('failed participant search is retryable and never offers coverage-gap entry', async ({ page }) => {
+  await page.route('**/api/reference-data/catalog', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
+  await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({
+    status: 503,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: { message: 'Canonical participant search is temporarily unavailable' } }),
+  }));
+
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NCAAF' }).click();
+  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByLabel('Away Team').fill('TCU');
+  await expect(page.getByText('Search failed: Canonical participant search is temporarily unavailable. Try again.', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
+  await expect(page.getByText('Manual participant override', { exact: true })).toHaveCount(0);
 });
 
 test('structured manual entry rejects the same canonical participant on both sides', async ({ page }) => {
@@ -361,6 +602,10 @@ test('editing a selected team as free text clears the dependent canonical player
 
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF', exact: true }).click();
+  await page.getByLabel('Away Team').fill('TCU');
+  await page.getByRole('button', { name: /TCU\s+team/i }).first().click();
+  await page.getByLabel('Home Team').fill('UNC');
+  await page.getByRole('button', { name: /UNC\s+team/i }).first().click();
   await page.getByRole('button', { name: /Player Prop/i }).first().click();
   await page.getByLabel('Team', { exact: true }).fill('TCU');
   await page.getByRole('button', { name: /TCU\s+team/i }).last().click();

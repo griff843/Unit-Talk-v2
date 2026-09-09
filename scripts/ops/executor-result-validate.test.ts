@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 import {
   parseExecutorResultComment,
@@ -9,6 +11,8 @@ import {
   proofArtifactRequired,
   REQUIRED_CHECK_NAME,
   PREFLIGHT_CHECK_NAME,
+  EXECUTOR_RESULT_ISSUE_ID_RE,
+  EXECUTOR_RESULT_BRANCH_RE,
 } from './executor-result-validate.ts';
 
 const VALID_COMMENT = `EXECUTOR_RESULT: READY_FOR_REVIEW
@@ -182,4 +186,122 @@ test('validateExecutorResultFields: PR number mismatch is rejected', () => {
   assert.ok(r);
   const errors = validateExecutorResultFields(r, { ...CTX, prNumber: 9999 });
   assert.ok(errors.some((e) => e.includes('PR mismatch')));
+});
+
+
+// ── UTV2-1688: the bootstrap/ namespace, and the duplication that hid it ────
+//
+// `Executor Result Validation` is a REQUIRED context, and it is created only by
+// an EXECUTOR_RESULT comment. A branch namespace the validator does not
+// recognize therefore cannot produce that context at all, which makes every
+// lane on that namespace permanently unmergeable. Recorded live on PR #1399.
+
+const BOOTSTRAP_COMMENT = `EXECUTOR_RESULT: READY_FOR_REVIEW
+schema: executor-result/v1
+Issue: UTV2-1619
+Lane: claude
+Branch: bootstrap/utv2-1619-repository-truth-integrity
+PR: #1399
+Head SHA: 9f1c2ab34d5e6f708192a3b4c5d6e7f809a1b2c3
+Proof Artifact: docs/06_status/proof/UTV2-1619/verification.md
+Checklist:
+- [x] example`;
+
+const BOOTSTRAP_CTX = {
+  prNumber: 1399,
+  headRef: 'bootstrap/utv2-1619-repository-truth-integrity',
+  headSha: '9f1c2ab34d5e6f708192a3b4c5d6e7f809a1b2c3',
+  prLabels: ['tier:T2'],
+};
+
+test('UTV2-1688: a bootstrap/ branch validates with zero errors', () => {
+  const r = parseExecutorResultComment(BOOTSTRAP_COMMENT);
+  assert.ok(r);
+  assert.deepEqual(validateExecutorResultFields(r, BOOTSTRAP_CTX), []);
+});
+
+// Controls. Widening the namespace must not have weakened anything the
+// validator actually binds -- a green result above only means something if
+// each of these still fails on the condition it names.
+
+test('UTV2-1688 control: a bootstrap/ branch that disagrees with the PR head is still rejected', () => {
+  const r = parseExecutorResultComment(BOOTSTRAP_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields(r, {
+    ...BOOTSTRAP_CTX,
+    headRef: 'bootstrap/utv2-1619-something-else',
+  });
+  assert.ok(
+    errors.some((e) => e.includes('Branch mismatch')),
+    'the Branch: == PR head ref binding must survive the namespace widening',
+  );
+});
+
+test('UTV2-1688 control: an unrecognized namespace is still rejected', () => {
+  const r = parseExecutorResultComment(BOOTSTRAP_COMMENT);
+  assert.ok(r);
+  const bad = { ...r, branch: 'feature/utv2-1619-repository-truth-integrity' };
+  const errors = validateExecutorResultFields(bad, {
+    ...BOOTSTRAP_CTX,
+    headRef: 'feature/utv2-1619-repository-truth-integrity',
+  });
+  assert.ok(errors.some((e) => e.includes('Invalid branch')));
+});
+
+test('UTV2-1688 control: a bootstrap/ branch with a stale head SHA is still rejected', () => {
+  const r = parseExecutorResultComment(BOOTSTRAP_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields(r, {
+    ...BOOTSTRAP_CTX,
+    headSha: '0000000000000000000000000000000000000000',
+  });
+  assert.ok(errors.some((e) => e.includes('HEAD SHA mismatch')));
+});
+
+// ── the anti-drift assertion the issue asked for ───────────────────────────
+//
+// The field validation is duplicated in an actions/github-script block, which
+// is a YAML string and cannot import this module. The copy in the workflow is
+// the one that gates merges, so a test that only exercises this module proves
+// nothing about the gate. These two read the workflow and compare literals.
+
+const WORKFLOW_RELATIVE_PATH = path.join('.github', 'workflows', 'executor-result-validator.yml');
+
+/**
+ * Walks up from the cwd to the repo root rather than assuming one. `tsx --test`
+ * is invoked from the repo root by `test:ops`, but a lane runs from a worktree
+ * and an editor runs from anywhere; a test whose location assumption is wrong
+ * fails for a reason that has nothing to do with what it asserts.
+ */
+function readValidatorWorkflow(): string {
+  let dir = process.cwd();
+  for (;;) {
+    const candidate = path.join(dir, WORKFLOW_RELATIVE_PATH);
+    if (fs.existsSync(candidate)) return fs.readFileSync(candidate, 'utf8');
+    const parent = path.dirname(dir);
+    if (parent === dir) throw new Error(`could not locate ${WORKFLOW_RELATIVE_PATH} above ${process.cwd()}`);
+    dir = parent;
+  }
+}
+
+const VALIDATOR_WORKFLOW = readValidatorWorkflow();
+
+test('UTV2-1688: the workflow issue-ID literal is byte-identical to the exported one', () => {
+  const match = VALIDATOR_WORKFLOW.match(/!(\/\^\(UTV2\|UNI\)[^/]*\/i)\.test\(r\.issueId\)/);
+  assert.ok(match, 'could not locate the inline issue-ID regex in executor-result-validator.yml');
+  assert.equal(
+    match[1],
+    EXECUTOR_RESULT_ISSUE_ID_RE.toString(),
+    'the workflow copy has drifted from EXECUTOR_RESULT_ISSUE_ID_RE',
+  );
+});
+
+test('UTV2-1688: the workflow branch literal is byte-identical to the exported one', () => {
+  const match = VALIDATOR_WORKFLOW.match(/const branchRe = (\/\^.*?\/i);/);
+  assert.ok(match, 'could not locate the inline branchRe in executor-result-validator.yml');
+  assert.equal(
+    match[1],
+    EXECUTOR_RESULT_BRANCH_RE.toString(),
+    'the workflow copy has drifted from EXECUTOR_RESULT_BRANCH_RE',
+  );
 });

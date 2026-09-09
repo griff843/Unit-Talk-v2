@@ -1,0 +1,147 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1825
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1825
+  objective: Post-merge rebinder cannot bind the pre-merge placeholder the
+    pre-merge contract mandates, stranding every closeout that uses it
+  acceptance_criteria:
+    - "A bundle whose top-level row is exactly `MERGE_SHA: pending merge`
+      rebinds to the merge SHA post-merge, proven by a test that starts from the
+      string `normalizePreMergeMergeShaRow` actually produces rather than a
+      hand-typed copy of it."
+    - "`## Merge SHA Binding` body lines carrying the same placeholder rebind
+      too."
+    - An authored non-placeholder value is still refused
+      (`unbindable_proof_artifact`), and a placeholder inside a fenced evidence
+      block is still left untouched.
+    - A mutation control removing the accepted placeholder makes the regression
+      fail.
+    - "[UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-12\
+      7-remote-migration-versions-into-baseline-safe-local)'s closeout is then
+      completed through the sanctioned `post-merge-lane-close` path with no
+      hand-edit of `main` and no admin bypass."
+  guardrails:
+    - Proof/gate tooling only. No production DDL, database mutation, deployment,
+      ingestion, delivery, or branch-protection change. Do not solve it by
+      relaxing `planExistingProofArtifact`'s refusal to overwrite authored
+      evidence.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Incident (live, 2026-09-02)
+      [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) merged as `1817eddc17ae4954cdd5876372763e1524e427fd`. Its `post-merge-lane-close` run (33644231049) failed at "Bind proof artifacts to merge SHA":
+
+      ```
+      "code": "unbindable_proof_artifact",
+      "proof_path": "docs/06_status/proof/UTV2-1822/diff-summary.md",
+      "message": "Refusing to overwrite authored proof at docs/06_status/proof/UTV2-1822/diff-summary.md:
+      it carries no merge-SHA anchor to rebind to 1817eddc..., and does not already name it."
+      ```
+
+      The manifest is still `in_progress` with `sha_binding.merge_sha: null` on a merged lane, and the retained merge mutex release then failed too. The migration lane cannot be truth-closed, which blocks [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume).
+    - |-
+      Root cause — a closed loop between two rules that never met
+      Both rules live in `scripts/ops/proof-generate.ts`:
+
+      * Pre-merge, `normalizePreMergeMergeShaRow` rewrites the top-level anchor to the literal string `pending merge` (`lines[matches[0]!] = 'MERGE_SHA: pending merge'`). `scripts/ci/proof-binding-validator.ts` requires exactly that value — a real SHA there is rejected, because a branch SHA is not merge authority ([UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result)'s contract).
+      * Post-merge, `rebindMergeShaAnchorsInMarkdown` substitutes a value only when it matches `FULL_SHA_TOKEN_PATTERN` (40 hex) or `PLACEHOLDER_VALUE_PATTERN`:
+
+      ```
+      const PLACEHOLDER_VALUE_PATTERN = /^`?(?:N\/A|TBD|pending|stale|<merge[_ -]?sha>)`?$/i;
+      ```
+
+      The alternation contains `pending`, and the pattern is anchored `^…$`. `pending merge` **does not match.** The rebinder therefore refuses the one placeholder the pre-merge validator demands, and `planExistingProofArtifact` — correctly, since it must never overwrite authored evidence — throws instead of guessing.
+
+      [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result)'s own bundle escaped this because it carried a real 40-hex branch SHA in that row (`b3df08fa…`), which the rebinder substitutes. Any bundle that actually follows the ratified pre-merge contract is unbindable.
+    - >-
+      Why this is not cosmetic
+
+      Every future lane that writes the mandated placeholder merges and then
+      cannot close. The failure surfaces after merge, when the branch is gone
+      and the only remaining remedies are hand-editing `main` or a second PR
+      against another lane's proof — precisely what
+      `scripts/ops/proof-repair.ts` was built to make unnecessary.
+    - >-
+      Required contract
+
+      1. The post-merge rebinder must accept the exact placeholder the pre-merge
+      normalizer writes and the pre-merge validator requires. One literal, one
+      source.
+
+      2. It must remain a placeholder-only substitution: the rebinder must still
+      refuse to rewrite an authored value that is neither a 40-hex SHA nor a
+      recognized placeholder, and must still never touch a value inside a fenced
+      block.
+
+      3. No consumer's existing behavior is weakened — `sha_binding.merge_sha`
+      stays `null` pre-merge, and a branch SHA in an authoritative merge field
+      still fails.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1825/post-merge-rebinder-cannot-bind-the-pre-merge-placeholder-the-pre
+    title: Post-merge rebinder cannot bind the pre-merge placeholder the pre-merge
+      contract mandates, stranding every closeout that uses it
+    description: |-
+      ## Incident (live, 2026-09-02)
+
+      [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) merged as `1817eddc17ae4954cdd5876372763e1524e427fd`. Its `post-merge-lane-close` run (33644231049) failed at "Bind proof artifacts to merge SHA":
+
+      ```
+      "code": "unbindable_proof_artifact",
+      "proof_path": "docs/06_status/proof/UTV2-1822/diff-summary.md",
+      "message": "Refusing to overwrite authored proof at docs/06_status/proof/UTV2-1822/diff-summary.md:
+      it carries no merge-SHA anchor to rebind to 1817eddc..., and does not already name it."
+      ```
+
+      The manifest is still `in_progress` with `sha_binding.merge_sha: null` on a merged lane, and the retained merge mutex release then failed too. The migration lane cannot be truth-closed, which blocks [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume).
+
+      ## Root cause — a closed loop between two rules that never met
+
+      Both rules live in `scripts/ops/proof-generate.ts`:
+
+      * Pre-merge, `normalizePreMergeMergeShaRow` rewrites the top-level anchor to the literal string `pending merge` (`lines[matches[0]!] = 'MERGE_SHA: pending merge'`). `scripts/ci/proof-binding-validator.ts` requires exactly that value — a real SHA there is rejected, because a branch SHA is not merge authority ([UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result)'s contract).
+      * Post-merge, `rebindMergeShaAnchorsInMarkdown` substitutes a value only when it matches `FULL_SHA_TOKEN_PATTERN` (40 hex) or `PLACEHOLDER_VALUE_PATTERN`:
+
+      ```
+      const PLACEHOLDER_VALUE_PATTERN = /^`?(?:N\/A|TBD|pending|stale|<merge[_ -]?sha>)`?$/i;
+      ```
+
+      The alternation contains `pending`, and the pattern is anchored `^…$`. `pending merge` **does not match.** The rebinder therefore refuses the one placeholder the pre-merge validator demands, and `planExistingProofArtifact` — correctly, since it must never overwrite authored evidence — throws instead of guessing.
+
+      [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result)'s own bundle escaped this because it carried a real 40-hex branch SHA in that row (`b3df08fa…`), which the rebinder substitutes. Any bundle that actually follows the ratified pre-merge contract is unbindable.
+
+      ## Why this is not cosmetic
+
+      Every future lane that writes the mandated placeholder merges and then cannot close. The failure surfaces after merge, when the branch is gone and the only remaining remedies are hand-editing `main` or a second PR against another lane's proof — precisely what `scripts/ops/proof-repair.ts` was built to make unnecessary.
+
+      ## Required contract
+
+      1. The post-merge rebinder must accept the exact placeholder the pre-merge normalizer writes and the pre-merge validator requires. One literal, one source.
+      2. It must remain a placeholder-only substitution: the rebinder must still refuse to rewrite an authored value that is neither a 40-hex SHA nor a recognized placeholder, and must still never touch a value inside a fenced block.
+      3. No consumer's existing behavior is weakened — `sha_binding.merge_sha` stays `null` pre-merge, and a branch SHA in an authoritative merge field still fails.
+
+      ## Acceptance criteria
+
+      * A bundle whose top-level row is exactly `MERGE_SHA: pending merge` rebinds to the merge SHA post-merge, proven by a test that starts from the string `normalizePreMergeMergeShaRow` actually produces rather than a hand-typed copy of it.
+      * `## Merge SHA Binding` body lines carrying the same placeholder rebind too.
+      * An authored non-placeholder value is still refused (`unbindable_proof_artifact`), and a placeholder inside a fenced evidence block is still left untouched.
+      * A mutation control removing the accepted placeholder makes the regression fail.
+      * [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local)'s closeout is then completed through the sanctioned `post-merge-lane-close` path with no hand-edit of `main` and no admin bypass.
+
+      ## Guardrails
+
+      Proof/gate tooling only. No production DDL, database mutation, deployment, ingestion, delivery, or branch-protection change. Do not solve it by relaxing `planExistingProofArtifact`'s refusal to overwrite authored evidence.
+    captured_at: 2026-09-02T14:51:44.880Z
+    description_sha256: b2088e18a1662e3b2c0ad97def5abfa75223ff0a591b1d5ddb3fec0bfbecd98e
+  contract_hash: e39322792042872f6a1f4ccf73f4793c6cd5bf739a6f16bfb1d7c4d63360c1b0

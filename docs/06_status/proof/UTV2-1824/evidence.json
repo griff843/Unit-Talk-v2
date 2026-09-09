@@ -1,0 +1,177 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1824",
+  "tier": "T1",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "2ac23342444ee2b3fbb086493e1b6ca6d862c59f",
+    "verified_source_sha": "284951151ef8c4c3198fbee603f50ace9143a34c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "type_check": "pass",
+      "test": "pass",
+      "r_level_check": "pass"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-03T05:49:55.247Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "commands": [
+      {
+        "command": "pnpm type-check",
+        "result": "pass",
+        "detail": "tsc -b tsconfig.json, no diagnostics"
+      },
+      {
+        "command": "pnpm exec tsx --test apps/smart-form/test/allowlist.test.ts",
+        "result": "pass",
+        "detail": "tests 9, pass 9, fail 0"
+      },
+      {
+        "command": "pnpm test",
+        "result": "pass",
+        "detail": "whole-repo aggregate tests=5439 pass=5439 fail=0, exit 0"
+      },
+      {
+        "command": "pnpm exec tsx --test apps/smart-form/test/*.test.ts",
+        "result": "pass",
+        "detail": "tests 135, pass 135, fail 0, skipped 0"
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "result": "pass",
+        "detail": "Verdict PASS, 6 changed files, rules matched operator-ui"
+      }
+    ]
+  },
+  "mutation_test": {
+    "status": "pass",
+    "mutation": "restore local-part derivation in parseAllowedCapperEmails (entries with no '=' fall back to email.split('@')[0].replace(/[^a-z0-9_-]/g, ''))",
+    "observed": "tests 9, pass 7, fail 2",
+    "failing_tests": [
+      "UTV2-1824: an entry with no explicit mapping is rejected and admits nobody",
+      "UTV2-1824: a non-canonical capper id is refused rather than sanitised"
+    ],
+    "reverted_before_commit": true
+  },
+  "containment": {
+    "database_writes": 0,
+    "migrations_applied": 0,
+    "picks_submitted": 0,
+    "member_delivery_paths_touched": 0,
+    "note": "Pure allowlist parser change plus tests and .env.example documentation; no I/O of any kind."
+  },
+  "identity_chain": [
+    "apps/smart-form/lib/auth-allowlist.ts parseAllowedCapperEmails -> {email, capperId} for explicitly mapped canonical entries only",
+    "apps/smart-form/auth.ts:32-41 sets token.capperId / token.sub from the matched allowlist entry",
+    "apps/api/src/handlers/submit-pick.ts:142-149 persists submittedBy from auth.capperId when role is capper"
+  ],
+  "known_follow_up": [
+    "docs/05_operations/REQUIRED_SECRETS.md still describes ALLOWED_CAPPER_EMAILS as a plain comma-separated email list; outside this lane file_scope_lock.",
+    "The deployed ALLOWED_CAPPER_EMAILS value must be migrated to email=capperId form; operator-supplied by policy."
+  ],
+  "runtime_proof": {
+    "status": "pass",
+    "measurement_basis": "The changed module executed directly at this head via tsx, plus one in-place mutation of the guard under test. No stub and no fixture: these are the real exported functions the Next.js auth callback calls. This lane performs no database access, so the runtime facts measured are identity-resolution facts, not row facts.",
+    "queries": [
+      {
+        "name": "an authorized login resolves to its mapped canonical id, not its local-part",
+        "method": "parseAllowedCapperEmails('pilot.capper@example.com=griff843, other.capper@example.com=other-capper') then findAllowedCapper('PILOT.Capper@Example.com', …)",
+        "result": "resolved capperId = 'griff843' for an address whose local-part is 'pilot.capper'",
+        "significance": "The identity comes from the explicit mapping. Under the previous implementation this same address would have resolved to \"pilotcapper\"."
+      },
+      {
+        "name": "an unmapped (bare email) entry admits nobody",
+        "method": "parseAllowedCapperEmails('pilot.capper@example.com')",
+        "result": "0 entries admitted",
+        "significance": "There is no local-part fallback. A stale bare-email deployment value fails closed rather than admitting a derived identity."
+      },
+      {
+        "name": "a non-canonical id is refused rather than repaired",
+        "method": "parseAllowedCapperEmails('pilot.capper@example.com=Pilot Capper!')",
+        "result": "0 entries admitted",
+        "significance": "Silent repair of an id is exactly how a wrong identity previously reached the database; the parser refuses instead."
+      },
+      {
+        "name": "empty ALLOWED_CAPPER_EMAILS admits nobody",
+        "method": "parseAllowedCapperEmails('')",
+        "result": "0 entries admitted",
+        "significance": "UTV2-1786 fail-closed behaviour is preserved by this change."
+      },
+      {
+        "name": "the derivation path is removed, not merely bypassed",
+        "method": "Object.keys(module) and 'deriveCapperIdFromEmail' in module",
+        "result": "exports = findAllowedCapper, normalizeEmail, parseAllowedCapperEmails; derivation helper present = false",
+        "significance": "No caller can reach local-part derivation, including future ones."
+      },
+      {
+        "name": "mutation: restoring local-part derivation breaks the acceptance tests",
+        "method": "reinstated the fallback email.split('@')[0].replace(/[^a-z0-9_-]/g,'') for entries with no '=' and re-ran the suite",
+        "result": "# pass 7 / # fail 2 — \"an entry with no explicit mapping is rejected and admits nobody\" and \"a non-canonical capper id is refused rather than sanitised\" both failed; mutation reverted before commit",
+        "significance": "The tests fail on the exact condition they name, so they are load-bearing rather than decorative."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "capper ids derived from an email local-part anywhere in the module",
+        "value": 0
+      },
+      {
+        "probe": "entries admitted for a bare-email (unmapped) ALLOWED_CAPPER_EMAILS value",
+        "value": 0
+      },
+      {
+        "probe": "entries admitted for a non-canonical capper id",
+        "value": 0
+      },
+      {
+        "probe": "entries admitted for an empty ALLOWED_CAPPER_EMAILS",
+        "value": 0
+      },
+      {
+        "probe": "allowlist tests passing at this head",
+        "value": 9
+      },
+      {
+        "probe": "allowlist test failures at this head",
+        "value": 0
+      },
+      {
+        "probe": "allowlist tests that fail when local-part derivation is restored",
+        "value": 2
+      },
+      {
+        "probe": "smart-form tests passing at this head",
+        "value": 135
+      },
+      {
+        "probe": "smart-form test failures at this head",
+        "value": 0
+      },
+      {
+        "probe": "real email addresses or capper ids committed by this lane",
+        "value": 0
+      },
+      {
+        "probe": "database queries executed by this lane",
+        "value": 0
+      },
+      {
+        "probe": "picks submitted, rows written, or member deliveries created by this lane",
+        "value": 0
+      },
+      {
+        "probe": "whole-repo tests passing at this head",
+        "value": 5439
+      },
+      {
+        "probe": "whole-repo test failures at this head",
+        "value": 0
+      }
+    ]
+  }
+}

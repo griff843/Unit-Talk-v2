@@ -381,7 +381,7 @@ test('api-client surfaces error messages from failed responses', async () => {
 test('manual team-sport submission is refused until both sides are entered', () => {
   const oneSide = evaluateSubmissionGuards({
     sportId: 'NBA',
-    manualOverride: true,
+    identityMode: 'manual',
     awayParticipantName: 'Sioux Falls Skyforce',
     homeParticipantName: '',
     team: 'Sioux Falls Skyforce',
@@ -392,7 +392,7 @@ test('manual team-sport submission is refused until both sides are entered', () 
   assert.equal(
     evaluateSubmissionGuards({
       sportId: 'NBA',
-      manualOverride: true,
+      identityMode: 'manual',
       awayParticipantName: 'Sioux Falls Skyforce',
       homeParticipantName: 'Osceola Magic',
       team: 'Osceola Magic',
@@ -404,7 +404,7 @@ test('manual team-sport submission is refused until both sides are entered', () 
   assert.equal(
     evaluateSubmissionGuards({
       sportId: 'GOLF',
-      manualOverride: true,
+      identityMode: 'manual',
       playerName: 'Unlisted Qualifier',
     }),
     null,
@@ -416,7 +416,7 @@ test('manual team-sport submission is refused when both sides name the same part
   // two — the server counts them the same way and would reject the duplicate.
   const duplicateSides = evaluateSubmissionGuards({
     sportId: 'NBA',
-    manualOverride: true,
+    identityMode: 'manual',
     awayParticipantName: 'Osceola Magic',
     homeParticipantName: 'osceola  magic',
   });
@@ -468,20 +468,26 @@ test('manual provenance treats punctuation and case differences as the same part
   );
 });
 
-test('a canonical player prop is refused without a canonical event', () => {
+test('a canonical player prop is admitted without a canonical event', () => {
+  // UTV2-1859. This asserted the opposite until UTV2-1856 taught the server to
+  // resolve team membership from the provider observation edge instead of from an
+  // event browse. The client guard outlived the server rule it mirrored, so the
+  // browser refused a submission the server would have accepted and the request
+  // was never sent. The refusal that remains is the server's, and it is narrower:
+  // only a player whose team relationship the database cannot establish.
   const noEvent = evaluateSubmissionGuards({
     sportId: 'NBA',
-    manualOverride: false,
+    identityMode: 'structured-fallback',
     canonicalEventId: null,
     selectedPlayerId: 'player-123',
   });
-  assert.equal(noEvent?.code, 'canonical-player-requires-event');
+  assert.equal(noEvent, null);
 
   // Inversion: the same player prop with its matchup selected is accepted.
   assert.equal(
     evaluateSubmissionGuards({
       sportId: 'NBA',
-      manualOverride: false,
+      identityMode: 'canonical',
       canonicalEventId: 'evt-abc',
       selectedPlayerId: 'player-123',
     }),
@@ -493,7 +499,7 @@ test('a canonical player prop is refused without a canonical event', () => {
   assert.equal(
     evaluateSubmissionGuards({
       sportId: 'NBA',
-      manualOverride: false,
+      identityMode: 'structured-fallback',
       canonicalEventId: null,
       team: 'Osceola Magic',
     }),
@@ -504,7 +510,7 @@ test('a canonical player prop is refused without a canonical event', () => {
 test('a canonical submission outside team sports is refused without an event', () => {
   const guard = evaluateSubmissionGuards({
     sportId: 'GOLF',
-    manualOverride: false,
+    identityMode: 'structured-fallback',
     canonicalEventId: null,
   });
   assert.equal(guard?.code, 'canonical-without-event-requires-team-sport');

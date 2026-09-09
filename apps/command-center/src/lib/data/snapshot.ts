@@ -417,7 +417,7 @@ function buildRolloutConfig(recentReceipts: ReceiptRecord[]) {
 // ─────────────────────────────────────────────────────────────
 
 export async function getSnapshotData(filter?: OutboxFilter): Promise<unknown> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
 
   const today = new Date().toISOString().slice(0, 10);
   const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -694,7 +694,7 @@ export async function getSnapshotData(filter?: OutboxFilter): Promise<unknown> {
 }
 
 export async function getPicksPipelineData(filter?: OutboxFilter): Promise<unknown> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const fetchLimit = (filter?.limit ?? 25) + 1;
 
   const [
@@ -743,7 +743,7 @@ export async function getPicksPipelineData(filter?: OutboxFilter): Promise<unkno
 }
 
 export async function getRecapData(): Promise<{ ok: true; data: SettlementSummary }> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const { data, error } = await client.from('settlement_records').select('*').order('created_at', { ascending: false }).limit(200);
   if (error) throw error;
   const settlements = (data ?? []) as SettlementRecord[];

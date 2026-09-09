@@ -3,6 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import {
+  SIGNED_DECIMAL_PATTERN,
+  SIGNED_INTEGER_PATTERN,
+  SignedNumberInput,
+  nextSignedInputValue,
+} from '../components/SignedNumberInput.tsx';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_DIRS = [
@@ -70,4 +78,66 @@ test('smart-form source tree does not import ingestion storage or direct Supabas
       assert.doesNotMatch(source, pattern, `${path.relative(ROOT, filePath)} matched ${pattern}`);
     }
   }
+});
+
+test('signed odds render as a text-keyboard input with an integer sign pattern', () => {
+  const markup = renderToStaticMarkup(createElement(SignedNumberInput, {
+    integerOnly: true,
+    name: 'odds',
+    value: -110,
+    onValueChange: () => undefined,
+  }));
+
+  assert.match(markup, /type="text"/);
+  assert.match(markup, /inputmode="text"/i);
+  assert.ok(markup.includes(`pattern="${SIGNED_INTEGER_PATTERN}"`));
+  assert.doesNotMatch(markup, /inputmode="(?:numeric|decimal)"/i);
+  assert.match(markup, /value="-110"/);
+});
+
+test('signed lines render as a text-keyboard input with a decimal sign pattern', () => {
+  const markup = renderToStaticMarkup(createElement(SignedNumberInput, {
+    name: 'line',
+    value: -3.5,
+    onValueChange: () => undefined,
+  }));
+
+  assert.match(markup, /type="text"/);
+  assert.match(markup, /inputmode="text"/i);
+  assert.ok(markup.includes(`pattern="${SIGNED_DECIMAL_PATTERN}"`));
+  assert.doesNotMatch(markup, /inputmode="(?:numeric|decimal)"/i);
+  assert.match(markup, /value="-3.5"/);
+});
+
+test('a signed decimal stays enterable one keystroke at a time', () => {
+  // Typing -3.5. Coercing each keystroke to a number drops the decimal point, because
+  // Number('-3.') is -3 and re-renders as "-3" -- so the next digit lands as -35, and a spread
+  // line becomes unenterable. Each intermediate state must survive verbatim.
+  assert.equal(nextSignedInputValue('-'), '-');
+  assert.equal(nextSignedInputValue('-3'), -3);
+  assert.equal(nextSignedInputValue('-3.'), '-3.');
+  assert.equal(nextSignedInputValue('-3.5'), -3.5);
+});
+
+test('a signed field preserves a leading minus that Number() would erase', () => {
+  // Number('-0') is -0, which String()s to "0" -- typing -0.5 would lose the sign at the second
+  // keystroke.
+  assert.equal(nextSignedInputValue('-0'), '-0');
+  assert.equal(nextSignedInputValue('-0.'), '-0.');
+  assert.equal(nextSignedInputValue('-0.5'), -0.5);
+});
+
+test('a signed field clears on empty and rejects input that is not a number', () => {
+  assert.equal(nextSignedInputValue(''), undefined);
+  for (const junk of ['abc', '-1-2', '1.2.3', '--5']) {
+    assert.equal(nextSignedInputValue(junk), null, junk);
+  }
+});
+
+test('a fully typed signed number is handed on as a number, not a string', () => {
+  // The inverse of the tests above: preserving intermediate states must not turn every value into
+  // a string, or downstream numeric handling silently changes shape.
+  assert.equal(nextSignedInputValue('-110'), -110);
+  assert.equal(nextSignedInputValue('110'), 110);
+  assert.equal(nextSignedInputValue('2.5'), 2.5);
 });

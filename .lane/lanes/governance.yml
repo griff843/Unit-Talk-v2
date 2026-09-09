@@ -17,6 +17,13 @@ allowed_path_globs:
   - deploy/**
   - docs/governance/**
   - docs/05_operations/**
+  # UTV2-1829: the mission layer (intent.md / spec.md / plan.md) that CLAUDE.md
+  # and AGENTS.md point every agent at. Both files were already individually
+  # admitted below; the docs they mandate were not, so a governance lane could
+  # add the pointer but never the target. Bounded to docs/mission/** only --
+  # this entry admits no other new subtree, and the mission docs remain
+  # subordinate to every canonical contract indexed in docs/mission/spec.md.
+  - docs/mission/**
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
   # Evidence bundles + the debt ledger they close against — added UTV2-1524.
@@ -79,6 +86,24 @@ allowed_path_globs:
   # Package-root CLAUDE.md files for governance/doc reconciliation lanes. Added UTV2-1199.
   - packages/db/CLAUDE.md
   - packages/contracts/CLAUDE.md
+  # UTV2-1843: the same DEBT-025-class gap on the app side. packages/db and
+  # packages/contracts were admitted by UTV2-1199, but no app-root CLAUDE.md
+  # ever was, so a governance/doc-reconciliation lane could correct a stale
+  # package-root agent instruction file and never an app-root one -- even
+  # though the app-root files are the ones an agent working in apps/ reads
+  # first. Bounded to these two named files, matching the UTV2-1199 shape;
+  # this admits no glob over apps/**.
+  - apps/api/CLAUDE.md
+  - apps/smart-form/CLAUDE.md
+  # UTV2-1843: product-intent documents. docs/mission/** (UTV2-1829) admits the
+  # mission layer and docs/05_operations/** admits the canonical contracts, but
+  # the product-intent layer that sits between them -- what a surface is for,
+  # written once from the contracts rather than restated to the owner -- was in
+  # no lane's allowlist, so it could be pointed at and never authored. Bounded
+  # to docs/03_product/** only. These documents remain subordinate to every
+  # canonical contract indexed in docs/mission/spec.md; where they disagree,
+  # the contract wins and the product-intent document is stale.
+  - docs/03_product/**
   - .claude/.state-stamp
   - docs/archive/**
   - CLAUDE.md

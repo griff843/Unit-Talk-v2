@@ -1,5 +1,5 @@
 import { InternalLabelBadge, Table, TableHead, Th, TableBody, EmptyState } from '@/components/ui';
-import { getGovernanceBoardSnapshot } from '@/app/api/governance/lanes/route';
+import { getGovernanceBoardSnapshot } from '@/lib/governance-board';
 import { LANE_BOARD_COLUMNS, type LaneSummary } from '@/lib/governance-contract';
 
 export const metadata = { title: 'Governance / Lanes — Unit Talk Command Center' };

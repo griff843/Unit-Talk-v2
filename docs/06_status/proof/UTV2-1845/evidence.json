@@ -1,0 +1,84 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1845",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "9a233bd90063d818d19cc026ec22f216671b6dea",
+    "verified_source_sha": "8a64a33158aa35197a62868a40c161657a6e75fa",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS — tests 5969, pass 5969, fail 0, exit 0, measured locally at this anchor.",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment — the very containment condition this lane is about. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
+      "r_level_check": "set-by-ci — R-Level Compliance runs in CI on this branch. This diff touches ops scripts and one document; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
+    },
+    "sha_type": "merge_sha",
+    "anchor_note": "8a64a33158aa35197a62868a40c161657a6e75fa is the merge of origin/main into this branch, taken to satisfy the strict-freshness requirement rather than merge BEHIND. It is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1845/, and it is the anchor because rule 4 of the proof-binding validator is a two-dot `git diff verified_source_sha..HEAD`: the resync carries docs/06_status/readiness/readiness-score.json, which is not a PROOF_ONLY_PREFIX, so the previous anchor b7274edd3b1665a5074c4edd176d87d0790063b4 could not be kept by argument. Every receipt below was re-executed at this commit rather than carried forward; the counts are unchanged from the previous anchor because the merge changed one generated ledger file and no code or test. Commits after this one are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
+    "bound_at": "2026-09-06T20:35:51.849Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5969,
+      "failures": 0,
+      "detail": "tests 5969, pass 5969, fail 0, exit 0"
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/preflight.test.ts",
+      "tests": 39,
+      "failures": 0,
+      "detail": "39/39, exit 0."
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "count": 2,
+      "command": "apply each mutation to the real source, run scripts/ops/preflight.test.ts, restore byte-for-byte and confirm a clean tree",
+      "observed": "M1 isContainmentPlaceholderSupabaseUrl returns false unconditionally -> # pass 36 / # fail 3 (exact recognition, the agreement assertion bound to the repo's own SUPABASE_URL, and the runT1Checks classification). M2 resolveVerdict stops considering blocked_by_containment -> # pass 38 / # fail 1 (the assertion that the new outcome still resolves to INFRA).",
+      "honest_reading": "M2 is the load-bearing one. Without it a future change could silently make blocked_by_containment admit a lane and nothing in the repository would notice. M1 shows the predicate is actually consulted rather than merely defined."
+    },
+    "admits_nothing": {
+      "status": "PASS",
+      "detail": "blocked_by_containment resolves to verdict INFRA exactly as infra_error does, so no lane opens that could not open before. Asserted with two controls so the mapping cannot be vacuous: the same check list with pass still resolves PASS, and infra_error still resolves INFRA.",
+      "significance": "This is the safety claim of the lane. Part 1 changes what preflight reports; it does not change what preflight admits."
+    },
+    "reserved_half_written_not_implemented": {
+      "status": "PASS",
+      "detail": "docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md states the admission change, its closeout obligation, its options and one recommendation. No token field, no manifest field and no closeout check is added by this diff."
+    },
+    "reserved_surface_untouched": {
+      "status": "PASS",
+      "command": "git diff origin/main --name-only -- .github/",
+      "observed": "empty",
+      "significance": "No workflow changed. No CODEOWNERS change, no branch-protection change, no tier semantics, no approval artifact, and no change to what `verify` requires. The diff is three ops scripts and one document."
+    },
+    "assertion_corrected_after_ci": {
+      "status": "PASS",
+      "detail": "The first version of the A3 test required the repository's own SUPABASE_URL to classify as the containment placeholder, which encoded one environment's value as the contract and was red in CI, where local.env comes from the staging-ci environment. It now computes the loopback answer independently of the function under test and asserts the two agree, so it holds in both environments. Both mutations were re-executed after the correction with identical results."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Static-proof governance lane. It changes preflight classification and reporting only; the live-DB ping it classifies is exercised by unit tests through runT1Checks with injected inputs, and the lane adds no database access of its own."
+  },
+  "known_gaps": [
+    "Part 2 of the correction -- whether blocked_by_containment may issue a preflight token for a T1 lane -- is written and deliberately not implemented. It is an admission change and requires explicit policy authority; presenting it as bookkeeping would be wrong. It is surfaced as an owner decision on UTV2-1842.",
+    "The misclassification this lane repairs is the mechanism behind UTV2-1842 being unable to open a lane, but Part 1 alone does not unblock it. Part 1 makes the refusal honest; it does not make it stop refusing."
+  ]
+}

@@ -1,0 +1,194 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1783
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1783
+  objective: Pre-merge MERGE_SHA contract is contradictory between Executor Result
+    Validation and proof-binding-validator
+  acceptance_criteria:
+    - "Exact schema-v2 pre-merge fixture with `sha_binding.merge_sha: null` and
+      real `verified_source_sha` passes BOTH proof-binding-validator and
+      Executor Result Validation."
+    - Literal `pending merge` is accepted only where it is a presentation
+      placeholder and is never treated as a git SHA.
+    - Branch/execution SHA in `sha_binding.merge_sha` fails.
+    - Non-null authoritative merge SHA before merge fails.
+    - Missing/invalid verified source SHA fails execution provenance.
+    - Post-merge rebind regression remains green.
+    - Mutation controls independently restore each old contradictory rule and
+      make the integration regression fail.
+    - "[UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-histor\
+      y-partitions-provision-current-and-forward-with-pre-expiry) / PR #1451 can
+      run the migration gate and ERV on the same exact head without changing its
+      production/migration semantics."
+  guardrails:
+    - Proof/gate contract only. No production DDL, database mutation,
+      deployment, ingestion, delivery, SGO, retention, or branch-protection
+      weakening. Do not solve by exempting migration PRs from either gate.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Incident
+      [UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe) / PR #1452 exposed a gate-set contradiction that is non-blocking for ordinary static/app-runtime lanes but structurally blocks migration lanes such as [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) / PR #1451.
+
+      Current pre-merge consumers require mutually exclusive values in the same top-level `verification.md` field:
+
+      * `scripts/ci/proof-binding-validator.ts::validatePreMergeVerificationBinding` requires exactly one top-level `MERGE_SHA:` row whose value is the literal `pending merge`; any real SHA is rejected because a branch/execution SHA is not merge authority.
+      * Required `Executor Result Validation` parses the same top-level `MERGE_SHA:` row as a git identity and requires it to be a real ancestor SHA; `pending merge` is rejected as `Proof MERGE_SHA is not a valid git SHA`.
+
+      PR #1452 can pass only because `proof-binding-validator` is reached through `migration-reversibility-gate.yml`, whose path filter does not include #1452's files. [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) changes `supabase/migrations/**`, so both consumers apply and the lane cannot satisfy both simultaneously.
+
+      This is a consumer-contract defect, not a reason to weaken merge authority or put a branch SHA into `sha_binding.merge_sha`.
+    - >-
+      Authoritative identity model
+
+      Schema-v2 already separates:
+
+
+      * `sha_binding.merge_sha` — merge authority; must remain `null` before
+      merge and become the GitHub merge SHA only post-merge.
+
+      * `sha_binding.verified_source_sha` — execution/source identity; a real
+      commit SHA before merge.
+
+
+      The fix must make every pre-merge consumer read the correct identity
+      rather than overloading top-level `MERGE_SHA` with two meanings.
+    - >-
+      Required contract
+
+      1. Pre-merge merge authority remains `sha_binding.merge_sha: null`.
+
+      2. Execution/source provenance is validated from
+      `sha_binding.verified_source_sha` (or another explicitly named
+      execution-identity field), not by pretending it is merge authority.
+
+      3. `proof-binding-validator` and Executor Result Validation must accept
+      the same structurally valid schema-v2 pre-merge bundle.
+
+      4. No consumer may require a branch/execution SHA in an authoritative
+      merge field.
+
+      5. Post-merge rebinding must still populate authoritative merge identity
+      and leave verified source identity truthful.
+
+      6. Historical compatibility must be narrow and explicit; do not broaden
+      legacy shapes silently.
+
+      7. Migration lanes must exercise both consumers in one integration
+      regression so this contradiction cannot recur behind path filters.
+    - |-
+      Sequencing
+      This is a direct support blocker for [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) / PR #1451. Track now. Do not interrupt the already-approved [UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe) merge. It may run as the single governance/reliability support lane alongside the production-truth recovery work before [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) is brought to final review.
+    - |-
+      File scope — PM normalized 2026-09-02
+      This lane owns only the pre-/post-merge proof identity contract needed to reconcile the two conflicting consumers:
+
+      * `.github/workflows/executor-result-validator.yml`
+      * `scripts/ci/proof-binding-validator.ts`
+      * `scripts/ops/proof-schema.ts`
+      * `scripts/ops/proof-schema.test.ts`
+      * `scripts/ops/proof-generate.ts`
+      * `scripts/ops/proof-generate.test.ts`
+      * `scripts/ops/proof-rebind.ts`
+      * `scripts/ops/proof-rebind.test.ts`
+      * `.ops/sync/UTV2-1783.yml`
+      * `docs/06_status/lanes/UTV2-1783.json`
+      * `docs/06_status/proof/UTV2-1783/**`
+
+      The executor should use the smallest subset necessary. Do not edit branch protection, merge-gate policy, unrelated workflows, application/runtime code, DB code, or production configuration. If the fix genuinely requires another path, stop for PM scope disposition rather than widening silently.
+
+      ### Sequencing update
+
+      [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result) now directly blocks [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) / PR #1482. [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) must not merge by selecting a `MERGE_SHA` value that knowingly leaves either validator red. If Tier-C/concurrency mechanics prevent these lanes from coexisting, park [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) via the sanctioned path, preserve its PR/proof, complete and truth-close this lane, then resume/sync/re-anchor [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result
+    title: Pre-merge MERGE_SHA contract is contradictory between Executor Result
+      Validation and proof-binding-validator
+    description: |-
+      ## Incident
+
+      [UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe) / PR #1452 exposed a gate-set contradiction that is non-blocking for ordinary static/app-runtime lanes but structurally blocks migration lanes such as [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) / PR #1451.
+
+      Current pre-merge consumers require mutually exclusive values in the same top-level `verification.md` field:
+
+      * `scripts/ci/proof-binding-validator.ts::validatePreMergeVerificationBinding` requires exactly one top-level `MERGE_SHA:` row whose value is the literal `pending merge`; any real SHA is rejected because a branch/execution SHA is not merge authority.
+      * Required `Executor Result Validation` parses the same top-level `MERGE_SHA:` row as a git identity and requires it to be a real ancestor SHA; `pending merge` is rejected as `Proof MERGE_SHA is not a valid git SHA`.
+
+      PR #1452 can pass only because `proof-binding-validator` is reached through `migration-reversibility-gate.yml`, whose path filter does not include #1452's files. [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) changes `supabase/migrations/**`, so both consumers apply and the lane cannot satisfy both simultaneously.
+
+      This is a consumer-contract defect, not a reason to weaken merge authority or put a branch SHA into `sha_binding.merge_sha`.
+
+      ## Authoritative identity model
+
+      Schema-v2 already separates:
+
+      * `sha_binding.merge_sha` — merge authority; must remain `null` before merge and become the GitHub merge SHA only post-merge.
+      * `sha_binding.verified_source_sha` — execution/source identity; a real commit SHA before merge.
+
+      The fix must make every pre-merge consumer read the correct identity rather than overloading top-level `MERGE_SHA` with two meanings.
+
+      ## Required contract
+
+      1. Pre-merge merge authority remains `sha_binding.merge_sha: null`.
+      2. Execution/source provenance is validated from `sha_binding.verified_source_sha` (or another explicitly named execution-identity field), not by pretending it is merge authority.
+      3. `proof-binding-validator` and Executor Result Validation must accept the same structurally valid schema-v2 pre-merge bundle.
+      4. No consumer may require a branch/execution SHA in an authoritative merge field.
+      5. Post-merge rebinding must still populate authoritative merge identity and leave verified source identity truthful.
+      6. Historical compatibility must be narrow and explicit; do not broaden legacy shapes silently.
+      7. Migration lanes must exercise both consumers in one integration regression so this contradiction cannot recur behind path filters.
+
+      ## Acceptance criteria
+
+      * Exact schema-v2 pre-merge fixture with `sha_binding.merge_sha: null` and real `verified_source_sha` passes BOTH proof-binding-validator and Executor Result Validation.
+      * Literal `pending merge` is accepted only where it is a presentation placeholder and is never treated as a git SHA.
+      * Branch/execution SHA in `sha_binding.merge_sha` fails.
+      * Non-null authoritative merge SHA before merge fails.
+      * Missing/invalid verified source SHA fails execution provenance.
+      * Post-merge rebind regression remains green.
+      * Mutation controls independently restore each old contradictory rule and make the integration regression fail.
+      * [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) / PR #1451 can run the migration gate and ERV on the same exact head without changing its production/migration semantics.
+
+      ## Guardrails
+
+      Proof/gate contract only. No production DDL, database mutation, deployment, ingestion, delivery, SGO, retention, or branch-protection weakening. Do not solve by exempting migration PRs from either gate.
+
+      ## Sequencing
+
+      This is a direct support blocker for [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) / PR #1451. Track now. Do not interrupt the already-approved [UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe) merge. It may run as the single governance/reliability support lane alongside the production-truth recovery work before [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) is brought to final review.
+
+      ## File scope — PM normalized 2026-09-02
+
+      This lane owns only the pre-/post-merge proof identity contract needed to reconcile the two conflicting consumers:
+
+      * `.github/workflows/executor-result-validator.yml`
+      * `scripts/ci/proof-binding-validator.ts`
+      * `scripts/ops/proof-schema.ts`
+      * `scripts/ops/proof-schema.test.ts`
+      * `scripts/ops/proof-generate.ts`
+      * `scripts/ops/proof-generate.test.ts`
+      * `scripts/ops/proof-rebind.ts`
+      * `scripts/ops/proof-rebind.test.ts`
+      * `.ops/sync/UTV2-1783.yml`
+      * `docs/06_status/lanes/UTV2-1783.json`
+      * `docs/06_status/proof/UTV2-1783/**`
+
+      The executor should use the smallest subset necessary. Do not edit branch protection, merge-gate policy, unrelated workflows, application/runtime code, DB code, or production configuration. If the fix genuinely requires another path, stop for PM scope disposition rather than widening silently.
+
+      ### Sequencing update
+
+      [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result) now directly blocks [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) / PR #1482. [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) must not merge by selecting a `MERGE_SHA` value that knowingly leaves either validator red. If Tier-C/concurrency mechanics prevent these lanes from coexisting, park [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local) via the sanctioned path, preserve its PR/proof, complete and truth-close this lane, then resume/sync/re-anchor [UTV2-1822](https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local).
+    captured_at: 2026-09-02T02:59:54.235Z
+    description_sha256: cf5205e458a37c05393e5754e153c12ccc76cb9357819ef1f7bbf855495f842a
+  contract_hash: e0a1b83f98b1e8a65442bbc7c93239fe7b71a71416f8d4fbb9a6a36fe28d71f5

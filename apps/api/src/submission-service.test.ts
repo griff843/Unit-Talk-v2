@@ -19,6 +19,7 @@ import {
 } from './distribution-worker-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
+import { waivesEventExistenceGate } from './smart-form-validation.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 import {
   computeSubmissionIdempotencyKey,
@@ -3306,3 +3307,142 @@ test('REGRESSION UTV2-1611: validated is a legal transient for a marker-less Pha
     },
   );
 });
+
+// UTV2-1842 EVENT_GATE_FALLBACK_WAIVER_TESTS_START
+// The waiver added in UTV2-1842 lets a Track Only Smart Form submission that took a
+// server-validated fallback path past the event-existence gate. These tests fix its exact
+// boundary: two kinds waive when Track Only, the third does not, an absent outcome does not,
+// and a delivery-eligible submission does not whatever its kind. The fail-closed default is
+// also covered by 'event gate: pick with unknown eventName is rejected when events repo is
+// populated' above, which calls processSubmission with no third argument at all.
+
+async function seedUnrelatedEvent(repositories: ReturnType<typeof createInMemoryRepositoryBundle>) {
+  // Populating the repo is what activates the gate; the seeded name deliberately does not
+  // match the eventName each submission below sends.
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-utv2-1842-unrelated',
+    sportId: 'nba',
+    eventName: 'Knicks vs Heat',
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {},
+  });
+}
+
+const fallbackPayload = {
+  source: 'smart-form' as const,
+  market: 'NBA Player Props',
+  selection: 'LeBron James Over 25.5 pts',
+  odds: -110,
+  confidence: 0.72,
+  eventName: 'Lakers vs Celtics',
+  metadata: { sport: 'NBA' },
+};
+
+test('UTV2-1842: manual coverage-gap outcome waives the event existence gate', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedUnrelatedEvent(repositories);
+
+  const result = await processSubmission(fallbackPayload, repositories, {
+    kind: 'manual-coverage-gap',
+    distributionMode: 'track-only',
+  });
+
+  assert.equal(result.pick.lifecycleState, 'validated');
+});
+
+test('UTV2-1842: structured team fallback outcome waives the event existence gate', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedUnrelatedEvent(repositories);
+
+  const result = await processSubmission(fallbackPayload, repositories, {
+    kind: 'structured-team-fallback',
+    distributionMode: 'track-only',
+  });
+
+  assert.equal(result.pick.lifecycleState, 'validated');
+});
+
+test('UTV2-1842: canonical-event outcome does NOT waive the event existence gate', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedUnrelatedEvent(repositories);
+
+  // A submission that resolved a canonical event has no excuse for naming an event the
+  // catalog does not contain. Widening the waiver to "any smart-form outcome" turns this red.
+  await assert.rejects(
+    () =>
+      processSubmission(fallbackPayload, repositories, {
+        kind: 'canonical-event',
+        eventId: 'evt-utv2-1842-unrelated',
+        distributionMode: 'track-only',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('EVENT_NOT_FOUND') || err.message.includes('Lakers vs Celtics'));
+      return true;
+    },
+  );
+});
+
+test('UTV2-1842: not-smart-form outcome does NOT waive the event existence gate', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedUnrelatedEvent(repositories);
+
+  // `not-smart-form` is what validateSmartFormRelationships returns for a service-role caller
+  // using `smart-form` as a plain label with none of the Smart Form fields. Nothing about that
+  // shape has been validated, so it must not reach the waiver. This is the test that fails if
+  // the predicate is ever rewritten as `smartFormOutcome?.kind !== 'canonical-event'`.
+  await assert.rejects(
+    () => processSubmission(fallbackPayload, repositories, { kind: 'not-smart-form' }),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('EVENT_NOT_FOUND') || err.message.includes('Lakers vs Celtics'));
+      return true;
+    },
+  );
+});
+
+// The Track Only half of the predicate. Both fallback kinds are exercised, because a waiver
+// that checked the mode for only one of them would still admit the other. An authenticated
+// capper is server-pinned to `track-only` upstream; an operator or service-role caller is
+// not, and a qualified delivery-eligible pick proceeds to the outbox-enqueue path -- so this
+// is the assertion standing between the contained persistence repair and admission of a
+// nonexistent event for member delivery.
+for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
+  test(`UTV2-1842: a delivery-eligible ${kind} outcome does NOT waive the event existence gate`, async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await seedUnrelatedEvent(repositories);
+
+    await assert.rejects(
+      () =>
+        processSubmission(fallbackPayload, repositories, {
+          kind,
+          distributionMode: 'delivery-eligible',
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.ok(err.message.includes('EVENT_NOT_FOUND') || err.message.includes('Lakers vs Celtics'));
+        return true;
+      },
+    );
+  });
+}
+
+test('UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail-closed', () => {
+  // Read directly rather than through processSubmission so the truth table is exhaustive
+  // over every outcome shape rather than over the two the gate tests happen to construct.
+  assert.equal(waivesEventExistenceGate(undefined), false, 'an absent outcome must not waive');
+  assert.equal(waivesEventExistenceGate({ kind: 'not-smart-form' }), false);
+  for (const distributionMode of ['track-only', 'delivery-eligible'] as const) {
+    assert.equal(
+      waivesEventExistenceGate({ kind: 'canonical-event', eventId: 'e1', distributionMode }),
+      false,
+      `canonical-event must never waive (${distributionMode})`,
+    );
+  }
+  for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
+    assert.equal(waivesEventExistenceGate({ kind, distributionMode: 'track-only' }), true);
+    assert.equal(waivesEventExistenceGate({ kind, distributionMode: 'delivery-eligible' }), false);
+  }
+});
+// UTV2-1842 EVENT_GATE_FALLBACK_WAIVER_TESTS_END

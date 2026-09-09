@@ -30,6 +30,16 @@ allowed_path_globs:
   # glob: every other contract module stays outside this lane.
   - packages/contracts/src/smart-form.ts
   - packages/contracts/src/index.ts
+  # UTV2-1842: a live-DB proof under apps/api/src has TWO mandatory registration
+  # points outside apps/**, and only one of them was admitted here. `pnpm verify`
+  # fails closed with WIRING_TEST_UNWIRED_NEW unless the test is reachable from a
+  # package script (package.json, already allowed below), and its "Enforce DB
+  # writer classification" step fails closed unless the credentialed test is
+  # classified in this inventory. So no runtime lane could legally carry its own
+  # live-DB proof. Admitted as one exact file, in the same narrow form as
+  # `promotion.ts` and `smart-form.ts` above -- deliberately NOT a
+  # `docs/05_operations/**` glob.
+  - docs/05_operations/db-writer-classification.json
   - .lane/lanes/**
   - .github/workflows/**
   - deploy/production/**

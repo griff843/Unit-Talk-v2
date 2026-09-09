@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1823",
+  "merge_sha": null,
+  "branch": "claude/utv2-1823-authenticate-trace",
+  "pr": 1501,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "evaluated_at": "2026-09-03T17:42:45Z",
+  "verified_source_sha": "38ef1fd97e1e57b55f4da1263a124905665996f8",
+  "provenance": {
+    "note": "Every value in this file is read from the CI run at verified_source_sha. None of it was produced locally. Local verification is structurally unavailable here: local.env pins SUPABASE_URL to http://127.0.0.1:1 under production containment, and ci:assert-staging fails closed rather than resolving a staging target off-CI. The authoritative receipts are therefore the CI ones named below, and they are cited with run and job ids so a reviewer can open them.",
+    "workflow_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33785176215",
+    "run_id": 33785176215
+  },
+  "verify_result": {
+    "status": "pass",
+    "conclusion": "success",
+    "check_name": "verify",
+    "job_id": 100750090391,
+    "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33785176215/job/100750090391",
+    "started_at": "2026-09-03T17:38:56Z",
+    "completed_at": "2026-09-03T17:42:45Z",
+    "head_sha": "38ef1fd97e1e57b55f4da1263a124905665996f8",
+    "detail": "The required `verify` check completed successfully at the exact anchor SHA. This supersedes the earlier PENDING-CI sentinel, which was accurate when written and is no longer."
+  },
+  "test_db_result": {
+    "status": "pass",
+    "command": "pnpm test:db",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "target": "staging",
+    "producer_job": "Writable DB proof (staging only)",
+    "producer_job_id": 100748085293,
+    "producer_job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33785176215/job/100748085293",
+    "receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "sha256": "157d9c7ef1113e76bdac47ebb64eca2fc0cbe7f4b0749cde264d2a81d0bcc1a7",
+      "path": ".out/ci-db-proof-receipt.json",
+      "consumed_by": "scripts/ci/verify-db-proof-receipt.ts inside the required verify job",
+      "producer_gate": "verify's 'Assert the DB proof producer succeeded' step read `staging-db-proof result: success`; it fails closed on any other result"
+    },
+    "target_note": "The receipt's target is masked in the CI log by secret redaction. It is the staging project, not production — staging-path-enforcement and the workflow-production-credential-guard both gate this job, and production credentials are not available to it."
+  },
+  "t1_live_proof_suites": {
+    "status": "pass",
+    "step": "Run the T1 live proof suites against staging",
+    "job_id": 100748085293,
+    "failures": 0,
+    "detail": "Every live proof suite in the step reported `# fail 0`. These run against the staging database, not in-memory repositories."
+  },
+  "route_auth_change": {
+    "route": "GET /api/picks/{id}/trace",
+    "before": "reachable by any anonymous caller who knew or guessed a pick UUID; returned the full lifecycle aggregate",
+    "after": "requires an authenticated credential with role `operator`",
+    "routes_whose_auth_behaviour_changed": 1,
+    "role_source": "stated inline at apps/api/src/server.ts because ROUTE_ROLES lives in apps/api/src/auth.ts, a Tier C path this lane is not authorized to edit; authorizeRoute denies by default when no pattern matches, so routing the trace path through it would answer every authenticated operator with 403",
+    "role_parity": "`operator` is the same role the kill-switch GET requires, which is the closest existing precedent for staff-only operational state",
+    "follow_up": "the policy belongs in ROUTE_ROLES and should move there when a lane is authorized to touch auth.ts"
+  },
+  "guard_sensitivity": {
+    "status": "pass",
+    "method": "remove the `|| traceMatch` disjunct from the gate predicate at apps/api/src/server.ts, re-run apps/api/src/server.test.ts, then restore the file",
+    "observed": "not ok 51 — UTV2-1823: anonymous GET /api/picks/:id/trace is refused with 401 and leaks no pick data; # pass 52 / # fail 1",
+    "restored_clean": true,
+    "restoration_check": "git diff --stat apps/api/src/server.ts reported no output after restoration",
+    "re_measured_at_anchor": true,
+    "detail": "Re-run at 38ef1fd97, not carried over from the pre-sync head. Exactly one test is guard-sensitive; the authenticated 200 and the authenticated-unknown-id 404 correctly pass under the mutation and are not claimed as guard-sensitive."
+  },
+  "targeted_suite": {
+    "status": "pass",
+    "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
+    "tests": 53,
+    "pass": 53,
+    "fail": 0,
+    "re_measured_at_anchor": true
+  },
+  "containment": {
+    "production_writes": 0,
+    "live_production_connections": 0,
+    "deploy_triggered": false,
+    "secrets_modified": false,
+    "detail": "This lane opens no connection, runs no query and alters no repository call. The DB work above ran against staging inside CI, never against the production project."
+  }
+}

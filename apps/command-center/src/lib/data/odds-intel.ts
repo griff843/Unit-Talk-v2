@@ -104,7 +104,7 @@ export async function getCurrentOfferGroups(params: {
   limit?: number;
 } = {}): Promise<IntelOffersResult | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     const rowCap = Math.min(params.limit ?? 500, 1000);
 
     let query = client
@@ -187,7 +187,7 @@ export async function getCurrentOfferGroups(params: {
 /** Distinct bookmaker keys present in provider_offer_current (small scan). */
 export async function getDistinctBookmakers(): Promise<string[] | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     const { data, error } = await client
       .from('provider_offer_current')
       .select('bookmaker_key')
@@ -229,7 +229,7 @@ export async function getOfferHistory(params: {
   limit?: number;
 }): Promise<{ rows: HistoryOfferRow[]; rowCap: number } | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     const rowCap = Math.min(params.limit ?? 500, 1000);
     let query = client
       .from('provider_offer_history')
@@ -303,7 +303,7 @@ export async function getPickLineMovement(params: {
   if (missing.length > 0) return { status: 'unresolved', missing };
 
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     let externalId = params.externalEventId ?? null;
     if (!externalId) {
       const { data: eventRows, error: eventError } = await client

@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1825",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1825-rebind-pending-merge-placeholder",
+  "branch": "claude/utv2-1825-rebind-pending-merge-placeholder",
+  "base_branch": "main",
+  "commit_sha": "5ed005a6da848917a355c4c0ee5e7d8f5513713b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1485",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1825.yml",
+    "docs/06_status/proof/UTV2-1825/diff-summary.md",
+    "docs/06_status/proof/UTV2-1825/evidence.json",
+    "docs/06_status/proof/UTV2-1825/verification.md",
+    "scripts/ops/proof-generate.test.ts",
+    "scripts/ops/proof-generate.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1825/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-02T14:51:58.306Z",
+  "heartbeat_at": "2026-09-03T05:43:13.477Z",
+  "closed_at": "2026-09-03T05:43:13.477Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-03T05:43:11.156Z",
+      "verdict": "pass",
+      "merge_sha": "5ed005a6da848917a355c4c0ee5e7d8f5513713b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1825-rebind-pending-merge-placeholder",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

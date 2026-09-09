@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
-  resolveOperatorIdentity,
 } from '@/lib/server-api';
+import { resolveActorOrRefusal } from '@/lib/require-actor';
 import type { SubmissionDraft } from '@/lib/pick-builder-model';
 
 export type SubmitPickResult =
@@ -21,9 +21,13 @@ export type SubmitPickResult =
  * approval queue; this action never posts directly to members.
  */
 export async function submitBuiltPick(draft: SubmissionDraft): Promise<SubmitPickResult> {
+  const actorResolution = await resolveActorOrRefusal();
+  if (!actorResolution.ok) {
+    return { ok: false, error: actorResolution.error };
+  }
+  const operatorActor = actorResolution.actor;
   const apiUrl = resolveApiBaseUrl();
   const headers = resolveCommandCenterApiHeaders();
-  const operatorActor = resolveOperatorIdentity();
 
   try {
     const res = await fetch(`${apiUrl}/api/submissions`, {

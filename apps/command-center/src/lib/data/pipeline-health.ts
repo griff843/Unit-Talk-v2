@@ -19,7 +19,7 @@ import {
 type Client = any;
 
 export async function getPipelineHealthSnapshot(): Promise<PipelineHealthSnapshot> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const observedAt = new Date().toISOString();
 
   const [submissionsResult, picksResult, outboxResult, receiptsResult, runsResult] = await Promise.all([

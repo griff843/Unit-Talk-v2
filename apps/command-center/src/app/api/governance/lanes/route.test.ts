@@ -3,7 +3,8 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { GET, getGovernanceBoardSnapshot } from './route';
+import { GET, createGovernanceLanesHandler } from './route';
+import { readGovernanceBoardSnapshotUnauthenticated } from '@/lib/governance-board.internal';
 
 test('governance lanes endpoint exposes manifest facts without synthesizing unavailable data', async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'utv2-governance-lanes-'));
@@ -24,7 +25,7 @@ test('governance lanes endpoint exposes manifest facts without synthesizing unav
     }),
   );
 
-  const snapshot = await getGovernanceBoardSnapshot({ manifestDirectory: directory, observedAt: '2026-07-14T13:00:00.000Z' });
+  const snapshot = await readGovernanceBoardSnapshotUnauthenticated({ manifestDirectory: directory, observedAt: '2026-07-14T13:00:00.000Z' });
 
   assert.equal(snapshot.sourceStatus, 'degraded');
   assert.equal(snapshot.activeLanes.length, 1);
@@ -40,11 +41,72 @@ test('governance lanes endpoint exposes manifest facts without synthesizing unav
 
 test('governance lanes route declares no write handlers', async () => {
   const route = await import('./route');
-  const response = await GET();
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get('cache-control'), 'no-store');
+  await withAuthEnv(
+    { NODE_ENV: 'test', COMMAND_CENTER_AUTH_MODE: 'disabled' },
+    async () => {
+      const response = await createGovernanceLanesHandler(async () => ({
+        observedAt: '2026-07-14T13:00:00.000Z',
+        sourceStatus: 'degraded',
+        missingSources: [],
+        activeLanes: [],
+        blockedLanes: [],
+        awaitingPmVerdict: [],
+      }))(new Request('http://localhost/api/governance/lanes'));
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+    },
+  );
   assert.equal('POST' in route, false);
   assert.equal('PUT' in route, false);
   assert.equal('PATCH' in route, false);
   assert.equal('DELETE' in route, false);
 });
+
+test('governance lanes route refuses forged actor headers without credentials', async () => {
+  await withAuthEnv(
+    {
+      UNIT_TALK_APP_ENV: 'production',
+      COMMAND_CENTER_AUTH_TOKEN: 'real-token',
+    },
+    async () => {
+      const response = await GET(
+        new Request('http://localhost/api/governance/lanes', {
+          headers: { 'x-command-center-actor': 'attacker' },
+        }),
+      );
+      assert.equal(response.status, 401);
+    },
+  );
+});
+
+async function withAuthEnv(
+  values: Record<string, string>,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const keys = [
+    'NODE_ENV',
+    'UNIT_TALK_APP_ENV',
+    'COMMAND_CENTER_AUTH_MODE',
+    'COMMAND_CENTER_AUTH_TOKEN',
+    'COMMAND_CENTER_AUTH_USERNAME',
+    'COMMAND_CENTER_AUTH_PASSWORD',
+    'UNIT_TALK_COMMAND_CENTER_AUTH_MODE',
+    'UNIT_TALK_COMMAND_CENTER_AUTH_TOKEN',
+    'UNIT_TALK_COMMAND_CENTER_AUTH_USERNAME',
+    'UNIT_TALK_COMMAND_CENTER_AUTH_PASSWORD',
+    'UNIT_TALK_OPERATOR_RUNTIME_MODE',
+  ];
+  const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+  for (const key of keys) delete process.env[key];
+  Object.assign(process.env, values);
+
+  try {
+    await fn();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}

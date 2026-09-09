@@ -1,0 +1,103 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1833
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1833
+  objective: "Record ratified mission direction: post-M1 internal operating
+    history, Claude orchestration ownership, reserved-decision presentation"
+  acceptance_criteria:
+    - >-
+      Governance lane. Record in `docs/mission/intent.md` the direction Griff
+      ratified on 2026-09-05:
+
+
+      1. **Product ordering.** Deliver Unit Talk as a trustworthy,
+      production-ready, revenue-generating product. Milestone 1 (contained Smart
+      Form Track Only pilot) first. Immediately afterward, establish reliable
+      ongoing internal pick submission, persistence, grading/settlement and
+      statistics, so a real performance history exists before member-facing
+      Discord delivery launches.
+
+      2. **Operating authority.** Claude owns decomposition, sequencing, agent
+      allocation, implementation coordination, verification, integration and
+      continuation. Product priorities come from this mission and live
+      production evidence; Linear records the work.
+
+      3. **Reserved-decision presentation.** Reserved decisions are surfaced
+      with preparation already complete and a concrete recommended action. A
+      reserved decision blocks only dependent work.
+
+
+      Scope: `docs/mission/intent.md` only, plus the lane's own proof artifacts.
+      No gate, tier, or merge-authority change.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Governance lane. Record in `docs/mission/intent.md` the direction Griff
+      ratified on 2026-09-05:
+
+
+      1. **Product ordering.** Deliver Unit Talk as a trustworthy,
+      production-ready, revenue-generating product. Milestone 1 (contained Smart
+      Form Track Only pilot) first. Immediately afterward, establish reliable
+      ongoing internal pick submission, persistence, grading/settlement and
+      statistics, so a real performance history exists before member-facing
+      Discord delivery launches.
+
+      2. **Operating authority.** Claude owns decomposition, sequencing, agent
+      allocation, implementation coordination, verification, integration and
+      continuation. Product priorities come from this mission and live
+      production evidence; Linear records the work.
+
+      3. **Reserved-decision presentation.** Reserved decisions are surfaced
+      with preparation already complete and a concrete recommended action. A
+      reserved decision blocks only dependent work.
+
+
+      Scope: `docs/mission/intent.md` only, plus the lane's own proof artifacts.
+      No gate, tier, or merge-authority change.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1833/record-ratified-mission-direction-post-m1-internal-operating-history
+    title: "Record ratified mission direction: post-M1 internal operating history,
+      Claude orchestration ownership, reserved-decision presentation"
+    description: >-
+      Governance lane. Record in `docs/mission/intent.md` the direction Griff
+      ratified on 2026-09-05:
+
+
+      1. **Product ordering.** Deliver Unit Talk as a trustworthy,
+      production-ready, revenue-generating product. Milestone 1 (contained Smart
+      Form Track Only pilot) first. Immediately afterward, establish reliable
+      ongoing internal pick submission, persistence, grading/settlement and
+      statistics, so a real performance history exists before member-facing
+      Discord delivery launches.
+
+      2. **Operating authority.** Claude owns decomposition, sequencing, agent
+      allocation, implementation coordination, verification, integration and
+      continuation. Product priorities come from this mission and live
+      production evidence; Linear records the work.
+
+      3. **Reserved-decision presentation.** Reserved decisions are surfaced
+      with preparation already complete and a concrete recommended action. A
+      reserved decision blocks only dependent work.
+
+
+      Scope: `docs/mission/intent.md` only, plus the lane's own proof artifacts.
+      No gate, tier, or merge-authority change.
+    captured_at: 2026-09-05T15:16:42.704Z
+    description_sha256: 425dc4dc13f5f0c9034257abc1fd79048d52f1326ef4bb9ba35b14402523d5e6
+  contract_hash: 677e1a541fb2953be8a61bc227d0a111e38e7c996b3f692c7b88215ecd2862c8
