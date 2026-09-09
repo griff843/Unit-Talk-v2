@@ -1,0 +1,212 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1860
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1860
+  objective: Record Milestone 1 complete and reconcile the mission plan onto Milestone 2
+  acceptance_criteria:
+    - >-
+      Milestone 1 was performed end to end by Griff against the deployed system
+      on 2026-09-09 and verified by governed read-only production observation.
+
+
+      Pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b` (submission
+      `d70c0e43-3ab1-420f-95b1-6f27e2429756`), created 2026-09-09T03:34:48Z on
+      deployed release `755e52a6c` (Deploy run 34296962788, 2026-09-09T00:54Z).
+
+
+      Verified against production `zfzdnfwdarxucxtaojxm`:
+
+
+      * capper_id = griff843; submitted_by = griff843 (canonical, no local-part
+      derivation)
+
+      * participants resolve to real rows: Dodgers (away) / Brewers (home), MLB
+      teams
+
+      * moneyline, selection Dodgers, line null (correct for moneyline), odds
+      -110, stake 3.00 units, conviction 6 -> confidence 0.60, book fanatics
+
+      * metadata.distributionMode = "track-only"
+
+      * zero rows in distribution_outbox, command_center_delivery_mappings,
+      execution_intents, settlement_records for the pick; zero outbox rows
+      repo-wide since 03:00Z
+
+      * containment parked: deploy emitted syndicate_machine_mode.validated
+      mode=parked
+
+      * provenance honest: participantResolution.resolution = canonical for
+      teams, eventId recorded as null rather than fabricated
+
+
+      Scope of this lane: update `docs/mission/plan.md` only — record Milestone
+      1 complete, reconcile current truth (deployed SHA, open PRs, readiness),
+      and restate the board as Milestone 2.
+
+
+      Findings to record rather than act on in this lane:
+
+
+      1. Promotion force-promote: the pick carries promotion_status=qualified /
+      promotion_target=best-bets via override_action=force_promote, reason
+      "smart-form submissions route directly to best-bets", promoting score
+      64.02 against policy minimumScore 70. Harmless under track-only; under
+      delivery-eligible it would queue a below-threshold pick to a member
+      channel. Milestone 2 item.
+
+      2. `governance.awaiting-approval-drift` has failed 12,634 times, latest
+      2026-09-09T03:30Z, on a static backlog of 14,984 stale awaiting_approval
+      picks with countIncreased=false. A permanently-red monitor cannot signal
+      genuine new drift. Repair belongs in the monitor's classification, not in
+      the data (production data deletion is reserved).
+
+      3. Grading is alive in production — `UNIT_TALK_GRADING_CRON_AUTORUN=true`
+      is hardcoded at deploy.yml:540 and not gated by containment; 13,720
+      successful `grading.run` rows, latest 2026-09-09T02:49Z. Cadence is
+      irregular (~90-150 min gaps), which Milestone 2 condition 3 ("on their
+      intended schedule") should measure.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Milestone 1 was performed end to end by Griff against the deployed system
+      on 2026-09-09 and verified by governed read-only production observation.
+
+
+      Pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b` (submission
+      `d70c0e43-3ab1-420f-95b1-6f27e2429756`), created 2026-09-09T03:34:48Z on
+      deployed release `755e52a6c` (Deploy run 34296962788, 2026-09-09T00:54Z).
+
+
+      Verified against production `zfzdnfwdarxucxtaojxm`:
+
+
+      * capper_id = griff843; submitted_by = griff843 (canonical, no local-part
+      derivation)
+
+      * participants resolve to real rows: Dodgers (away) / Brewers (home), MLB
+      teams
+
+      * moneyline, selection Dodgers, line null (correct for moneyline), odds
+      -110, stake 3.00 units, conviction 6 -> confidence 0.60, book fanatics
+
+      * metadata.distributionMode = "track-only"
+
+      * zero rows in distribution_outbox, command_center_delivery_mappings,
+      execution_intents, settlement_records for the pick; zero outbox rows
+      repo-wide since 03:00Z
+
+      * containment parked: deploy emitted syndicate_machine_mode.validated
+      mode=parked
+
+      * provenance honest: participantResolution.resolution = canonical for
+      teams, eventId recorded as null rather than fabricated
+
+
+      Scope of this lane: update `docs/mission/plan.md` only — record Milestone
+      1 complete, reconcile current truth (deployed SHA, open PRs, readiness),
+      and restate the board as Milestone 2.
+
+
+      Findings to record rather than act on in this lane:
+
+
+      1. Promotion force-promote: the pick carries promotion_status=qualified /
+      promotion_target=best-bets via override_action=force_promote, reason
+      "smart-form submissions route directly to best-bets", promoting score
+      64.02 against policy minimumScore 70. Harmless under track-only; under
+      delivery-eligible it would queue a below-threshold pick to a member
+      channel. Milestone 2 item.
+
+      2. `governance.awaiting-approval-drift` has failed 12,634 times, latest
+      2026-09-09T03:30Z, on a static backlog of 14,984 stale awaiting_approval
+      picks with countIncreased=false. A permanently-red monitor cannot signal
+      genuine new drift. Repair belongs in the monitor's classification, not in
+      the data (production data deletion is reserved).
+
+      3. Grading is alive in production — `UNIT_TALK_GRADING_CRON_AUTORUN=true`
+      is hardcoded at deploy.yml:540 and not gated by containment; 13,720
+      successful `grading.run` rows, latest 2026-09-09T02:49Z. Cadence is
+      irregular (~90-150 min gaps), which Milestone 2 condition 3 ("on their
+      intended schedule") should measure.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1860/record-milestone-1-complete-and-reconcile-the-mission-plan-onto
+    title: Record Milestone 1 complete and reconcile the mission plan onto Milestone 2
+    description: >-
+      Milestone 1 was performed end to end by Griff against the deployed system
+      on 2026-09-09 and verified by governed read-only production observation.
+
+
+      Pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b` (submission
+      `d70c0e43-3ab1-420f-95b1-6f27e2429756`), created 2026-09-09T03:34:48Z on
+      deployed release `755e52a6c` (Deploy run 34296962788, 2026-09-09T00:54Z).
+
+
+      Verified against production `zfzdnfwdarxucxtaojxm`:
+
+
+      * capper_id = griff843; submitted_by = griff843 (canonical, no local-part
+      derivation)
+
+      * participants resolve to real rows: Dodgers (away) / Brewers (home), MLB
+      teams
+
+      * moneyline, selection Dodgers, line null (correct for moneyline), odds
+      -110, stake 3.00 units, conviction 6 -> confidence 0.60, book fanatics
+
+      * metadata.distributionMode = "track-only"
+
+      * zero rows in distribution_outbox, command_center_delivery_mappings,
+      execution_intents, settlement_records for the pick; zero outbox rows
+      repo-wide since 03:00Z
+
+      * containment parked: deploy emitted syndicate_machine_mode.validated
+      mode=parked
+
+      * provenance honest: participantResolution.resolution = canonical for
+      teams, eventId recorded as null rather than fabricated
+
+
+      Scope of this lane: update `docs/mission/plan.md` only — record Milestone
+      1 complete, reconcile current truth (deployed SHA, open PRs, readiness),
+      and restate the board as Milestone 2.
+
+
+      Findings to record rather than act on in this lane:
+
+
+      1. Promotion force-promote: the pick carries promotion_status=qualified /
+      promotion_target=best-bets via override_action=force_promote, reason
+      "smart-form submissions route directly to best-bets", promoting score
+      64.02 against policy minimumScore 70. Harmless under track-only; under
+      delivery-eligible it would queue a below-threshold pick to a member
+      channel. Milestone 2 item.
+
+      2. `governance.awaiting-approval-drift` has failed 12,634 times, latest
+      2026-09-09T03:30Z, on a static backlog of 14,984 stale awaiting_approval
+      picks with countIncreased=false. A permanently-red monitor cannot signal
+      genuine new drift. Repair belongs in the monitor's classification, not in
+      the data (production data deletion is reserved).
+
+      3. Grading is alive in production — `UNIT_TALK_GRADING_CRON_AUTORUN=true`
+      is hardcoded at deploy.yml:540 and not gated by containment; 13,720
+      successful `grading.run` rows, latest 2026-09-09T02:49Z. Cadence is
+      irregular (~90-150 min gaps), which Milestone 2 condition 3 ("on their
+      intended schedule") should measure.
+    captured_at: 2026-09-09T03:50:56.422Z
+    description_sha256: 01cf07b05d906f3007c98044f28f5da26c0b68290317f371144faf23f129d133
+  contract_hash: dffa7efc048fede11cb38e14f039045b80439573908e155ddfb07dc807757722
