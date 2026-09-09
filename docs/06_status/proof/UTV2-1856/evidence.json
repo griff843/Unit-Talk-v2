@@ -6,12 +6,12 @@
   "proof_profile": "app-runtime",
   "status": "pending_merge",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "c840ea827f8d222d0281790252340177b08b79a1",
     "verified_source_sha": "5fbf28c99b47fcdeac9376c8eedee8d45c0bd901",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-08T16:30:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-09T00:12:25.476Z",
     "anchor_note": "5fbf28c99b47fcdeac9376c8eedee8d45c0bd901 is this branch's current anchor: the seventh `main` resync merge, and the last commit on this branch touching a path outside docs/06_status/proof/UTV2-1856/. Its parent 413823a85052500d0a62ba26c4dbc92c2532e567 is the in-memory / Database reference-data parity repair, the last commit this lane authored; the server change this lane exists for is 762a97afea7fabe1d7e5b92901bb9580203fdd37 and is unchanged since. The anchor supersedes 83f4ea04c4defb3b2755a292be486a5bd8ca9277, which was the anchor until the parity repair landed. Two independent reasons required the move: the parity repair is real code outside the proof directory, and proof-binding-validator.ts rule 4 admits only docs/06_status/proof/ and docs/06_status/lanes/ between verified_source_sha and HEAD, which docs/06_status/readiness/readiness-score.json is not. Receipt provenance is stated per receipt rather than collapsed onto the anchor: the local commands, the browser runs and the three mutations were measured at the tree of 413823a85052500d0a62ba26c4dbc92c2532e567, whose only difference from the anchor tree is readiness-score.json; the CI receipts previously recorded here were taken at 83f4ea04c4defb3b2755a292be486a5bd8ca9277, a tree WITHOUT the parity repair, and are retained as superseded rather than restated onto this head. The authoritative CI receipts for this head are recorded once the run at this head concludes. An earlier resync brought UTV2-1859 (apps/smart-form/lib/form-utils.ts and its tests), which is why the browser evidence exercises this lane's server change and the client change that unblocks it in one tree. Corrected at PM review: this anchor is the gates' binding identity only. No receipt in this bundle was obtained at it. The local commands and browser runs were executed at 413823a85052500d0a62ba26c4dbc92c2532e567, and the authoritative CI receipts (run 34277374399) were obtained at 740f027704cbab3f94edefe370b67328a74230f7. See receipt_provenance for each SHA and its measured, proof-only difference to the final head 449b3c90bb809bde3c76b99d70e0ad449ff53cf2."
   },
   "static_proof": {
