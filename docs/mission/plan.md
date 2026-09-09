@@ -346,10 +346,15 @@ secret differs cannot be checked without reading a secret.
 
 **What this plan therefore asks of Griff is smaller than an unpark, and is stated under "Requires
 Griff" below**: confirm whether the production provider key is active, and — only if it is —
-authorize a *bounded* operator-run results backfill under `DB_ENVIRONMENT_OPERATOR_POLICY.md`. Its
-blast radius must be bounded before it is requested, because `ingestLeague` writes offers and
-events broadly rather than results alone. **No containment change is requested, and the earlier
-implication that one would be is withdrawn.**
+authorize a *bounded* operator-run results backfill under `DB_ENVIRONMENT_OPERATOR_POLICY.md`.
+**That packet is now written** — `docs/05_operations/RESULTS_BACKFILL_AUTHORIZATION_PACKET.md`
+(UTV2-1870). The condition this plan attached to writing it — that the blast radius be bounded
+first, because `ingestLeague` was believed to write offers and events broadly rather than results
+alone — was satisfied by UTV2-1866, and satisfied by a *control* rather than by a more careful
+reading: a results-only run is now mechanically confined to eight write methods across six tables,
+and a dry run reports the row counts of the exact window it is given without performing any of
+them. **No containment change is requested, and the earlier implication that one would be is
+withdrawn.**
 
 ### Executable now, under existing authority, nothing reserved
 
@@ -366,8 +371,17 @@ In dependency order. None of these needs Griff and none touches a reserved surfa
    and only repetition tests it. Different market shapes — a player prop (now that UTV2-1859
    removed the client-side refusal), a spread — because condition 2's provenance guarantee is
    untested outside moneyline. This is an operator action, not an agent one.
-4. **Bound the results backfill before requesting it**, so the reserved item below arrives with its
-   blast radius measured rather than described.
+4. ~~**Bound the results backfill before requesting it**~~ — **done, twice over.** UTV2-1866
+   (#1544) replaced the *reading* of `ingest-league.ts` with an enforced classification:
+   `apps/ingestor/src/write-surface.ts` maps all 16 ingestor write methods to physical tables and
+   names the 31 reads explicitly, so an unclassified new method fails a completeness assertion
+   rather than defaulting to harmless; a blast-radius test (`ingestor.test.ts:4247`) proxies the
+   bundle and asserts a `resultsOnly` run performs only the eight permitted writes; and a dry-run
+   bundle reports per-table counts having written nothing, failing closed on an unclassified write
+   rather than under-reporting. UTV2-1870 then wrote the packet itself,
+   `docs/05_operations/RESULTS_BACKFILL_AUTHORIZATION_PACKET.md`. **`picks`, `submissions`,
+   `settlement_records` and `distribution_outbox` are not in the ingestor write surface at all**,
+   so no backfill can create, grade, settle or deliver a pick.
 5. **Repair the grading pass's N+1.** Every pass loops all ~22,290 picks with a sequential
    `await repositories.settlements.findLatestForPick(pick.id)` (`grading-service.ts:105`). Each run
    records `started_at`→`finished_at` of ~240ms while consecutive runs are 88–152 minutes apart, so
@@ -1543,7 +1557,8 @@ Every other item below blocks only itself.
    targets from the forced `none`), and it is not necessary (operator CLI scripts reach the results
    writers in-process without the daemon). Both are evidenced under "Layer 3 is answered" above.
    **What replaces it is smaller and is item 6a.**
-6a. **Confirm whether the production `SGO_API_KEY` is active** — reserved decision 4, and the
+6a. **Confirm whether the production `SGO_API_KEY` is active** — reserved decision 4, prepared in
+   full as `docs/05_operations/RESULTS_BACKFILL_AUTHORIZATION_PACKET.md`, and the
    smallest operator action that closes the last open question in Milestone 2 condition 3. The key
    available to tooling returns `403 Inactive API key`, verified live on 2026-09-09; whether the
    production secret differs cannot be checked without reading it. **Non-secret success criterion:**
@@ -1554,9 +1569,13 @@ Every other item below blocks only itself.
    If it comes back inactive, layer 3 becomes a **paid provider commitment** — reserved decision 3 —
    and this plan will say so rather than routing around it. If it comes back active, the follow-on
    ask is a *bounded* operator-run results backfill under `DB_ENVIRONMENT_OPERATOR_POLICY.md`, and
-   **that packet is not written yet and is not requested here**: `ingestLeague` writes offers and
-   events broadly rather than results alone, so its blast radius has to be measured before it is
-   put in front of anyone. Nothing about 6a authorizes a write.
+   **that packet is now written and waiting**:
+   `docs/05_operations/RESULTS_BACKFILL_AUTHORIZATION_PACKET.md` (UTV2-1870). It states the
+   enforced six-table blast radius, both exact operator commands, the four things a dry-run report
+   must show before the write run is authorized, the rollback position (there is none — which is
+   why the dry run is mandatory and the first window is one day), and both reserved branches.
+   **Nothing about 6a authorizes a write**, and the packet asks for the dry run — which writes
+   nothing — before it asks for anything else.
 7. **Review the approval carry-forward Merge Gate integration** (UTV2-1836) — merge authority,
    reserved decision 7. The verifier (`scripts/ops/approval-carry-forward.ts`, #1508) and its
    trusted evidence collector (`scripts/ops/carry-forward-collect.ts`) are both on `main` and
@@ -1590,6 +1609,29 @@ granted; the `ALLOWED_CAPPER_EMAILS` reshape; the #1477 decision; the #1501 appr
 scope override.
 
 ## Learned
+
+- **A caveat that blocks an ask can be retired by building a control, and that is cheaper than
+  reading more carefully.** This plan declined for days to write the results-backfill packet on the
+  grounds that `ingestLeague` "writes offers and events broadly rather than results alone, so its
+  blast radius has to be measured before it is put in front of anyone." The obvious response was to
+  go read `ingest-league.ts` more carefully and write down what it does — and that would have been
+  worthless, because a reading is invalidated by the next edit and nobody would know. UTV2-1866
+  instead made the claim testable: the write surface is enumerated with reads named **explicitly**
+  so a new method fails a completeness assertion rather than defaulting to harmless, and the
+  behavioural claim is asserted by proxying the bundle rather than by inspecting the branch. The
+  packet then cites the control, not the code path. **The general form: when a decision is blocked
+  on "we cannot state what this does", the deliverable is the mechanism that keeps the statement
+  true, not the statement.** This is the same rule as the UTV2-1688 duplicated-regex lesson and the
+  UTV2-1856 client-guard lesson, arrived at from the opposite direction — those two are what
+  happens when the coupling is documented in a comment instead.
+
+- **The safety direction of a reporting tool is a design decision, and it has a right answer.** The
+  dry-run bundle overlays its own simulated writes onto subsequent reads, because without the
+  overlay a would-be-created event is invisible to the following `findByExternalId` and every
+  result under it counts as `skippedEventNotFound` — an *undercount*, which reads as a smaller
+  blast radius than the real run would have. It also refuses outright on an unclassified write
+  rather than dropping it. Both choices err toward over-reporting. A safety tool that can be wrong
+  in the reassuring direction is worse than no tool, because it is believed.
 
 - **A milestone closed, and the thing that closed it was a dispatch — not a repair.** For five
   reconciliations this plan named an engineering blocker as the last obstacle to Milestone 1, and
