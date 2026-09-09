@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1868",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "e26a7e2a38d2943d775c5289a8b74cc3a1f5405a",
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null,
+    "sha_type": "verified_source_sha",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS - pnpm exec tsc -b tsconfig.json, exit 0, no diagnostics.",
+      "pnpm_test": "PASS - 100 test files, node:test + tsx --test, fail 0 in every file, exit 0.",
+      "pnpm_lint": "PASS - pnpm exec eslint over the four touched files, no output.",
+      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: Verdict PASS, rules matched ingestor-provider.",
+      "pnpm_verify": "Not runnable locally: ci:assert-staging-target fails closed outside CI by design. verify is a required check and is green on this PR's head."
+    },
+    "anchor_note": "e26a7e2a3 is the second main-resync merge commit and the last commit on this branch touching any path outside docs/06_status/proof/. The only commit after it is this evidence bundle, so the bundle is anchored to a tree in which every recorded command was run. The earlier anchor 2af53643c named in the first draft of verification.md is superseded rather than left standing: it predates two main resyncs that branch protection's strict mode required.",
+    "bound_at": "2026-09-09T13:30:00.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "detail": "100 test files, fail 0 in every file, exit 0. Touched suites: apps/ingestor/src/ingestor.test.ts tests 93 pass 93 fail 0; apps/ingestor/src/results-resolver.test.ts tests 4 pass 4 fail 0."
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm exec eslint apps/ingestor/src/sgo-fetcher.ts apps/ingestor/src/results-resolver.ts apps/ingestor/src/ingestor.test.ts apps/ingestor/src/results-resolver.test.ts",
+      "detail": "exit 0, no findings"
+    },
+    "scope": {
+      "status": "PASS",
+      "detail": "Source changes are confined to apps/ingestor/src/**, matching file_scope_lock. No contract, no migration, no schema change, no workflow change."
+    },
+    "mutation_testing": {
+      "status": "PASS",
+      "detail": "Three mutations, each applied alone and reverted. (1) never capture a side in sgo-fetcher.ts -> 'not ok 64 the fetcher carries the home/away stat entity as providerSide', 92 pass 1 fail. (2) ignore providerSide in results-resolver.ts -> 'not ok 62 home and away game-line scores land on distinct participants' and 'not ok 63 an unresolvable team side is skipped and counted', 91 pass 2 fail. (3) remove the sideId fallback -> 'not ok 64', 92 pass 1 fail.",
+      "significance": "Mutations 1 and 3 fail a fetcher test and no resolver test; mutation 2 fails the two resolver tests and no fetcher test. The two halves of the repair are independently constrained rather than jointly covered by a single assertion."
+    },
+    "no_new_gate": {
+      "status": "PASS",
+      "command": "git diff origin/main --name-only -- .github/",
+      "observed": "empty",
+      "significance": "No workflow, required check, label, approval artifact or lane type is added or changed."
+    }
+  },
+  "known_gaps": {
+    "no_runtime_execution": "No runtime execution against a provider or a live database was performed, and none is claimed. SYNDICATE_MACHINE_MODE is parked, provider ingestion is not activated, and this lane requests no containment change. proof_profile is therefore 'static': the repair is constrained by unit and mutation tests, not by a live run.",
+    "defect_established_by_read_only_sql": "The defect itself was established from read-only production SQL rather than from a run (points-all-game-ml: 280 rows, 0 with participant, 280 events, max 1 row per event; game_total_ou 13 against points-all-game-ml 9 on the same event, so the stored value is one team's score). Those queries prove the defect existed; they do not exercise the repair, and are not offered as runtime proof of it.",
+    "existing_rows_untouched": "The ~280 existing ambiguous rows per game-line family are not reinterpreted. This changes future writes only: no migration, no backfill, no write against production. Correcting them requires re-derivation against a real payload, which is separate work."
+  }
+}

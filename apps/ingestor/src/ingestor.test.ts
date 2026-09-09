@@ -2304,6 +2304,7 @@ test('fetchSGOResults extracts scored markets from explicit SGO odd and particip
       oddId: 'assists-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'assists-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 7,
       scoringSupported: true,
     },
@@ -2311,6 +2312,7 @@ test('fetchSGOResults extracts scored markets from explicit SGO odd and particip
       oddId: 'points-LEBRON_JAMES_1_NBA-game-ou-over',
       baseMarketKey: 'points-all-game-ou',
       providerParticipantId: 'LEBRON_JAMES_1_NBA',
+      providerSide: null,
       score: 31,
       scoringSupported: true,
     },
@@ -2538,6 +2540,7 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
             oddId: 'points-player-UNKNOWN_PLAYER-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: 'UNKNOWN_PLAYER',
+            providerSide: null,
             score: 9,
             scoringSupported: true,
           },
@@ -2545,6 +2548,7 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
             oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+            providerSide: null,
             score: 9,
             scoringSupported: true,
           },
@@ -2608,6 +2612,7 @@ test('resolveAndInsertResults warns and skips malformed scored markets', async (
             oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+            providerSide: null,
             score: 31,
             scoringSupported: true,
           },
@@ -2615,6 +2620,7 @@ test('resolveAndInsertResults warns and skips malformed scored markets', async (
             oddId: 'broken',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: undefined as unknown as string,
+            providerSide: null,
             score: 12,
             scoringSupported: true,
           },
@@ -2672,6 +2678,7 @@ test('resolveAndInsertResults inserts game-line result with null participant_id'
             oddId: 'points-all-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: null,
+            providerSide: null,
             score: 227,
             scoringSupported: true,
           },
@@ -2695,6 +2702,211 @@ test('resolveAndInsertResults inserts game-line result with null participant_id'
   assert.equal(results[0]?.actual_value, 227);
 });
 
+const COMPLETED_SGO_STATUS = {
+  started: true,
+  completed: true,
+  cancelled: false,
+  ended: true,
+  live: false,
+  delayed: false,
+  finalized: true,
+  oddsAvailable: false,
+} as const;
+
+/*
+ * UTV2-1868 — a game-line market whose SGO stat entity is `home` or `away` is one
+ * team's score, not the game's.
+ *
+ * Before this repair, `normalizeExplicitParticipantId` discarded the `home`/`away`
+ * entity (correctly: it is not a provider participant id) and the resolver then wrote
+ * the score with participant_id NULL. Both sides therefore landed on the same address,
+ * `game_results_game_line_unique_idx` rejected the second, and
+ * DatabaseGradeResultRepository.insert swallowed the 23505 and returned the first row
+ * — so one team's score was lost and still counted as inserted. Measured in production:
+ * every game-line family holds exactly one row per event and zero with a participant.
+ */
+test('UTV2-1868: home and away game-line scores land on distinct participants', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const event = createResolvedEvent({ status: { ...COMPLETED_SGO_STATUS } });
+  await resolveSgoEntities([event], repositories);
+
+  const summary = await resolveAndInsertResults(
+    [
+      {
+        providerEventId: 'evt-entity-1',
+        status: { ...COMPLETED_SGO_STATUS },
+        playerStats: [],
+        scoredMarkets: [
+          {
+            oddId: 'points-home-game-ml-home',
+            baseMarketKey: 'nba-ml-all-game',
+            providerParticipantId: null,
+            providerSide: 'home',
+            score: 118,
+            scoringSupported: true,
+          },
+          {
+            oddId: 'points-away-game-ml-away',
+            baseMarketKey: 'nba-ml-all-game',
+            providerParticipantId: null,
+            providerSide: 'away',
+            score: 109,
+            scoringSupported: true,
+          },
+        ],
+        resolvedEvent: null,
+      },
+    ],
+    repositories,
+  );
+
+  assert.equal(summary.insertedResults, 2);
+  assert.equal(summary.skippedTeamSideUnresolved, 0);
+
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+  const links = await repositories.eventParticipants.listByEvent(
+    resolvedEvent.id,
+  );
+  const homeParticipantId = links.find(
+    (link) => link.role === 'home',
+  )?.participant_id;
+  const awayParticipantId = links.find(
+    (link) => link.role === 'away',
+  )?.participant_id;
+  assert.ok(homeParticipantId);
+  assert.ok(awayParticipantId);
+  assert.notEqual(homeParticipantId, awayParticipantId);
+
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  assert.equal(results.length, 2);
+  // Both sides survive, each addressed to its own team, with its own score.
+  assert.equal(
+    results.find((row) => row.participant_id === homeParticipantId)
+      ?.actual_value,
+    118,
+  );
+  assert.equal(
+    results.find((row) => row.participant_id === awayParticipantId)
+      ?.actual_value,
+    109,
+  );
+  // ...and neither is the participant-less row that used to swallow the other.
+  assert.equal(
+    results.filter((row) => row.participant_id === null).length,
+    0,
+  );
+});
+
+test('UTV2-1868: an unresolvable team side is skipped and counted, never written participant-less', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  // Deliberately no resolveSgoEntities call: the event exists but carries no
+  // event_participants rows, so the home side cannot be resolved.
+  const insertedEvent = await repositories.events.upsertByExternalId({
+    externalId: 'evt-no-links',
+    sportId: 'NBA',
+    eventName: 'Unlinked Event',
+    eventDate: '2026-03-26T23:30:00.000Z',
+    status: 'completed',
+    metadata: {},
+  });
+
+  const warnings: string[] = [];
+  const summary = await resolveAndInsertResults(
+    [
+      {
+        providerEventId: 'evt-no-links',
+        status: { ...COMPLETED_SGO_STATUS },
+        playerStats: [],
+        scoredMarkets: [
+          {
+            oddId: 'points-home-game-ml-home',
+            baseMarketKey: 'nba-ml-all-game',
+            providerParticipantId: null,
+            providerSide: 'home',
+            score: 118,
+            scoringSupported: true,
+          },
+        ],
+        resolvedEvent: null,
+      },
+    ],
+    repositories,
+    {
+      warn: (message: string) => warnings.push(message),
+      info: () => {},
+    },
+  );
+
+  assert.equal(summary.insertedResults, 0);
+  assert.equal(summary.skippedTeamSideUnresolved, 1);
+  // The skip is its own counter, not folded into the aggregate.
+  assert.equal(summary.skippedResults, 0);
+  assert.ok(
+    warnings.some((message) => message.includes('unresolved home participant')),
+  );
+  const results = await repositories.gradeResults.listByEvent(insertedEvent.id);
+  assert.equal(results.length, 0);
+});
+
+test('UTV2-1868: the fetcher carries the home/away stat entity as providerSide', async () => {
+  const results = await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-03-27T02:00:00.000Z',
+    fetchImpl: (async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              eventID: 'evt-side-1',
+              status: { finalized: true, completed: true, started: true },
+              odds: {
+                'points-home-game-ml-home': {
+                  oddID: 'points-home-game-ml-home',
+                  statEntityID: 'home',
+                  scoringSupported: true,
+                  score: 118,
+                },
+                'points-away-game-ml-away': {
+                  oddID: 'points-away-game-ml-away',
+                  statEntityID: 'away',
+                  scoringSupported: true,
+                  score: 109,
+                },
+                'points-all-game-ou-over': {
+                  oddID: 'points-all-game-ou-over',
+                  statEntityID: 'all',
+                  scoringSupported: true,
+                  score: 227,
+                },
+                // A sided market whose stat entity is genuinely `all`: the side
+                // survives via the oddID's own sideID segment.
+                'points-all-reg-ml3way-home': {
+                  oddID: 'points-all-reg-ml3way-home',
+                  statEntityID: 'all',
+                  scoringSupported: true,
+                  score: 118,
+                },
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch,
+  });
+
+  const markets = results[0]?.scoredMarkets ?? [];
+  const sideOf = (oddId: string) =>
+    markets.find((market) => market.oddId === oddId)?.providerSide;
+  assert.equal(sideOf('points-home-game-ml-home'), 'home');
+  assert.equal(sideOf('points-away-game-ml-away'), 'away');
+  // A genuinely game-scoped market keeps a null side and stays a participant-less row.
+  assert.equal(sideOf('points-all-game-ou-over'), null);
+  assert.equal(sideOf('points-all-reg-ml3way-home'), 'home');
+});
+
 test('resolveAndInsertResults deduplicates game-line results (idempotent for null participant)', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
   const event = createResolvedEvent({
@@ -2715,6 +2927,7 @@ test('resolveAndInsertResults deduplicates game-line results (idempotent for nul
     oddId: 'points-all-game-ou-over',
     baseMarketKey: 'points-all-game-ou',
     providerParticipantId: null as null,
+    providerSide: null,
     score: 227,
     scoringSupported: true,
   };
@@ -3382,6 +3595,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'points-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 31,
       scoringSupported: true,
     },
@@ -3389,6 +3603,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'assists-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'assists-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 7,
       scoringSupported: true,
     },
@@ -3396,6 +3611,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'rebounds-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'rebounds-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 4,
       scoringSupported: true,
     },
@@ -3403,6 +3619,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'pra-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'pra-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 42,
       scoringSupported: true,
     },
@@ -3410,6 +3627,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'pts-rebs-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'pts-rebs-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 35,
       scoringSupported: true,
     },
@@ -3417,6 +3635,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'pts-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'pts-asts-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 38,
       scoringSupported: true,
     },
@@ -3424,6 +3643,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'rebs-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'rebs-asts-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 11,
       scoringSupported: true,
     },
