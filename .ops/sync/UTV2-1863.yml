@@ -1,0 +1,130 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1863
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1863
+  objective: Lease reclaim is TTL-gated, so every merged lane's lease strands its
+    files for 48 hours
+  acceptance_criteria:
+    - "`reclaimLease` admits a lease whose lane has reached a terminal manifest
+      state, regardless of TTL, reusing the existing terminality predicate
+      rather than a second copy of it."
+    - A lease whose lane state cannot be determined is **not** reclaimable —
+      unknown must never be treated as terminal. This is the fail-closed half
+      and must have its own test.
+    - A lease whose lane is genuinely still active and whose TTL has not lapsed
+      remains unreclaimable, with the current `lease_conflict` code and message
+      unchanged.
+    - "`reclaim_history` records which of the two grounds admitted the reclaim
+      (terminal lane vs. lapsed TTL), so an operator can tell them apart
+      afterwards."
+    - "Mutation-checked: reverting the terminality admission turns a test red,
+      and so does removing the unknown-state guard."
+  guardrails: []
+  non_goals:
+    - No change to `file_scope_lock` semantics, to what `ops:lane-start`
+      refuses, to TTL values, or to `ops:lease release`. This lane makes an
+      existing manual escape unnecessary; it does not remove it.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      What was measured
+      On 2026-09-09 exactly four leases were `active`: [UTV2-1529](https://linear.app/unit-talk-v2/issue/UTV2-1529/closeout-and-review-gates-must-consume-trusted-scope-overridev1), [UTV2-1855](https://linear.app/unit-talk-v2/issue/UTV2-1855/smart-form-client-units-stepper-exceeds-the-schema-cap-and-a-dead-odds), [UTV2-1858](https://linear.app/unit-talk-v2/issue/UTV2-1858/reconcile-docsmissionplanmd-against-main-the-pt1-admission-and-the), [UTV2-1860](https://linear.app/unit-talk-v2/issue/UTV2-1860/record-milestone-1-complete-and-reconcile-the-mission-plan-onto). **All four** had manifests reading `status: done` on `origin/main`, each with a merged PR ([griff843/Unit-Talk-v2#1532](https://linear.app/unit-talk-v2/review/fixtruth-check-honor-codeowners-scope-overridev1-at-closeout-s1-utv2-0cc844cd027e), [griff843/Unit-Talk-v2#1533](https://linear.app/unit-talk-v2/review/utv2-1855-clamp-the-smart-form-units-stepper-to-the-schema-bound-5b548d5afd40), [griff843/Unit-Talk-v2#1538](https://linear.app/unit-talk-v2/review/utv2-1858-reconcile-the-mission-plan-the-pt1-admission-closed-and-26ce8a1acf09), [griff843/Unit-Talk-v2#1540](https://linear.app/unit-talk-v2/review/utv2-1860-record-milestone-1-complete-and-reconcile-the-mission-plan-219c909587a4)), and each with an `owner_pid` pointing at a dead process.
+
+      That reframes what the plan had recorded as a five-occurrence defect. It is not occasional — it is what happens on **every** lane. The count understated it because only the leaks that happened to collide with a new lane's declared scope were ever noticed. [UTV2-1860](https://linear.app/unit-talk-v2/issue/UTV2-1860/record-milestone-1-complete-and-reconcile-the-mission-plan-onto)'s lock on `docs/mission/plan.md` would have refused [UTV2-1862](https://linear.app/unit-talk-v2/issue/UTV2-1862/reconcile-the-mission-plan-milestone-2s-results-supply-question-is); the other three were invisible until enumerated directly.
+    - >-
+      Cause
+
+      `reclaimLease` (`scripts/ops/lease-registry.ts:522-531`) gates purely on
+      the clock:
+
+
+      ```ts
+
+      const expired = new Date(lease.expires_at).getTime() <= now.getTime();
+
+      if (lease.status === 'active' && !expired) {
+        return { ok: false, code: 'lease_conflict', message: `Lease ${issueId} is not stale and cannot be reclaimed` };
+      }
+
+      ```
+
+
+      A provably finished lane is therefore unreclaimable for its full 48-hour
+      TTL, and the only escape is knowing that `ops:lease release --issue <ID>
+      --actor <who> --reason <why>` exists. `ops:lease-recover` refuses for the
+      same reason.
+
+
+      `findLeasesHeldByTerminalLanes` (`:770-800`) already computes exactly the
+      right predicate — it reads lane manifest status, skips an issue whose lane
+      state is unknown rather than assuming terminality, and reuses
+      `ACTIVE_NON_RECLAIMED` as the definition of "still holds its scope". The
+      reclaim path simply never consults it.
+    - >-
+      File scope
+
+      * `scripts/ops/lease-registry.ts`
+
+      * `scripts/ops/lease-registry.test.ts`
+
+
+      Both exist, and the test file is already wired into `test:ops`, so no
+      `package.json` edit is required.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its
+    title: Lease reclaim is TTL-gated, so every merged lane's lease strands its
+      files for 48 hours
+    description: |-
+      ## What was measured
+
+      On 2026-09-09 exactly four leases were `active`: [UTV2-1529](https://linear.app/unit-talk-v2/issue/UTV2-1529/closeout-and-review-gates-must-consume-trusted-scope-overridev1), [UTV2-1855](https://linear.app/unit-talk-v2/issue/UTV2-1855/smart-form-client-units-stepper-exceeds-the-schema-cap-and-a-dead-odds), [UTV2-1858](https://linear.app/unit-talk-v2/issue/UTV2-1858/reconcile-docsmissionplanmd-against-main-the-pt1-admission-and-the), [UTV2-1860](https://linear.app/unit-talk-v2/issue/UTV2-1860/record-milestone-1-complete-and-reconcile-the-mission-plan-onto). **All four** had manifests reading `status: done` on `origin/main`, each with a merged PR ([griff843/Unit-Talk-v2#1532](https://linear.app/unit-talk-v2/review/fixtruth-check-honor-codeowners-scope-overridev1-at-closeout-s1-utv2-0cc844cd027e), [griff843/Unit-Talk-v2#1533](https://linear.app/unit-talk-v2/review/utv2-1855-clamp-the-smart-form-units-stepper-to-the-schema-bound-5b548d5afd40), [griff843/Unit-Talk-v2#1538](https://linear.app/unit-talk-v2/review/utv2-1858-reconcile-the-mission-plan-the-pt1-admission-closed-and-26ce8a1acf09), [griff843/Unit-Talk-v2#1540](https://linear.app/unit-talk-v2/review/utv2-1860-record-milestone-1-complete-and-reconcile-the-mission-plan-219c909587a4)), and each with an `owner_pid` pointing at a dead process.
+
+      That reframes what the plan had recorded as a five-occurrence defect. It is not occasional — it is what happens on **every** lane. The count understated it because only the leaks that happened to collide with a new lane's declared scope were ever noticed. [UTV2-1860](https://linear.app/unit-talk-v2/issue/UTV2-1860/record-milestone-1-complete-and-reconcile-the-mission-plan-onto)'s lock on `docs/mission/plan.md` would have refused [UTV2-1862](https://linear.app/unit-talk-v2/issue/UTV2-1862/reconcile-the-mission-plan-milestone-2s-results-supply-question-is); the other three were invisible until enumerated directly.
+
+      ## Cause
+
+      `reclaimLease` (`scripts/ops/lease-registry.ts:522-531`) gates purely on the clock:
+
+      ```ts
+      const expired = new Date(lease.expires_at).getTime() <= now.getTime();
+      if (lease.status === 'active' && !expired) {
+        return { ok: false, code: 'lease_conflict', message: `Lease ${issueId} is not stale and cannot be reclaimed` };
+      }
+      ```
+
+      A provably finished lane is therefore unreclaimable for its full 48-hour TTL, and the only escape is knowing that `ops:lease release --issue <ID> --actor <who> --reason <why>` exists. `ops:lease-recover` refuses for the same reason.
+
+      `findLeasesHeldByTerminalLanes` (`:770-800`) already computes exactly the right predicate — it reads lane manifest status, skips an issue whose lane state is unknown rather than assuming terminality, and reuses `ACTIVE_NON_RECLAIMED` as the definition of "still holds its scope". The reclaim path simply never consults it.
+
+      ## Acceptance criteria
+
+      1. `reclaimLease` admits a lease whose lane has reached a terminal manifest state, regardless of TTL, reusing the existing terminality predicate rather than a second copy of it.
+      2. A lease whose lane state cannot be determined is **not** reclaimable — unknown must never be treated as terminal. This is the fail-closed half and must have its own test.
+      3. A lease whose lane is genuinely still active and whose TTL has not lapsed remains unreclaimable, with the current `lease_conflict` code and message unchanged.
+      4. `reclaim_history` records which of the two grounds admitted the reclaim (terminal lane vs. lapsed TTL), so an operator can tell them apart afterwards.
+      5. Mutation-checked: reverting the terminality admission turns a test red, and so does removing the unknown-state guard.
+
+      ## File scope
+
+      * `scripts/ops/lease-registry.ts`
+      * `scripts/ops/lease-registry.test.ts`
+
+      Both exist, and the test file is already wired into `test:ops`, so no `package.json` edit is required.
+
+      ## Out of scope
+
+      No change to `file_scope_lock` semantics, to what `ops:lane-start` refuses, to TTL values, or to `ops:lease release`. This lane makes an existing manual escape unnecessary; it does not remove it.
+    captured_at: 2026-09-09T06:43:38.503Z
+    description_sha256: 1e685e1a1a4cc076e3c37f29b5595cbd1c7feebc957743047abc5f2f69712605
+  contract_hash: 17003e8d2ee7e1eb97269a43e14756967739f38fe51e570fa58c469b3e890c52

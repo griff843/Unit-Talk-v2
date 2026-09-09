@@ -1,0 +1,34 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1863",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1863-lease-reclaim-terminality",
+  "branch": "claude/utv2-1863-lease-reclaim-terminality",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1542",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/lease-registry.test.ts",
+    "scripts/ops/lease-registry.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "started_at": "2026-09-09T06:43:50.169Z",
+  "heartbeat_at": "2026-09-09T06:52:31.384Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1863-lease-reclaim-terminality.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1863-lease-reclaim-terminality",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
