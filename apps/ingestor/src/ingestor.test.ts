@@ -2881,6 +2881,14 @@ test('UTV2-1868: the fetcher carries the home/away stat entity as providerSide',
                   scoringSupported: true,
                   score: 227,
                 },
+                // A sided market whose stat entity is genuinely `all`: the side
+                // survives via the oddID's own sideID segment.
+                'points-all-reg-ml3way-home': {
+                  oddID: 'points-all-reg-ml3way-home',
+                  statEntityID: 'all',
+                  scoringSupported: true,
+                  score: 118,
+                },
               },
             },
           ],
@@ -2896,6 +2904,7 @@ test('UTV2-1868: the fetcher carries the home/away stat entity as providerSide',
   assert.equal(sideOf('points-away-game-ml-away'), 'away');
   // A genuinely game-scoped market keeps a null side and stays a participant-less row.
   assert.equal(sideOf('points-all-game-ou-over'), null);
+  assert.equal(sideOf('points-all-reg-ml3way-home'), 'home');
 });
 
 test('resolveAndInsertResults deduplicates game-line results (idempotent for null participant)', async () => {

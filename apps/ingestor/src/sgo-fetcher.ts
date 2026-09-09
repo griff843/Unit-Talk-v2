@@ -1423,9 +1423,18 @@ function resolveTeamSideEntity(
   if (explicit === 'home' || explicit === 'away') {
     return explicit;
   }
-  const parsedEntity = parseSgoOddId(oddId)?.statEntityId?.toLowerCase();
+  const parsed = parseSgoOddId(oddId);
+  const parsedEntity = parsed?.statEntityId?.toLowerCase();
   if (parsedEntity === 'home' || parsedEntity === 'away') {
     return parsedEntity;
+  }
+  // Last resort: the sideID segment. Observed game-line ids carry the side in both
+  // places (`points-home-game-ml-home`), but a market whose stat entity is genuinely
+  // `all` can still be sided -- a 3-way moneyline is `...-ml3way-home`. `over`/`under`
+  // and `yes`/`no` sides do not match, so a real game total is unaffected.
+  const parsedSide = parsed?.sideId?.toLowerCase();
+  if (parsedSide === 'home' || parsedSide === 'away') {
+    return parsedSide;
   }
   return null;
 }
