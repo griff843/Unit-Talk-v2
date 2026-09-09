@@ -12,7 +12,7 @@ Tier: T2
 Lane type: runtime
 Branch: claude/utv2-1868-game-line-result-side
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1546
-Head SHA: 2af53643c07b6e815a19c3443f4e754be02631be
+Head SHA: e26a7e2a38d2943d775c5289a8b74cc3a1f5405a
 result: pass
 
 ## ASSERTIONS:
@@ -118,4 +118,4 @@ than writing anything — the fail-closed direction.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1546
 Approved PR head: pending merge
-Execution SHA: 2af53643c07b6e815a19c3443f4e754be02631be
+Execution SHA: e26a7e2a38d2943d775c5289a8b74cc3a1f5405a
