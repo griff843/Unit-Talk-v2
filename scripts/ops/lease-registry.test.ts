@@ -796,3 +796,133 @@ test('a lease already marked stale in an earlier run is still reported as orphan
     assert.equal(leaseReportExitCode(secondRun.orphaned_count), 1);
   });
 });
+
+// --- UTV2-1863: reclaim is gated on lane terminality, not only on the clock ---
+//
+// Before this, `reclaimLease` admitted a reclaim only when the TTL had lapsed.
+// A lane that had merged, truth-closed and gone `done` on `main` therefore kept
+// holding its file scope for the remainder of a 48-hour claude TTL, refusing
+// the next lane on the same files with `lease_conflict`. Eight recorded
+// occurrences: UTV2-1830, 1835, 1838, 1840, 1849, 1855, 1858, 1860.
+
+function reserveActive(registryDir: string, issueId: string) {
+  // Expires well after `NOW` below, so nothing here is admitted by the clock.
+  return reserve(registryDir, issueId, ['scripts/ops/lease-registry.ts'], '2026-05-20T12:00:00.000Z');
+}
+
+const NOW = new Date('2026-05-18T13:00:00.000Z');
+
+test('reclaim admits an unexpired active lease whose lane reached a terminal state', () => {
+  withTempRegistry((registryDir) => {
+    reserveActive(registryDir, 'UTV2-1830');
+    const result = reclaimLease(
+      {
+        issue_id: 'UTV2-1830',
+        actor: 'claude',
+        reason: 'lane merged and truth-closed; lease outlived it',
+      },
+      {
+        registryDir,
+        now: NOW,
+        laneStatusByIssue: new Map([['UTV2-1830', 'done']]),
+      },
+    );
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.code, 'lease_reclaimed');
+    assert.strictEqual(result.ok ? result.lease.status : '', 'reclaimed');
+    assert.strictEqual(
+      result.ok ? result.lease.reclaim_history?.at(-1)?.admitted_by : undefined,
+      'terminal_lane',
+    );
+  });
+});
+
+test('reclaim admits every terminal lane state, not only the successful ones', () => {
+  for (const laneStatus of ['merged', 'done', 'failed', 'superseded', 'cancelled'] as const) {
+    withTempRegistry((registryDir) => {
+      reserveActive(registryDir, 'UTV2-1831');
+      const result = reclaimLease(
+        { issue_id: 'UTV2-1831', actor: 'claude', reason: `lane ${laneStatus}` },
+        { registryDir, now: NOW, laneStatusByIssue: new Map([['UTV2-1831', laneStatus]]) },
+      );
+      assert.strictEqual(result.ok, true, `expected reclaim to be admitted for ${laneStatus}`);
+      assert.strictEqual(
+        result.ok ? result.lease.reclaim_history?.at(-1)?.admitted_by : undefined,
+        'terminal_lane',
+      );
+    });
+  }
+});
+
+// The inversion. Without it the test above would pass on an implementation that
+// admitted everything, which is the failure mode a terminality gate invites.
+test('reclaim still refuses an unexpired active lease whose lane is still running', () => {
+  for (const laneStatus of ['in_progress', 'blocked'] as const) {
+    withTempRegistry((registryDir) => {
+      reserveActive(registryDir, 'UTV2-1832');
+      const result = reclaimLease(
+        { issue_id: 'UTV2-1832', actor: 'claude', reason: 'attempted takeover' },
+        { registryDir, now: NOW, laneStatusByIssue: new Map([['UTV2-1832', laneStatus]]) },
+      );
+      assert.strictEqual(result.ok, false, `expected refusal for ${laneStatus}`);
+      assert.strictEqual(result.code, 'lease_conflict');
+      const stored = JSON.parse(
+        fs.readFileSync(leasePathForIssue('UTV2-1832', registryDir), 'utf8'),
+      ) as DispatchLease;
+      assert.strictEqual(stored.status, 'active');
+      assert.strictEqual(stored.reclaim_history ?? undefined, undefined);
+    });
+  }
+});
+
+// The load-bearing safety property, inherited from `findLeasesHeldByTerminalLanes`
+// rather than reimplemented: an issue absent from the manifest map is UNKNOWN,
+// never terminal. A reclaim path that read a missing manifest as "finished"
+// would hand one lane's files to another on no evidence at all.
+test('reclaim refuses when the lane state is unknown rather than assuming terminal', () => {
+  withTempRegistry((registryDir) => {
+    reserveActive(registryDir, 'UTV2-1833');
+    const result = reclaimLease(
+      { issue_id: 'UTV2-1833', actor: 'claude', reason: 'no manifest for this issue' },
+      { registryDir, now: NOW, laneStatusByIssue: new Map() },
+    );
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'lease_conflict');
+  });
+});
+
+test('a lapsed TTL is still an independent admission rule and is recorded as one', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1834', ['scripts/ops/lease-registry.ts'], '2026-05-18T12:30:00.000Z');
+    const result = reclaimLease(
+      { issue_id: 'UTV2-1834', actor: 'claude', reason: 'TTL lapsed' },
+      {
+        registryDir,
+        now: NOW,
+        // Still running, so only the clock can admit this one.
+        laneStatusByIssue: new Map([['UTV2-1834', 'in_progress']]),
+      },
+    );
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(
+      result.ok ? result.lease.reclaim_history?.at(-1)?.admitted_by : undefined,
+      'lapsed_ttl',
+    );
+  });
+});
+
+test('reclaim matches the lane issue id case-insensitively', () => {
+  withTempRegistry((registryDir) => {
+    reserveActive(registryDir, 'UTV2-1835');
+    const result = reclaimLease(
+      { issue_id: 'utv2-1835', actor: 'claude', reason: 'lowercase issue id' },
+      { registryDir, now: NOW, laneStatusByIssue: new Map([['UTV2-1835', 'merged']]) },
+    );
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(
+      result.ok ? result.lease.reclaim_history?.at(-1)?.admitted_by : undefined,
+      'terminal_lane',
+    );
+  });
+});
