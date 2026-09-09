@@ -33,6 +33,7 @@ function makeResult(
       oddId: `points-all-game-ou-${i}`,
       baseMarketKey: 'points-all-game-ou',
       providerParticipantId: null, // game-line market → inserts without a participant
+      providerSide: null, // stat entity `all` → genuinely game-scoped (UTV2-1868)
       score: 5 + i,
       scoringSupported: true,
     })),

@@ -111,6 +111,16 @@ export interface ResultsResolutionSummary {
    */
   skippedEventNotFound: number;
   skippedEventNotCompleted: number;
+  /**
+   * UTV2-1868: team-sided game-line markets (SGO stat entity `home`/`away`) whose
+   * side could not be resolved to an `event_participants` row for the event. These
+   * are skipped rather than written participant-less, because a participant-less
+   * game-line row cannot say whose score it is and silently collides with the other
+   * side under `game_results_game_line_unique_idx`. Counted separately from
+   * `skippedResults` so an unresolved side is visible rather than folded into the
+   * aggregate.
+   */
+  skippedTeamSideUnresolved: number;
   errors: number;
   /**
    * UTV2-1297 per-step phase timing breakdown (ms) for the results-resolve path.
@@ -132,7 +142,7 @@ export async function resolveAndInsertResults(
   eventResults: SGOEventResult[],
   repositories: Pick<
     IngestorRepositoryBundle,
-    'events' | 'participants' | 'gradeResults'
+    'events' | 'participants' | 'gradeResults' | 'eventParticipants'
   >,
   logger?: Pick<Console, 'warn' | 'info'>,
 ): Promise<ResultsResolutionSummary> {
@@ -153,6 +163,7 @@ export async function resolveAndInsertResults(
     skippedResults: 0,
     skippedEventNotFound: 0,
     skippedEventNotCompleted: 0,
+    skippedTeamSideUnresolved: 0,
     errors: 0,
     phaseTimings: innerTimings,
   };
@@ -161,6 +172,28 @@ export async function resolveAndInsertResults(
     string,
     Awaited<ReturnType<typeof repositories.participants.findByExternalId>>
   >();
+
+  // UTV2-1868: per-event home/away participant ids, resolved lazily from
+  // event_participants.role and reused across every scored market on that event.
+  const sideParticipantsByEventId = new Map<
+    string,
+    { home: string | null; away: string | null }
+  >();
+  const resolveSideParticipantId = async (
+    eventId: string,
+    side: 'home' | 'away',
+  ): Promise<string | null> => {
+    let sides = sideParticipantsByEventId.get(eventId);
+    if (sides === undefined) {
+      const rows = await repositories.eventParticipants.listByEvent(eventId);
+      sides = {
+        home: rows.find((row) => row.role === 'home')?.participant_id ?? null,
+        away: rows.find((row) => row.role === 'away')?.participant_id ?? null,
+      };
+      sideParticipantsByEventId.set(eventId, sides);
+    }
+    return sides[side];
+  };
 
   const loopStartMs = Date.now();
   for (const eventResult of eventResults) {
@@ -204,10 +237,33 @@ export async function resolveAndInsertResults(
             SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ??
             scoredMarket.baseMarketKey;
 
+          // UTV2-1868: a game-line market whose SGO stat entity is `home` or `away`
+          // is one team's score, not the game's. Writing it with participant_id NULL
+          // makes it indistinguishable from the other side and collides with it under
+          // game_results_game_line_unique_idx — where the duplicate is swallowed and
+          // the second team's score is lost. Resolve the side, or skip: an ambiguous
+          // NULL row is worse than no row, because grading cannot detect it.
+          let participantId: string | null = null;
+          if (scoredMarket.providerSide) {
+            participantId = await resolveSideParticipantId(
+              event.id,
+              scoredMarket.providerSide,
+            );
+            if (!participantId) {
+              logger?.warn?.(
+                `[results-resolver] unresolved ${scoredMarket.providerSide} participant ` +
+                  `for event ${eventResult.providerEventId} market ${scoredMarket.oddId}; ` +
+                  'skipping rather than writing a participant-less game-line row',
+              );
+              summary.skippedTeamSideUnresolved += 1;
+              continue;
+            }
+          }
+
           const insertStartMs = Date.now();
           await repositories.gradeResults.insert({
             eventId: event.id,
-            participantId: null,
+            participantId,
             marketKey: canonicalMarketKey,
             actualValue: scoredMarket.score,
             source: 'sgo',
@@ -279,7 +335,9 @@ export async function resolveAndInsertResults(
       `completed=${summary.completedEvents} inserted=${summary.insertedResults} ` +
       `skipped_event_not_found=${summary.skippedEventNotFound} ` +
       `skipped_event_not_completed=${summary.skippedEventNotCompleted} ` +
-      `skipped_markets=${summary.skippedResults} errors=${summary.errors} ` +
+      `skipped_markets=${summary.skippedResults} ` +
+      `skipped_team_side_unresolved=${summary.skippedTeamSideUnresolved} ` +
+      `errors=${summary.errors} ` +
       `phase_timings_ms=${JSON.stringify(innerTimings)}`,
   );
 
@@ -313,6 +371,19 @@ function isValidScoredMarket(
   ) {
     logger?.warn?.(
       `[sgo-results-parser] skipping malformed scored market for event ${providerEventId}: invalid providerParticipantId; payload=${safeExcerpt(scoredMarket)}`,
+    );
+    return false;
+  }
+  // UTV2-1868: an unrecognised or absent side is not treated as "game-scoped".
+  // Defaulting it to null is exactly the discard this repair exists to remove, so
+  // the market is skipped and the malformed payload is named instead.
+  if (
+    scoredMarket.providerSide !== null &&
+    scoredMarket.providerSide !== 'home' &&
+    scoredMarket.providerSide !== 'away'
+  ) {
+    logger?.warn?.(
+      `[sgo-results-parser] skipping malformed scored market for event ${providerEventId}: invalid providerSide; payload=${safeExcerpt(scoredMarket)}`,
     );
     return false;
   }

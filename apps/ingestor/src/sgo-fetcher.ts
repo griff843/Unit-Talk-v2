@@ -4,6 +4,7 @@ import {
   buildSgoResultsRequestUrl,
   inferSgoParticipantId,
   normalizeSgoProviderMarketKey,
+  parseSgoOddId,
 } from './sgo-request-contract.js';
 import { flatMapCooperatively, mapCooperatively } from './cooperative.js';
 
@@ -142,10 +143,28 @@ export interface SGOPlayerStatRow {
   stats: Record<string, number>;
 }
 
+/**
+ * Which team a game-line score belongs to.
+ *
+ * UTV2-1868: an SGO oddID is `{statID}-{statEntityID}-{periodID}-{betTypeID}-{sideID}`,
+ * so `points-home-game-ml-home` carries statEntityID `home` -- the home team, a real
+ * participant, not a placeholder. `normalizeExplicitParticipantId` discards `home`/`away`
+ * because they are not provider participant IDs, which is correct for
+ * `participants.findByExternalId` and *wrong* as a claim that the score is game-scoped.
+ * This field carries the side that lookup cannot.
+ */
+export type SGOTeamSide = 'home' | 'away';
+
 export interface SGOMarketScore {
   oddId: string;
   baseMarketKey: string;
   providerParticipantId: string | null;
+  /**
+   * The team the score belongs to, when the market's stat entity is a side rather than
+   * a player or the whole game. `null` for genuinely game-scoped markets (stat entity
+   * `all`, e.g. `points-all-game-ou`) and for player props.
+   */
+  providerSide: SGOTeamSide | null;
   score: number;
   scoringSupported: boolean;
 }
@@ -1087,25 +1106,29 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
     selfOddId
   ) {
     const score = firstNumber(odds.score);
+    const explicitEntityId = firstString(
+      odds.playerID,
+      odds.playerId,
+      odds.participantID,
+      odds.participantId,
+      odds.entityID,
+      odds.entityId,
+      odds.statEntityID,
+      odds.statEntityId,
+    );
     const providerParticipantId =
-      normalizeExplicitParticipantId(
-        firstString(
-          odds.playerID,
-          odds.playerId,
-          odds.participantID,
-          odds.participantId,
-          odds.entityID,
-          odds.entityId,
-          odds.statEntityID,
-          odds.statEntityId,
-        ),
-      ) ?? inferSgoParticipantId(selfOddId);
+      normalizeExplicitParticipantId(explicitEntityId) ??
+      inferSgoParticipantId(selfOddId);
+    const providerSide = providerParticipantId
+      ? null
+      : resolveTeamSideEntity(explicitEntityId, selfOddId);
     const baseMarketKey = normalizeMarketKey(selfOddId, providerParticipantId);
     if (score !== null && baseMarketKey !== null) {
       markets.push({
         oddId: selfOddId,
         baseMarketKey,
         providerParticipantId,
+        providerSide,
         score,
         scoringSupported: true,
       });
@@ -1151,19 +1174,22 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
       continue;
     }
 
+    const explicitEntityId = firstString(
+      oddValue.playerID,
+      oddValue.playerId,
+      oddValue.participantID,
+      oddValue.participantId,
+      oddValue.entityID,
+      oddValue.entityId,
+      oddValue.statEntityID,
+      oddValue.statEntityId,
+    );
     const providerParticipantId =
-      normalizeExplicitParticipantId(
-        firstString(
-          oddValue.playerID,
-          oddValue.playerId,
-          oddValue.participantID,
-          oddValue.participantId,
-          oddValue.entityID,
-          oddValue.entityId,
-          oddValue.statEntityID,
-          oddValue.statEntityId,
-        ),
-      ) ?? inferSgoParticipantId(explicitOddId);
+      normalizeExplicitParticipantId(explicitEntityId) ??
+      inferSgoParticipantId(explicitOddId);
+    const providerSide = providerParticipantId
+      ? null
+      : resolveTeamSideEntity(explicitEntityId, explicitOddId);
     const baseMarketKey = normalizeMarketKey(
       explicitOddId,
       providerParticipantId,
@@ -1176,6 +1202,7 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
       oddId: explicitOddId,
       baseMarketKey,
       providerParticipantId,
+      providerSide,
       score,
       scoringSupported: true,
     });
@@ -1374,6 +1401,31 @@ function inferSide(marketKey: string | undefined) {
   }
   if (marketKey.endsWith('-under') || marketKey.endsWith('-away')) {
     return 'under';
+  }
+  return null;
+}
+
+/**
+ * UTV2-1868: recover the team side an SGO scored market belongs to.
+ *
+ * Prefers the explicit stat-entity field on the payload and falls back to the oddID's
+ * own statEntityID segment, which `parseSgoOddId` already isolates. Returns null for
+ * `all` (game-scoped) and for player entities, so player props and game totals are
+ * untouched.
+ */
+function resolveTeamSideEntity(
+  explicitEntityId: string | undefined,
+  oddId: string,
+): SGOTeamSide | null {
+  const explicit = explicitEntityId
+    ?.toLowerCase()
+    .replace(/^player[-_]/, '');
+  if (explicit === 'home' || explicit === 'away') {
+    return explicit;
+  }
+  const parsedEntity = parseSgoOddId(oddId)?.statEntityId?.toLowerCase();
+  if (parsedEntity === 'home' || parsedEntity === 'away') {
+    return parsedEntity;
   }
   return null;
 }
