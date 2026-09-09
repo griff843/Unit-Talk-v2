@@ -7,21 +7,29 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1860-milestone-1-complete",
   "branch": "claude/utv2-1860-milestone-1-complete",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "90f51009bc975a6b4e5206c108206f27041baf7d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1540",
   "files_changed": [],
   "file_scope_lock": [
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-09T03:51:14.984Z",
-  "heartbeat_at": "2026-09-09T04:13:15.261Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-09T04:38:37.090Z",
+  "closed_at": "2026-09-09T04:38:37.090Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1860-milestone-1-complete.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-09T04:38:34.786Z",
+      "verdict": "pass",
+      "merge_sha": "90f51009bc975a6b4e5206c108206f27041baf7d",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
