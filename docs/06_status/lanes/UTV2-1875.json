@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1875-dead-letter-reason-buckets",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1552",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/QUEUE_READINESS_SEMANTICS.md",
@@ -16,9 +16,9 @@
     "scripts/ops/readiness-refresh.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-09T17:54:14.997Z",
-  "heartbeat_at": "2026-09-09T17:54:14.997Z",
+  "heartbeat_at": "2026-09-09T17:58:36.657Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1875-dead-letter-reason-buckets.json",
