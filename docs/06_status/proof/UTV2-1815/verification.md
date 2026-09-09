@@ -401,9 +401,37 @@ No unpark.
   zero-unit "paper" pick, if such a thing is ever introduced, would be refused rather than computed
   at zero. No such concept exists in the codebase today.
 
+## Live-DB proof (added after review — UTV2-1815)
+
+`apps/api/src/t1-proof-utv2-1815-stake-units-truth.test.ts` exercises the changed settlement path
+against a real Supabase database, closing the gap declared above that no test in this bundle
+touched the real repositories.
+
+**The proof is shaped by a measured constraint, not by convenience.** `public.picks` carries
+`picks_stake_units_canonical_check` — `CHECK (stake_units IS NOT NULL AND stake_units > 0)`,
+`NOT VALID` — in **both** production (`zfzdnfwdarxucxtaojxm`) and staging
+(`xskgrzbteyqdufktjrjx`), measured 2026-09-09. `NOT VALID` exempts pre-existing rows but is fully
+enforced on INSERT and UPDATE. The unusable-stake shapes this lane governs therefore **cannot be
+created through any write path**, and a proof that manufactured a null-stake pick would be proving
+something the database refuses to represent.
+
+The three live cases assert both halves of the truth instead:
+
+| Case | Asserts |
+|---|---|
+| canonical stake settles | `recordPickSettlement` with live repositories persists `stakeUnitsStatus: 'canonical'`, no historical-unknown marker, and `profitLossUnits: 2.27` (2.5 units at -110) |
+| `picks` refuses a null stake on INSERT | the `historical_unknown` branch is unreachable for new rows |
+| `picks` refuses a non-positive stake on UPDATE | the newly-added zero/negative refusal is likewise unreachable for new rows |
+
+**Consequence for how this change should be read.** For every row the database will accept going
+forward, the settlement-service edit is behaviour-preserving. It matters only for rows written
+before the constraint existed — **2,902 null-stake picks measured in production on 2026-09-09**,
+zero at exactly 0 and zero negative. This is a hardening of a path the database already blocks,
+retained so a legacy row settles honestly rather than at an assumed flat stake.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1479
 Approved PR head: pending merge
-Execution SHA: fb5962bc37bf554fc6d8deaafee0e6ad9ca00860
+Execution SHA: cf4a1384df97a0a6f7c0517424ed60a915a9a571
