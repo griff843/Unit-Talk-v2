@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1863-lease-reclaim-terminality",
   "branch": "claude/utv2-1863-lease-reclaim-terminality",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d48e46f41ae89f8fa46a7c4237e0d4066635be9b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1542",
   "files_changed": [],
   "file_scope_lock": [
@@ -15,14 +15,22 @@
     "scripts/ops/lease-registry.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-09T06:43:50.169Z",
-  "heartbeat_at": "2026-09-09T06:52:31.384Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-09T07:56:02.805Z",
+  "closed_at": "2026-09-09T07:56:02.805Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1863-lease-reclaim-terminality.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-09T07:56:00.629Z",
+      "verdict": "pass",
+      "merge_sha": "d48e46f41ae89f8fa46a7c4237e0d4066635be9b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
