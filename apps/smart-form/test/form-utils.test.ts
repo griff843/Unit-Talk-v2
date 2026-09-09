@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   buildSelectionString,
   buildSubmissionPayload,
   calcPayout,
+  evaluateSubmissionGuards,
   getMarketTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
@@ -606,4 +608,54 @@ test('buildSubmissionPayload resolves NHL stat types to canonical keys', () => {
     buildBaseValues({ sport: 'NHL', statType: 'Blocked Shots' }),
   );
   assert.equal(blockedPayload.market, 'player.blocked_shots');
+});
+
+// UTV2-1859 — the client submission guards mirror server rules, which makes them
+// one rule stored twice. That is the shape that produced this lane: UTV2-1856
+// deleted a server refusal, the client copy survived, every test stayed green
+// because each copy was only ever tested against itself, and the browser refused
+// a pick the server would have accepted. No server-side evidence can detect that
+// class, because the defect is that the request is never sent.
+//
+// This reads the server module as text rather than importing it — invariant 8
+// forbids an app importing another app — and is the same technique
+// executor-result-validate.test.ts uses to hold two copies of a regex in step.
+test('every client submission guard cites a server rule that still exists', () => {
+  const guardSource = readFileSync(
+    new URL('../lib/form-utils.ts', import.meta.url),
+    'utf8',
+  );
+  const serverSource = readFileSync(
+    new URL('../../api/src/smart-form-validation.ts', import.meta.url),
+    'utf8',
+  );
+
+  const cited = [...guardSource.matchAll(/^\s*\/\/ SERVER-RULE: (.+)$/gmu)].map((m) =>
+    m[1]!.trim(),
+  );
+
+  // Non-vacuity: a citation format change that silently matched nothing would
+  // otherwise turn this test into an assertion about an empty list.
+  assert.ok(cited.length >= 3, `expected at least 3 SERVER-RULE citations, found ${cited.length}`);
+
+  for (const fragment of cited) {
+    assert.ok(
+      serverSource.includes(fragment),
+      `client guard cites a server rule that is no longer in apps/api/src/smart-form-validation.ts: ${fragment}`,
+    );
+  }
+});
+
+test('no client guard refuses a structured-fallback player prop that has no event', () => {
+  // The specific regression UTV2-1859 repaired, asserted on the guard's own
+  // behaviour rather than on the absence of a string.
+  assert.equal(
+    evaluateSubmissionGuards({
+      sportId: 'NBA',
+      identityMode: 'structured-fallback',
+      canonicalEventId: null,
+      selectedPlayerId: 'player-123',
+    }),
+    null,
+  );
 });

@@ -583,7 +583,6 @@ export interface SubmissionGuardFailure {
     | 'manual-team-sport-requires-both-sides'
     | 'manual-requires-a-participant'
     | 'canonical-requires-event'
-    | 'canonical-player-requires-event'
     | 'canonical-without-event-requires-team-sport';
   title: string;
   description: string;
@@ -616,7 +615,7 @@ export function evaluateSubmissionGuards(
   if (input.identityMode === 'manual') {
     const participants = buildManualEnteredParticipants(input);
 
-    // smart-form-validation.ts:126 — at least one entered participant.
+    // SERVER-RULE: manual participant resolution requires at least one entered participant
     if (participants.length === 0) {
       return {
         code: 'manual-requires-a-participant',
@@ -626,9 +625,9 @@ export function evaluateSubmissionGuards(
       };
     }
 
-    // smart-form-validation.ts:129 — team sports need both sides, counted
-    // after the duplicate rule, because two entries with the same name collapse
-    // to one and would be refused as a duplicate rather than accepted as two.
+    // Counted after the duplicate rule, because two entries with the same name
+    // collapse to one and would be refused as a duplicate rather than accepted as two.
+    // SERVER-RULE: manual participant resolution requires both sides of the entered matchup
     if (teamSport && participants.length < 2) {
       return {
         code: 'manual-team-sport-requires-both-sides',
@@ -646,6 +645,7 @@ export function evaluateSubmissionGuards(
       return null;
     }
 
+    // SERVER-RULE: canonical participant resolution without an event is not verifiable
     return {
       code: 'canonical-requires-event',
       title: 'Select a canonical matchup',
@@ -657,20 +657,18 @@ export function evaluateSubmissionGuards(
     return null;
   }
 
-  // smart-form-validation.ts:203 — `validateStructuredTeamFallback` refuses any
-  // canonical player selection without a canonical event, because team
-  // membership cannot be verified.
-  if (input.selectedPlayerId) {
-    return {
-      code: 'canonical-player-requires-event',
-      title: 'Select a canonical matchup',
-      description:
-        'A canonical player prop needs the matchup it belongs to. Select a matchup, or use the verified coverage-gap path.',
-    };
-  }
+  // UTV2-1859: there is deliberately no player branch here. This guard used to
+  // refuse every canonical player selection without an event, mirroring a server
+  // rule UTV2-1856 removed. The server now resolves team membership from the
+  // provider observation edge and refuses only the player whose team relationship
+  // the database cannot establish -- a fact this client cannot evaluate, because
+  // it requires the same `searchPlayers` read the server performs. Mirroring it
+  // here would either re-refuse valid picks or guess. The server's refusal is
+  // explicit and reaches the operator as a submission error, so the honest client
+  // behaviour is to send the request and let the authority answer.
 
-  // smart-form-validation.ts:70 — outside team sports there is no structured
-  // fallback at all, so a canonical resolution without an event is refused.
+  // Outside team sports there is no structured fallback at all.
+  // SERVER-RULE: canonical participant resolution without an event is not verifiable
   if (!teamSport) {
     return {
       code: 'canonical-without-event-requires-team-sport',

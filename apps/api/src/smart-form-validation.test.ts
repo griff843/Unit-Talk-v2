@@ -324,25 +324,110 @@ test('accepts a Soccer structured fallback backed by canonical team search', asy
   await validateSmartFormRelationships(soccer, repository);
 });
 
-test('structured no-event fallback rejects a player whose team relationship cannot be verified', async () => {
-  const invalid = payload();
-  const resolution = invalid.metadata?.['participantResolution'] as Record<string, unknown>;
-  resolution['eventId'] = null;
-  resolution['player'] = {
-    participantId: 'player-mlb-injection',
-    displayName: 'Cross Sport Player',
-    participantType: 'player',
-    teamId: 'team-tcu',
-  };
+/**
+ * UTV2-1856: the structured no-event fallback used to refuse EVERY player selection, on the
+ * premise that team membership needed a canonical event to be verifiable. That premise held
+ * only while `player_team_assignments` was the sole source of the relationship. It is no
+ * longer the sole source, so the five tests below pin what is now verified instead: the
+ * relationship is taken from reference data the server read itself, and the caller's own
+ * `teamId` is compared against it rather than believed.
+ */
+function structuredNoEventRepository(options: {
+  playerTeamId?: string | null;
+  playerName?: string;
+} = {}): ReferenceDataRepository {
   const repository = referenceData();
   repository.searchTeams = async (_sportId, query) => [{
     participantId: query === 'TCU' ? 'team-tcu' : 'team-unc',
     displayName: query,
     sport: 'NCAAF',
-  }];
+  } as never];
+  repository.searchPlayers = async (_sportId, query) =>
+    query === (options.playerName ?? 'Structured Player')
+      ? [{
+          participantId: 'player-structured',
+          displayName: options.playerName ?? 'Structured Player',
+          participantType: 'player',
+          teamId: options.playerTeamId === undefined ? 'team-tcu' : options.playerTeamId,
+        } as never]
+      : [];
+  return repository;
+}
+
+function structuredNoEventPayload(player: Record<string, unknown> | null): SubmissionPayload {
+  const built = payload();
+  const resolution = built.metadata?.['participantResolution'] as Record<string, unknown>;
+  resolution['eventId'] = null;
+  resolution['eventName'] = null;
+  built.eventName = 'TCU @ UNC';
+  if (player) resolution['player'] = player;
+  return built;
+}
+
+const structuredPlayer = {
+  participantId: 'player-structured',
+  displayName: 'Structured Player',
+  participantType: 'player',
+  teamId: 'team-tcu',
+};
+
+test('structured no-event fallback accepts a player whose team relationship reference data confirms', async () => {
+  await validateSmartFormRelationships(
+    structuredNoEventPayload({ ...structuredPlayer }),
+    structuredNoEventRepository(),
+  );
+});
+
+test('structured no-event fallback rejects a player whose team relationship cannot be verified', async () => {
   await assert.rejects(
-    () => validateSmartFormRelationships(invalid, repository),
-    /player selection requires a canonical event/,
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({ ...structuredPlayer, teamId: null }),
+        structuredNoEventRepository({ playerTeamId: null }),
+      ),
+    /has no verifiable team relationship without a canonical event; use explicit manual override/,
+  );
+});
+
+test('structured no-event fallback rejects a player who is on neither side of the entered matchup', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({ ...structuredPlayer, teamId: 'team-elsewhere' }),
+        structuredNoEventRepository({ playerTeamId: 'team-elsewhere' }),
+      ),
+    /is not on either side of the structured matchup/,
+  );
+});
+
+test('structured no-event fallback does not believe a caller-supplied team relationship', async () => {
+  // Reference data says the player is on team-unc; the caller claims team-tcu, which IS a
+  // legitimate side of this matchup and IS the selected team, so every check except the
+  // comparison against resolved truth would pass. This is the test that fails if the
+  // caller's `teamId` is ever used as the source rather than the claim.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({ ...structuredPlayer, teamId: 'team-tcu' }),
+        structuredNoEventRepository({ playerTeamId: 'team-unc' }),
+      ),
+    /is not assigned to team team-tcu/,
+  );
+});
+
+test('structured no-event fallback rejects a player reference data does not know at all', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        structuredNoEventPayload({
+          participantId: 'player-mlb-injection',
+          displayName: 'Cross Sport Player',
+          participantType: 'player',
+          teamId: 'team-tcu',
+        }),
+        structuredNoEventRepository(),
+      ),
+    /is not canonical for sport NCAAF/,
   );
 });
 

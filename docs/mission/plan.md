@@ -1,209 +1,178 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-07
+**Last reconciled against live truth:** 2026-09-09
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
 
 ---
 
-## Reconciled current truth (2026-09-07)
+## Milestone 1 is complete — performed, then verified against production
 
-Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, the secret
-metadata listing and the current readiness ledger. Not against docs or chat history.
+**Griff performed Milestone 1 end to end on 2026-09-09 against the deployed system.** All seven
+steps in `intent.md` hold, containment intact throughout. This is the first entry in this plan's
+history that reports a milestone done rather than a blocker moved, and it is recorded from a
+governed read-only production observation of the actual row — not from tests, not from a merge.
 
-- `main` is `e32bc506c` (re-measured 2026-09-07T00:40Z; this bullet read `3ad11a69b` earlier, and
-  `7231dc9c7`, `175f07c10`, `85f63c696` before that). Two lanes landed between those two tips:
-  UTV2-1847 (#1525, `656ed0353`) and UTV2-1848 (#1526, merge SHA
-  `1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4`, closeout `e32bc506c`). **Production is
-  `d3f69b804`, and there is now zero container-code drift between production and `main`** — see the
-  rewritten deploy section below, which replaces the "only Deploy remains" framing this plan carried
-  for five days. **No lane manifest is `in_progress` on `main`.** The readiness ledger still writes
-  directly to `main` on a schedule, so the tip moves without a PR and every head-pinned artifact on
-  an open lane ages against commits that changed no code — measured again on this reconciliation,
-  which found #1521 `BEHIND` at a head whose Merge Gate and executor result were both green.
+**Pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b`**, submission `d70c0e43-3ab1-420f-95b1-6f27e2429756`,
+created **2026-09-09T03:34:48Z** on deployed release `755e52a6c` (`Deploy` run `34296962788`,
+2026-09-09T00:54:18Z). Measured against production `zfzdnfwdarxucxtaojxm`:
+
+| Step | Evidence |
+|---|---|
+| 1. Reach the deployed form | The row exists with `source = smart-form`. |
+| 2. Authenticate | `submitted_by = griff843` on the submission; the allow-list admitted a real sign-in. The `ALLOWED_CAPPER_EMAILS` shape gap below is **closed by this event** — the value was correct, and Griff's browser was its first and only test, exactly as predicted. |
+| 3. Resolve canonical identity | `capper_id = griff843`, `metadata.capper` and `metadata.submittedBy` both `griff843`. No local-part derivation. |
+| 4. Submit a real Track Only pick | MLB moneyline, selection `Dodgers`, `line = null` (correct — a moneyline has no line), odds **−110**, stake **3.00 units**, conviction 6 → confidence 0.60, book `fanatics`, event `Dodgers @ Brewers` dated 2026-09-09. |
+| 5. Persist correctly | `status = validated`; one `pick_lifecycle` row, `from_state: null → validated`, `writer_role: submitter`, reason *"validated submission materialized into canonical pick"*. Participants resolve to **real** `participants` rows — `8a4dcd49…` Dodgers (away), `34f1a51c…` Brewers (home), both `participant_type = team`, `sport = MLB`. |
+| 6. Track Only cannot create member delivery | **Zero** rows in `distribution_outbox`, `command_center_delivery_mappings`, `execution_intents` and `settlement_records` for this pick, and zero `distribution_outbox` rows repo-wide since 03:00Z. |
+| 7. Observe through an internal/operator path | This observation. Read-only, governed, reading the one pick the pilot created and its delivery records, writing nothing and changing no containment setting — the form PM ratified on 2026-09-03. |
+
+**Containment held.** The shipping deploy emitted
+`{"service":"…","event":"syndicate_machine_mode.validated","mode":"parked"}`. Provider ingestion,
+provider activation, system picks and member-facing delivery were all parked before the pilot and
+all remain parked after it. Nothing was unparked to make the pilot complete, which is the condition
+`intent.md` attaches to the milestone being considered done.
+
+**The provenance is honest, which was the one thing that could have made a persisted row worthless.**
+`metadata.participantResolution.resolution` reads `canonical` and the two team participant IDs
+genuinely resolve; `eventId` reads `null` rather than a fabricated identifier. The record therefore
+claims canonical resolution for exactly the part that was canonical and states the absence of the
+rest. That is the structured/coverage-gap path `intent.md` permits for the contained pilot.
+
+### Non-delivery is enforced, not merely absent
+
+Zero outbox rows is the observation. The reason it is not a coincidence is that
+`isTrackOnlyPickMetadata` — which returns true on exactly the `distributionMode: "track-only"`
+string this row carries — gates seven independent paths on `main`: the submit-time pin
+(`handlers/submit-pick.ts:95-104`), the enqueue chokepoint
+(`distribution-service.ts:243` → `TrackOnlyDistributionError`), the atomic-RPC audit
+(`run-audit-service.ts:70`), requeue (`controllers/requeue-controller.ts:25`), retry
+(`controllers/retry-delivery-controller.ts:42`), recap exclusion (`recap-service.ts:203`) and
+health (`routes/health.ts:104`). UTV2-1672 mutation-tested each one. As defence in depth,
+`best-bets`, `trader-insights` and `exclusive-insights` are all `killed = true` in
+`delivery_kill_switch`.
+
+### The one finding worth carrying forward — a force-promote past the policy minimum
+
+The pick carries `promotion_status = qualified` and `promotion_target = best-bets`, which reads
+alarmingly on a Track Only pick and is **not** a containment failure. Promotion is business truth
+and delivery is separately gated; `band` is `SUPPRESS` on all three policies. But the mechanism
+underneath deserves recording:
+
+`pick_promotion_history` shows `override_action: force_promote`, `override.forcePromote: true`,
+reason *"smart-form submissions route directly to best-bets"* — promoting a score of **64.02**
+against `best-bets-v2`'s own `minimumScore: 70`. The other two targets scored *higher* (72.28
+exclusive-insights, 69.37 trader-insights) and were correctly suppressed on trust thresholds.
+
+Under Track Only this reaches nothing. Under `delivery-eligible` it would enqueue a
+below-threshold pick to a member channel on the strength of its *source* rather than its score.
+That is a Milestone 2 question — Milestone 2 exists so that what is later shown to members is
+earned — and it is recorded here rather than filed, per the ratified filing threshold.
+
+---
+
+## Reconciled current truth (2026-09-09)
+
+Verified against `origin/main`, the GitHub API, git ancestry, live production SQL and the current
+readiness ledger. Not against docs or chat history.
+
+- `main` is `17741e6a4`. The tip is `ops(readiness): refresh ledger [skip ci]` — the bot commit that
+  has been taxing every open lane's head-pinned artifact for six consecutive reconciliations.
+- **Production is `755e52a6c` and is current.** This is the first reconciliation in this plan's
+  history where that sentence is true:
+
+  ```
+  git rev-list --count 755e52a6c..origin/main                                    -> 1
+  git diff --name-only 755e52a6c origin/main -- 'apps/**' 'packages/**' 'deploy/**' \
+    | grep -v '\.test\.' | wc -l                                                 -> 0
+  git diff --name-only 755e52a6c origin/main -- 'supabase/migrations/'  | wc -l  -> 0
+  ```
+
+  One commit, zero container-code files, zero migrations. The single commit is the readiness bot.
+  **The 45-commit / 16-file gap the previous reconciliation called "the most consequential fact on
+  this page" is closed**, and it closed the way that section said it had to: by a dispatch, not by
+  more engineering.
+- **11 PRs are open** (down from 13): #1429, #1451, #1479, #1484, #1491, #1492, #1495, #1496, #1498,
+  #1505, #1513. Two left by merging — #1521 (UTV2-1843) and #1536 (UTV2-1856) — and #1539
+  (UTV2-1859) merged after them, which is what removed the client-side player-prop refusal.
+  - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six, unchanged
+    for six reconciliations. All were opened with no `UTV2-###` in the branch, so `Merge Gate`
+    cannot resolve a tier. Self-inflicted; the remedy is readmission, not a gate change.
+  - **Admissible, awaiting a T1 verdict** (#1484, #1505, #1513) — three.
+  - **Admissible, `verify` red** (#1451) — real repair work, production DDL, PM-gated.
+  - **#1479** — `verify` green, needs an approval artifact rather than a repair.
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
-- **12 PRs are open** (re-measured 2026-09-07T00:50Z — the same twelve as the previous
-  reconciliation: #1429, #1451, #1479, #1484, #1491, #1492, #1495, #1496, #1498, #1505, #1513,
-  #1521; this lane is not yet among them). The composition has shifted and the previous "every one is blocked on `Merge Gate`"
-  framing no longer holds — #1523 merged cleanly through the ordinary path, which is the first
-  end-to-end demonstration since the ratification that an open PR can finish without an
-  administrative restart. Current state by class:
-  - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six, unchanged.
-  - **Admissible, awaiting a verdict** (#1451, #1479, #1484, #1505, #1513) — five.
-  - **Admissible, blocked on a scope decision** (#1521) — one; see "Requires Griff".
-  - **`BEHIND` count: eight of twelve.** #1451, #1479, #1484, #1495, #1505, #1513, #1521 and
-    #1523-before-it-merged. This is the head-pinning tax measured directly rather than described:
-    the ledger bot and ordinary merges move `main` faster than head-pinned artifacts can be
-    obtained.
+- **No lane manifest is `in_progress` on `main`**, and `ops:brief` reports `claude_lanes=0`,
+  `codex_cli_lanes=0`. The board is free.
 
-  The three-way breakdown below was written on 2026-09-06T04:30Z and is retained because its
-  diagnoses of the individual reds are still accurate:
-  - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six PRs opened
-    with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found in PR branch or
-    title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy defect. The
-    count fell from eight because **#1493 and #1494 were re-homed and closed**, exactly as the
-    readmission ruling prescribes: #1493's diff landed as **#1503 (UTV2-1812), merged
-    `9ac4694d9`**, and #1494's is open as **#1513 (UTV2-1802)**.
-  - **Admissible, awaiting a T1 verdict** (#1513, #1479, #1505) — all three green on `verify`,
-    re-measured 2026-09-06T04:30Z. #1513's only remaining obstacle is genuinely the verdict. **#1479
-    is not:** `Branch Discipline Guard`, `Proof Coverage Guard` and `Shadow Parity Check` are all
-    red on its head `cdc72758`, and #1505's `File scope lock` is red. None of those four is a
-    required check, so none of them blocks the merge — but binding a head-pinned verdict to a PR
-    whose own contract checks disagree with it is not a reasonable hand-off — so each red was read
-    rather than assumed. **None of the four turns out to be an ordinary repair**, and #1479 had
-    already reached that conclusion itself: `docs/06_status/proof/UTV2-1815/verification.md`
-    gives all three of its reds a measured cause.
-    - #1479 `Require live-DB proof for runtime changes` — the guard requires the *same PR* that
-      touches `apps/api/src/settlement-service.ts` to also touch an `apps/*/src/t1-proof-*.test.ts`
-      (`proof-coverage-guard.yml:141-163`). The proof exists and is on `main`
-      (`apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`, landed by #1504 under UTV2-1831) — but
-      it landed on a *different* PR, so #1479's own diff cannot contain it, and that path is outside
-      #1479's `file_scope_lock`. Closing it needs a `scope-override/v1` or the
-      `skip-proof-coverage` label. Both are Griff's.
-    - #1479 `Check issue references` — `found UTV2-1783, UTV2-1815`. The one reference is commit
-      `32bb89db8`'s message citing the ratification that governs its merge-SHA anchor row. Rewriting
-      it changes that SHA, and `32bb89db` is the head the lane's staging receipt is bound to. The
-      lane left it uncorrected deliberately, and that is the right trade: a verifiable receipt is
-      worth more than a green non-required check.
-    - #1479 `Shadow Parity Check` — *"No mechanically read-only production credential is
-      provisioned."* It refuses service-role credentials by design, so it compared nothing and
-      reached no parity conclusion. Provisioning the credential is reserved decision 4.
-    - #1505 `File scope lock` — *"package.json is not declared by UTV2-1827."* `file_scope_lock` is
-      pinned at lane-start and cannot be widened by an agent, so this needs a CODEOWNERS
-      `scope-override/v1` pinned to the head — standing item 8 under "Requires Griff" — or the
-      `package.json` wiring dropped, which would leave the runner unwired.
+### What the deploy changed about readiness, and what it did not
 
-    So all three are genuinely verdict-blocked, and the first draft of this bullet was wrong in both
-    directions: it first said they needed no repair, then said the repairs were ordinary. The true
-    statement is narrower — every one of the four reds is non-required, and every one is closed only
-    by an action reserved to Griff. #1513 and #1479 are also `BEHIND` and should be resynced before
-    a head-pinned verdict is bound.
-  - **This lane** (#1517, UTV2-1838) — `verify` green, `Merge Gate` awaiting the T2 artifact.
-  - **Admissible, `verify` red** (#1451) — real repair work, production DDL, PM-gated.
-  - #1484 remains open awaiting a verdict.
-- Measured 2026-09-03: `strict: true` did **not** block #1474 even though it was genuinely BEHIND
-  `main`, so head-pinned verdicts do not serialize to one merge per cycle and an approved-but-BEHIND
-  PR needs no re-verdict round trip.
-- The three-concurrent-terminal drift recorded on 2026-09-03 has not recurred. Every commit since
-  has come through a lane or the readiness bot.
-
-### Production is `d3f69b804`, deployed 2026-09-06 — and readiness is still RED for reasons that are mostly containment
-
-**This section previously said production was `e48106fc` from 2026-09-01 and that a `Deploy`
-dispatch was the one reserved action left on the Milestone 1 path. Both are now false.** The
-dispatch happened. What follows is measured against the GitHub API, git ancestry and the readiness
-ledger on `main`, not against the previous draft of this file.
-
-#### The deploy ran, failed once on a repo defect, was repaired inside existing authority, and succeeded
-
-| run | SHA | result | when |
-|---|---|---|---|
-| `34041575531` | `d3f69b804` | **success** | 2026-09-06T15:12:30Z |
-| `34031708984` | `391d4345c` | failure | 2026-09-06T11:57:41Z |
-| `33513608611` | `e48106fc9` | success | 2026-09-01T13:28:39Z |
-
-The first attempt of the day failed **inside the deploy workflow's own `verify` job**, at *"Run test
-suite (dev env — static correctness gate before gate env is written)"*. That was a defect in
-`.github/workflows/deploy.yml`, not in the release: UTV2-1841 repaired it, merged as **#1520**, and
-the merge commit of that repair **is** `d3f69b804` — the deploy was dispatched nineteen seconds
-later and passed.
-
-This is worth recording as a shape, not just an event. A reserved action was attempted, was blocked
-by an ordinary repository defect, was diagnosed and repaired through a normal governed lane inside
-existing authority, and then completed. The reservation was never the thing that was broken.
-
-#### What is actually live
-
-Both Milestone 1 identity prerequisites are in production, established by ancestry rather than by
-recollection:
-
-```
-git merge-base --is-ancestor 2ac233424 d3f69b804   # #1488 canonical capper identity     -> yes
-git merge-base --is-ancestor b7d9fc07f d3f69b804   # #1501 authenticated picks trace     -> yes
-git merge-base --is-ancestor 1734bf201 d3f69b804   # #1477 rate-limit work               -> yes
-```
-
-And the gap between production and `main` contains **no container code at all**:
-
-```
-git diff --name-only d3f69b804 origin/main -- 'apps/**' 'packages/**' 'deploy/**' \
-  | grep -v '\.test\.' | wc -l
-0
-```
-
-Four commits separate them and every one is ops scripts, lane artifacts, proof bundles or docs.
-`d3f69b804` itself changed only `.github/workflows/deploy.yml` and its own lane artifacts, which is
-why the deploy that shipped it altered no running image beyond the two behaviours above.
-
-#### Readiness is RED, and the distinction that matters is containment versus breakage
-
-`docs/06_status/readiness/readiness-score.json`, generated 2026-09-06T19:54:20Z from run
-`34056303418`, records `"verdict": "RED"` and `"observability": "degraded"`. Five blocking
-dimensions are not passing, and **they do not mean the same kind of thing**:
+`deploy_sha_alignment` was the one blocking readiness dimension the previous reconciliation had to
+concede was measuring something real — 45 commits, 16 container files. It is now measuring a
+one-commit bot gap. The remaining blocking dimensions are unchanged in kind and still do **not**
+mean the same thing as each other:
 
 | Dimension | Status | What it actually means |
 |---|---|---|
-| `deploy_sha_alignment` | fail | **Bookkeeping, not drift.** `commits_ahead: 1` at generation time. It compares SHAs, and zero container-code files differ. |
-| `ingestor_health` | fail | **Containment.** `SYNDICATE_MACHINE_MODE=parked` sets `UNIT_TALK_INGESTOR_AUTORUN=false`; the last cycle is from 2026-06-30 because ingestion is deliberately off. |
-| `worker_outbox_health` | fail | **Containment.** Same mechanism — `UNIT_TALK_WORKER_AUTORUN=false`. The heartbeat is 29944m old because the worker is not autorunning. 32 rows sit `bucket:stale_unknown`, 0 attempted-and-stuck. |
-| `dead_letter_count` | fail | **1953 of 1954 rows are `bucket:governance_hold` with `attempt_count=0`**, which `QUEUE_READINESS_SEMANTICS.md` v1.0 says do not fail readiness. Exactly **one** row is `bucket:true_failure`. |
-| `db_tripwires` | unknown | The observer itself is red (`db-health-tripwire.yml` run `34055734941` failed at *Report DB health verdict*), so tripwire state is **unproven**, correctly not scored as passing. |
+| `deploy_sha_alignment` | back to bookkeeping | 1 commit, **0** container files, 0 migrations. |
+| `ingestor_health` | fail | **Containment.** `SYNDICATE_MACHINE_MODE=parked` sets `UNIT_TALK_INGESTOR_AUTORUN=false`. |
+| `worker_outbox_health` | fail | **Containment.** Same mechanism — `UNIT_TALK_WORKER_AUTORUN=false`. Confirmed live: the last `worker.heartbeat` in `system_runs` is 2026-08-17. |
+| `dead_letter_count` | fail | 1953 of 1954 rows are `bucket:governance_hold` with `attempt_count=0`, which `QUEUE_READINESS_SEMANTICS.md` v1.0 says do not fail readiness. The bucketing defect (`readiness-refresh.ts:517-532` buckets on `attempt_count`, not on reason) is unrepaired and recorded rather than filed. |
+| `db_tripwires` | unknown | The observer itself is red, so tripwire state is **unproven** and correctly not scored as passing. |
 
-**The structural consequence, stated plainly: readiness cannot reach GREEN while containment
-holds.** Two blocking dimensions measure precisely the flags containment sets to `false`. That is
-not an argument for unparking anything — containment is reserved, and Milestone 1 is defined to
-complete with it intact. It is an argument against reading this ledger's verdict as a statement
-about whether the product works. The ledger measures a system running at full autonomy; the system
-is deliberately not running at full autonomy.
+**Readiness still cannot reach GREEN while containment holds**, because two blocking dimensions
+measure precisely the flags containment sets to `false`. That was true before the deploy and is
+true after it. What changed is that RED is now *entirely* a statement about the contained system
+rather than partly a statement that production was stale.
 
-**The one row that is not containment is the `true_failure` dead-letter row — and it was read, and
-it is not a delivery failure either.** Measured read-only against production Supabase on
-2026-09-06:
+### Grading is already running in production, and containment does not stop it
+
+Measured in `system_runs`, not inferred from config — though the config explains it:
+`deploy.yml:540` writes `UNIT_TALK_GRADING_CRON_AUTORUN=true` **unconditionally**, outside the
+`SYNDICATE_MACHINE_MODE` case statement that gates the ingestor and worker autoruns. So grading is
+deliberately not contained, and the evidence agrees: **13,720 succeeded `grading.run` rows**, latest
+2026-09-09T02:49:27Z, with a matching `grading.cron.heartbeat` half a second later.
+
+This materially changes the Milestone 2 starting position. Milestone 2 condition 3 is *"grading and
+settlement run on their intended schedule against real results"*, and the plan has never before
+established that the first half of that is already true in production. Two things it does **not**
+establish, both of which Milestone 2 has to measure rather than assume:
+
+- **The cadence is irregular.** Recent starts: 18:05, 19:41, 21:16, 22:47, 00:17, 02:49 — gaps of
+  96, 95, 91, 90 and 152 minutes, against a `pollIntervalMs` default of 5 minutes. The loop is
+  alive; "its intended schedule" is not yet a thing this plan can state, let alone assert is met.
+- **370 `grading.run` rows are `failed`**, latest 2026-09-08T14:53Z. Unread.
+
+### A permanently-red governance monitor — 12,634 consecutive failures
+
+`governance.awaiting-approval-drift` runs every 15 minutes under `pg_cron` and has **failed 12,634
+times**, latest 2026-09-09T03:30:00Z. The last two runs are byte-identical in their findings:
 
 ```
-id           c60ec49b-c1b0-4b60-aea8-640a5daa07b7
-target       discord:canary
-attempt_count 1
-created_at   2026-07-14T12:59:44Z    updated_at 2026-07-15T19:00:30Z
-last_error   proof-pick-blocked: source 't1-proof' is not a live source
+driftCount: 14984, staleCount: 14984, previousDriftCount: 14984,
+countIncreased: false, staleThresholdHours: 4
 ```
 
-That string is emitted by `apps/worker/src/distribution-worker.ts:212-213`, which blocks any pick
-whose `source` is not in `LIVE_SOURCES` from delivery. **The guard fired and won.** It marked the
-row dead-letter, recorded its own run as `status: 'succeeded'`, and wrote a `distribution.blocked`
-audit entry (`:214-236`). All 1 of 1 `true_failure` rows carry that error.
+The monitor computes `countIncreased: false` — it *knows* the backlog is static — and reports
+`failed` anyway. The 14,984 stale `awaiting_approval` picks are consistent with the recorded ~93%
+CI-fixture contamination of the production picks table, i.e. historical residue, not live drift.
 
-Two things follow, and they matter in opposite directions:
-
-- **This strengthens the Milestone 1 step 6 position rather than weakening it.** The only
-  real-looking delivery failure in production is the delivery guard refusing a T1 proof fixture. It
-  is direct evidence of a non-delivery control working against live data, from before this mission
-  began. It does not by itself prove Track Only non-delivery — that guard is a different one — but
-  the table holds no unexplained delivery failure that a non-delivery claim would have to account
-  for.
-- **`dead_letter_count` misclassifies it.** `readiness-refresh.ts:517-532` buckets purely on
-  `attempt_count`: `= 0` is `governance_hold`, `> 0` is `true_failure`. A guard that refuses on the
-  first attempt increments the counter, so **a successful policy refusal is counted as a true
-  delivery failure** and fails a blocking readiness dimension. This is the third recorded instance
-  of the aggregate-conflation class — after `UTV2-1730`/`UTV2-1724` and PT1's `infra_error`
-  reporting of a documented containment state. Recorded here rather than filed, per the filing
-  threshold; the bucketing needs a reason predicate, not an attempt count.
-
-Three non-blocking dimensions also fail: `pnpm_verify` (main HEAD has no completed CI result of its
-own — an artefact of the ledger bot committing to `main`), `scheduled_observer_health` (four
-observer workflows red, which are observer failures rather than product failures), and
-`proof_coverage` (71/72; UTV2-1822 unbound).
-
-**The readiness contract's "worker DOWN" line (dated 2026-04-30) remains stale as a statement of
-capability.** The worker is deployed; its autorun is deliberately off.
+**This is the "a control that fires on everything conveys no information" class, in its purest
+form yet**: a monitor that has been red continuously for months cannot signal the genuine new drift
+it exists to catch, and its own payload contains the field that would distinguish the two. The
+repair belongs in the monitor's classification — alert on `countIncreased`, or on drift newer than
+the fixture epoch — and explicitly **not** in the data, since production data deletion is reserved
+decision 1. Recorded rather than filed pending the filing threshold; it has not yet stranded a lane,
+but it is actively costing every operator who reads `system_runs`.
 
 ### Open incident — direct-`main` push, `717b46971`
 
 On 2026-09-02T21:09:57-04:00 a Claude terminal ran `git push origin HEAD:main`, landing a 2-file
+
 edit to `docs/06_status/lanes/UTV2-1826.json` and `UTV2-1828.json` with no PR.
 
 `Direct Main Push Guard` fired and went red (run `33683588651`), classifying it
@@ -260,69 +229,83 @@ model".
 
 ---
 
-## Milestone 1 — what is actually left
+## Milestone 2 — reliable internal operating history
 
-Reach the deployed Smart Form → authenticate → resolve identity as `griff843` → submit a real
-internal Track Only pick → persist it → prove Track Only cannot create member delivery → observe it
-through a safe internal/operator path. Containment stays parked throughout; see `intent.md`
-§ "Containment during Milestone 1".
+Ratified 2026-09-05, begins now that Milestone 1 is complete, and completes **before** member-facing
+Discord launch. Milestone 1 proved the path works once, under containment, for a single pick.
+Milestone 2 makes it routine — enough real, internally submitted, correctly graded and settled picks
+that whatever is later shown to members is *earned* rather than asserted.
 
-| Step | State |
-|---|---|
-| Reach the deployed form | **Infrastructure done.** `smart-form` is deployed, healthy, routed by Caddy at `UNIT_TALK_SMART_FORM_DOMAIN`. The hostname is a secret and is not in the repo. |
-| Authenticate | **Live.** Google OAuth via Auth.js v5, allow-list gated on `ALLOWED_CAPPER_EMAILS`; the secret was reshaped 2026-09-03T17:29Z and #1488's parser shipped 2026-09-06. Both halves are now in production together. **Untested against a real sign-in** — nothing in the deploy validates the allow-list's shape, so this step is live-but-unproven, not done. |
-| Resolve canonical identity as `griff843` | **Live.** #1488 (`2ac233424`) is an ancestor of the deployed `d3f69b804`, verified by `git merge-base --is-ancestor`. Local-part derivation is gone. Same caveat as above: proven present, not yet exercised. |
-| Submit + persist a real internal Track Only pick | **Implemented, but blocked in the deployed flow.** `trackOnly` defaults to `true` in both `apps/smart-form/lib/form-schema.ts` and `BetForm.tsx`, and `parked` does not stop capper submission. But a structured-fallback submission still 422s on the event-existence gate, so a real pick cannot currently be submitted end to end. **This is the Milestone 1 blocker**, tracked as UTV2-1842 — see below. The UI half landed as UTV2-1844 (#1523). **Canonical reference-data coverage is not a precondition** — honest structured or manual `canonical-coverage-gap` provenance is acceptable for this contained pilot. |
-| Prove Track Only cannot create member delivery | **Built, mutation-tested, and deployed.** UTV2-1672 (`6a8eface9`) is an ancestor of the running `d3f69b804`, re-verified 2026-09-06: the submit-time pin, direct-enqueue guard, retry guard, requeue guard, outbox chokepoint, atomic-RPC chokepoint and recap exclusion each have a test that fails when the guard is removed. What remains is *observing* it during the pilot — a run, not a build. |
-| Observe through an internal/operator path | **Not blocked.** A safe read-only internal observation — the pick's persisted `capper_id`, `metadata->>'distributionMode'`, provenance and the absence of any outbox row — satisfies this step. Deploying the Command Center (#1496) is desirable product work tracked on its own merits and is **not** a Milestone 1 gate; no `COMMAND_CENTER_*` secret is a prerequisite. |
+The six conditions are in `intent.md`. Measured against them today:
 
-### Containment during the pilot
+| # | Condition | State on 2026-09-09 |
+|---|---|---|
+| 1 | Repeatable submission by intended operators, no per-submission engineering | **Plausible, unproven.** Exactly one pick has ever been submitted this way. One success is not repeatability, and the honest next step is a second and third submission rather than an argument. |
+| 2 | Every pick persists with canonical identity and truthful provenance | **Holds for n=1.** The coverage-gap path recorded `eventId: null` honestly. What is untested is whether provenance stays truthful across market types — a player prop, a spread, a total. |
+| 3 | Grading and settlement run on schedule against real results; outcomes traceable to score provenance | **Grading runs; the rest is open.** 13,720 succeeded runs prove the loop is alive. The cadence is irregular (90–152 min), 370 runs have failed unread, and **no settlement has occurred since 2026-07-30**. |
+| 4 | Statistics computed from persisted history and reconciling against rows | **Not started, and contaminated at the source.** ~93% of the `picks` table is CI fixtures and 14,984 picks are stale `awaiting_approval`. Any statistic computed over the raw table today is meaningless. |
+| 5 | Operator observes all of it through a governed internal surface | **Partial.** Governed read-only SQL satisfied Milestone 1 step 7 and does not scale to an operating history. The Command Center (#1496) is the intended surface and is undeployed. |
+| 6 | None of it achieved by activating member-facing delivery | **Holds and must keep holding.** Member-delivery activation is separately reserved and explicitly not part of Milestone 2. |
 
-Paid provider ingestion, provider activation or purchase, system picks
-(`SYNDICATE_MACHINE_MODE=parked`) and member-facing delivery — including every deferred delivery
-target — all remain parked for the duration of Milestone 1 and as a condition of it being
-considered done. The last `Deploy` run verified `{"event":"syndicate_machine_mode.validated",
-"mode":"parked"}` and re-read each value out of the running container. Nothing in the pilot may
-unpark any of them.
+### The blocker underneath condition 4, stated before any statistics work starts
 
-### The identity blocker is closed. The submission blocker is not.
+**A performance history cannot be computed from this table as it stands, and no amount of query
+care fixes that.** Two independent contaminations:
 
-**The identity work is done and live.** #1488 requires each allow-list entry to carry its canonical
-ID explicitly, refusing anything not already canonical rather than repairing it:
+- ~93% of `picks` are CI fixtures written before staging isolation landed (UTV2-1630).
+- 14,984 picks sit in stale `awaiting_approval`, which is what keeps
+  `governance.awaiting-approval-drift` permanently red.
 
-```
-ALLOWED_CAPPER_EMAILS = <email>=<canonicalCapperId>[, <email>=<canonicalCapperId>]
-```
+Both are *historical* and neither can be deleted — production data deletion is reserved decision 1,
+and deleting audit history to make a statistic look better would be exactly the kind of
+self-serving cleanup this plan exists to prevent. **The answer is a governed cohort predicate, not
+a delete**: statistics for Milestone 2 are computed over picks that are genuinely internal
+operator submissions, identified positively rather than by excluding known-bad rows. The single
+Milestone 1 pick is cohort member number one, and `v_governed_pick_performance` already exists as
+a starting point that needs re-reading against this requirement before it is trusted.
 
-`<canonicalCapperId>` must match `^[a-z0-9][a-z0-9_-]*$`; an entry with no `=` is dropped and does
-**not** fall back to the local part. The secret was reshaped 2026-09-03T17:29Z and the parser shipped
-2026-09-06 in `d3f69b804`. Both halves are in production together, which is the pairing this section
-spent five days warning about.
+Recorded here because getting this wrong is silent: a statistics surface that quietly averages CI
+fixtures into a capper's ROI would look finished and be worthless, and it would be discovered by a
+member rather than by a test.
 
-**The actual address and mapping are not recorded here or anywhere else in the repository.** They
-live only in the sanctioned secret store. Mission docs name the secret and its required shape; they
-never carry its value.
+### Containment interaction — what Milestone 2 will eventually need from Griff
 
-What is *not* established is that the value is correct — see the allow-list gap above. The deploy
-validated it non-empty and nothing validated its shape, so the first real test is a sign-in.
+Milestone 1 completed with containment intact. Milestone 2 may not: making submission, grading and
+settlement *ongoing* against real results is likely to require moving one or more parked runtime
+settings toward `active`. **Every such change is reserved**, and per `intent.md` the sequence is to
+prepare each one — dependent work staged, blast radius measured, recommendation written — and let
+Griff decide.
 
-**The blocker underneath it is UTV2-1842**, and it was always there; the deploy is what made it
-visible. A structured-fallback submission 422s on the event-existence gate
-(`checkEventExistenceGate`, `apps/api/src/submission-service.ts:867`, called at `:203`), so Griff
-cannot complete step 4 even with a perfect sign-in. That path is a Tier C exact path, so
-`classifyMechanicalMinimum` returns a `T1` floor and the work cannot be reclassified down.
+**No such packet is ready yet, and none is claimed.** The honest position on 2026-09-09 is that the
+non-reserved work below has not yet been done far enough to know which parked flag, if any, is
+actually required. Grading already runs uncontained, which removes the most obvious candidate.
+Settling a pick needs real scores, and whether that needs provider ingestion unparked or can be
+served by the existing score-provenance path is the **first question Milestone 2 must answer** —
+by measurement, not by requesting an unpark.
 
-And UTV2-1842 cannot currently open a lane at all. `ops:preflight` PT1 pings live Supabase and, under
-containment, `local.env` points every client at `http://127.0.0.1:1` by design. PT1 reports that
-deliberate policy state as `infra_error`, which maps to verdict `INFRA`, so no preflight token is
-written and `lane-start` refuses. PT1 runs only at T1 and is waivable at no tier. The full analysis,
-two routes and a recommendation are in **`docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`**
-(merged `9a233bd90` under UTV2-1845). Part 1 — classifying the containment placeholder as
-`blocked_by_containment` rather than `infra_error` — has landed and makes the refusal *honest*; it
-deliberately does not make it stop refusing, because admitting the lane is an admission-policy change
-and that is reserved.
+### Executable now, under existing authority, nothing reserved
 
-**This is Wave 0 item 1 and the one thing on the Milestone 1 critical path.**
+In dependency order. None of these needs Griff and none touches a reserved surface:
+
+1. **Submit again, twice, through the deployed form.** Condition 1 is a claim about repeatability
+   and only repetition tests it. Different market shapes — a player prop (now that UTV2-1859
+   removed the client-side refusal), a spread — because condition 2's provenance guarantee is
+   untested outside moneyline.
+2. **Read the 370 failed `grading.run` rows.** Unread failure is the cheapest available source of
+   truth about why nothing has settled since 2026-07-30, and it costs one query.
+3. **Establish what "intended schedule" means for grading and measure the gap.** The cadence is
+   90–152 minutes against a 5-minute poll default; either the default is not what runs, or the loop
+   restarts. Condition 3 cannot be evaluated until this is a number.
+4. **Trace the Milestone 1 pick to a settlement.** `Dodgers @ Brewers` on 2026-09-09 will have a
+   real result. Following that one pick from `validated` to a settled outcome with traceable score
+   provenance is the smallest end-to-end proof of condition 3, and it uses the pick that already
+   exists rather than requiring a new one.
+5. **Define the governed cohort predicate** before any statistic is computed, per the section above.
+6. **Repair `governance.awaiting-approval-drift`'s classification** so a real drift becomes visible
+   again. Its own payload already carries `countIncreased`.
+
+Items 1 and 4 are the ones that actually advance the milestone; the rest make it measurable.
+
 
 ## Concurrent session ownership — Claude and Codex, 2026-09-07
 
@@ -369,12 +352,20 @@ mergeable state before merging, and land the one that is already green rather th
 sanctioned resync is `pnpm ops:merge-wrapper main-sync`; a direct `git push origin main` is
 prohibited regardless of how convenient the ordering makes it look.
 
-**`docs/mission/plan.md` is shared and is being edited by this lane right now (UTV2-1849, #1527).**
-Codex should reconcile its own findings into this file *after* #1527 lands, not concurrently.
+**`docs/mission/plan.md` is shared.** UTV2-1849 (#1527) landed on 2026-09-07 and UTV2-1858 is
+editing it now. Codex should reconcile its own findings into this file after UTV2-1858 lands, not
+concurrently.
 
 ---
 
 ## The route B bootstrap — why the admission change takes two lanes
+
+**SUPERSEDED 2026-09-08 — retained as a record of the reasoning, not as a plan.** The admission
+landed in **one** lane (UTV2-1851, #1528), not two. The hazard this section identifies is real and
+was closed exactly as described — a deferral-carrying manifest cannot be created without the
+obligation recorded on it — but the ordering constraint below was derived from the assumption that
+the manifest carry-forward had to live in `lane-start.ts` (T1-floored). It went into
+`createManifest` in `shared.ts` (T3) instead, and the sequencing problem dissolved. See Learned.
 
 Ratified 2026-09-07. The remaining admission diff is the three edits in
 `PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a. They do **not** all sit at the same tier, and that is
@@ -450,43 +441,65 @@ waiting on Griff" — at any moment most of the board is independent of every op
 
 ### Wave 0 — reserved actions (Griff only)
 
-**Corrected 2026-09-07.** This preamble read *"Nothing in this table is on the Milestone 1 critical
-path"* while row 1 of the same table called itself the Milestone 1 blocker. Row 1 was right. The
-`Deploy` dispatch left this table by being done, and what that exposed underneath it — the PT1
-containment admission — is squarely on the critical path, and blocks more of it than row 1 first
-said. Rows 2–5 are genuinely off the critical path.
+**For the first time in this plan's history, no row in this table blocks the active milestone.**
+Row 1 has been the Milestone 1 blocker in every previous version — a `Deploy` dispatch on
+2026-09-06, the PT1 admission, then a second `Deploy` dispatch. That second dispatch happened on
+2026-09-09T00:54Z, Milestone 1 was performed against the release it shipped, and the row is gone.
+
+Every remaining row blocks only itself. **Milestone 2's executable work needs none of them**, and
+Milestone 2 has not yet produced a reserved item of its own — see the containment-interaction
+section above, which deliberately declines to request an unpark before measuring whether one is
+needed.
 
 | # | Action | Why reserved | What it actually blocks |
 |---|---|---|---|
-| 1 | Decide **the PT1 containment admission** — route A0 or B in `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`; the enforcement half is already on `main` (UTV2-1848, §6a carries the exact three-edit diff) | Route A0 is a bounded secrets action (reserved decision 4); route B is an admission-policy change | Milestone 1 steps **3**–5, and **every lane touching a Tier C path**, not only UTV2-1842. This is the Milestone 1 blocker. |
+| 1 | Approve **#1513** (UTV2-1802, T1) — Command Center management token can no longer be handed arbitrary SQL | Merge authority | #1513 only. Pre-deployment hardening; the Command Center is in no compose service and behind no Caddy route. |
 | 2 | Approve **#1484** (`pm-verdict/v1`) — canonical reference bootstrap | Merge authority | #1484 only. Not a Milestone 1 gate. |
 | 3 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
 | 4 | Decide the direct-`main` prevention control (`enforce_admins`, a ruleset, or a `pre-push` hook) | Branch protection | Nothing. The prohibition is already in force; what is reserved is the mechanical enforcement. |
-| 5 | Any production containment change (`parked` → `active`) | Containment | Nothing in Milestone 1 — the milestone is explicitly defined to complete with containment intact. |
+| 5 | Any production containment change (`parked` → `active`) | Containment | Nothing today. Milestone 1 completed with containment intact; Milestone 2 has not yet established that it needs any unpark. |
 
-**Four items left this table by being done, not by being deferred.** The newest is the one that
-mattered most:
+**Eight items have left this table by being done rather than by being deferred.** The two newest
+are the ones that emptied the Milestone 1 critical path:
 
-- **The `Deploy` dispatch — completed 2026-09-06T15:12:30Z, run `34041575531`, shipping
-  `d3f69b804`.** It stood at the head of this table for five days and was described here as the only
-  remaining reserved action on the Milestone 1 path. It is done, and the Milestone 1 path did not
-  open, which is what surfaced UTV2-1842 as the real blocker underneath it.
-- The former item 1 before that — reshape `ALLOWED_CAPPER_EMAILS` — was completed by Griff on
+- **The second `Deploy` dispatch — completed 2026-09-09T00:54:18Z, run `34296962788`, shipping
+  `755e52a6c`.** It carried the whole Smart Form submission repair into production, and Milestone 1
+  was performed against it hours later. The packet that prepared it was right about the change and,
+  unlike its 2026-09-06 predecessor, was not blindsided by the mechanism: the deploy succeeded on
+  the first attempt.
+- **Approve #1536 (UTV2-1856)** — merged, as did #1539 (UTV2-1859), which removed the client-side
+  player-prop refusal that #1536 had left stranded. The pairing is the recorded duplicated-rule
+  lesson closing itself out.
+
+- **The PT1 containment admission — ratified 2026-09-07, landed as UTV2-1851 (#1528).** It had been
+  row 1 and was the widest-reaching item on the table: it blocked not only UTV2-1842 but *every*
+  lane the mechanical floor raised to T1. A T1 lane can now be opened from a contained workstation,
+  with the live-DB obligation recorded in the token, carried onto the manifest, and enforced at
+  closeout by `G6`. Nothing was loosened to achieve it.
+- **The first `Deploy` dispatch — completed 2026-09-06T15:12:30Z, run `34041575531`, shipping
+  `d3f69b804`.** Row 1 for five days. Done, and the Milestone 1 path did not open, which is what
+  surfaced UTV2-1842 underneath it.
+- **The `scope-override/v1` on #1521** — closed without needing Griff at all. UTV2-1857 (#1537)
+  landed the `.lane/lanes/governance.yml` registration byte-identically as its own lane, so the
+  resync dropped that file from #1521's diff and `File scope lock` is green. Recorded because the
+  general move is reusable: when a lane's only scope violation is a shared registry file, landing
+  that registration in its own lane is cheaper than a head-pinned human artifact.
+- The former item 1 before those — reshape `ALLOWED_CAPPER_EMAILS` — completed by Griff on
   2026-09-03T17:29Z.
-- The former item 3 — decide #1477 — was resolved: the standing `CHANGES_REQUIRED` was answered by
-  correcting the proof bundle rather than the implementation, and #1477 merged at `1734bf20` on
-  2026-09-05T01:43Z.
-- The former item 4 — approve #1501 (UTV2-1823) — was approved and merged at `b7d9fc07` on
-  2026-09-03T19:26Z. The anonymous `GET /api/picks/{id}/trace` exposure that would have leaked the
-  pilot's own pick is closed in code, though not yet in production, which is downstream of item 1.
+- Decide #1477 — resolved by correcting the proof bundle rather than the implementation; merged at
+  `1734bf20` on 2026-09-05T01:43Z.
+- Approve #1501 (UTV2-1823) — merged at `b7d9fc07` on 2026-09-03T19:26Z. The anonymous
+  `GET /api/picks/{id}/trace` exposure that would leak the pilot's own pick is closed in code, and
+  **still not in production** — it is one of the 45 commits row 1 would ship.
 
 Command Center secrets are **not** in this table. They are not a Milestone 1 prerequisite; see
 `intent.md` § "Step 7 — observation path".
 
-### The deployment decision packet — closed 2026-09-06, kept for what it got right and wrong
+### The *first* deployment decision packet (2026-09-06) — closed, kept for what it got right and wrong
 
-This packet existed to prepare a reserved decision. **The decision was taken and the action
-completed**, so it is retained here only as a record, and trimmed to the parts that are still load-
+This packet prepared the 2026-09-06 dispatch. **That decision was taken and that action completed**,
+so it is retained here only as a record — the packet for the *next* dispatch is above under "The
+deploy decision packet", and trimmed to the parts that are still load-
 bearing. It is no longer something Griff has to read before acting.
 
 **What the packet got right.** It insisted on measuring the release rather than describing it, and
@@ -541,86 +554,65 @@ There is still **no automatic rollback**: `ROLLBACK_TAG` is an optional, empty-b
 input (`deploy.yml:10-13`), and a failed health loop just fails the job with production on the new
 tag. Rollback images resolve at the full 40-char tag for every service.
 
-### Wave 1 — Smart Form Track Only pilot (Milestone 1)
+### Wave 1 — Smart Form Track Only pilot (Milestone 1) — **COMPLETE 2026-09-09**
 
-**Every code and secret prerequisite is now deployed.** #1488 (canonical identity, `2ac233424`),
-#1501 (authenticated `GET /api/picks/{id}/trace`, `b7d9fc07f`) and #1477 (`1734bf201`) are all
-ancestors of the running `d3f69b804`, and `ALLOWED_CAPPER_EMAILS` was reshaped on 2026-09-03T17:29Z.
+**Every step in this wave is done, and the pilot itself has been performed.** The wave is retained
+as the record of how it closed, because the sequence is reusable and because two of its entries
+were wrong in instructive ways. The evidence for the pilot is at the top of this file under
+"Milestone 1 is complete"; the board has moved to Milestone 2.
 
-**The previous draft of this section said one `Deploy` dispatch was all that stood between `main`
-and a runnable pilot. That was wrong, and the deploy is what proved it wrong.** The dispatch
-happened; the pilot still cannot complete, because step 4 — submit a real Track Only pick — 422s on
-the event-existence gate before it ever reaches persistence.
+Step 4 (the deploy) completed 2026-09-09T00:54Z. Step 5 (the pilot) was performed by Griff hours
+later and verified by governed read-only production observation. What follows is the 2026-09-08
+text, kept for the record.
 
-So the sequence is now:
+1. ~~**Decide UTV2-1842's admission.**~~ **Done** — ratified 2026-09-07 (route B), landed as
+   UTV2-1851 (#1528). See "The PT1 containment admission is closed" above.
+2. ~~**Land UTV2-1842's server half.**~~ **Done** — #1529 (`40b0f19f4`) admits server-validated
+   Smart Form fallbacks past the event-existence gate. UTV2-1853 (#1531) added the server-side
+   numeric bounds, UTV2-1855 (#1533) clamped the units stepper to the schema bound and deleted the
+   dead odds validator, and UTV2-1854 (#1535) made team and player search answer from
+   `participants` rather than from an unpopulated canonical catalog.
+3. ~~**Verify the combined flow before release.**~~ **Done, and honestly bounded.** UTV2-1850
+   (#1530, `89cca15da`) asserts the persisted pick in the Smart Form e2e suite **and wires it**:
+   `apps/smart-form/package.json`'s `verify` script now ends in `node scripts/run-e2e-gate.mjs`, and
+   `verify:static` already invokes `pnpm --filter @unit-talk/smart-form verify`, so the execution
+   site is inside the required `verify` check with no workflow edit.
 
-1. **Decide UTV2-1842's admission** (Wave 0 item 1). Route A0 or B in
-   `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`. This is the only reserved item on the
-   path.
-2. **Land UTV2-1842's server half.** The client half is already on `main` — UTV2-1844 (#1523,
-   `b5ee99e17`) delivered signed odds and line entry and the three-valued identity mode.
-3. **Verify the combined flow before release**: browser → API → persisted pick, covering stale
-   events, signed odds and spread lines, canonical team fallback, honest missing coverage, and
-   Track Only non-delivery. **Still not covered in CI, and UTV2-1847 did not close it.** #1525
-   (`656ed0353`) rewrote `apps/smart-form/playwright.config.ts` and three specs so the suite can
-   run, but it touched **no `package.json` and no workflow**, so the four `apps/smart-form/e2e/`
-   specs are still executed by nothing: `qa-fast.yml`, `qa-experience-regression.yml` and
-   `post-merge-qa-gate.yml` each run the qa-agent's own Playwright project, never
-   `apps/smart-form`'s `test:e2e:fixture`. Wiring it needs a lane that declares `package.json` —
-   and, to add the workflow, one that declares `.github/workflows/**`. **That second path is
-   T1-floored and therefore blocked by the same reserved PT1 admission decision as UTV2-1842**;
-   see the correction under "Requires Griff" item 1.
+   **The gate is wired and defaults to off, and that was a deliberate, recorded choice rather than
+   an oversight.** `run-e2e-gate.mjs` runs the suite only when `UNIT_TALK_SMART_FORM_E2E` is exactly
+   `'1'`; unset, empty, `'0'`, `'true'` and `'yes'` all leave it off. The reason is the one Griff
+   stated on 2026-09-07 — *"any change to the required CI execution path should be reviewed as part
+   of the actual change, regardless of file-based tier minimum"* — because turning it on also
+   requires `playwright install chromium --with-deps` inside a required check, which changes what
+   that check does and how long it takes. `ci.yml` never mentions Playwright today.
 
-   **But the workflow is not the only route, and the rest of the work is executable today.**
-   Measured: `['apps/smart-form/package.json', 'package.json',
-   'apps/smart-form/playwright.config.ts', 'apps/smart-form/e2e/…']` floors at **T3** — no Tier C
-   prefix, so a lane covering all of it opens under containment. And the required `verify` check
-   already reaches this app: `verify:static` runs `pnpm --filter @unit-talk/smart-form verify`,
-   which today is `pnpm type-check && pnpm test`. So the suite can be authored, wired and made
-   runnable without touching a workflow at all.
+   **The fail-closed direction is the right way round**: the default is a *coverage* decision, never
+   a correctness one. When the flag is set, a failing suite fails `verify`; the gate cannot report
+   success for a suite that failed.
 
-   **And more of that is already done than this plan said.** The claim it carried — that
-   `playwright.config.ts` *"starts only `pnpm dev` on `127.0.0.1:4100` with no API process while
-   the client posts to `127.0.0.1:4000`"* — is stale: UTV2-1847 rewrote it, and the config on
-   `main` now declares a **two-entry `webServer`** that stands `pnpm --dir ../api dev` up on
-   `127.0.0.1:4000` with an explicit contained environment (empty `SUPABASE_*`,
-   `SYNDICATE_MACHINE_ENABLED: 'false'`, `UNIT_TALK_QA_SEED_ENABLED: 'true'`) and waits on
-   `/api/health/runtime` before starting `next dev` with `NEXT_PUBLIC_API_BASE_URL` pointed at it.
-   So the browser → API half of the harness exists.
+   **Enabling it is now executable and is not reserved.** It is a one-line change to `ci.yml` — a
+   Tier C prefix, so T1-floored — and the PT1 admission that used to make such a lane unopenable
+   from a contained workstation has landed. It should be reviewed on its own terms as a change to
+   required-check behaviour, which is exactly what its T1 floor delivers.
 
-   **What is missing is the persistence half — and Griff ruled on 2026-09-07 how it may not be
-   obtained.** The obvious move is to pass the staging credentials the `verify` job already carries
-   into that `webServer` env. **Do not.** That API child process runs with
-   `UNIT_TALK_API_RUNTIME_MODE: 'fail_open'` and `UNIT_TALK_QA_SEED_ENABLED: 'true'`; handing a
-   fail-open, QA-seeding runtime a live staging credential is how the staging database acquired
-   ~93% CI-fixture contamination in the first place. **The local in-memory harness and staging
-   database verification stay distinct**: the Playwright config keeps its empty `SUPABASE_*` and
-   stays a browser → API contract harness, and persistence is asserted where a real credential
-   already lives under real controls — `pnpm test:db` / the `Writable DB proof (staging only)` job,
-   which `assert-staging-target.ts` already pins to `xskgrzbteyqdufktjrjx`.
+   **The persistence half stays where the credential already lives.** The Playwright config keeps
+   its empty `SUPABASE_*` and stays a browser → API contract harness; `run-e2e-gate.mjs` strips any
+   `SUPABASE|DATABASE_URL|SERVICE_ROLE` key from the child environment, and its test asserts every
+   branch of that denylist. Persistence is asserted by `pnpm test:db` / the
+   `Writable DB proof (staging only)` job, which `assert-staging-target.ts` pins to
+   `xskgrzbteyqdufktjrjx`. That separation is why the staging database's ~93% CI-fixture
+   contamination is not repeated.
 
-   **And the execution-site question is not settled by the tier floor.** Griff: *"any change to the
-   required CI execution path should be reviewed as part of the actual change, regardless of
-   file-based tier minimum."* Adding an e2e run — and a `playwright install chromium --with-deps`
-   — to a script that executes inside the required `verify` check changes what a required check
-   does and how long it takes. `classifyMechanicalMinimum` returning `T3` for
-   `apps/smart-form/package.json` is a floor, not a verdict, and this is one of the cases where the
-   floor is the wrong answer. That hunk gets reviewed on its own terms whatever the classifier says.
+4. ~~**Dispatch the deploy.**~~ **Done** — 2026-09-09T00:54:18Z, run `34296962788`, shipping
+   `755e52a6c`. Succeeded on the first attempt; the deploy-workflow defect that failed the
+   2026-09-06 attempt had been repaired by UTV2-1841.
+5. ~~**Then run the pilot itself.**~~ **Done, and performed by Griff rather than simulated** —
+   2026-09-09T03:34:48Z. Reached the form, authenticated, resolved `griff843`, submitted a real
+   internal Track Only pick, persisted it, and the Track Only guards held. Containment stayed
+   parked throughout. Evidence at the top of this file.
 
-   What that route does **not** get for free is a browser. `ci.yml` never mentions Playwright;
-   the three qa workflows each run `playwright install chromium --with-deps` themselves. Adding
-   the e2e run to `smart-form`'s `verify` script would therefore need the browser install to
-   happen inside a package script running in a **required** check — which is a real change to what
-   a required check does and how long it takes, not a scripting detail, and should be decided as
-   one rather than slipped in. The clean split is: do the T3 authoring and wiring now, and let the
-   *execution site* be the one thing that waits.
-4. **Then run the pilot itself as one lane**: reach the form, authenticate, resolve `griff843`,
-   submit a real internal Track Only pick, assert persistence, observe the Track Only guards holding
-   during the run, and observe the result through a safe read-only internal/operator path.
-   Containment stays parked throughout.
-
-Step 4 is still the deliverable that has never been attempted end to end. Steps 1–3 are what the
-deploy revealed sit in front of it.
+**This wave is closed.** Its last two steps were the only ones that had never been attempted end to
+end, and both were performed on the same night.
 
 #1477 is **not** a Milestone 1 dependency; it is unrelated rate-limit DDL and is sequenced on its
 own merits.
@@ -629,27 +621,28 @@ own merits.
 
 | PR / work | State |
 |---|---|
-| #1479 null-stake computation truth | **`verify` is green** (re-measured 2026-09-05T22:10Z; the earlier "red" is stale). Only `Merge Gate` fails, so what it needs is an approval artifact, not a repair. This plan states no verdict on it. |
+| #1479 null-stake computation truth | **`verify` is green.** Only `Merge Gate` fails, so what it needs is an approval artifact, not a repair, and three of its non-required reds are each closed only by a Griff action (a `scope-override/v1` or `skip-proof-coverage` for the cross-PR proof-coverage rule; a commit-message rewrite that would move the anchor its staging receipt is bound to; and a read-only production credential, reserved decision 4). This plan states no verdict on it. |
 | #1451 June offer-history partitions | `verify` red; production DDL; PM-gated |
-| #1484 canonical reference bootstrap | `verify` green; needs a verdict (Wave 0 item 2) |
+| #1484 canonical reference bootstrap | `verify` green; needs a verdict (Wave 0 row 4) |
 | **The one `true_failure` dead-letter row** | **Read 2026-09-06 — done, and it was not a delivery failure.** It is the `proof-pick-blocked` guard refusing a `t1-proof` fixture to `discord:canary`, with its own run recorded `succeeded`. See the readiness section above. What remains is the *bucketing* defect it exposed in `readiness-refresh.ts:517-532`, recorded rather than filed. |
 | Closing-line truth | Not yet a branch |
 
 ### Wave 3 — Command Center
 
-**This is one of two executable fronts while Wave 0 item 1 is outstanding**; the other is the
-Smart Form work in Wave 1 steps 2–3, which is product work on the Milestone 1 path itself and
-outranks this. #1493 (dotted-path auth
-bypass, canonical issue **UTV2-1812**) and #1494 (arbitrary management SQL, canonical issue
-**UTV2-1802**) first — both are Command Center auth defects with green `verify`, and neither
-depends on any reserved action. They are **pre-deployment hardening, not live exposure**: the
-Command Center is in no production compose service and behind no Caddy route (measured 2026-09-06,
-see "The Command Center is not deployed" above). They must land before #1496 because #1496 is what
-would expose them. Then #1496 (deployment), which does need Command Center secrets and
-a hostname. All three need readmission as lanes; see "Admissibility debt" below. Readmission runs
-through `ops:lane-start --readmit-existing-branch --executor <who>` under the canonical issue.
+**Half of this wave is done.** #1493's diff landed as **#1503 (UTV2-1812, `9ac4694d9`)** — the
+dotted-path authentication bypass is closed on `main`. #1494's is open as **#1513 (UTV2-1802)**,
+green on `verify`, and needs only a T1 verdict; it is Wave 0 row 3.
 
-Deployment is tracked here on its own product merits. It is **not** a Milestone 1 gate.
+Both are **pre-deployment hardening, not live exposure**: the Command Center is in no production
+compose service and behind no Caddy route, so they harden a surface #1496 would create rather than
+close a reachable one. They must land before #1496 for exactly that reason.
+
+#1496 (deployment) still needs Command Center secrets and a hostname and remains inadmissible as a
+lane — it carries no `UTV2-###` in its branch, so `Merge Gate` cannot resolve a tier. Readmission
+runs through `ops:lane-start --readmit-existing-branch --executor <who>` under a canonical issue.
+
+Deployment is tracked here on its own product merits. It is **not** a Milestone 1 gate, and no
+`COMMAND_CENTER_*` secret is a Milestone 1 prerequisite.
 
 ### Wave 4 — models / research
 
@@ -661,14 +654,23 @@ Not started.
 
 ### Wave 6 — exactly one governance lane at a time
 
-**The slot is empty.** UTV2-1848 held it last and **merged as #1526
-(`1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4`) on 2026-09-07**, closing out at `e32bc506c` with its
-manifest `done` and its Linear issue Done on the first closeout attempt, no replay.
+**The slot is empty, and it emptied by being spent well.** Since the previous reconciliation four
+lanes have passed through it, each closing a defect that had already cost real lanes:
 
-It landed the **enforcement half of `PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2, before the
-admission decision it protects** — deliberately, so the reserved decision becomes a yes/no on a
-small diff whose protection already exists on `main` rather than a decision to build one. What
-landed:
+- **UTV2-1851 (#1528)** — the PT1 route B admission itself. The largest of the four: it is what
+  makes a T1 lane openable from a contained workstation, and it was written so the live-DB
+  obligation cannot be dropped by omission (missing, malformed, and *token-says-yes /
+  manifest-says-nothing* all fail closed). See the section above.
+- **UTV2-1857 (#1537)** — registered `apps/api/CLAUDE.md`, `apps/smart-form/CLAUDE.md` and
+  `docs/03_product/**` in `.lane/lanes/governance.yml`, which is what unblocked #1521 without a
+  head-pinned human artifact.
+- **UTV2-1849 (#1527)** and **UTV2-1855 (#1533)** — the previous plan reconciliation, and the units
+  stepper clamp plus the dead-odds-validator deletion.
+
+Before them, **UTV2-1848 (#1526)** landed the enforcement half of
+`PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2 *before* the admission decision it protects —
+deliberately, so the reserved decision became a yes/no on a small diff whose protection already
+existed on `main` rather than a decision to build one. What it landed:
 
 - `shared.ts` — an optional `LaneManifest.t1_live_db_precondition` field with the single legal
   value `deferred_to_ci`, plus two `validateManifest` rules: an unrecognised value is an error
@@ -679,42 +681,33 @@ landed:
   `fail`. Both contexts are asserted directly rather than relying on `verify`'s `needs:` edge, so a
   later loosening of that relationship cannot silently satisfy the gate.
 - Spec rows in `TRUTH_CHECK_SPEC.md` and `LANE_MANIFEST_SPEC.md`, and §6a of
-  `PT1_CONTAINMENT_ADMISSION_DECISION.md` carrying **the exact remaining admission diff** — three
-  edits: stop folding `blocked_by_containment` into `INFRA` in `resolveVerdict`
-  (`preflight.ts:1468-1477`), emit `t1_live_db_precondition: "deferred_to_ci"` in the token, and
-  copy it onto the manifest at lane-start.
+  `PT1_CONTAINMENT_ADMISSION_DECISION.md` carrying the exact remaining admission diff.
 
-**It admits nothing and is inert today**, asserted against real data rather than described: a test
-reads all 752 lane manifests on the branch and requires that **zero** carry the field, so if that
-assertion ever fails the admission decision was taken and G6 is live rather than dormant. Three
-mutations each turn a distinct assertion red, including an unwire mutation (`addCheck(g6…)` →
-`void g6`) — without it the whole check could be deleted with every behavioural test still green,
-which is exactly the failure mode the executor-result-validator duplication produced.
+**That sequencing worked and is worth reusing.** UTV2-1848's acceptance test read all 752 lane
+manifests on the branch and required that zero carried the field, so the gate was provably inert
+until the decision was taken — and when it was taken, one lane was enough to take it.
 
-Before it, UTV2-1688 — the executor-result namespace repair described under the
-`WORK-###` correction above — held the slot and **merged as #1519 (`949459fea`) on 2026-09-06T07:26Z**.
-It was chosen for a reason worth recording: it was not new debt. Filed 2026-08-09, PM-authored and
-already tier-labelled, and until it landed it made every `bootstrap/` lane permanently unmergeable
-without an admin bypass. Staffing an existing canonical issue that blocks merges outranks opening a
-fresh one.
+Before it, **UTV2-1688 (#1519, `949459fea`)** held the slot: the executor-result namespace repair.
+Chosen because it was not new debt — filed 2026-08-09, PM-authored, already tier-labelled, and until
+it landed every `bootstrap/` lane was permanently unmergeable without an admin bypass. Staffing an
+existing canonical issue that blocks merges outranks opening a fresh one.
 
-Leaving the slot empty now is deliberate and correct per the ratified policy: the Milestone 1 path
-has a live blocker (UTV2-1842) and the Smart Form work is product work, not governance work.
-
-**UTV2-1840** held the slot before it and merged as #1518 (`e4dcb59ee`), moving a repo-minted
-`WORK-###` task from *cannot start* to *cannot finish*; UTV2-1838 as #1517 (`3eea8f258`, closeout
-made safe to repeat); UTV2-1836 before that (the carry-forward evidence collector and the reserved
-Merge Gate integration diff); UTV2-1830 as #1502 (`1cb31a43e`); UTV2-1829 as #1499 (`d70df077`).
-RMA is an architecture review, not a governance lane.
+**UTV2-1840** (#1518, `e4dcb59ee`) preceded it, moving a repo-minted `WORK-###` task from *cannot
+start* to *cannot finish*; then UTV2-1838 (#1517, `3eea8f258`), UTV2-1836, UTV2-1830 (#1502) and
+UTV2-1829 (#1499). RMA is an architecture review, not a governance lane.
 
 Per the ratified debt policy in `intent.md`, **the slot is a ceiling, not a quota, and may stand
-empty.** After this lane closes it is deliberately left unstaffed: the closeout defects below are
-survivable by hand, the Command Center auth exposures are not, and production security work does
-not consume this slot. The strongest current candidates when the slot is next spent are the
-`pre-proof-validator` classification repair recorded under Learned, and the lease-reclaim
-terminality gate — now at **four** recorded occurrences, UTV2-1830, UTV2-1835, UTV2-1838 and
-UTV2-1840, the last of which refused UTV2-1688's lane start from a lease whose lane was already
-`done` on `main`.
+empty.** It is deliberately left unstaffed now: the Milestone 1 path's remaining blocker is a
+reserved dispatch, not a governance defect, and the strongest available product work outranks it.
+
+**The strongest candidate when the slot is next spent is the lease-reclaim terminality gate, now at
+five recorded occurrences** — UTV2-1830, UTV2-1835, UTV2-1838, UTV2-1840 and, on 2026-09-08,
+UTV2-1849, whose lease refused UTV2-1858's lane start (`lease_conflict Requested scope overlaps
+active lease for UTV2-1849`) while its own manifest read `done` on `main` and its `owner_pid` was
+`null`. Reclaim is purely TTL-gated (`lease-registry.ts:523-531`), so a provably finished lease
+stays unreclaimable for 48 hours and `ops:lease release` is the only escape. `findLeasesHeldByTerminalLanes`
+(`:769-800`) already computes exactly the predicate the reclaim path should be using. The
+`pre-proof-validator` classification repair recorded under Learned is the second candidate.
 
 ---
 
@@ -798,7 +791,7 @@ Per `intent.md`, the cutover closes when all five hold, demonstrated rather than
 
 Then the capacity returns to product work.
 
-**Measured 2026-09-06 — where the five actually stand.** The workstream is *not* complete, and it
+**Measured 2026-09-08 — where the five actually stand.** The workstream is *not* complete, and it
 is not complete for reasons that are now specific rather than general:
 
 | # | State | Evidence |
@@ -806,8 +799,8 @@ is not complete for reasons that are now specific rather than general:
 | 1 | **Advanced, not closed** | A repo-minted `WORK-###` task could not *open* a lane: a credential-free `ops:preflight WORK-902` reported `PE2 skip` and `PL1 skip` — every tracker check correctly optional — and then **`PX2 fail`**, because `branch-discipline-guard.ts` kept a private copy of the identifier alternation never widened when `WORK-###` was minted, and `lane-start` refuses without a validated preflight token. UTV2-1840 repairs that; the same probe now reports `PX2 pass`. **It does not make the rest of the lifecycle `WORK-###`-clean** — see the enumeration below. |
 | 2 | **Holds** | The credential-free probe reaches a verdict at all: `PE2`/`PL1`-`PL5` degrade to `skip`, not `fail`. |
 | 3 | **Holds, unchanged** | Nothing in this workstream has touched merge authority, the merge gate, CODEOWNERS or branch protection. Items 8–11 of the change set remain RESERVED and unimplemented. |
-| 4 | **Demonstrated but not yet proven mechanically** | This session recovered mission and plan across a compaction, but no test asserts it. |
-| 5 | **Demonstrated twice on 2026-09-06** | #1522 (UTV2-1845) merged `9a233bd90` and #1523 (UTV2-1844) merged `b5ee99e17`; both post-merge closeouts concluded `success` on the first attempt, with no replay, no state repair and no manifest repair. Both lanes had their tracker state moved *before* closeout rather than after it, which is what avoided the `truth-check` L3 failure recorded below — so this demonstrates the lifecycle works when the tracker is correct, not that it works without one. |
+| 4 | **Demonstrated repeatedly, still not proven mechanically** | This session has recovered mission and plan across several compactions, each time from `CLAUDE.md`'s `@`-includes plus live measurement rather than from carried context. No test asserts it, and until one does this row is an observation about a session, not a property of the system. |
+| 5 | **Demonstrated repeatedly, and once *not*** | Eleven lanes have closed since 2026-09-06 — #1522, #1523, #1525, #1526, #1527, #1528, #1529, #1530, #1531, #1533, #1535 — the great majority on the first closeout attempt with no replay, no state repair and no manifest repair. The exception is instructive: **UTV2-1857 (#1537) needed two dispatches**, and the first failed with `"code": "pr_sha_mismatch"` because it was given the optional `pr` input. `lane-close.ts:632` refuses the explicit-PR path whenever `manifest.commit_sha !== pr.mergeSha`, which is the state *every* merged lane is in — `commit_sha` can only hold the last implementation commit, since the merge SHA does not exist until after the merge. The inferred path (no `pr` input) has no such check and closed it. So: **re-dispatch `post-merge-lane-close.yml` with `issue_id` alone**; the `pr` input is documented "trusted missing-binding repair only" and should be taken literally. |
 
 **Where `WORK-###` still fails, enumerated rather than assumed.** `grep -rn "UTV2|UNI" scripts/
 .github/` returns **22 sites** carrying the narrow alternation. They are not equivalent, and the
@@ -1083,30 +1076,27 @@ replacements land.
 
 ## Admissibility debt
 
-**Eight** open PRs cannot be evaluated by `Merge Gate` because they were opened outside the lane
-system and carry no resolvable tier: #1429, #1491, #1492, #1493, #1494, #1495, #1496, #1498. All
-eight fail the identical set of checks — `Check issue references`, `Sync tier label`, `Executor
-Result Validation`, `Merge Gate` — every one of them downstream of the same single cause. (The count
-rose from seven not because a new PR was opened outside the system, but because #1429, an older
-model-de-pin branch, was checked and belongs to the same class.)
+**Six** open PRs cannot be evaluated by `Merge Gate` because they were opened outside the lane
+system and carry no resolvable tier: #1429, #1491, #1492, #1495, #1496, #1498. All six fail the
+identical set of checks — `Check issue references`, `Sync tier label`, `Executor Result Validation`,
+`Merge Gate` — every one of them downstream of the same single cause: no `UTV2-###` in the branch,
+so no tier can be resolved.
 
 **PM ruling 2026-09-03: `Merge Gate` is not changed to admit incorrectly-created branches.** The fix
 is readmission through `ops:lane-start` under the real issue. Renaming an open PR's head branch
 closes it and it will not reopen, so readmission means a replacement PR carrying the same diff.
 
-Two of them are security fixes that already have canonical Linear owners — the work and the issue
-exist, they were simply never joined:
+**The count fell from eight because the readmission ruling worked, twice.** #1493 and #1494 were the
+two security fixes in this set that already had canonical Linear owners — the work and the issue
+existed, they were simply never joined. Both were re-homed and closed:
 
-| PR | Fix | Canonical issue |
-|---|---|---|
-| #1493 (+121/-1) | a dot in the path no longer skips Command Center authentication | **UTV2-1812** (Backlog) |
-| #1494 (+503/-61) | the management token can no longer be handed arbitrary SQL | **UTV2-1802** (Backlog) |
+| Former PR | Fix | Canonical issue | Outcome |
+|---|---|---|---|
+| #1493 (+121/-1) | a dot in the path no longer skips Command Center authentication | **UTV2-1812** | landed as **#1503**, `9ac4694d9` |
+| #1494 (+503/-61) | the management token can no longer be handed arbitrary SQL | **UTV2-1802** | open as **#1513**, green `verify`, awaiting a T1 verdict |
 
-These are being re-homed onto those issues through normal governed lanes. They are product security
-work, not governance work, and do not consume the governance slot. Note the correction above: the
-Command Center is not deployed, so these harden a surface #1496 would create rather than close a
-reachable one. **They are the next
-executable work after this lane closes**, and neither waits on Griff.
+That is the readmission path demonstrated end to end rather than argued: an inadmissible PR carrying
+real work becomes an ordinary governed lane, and the gate never had to change.
 
 ### `Lane authority` rejects dotfiles inside its own allowed globs
 
@@ -1383,116 +1373,179 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 
 ## Requires Griff
 
-Consolidated from Wave 0, in dependency order. **This list is one item long on the Milestone 1
-path.** Everything below item 1 blocks only itself.
+Consolidated from Wave 0, in dependency order. **Nothing on this list blocks the active milestone.**
+Milestone 1 is complete; Milestone 2's executable work — enumerated above under "Executable now,
+under existing authority" — needs no item below. Each blocks only itself.
 
-1. ~~**Decide UTV2-1842's backend admission.**~~ **RATIFIED 2026-09-07 — route B.** Griff
-   authorized the bounded admission change for the deliberately contained PT1 case, to be
-   implemented through the governed PR path. The ratification is explicit that it is **policy
-   authorization, not a merge or deployment approval**, and it carries five binding conditions:
-   every other applicable preflight check must still pass; the deferral is recorded in the
-   generated token **and** the manifest; required staging verification is preserved before merge;
-   `G6` is retained at closeout; and **missing or malformed deferral information must not silently
-   discard the obligation**. Substitute hand-generated passing tokens are prohibited. Implementation
-   sequencing is under "The route B bootstrap" below. The original packet text follows for
-   reference: Route **A0** (export staging credentials for one
-   preflight invocation — no code change, unblocks the lane today, a bounded reserved-decision-4
-   secrets action) or route **B** (Part 1 + Part 2 — admit with a recorded, closeout-enforced
-   deferral, which unblocks every future T1 lane opened from a contained workstation). The packet
-   recommends **A0 now, B as the durable fix**, and is written in full at
-   `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` (merged `9a233bd90`). Route A — Part 1
-   alone — has already landed and makes the refusal honest without lifting it.
-
-   **This is not bookkeeping and must not be presented as such.** Changing PT1's classification
-   from `infra_error` to `skip` would change lane *admission* behaviour, which is execution
-   authority under `intent.md` § "Changes to the operating model". Part 1 was deliberately scoped
-   to avoid that: `blocked_by_containment` still resolves to verdict `INFRA` exactly as
-   `infra_error` does, asserted with two controls, so no lane opens that could not open before.
-
-   **Corrected 2026-09-07: "Nothing else on the board waits on this" was false, and it understated
-   the decision rather than overstating it.** PT1 runs at T1 and is waivable at no tier, so the
-   refusal reaches *every* lane the mechanical floor raises to T1 — not only UTV2-1842. Measured
-   directly: `classifyMechanicalMinimum(['.github/workflows/smart-form-e2e.yml'])` returns
-   `{"mechanicalMinimum":"T1","matches":[{"rule_id":"tier-c-prefix"}]}`, because
-   `.github/workflows/` is a Tier C prefix (`scripts/ops/merge-risk.ts:57-89`, alongside
-   `supabase/migrations/`, `packages/contracts/src/`, `packages/domain/src/`, `apps/worker/`,
-   `packages/config/` and `docs/00_constitution/`). And containment is still live: `local.env`
-   carries `SUPABASE_URL=http://127.0.0.1:1`, and `resolveVerdict([{id:'PT1',
-   status:'blocked_by_containment'}])` returns `INFRA` while an all-pass list returns `PASS`.
-
-   So the true blast radius is: **no lane touching any Tier C path can be opened from a contained
-   workstation.** Wave 1 step 3's CI wiring is one such lane, which means the *verification* half
-   of the Milestone 1 path is blocked by this decision too, not merely the submission repair.
-   Blocks Milestone 1 steps 3–5.
-2. **Approve #1484** (`pm-verdict/v1`) — canonical reference bootstrap, `verify` green, the only
-   open PR whose sole remaining obstacle is a verdict. Not a Milestone 1 gate.
+1. **Approve #1513** (UTV2-1802, T1) — the Command Center management token can no longer be handed
+   arbitrary SQL. Green `verify`. Pre-deployment hardening: the Command Center is in no production
+   compose service and behind no Caddy route, so this closes a surface #1496 would create rather
+   than a reachable one. It becomes load-bearing if Milestone 2 condition 5 is answered by
+   deploying the Command Center, which is the current expectation.
+2. **Approve #1484** (`pm-verdict/v1`) — canonical reference bootstrap, `verify` green.
 3. **#1491 / #1492 architecture review** — merge authority and agent authority. Those two PRs only.
-4. **#1451** — production DDL, `verify` currently red. Not a Milestone 1 gate.
+4. **#1451** — production DDL, `verify` currently red.
 5. **Direct-`main` prevention** — branch protection change, decided on its own merits and its own
    timeline. **Not sequenced behind the inadmissible-PR backlog:** the prohibition is already in
-   force, and incorrectly created PRs do not earn a deferral of a safety control. Not changed in
-   this lane.
-6. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1, and
-   explicitly excluded from it. Command Center secrets are likewise not a Milestone 1 gate.
+   force, and incorrectly created PRs do not earn a deferral of a safety control.
+6. **Any production containment change (`parked` → `active`)** — **not requested.** Milestone 1
+   completed with containment intact, and Milestone 2 has not yet measured whether it needs an
+   unpark. Per `intent.md`, a reserved decision is surfaced with the preparation complete and a
+   recommendation; no such packet exists yet and none is implied here. Grading already runs
+   uncontained, which removes the most obvious candidate before it was ever asked for.
 7. **Review the approval carry-forward Merge Gate integration** (UTV2-1836) — merge authority,
    reserved decision 7. The verifier (`scripts/ops/approval-carry-forward.ts`, #1508) and its
-   trusted evidence collector (`scripts/ops/carry-forward-collect.ts`, UTV2-1836) are both on
-   `main`/in review and **nothing calls them**; the workflow hunk that would is presented as a diff
-   and deliberately not applied. It is narrow: it fires only when every `validateT1Verdicts` error
-   is staleness, and every other T1 error still blocks. Blocks nothing — head-pinned verdicts keep
-   working exactly as they do today until this is decided.
-8. **A `scope-override/v1` comment** on any future lane that must touch `.lane/lanes/governance.yml`
-   or another path outside its own `file_scope_lock`. None is outstanding right now — the
-   `docs/mission/**` registration it was last needed for merged in #1499.
-
-9. **The `WORK-###` executor-result namespace diff** (UTV2-1688) — reserved decision 7. Two words
+   trusted evidence collector (`scripts/ops/carry-forward-collect.ts`) are both on `main` and
+   **nothing calls them**; the workflow hunk that would is presented as a diff and deliberately not
+   applied. Blocks nothing.
+8. **The `WORK-###` executor-result namespace diff** (UTV2-1688) — reserved decision 7. Two words
    in two byte-identical regex literals, one of them inside a required-check workflow. Blocks
-   nothing that is running today; it blocks cutover exit condition 1. Prepared in full above under
-   "The reserved `WORK-###` executor-result diff", with its controls already written and its
-   non-secret success criterion stated. The `bootstrap/` half of the same defect needed no
-   decision and has landed.
+   nothing that is running today; it blocks cutover exit condition 1. Prepared in full above.
+9. **A `scope-override/v1` comment** on any future lane that must touch a path outside its own
+   `file_scope_lock`. **None is outstanding.**
 
-**The `Deploy` dispatch left this list on 2026-09-06 by being done** — run `34041575531`,
-`d3f69b804`, 15:12:30Z. It had been item 1 for five days.
+**Three items left this list by being done since the last reconciliation, and the first of them is
+the one that mattered:**
 
-Items that left on 2026-09-05 by being done: the `ALLOWED_CAPPER_EMAILS` reshape; the #1477 decision
-(resolved by correcting the proof bundle, merged `1734bf20`); the #1501 approval (merged
-`b7d9fc07`); and the #1499 scope override (merged `d70df077`). #1493 also left it — it was never
-actually a Griff-reserved item, only an unadmitted PR, and it is now Wave 3 executable work.
+- **The `Deploy` dispatch at `origin/main`** — completed 2026-09-09T00:54:18Z, run `34296962788`,
+  shipping `755e52a6c`. It was item 1 on this list for the whole of its existence in one form or
+  another. Its stated non-secret success criterion has been met on both halves: production is now
+  one bot commit and **zero container files** behind `main`, and a Smart Form submission no longer
+  fails — it persisted.
+- **The `ALLOWED_CAPPER_EMAILS` shape gap** — closed by being exercised. This plan warned for six
+  days that the value was checked non-empty at three layers, shape-validated at none, and would
+  first be tested by Griff's own browser. That is exactly what happened, and the value was correct.
+  The gap in the *deploy* remains real for any future reshape: nothing still validates the shape,
+  and the `smart-form` healthcheck still returns 200 regardless of allow-list contents.
+- **Approve #1536** (UTV2-1856) — merged.
 
-**One item is outstanding and is not on the Milestone 1 path: a `scope-override/v1` on #1521**
-(UTV2-1843, Smart Form product-intent consolidation). Its four required checks were green, but its
-`File scope lock` is red.
-
-**Corrected 2026-09-07 — the three paths this paragraph previously named are all *inside* the
-lock.** It said the violation was that the diff adds `apps/api/CLAUDE.md`,
-`apps/smart-form/CLAUDE.md` and `docs/03_product/**` to `.lane/lanes/governance.yml`. Measured
-against the manifest on the branch, `file_scope_lock` already contains `apps/api/CLAUDE.md`,
-`apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/**`. Re-running the scope comparison
-over all 14 changed files against the lock plus the lane's own metadata and declared proof paths
-returns **exactly one** violation:
-
-```
-OUT OF SCOPE: .lane/lanes/governance.yml
-total files: 14
-```
-
-So the scope question is real but is one file, not three: the lane must register its own doc
-subtree in the lane-authority allowlist, and `.lane/lanes/governance.yml` is the file that does it.
-That is precisely the mechanism UTV2-1829 used for `docs/mission/**` and that
-`.lane/lanes/governance.yml`'s own comments record eight prior times — a CODEOWNERS
-`scope-override/v1` pinned to an exact head SHA. It remains a real scope question, not the
-review-packet defect, and "non-required check" is not authorization to merge past it.
-
-**Its lease is already released and its lane is already parked**, so it is not blocking the
-frontend repair: `docs/06_status/lanes/UTV2-1843.json` on the branch reads `"status": "parked"` and
-`.ops/leases/UTV2-1843.json` reads `"status": "released"` with `owner_pid: null`. The PR is
-`BEHIND`, so per the head-pinning rule it should be resynced and reconciled *before* the override is
-requested, not after — the override binds a head SHA and every later commit invalidates it.
-
----
+Earlier departures, retained because the pattern is the point: the PT1 containment admission
+(2026-09-07, route B, landed as UTV2-1851/#1528 — it had blocked *every* lane the mechanical floor
+raised to T1, not only UTV2-1842); the `scope-override/v1` on #1521, routed around rather than
+granted; the `ALLOWED_CAPPER_EMAILS` reshape; the #1477 decision; the #1501 approval; and the #1499
+scope override.
 
 ## Learned
+
+- **A milestone closed, and the thing that closed it was a dispatch — not a repair.** For five
+  reconciliations this plan named an engineering blocker as the last obstacle to Milestone 1, and
+  each time the blocker underneath turned out to be reserved rather than technical. The final
+  sequence was: repair merged → deploy dispatched → milestone performed. **The engineering had been
+  finished for a day before the milestone was reachable**, which is the strongest available
+  statement of the merged-is-not-shipped rule this plan recorded on 2026-09-08. Worth keeping now
+  that it has been paid off rather than only warned about.
+
+- **The one prediction this plan repeated most often was correct, and it was correct because it
+  named the mechanism rather than the outcome.** For six days it said `ALLOWED_CAPPER_EMAILS` was
+  checked non-empty at three layers, shape-validated at none, that the healthcheck returned 200
+  regardless of its contents, and that Griff's browser would therefore be its first real test. All
+  four were true and the value happened to be right. **The gap is not closed by the value being
+  right** — nothing validates the shape today either, so the next reshape carries the identical
+  risk with no accumulated protection. A risk that does not fire is not a risk that was wrong.
+
+- **Verifying a milestone means reading the row, not the receipts underneath it.** The Milestone 1
+  verification queried the persisted pick, its lifecycle, its promotion history, its participants
+  against the real `participants` table, four separate delivery-bearing tables, and the deploy's own
+  containment log. Every one of those could have been argued from code and tests that were already
+  green — and the 2026-09-08 client-guard defect is proof that green tests coexisted with a form
+  that refused. **Enumerate the delivery-bearing tables from the schema** (`information_schema`
+  for `pick_id`) rather than from the two you happen to remember; two of the four checked this way
+  were not in the plan's own prior list.
+
+- **A monitor that has failed 12,634 consecutive times is not a monitor.** `governance.awaiting-approval-drift`
+  reports `failed` every 15 minutes on a static 14,984-row backlog while computing
+  `countIncreased: false` in the same payload — it holds the field that would distinguish real
+  drift from historical residue and does not use it. This is the "a control that fires on
+  everything conveys no information" class, and it is the first instance where the control's own
+  output contains its own repair. Also a reminder that the fix is in the classifier: deleting the
+  rows to make the monitor green would be destroying audit history to improve a dashboard, and
+  production data deletion is reserved besides.
+
+- **Config that is *not* gated is as load-bearing as config that is, and nobody writes it down.**
+  `UNIT_TALK_GRADING_CRON_AUTORUN=true` sits at `deploy.yml:540` outside the
+  `SYNDICATE_MACHINE_MODE` case statement that parks the ingestor and worker. That single
+  placement is why grading has 13,720 successful runs under containment, and it materially changed
+  Milestone 2's starting position — but no document said so, and the plan spent five days
+  describing containment as though it stopped everything. **When recording what containment parks,
+  enumerate what it does not.**
+
+- **Promotion ran, scored, force-promoted past its own minimum, and delivered nothing — and only
+  the last of those is guaranteed by containment.** The Milestone 1 pick is `qualified` for
+  `best-bets` at score 64.02 against a policy minimum of 70, via a source-based override. Track
+  Only made it harmless. The general form is worth holding onto going into Milestone 2: **a guard
+  that blocks the consequence does not correct the decision**, and when the guard is removed the
+  decision is what remains.
+
+- **A client guard that mirrors a server rule is one rule stored twice, and deleting the server copy
+  silently re-arms the client copy.** UTV2-1856 removed the server refusal *"canonical player
+  selection requires a canonical event"*; `evaluateSubmissionGuards` kept its mirror of that exact
+  rule, citing it by `file:line` in a comment. Every test stayed green — the server tests assert the
+  server's new behaviour, the client tests assert the client's old behaviour, and no test compares
+  them — so a green `verify`, a complete T1 proof bundle and a merged repair all coexisted with a
+  form that refused before issuing a request. **Server-side evidence cannot detect this class at
+  all**, because the defect is that the request is never sent. It was found in ~40 seconds of
+  Playwright and would not have been found by any amount of reading. The mechanical form of the
+  lesson matches UTV2-1688's: where a rule is duplicated for a real reason, something must fail when
+  the copies disagree; a `file:line` citation in a comment is documentation of the coupling, not
+  enforcement of it.
+
+- **"Demonstrate the path" and "prove the components" are different obligations, and only one of
+  them ends a milestone.** The submission repair had unit tests, live-DB tests, mutation tests and
+  green CI at every step, and the operator still could not submit. Milestone 1's steps are written
+  as operator actions for exactly this reason. Any future claim that a step is repaired needs a run
+  of that step, not a receipt from underneath it.
+
+- **A merged repair is not a shipped repair, and this plan wrote the confusion into its own
+  headings.** The 2026-09-07 draft said "the submission blocker is closed" in a section whose
+  subject was explicitly the *deployed* system. Both halves were individually true — UTV2-1842 was
+  merged, and the pilot runs against production — and the sentence connecting them was false. It
+  took a `git rev-list --count d3f69b804..origin/main` returning **45** to notice. The generalisable
+  rule is narrow and mechanical: **when a claim is about a deployed system, the evidence has to be
+  an ancestry or drift measurement against the deployed SHA, never a merge SHA.** The plan already
+  applied that rule correctly to #1488 and #1501 (`git merge-base --is-ancestor`); it stopped
+  applying it the moment the merges started arriving faster than the reconciliations.
+
+- **The two-lane sequencing argument was right about the risk and wrong about the file.** "The route
+  B bootstrap" section below reasoned carefully that the admission change could not land in one
+  lane, because copying the deferral onto the manifest lives in `lane-start.ts`, which is T1-floored
+  by `tier-c-pattern` — the exact refusal the change exists to lift. UTV2-1851 landed it in **one**
+  lane by putting the carry-forward in `createManifest` in `shared.ts`, a T3 file that
+  `lane-start.ts` calls. The hazard the section identified was real and had to be closed; the
+  ordering constraint it derived was an artifact of assuming where the code had to go. **A tier
+  floor is computed from the file list, so the file list is a design variable, not a given** — when
+  a floor makes a change unopenable, ask which file the change actually needs before accepting the
+  sequencing cost.
+
+- **A leaked lease has now blocked five lane starts, which is what the filing threshold's
+  "repeatedly strands lanes" clause is for.** UTV2-1849 merged, truth-closed, manifest `done` on
+  `main`, `owner_pid: null` — and its lease refused UTV2-1858 with `lease_conflict`. Reclaim is
+  purely TTL-gated, so the only escape is knowing that `ops:lease release --issue <ID> --actor
+  <who> --reason <why>` exists. `findLeasesHeldByTerminalLanes` already computes the right
+  predicate; the reclaim path consults the clock instead. Fifth occurrence: UTV2-1830, 1835, 1838,
+  1840, 1849. It is now the strongest candidate for the governance slot.
+
+- **A failed `lane-start` leaves a branch and worktree the retry then refuses**, and the sanctioned
+  cleaner does not model that state. `ops:lane-start` created both before failing the lease check;
+  the retry reported *"Branch and worktree already exist but no manifest exists for this issue"*.
+  `git worktree remove --force` plus `git branch -D` is the working path. Recorded again because
+  it compounds with the lease defect above: one leaked lease costs two failures, not one.
+
+- **A red check can be red for a reason that has nothing to do with the code.** #1521's
+  `QA Experience Regression (Advisory)` failed at its *"Post PR comment"* step with a GitHub API
+  403 — *"Resource not accessible by integration"* — after the check itself had already concluded
+  `NEEDS_REVIEW` (advisory; the apps are not running in CI). The workflow's finding was
+  informational and the job failed on a permissions grant, not on a QA result. This belongs to the
+  same aggregate-conflation class already recorded three times over — infrastructure failure and
+  policy or product state reported as one verdict — and it is a fourth instance rather than a new
+  defect. Recorded rather than filed, per the filing threshold.
+
+- **When a lane's only scope violation is a shared registry file, land the registration as its own
+  lane instead of asking for an override.** #1521 sat one `scope-override/v1` away from mergeable
+  for two days on a single violation: `.lane/lanes/governance.yml is not declared by UTV2-1843`.
+  UTV2-1857 registered the same paths byte-identically in its own T3 lane; the resync then dropped
+  the file from #1521's diff entirely and `File scope lock` went green with no human artifact and
+  no head pinning. The override route costs one Griff round trip *per head move*, and the readiness
+  bot moves heads on a schedule. This route costs one lane and is immune to that.
 
 - **A reserved gate's blast radius is itself a measurement, and stating it from the one case that
   surfaced it understates it.** This plan said the PT1 containment admission blocked UTV2-1842 and
