@@ -1,0 +1,66 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1867
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1867
+  objective: Register docs/03_product/** in the delivery-ui lane so a
+    product-surface lane can carry its own intent doc
+  acceptance_criteria:
+    - |-
+      `CLAUDE.md` makes a product's intent document required reading before any task that changes how that product behaves for its operator, and `docs/03_product/smart-form/intent.md` is the first such document. But no lane type admits both an app surface and `docs/03_product/**`:
+
+      * `delivery-ui` admits `apps/smart-form/**` and not `docs/03_product/**`
+      * `hygiene` admits neither `*.spec.ts` nor `docs/03_product/**`
+      * `governance` admits `docs/03_product/**` and no app source
+
+      So a coherent change that adds a Smart Form test and records what it proves in the product's own matrix cannot be typed. Measured on [UTV2-1864](https://linear.app/unit-talk-v2/issue/UTV2-1864/smart-form-acceptance-matrix-prove-persistence-for-every-supported) ([griff843/Unit-Talk-v2#1543](https://linear.app/unit-talk-v2/review/utv2-1864-row-assert-the-three-smart-form-families-that-persist-a-real-37eeb026e83a)), where `Lane authority` reported `outside_allowed_paths` for `apps/smart-form/e2e/phase-one.spec.ts`, `docs/03_product/smart-form/acceptance-matrix.md` and `docs/03_product/smart-form/intent.md`, and restarting the lane under any other type would not have cleared it. [griff843/Unit-Talk-v2#1543](https://linear.app/unit-talk-v2/review/utv2-1864-row-assert-the-three-smart-form-families-that-persist-a-real-37eeb026e83a) merged on its green required checks with the finding recorded.
+
+      **Change:** add `docs/03_product/**` to `allowed_path_globs` in `.lane/lanes/delivery-ui.yml`, with a comment recording the reason — the same admission-correction precedent `apps/web/**` set under [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work). No taxonomy change, no concurrency change, no forbidden-path change.
+
+      **Acceptance:** a lane declaring `apps/smart-form/**` and `docs/03_product/**` under `lane-type delivery-ui` passes `Lane authority`; `governance`'s own admission of `docs/03_product/**` is unchanged; nothing else in the file moves.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      `CLAUDE.md` makes a product's intent document required reading before any task that changes how that product behaves for its operator, and `docs/03_product/smart-form/intent.md` is the first such document. But no lane type admits both an app surface and `docs/03_product/**`:
+
+      * `delivery-ui` admits `apps/smart-form/**` and not `docs/03_product/**`
+      * `hygiene` admits neither `*.spec.ts` nor `docs/03_product/**`
+      * `governance` admits `docs/03_product/**` and no app source
+
+      So a coherent change that adds a Smart Form test and records what it proves in the product's own matrix cannot be typed. Measured on [UTV2-1864](https://linear.app/unit-talk-v2/issue/UTV2-1864/smart-form-acceptance-matrix-prove-persistence-for-every-supported) ([griff843/Unit-Talk-v2#1543](https://linear.app/unit-talk-v2/review/utv2-1864-row-assert-the-three-smart-form-families-that-persist-a-real-37eeb026e83a)), where `Lane authority` reported `outside_allowed_paths` for `apps/smart-form/e2e/phase-one.spec.ts`, `docs/03_product/smart-form/acceptance-matrix.md` and `docs/03_product/smart-form/intent.md`, and restarting the lane under any other type would not have cleared it. [griff843/Unit-Talk-v2#1543](https://linear.app/unit-talk-v2/review/utv2-1864-row-assert-the-three-smart-form-families-that-persist-a-real-37eeb026e83a) merged on its green required checks with the finding recorded.
+
+      **Change:** add `docs/03_product/**` to `allowed_path_globs` in `.lane/lanes/delivery-ui.yml`, with a comment recording the reason — the same admission-correction precedent `apps/web/**` set under [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work). No taxonomy change, no concurrency change, no forbidden-path change.
+
+      **Acceptance:** a lane declaring `apps/smart-form/**` and `docs/03_product/**` under `lane-type delivery-ui` passes `Lane authority`; `governance`'s own admission of `docs/03_product/**` is unchanged; nothing else in the file moves.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1867/register-docs03-product-in-the-delivery-ui-lane-so-a-product-surface
+    title: Register docs/03_product/** in the delivery-ui lane so a product-surface
+      lane can carry its own intent doc
+    description: |-
+      `CLAUDE.md` makes a product's intent document required reading before any task that changes how that product behaves for its operator, and `docs/03_product/smart-form/intent.md` is the first such document. But no lane type admits both an app surface and `docs/03_product/**`:
+
+      * `delivery-ui` admits `apps/smart-form/**` and not `docs/03_product/**`
+      * `hygiene` admits neither `*.spec.ts` nor `docs/03_product/**`
+      * `governance` admits `docs/03_product/**` and no app source
+
+      So a coherent change that adds a Smart Form test and records what it proves in the product's own matrix cannot be typed. Measured on [UTV2-1864](https://linear.app/unit-talk-v2/issue/UTV2-1864/smart-form-acceptance-matrix-prove-persistence-for-every-supported) ([griff843/Unit-Talk-v2#1543](https://linear.app/unit-talk-v2/review/utv2-1864-row-assert-the-three-smart-form-families-that-persist-a-real-37eeb026e83a)), where `Lane authority` reported `outside_allowed_paths` for `apps/smart-form/e2e/phase-one.spec.ts`, `docs/03_product/smart-form/acceptance-matrix.md` and `docs/03_product/smart-form/intent.md`, and restarting the lane under any other type would not have cleared it. [griff843/Unit-Talk-v2#1543](https://linear.app/unit-talk-v2/review/utv2-1864-row-assert-the-three-smart-form-families-that-persist-a-real-37eeb026e83a) merged on its green required checks with the finding recorded.
+
+      **Change:** add `docs/03_product/**` to `allowed_path_globs` in `.lane/lanes/delivery-ui.yml`, with a comment recording the reason — the same admission-correction precedent `apps/web/**` set under [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work). No taxonomy change, no concurrency change, no forbidden-path change.
+
+      **Acceptance:** a lane declaring `apps/smart-form/**` and `docs/03_product/**` under `lane-type delivery-ui` passes `Lane authority`; `governance`'s own admission of `docs/03_product/**` is unchanged; nothing else in the file moves.
+    captured_at: 2026-09-09T09:23:09.269Z
+    description_sha256: 26a46696ccc7c592bc0f83f4ab6399c54bec4a3dfd3b468da9e8af33a764ffb1
+  contract_hash: b72bd9489d2e7bdbcbe14cda9e012f8c52acef235371f77cfa40e5b1be381dbd
