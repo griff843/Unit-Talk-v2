@@ -100,12 +100,54 @@ function runPreProofHook(
   repo: string,
   hookPath = PRE_PROOF_HOOK,
   command = 'git commit -m "merge"',
+  env?: NodeJS.ProcessEnv,
 ): SpawnSyncReturns<string> {
   return spawnSync('bash', [hookPath], {
     cwd: repo,
     encoding: 'utf8',
     input: JSON.stringify({ tool_input: { command } }),
+    ...(env ? { env: { ...process.env, ...env } } : {}),
   });
+}
+
+/**
+ * Point every temp-file allocation at a directory that cannot be written to,
+ * so `mktemp` fails the way a full /tmp makes it fail. bash's mktemp honours
+ * TMPDIR, so this reproduces ENOSPC without needing to fill a filesystem.
+ */
+function unwritableTmpdir(): { env: NodeJS.ProcessEnv; cleanup: () => void } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'no-alloc-'));
+  const denied = path.join(dir, 'denied');
+  fs.mkdirSync(denied);
+  fs.chmodSync(denied, 0o500);
+  return {
+    env: { TMPDIR: denied },
+    cleanup: () => {
+      fs.chmodSync(denied, 0o700);
+      fs.rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
+/**
+ * Narrow the pre-filter from `*git*` to the literal `git commit`. This is the
+ * mutation that must turn a detection assertion red: `git -C <path> commit` and
+ * `bash -c "git commit ..."` are both real commits that the narrowed filter
+ * would drop before the tokenizer ever sees them.
+ */
+function writeNarrowedPrefilterMutation(repo: string): string {
+  const mutatedHook = path.join(repo, 'narrow-prefilter-pre-proof-validator.sh');
+  const current = fs.readFileSync(PRE_PROOF_HOOK, 'utf8');
+  const prefilter = 'case "$command" in\n  *git*) ;;\n  *) exit 0 ;;\nesac';
+  assert.ok(
+    current.includes(prefilter),
+    'pre-filter must be present verbatim for this mutation to be meaningful',
+  );
+  fs.writeFileSync(
+    mutatedHook,
+    current.replace(prefilter, 'case "$command" in\n  *"git commit"*) ;;\n  *) exit 0 ;;\nesac'),
+  );
+  return mutatedHook;
 }
 
 interface InheritedMergeFixture {
@@ -623,6 +665,103 @@ test('the raw-command fallback is load-bearing for untokenizable commands', () =
     // And the wrapper forms stay blocked either way, now via tokenization.
     const wrapped = 'bash -c "git commit -m x"';
     assert.equal(runPreProofHook(repo, PRE_PROOF_HOOK, wrapped).status, 2);
+  } finally {
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Classify before allocating (UTV2-1873)
+//
+// This hook runs on EVERY Bash tool call. It used to call mktemp before it had
+// looked at the command at all, so a full /tmp denied every Bash call in the
+// session -- including the recovery that would have cleared it. These tests
+// lock the ordering, not the message.
+// ---------------------------------------------------------------------------
+
+test('a command that cannot be a commit is allowed even when no temp file can be allocated', () => {
+  const repo = initGitFixture();
+  const tmp = unwritableTmpdir();
+  try {
+    // Control: allocation really is impossible under this TMPDIR. If this
+    // assertion ever goes green-by-accident the loop below proves nothing.
+    const allocationProbe = spawnSync('bash', ['-c', 'mktemp'], {
+      encoding: 'utf8',
+      env: { ...process.env, ...tmp.env },
+    });
+    assert.notEqual(
+      allocationProbe.status,
+      0,
+      'fixture is vacuous unless mktemp genuinely fails under this TMPDIR',
+    );
+
+    // The last two are the shape of the recovery a full disk needs. Under the
+    // old ordering the hook denied exactly these.
+    for (const command of [
+      'ls -la',
+      'pnpm test',
+      'df -h /tmp',
+      'truncate -s 0 /tmp/big.log',
+    ]) {
+      const result = runPreProofHook(repo, PRE_PROOF_HOOK, command, tmp.env);
+      assert.equal(
+        result.status,
+        0,
+        `hook denied an unrelated command under an unwritable TMPDIR: ${command}\n${result.stderr}`,
+      );
+    }
+  } finally {
+    tmp.cleanup();
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('a real commit still fails closed when no temp file can be allocated', () => {
+  const repo = initGitFixture();
+  const tmp = unwritableTmpdir();
+  try {
+    const result = runPreProofHook(repo, PRE_PROOF_HOOK, 'git commit -m x', tmp.env);
+    assert.equal(result.status, 2, 'a commit must never be waved through on an allocation failure');
+    assert.match(result.stderr, /cannot allocate detection workspace/);
+  } finally {
+    tmp.cleanup();
+    fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+test('the pre-filter is a superset of both detection paths, and narrowing it is caught', () => {
+  const repo = initGitFixture();
+  const proofPath = 'docs/06_status/proof/TOPIC/evidence.json';
+  try {
+    writeFixture(repo, proofPath, invalidEvidence('prefilter-control'));
+    runGit(repo, ['add', proofPath]);
+
+    // Commit forms that carry `git` but not the literal "git commit".
+    const forms = [
+      `git -C ${repo} commit -m x`,
+      'git --git-dir=.git commit -m x',
+      'git commit -m "unterminated',
+    ];
+
+    for (const command of forms) {
+      assert.equal(
+        runPreProofHook(repo, PRE_PROOF_HOOK, command).status,
+        2,
+        `real hook must still classify this as a commit: ${command}`,
+      );
+    }
+
+    // Mutation: narrowing `*git*` to `*"git commit"*` drops these forms before
+    // the tokenizer runs, so the hook waves a bad proof bundle through.
+    const mutated = writeNarrowedPrefilterMutation(repo);
+    let dropped = 0;
+    for (const command of forms) {
+      if (runPreProofHook(repo, mutated, command).status === 0) dropped += 1;
+    }
+    assert.ok(
+      dropped > 0,
+      'narrowing the pre-filter must change at least one verdict, or it is not load-bearing',
+    );
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }
