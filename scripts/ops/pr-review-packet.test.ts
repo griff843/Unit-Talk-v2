@@ -194,6 +194,62 @@ test('generatePRReviewPacket still flags wrong-issue lane metadata as scope blee
   assert.equal(packet.checks.find((check) => check.id === 'scope')?.status, 'FAIL');
 });
 
+test("generatePRReviewPacket allows the lane's own proof directory outside explicit scope lock", async () => {
+  // .gitkeep is created and committed by ops:lane-start itself; evidence.json is
+  // what Executor Result Validation looks for. Neither is in expected_proof_paths,
+  // and before this both were reported as scope bleed on a correct bundle.
+  const packet = await generatePRReviewPacket(
+    createInput({
+      pull_request: {
+        number: 1057,
+        url: 'https://github.com/unit-talk/unit-talk-v2/pull/1057',
+        title: 'feat(ops): UTV2-1057 automated return review packet',
+        headRefName: 'codex/utv2-1057-automated-return-review-packet-for-t1t2-prs',
+        headRefOid: 'abc123def456',
+        labels: [{ name: 'tier:T2' }],
+        files: [
+          { path: 'scripts/ops/pr-review-packet.ts' },
+          { path: 'docs/06_status/proof/UTV2-1057/.gitkeep' },
+          { path: 'docs/06_status/proof/UTV2-1057/evidence.json' },
+        ],
+        statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }],
+      },
+    }),
+  );
+
+  assert.strictEqual(packet.verdict, 'PASS');
+  assert.deepStrictEqual(packet.out_of_scope_files, []);
+  assert.equal(packet.checks.find((check) => check.id === 'scope')?.status, 'PASS');
+});
+
+test("generatePRReviewPacket still flags another lane's proof directory as scope bleed", async () => {
+  // This is what keeps the widening above honest. Broadening the new glob to
+  // docs/06_status/proof/** turns this test red, which is the point of it.
+  const packet = await generatePRReviewPacket(
+    createInput({
+      pull_request: {
+        number: 1057,
+        url: 'https://github.com/unit-talk/unit-talk-v2/pull/1057',
+        title: 'feat(ops): UTV2-1057 automated return review packet',
+        headRefName: 'codex/utv2-1057-automated-return-review-packet-for-t1t2-prs',
+        headRefOid: 'abc123def456',
+        labels: [{ name: 'tier:T2' }],
+        files: [
+          { path: 'scripts/ops/pr-review-packet.ts' },
+          { path: 'docs/06_status/proof/UTV2-9999/evidence.json' },
+        ],
+        statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }],
+      },
+    }),
+  );
+
+  assert.strictEqual(packet.verdict, 'FAIL');
+  assert.deepStrictEqual(packet.out_of_scope_files, [
+    'docs/06_status/proof/UTV2-9999/evidence.json',
+  ]);
+  assert.equal(packet.checks.find((check) => check.id === 'scope')?.status, 'FAIL');
+});
+
 test('generatePRReviewPacket detects missing package script wiring for new tests', async () => {
   const packet = await generatePRReviewPacket(
     createInput({
@@ -409,6 +465,7 @@ test('generatePRReviewPacket preserves packet shape for prompt consumers', async
     '.github/workflows/return-review-packet.yml',
     '.ops/sync/UTV2-1057.yml',
     'docs/06_status/lanes/UTV2-1057.json',
+    'docs/06_status/proof/UTV2-1057/**',
     'docs/06_status/proof/UTV2-1057/diff-summary.md',
     'docs/06_status/proof/UTV2-1057/verification.md',
     'package.json',

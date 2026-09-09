@@ -664,6 +664,19 @@ function sameIssueLaneMetadataPaths(issueId: string): string[] {
   return [
     `.ops/sync/${normalizedIssueId}.yml`,
     `docs/06_status/lanes/${normalizedIssueId}.json`,
+    // A lane's own proof directory, for the same reason as the two above: the
+    // tooling puts files there that the lane never declared. `ops:lane-start`
+    // creates and commits `<dir>/.gitkeep`, and Executor Result Validation
+    // selects a narrower legacy proof contract unless `<dir>/evidence.json`
+    // exists -- so a correctly-built lane is pushed toward adding files this
+    // check then reported as scope bleed. `.lane/lanes/governance.yml` already
+    // admits `docs/06_status/proof/**`, so `Lane authority` passed the very
+    // files this packet failed.
+    //
+    // Deliberately keyed to THIS lane's issue id and not to
+    // `docs/06_status/proof/**`: editing another lane's proof bundle is real
+    // scope bleed and must still be reported. Both directions are asserted.
+    `docs/06_status/proof/${normalizedIssueId}/**`,
   ];
 }
 
