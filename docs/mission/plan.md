@@ -300,7 +300,9 @@ keep `governance.awaiting-approval-drift` red.
 
 1. **Lifecycle.** A Track Only submission persists at `validated`, which grading never reads. Only
    `posted` can reach `settled`, and `posted` means delivered. Ordinary engineering — this is
-   UTV2-1861, and it is blocked only by #1479 holding `grading-service.ts` in its `file_scope_lock`.
+   UTV2-1861. Its lane cannot open while #1479 is open: `lane-start` reads that PR's manifest at
+   its head and refuses on `file_scope_conflict` with `UTV2-1815`. Preflight `PL6` passes and is
+   not the gate — see the correction below.
 2. **Market family.** Milestone 1's pick is an MLB moneyline. Moneyline and spread are both
    `unsupported`, and `:153` skips anything without a finite `line` — a moneyline always has
    `line = null`. Moneyline *results* exist (`points-all-game-ml`, 280 rows) but carry
@@ -400,33 +402,43 @@ any test flag, and **6 of them `settled`**. That predicate yields a plausible-lo
 settled record made entirely of fixtures, which is exactly the failure mode this section exists to
 prevent.
 
-**Correction, made before this reconciliation merged: item 1 is not blocked, and an earlier draft
-of this section said it was.** The draft asserted that #1479's `file_scope_lock` holds
-`apps/api/src/grading-service.ts`, so preflight `PL6` would refuse a UTV2-1861 lane until that PR
-merged. Measured rather than assumed, all three legs of that are false:
+**Item 1 is blocked by #1479, the original claim was right, and the correction that replaced it
+was wrong — measured twice, in both directions, before this reconciliation merged.**
 
-- **`docs/06_status/lanes/UTV2-1815.json` does not exist on `main`.** It lives only on #1479's
-  branch, and its status there is `in_review`. `PL6` reads the manifests in the checkout, and **no
-  manifest on `main` is `in_progress`, `blocked` or `started`** — so it sees nothing to overlap.
-- **The lease is not held either.** All four `.ops/leases/` entries that were `active` on
-  2026-09-09 belonged to lanes already `done` on `main`, and all four have been released.
-- **The diffs do not even touch the same code.** #1479's `grading-service.ts` hunks are at `:2`,
-  `:601-638` and `:973-1010` — the settlement-recap and `readSubmittedBy` region. UTV2-1861 changes
-  `runGradingPass`'s population at `:96-100`. Zero overlapping lines; git merges both cleanly.
+The first draft said #1479's `file_scope_lock` on `apps/api/src/grading-service.ts` refuses a
+UTV2-1861 lane. A second draft called that false on the grounds that preflight `PL6` reads only the
+manifests in the checkout, that `docs/06_status/lanes/UTV2-1815.json` exists solely on #1479's
+branch, and that no manifest on `main` is active. **Every one of those three facts is true and the
+conclusion drawn from them is still false**, because `PL6` is not the gate that enforces this:
 
-What remains is an ordinary sequencing preference, not a block: a second lane on the same file
-means whichever PR lands second resyncs, and #1479 is head-pinned to an `EXECUTOR_RESULT` and a
-staging DB receipt, so it is cheaper for it to land first. That is a reason to prefer an order, not
-a reason to leave the milestone's only executable step unstarted.
+```
+pnpm ops:preflight UTV2-1861 ... -> PL6 PASS  (candidate file scope does not overlap any active manifest)
+pnpm ops:lane-start UTV2-1861 ... -> { "code": "file_scope_conflict",
+                                       "conflicting_issue_id": "UTV2-1815",
+                                       "overlapping_files": ["apps/api/src/grading-service.ts",
+                                                             "apps/api/src/grading-service.test.ts"] }
+```
 
-**The generalisable error is worth naming, because this plan has now made it twice in two days.**
-A `file_scope_lock` is a property of an *active manifest in the checkout*, not of a PR. Reading a
-PR's declared scope and concluding that it locks a file conflates the artifact with the enforcement
-that reads it — the same shape as the 2026-09-08 correction, where a tier floor was treated as a
-given rather than as something computed from a file list. **The check is `PL6` against the
-manifests on `main`, and it costs one command to run.**
+`lane-start.ts:973` calls `activeManifestOverlap` against the board returned by
+`resolveActiveLaneManifests` (`shared.ts:1627`), which **enumerates every open PR and reads that
+PR's lane manifest at its head ref** (`:1678-1700`), then overlays those on top of the local
+population. #1479's head carries `UTV2-1815.json` with status `in_review`, which is in
+`ACTIVE_LOCK_STATUSES`. So a PR's declared scope *is* enforcement — it is simply enforced one step
+later than preflight, and by a different function that fails closed on an unknown board by design.
 
-So item 1 advances the milestone and is available now.
+**The generalisable error is the reverse of the one the second draft named, and it is the more
+expensive kind.** A refutation is only as good as its choice of gate. `PL6` was measured correctly,
+reported correctly, and was the wrong check — the empirical test confirmed a true statement about
+preflight and was then read as a statement about admission. Running the actual command that would
+be blocked costs one invocation and is the only measurement that settles it; reasoning about which
+check *would* refuse is how a correct diagnosis gets overturned by a wrong one.
+
+**What this means for item 1.** It is genuinely unavailable until #1479 merges or its manifest
+leaves an active status. #1479 needs a T1 verdict — a reserved decision, already on the Requires
+Griff list — so the milestone's first item is gated behind an existing reserved item rather than
+behind new engineering. The remaining items 2 through 6 do not touch `grading-service.ts` and are
+unaffected; the plan continues on those.
+
 
 
 ## Concurrent session ownership — Claude and Codex, 2026-09-07
@@ -1495,10 +1507,10 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 
 ## Requires Griff
 
-Consolidated from Wave 0, in dependency order. **Nothing on this list blocks Milestone 2's
-critical path.** An earlier draft of this reconciliation said item 0 did; that was measured and
-withdrawn before merge — see the correction at the end of "Executable now". Each item below blocks
-only itself.
+Consolidated from Wave 0, in dependency order. **Item 0 does block Milestone 2's first executable
+step**, measured by running the command that would be refused rather than by reading a gate — see
+the correction at the end of "Executable now", which withdraws a mid-draft claim that it did not.
+Every other item below blocks only itself.
 
 0. **Approve #1479** (UTV2-1815, T1, modeling) — null and zero stakes no longer compute as if they
    were a real unit size. `verify` and `Writable DB proof (staging only)` both green at
@@ -1508,10 +1520,11 @@ only itself.
    this lane's proof already sits on `main`; `Shadow Parity Check` needs a read-only production
    credential, which is a secret; and `Check issue references` names foreign refs in pre-existing
    commits, clearable only by a history rewrite that would move every bound anchor. It is listed
-   first because it is the one item here whose *timing* interacts with Milestone 2: it shares
-   `apps/api/src/grading-service.ts` with UTV2-1861, and landing it first spares a resync of a
-   head-pinned T1 PR. It does **not** block that lane — its manifest is not on `main`, so `PL6`
-   sees no overlap, and the two diffs share no lines.
+   first because it is the only item here that **blocks** Milestone 2's first executable step: it
+   shares `apps/api/src/grading-service.ts` with UTV2-1861, and `ops:lane-start` reads #1479's
+   manifest at its own head — status `in_review` — and refuses the new lane with
+   `file_scope_conflict`. Approving it opens that step; nothing else in Milestone 2's list waits
+   on it.
 1. **Approve #1513** (UTV2-1802, T1) — the Command Center management token can no longer be handed
    arbitrary SQL. Green `verify`. Pre-deployment hardening: the Command Center is in no production
    compose service and behind no Caddy route, so this closes a surface #1496 would create rather
