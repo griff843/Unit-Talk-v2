@@ -242,7 +242,7 @@ The six conditions are in `intent.md`. Measured against them today:
 |---|---|---|
 | 1 | Repeatable submission by intended operators, no per-submission engineering | **Plausible, unproven.** Exactly one pick has ever been submitted this way. One success is not repeatability, and the honest next step is a second and third submission rather than an argument. |
 | 2 | Every pick persists with canonical identity and truthful provenance | **Holds for n=1.** The coverage-gap path recorded `eventId: null` honestly. What is untested is whether provenance stays truthful across market types — a player prop, a spread, a total. |
-| 3 | Grading and settlement run on schedule against real results; outcomes traceable to score provenance | **Grading runs; the rest is open.** 13,720 succeeded runs prove the loop is alive. The cadence is irregular (90–152 min), 370 runs have failed unread, and **no settlement has occurred since 2026-07-30**. |
+| 3 | Grading and settlement run on schedule against real results; outcomes traceable to score provenance | **Neither proven working nor proven broken — grading has never seen a real pick.** 13,722 succeeded runs prove a loop is alive, not that it grades. Every unsettled pick in its population is a fixture (below). The cadence is 90–152 min against a 5-minute poll, and the 370 failed runs are 100% infrastructure. |
 | 4 | Statistics computed from persisted history and reconciling against rows | **Not started, and contaminated at the source.** ~93% of the `picks` table is CI fixtures and 14,984 picks are stale `awaiting_approval`. Any statistic computed over the raw table today is meaningless. |
 | 5 | Operator observes all of it through a governed internal surface | **Partial.** Governed read-only SQL satisfied Milestone 1 step 7 and does not scale to an operating history. The Command Center (#1496) is the intended surface and is undeployed. |
 | 6 | None of it achieved by activating member-facing delivery | **Holds and must keep holding.** Member-delivery activation is separately reserved and explicitly not part of Milestone 2. |
@@ -268,43 +268,140 @@ Recorded here because getting this wrong is silent: a statistics surface that qu
 fixtures into a capper's ROI would look finished and be worthless, and it would be discovered by a
 member rather than by a test.
 
-### Containment interaction — what Milestone 2 will eventually need from Griff
+### The condition-3 blocker, measured rather than inferred
 
-Milestone 1 completed with containment intact. Milestone 2 may not: making submission, grading and
-settlement *ongoing* against real results is likely to require moving one or more parked runtime
-settings toward `active`. **Every such change is reserved**, and per `intent.md` the sequence is to
-prepare each one — dependent work staged, blast radius measured, recommendation written — and let
-Griff decide.
+This section previously said grading runs and "the rest is open". That understated one half and
+overstated the other, and the correction matters because it changes what is worth building.
 
-**No such packet is ready yet, and none is claimed.** The honest position on 2026-09-09 is that the
-non-reserved work below has not yet been done far enough to know which parked flag, if any, is
-actually required. Grading already runs uncontained, which removes the most obvious candidate.
-Settling a pick needs real scores, and whether that needs provider ingestion unparked or can be
-served by the existing score-provenance path is the **first question Milestone 2 must answer** —
-by measurement, not by requesting an unpark.
+**Grading has never had a real pick to grade.** `runGradingPass`
+(`apps/api/src/grading-service.ts:96-100`) reads exactly two lifecycle states, `posted` and
+`awaiting_approval`. Measured in production on 2026-09-09, that population is 22,290 picks, none
+created after **2026-07-30**, and every unsettled member of it is a fixture:
+
+| market | unsettled `posted` picks with a line |
+|---|---|
+| `nba-spread` | 5,147 |
+| `nfl-spread` | 2 |
+| `player_points_ou` | 1 (`metadata.eventName = "db-smoke-…"`) |
+| `points-all-game-ou` | 1 (`metadata.eventName = "db-smoke-…"`) |
+
+5,149 of the 5,151 are **spread**, which `classifyMarketFamilyForGrading`
+(`grading-service.ts:389-419`) classifies `unsupported` — they are skipped on market family, not
+starved of results. The other two are DB smoke rows. So the settlement drought since 2026-07-30 is
+**not** evidence that grading is broken, and the 13,722 succeeded runs are **not** evidence that it
+works. Neither claim has ever been testable.
+
+A second oddity from the same query, worth carrying: **1,179 picks hold a `settlement_records` row
+while still sitting in `awaiting_approval`.** Grading skips them forever with
+`settlement_already_exists`; nothing advanced them to `settled`. They are part of the 14,984 that
+keep `governance.awaiting-approval-drift` red.
+
+**Three layers stand between Milestone 1's pick and a settlement, and all three bind at once.**
+
+1. **Lifecycle.** A Track Only submission persists at `validated`, which grading never reads. Only
+   `posted` can reach `settled`, and `posted` means delivered. Ordinary engineering — this is
+   UTV2-1861, and it is blocked only by #1479 holding `grading-service.ts` in its `file_scope_lock`.
+2. **Market family.** Milestone 1's pick is an MLB moneyline. Moneyline and spread are both
+   `unsupported`, and `:153` skips anything without a finite `line` — a moneyline always has
+   `line = null`. Moneyline *results* exist (`points-all-game-ml`, 280 rows) but carry
+   `participant_id = NULL`, so no side is attached and they cannot settle a moneyline as stored.
+   Ordinary engineering, but a score-provenance design against `SCORE_PROVENANCE_STANDARD.md`.
+3. **Results supply.** `game_results` and `events` both stop at **2026-06-30**. Nothing after that
+   date can resolve an event at all.
+
+### Layer 3 is answered, and the answer withdraws the unpark request
+
+The previous version of this section named this the "first question Milestone 2 must answer" and
+declined to request an unpark before measuring. That was right, and the measurement is now done.
+It points away from an unpark twice over.
+
+**First: an unpark is not an available action.** `SYNDICATE_MACHINE_MODE` is binary
+(`deploy.yml:440-457`, duplicated at `:1033-1050`) — `active`, `parked`, or `exit 1`. There is no
+setting that starts the ingestor alone. `active` simultaneously sets `_worker_autorun=true`, sets
+`SYNDICATE_MACHINE_ENABLED=true`, and at `:474-477` releases `_enabled_targets` from the forced
+`none` to whatever the `UNIT_TALK_ENABLED_TARGETS` secret holds — defaulting to `best-bets` when it
+is empty. Worse, the readiness assertion that delivery is off (`:1475-1480`) runs **only in parked
+mode**, its own comment noting that active mode's value "legitimately varies with the secret". The
+one check that proves member delivery is off is the check that stops running the moment it would
+matter. Since `intent.md` makes member-delivery activation separately reserved and explicitly not
+part of Milestone 2, a request to unpark ingestion *is* a request to activate delivery.
+
+**Second: it is not necessary.** Enumerated across non-test source, `events` has exactly one
+physical writer — `DatabaseEventRepository.upsertByExternalId`
+(`packages/db/src/runtime-repositories.ts:6176`), reached only from
+`apps/ingestor/src/entity-resolver.ts:146` and `ingest-odds-api.ts:392` — and `game_results` has
+one repository writer (`runtime-repositories.ts:4766`, from `results-resolver.ts:208,245`) plus
+`scripts/seed-game-result.ts:187`, which POSTs directly with the service-role key. No API route,
+server action, worker, migration or RPC writes either table. **But several operator CLI scripts
+import the ingestor library and run it in-process** — `scripts/backfill-sgo-history.ts`,
+`run-historical-backfill.ts`, `sgo-historical-coverage.ts`, `utv2-796-slate-replay.ts` — and none
+of them consults `SYNDICATE_MACHINE_MODE` or `UNIT_TALK_INGESTOR_AUTORUN`.
+
+So the daemon is not the only route to a results supply, and containment is therefore **not** the
+binding constraint. The provider key is: the SGO key available to tooling returns
+`403 Inactive API key`, verified live on 2026-09-09, and whether the production `SGO_API_KEY`
+secret differs cannot be checked without reading a secret.
+
+**What this plan therefore asks of Griff is smaller than an unpark, and is stated under "Requires
+Griff" below**: confirm whether the production provider key is active, and — only if it is —
+authorize a *bounded* operator-run results backfill under `DB_ENVIRONMENT_OPERATOR_POLICY.md`. Its
+blast radius must be bounded before it is requested, because `ingestLeague` writes offers and
+events broadly rather than results alone. **No containment change is requested, and the earlier
+implication that one would be is withdrawn.**
 
 ### Executable now, under existing authority, nothing reserved
 
 In dependency order. None of these needs Griff and none touches a reserved surface:
 
-1. **Submit again, twice, through the deployed form.** Condition 1 is a claim about repeatability
+1. **Land UTV2-1861 — admit Track Only picks to the grading population.** Layer 1 above. Narrow
+   by measurement rather than by hope: exactly **one** `validated` pick in production is Track Only,
+   so admitting `validated AND isTrackOnlyPickMetadata` admits one row today, where admitting all
+   `validated` would sweep 21,364. **Blocked only by #1479**, whose `file_scope_lock` holds
+   `apps/api/src/grading-service.ts` and `settlement-service.ts`; a lock cannot be widened by an
+   agent, so the lane cannot open until that PR merges. A drafted implementation is ready.
+2. **Then layer 2 — make moneyline and spread gradeable.** Needs the score-provenance design for
+   attaching a side to `points-all-game-ml`, not a classifier tweak. Same file, so same block.
+3. **Submit again, twice, through the deployed form.** Condition 1 is a claim about repeatability
    and only repetition tests it. Different market shapes — a player prop (now that UTV2-1859
    removed the client-side refusal), a spread — because condition 2's provenance guarantee is
-   untested outside moneyline.
-2. **Read the 370 failed `grading.run` rows.** Unread failure is the cheapest available source of
-   truth about why nothing has settled since 2026-07-30, and it costs one query.
-3. **Establish what "intended schedule" means for grading and measure the gap.** The cadence is
-   90–152 minutes against a 5-minute poll default; either the default is not what runs, or the loop
-   restarts. Condition 3 cannot be evaluated until this is a number.
-4. **Trace the Milestone 1 pick to a settlement.** `Dodgers @ Brewers` on 2026-09-09 will have a
-   real result. Following that one pick from `validated` to a settled outcome with traceable score
-   provenance is the smallest end-to-end proof of condition 3, and it uses the pick that already
-   exists rather than requiring a new one.
-5. **Define the governed cohort predicate** before any statistic is computed, per the section above.
-6. **Repair `governance.awaiting-approval-drift`'s classification** so a real drift becomes visible
-   again. Its own payload already carries `countIncreased`.
+   untested outside moneyline. This is an operator action, not an agent one.
+4. **Bound the results backfill before requesting it**, so the reserved item below arrives with its
+   blast radius measured rather than described.
+5. **Repair the grading pass's N+1.** Every pass loops all ~22,290 picks with a sequential
+   `await repositories.settlements.findLatestForPick(pick.id)` (`grading-service.ts:105`). Each run
+   records `started_at`→`finished_at` of ~240ms while consecutive runs are 88–152 minutes apart, so
+   the time is spent inside the pass before the record opens. The 14,984 stale `awaiting_approval`
+   picks are therefore not merely what keeps the drift monitor red — **they are the grading
+   cadence.** Same file, so same block as items 1 and 2.
+6. **Persist the skip histogram.** `grading-service.ts:368` records only
+   `{picksGraded, failed}`, discarding the per-pick `outcome: 'skipped'` + `reason` it already
+   computed. A pass that examined 15,000 picks and graded none is byte-identical to one that
+   examined zero — which is precisely why the measurement above needed direct SQL. Same file.
+7. **Repair `governance.awaiting-approval-drift`'s classification** so a real drift becomes visible
+   again. Its own payload already carries `countIncreased: false`. The monitor is a SQL function,
+   so landing the migration is ordinary work and *applying* it is production DDL — reserved
+   decision 1. Note the interaction: any fix routing Track Only picks into `awaiting_approval`
+   makes this monitor worse until its classification is repaired first.
 
-Items 1 and 4 are the ones that actually advance the milestone; the rest make it measurable.
+**Three items from the previous list are done, and their answers are above:** the 370 failed
+`grading.run` rows (100% infrastructure — `TypeError: fetch failed` ×134, statement timeout ×33,
+an `undefined` error-serialisation defect ×58, upstream timeout ×3; none is a grading-logic
+failure); the grading cadence (median gap **91.0 min**, min 88.1, max 152.5 over 109 runs in seven
+days, against a 5-minute `pollIntervalMs` default with no production override); and the governed
+cohort predicate.
+
+**The cohort predicate, since getting it wrong is silent.** The positive marker is
+`metadata ? 'distributionMode'` — **exactly 1 row**, Milestone 1's pick. Two traps sit next to it.
+`v_governed_pick_performance` is `WHERE p.source = 'board-construction'` with INNER JOINs to
+`pick_candidates`/`syndicate_board`/`market_universe`, so it **structurally cannot** contain an
+operator submission and is not the starting point this plan previously assumed. And the natural
+alternative, `capper_id = 'griff843' AND source = 'smart-form'`, returns **13** rows — 12 of them
+proof fixtures from 2026-05-29 (`UTV2 Proof Player <hex> Over 27.5`), none carrying `testRun` or
+any test flag, and **6 of them `settled`**. That predicate yields a plausible-looking six-pick
+settled record made entirely of fixtures, which is exactly the failure mode this section exists to
+prevent.
+
+Item 1 is the only one that advances the milestone, and it is the one that is blocked.
 
 
 ## Concurrent session ownership — Claude and Codex, 2026-09-07
@@ -1373,10 +1470,22 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 
 ## Requires Griff
 
-Consolidated from Wave 0, in dependency order. **Nothing on this list blocks the active milestone.**
-Milestone 1 is complete; Milestone 2's executable work — enumerated above under "Executable now,
-under existing authority" — needs no item below. Each blocks only itself.
+Consolidated from Wave 0, in dependency order. **One item now blocks Milestone 2's critical path,
+which is a change from the previous reconciliation.** Item 1 releases the file lock that stops
+UTV2-1861 — the lifecycle admission that is the only executable step advancing the milestone.
+Every other item still blocks only itself.
 
+0. **Approve #1479** (UTV2-1815, T1, modeling) — null and zero stakes no longer compute as if they
+   were a real unit size. `verify` and `Writable DB proof (staging only)` both green at
+   `d180096cc`, `EXECUTOR_RESULT` posted and bound to that head, so a verdict binds a mergeable
+   head rather than one that would need a resync afterwards. **Its three red checks are all
+   non-required and all previously diagnosed** — the live-DB proof guard reads the PR *diff* while
+   this lane's proof already sits on `main`; `Shadow Parity Check` needs a read-only production
+   credential, which is a secret; and `Check issue references` names foreign refs in pre-existing
+   commits, clearable only by a history rewrite that would move every bound anchor. **Beyond its
+   own merits, this is the merge that unblocks Milestone 2**: its `file_scope_lock` holds
+   `apps/api/src/grading-service.ts` and `settlement-service.ts`, and a lock cannot be widened by
+   an agent, so items 1, 2, 5 and 6 of "Executable now" cannot open until it lands.
 1. **Approve #1513** (UTV2-1802, T1) — the Command Center management token can no longer be handed
    arbitrary SQL. Green `verify`. Pre-deployment hardening: the Command Center is in no production
    compose service and behind no Caddy route, so this closes a surface #1496 would create rather
@@ -1388,11 +1497,27 @@ under existing authority" — needs no item below. Each blocks only itself.
 5. **Direct-`main` prevention** — branch protection change, decided on its own merits and its own
    timeline. **Not sequenced behind the inadmissible-PR backlog:** the prohibition is already in
    force, and incorrectly created PRs do not earn a deferral of a safety control.
-6. **Any production containment change (`parked` → `active`)** — **not requested.** Milestone 1
-   completed with containment intact, and Milestone 2 has not yet measured whether it needs an
-   unpark. Per `intent.md`, a reserved decision is surfaced with the preparation complete and a
-   recommendation; no such packet exists yet and none is implied here. Grading already runs
-   uncontained, which removes the most obvious candidate before it was ever asked for.
+6. **Any production containment change (`parked` → `active`)** — **still not requested, and now
+   affirmatively withdrawn as an ask.** The previous reconciliation left this open pending
+   measurement. The measurement is done and points away from it twice: an unpark cannot be bounded
+   (`SYNDICATE_MACHINE_MODE` is binary, and `active` also starts the worker and releases delivery
+   targets from the forced `none`), and it is not necessary (operator CLI scripts reach the results
+   writers in-process without the daemon). Both are evidenced under "Layer 3 is answered" above.
+   **What replaces it is smaller and is item 6a.**
+6a. **Confirm whether the production `SGO_API_KEY` is active** — reserved decision 4, and the
+   smallest operator action that closes the last open question in Milestone 2 condition 3. The key
+   available to tooling returns `403 Inactive API key`, verified live on 2026-09-09; whether the
+   production secret differs cannot be checked without reading it. **Non-secret success criterion:**
+   a single authenticated `GET` against the provider's account/usage endpoint using the production
+   value returns `isActive: true` and a tier name. No key material is printed or leaves the machine,
+   and nothing is written.
+
+   If it comes back inactive, layer 3 becomes a **paid provider commitment** — reserved decision 3 —
+   and this plan will say so rather than routing around it. If it comes back active, the follow-on
+   ask is a *bounded* operator-run results backfill under `DB_ENVIRONMENT_OPERATOR_POLICY.md`, and
+   **that packet is not written yet and is not requested here**: `ingestLeague` writes offers and
+   events broadly rather than results alone, so its blast radius has to be measured before it is
+   put in front of anyone. Nothing about 6a authorizes a write.
 7. **Review the approval carry-forward Merge Gate integration** (UTV2-1836) — merge authority,
    reserved decision 7. The verifier (`scripts/ops/approval-carry-forward.ts`, #1508) and its
    trusted evidence collector (`scripts/ops/carry-forward-collect.ts`) are both on `main` and
