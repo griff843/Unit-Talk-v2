@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1874-review-packet-proof-scope",
   "branch": "claude/utv2-1874-review-packet-proof-scope",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2b58117a25e0c050663e96bf86f06f656c43b49b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1551",
   "files_changed": [],
   "file_scope_lock": [
@@ -15,14 +15,22 @@
     "scripts/ops/pr-review-packet.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-09T17:24:33.475Z",
-  "heartbeat_at": "2026-09-09T17:29:32.401Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-09T17:48:50.377Z",
+  "closed_at": "2026-09-09T17:48:50.377Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1874-review-packet-proof-scope.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-09T17:48:48.371Z",
+      "verdict": "pass",
+      "merge_sha": "2b58117a25e0c050663e96bf86f06f656c43b49b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
