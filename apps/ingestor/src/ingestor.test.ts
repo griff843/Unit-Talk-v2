@@ -44,6 +44,13 @@ import {
   collectConfiguredSgoApiKeyCandidates,
   resolveActiveSgoApiKey,
 } from './sgo-key-manager.js';
+import { createDryRunIngestorRepositoryBundle } from './dry-run-repositories.js';
+import {
+  enumerateRepositoryMethods,
+  INGESTOR_READ_SURFACE,
+  INGESTOR_WRITE_SURFACE,
+} from './write-surface.js';
+import type { IngestorRepositoryBundle } from '@unit-talk/db';
 
 test('normalizeSGOPairedProp returns a PAIRED normalized offer with stripped market key and idempotency key', () => {
   const normalized = normalizeSGOPairedProp({
@@ -3932,4 +3939,205 @@ test('triggerGradingRun omits Authorization header when no apiKey', async () => 
 
   const authHeader = (capturedInit?.headers as Record<string, string>)?.['Authorization'];
   assert.equal(authHeader, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1866 -- what a results-only run is allowed to write, enforced rather than read.
+//
+// Milestone 2 needs a results supply, and authorizing an operator-run results backfill
+// means being able to state its blast radius. That statement used to be a reading of
+// ingest-league.ts: `resultsOnly` replaces the fetch with an empty result at :252, so the
+// whole odds branch -- offers, odds_snapshots, closing lines -- never runs. A reading is
+// not a control. An edit that moved one write out of that branch would be invisible to
+// every test in this repository, and the next person to bound a backfill would be
+// bounding it against a comment.
+// ---------------------------------------------------------------------------
+
+/** Every write a results-only run is permitted to perform, as `repository.method`. */
+const RESULTS_ONLY_ALLOWED_WRITES = new Set([
+  'runs.startRun',
+  'runs.completeRun',
+  'rawPayloads.insert',
+  'events.upsertByExternalId',
+  'participants.upsertByExternalId',
+  'participants.updateMetadata',
+  'eventParticipants.upsert',
+  'gradeResults.insert',
+]);
+
+function recordRepositoryCalls(bundle: IngestorRepositoryBundle): {
+  repositories: IngestorRepositoryBundle;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const wrapped = Object.fromEntries(
+    Object.entries(bundle as unknown as Record<string, object>).map(
+      ([name, repository]) => [
+        name,
+        new Proxy(repository, {
+          get(target, property, receiver) {
+            const value = Reflect.get(target, property, target) as unknown;
+            if (typeof value !== 'function') {
+              return Reflect.get(target, property, receiver) as unknown;
+            }
+            return (...args: unknown[]) => {
+              calls.push(`${name}.${String(property)}`);
+              return (value as (...a: unknown[]) => unknown).apply(target, args);
+            };
+          },
+        }),
+      ],
+    ),
+  ) as unknown as IngestorRepositoryBundle;
+  return { repositories: wrapped, calls };
+}
+
+function completedResultsResponse(): Response {
+  return new Response(
+    JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  );
+}
+
+test('the ingestor write surface classifies every method the repository bundle exposes', () => {
+  // Guards the two tests below. They are only meaningful if no method can exist that
+  // write-surface.ts has never seen: an unclassified write would be counted as a read
+  // and would pass the blast-radius assertion silently. A newly added method therefore
+  // fails here until somebody classifies it.
+  const bundle = createInMemoryIngestorRepositoryBundle() as unknown as Record<
+    string,
+    object
+  >;
+  const unclassified: string[] = [];
+  for (const [name, repository] of Object.entries(bundle)) {
+    for (const method of enumerateRepositoryMethods(repository)) {
+      const key = `${name}.${method}`;
+      if (key in INGESTOR_WRITE_SURFACE) continue;
+      if (INGESTOR_READ_SURFACE.has(key)) continue;
+      unclassified.push(key);
+    }
+  }
+  assert.deepEqual(
+    unclassified,
+    [],
+    `unclassified repository methods -- add each to INGESTOR_WRITE_SURFACE or INGESTOR_READ_SURFACE: ${unclassified.join(', ')}`,
+  );
+});
+
+test('a resultsOnly run writes only results, their entities and its own run record', async () => {
+  const { repositories, calls } = recordRepositoryCalls(
+    createInMemoryIngestorRepositoryBundle(),
+  );
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    resultsOnly: true,
+    fetchImpl: async () => completedResultsResponse(),
+  });
+
+  const writes = [...new Set(calls)]
+    .filter((call) => call in INGESTOR_WRITE_SURFACE)
+    .sort();
+
+  // Stated as a set difference, not a deepEqual: the invariant is that nothing OUTSIDE
+  // the allowed set was written. Which subset a given fixture happens to exercise is
+  // not the invariant, and pinning it would make this test fail on unrelated fixture
+  // edits while still not catching the thing it exists to catch.
+  const forbidden = writes.filter((call) => !RESULTS_ONLY_ALLOWED_WRITES.has(call));
+  assert.deepEqual(
+    forbidden,
+    [],
+    `a resultsOnly run wrote outside its blast radius: ${forbidden
+      .map((call) => `${call} -> ${INGESTOR_WRITE_SURFACE[call]}`)
+      .join(', ')}`,
+  );
+
+  // Non-vacuity: the run must have written the results it exists to write, or an empty
+  // `forbidden` would prove only that nothing ran.
+  assert.ok(writes.includes('gradeResults.insert'), 'no game_results write occurred');
+  assert.ok(writes.includes('events.upsertByExternalId'), 'no events write occurred');
+
+  // The writes an operator would otherwise have to reason about, named individually so
+  // a regression reports which one came back rather than only that the set grew.
+  for (const call of [
+    'providerOffers.upsertBatch',
+    'providerOffers.stageBatch',
+    'providerOffers.mergeStagedCycle',
+    'providerOffers.markClosingLines',
+    'oddsSnapshots.insert',
+  ]) {
+    assert.equal(
+      calls.includes(call),
+      false,
+      `${call} must not run under resultsOnly`,
+    );
+  }
+});
+
+test('a dry run performs no writes at all while still reporting them', async () => {
+  const { repositories, calls } = recordRepositoryCalls(
+    createInMemoryIngestorRepositoryBundle(),
+  );
+  const dryRun = createDryRunIngestorRepositoryBundle(repositories);
+
+  await ingestLeague('NBA', 'test-key', dryRun.repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    resultsOnly: true,
+    fetchImpl: async () => completedResultsResponse(),
+  });
+
+  const leaked = calls.filter((call) => call in INGESTOR_WRITE_SURFACE);
+  assert.deepEqual(
+    leaked,
+    [],
+    `dry run reached real write methods: ${leaked.join(', ')}`,
+  );
+
+  // ...and the report is non-empty, so "no writes" is a property of the wrapper rather
+  // than of a run that did nothing.
+  const report = dryRun.report();
+  assert.ok(report.writes.length > 0, 'dry run reported no writes at all');
+  assert.ok(
+    report.byTable.some((row) => row.table === 'game_results' && row.count > 0),
+    'dry run did not report the game_results writes it would perform',
+  );
+  assert.ok(report.newEventExternalIds.includes('evt-entity-1'));
+
+  // Every reported table is one the allowed set maps to -- the report and the
+  // blast-radius assertion above must not be able to disagree.
+  const allowedTables = new Set(
+    [...RESULTS_ONLY_ALLOWED_WRITES].map((call) => INGESTOR_WRITE_SURFACE[call]),
+  );
+  for (const row of report.byTable) {
+    assert.ok(allowedTables.has(row.table), `unexpected table in report: ${row.table}`);
+  }
+});
+
+test('a dry run intercepts a provider-offer write instead of performing it', async () => {
+  // The providerOffers proxy is the one repository the dry-run bundle wraps generically
+  // rather than by hand, so its interception is worth asserting directly: a results-only
+  // run never reaches these methods, which means the blast-radius test above cannot tell
+  // whether the wrapper would have stopped them.
+  const { repositories, calls } = recordRepositoryCalls(
+    createInMemoryIngestorRepositoryBundle(),
+  );
+  const dryRun = createDryRunIngestorRepositoryBundle(repositories);
+
+  await dryRun.repositories.providerOffers.upsertBatch([]);
+  await dryRun.repositories.providerOffers.listByProvider('sgo');
+
+  assert.equal(
+    calls.includes('providerOffers.upsertBatch'),
+    false,
+    'the write reached the real repository',
+  );
+  assert.equal(
+    calls.includes('providerOffers.listByProvider'),
+    true,
+    'the read did not pass through',
+  );
+  assert.deepEqual(
+    dryRun.report().byTable,
+    [{ table: 'provider_offers', count: 1 }],
+  );
 });
