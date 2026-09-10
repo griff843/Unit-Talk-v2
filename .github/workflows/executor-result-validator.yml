@@ -212,17 +212,17 @@ jobs:
                 // file and asserts both literals are byte-identical to the
                 // exported ones, so the pair can never drift again -- as it did
                 // when `bootstrap/` was added to neither.
-                if (!r.issueId || !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
-                  errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
+                if (!r.issueId || !/^(UTV2|UNI|WORK)-\d+$/i.test(r.issueId)) {
+                  errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN, UNI-NNN or WORK-NNN.`);
                 }
 
                 if (!r.lane || !['claude', 'codex'].includes(r.lane.toLowerCase())) {
                   errors.push(`Invalid Lane: "${r.lane || '<missing>'}". Must be "claude" or "codex".`);
                 }
 
-                const branchRe = /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i;
+                const branchRe = /^(claude|codex|bootstrap)\/(utv2|uni|work)-\d+/i;
                 if (!r.branch || !branchRe.test(r.branch)) {
-                  errors.push(`Invalid branch: "${r.branch || '<missing>'}". Must match claude/, codex/ or bootstrap/ followed by utv2-NNN-* or uni-NNN-*.`);
+                  errors.push(`Invalid branch: "${r.branch || '<missing>'}". Must match claude/, codex/ or bootstrap/ followed by utv2-NNN-*, uni-NNN-* or work-NNN-*.`);
                 }
                 if (r.branch && r.branch !== headRef) {
                   errors.push(`Branch mismatch: comment declares "${r.branch}", PR head is "${headRef}".`);
