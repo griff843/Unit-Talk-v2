@@ -1,0 +1,148 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1878
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1878
+  objective: Ratify the canonical membership product contract and reference it
+    from mission intent
+  acceptance_criteria:
+    - >-
+      Readmits PR #1555 (branch `docs/membership-product-contract-2026-09-10`)
+      into the lane system.
+
+
+      The PR was opened outside `ops:lane-start`, so its branch carries no
+      `UTV2-###` and `Merge Gate` reports *"No issue ID found in PR branch or
+      title. Cannot resolve authoritative tier."* Per the PM readmission ruling,
+      the fix is readmission under a canonical issue — not a change to the gate.
+
+
+      **Scope (docs-only, 2 files, +368/-0):**
+
+
+      * `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md` — canonical tier
+      entitlements for Free, Trial, VIP, VIP+, and parked Black Label.
+
+      * `docs/mission/intent.md` — references the contract as the product
+      *destination*, explicitly not as current-state or readiness truth
+      (readiness stays governed by `T1_PRODUCTION_READINESS_CONTRACT.md`).
+
+
+      **Owner decisions embodied (ratified by Griff 2026-09-10):**
+
+
+      * Free and Trial receive the complete settled record — all settled picks,
+      recaps, results, corrections, capper records, units and ROI.
+
+      * Free access to settled results never grants an active paid pick before
+      settlement.
+
+      * Trial receives the full VIP experience and no automatic VIP+
+      entitlement.
+
+      * Black Label is committed but parked until separately approved.
+
+
+      **Not changed:** no runtime, schema, deployment, containment, Discord
+      target, or production data. Member delivery and SGO stay disabled.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Readmits PR #1555 (branch `docs/membership-product-contract-2026-09-10`)
+      into the lane system.
+
+
+      The PR was opened outside `ops:lane-start`, so its branch carries no
+      `UTV2-###` and `Merge Gate` reports *"No issue ID found in PR branch or
+      title. Cannot resolve authoritative tier."* Per the PM readmission ruling,
+      the fix is readmission under a canonical issue — not a change to the gate.
+
+
+      **Scope (docs-only, 2 files, +368/-0):**
+
+
+      * `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md` — canonical tier
+      entitlements for Free, Trial, VIP, VIP+, and parked Black Label.
+
+      * `docs/mission/intent.md` — references the contract as the product
+      *destination*, explicitly not as current-state or readiness truth
+      (readiness stays governed by `T1_PRODUCTION_READINESS_CONTRACT.md`).
+
+
+      **Owner decisions embodied (ratified by Griff 2026-09-10):**
+
+
+      * Free and Trial receive the complete settled record — all settled picks,
+      recaps, results, corrections, capper records, units and ROI.
+
+      * Free access to settled results never grants an active paid pick before
+      settlement.
+
+      * Trial receives the full VIP experience and no automatic VIP+
+      entitlement.
+
+      * Black Label is committed but parked until separately approved.
+
+
+      **Not changed:** no runtime, schema, deployment, containment, Discord
+      target, or production data. Member delivery and SGO stay disabled.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from
+    title: Ratify the canonical membership product contract and reference it from
+      mission intent
+    description: >-
+      Readmits PR #1555 (branch `docs/membership-product-contract-2026-09-10`)
+      into the lane system.
+
+
+      The PR was opened outside `ops:lane-start`, so its branch carries no
+      `UTV2-###` and `Merge Gate` reports *"No issue ID found in PR branch or
+      title. Cannot resolve authoritative tier."* Per the PM readmission ruling,
+      the fix is readmission under a canonical issue — not a change to the gate.
+
+
+      **Scope (docs-only, 2 files, +368/-0):**
+
+
+      * `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md` — canonical tier
+      entitlements for Free, Trial, VIP, VIP+, and parked Black Label.
+
+      * `docs/mission/intent.md` — references the contract as the product
+      *destination*, explicitly not as current-state or readiness truth
+      (readiness stays governed by `T1_PRODUCTION_READINESS_CONTRACT.md`).
+
+
+      **Owner decisions embodied (ratified by Griff 2026-09-10):**
+
+
+      * Free and Trial receive the complete settled record — all settled picks,
+      recaps, results, corrections, capper records, units and ROI.
+
+      * Free access to settled results never grants an active paid pick before
+      settlement.
+
+      * Trial receives the full VIP experience and no automatic VIP+
+      entitlement.
+
+      * Black Label is committed but parked until separately approved.
+
+
+      **Not changed:** no runtime, schema, deployment, containment, Discord
+      target, or production data. Member delivery and SGO stay disabled.
+    captured_at: 2026-09-10T16:39:43.046Z
+    description_sha256: b02b33fb54338b70b928d417acb47ce553eb8725696a29b95f36da4c93aba08f
+  contract_hash: 38b69bbf950454ce289d7e0a2f45a0057f83aa1f789116cb30c9aa93ca3ce3a1
