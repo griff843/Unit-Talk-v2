@@ -1,15 +1,13 @@
 # WORK-2026091001 diff summary
 
 MERGE_SHA: pending merge
-Execution SHA: 2a24a307e6ff000faf5e234a4aec7cb28c0241de
+Execution SHA: 2cbe26c35dc11b5ff3a80b67ae196efe80602e52
 
 ## Summary
 
-Repository packets and PR metadata replace mandatory Linear access in routine execution and recovery. P0 classification remains fail-closed while ordinary tier approvals retain their existing scope. Namespace fixes support existing lane ownership controls. The P0 consumer is staged separately.
+Existing repository packets and PR metadata replace mandatory tracker access. Scope and review controls are retained, including authenticated exact-head scope overrides. Trusted P0 consumer activation follows foundation integration.
 
 ## Verification
-
-Source diff against origin/main:
 
 ```text
 .agents/skills/dispatch/SKILL.md                   |   25 +-
@@ -22,22 +20,23 @@ Source diff against origin/main:
  .claude/commands/lane-management.md                |    6 +-
  .claude/commands/lane-recovery.md                  |    4 +-
  .claude/commands/loop-dispatch.md                  |   32 +-
- .claude/commands/system-state-loader.md            |    6 +-
+ .claude/commands/system-state-loader.md            |   18 +-
  .claude/hooks/artifact-drift-check.sh              |    6 +-
  .claude/hooks/commit-msg-linear-check.sh           |   20 +-
  .claude/hooks/linear-sync-reminder.sh              |    4 +-
  .claude/hooks/post-compact-reinjector.sh           |    5 +-
- .claude/hooks/session-start.sh                     |   28 +-
+ .claude/hooks/session-start.sh                     |   42 +-
  .github/workflows/close-eligibility-preflight.yml  |    2 +-
  .github/workflows/executor-result-validator.yml    |    8 +-
  .github/workflows/file-scope-lock-check.yml        |    2 +-
  .github/workflows/merge-gate.yml                   |    6 +-
  .github/workflows/post-merge-lane-close.yml        |   10 +-
  .github/workflows/proof-gate.yml                   |    6 +-
+ .github/workflows/return-review-packet.yml         |    5 +-
  .github/workflows/tier-label-apply.yml             |    2 +-
  .github/workflows/tier-label-check.yml             |    6 +-
  .ops/sync/WORK-2026091001.yml                      | 1335 ++++++++++++++++++++
- .ops/work/WORK-2026091001.md                       |  338 +++++
+ .ops/work/WORK-2026091001.md                       |  340 +++++
  AGENTS.md                                          |   12 +-
  CLAUDE.md                                          |   16 +-
  docs/05_operations/DELEGATION_POLICY.md            |   22 +-
@@ -47,8 +46,14 @@ Source diff against origin/main:
  docs/05_operations/TRUTH_CHECK_SPEC.md             |   75 +-
  docs/05_operations/WORKFLOW_SPEC.md                |    6 +-
  .../schemas/lane_manifest_v1.schema.json           |   10 +-
- docs/06_status/lanes/WORK-2026091001.json          |  204 +++
+ docs/06_status/lanes/WORK-2026091001.json          |  210 +++
  docs/06_status/proof/WORK-2026091001/.gitkeep      |    0
+ .../proof/WORK-2026091001/diff-summary.md          |   95 ++
+ docs/06_status/proof/WORK-2026091001/evidence.json |   56 +
+ .../06_status/proof/WORK-2026091001/integration.md |   47 +
+ .../proof/WORK-2026091001/model-routing.json       |   28 +
+ .../WORK-2026091001/p0-consumer-activation.patch   |  249 ++++
+ .../proof/WORK-2026091001/verification.md          |   70 +
  .../tracker-independence/p0-classifications.json   |   18 +
  package.json                                       |    2 +-
  scripts/ci/file-scope-guard.test.ts                |   14 +
@@ -75,7 +80,8 @@ Source diff against origin/main:
  scripts/ops/orchestration-reconciler.test.ts       |   46 +
  scripts/ops/orchestration-reconciler.ts            |   36 +-
  scripts/ops/p0-detect.ts                           |  147 +--
- scripts/ops/pr-review-packet.ts                    |    4 +-
+ scripts/ops/pr-review-packet.test.ts               |   80 ++
+ scripts/ops/pr-review-packet.ts                    |   47 +-
  scripts/ops/pre-merge-authorization.test.ts        |    8 +
  scripts/ops/pre-merge-authorization.ts             |    2 +-
  scripts/ops/preflight.test.ts                      |   54 +-
@@ -84,12 +90,13 @@ Source diff against origin/main:
  scripts/ops/proof-schema.test.ts                   |   23 +
  scripts/ops/proof-schema.ts                        |    2 +-
  scripts/ops/shared.ts                              |   18 +-
- .../tracker-independence/instruction-hooks.test.ts |   76 ++
+ .../tracker-independence/instruction-hooks.test.ts |   79 ++
  scripts/ops/tracker-independence/p0-classifier.cjs |  121 ++
  .../tracker-independence/p0-classifier.test.cjs    |  212 ++++
  scripts/ops/tracker-independence/p0-workflow.cjs   |   58 +
  .../ops/tracker-independence/truth-entry.test.ts   |   70 +
  scripts/ops/truth-check-lib.test.ts                |    9 +
  scripts/ops/truth-check-lib.ts                     |  183 +--
- 79 files changed, 3287 insertions(+), 948 deletions(-)
+ scripts/ops/workflow-hardening.test.ts             |   18 +
+ 88 files changed, 3997 insertions(+), 966 deletions(-)
 ```

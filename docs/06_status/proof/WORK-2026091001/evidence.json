@@ -7,35 +7,33 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "5634aed5bb9930c36dc77fe90cc10d4080c4d6cc",
+    "verified_source_sha": "2cbe26c35dc11b5ff3a80b67ae196efe80602e52",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "partial",
     "local_verification": {
+      "source_sha": "2cbe26c35dc11b5ff3a80b67ae196efe80602e52",
       "command": "pnpm verify",
       "exit_code": 1,
-      "tests_reported": 6323,
-      "passed": 6323,
+      "tests_reported": 6331,
+      "passed": 6331,
       "failed": 0,
       "skipped": 0,
-      "result": "local static/build/test stages passed; writable DB stage refused containment URL",
-      "limitation": "Not a full verify pass. Smart Form browser E2E was not requested by its environment flag. Final-head CI staging verification required.",
-      "log_sha256": "90f53e55a640494513d96a2834632c35c58764b49bc78bb6d41830eb42eb3626",
-      "source_sha": "2a24a307e6ff000faf5e234a4aec7cb28c0241de"
+      "result": "Static/build/test and command stages passed; writable DB target guard refused the containment URL",
+      "limitation": "Not a full verify pass; final-head staging CI required. Smart Form browser E2E was not enabled.",
+      "log_sha256": "b94ab4a57972246fdf0c64c36ec93c135721050d56408e9bfb360124eadf1e64"
     },
     "independent_review": {
-      "source_sha": "2a24a307e6ff000faf5e234a4aec7cb28c0241de",
-      "targeted_tests": 528,
-      "passed": 528,
-      "failed": 0,
-      "disposition": "No additional blocking code defect found in reviewed paths; not merge approval"
+      "source_sha": "2cbe26c35dc11b5ff3a80b67ae196efe80602e52",
+      "disposition": "No additional defect found; not merge approval",
+      "checks": "528 earlier targeted tests, 67 workflow tests, 26 final packet/recovery tests passed in independent review; runs overlap"
     },
     "r_level": {
       "verdict": "PASS",
       "matched_rules": [],
-      "changed_files": 79
+      "changed_files": 88
     },
     "prior_head_ci": {
       "source_sha": "cf702af5a1f2ffaa2f7f6ba857d212968a48c194",
@@ -44,13 +42,9 @@
       "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34477871838",
       "applies_to_current_source": false
     },
-    "additional_checks": {
-      "source_sha": "5634aed5bb9930c36dc77fe90cc10d4080c4d6cc",
-      "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
-      "passed": 67,
-      "failed": 0,
-      "scoped_lint": "pass",
-      "full_verify": "rerun in progress; final-head CI required"
+    "recovery": {
+      "fresh_agent": "Recovered mission, lane, PR and next safe action from repository records without network; stale loader findings corrected and rechecked at source SHA",
+      "compacted_session": "Actual post-compaction hook passes with tracker tools blocked; a separate end-to-end compacted-agent experiment remains unproven"
     }
   }
 }
