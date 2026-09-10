@@ -22,6 +22,7 @@ import {
   validateTier,
 } from './ops/shared.js';
 import { resolveModelProfile } from './ops/model-routing.js';
+import { readLocalTaskSource, readTaskContract, buildTaskContract, assertTaskContract } from './ops/execution-packet.js';
 
 /**
  * Default model-profile-per-tier mapping for pnpm codex:dispatch (UTV2-1526).
@@ -56,7 +57,7 @@ const CANONICAL_LANE_TYPES = new Set([
   'data-canonical',
 ]);
 
-type LinearIssue = {
+type DispatchTask = {
   id: string;
   identifier: string;
   title: string;
@@ -181,7 +182,7 @@ function notificationEventForFailure(result: DispatchResult): CodexNotifyEvent {
     : 'fail';
 }
 
-async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIssue> {
+async function fetchIssue(identifier: string, apiKey: string): Promise<DispatchTask> {
   const query = `
     query FetchIssue($id: String!) {
       issue(id: $id) {
@@ -212,7 +213,7 @@ async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIss
   }
 
   const payload = (await response.json()) as {
-    data?: { issue: LinearIssue | null };
+    data?: { issue: DispatchTask | null };
     errors?: Array<{ message?: string }>;
   };
 
@@ -307,7 +308,7 @@ function runLaneStart(
   return runPnpm(args);
 }
 
-function inferLaneType(issue: LinearIssue, explicitLaneType: string | undefined): string {
+function inferLaneType(issue: DispatchTask, explicitLaneType: string | undefined): string {
   if (explicitLaneType) {
     if (!CANONICAL_LANE_TYPES.has(explicitLaneType)) {
       throw new Error(`Invalid --lane-type ${explicitLaneType}; use one of ${[...CANONICAL_LANE_TYPES].join(', ')}`);
@@ -352,7 +353,7 @@ function buildVerificationLines(manifest: LaneManifest): string[] {
 }
 
 export function buildDispatchPacket(input: {
-  issue: LinearIssue;
+  issue: DispatchTask;
   manifest: LaneManifest;
   manifestPath: string;
   forbiddenFiles: string[];
@@ -387,11 +388,11 @@ Preflight:     ${manifest.preflight_token}
 
 ---
 
-Work only this Linear issue.
+Work only this repository task.
 
 ## Task
 
-* Linear issue: **${issue.identifier} — ${issue.title}**
+* Work identity: **${issue.identifier} — ${issue.title}**
 
 ### Why it matters
 ${description}
@@ -463,6 +464,28 @@ function writePacket(packetPath: string, packet: string): void {
   fs.writeFileSync(packetPath, packet, 'utf8');
 }
 
+export async function resolveDispatchTask(
+  issueId: string,
+  token: string | undefined,
+  root = ROOT,
+  fetchTracker = fetchIssue,
+): Promise<DispatchTask> {
+  // Legacy IDs are repository identities too; a stored token never changes authority.
+  void token;
+  void fetchTracker;
+  const local = readLocalTaskSource(issueId, { root });
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  const hasCapturedContract = fs.existsSync(syncPath) && /(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(fs.readFileSync(syncPath, 'utf8'));
+  const contract = hasCapturedContract
+    ? readTaskContract(issueId, root)
+    : local ? buildTaskContract(local, new Date().toISOString(), 'local-description') : null;
+  if (!contract) throw new Error(`Repository work ${issueId} requires .ops/work/${issueId}.md with scope, acceptance criteria and verification; tracker access is not required.`);
+  assertTaskContract(contract, issueId);
+  return { id: issueId, identifier: issueId, title: contract.source.title,
+    url: contract.source.issue_url, description: contract.source.description };
+
+}
+
 async function main(): Promise<number> {
   const { flags, bools } = parseArgs(process.argv.slice(2));
   const dryRun = bools.has('dry-run');
@@ -490,12 +513,6 @@ async function main(): Promise<number> {
     const env = loadEnvironment();
     const linearToken = env.LINEAR_API_TOKEN?.trim();
 
-    if (!linearToken) {
-      throw Object.assign(new Error('LINEAR_API_TOKEN is required to fetch issue details.'), {
-        dispatch_code: 3,
-        dispatch_result: { ok: false, code: 'missing_linear_token', message: 'LINEAR_API_TOKEN is required to fetch issue details.' } satisfies DispatchResult,
-      });
-    }
     if (!branch) {
       throw new Error('Missing required --branch');
     }
@@ -504,7 +521,7 @@ async function main(): Promise<number> {
     }
     validateBranchName(branch);
 
-    const issue = await fetchIssue(issueId, linearToken);
+    const issue = await resolveDispatchTask(issueId, linearToken);
     const laneType = inferLaneType(issue, explicitLaneType);
     const modelProfile = resolveDispatchModelProfile(tier, explicitModelProfile);
     // A verification lane's own tracking issue (issueId) is not necessarily the issue it

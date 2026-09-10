@@ -29,7 +29,33 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 
 **Arguments:** `$ARGUMENTS`
 
+Before the safety sequence, prepare `<local-candidates.json>` from the explicitly scoped local contracts/current PRs using the existing CandidateLane shape in `scripts/ops/lane-maximizer.ts`. It is a temporary input, not a new queue. Always supply explicit JSON via `--from-stdin < local-candidates.json` (or inline `--candidates` JSON); bare maximizer can consult a configured tracker. Admission still independently enforces scope, tier floors and global capacity.
+
 ---
+
+## Repository-owned WORK tasks
+
+For an explicitly assigned `WORK-<number>` task, recover `docs/mission/{intent,spec,plan}.md`
+and its `.ops/work/<ID>.md` local task contract. The contract supplies objective, scope,
+ownership, dependencies, acceptance criteria and verification. Declare the assessed tier
+and lane type explicitly; preflight's mechanical risk floor can refuse a lower tier.
+Do not create or fetch a Linear issue, require tracker labels/state, or infer authority
+from an optional tracker reference for this route.
+
+Run substrate, merge-risk and execution-state checks in the same order as Phase 0, then
+`pnpm ops:orchestration-reconcile --issue <ID> --json`. This scopes administrative recovery
+to the assigned work; the board capacity, scope conflicts and singleton checks remain
+global through execution-state and lane-start. For recommendation checks, pass the assigned local candidate explicitly to lane-maximizer.
+
+Delegate with `pnpm codex:dispatch -- --issue <ID> --tier <T1|T2|T3>
+--branch codex/work-<number>-<slug> --lane-type <type> --files <path>` (repeat `--files`).
+It validates the local contract, runs preflight, and starts the isolated lane through
+`ops:lane-start`. Never mint or alter a preflight token. Use the resulting worktree cwd
+and packet. Continue verification, independent review, PR, reserved approvals,
+protected merge through the merge wrapper/mutex, and truth-checked closeout exactly
+as required below. Tracker synchronization is optional; no tracker outcome proves
+repository completion. Fresh or compacted sessions recover this same work identity,
+contract, manifest and existing PR rather than creating an administrative replacement.
 
 ## Execution flow
 
@@ -39,17 +65,17 @@ Before resolving targets or routing any issue, run the live governor and reconci
 
 This five-command gate sequence is **canonical** in composition and order: `/dispatch-board` and `/loop-dispatch` run the same five gates, in this order, and a copy that drops or reorders a gate is stale — fix the copy rather than following it.
 
-Parity governs which gates run, not their flags. `/loop-dispatch` deliberately invokes `pnpm ops:substrate-guard --check-linear` because it dispatches a whole board across repeated cycles, where Linear/manifest drift accumulates between cycles; that flag adds the Linear conflict check described below. **Do not remove `--check-linear` from `/loop-dispatch` in the name of parity** — it is an intentional loop-only addition, not divergence.
+All three entry points use repository substrate and reconciliation checks. Do not add `--check-linear` to ordinary dispatch; optional tracker drift never determines execution authority.
 
 ```bash
 pnpm ops:substrate-guard
 pnpm ops:merge-risk
 pnpm ops:execution-state
-pnpm ops:lane-maximizer
+pnpm ops:lane-maximizer --from-stdin < local-candidates.json
 pnpm ops:orchestration-reconcile --current --json
 ```
 
-`ops:substrate-guard` runs FIRST and is fail-closed: it refuses dispatch when the lane-execution substrate is unsafe — `.ops/leases/` missing and uninitializable, `.ops/merge-lock.json` present-but-invalid, an active lane whose worktree directory is missing, a board `hard_fail` lane (folds in `ops:merge-risk`), or (with `--check-linear`) a Linear/manifest conflict. It tolerates transient WSL ENOENT by retry-probing before declaring substrate genuinely absent. Exit code 1 ⇒ HALT. The same guard runs again mechanically inside `ops:lane-start` (local checks) so no lane can reserve a lease or create a worktree on unsafe substrate even if Phase 0 was skipped; break-glass is `--force-unsafe-substrate`.
+`ops:substrate-guard` runs FIRST and is fail-closed: it refuses dispatch when the lane-execution substrate is unsafe — `.ops/leases/` missing and uninitializable, `.ops/merge-lock.json` present-but-invalid, an active lane whose worktree directory is missing, a board `hard_fail` lane (folds in `ops:merge-risk`). It tolerates transient WSL ENOENT by retry-probing before declaring substrate genuinely absent. Exit code 1 ⇒ HALT. The same guard runs again mechanically inside `ops:lane-start` (local checks) so no lane can reserve a lease or create a worktree on unsafe substrate even if Phase 0 was skipped; break-glass is `--force-unsafe-substrate`.
 
 Use `ops:execution-state` as the concurrency authority for active lanes by executor, available slots, stale heartbeats, singleton blockers, merge mutex state, proof readiness, and recommended actions.
 
@@ -78,68 +104,22 @@ Agent({
 })
 ```
 
-### Phase 0.5: Live Linear context pull
+### Phase 0.5: Recover repository scope
 
-Before resolving targets, pull fresh Linear state for each candidate issue. Do not route from memory or stale manifests.
-
-For each candidate issue ID:
-```
-mcp__claude_ai_Linear__get_issue({"id": "<issue_id>"})
-```
-
-From the response, extract and record: current state, tier label, priority, blocking issue IDs, and assignee. Exclude any issue whose current state is Done, Cancelled, or Blocked — do not process further. This ensures routing decisions reflect Linear truth, not cache.
+Read mission intent/spec/plan, `.ops/work/<ID>.md` (or an existing captured local contract), active manifests, leases, worktrees, PRs and relevant runtime evidence. Configured tracker credentials do not change this route. Preserve accepted user scope and existing owners.
 
 ### Phase 1: Resolve targets
 
-**Mandatory three-brain routing:** Call `/three-brain` for every candidate before assigning an executor. Do not assign from memory or prior session routing. Three-brain owns the routing decision; this skill owns the lane lifecycle. If `/three-brain` is not called for a candidate, do not dispatch that candidate.
+For an explicit ID, resolve its local contract. `WORK-<number>`, `UTV2-<number>` and `UNI-<number>` remain valid repository identities. Without an explicit ID, select only mission-relevant local work and active PRs; do not enumerate a tracker board. Check collisions before minting a new WORK identity. Missing acceptance criteria, file scope, dependencies or verification produce an actionable local-contract error, not a mandatory tracker request.
 
-If no issue IDs provided:
-1. Run the daily digest dispatch query by executing: `source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json`
-2. Parse `dispatch_candidates` from the JSON output
-3. If empty: report "No dispatchable issues. Add tier labels to Ready issues in Linear." and stop.
-4. Pick candidates from `ops:lane-maximizer` recommendations up to the available executor slots reported by `ops:execution-state`; dangerous classes (Runtime, Migration, Modeling, Data/Canonical) remain singleton per config and policy.
-
-If issue IDs provided:
-1. For each issue ID, query Linear via MCP (`mcp__claude_ai_Linear__get_issue`) to get labels, state, description
-2. Determine tier from labels (tier:T1, tier:T2, tier:T3)
-3. Call `/three-brain` for each candidate — the routing decision returned by `/three-brain` is authoritative. Apply routing defaults only if `/three-brain` is unavailable: T1→Claude, T2 clear-scope→Codex, T2 with migration/contract→Claude, T3→Claude
-
-### Phase 1.5: Deterministic skill discovery
-
-Before launching any executor (Phase 4/Codex), run skill discovery for each validated target. This is mechanical, not a judgment call: the same task contract must always select the same skills.
-
-```bash
-npx tsx scripts/ops/execution-packet.ts UTV2-{number}
-```
-
-The packet's `skill_routing.selected_skills` field is the routing authority — never re-derive this from reading the issue yourself. `skill_routing.reasons` names the trigger condition matched for each selected skill, and `skill_routing.note` states explicitly when no skill matched ("No operational skill trigger matched..."). Record the selected skills in the dispatch report (Phase 6) and pass them into the background executor prompt (Phase 4) so the executor is told which skill(s) to consult before proceeding — an empty selection is passed through unchanged, not silently dropped.
-
-Routing triggers (see `scripts/ops/execution-packet.ts`'s `SKILL_ROUTING_SPECS` for the authoritative patterns — this table is prose, not the source):
-
-| Condition | Skill |
-|---|---|
-| Broken, ghosted, parked, or merged-but-unclosed lane | `/lane-recovery` |
-| Required-context, head-binding, or merge-gate mismatch | `/pr-unblock` |
-| Proof bundle creation or correction | `/proof-authoring` |
-| A control claimed by tests | `/mutation-test` |
-
-**Product intent goes into the packet, and so do the acceptance criteria.** If the issue's declared
-file scope touches a product surface — `apps/smart-form/**`, `apps/command-center/**`, or the
-`apps/api` handlers, validation and guards behind them — the executor prompt must name that
-product's intent document (`docs/03_product/<product>/intent.md`) and the canonical contracts it
-indexes as required reading, and must **quote the applicable acceptance criteria inline** rather
-than citing them by number. An executor should not have to resolve a cross-document numbering to
-learn what it must satisfy. This is packet content, not a gate: nothing checks for it, and no
-dispatch is blocked by its absence.
-
-Multiple skills may be selected when triggers genuinely overlap (e.g. a ghost lane whose PR is also head-mismatched selects both `/lane-recovery` and `/pr-unblock`). If the packet refuses with `INSUFFICIENT_TASK_CONTRACT`, the issue's Linear description is missing where-to-look, definition-of-done, or verification/self-check content — fix the issue description before dispatching; do not fabricate the missing section on the executor's behalf.
+Exclude completed work, unresolved repository dependencies, overlapping file scopes and reserved actions without the required approval. Do not invent scope or a prior lane to make admission pass.
 
 ### Phase 2: Validate prerequisites (for each target)
 
 Check each target has:
-- [ ] Tier label set (tier:T1, tier:T2, or tier:T3)
-- [ ] State is "unstarted" type (Ready for Claude, Ready for Codex, Ready, etc.)
-- [ ] Description contains acceptance criteria (search for "Acceptance criteria" or "AC:" or "What to do")
+- [ ] Explicit repository tier declared and checked against mechanical floors
+- [ ] Repository work is unstarted or eligible for governed resume/readmission; no completed or conflicting active lane
+- [ ] Local contract contains acceptance criteria, scope, dependencies and verification
 
 If any check fails, report which prerequisite is missing and skip that issue.
 
@@ -153,7 +133,7 @@ For `--dry-run`: stop here and report the dispatch plan as a table:
 For each validated target:
 
 1. Determine branch name: `claude/utv2-{number}-{slug}` or `codex/utv2-{number}-{slug}`
-2. Determine file scope from the issue description (look for explicit file paths first; fall back to package names or area labels). Declare the **narrowest possible scope** — list individual files when known (`apps/worker/src/processor.ts`), not directory globs (`apps/worker/**`), unless the issue explicitly requires changes across the full subtree. Overly broad locks block other lanes unnecessarily.
+2. Determine file scope from the local work contract (look for explicit file paths first; fall back to package names or area labels). Declare the **narrowest possible scope** — list individual files when known (`apps/worker/src/processor.ts`), not directory globs (`apps/worker/**`), unless the issue explicitly requires changes across the full subtree. Overly broad locks block other lanes unnecessarily.
 3. Start the lane through the kernel. Do not hand-roll worktree eligibility, branch creation, manifest creation, or file-scope locking in prose. Do not check out the lane branch on the main checkout.
 
    ```bash
@@ -167,8 +147,8 @@ For each validated target:
    ```bash
    pnpm ops:lane-start UTV2-{number} --tier T3 --branch {branch} --docs-only-fast-path --files {file_scope[0]} --files {file_scope[1]}
    ```
-   A successful `code: "docs_only_fast_path"` response means lane-start intentionally created no worktree, manifest, lease, sync file, or proof scaffold. Continue on a normal PR branch and rely on CI, branch discipline, lane authority, merge gate, tier label, and Linear auto-close.
-4. Update Linear issue state to "In Claude" or "In Codex" via MCP
+   A successful `code: "docs_only_fast_path"` response means lane-start intentionally created no worktree, manifest, lease, sync file, or proof scaffold. Continue on a normal PR branch and rely on CI, branch discipline, lane authority, merge gate, tier label, and governed repository closeout.
+4. Record the executor and state through the lane manifest; optional tracker mirroring is not required.
 5. Confirm `ops:lane-start` created the lane manifest and per-issue sync file, then commit both to the branch:
    ```bash
    git add docs/06_status/lanes/UTV2-{number}.json ".ops/sync/UTV2-{number}.yml"
@@ -255,15 +235,8 @@ Anything that warrants Griff review beyond the standard T1 gate.`
 
 Block on the planning result.
 
-**Deliver the plan to Linear for async PM review (mandatory for all T1):**
-After the planning subagent returns, immediately post the Outcome Contract as a Linear comment so Griff can review asynchronously without being in the same session:
-```
-mcp__claude_ai_Linear__save_comment({
-  issueId: "<issue_id>",
-  body: "## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: sonnet\nStatus: awaiting Griff review before implementation begins."
-})
-```
-Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
+**Deliver the T1 plan through the governed repository/PR path:**
+Record the Outcome Contract in the local work/proof artifact and make it reviewable on the PR. Preserve required PM plan approval before implementation. Existing explicit user authorization applies to its stated scope; it is not an exact-head merge verdict. Do not require a Linear comment, reply or label to deliver or approve the plan.
 
 **Execution — background subagent, orchestrator stays control-plane:**
 
@@ -349,8 +322,8 @@ Steps:
 1. Read the diff via: gh pr diff ${pr_number}
 2. Run the codex-return-reviewer checks (file scope, Tier C paths, test existence, commit format, tier label, R-level) — these apply the same way regardless of which executor produced the diff
 3. Check if diff touches any Tier C path: packages/domain/, packages/contracts/, supabase/migrations/, packages/db/src/lifecycle.ts, apps/api/src/auth.ts
-4. Post review result as Linear comment on ${issue_id}
-5. If REJECT or Tier C violation found: post a blocking comment on the PR and set Linear state to Blocked
+4. Record independent review on the governed PR/proof path, bound to the reviewed head.
+5. If REJECT or Tier C violation found: record the blocking finding on the PR and lane; do not merge.
 
 Return: APPROVE or REJECT with findings.`
 })

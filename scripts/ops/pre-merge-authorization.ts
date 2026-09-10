@@ -156,7 +156,7 @@ export interface PreMergeAuthorizationDeps {
  * `UTV2-1661`), which is how the manifest path is located.
  */
 export function issueIdFromHeadRef(headRef: string): string | null {
-  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(headRef);
+  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni|work)-(\d+)(?:-|$)/i.exec(headRef);
   return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
 }
 

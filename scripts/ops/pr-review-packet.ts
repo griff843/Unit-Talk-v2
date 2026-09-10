@@ -11,6 +11,7 @@ import {
   getFlag,
   parseArgs,
   readManifest,
+  issueIdFromBranchName,
   requireIssueId,
   type LaneExecutor,
   type LaneManifest,
@@ -1051,8 +1052,7 @@ function inferIssueFromBranch(): string | null {
       cwd: ROOT,
       encoding: 'utf8',
     }).trim();
-    const match = branch.match(/(?:utv2|uni)-(\d+)/iu);
-    return match ? `UTV2-${match[1]}` : null;
+    return issueIdFromBranchName(branch);
   } catch {
     return null;
   }

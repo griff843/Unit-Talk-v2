@@ -16,10 +16,10 @@ Use this at the start of a session, after `/clear`, or when repo/queue truth is 
 ```bash
 pnpm ops:brief
 ```
-2. Read the output fully before acting.
+2. Read mission intent/spec/plan and the assigned `.ops/work/<ID>.md` contract, then read the output fully before acting. Tracker access is never required, including when credentials are configured.
 3. If the task is queue or branch related, also inspect:
 ```bash
-pnpm linear:work
+pnpm ops:execution-state
 pnpm github:current
 ```
 4. Confirm three things before proceeding:
@@ -36,7 +36,7 @@ pnpm github:current
 ## Stop and reconcile when
 
 - `ops:brief` fails
-- Linear state conflicts with repo truth
+- manifest, lease, worktree or PR state conflicts with repo truth
 - mainline health is unclear
 - you cannot name the next concrete lane
 

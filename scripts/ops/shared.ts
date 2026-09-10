@@ -434,11 +434,8 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
 // explicitly and nullably in `tracker_ref` rather than being inferred from this
 // field. See LaneManifest.tracker_ref.
 //
-// KNOWN BOUND: `merge-gate.yml`, `p0-protocol.yml` and
-// `executor-result-validator.yml` are RESERVED surfaces under the same
-// ratification and still resolve a lane by `UTV2-###`. A `WORK-###` lane is
-// therefore fully usable for discovery, delegation, verification, PR and
-// closeout, and is NOT yet mergeable. Do not widen those workflows here.
+// Required workflows resolve WORK identities through their repository manifests;
+// tracker namespaces remain separate and cannot supply merge authority.
 // The single source of truth for which identifier namespaces name a unit of work.
 // `branch-discipline-guard.ts` kept its own copy of this alternation and was not
 // widened when `WORK-###` was minted, which silently made an issue-ID-free task
@@ -758,6 +755,15 @@ export function requireIssueId(issueId: string): string {
  * no issue by that name to look up, and inventing one would produce a lookup
  * that always fails rather than a check that correctly skips.
  */
+/** Identifies explicitly detached identities for optional tracker diagnostics.
+ * This association helper never authorizes a default execution-time tracker call.
+ */
+export function isTrackerIndependent(
+  manifest: Pick<LaneManifest, 'issue_id'> & { tracker_ref?: string | null },
+): boolean {
+  return /^WORK-\d+$/i.test(manifest.issue_id) || manifest.tracker_ref === null;
+}
+
 export function resolveTrackerRef(
   manifest: Pick<LaneManifest, 'issue_id'> & { tracker_ref?: string | null },
 ): string | null {
@@ -1396,7 +1402,7 @@ export interface ActiveLaneDiscoveryDeps {
  * not lane branches, which are skipped rather than treated as failures.
  */
 export function issueIdFromBranchName(branch: string): string | null {
-  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(branch);
+  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni|work)-(\d+)(?:-|$)/i.exec(branch);
   return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
 }
 

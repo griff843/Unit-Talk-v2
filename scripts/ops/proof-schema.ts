@@ -323,7 +323,7 @@ function verifyProofOnlyMigrationAncestry(
   if (!repoRoot) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
   }
-  if (!/^(?:UTV2|UNI)-\d+$/.test(issueId)) {
+  if (!/^(?:UTV2|UNI|WORK)-\d+$/.test(issueId)) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires a valid issue_id' };
   }
 

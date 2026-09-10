@@ -125,6 +125,7 @@ export function buildLaneFinalizePlan(input: {
   branch?: string | null;
   dryRun?: boolean;
   mergeSha?: string | null;
+  syncTracker?: boolean;
 }): LaneFinalizePlan {
   const alreadyClosed = input.manifest.status === 'done';
   const mergeAlreadyRecorded =
@@ -162,6 +163,8 @@ export function buildLaneFinalizePlan(input: {
         ],
         required: true,
       });
+      // Preserve the durable step identity used by existing finalize journals.
+      // Without explicit opt-in its command emits only a local skip receipt.
       steps.push({
         id: 'apply_linear_tier_label',
         command: 'pnpm',
@@ -173,9 +176,12 @@ export function buildLaneFinalizePlan(input: {
           issueId,
           '--apply-linear-tier-label',
           input.manifest.tier,
+          ...(input.syncTracker ? ['--sync-tracker'] : []),
           '--json',
         ],
-        required: true,
+        // Preserve the durable journal step; the command itself is a local
+        // no-op unless --sync-tracker explicitly opts into the mirror.
+        required: false,
       });
     }
     // Explicit --merge-sha ensures the proof reflects the actual merge commit,
@@ -453,6 +459,7 @@ export function runLaneFinalizePlan(
     if (status !== 0) {
       if (!step.required) {
         steps.push({ ...step, status: 'skipped', ...output });
+        completedStepIds.add(step.id);
         continue;
       }
       steps.push({ ...step, status: 'failed', ...output });
@@ -949,6 +956,19 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
   const json = bools.has('json');
   const linearTier = getFlag(flags, 'apply-linear-tier-label');
   if (linearTier) {
+    if (!bools.has('sync-tracker')) {
+      const skipped = {
+        ok: true,
+        code: 'tracker_sync_skipped',
+        issue_id: rawIssueId,
+        tier: linearTier,
+        tracker_sync: 'skipped',
+        message: 'Tracker mirroring was not requested; no tracker credentials were read or network requests made. Use --sync-tracker to opt in.',
+      };
+      if (json) emitJson(skipped);
+      else process.stdout.write(`${skipped.code}: ${rawIssueId} tier:${linearTier}\n`);
+      return 0;
+    }
     const token =
       readConfiguredEnvValue('LINEAR_API_TOKEN') ||
       readConfiguredEnvValue('LINEAR_API_KEY');
@@ -1024,6 +1044,7 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     branch: getFlag(flags, 'branch') ?? null,
     dryRun: bools.has('dry-run') || bools.has('explain'),
     mergeSha: getFlag(flags, 'merge-sha') ?? null,
+    syncTracker: bools.has('sync-tracker'),
   });
   const execute = (): LaneFinalizeResult => {
     validateLaneFinalizePullRequest(plan);

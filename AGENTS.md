@@ -44,9 +44,11 @@ Claude owns `plan.md`; Codex may use it as context but does not change orchestra
 - Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
 - Legacy repo: `C:\dev\unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
 
-**Execution model:** Parallel lanes run in dedicated git worktrees. The main checkout (`C:\Dev\Unit-Talk-v2-main` / `/home/griff843/code/Unit-Talk-v2`) is the control and merge checkout only. `/dispatch` and `/dispatch-board` must start each executable lane through `pnpm ops:lane-start`, which creates or resumes the lane worktree, records `worktree_path`, reserves the file-scope lock, and verifies the lane cwd. Do not execute parallel lane work by branch-switching the main checkout. Merge, branch-refresh, Linear Done, and lane closeout remain serialized through the merge mutex.
+**Execution model:** Parallel lanes run in dedicated git worktrees. The main checkout (`C:\Dev\Unit-Talk-v2-main` / `/home/griff843/code/Unit-Talk-v2`) is the control and merge checkout only. `/dispatch` and `/dispatch-board` must start each executable lane through `pnpm ops:lane-start`, which creates or resumes the lane worktree, records `worktree_path`, reserves the file-scope lock, and verifies the lane cwd. Do not execute parallel lane work by branch-switching the main checkout. Merge, branch-refresh, optional tracker mirroring, and lane closeout remain serialized through the merge mutex.
 
-**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Use Linear MCP (`linear`) for Linear issue lookup/update workflows when available; fall back to the repo CLI commands only when MCP is unavailable.
+**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Linear is an optional mirror, used only for explicitly requested tracker work. A configured token never makes tracker access a prerequisite.
+
+**Work authority:** Recover mission intent/spec/plan, local `.ops/work/<ID>.md` contracts, active manifests/worktrees/leases, current PRs and runtime evidence. Use repository-owned `WORK-<number>` identity for new local work; existing `UTV2-<number>` and `UNI-<number>` identities remain valid. Missing scope requires a local contract repair, not a tracker ticket. Repository admission determines tier with mechanical risk floors; labels alone cannot lower risk. Preserve lane isolation, independent review, exact-head proof and reserved merge approvals. Optional tracker failures cannot block otherwise verified repository work.
 
 ---
 
@@ -303,12 +305,12 @@ Before opening any PR, complete all 7 steps in order:
 3. **Scope check** — every file you changed must be within the issue's acceptance criteria. Revert any scope bleed.
 4. **No new `any` casts** — unless the existing code already uses them and the issue does not require typed fixes.
 5. **Tests** — new runtime behavior requires new `node:test` tests. No test count decrease.
-6. **Commit message** — must reference the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
+6. **Commit message** — must reference the repository work ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
 7. **Tier label** — after opening the PR with `gh pr create`, immediately run:
    ```bash
    gh pr edit <PR-URL-or-number> --add-label "tier:T2"
    ```
-   Replace `T2` with the actual tier from the Linear issue labels. Never skip this step — tier-label-check CI will block the merge gate.
+   Replace `T2` with the authoritative admitted manifest tier (subject to mechanical risk floors). Never skip this step — tier-label-check CI will block the merge gate.
 
 ### Forbidden actions (never do these in a PR)
 
@@ -361,4 +363,4 @@ State whether this PR must merge before or after any other currently open PR.
 - No new `any` casts unless the existing code already uses them and the issue doesn't require typed fixes
 - No new packages added without clear necessity
 - No docs files modified unless the AC explicitly requires it
-- Commit message references the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`)
+- Commit message references the repository work ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`)

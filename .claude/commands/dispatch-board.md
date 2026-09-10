@@ -1,6 +1,6 @@
 # /dispatch-board
 
-Board-wide autonomous loop. Reads the entire Linear board, routes every executable issue via `/three-brain`, and runs the dispatch → execute → verify → close cycle until the board is empty or all remaining issues are blocked.
+Board-wide autonomous loop. Reads mission-relevant local work contracts and active PRs, routes eligible work via `/three-brain`, and runs the dispatch → execute → verify → close cycle until the authorized local work is complete or only concrete reserved actions remain.
 
 ## Mandatory merge wrapper
 
@@ -12,16 +12,18 @@ All PR merge, PR branch refresh, and post-merge `main` sync operations must go t
 
 Before counting a lane as active, confirm `/dispatch` started it through `pnpm ops:lane-start` and recorded a lane-specific `worktree_path`/cwd. If worktree creation or isolated install verification fails, do not consume a parallel slot; mark the issue blocked with the specific setup failure.
 
-Worktrees increase execution concurrency, not merge concurrency. PR merge, branch refresh, Linear Done transition, and lane closeout remain one-at-a-time through the merge mutex.
+Worktrees increase execution concurrency, not merge concurrency. PR merge, branch refresh, optional tracker mirroring, and lane closeout remain one-at-a-time through the merge mutex.
 
 **Usage:**
 - `/dispatch-board` — run all executable issues
-- `/dispatch-board --milestone <id>` — scope to a Linear milestone
+- `/dispatch-board --milestone <id>` — scope to a repository mission milestone
 - `/dispatch-board --dry-run` — show routing plan without executing
 - `/dispatch-board --tier T2` — restrict to a single tier this cycle
 - `/dispatch-board --check-codex` — review returned Codex PRs (async re-entry)
 
 **Arguments:** `$ARGUMENTS`
+
+Before the safety sequence, prepare `<local-candidates.json>` from the explicitly scoped local contracts/current PRs using the existing CandidateLane shape in `scripts/ops/lane-maximizer.ts`. It is a temporary input, not a new queue. Always supply explicit JSON via `--from-stdin < local-candidates.json` (or inline `--candidates` JSON); bare maximizer can consult a configured tracker. Admission still independently enforces scope, tier floors and global capacity.
 
 ---
 
@@ -45,7 +47,7 @@ Before reading the board, run the same live governor and reconciliation sequence
 pnpm ops:substrate-guard
 pnpm ops:merge-risk
 pnpm ops:execution-state
-pnpm ops:lane-maximizer
+pnpm ops:lane-maximizer --from-stdin < local-candidates.json
 pnpm ops:orchestration-reconcile --current --json
 ```
 
@@ -68,23 +70,13 @@ If reconciliation does not pass, surface exactly one repair command from the fir
 Repair command: {first repair_plan action command | none available}
 ```
 
-## Phase 1: Read the board
+## Phase 1: Read repository work
 
-1. `pnpm ops:brief` — current context
-2. Query Linear (MCP `mcp__claude_ai_Linear__list_issues`):
-   - **Include:** Ready / Ready for Codex / Ready for Claude / Backlog with a tier label
-   - **Exclude:** In Claude, In Codex (already active), Done, Cancelled, Blocked, untiered
-3. Read `docs/06_status/lanes/*.json` — enumerate active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`), note `file_scope_lock[]`, executor counts, and worktree paths. Slot limits come from `docs/governance/CONCURRENCY_CONFIG.json` through the live gate outputs; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
-4. Build candidate list — exclude:
-   - File-scope overlap with any active lane
-   - Missing tier label
-   - Linked blockers not in Done
-   - External-gate labels (skip silently, surface in report):
-     - `needs:operator-action`, `needs:live-data`, `needs:hetzner`
-5. If `--milestone <id>`: filter via `mcp__claude_ai_Linear__get_milestone`
-6. Empty after filtering → report what blocks each issue and stop
-
----
+1. Read mission intent/spec/plan and `pnpm ops:brief`.
+2. Enumerate `.ops/work/*.md` and current active PRs. Existing captured local contracts remain valid; no new tracker issue or restart is required for legacy identities.
+3. Inspect active manifests, file-scope locks, leases, worktrees and heartbeat through `ops:execution-state`.
+4. Filter by mission relevance, explicit acceptance criteria, admitted risk/floors, unresolved dependencies, reserved decisions, overlap and configured capacity. A tracker label or state cannot authorize or block ordinary dispatch.
+5. `--milestone` filters the repository mission scope. Empty selection reports concrete local blockers; do not create a replacement backlog.
 
 ## Phase 2: Route
 
@@ -127,7 +119,7 @@ If any T1 in routing:
 
 ## Phase 4: Dispatch
 
-For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, lane manifest, Linear state, file-scope lock, dedicated worktree creation/resume, pre-PR verification, R-level check, tier label, and PR opening.
+For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, lane manifest, file-scope lock, dedicated worktree creation/resume, pre-PR verification, R-level check, tier label, and PR opening.
 
 Dispatch order:
 1. Approved T1 Claude lanes first
@@ -161,7 +153,7 @@ Parallel dispatch guard:
 5. For a Codex lane specifically: `gh pr review <n> --approve` before merging (Claude lanes don't self-review their own PR — a Claude-authored PR proceeds straight to merge on PASS, same as before).
 6. On PASS: `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
 7. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
-8. `ops:lane-close` runs `ops:truth-check` (the done-gate, against the merge SHA) and owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. If `ops:lane-close` exits non-zero, the lane is **merged-but-not-closed** — repair and re-run close before moving on.
+8. `ops:lane-close` runs `ops:truth-check` (the done-gate, against the merge SHA) and owns manifest closeout, dispatch lease release, and merge mutex release. If `ops:lane-close` exits non-zero, the lane is **merged-but-not-closed** — repair and re-run close before moving on.
 9. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes the closed lane's git worktree. Non-blocking: if worktree already absent, command exits 0.
 10. Then dispatch the next candidate (Claude or Codex, whichever has an open slot).
 11. On pre-merge FAIL / scope bleed: mark blocked with the specific failing check, leave PR open → dispatch next from unblocked pool.
@@ -261,4 +253,4 @@ pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
 - **Singleton and forbidden-combination rules are config-backed.** Runtime, migration, modeling, and data/canonical lanes remain singleton per the live governor model. Queue — never stack.
 - **No scope overlap.** Check `file_scope_lock` before every dispatch.
 - **Codex lanes are async.** Dispatch and continue. Review on `--check-codex` re-entry.
-- **Board truth over Linear truth.** If `docs/06_status/lanes/*.json` manifests say active but Linear says Done, reconcile before dispatching (`pnpm ops:orchestration-reconcile --current --json`).
+- **Repository execution truth.** If manifests, leases, worktrees and current PRs disagree, reconcile before dispatching (`pnpm ops:orchestration-reconcile --current --json`).

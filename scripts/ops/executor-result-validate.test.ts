@@ -287,7 +287,7 @@ function readValidatorWorkflow(): string {
 const VALIDATOR_WORKFLOW = readValidatorWorkflow();
 
 test('UTV2-1688: the workflow issue-ID literal is byte-identical to the exported one', () => {
-  const match = VALIDATOR_WORKFLOW.match(/!(\/\^\(UTV2\|UNI\)[^/]*\/i)\.test\(r\.issueId\)/);
+  const match = VALIDATOR_WORKFLOW.match(/!(\/\^\(UTV2\|UNI\|WORK\)[^/]*\/i)\.test\(r\.issueId\)/);
   assert.ok(match, 'could not locate the inline issue-ID regex in executor-result-validator.yml');
   assert.equal(
     match[1],
@@ -304,4 +304,69 @@ test('UTV2-1688: the workflow branch literal is byte-identical to the exported o
     EXECUTOR_RESULT_BRANCH_RE.toString(),
     'the workflow copy has drifted from EXECUTOR_RESULT_BRANCH_RE',
   );
+});
+
+
+test('WORK identity reaches the actual executor workflow field validator with all bindings intact', () => {
+  const start = VALIDATOR_WORKFLOW.indexOf('if (!r.issueId');
+  const end = VALIDATOR_WORKFLOW.indexOf('// ── 6.', start);
+  assert.ok(start > 0 && end > start);
+  const validate = new Function('r', 'headRef', 'headSha', 'prNumber',
+    `const errors = []; ${VALIDATOR_WORKFLOW.slice(start, end)} return errors;`);
+  const r = { issueId: 'WORK-903', lane: 'codex', branch: 'codex/work-903-product',
+    pr: '1235', headSha: CTX.headSha };
+  assert.deepEqual(validate(r, r.branch, r.headSha, 1235), []);
+  for (const changed of [{ issueId: '' }, { issueId: '../WORK-903' },
+    { branch: 'codex/work-904-other' }, { pr: '1236' }, { headSha: '0'.repeat(40) }]) {
+    assert.ok(validate({ ...r, ...changed }, r.branch, r.headSha, 1235).length > 0);
+  }
+});
+
+test('actual Merge Gate and tier resolver select WORK branch identity over optional tracker title', () => {
+  for (const file of ['merge-gate.yml', 'tier-label-check.yml']) {
+    const source = fs.readFileSync(path.join(process.cwd(), '.github/workflows', file), 'utf8');
+    const start = source.indexOf('const issueMatch =');
+    const end = source.indexOf(';', source.indexOf('const issueId =', start));
+    const resolve = new Function('headRef', 'prTitle', 'pr',
+      `${source.slice(start, end + 1)} return issueId;`);
+    assert.equal(resolve('codex/work-903-product', 'Optional UTV2-1837',
+      { head: { ref: 'codex/work-903-product' }, title: 'Optional UTV2-1837' }), 'WORK-903');
+  }
+});
+
+test('actual post-merge shell chooses WORK PR branch over optional tracker in squash text', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { tmpdir } = await import('node:os');
+  const dir = fs.mkdtempSync(path.join(tmpdir(), 'work-close-extraction-'));
+  try {
+    const source = fs.readFileSync(path.join(process.cwd(), '.github/workflows/post-merge-lane-close.yml'), 'utf8');
+    const start = source.indexOf('        run: |');
+    const end = source.indexOf('      - name: Checkout', start);
+    const shell = source.slice(start + '        run: |'.length, end)
+      .replaceAll('${{ github.repository }}', 'o/r');
+    fs.writeFileSync(path.join(dir, 'curl'), '#!/bin/sh\nprintf \'%s\' \'[{"number":1,"head":{"ref":"codex/work-903-product"}}]\'\n', { mode: 0o755 });
+    const output = path.join(dir, 'output');
+    const result = spawnSync('bash', ['-c', shell], { encoding: 'utf8', env: {
+      ...process.env, PATH: `${dir}:${process.env.PATH}`, COMMIT_MSG: 'WORK-903 improve health; optional UTV2-1837',
+      COMMIT_SHA: 'test-head', GITHUB_TOKEN: 'test-token', GITHUB_OUTPUT: output,
+      DISPATCH_ISSUE_ID: '', DISPATCH_PR: '',
+    } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(fs.readFileSync(output, 'utf8'), /^issue_id=WORK-903$/m);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('all actual proof-gate extraction commands preserve WORK identity', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const source = fs.readFileSync(path.join(process.cwd(), '.github/workflows/proof-gate.yml'), 'utf8');
+  const lines = source.split('\n').filter(line => /^\s*(?:issue_id|ISSUE_ID)=\$\(echo/.test(line));
+  assert.equal(lines.length, 3);
+  for (const line of lines) {
+    const result = spawnSync('bash', ['-c', `${line}\nprintf '%s' "\${issue_id:-\${ISSUE_ID:-}}"`], {
+      encoding: 'utf8', env: { ...process.env, proof_dir: 'docs/06_status/proof/WORK-903',
+        branch: 'codex/work-903-product', BRANCH: 'codex/work-903-product' },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'WORK-903');
+  }
 });

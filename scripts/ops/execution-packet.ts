@@ -1131,7 +1131,7 @@ export function buildTaskContract(
   // identity may be; this mirrors it deliberately rather than importing it,
   // because execution-packet is consumed in contexts that do not load shared's
   // path constants.
-  if (!/^(?:UTV2|WORK)-\d+$/u.test(issueId)) {
+  if (!/^(?:UTV2|UNI|WORK)-\d+$/u.test(issueId)) {
     throw new Error(
       `task contract has an invalid issue identity: ${source.identifier}`,
     );
@@ -1431,9 +1431,8 @@ export function localTaskSourcePath(issueId: string, root: string = ROOT): strin
  * Build a task source from repo-authored text instead of the tracker API.
  *
  * `description` wins over `descriptionFile`, which wins over the conventional
- * `.ops/work/<ID>.md`. Returns `null` when none of the three is present, so a
- * caller can fall through to the tracker rather than being forced into one
- * source or the other.
+ * `.ops/work/<ID>.md`. Returns `null` when none of the three is present so the caller can report
+ * the missing local work contract. Credentials never supply missing scope.
  */
 export function readLocalTaskSource(
   issueId: string,
@@ -1511,7 +1510,9 @@ export function captureOrReadTaskContract(
   if (local) {
     return buildTaskContract(local, packetTimestamp(), 'local-description');
   }
-  return buildTaskContract(fetchLinearTaskSource(issueId, token, runner));
+  void token;
+  void runner;
+  throw new Error(`Missing local task contract for ${issueId}; create .ops/work/${issueId}.md with scope, acceptance criteria and verification, or supply --description-file. Tracker access is not required.`);
 }
 
 /** First value that is a non-empty string; `''` when there is none. */
@@ -1586,8 +1587,8 @@ export interface TaskContractResolution {
  *
  * `roots` is in precedence order: the first root holding a valid contract wins
  * when all agree. Any two valid contracts with different hashes are a refusal,
- * never a silent overwrite. Capture happens only when no root has one, and it
- * is the sole network call.
+ * never a silent overwrite. When no captured contract exists, local descriptions
+ * supply the work order. Missing local scope refuses without network access.
  */
 export function resolveTaskContractAcrossRoots(
   issueId: string,
@@ -1633,11 +1634,9 @@ export function resolveTaskContractAcrossRoots(
       };
     }
   }
-  return {
-    contract: buildTaskContract(fetchLinearTaskSource(issueId, token, runner)),
-    fetched: true,
-    rootIndex: -1,
-  };
+  void token;
+  void runner;
+  throw new Error(`Missing local task contract for ${issueId}; create .ops/work/${issueId}.md in a lane/control root with scope, acceptance criteria and verification. Tracker access is not required.`);
 }
 
 /**

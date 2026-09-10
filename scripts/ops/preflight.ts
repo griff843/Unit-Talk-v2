@@ -882,7 +882,7 @@ function runRepoChecks(
     addCheck('PG2', 'infra_error', status.stderr || 'git status failed');
   } else if (status.stdout.trim().length > 0) {
     const dirtyPaths = parsePorcelainPaths(status.stdout);
-    const nonRegistryDirtyPaths = dirtyPaths.filter((dirtyPath) => !isLaneRegistryPath(dirtyPath));
+    const nonRegistryDirtyPaths = dirtyPaths.filter((dirtyPath) => !isLaneRegistryPath(dirtyPath, issueId));
     if (nonRegistryDirtyPaths.length > 0) {
       addCheck('PG2', 'fail', `working tree is not clean: ${nonRegistryDirtyPaths.slice(0, 5).join(', ')}${nonRegistryDirtyPaths.length > 5 ? ` +${nonRegistryDirtyPaths.length - 5} more` : ''}`);
     } else {
@@ -1130,113 +1130,33 @@ export async function runLinearChecks(
   readmitExistingBranch = false,
   branch = '',
 ): Promise<{ labels: string[]; stateName: string }> {
-  const token = env?.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
-  if (!token) {
-    // Tracker independence (ratified 2026-09-05, `docs/mission/intent.md`
-    // "Execution must not depend on the tracker"). An absent tracker
-    // credential is not an infrastructure failure and not a policy refusal --
-    // it is the tracker being optional. Reporting it as `infra_error` made
-    // `resolveVerdict` return INFRA, which wrote no token, which made
-    // `ops:lane-start` fail with "validated preflight token is unavailable".
-    // That cascade is the single hard block on the whole open->PR path.
-    //
-    // What must NOT be lost with the tracker is the tier decision PL2
-    // otherwise carries. Without Linear there is no label to read, so the
-    // declared `--tier` stands -- but only when it is at or above the
-    // MECHANICAL FLOOR computed from the declared file scope. The floor is a
-    // floor in both directions: it can raise a declared tier's requirement
-    // and refuse, and it can never lower one. `classifyMechanicalMinimum` is
-    // pure -- no Linear, no network, no git -- so it is computable in exactly
-    // the situation this branch exists for.
-    //
-    // The floor is binary (T1 or T3) and blind to semantic risk, so it is
-    // used ONLY to refuse a declared tier beneath it, never to set a tier.
-    const { mechanicalMinimum, matches } = classifyMechanicalMinimum(candidateFiles);
-    const declaredMeetsFloor = maxTier(tier, mechanicalMinimum) === tier;
-    if (!declaredMeetsFloor) {
-      const offending = matches
-        .map((match) => match.path)
-        .slice(0, 5)
-        .join(', ');
-      addCheck(
-        'PE2',
-        'fail',
-        `no tracker credential, and declared --tier ${tier} is below the mechanical floor ` +
-          `${mechanicalMinimum} implied by the declared file scope (${offending}). ` +
-          'A tier is never lowered to avoid tracker bookkeeping.',
-      );
-    } else {
-      addCheck(
-        'PE2',
-        'skip',
-        'no tracker credential; tracker checks are optional and non-blocking. ' +
-          `Declared --tier ${tier} satisfies the mechanical floor ${mechanicalMinimum}.`,
-      );
-    }
-    addCheck('PL1', 'skip', 'PL1 skipped: no tracker credential');
-    addCheck('PL2', 'skip', `PL2 skipped: no tracker credential; --tier ${tier} stands above floor ${mechanicalMinimum}`);
-    addCheck('PL3', 'skip', 'PL3 skipped: no tracker credential');
-    addCheck('PL4', 'skip', 'PL4 skipped: no tracker credential');
-    addCheck('PL5', 'skip', 'PL5 skipped: no tracker credential');
-    addCheck('PL6', 'skip', 'PL6 skipped without issue context');
-    return { labels: [], stateName: '' };
-  }
-
-  const issue = await fetchLinearIssue(issueId, token, addCheck);
-  if (!issue) {
-    addCheck('PL2', 'skip', 'PL2 skipped because the issue could not be resolved');
-    addCheck('PL3', 'skip', 'PL3 skipped because the issue could not be resolved');
-    addCheck('PL4', 'skip', 'PL4 skipped because the issue could not be resolved');
-    addCheck('PL5', 'skip', 'PL5 skipped because the issue could not be resolved');
-    addCheck('PL6', 'skip', 'PL6 skipped without issue context');
-    return { labels: [], stateName: '' };
-  }
-
-  const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
-  // Normalize labels: strip optional "tier:" prefix so both "t1" and "tier:t1" match
-  const normalizeTierLabel = (l: string) => l.replace(/^tier:/, '');
-  const tierLabels = [
-    ...new Set(
-      labels
-        .map(normalizeTierLabel)
-        .filter((label) => label === 't1' || label === 't2' || label === 't3'),
-    ),
-  ];
-  if (tierLabels.length !== 1 || tierLabels[0] !== tier.toLowerCase()) {
-    addCheck('PL2', 'fail', `issue tier labels ${tierLabels.join(', ') || '(none)'} do not match --tier ${tier}`);
+  // Tracker credentials cannot change repository admission authority.
+  void env;
+  void refresh;
+  const { mechanicalMinimum, matches } = classifyMechanicalMinimum(candidateFiles);
+  const declaredMeetsFloor = maxTier(tier, mechanicalMinimum) === tier;
+  if (!declaredMeetsFloor) {
+    const offending = matches
+      .map((match) => match.path)
+      .slice(0, 5)
+      .join(', ');
+    addCheck(
+      'PE2',
+      'fail',
+      `repository admission, and declared --tier ${tier} is below the mechanical floor ` +
+        `${mechanicalMinimum} implied by the declared file scope (${offending}). ` +
+        'A tier is never lowered to avoid tracker bookkeeping.',
+    );
   } else {
-    addCheck('PL2', 'pass', `issue tier label matches ${tier}`);
+    addCheck(
+      'PE2',
+      'skip',
+      'repository admission; tracker checks are optional and non-blocking. ' +
+        `Declared --tier ${tier} satisfies the mechanical floor ${mechanicalMinimum}.`,
+    );
   }
-
-  const stateName = issue.state?.name ?? '';
-  // Accept workflow-specific state names alongside generic "Ready" / "In Progress"
-  const startableStates = new Set([
-    'Ready',
-    'In Progress',
-    'Ready for Claude',
-    'Ready for Codex',
-    'In Claude Review',
-    'In Codex Review',
-    'Needs Standard',
-  ]);
-  if (readmitExistingBranch && isTerminalLinearState(stateName)) {
-    addCheck('PL3', 'fail', `terminal issue state ${stateName} cannot be readmitted`);
-  } else if (readmitExistingBranch && isContinuationEligibleLinearState(stateName)) {
-    addCheck('PL3', 'pass', `issue state ${stateName} is explicitly continuation-eligible`);
-  } else if (readmitExistingBranch) {
-    addCheck('PL3', 'fail', `issue state ${stateName || 'Unknown'} is not continuation-eligible`);
-  } else if (startableStates.has(stateName)) {
-    addCheck('PL3', 'pass', `issue state ${stateName} is startable`);
-  } else if (stateName === 'Backlog' && refresh) {
-    addCheck('PL3', 'waived', 'issue state Backlog tolerated via --refresh');
-  } else {
-    addCheck('PL3', 'fail', `issue state ${stateName || 'Unknown'} is not startable`);
-  }
-
-  if ((issue.description ?? '').trim().length > 0) {
-    addCheck('PL4', 'pass', 'issue description is non-empty');
-  } else {
-    addCheck('PL4', 'fail', 'issue description is empty');
+  for (const id of ['PL1', 'PL2', 'PL3', 'PL4']) {
+    addCheck(id, 'skip', 'Repository admission does not consult the optional tracker');
   }
 
   const conflictingManifest = readAllManifests().find(
@@ -1273,7 +1193,7 @@ export async function runLinearChecks(
     }
   }
 
-  return { labels, stateName };
+  return { labels: [], stateName: '' };
 }
 
 function runRequiredDocChecks(
@@ -1653,10 +1573,13 @@ function parsePorcelainPaths(stdout: string): string[] {
     });
 }
 
-function isLaneRegistryPath(repoRelativePath: string): boolean {
+export function isLaneRegistryPath(repoRelativePath: string, issueId?: string): boolean {
   return (
-    /^\.ops\/sync\/UTV2-\d+\.yml$/.test(repoRelativePath) ||
-    /^docs\/06_status\/lanes\/UTV2-\d+\.json$/.test(repoRelativePath)
+    /^\.ops\/sync\/(?:UTV2|UNI|WORK)-\d+\.yml$/.test(repoRelativePath) ||
+    /^docs\/06_status\/lanes\/(?:UTV2|UNI|WORK)-\d+\.json$/.test(repoRelativePath) ||
+    // A new local work order is captured into the lane's hash-bound sync contract
+    // by lane-start. Admit only this work identity's markdown, never executable files.
+    (/^(?:UTV2|UNI|WORK)-\d+$/i.test(issueId ?? '') && repoRelativePath === `.ops/work/${issueId}.md`)
   );
 }
 
@@ -1741,7 +1664,7 @@ function compareVersions(left: string, right: string): number {
   return 0;
 }
 
-async function fetchLinearIssue(
+export async function fetchLinearIssue(
   issueId: string,
   token: string,
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,

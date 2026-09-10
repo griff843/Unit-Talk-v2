@@ -249,7 +249,7 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     const dryRun = bools.has('dry-run');
     const json = bools.has('json');
     const explain = bools.has('explain');
-    const noLinear = bools.has('no-linear');
+    const noLinear = !bools.has('sync-tracker') || bools.has('no-linear');
 
     if (!branch) {
       throw new Error('Missing required --branch');

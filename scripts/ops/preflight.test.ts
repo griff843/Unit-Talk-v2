@@ -14,6 +14,7 @@ import {
 } from './shared.js';
 import {
   branchContainsExactIssue,
+  isLaneRegistryPath,
   createToken,
   FULL_VERIFY_THROTTLE_DIR,
   FULL_VERIFY_THROTTLE_STALE_MS,
@@ -66,11 +67,15 @@ test('preflight supports a fail-closed T3 docs-only fast path', () => {
   assert.match(source, /PB2 skipped via T3 docs-only fast path/, 'docs-only fast path should skip preflight test baseline');
 });
 
-test('preflight treats lane registry dirt as control-plane safe', () => {
-  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
-  assert.match(source, /isLaneRegistryPath/, 'preflight should classify lane registry paths');
-  assert.match(source, /\.ops\\\/sync\\\/UTV2-\\d\+\\\.yml/, 'sync files should be allowed lane registry dirt');
-  assert.match(source, /docs\\\/06_status\\\/lanes\\\/UTV2-\\d\+\\\.json/, 'lane manifests should be allowed lane registry dirt');
+test('preflight admits only registry records and the current local work contract as preparation dirt', () => {
+  for (const id of ['WORK-123', 'UTV2-123', 'UNI-123']) {
+    assert.equal(isLaneRegistryPath(`.ops/sync/${id}.yml`), true);
+    assert.equal(isLaneRegistryPath(`docs/06_status/lanes/${id}.json`), true);
+    assert.equal(isLaneRegistryPath(`.ops/work/${id}.md`, id), true);
+  }
+  assert.equal(isLaneRegistryPath('.ops/work/WORK-123.md', 'WORK-123'), true);
+  assert.equal(isLaneRegistryPath('.ops/work/WORK-456.md', 'WORK-123'), false);
+  assert.equal(isLaneRegistryPath('scripts/ops/preflight.ts', 'WORK-123'), false);
 });
 
 test('preflight reads GitHub token from repo env files', () => {
@@ -376,7 +381,7 @@ test('UTV2-1837 AC1: with no tracker credential, PL1-PL5 skip instead of infra_e
     if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
   }
 
-  for (const id of ['PL1', 'PL2', 'PL3', 'PL4', 'PL5', 'PL6']) {
+  for (const id of ['PL1', 'PL2', 'PL3', 'PL4']) {
     assert.equal(sink.byId(id)?.status, 'skip', `${id} must skip without a tracker credential`);
   }
   assert.equal(sink.byId('PE2')?.status, 'skip');
@@ -443,26 +448,25 @@ test('UTV2-1837 AC5: a declared tier AT OR ABOVE the floor is accepted', async (
   assert.equal(resolveVerdict(sink.checks), 'PASS');
 });
 
-test('UTV2-1837 AC4 inversion: the skip is conditional on absence, never unconditional', async () => {
-  const sink = collectChecks();
-  // A present-but-invalid credential must NOT take the skip path. If it did,
-  // supplying a token would silently disable every tracker check -- the exact
-  // unconditional-skip failure mode acceptance criterion 4 exists to refuse.
-  await runLinearChecks(
-    'UTV2-1837',
-    'T2',
-    { LINEAR_API_TOKEN: 'lin_api_not_a_real_token' } as never,
-    ['README.md'],
-    false,
-    sink.addCheck,
-  );
-  assert.notEqual(
-    sink.byId('PL1')?.status,
-    'skip',
-    'PL1 must not skip when a credential IS present',
-  );
+test('ordinary admission ignores stale credentials for local and legacy identities without network', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; throw new Error('blocked network'); };
+  try {
+    for (const identity of ['WORK-999931', 'UTV2-999931', 'UNI-999931']) {
+      const sink = collectChecks();
+      await runLinearChecks(identity, 'T2', { LINEAR_API_TOKEN: 'invalid' } as never,
+        ['README.md'], false, sink.addCheck);
+      assert.equal(sink.byId('PL1')?.status, 'skip');
+      assert.equal(resolveVerdict(sink.checks), 'PASS');
+      const unsafe = collectChecks();
+      await runLinearChecks(identity, 'T3', { LINEAR_API_TOKEN: 'invalid' } as never,
+        ['packages/domain/src/scoring.ts'], false, unsafe.addCheck);
+      assert.equal(resolveVerdict(unsafe.checks), 'FAIL');
+    }
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = originalFetch; }
 });
-
 
 // UTV2-1845: PT1 pinged live Supabase and could only answer `pass` or `infra_error`. Under
 // containment the ping is *designed* to fail -- `local.env` declares itself a containment

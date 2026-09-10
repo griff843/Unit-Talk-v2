@@ -842,3 +842,11 @@ test('BMW-11: the merge wrapper allowlist admits no application or runtime path'
     }
   }
 });
+
+
+test('protected merge lookup resolves WORK identity and keeps boundaries', async () => {
+  const { issueIdFromHeadRef } = await import('./pre-merge-authorization.js');
+  assert.equal(issueIdFromHeadRef('codex/work-903-product'), 'WORK-903');
+  assert.equal(issueIdFromHeadRef('codex/work-903x'), null);
+  assert.equal(issueIdFromHeadRef('codex/../WORK-903'), null);
+});

@@ -8,7 +8,7 @@ If this file and a canonical doc disagree, **the canonical doc wins**. Update th
 
 ## Mission
 
-Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Claude Code is the execution orchestrator: work the Linear backlog, merge on green per tier policy, and keep execution truth mechanical rather than narrative.
+Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Claude Code is the execution orchestrator: work mission-relevant local contracts and existing PRs, merge on green per tier policy, and keep execution truth mechanical rather than narrative.
 
 ---
 
@@ -45,7 +45,7 @@ pnpm verify            # env:check + lint + type-check + build + test
 pnpm verify:parallel   # lint + type-check in parallel, then build + test (faster)
 pnpm verify:quick      # fast pre-flight: sync-check + env + lint + type-check only
 pnpm supabase:types    # regenerate database.types.ts after a migration
-pnpm ops:brief         # current system state: lanes, Linear queue, runtime status
+pnpm ops:brief         # current system state: lanes, local work, runtime status
 pnpm ops:digest        # daily dispatch digest — surfaces executable candidates
 pnpm ops:truth-check   # done-gate for a lane (pass UTV2-### as argument)
 pnpm ops:scope-suggest # auto-suggest file scope before ops:lane-start (pass --issue UTV2-###)
@@ -69,7 +69,7 @@ Never `sleep`-then-poll for CI/merge status — the harness blocks bare sleep ch
 | 1 | **GitHub `main`** | shipped code, merge SHAs, CI on merge |
 | 2 | **Proof bundle** (tied to merge SHA) | completion evidence |
 | 3 | **Lane manifest** (`docs/06_status/lanes/*.json`) | active lane state |
-| 4 | **Linear** | workflow intent, tier label, ownership |
+| 4 | **Mission and local work contract** | scope, acceptance criteria, ownership; admitted manifest records risk |
 | 5 | **Chat / memory / agent claims** | context only — never authoritative |
 
 Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH_MODEL.md`.
@@ -112,10 +112,10 @@ Before starting: preflight token valid, tier label set, file scope declared, no 
 3. Proof SHA binding automated — `post-merge-lane-close.yml` runs `ops:proof-generate --merge-sha` after merge; no manual append needed
 4. CI green on merge SHA (not just branch CI)
 5. For T1: `pnpm test:db` green + evidence bundle generated and validated
-6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
+6. Tier label auto-applied by `ops:lane-finalize`; verify the GitHub tier label agrees with authoritative repository risk
 7. `ops:truth-check` runs and exits 0
 
-`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and transitions the Linear issue to Done — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.
+`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and optionally mirrors completion to a configured tracker — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.
 
 Procedural details: `/lane-management` and `/verification` skills.
 Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
@@ -182,14 +182,14 @@ no work waits on one being written.
 
 | Skill | When to use |
 |---|---|
-| `/dispatch-board` | "clear the board" — routes entire Linear backlog, runs full loop autonomously |
+| `/dispatch-board` | "clear the board" — routes mission-relevant local work and active PRs, runs full loop autonomously |
 | `/loop-dispatch` | continuous dispatch loop — runs /dispatch-board repeatedly until board empty or all blocked |
 | `/dispatch` | execute a specific issue or pick top candidates (single dispatch cycle) |
 | `/three-brain` | executor routing decision for any issue (Claude / Codex CLI / Codex Cloud / Explore / QA / Griff) |
 | `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |
 | `/lane-management` | starting, progressing, blocking, closing any lane |
 | `/verification` | before any merge claim or `ops:truth-check` call |
-| `/lane-recovery` | a lane is stuck, a gate refuses, or manifest/Linear/GitHub disagree |
+| `/lane-recovery` | a lane is stuck, a gate refuses, or manifest/worktree/GitHub disagree |
 | `/pr-unblock` | a PR is red, BLOCKED, or stalled and the cause is not obvious |
 | `/proof-authoring` | writing or correcting a proof bundle so it is true and passes all three gates |
 | `/mutation-test` | proving a control, guard, or test actually fails on the condition it names |
@@ -234,3 +234,5 @@ This file is not the place for:
 - anti-drift prose lists → encoded as CI checks or skill red flags
 
 If you feel the urge to add procedural detail here, add it to a skill instead.
+
+Repository closeout records explicit completion intent with `ops:lane-close <ID> --complete-work` after merge/proof verification. Tracker transition is opt-in via `--sync-tracker`; default closeout performs no tracker request, including for legacy identities with configured credentials. Neither flag bypasses proof, required checks, or approval.

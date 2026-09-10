@@ -7,7 +7,7 @@
 > **Last updated:** 2026-04-11 under UTV2-524 — codified "isolated" definition, issue-reshaping rules, sensitive-path matrix, and alignment with `SPRINT_MODEL_v2.md` T1/T2/T3.
 >
 > **Cross-references (no duplication):**
-> - `docs/05_operations/AGENT_OPERATING_MODEL.md` — role boundaries, Linear-first reporting, anti-orchestration rules
+> - `docs/05_operations/AGENT_OPERATING_MODEL.md` — role boundaries, repository-first reporting, anti-orchestration rules
 > - `docs/05_operations/SPRINT_MODEL_v2.md` — T1/T2/T3 risk-tier sprint model (authoritative tier definitions)
 > - `CLAUDE.md` — execution model, classification rules, merge policy, stop conditions
 
@@ -27,7 +27,7 @@ The three authorization tiers in this policy map onto — but do not replace —
 | T2 (service wrappers, cross-package integration, bounded refactors) | **Tier B** by default | Merge authority per `merge-gate.yml`: orchestrator diff-review + `gh pr review --approve` (no PM_VERDICT or PM presence required) satisfies the gate — for any executor, not Codex-lane-only. A `pm-verdict/v1` APPROVED comment is the alternate path. |
 | T1 (migrations, routing, settlement, lifecycle, shared contracts) | **Tier C** always | Plan approval and merge approval required |
 
-Tier label overrides file-scope eligibility. A T1 Linear issue is Tier C even if it happens to touch only `scripts/**` — because T1 classification signals PM has flagged runtime risk.
+Tier label overrides file-scope eligibility. An admitted T1 work item is Tier C even if it happens to touch only `scripts/**` — because T1 classification signals PM has flagged runtime risk.
 
 ## Definition of "isolated"
 
@@ -45,11 +45,11 @@ If any of those seven conditions fails, the change is **not isolated** and must 
 
 ## Three authorization tiers
 
-All execution falls into one of three tiers. The tier is determined by the task's risk profile, not by its Linear tier label alone.
+All execution falls into one of three tiers. The tier is determined by the task's risk profile, not by an optional tracker label.
 
 ### Tier A — Autonomous
 
-The orchestrator may plan, dispatch, review, merge, and update Linear state without PM confirmation. PM is notified via the post-merge report but is not in the decision loop.
+The orchestrator may plan, dispatch, review, merge, and update repository lane state without PM confirmation. PM is notified via the post-merge report but is not in the decision loop.
 
 **Eligible work:**
 - Any PR that touches **only** files under:
@@ -59,10 +59,10 @@ The orchestrator may plan, dispatch, review, merge, and update Linear state with
   - `docs/06_status/**` (status docs, progress reports, evidence bundles — **after** PM has accepted the underlying work)
   - `docs/05_operations/**` (operational playbooks and policies — **not** the delegation policy itself; self-amendment requires PM)
   - `.ut-issues/**.yaml` (issue metadata)
-- Stale Linear reconciliation (moving issues marked Done in main to Done in Linear when commit history confirms the merge)
+- Optional tracker reconciliation when explicitly requested; tracker failures do not block repository work
 - Housekeeping cleanup of known-stale files (e.g. expired `.claude/codex-queue/*.md` for Done issues) when the cleanup touches only the stale files
 - Bash/SQL **read-only** verification queries against live DB to produce evidence (no mutations, no DDL)
-- Opening Linear issues to track newly-discovered debt, follow-ups, or corrective work
+- Recording authorized follow-up scope in local work contracts; do not migrate a backlog or create a new tracker
 - Dispatching Codex CLI lanes for work already classified as Tier A or Tier B by this policy
 - Running `pnpm type-check`, `pnpm test`, `pnpm test:db`, `pnpm lint`, `pnpm build` — any verification that does not mutate state
 
@@ -70,7 +70,7 @@ The orchestrator may plan, dispatch, review, merge, and update Linear state with
 
 **Required post-merge actions:**
 - Report merge SHA to PM in the next message
-- Update Linear state via the tooling (or rely on the `linear-auto-close.yml` workflow once the `LINEAR_API_TOKEN` secret is configured)
+- Complete repository closeout through the sanctioned tooling. Optional tracker integration remains separate and non-blocking.
 - Confirm scanner quiescence and any other standing invariants are still in place
 
 ### Tier B — Review-before-merge
@@ -165,7 +165,7 @@ A PR that violates any of the above is auto-Tier-C-block regardless of file coun
 
 ## Issue reshaping rules
 
-The orchestrator may reshape Linear issues to keep work executable, but only within bounded reshaping authority.
+The orchestrator may reshape local work contracts to keep work executable, but only within bounded reshaping authority.
 
 **Allowed without PM (reshaping does not require re-approval):**
 - Tightening acceptance criteria to make them more testable or more specific, without narrowing the intent
@@ -179,14 +179,14 @@ The orchestrator may reshape Linear issues to keep work executable, but only wit
 **Not allowed without PM (reshaping requires explicit approval):**
 - Widening scope of an existing issue, even by one additional file or one additional behavior
 - Changing the architectural intent (the "why") of an issue
-- Collapsing multiple Linear issues into a single execution unit
+- Collapsing multiple work items into a single execution unit
 - Skipping a contract that the issue explicitly references, even if the contract looks outdated
 - Re-tiering down (T1 → T2, T2 → T3) — risk reductions require PM acknowledgment
 - Converting a runtime-code issue into a docs-only issue, or vice versa
 - Removing acceptance criteria from an issue
 - Renaming or re-IDing an issue
 
-When in doubt, add a comment to the Linear issue describing the proposed reshape and wait for PM confirmation rather than reshaping silently.
+When in doubt, record a reviewable proposal in the local work/PR path describing the proposed reshape and wait for PM confirmation rather than reshaping silently.
 
 ## Self-amendment
 
@@ -198,7 +198,7 @@ The orchestrator must stop and report (not "fix while checking") when any of the
 
 From `CLAUDE.md` (verbatim intent):
 - issue scope is ambiguous
-- Linear state conflicts with repo truth
+- manifest, lease, worktree or PR state conflicts with repo truth
 - task requires a missing contract
 - task overlaps another active lane
 - baseline on main is failing

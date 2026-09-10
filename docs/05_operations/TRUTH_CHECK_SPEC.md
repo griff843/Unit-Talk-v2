@@ -14,7 +14,7 @@ Implementation must not deviate from this spec without an update to this documen
 
 ## 1. Purpose
 
-Deterministically answer one question: **"Is this Linear issue actually Done, per repo and artifact truth, right now?"**
+Deterministically answer one question: **"Is this repository work item actually Done, per repo and artifact truth, right now?"**
 
 Truth-check never infers. It mechanically checks conditions against rank-1 and rank-2 sources (GitHub main, proof bundle) and rank-3 (lane manifest). It does not read chat, memory, or agent claims.
 
@@ -23,17 +23,17 @@ Truth-check never infers. It mechanically checks conditions against rank-1 and r
 ## 2. Inputs
 
 ### Required
-- `issue_id` (string, format `UTV2-\d+`) — the Linear issue under test.
+- `issue_id` (string, format `(UTV2|UNI|WORK)-\d+`) — repository work identity under test.
 
-### Derived (from repo + manifest + Linear)
+### Derived (from repository + manifest + GitHub)
 - **Lane manifest** at `docs/06_status/lanes/<issue_id>.json` — must exist.
-- **Linear issue record** — fetched via Linear API.
+- **Local work contract** — persisted repository scope; optional tracker data is diagnostic only.
 - **GitHub merge commit** — derived from `manifest.pr_url` → merge SHA.
 - **Proof artifact paths** — from `manifest.expected_proof_paths`.
-- **Tier label** — from Linear issue labels.
+- **Tier** — authoritative admitted manifest risk, checked against mechanical floors.
 
 ### Environment
-- `LINEAR_API_KEY` — **optional** since the tracker-independence ratification; see §4.3.1
+- `LINEAR_API_KEY` — **optional** since the tracker-independence ratification; see §4.3
 - `GITHUB_TOKEN`
 - `SUPABASE_SERVICE_ROLE_KEY` (only if tier requires runtime proof)
 
@@ -128,55 +128,15 @@ loosening the `needs:` relationship must not silently satisfy this gate.
 Every uncertain input is a refusal. An unreadable check list is `fail`, not `skip`: unverifiable
 evidence is not absent evidence.
 
-### 4.3 Linear Checks (always)
+### 4.3 Repository authority and optional tracker diagnostics
 
-| ID | Check | Fail Exit |
-|---|---|---|
-| `L1` | Linear issue exists | `3` |
-| `L2` | Linear issue has exactly one tier label (`t1`, `t2`, or `t3`) | `1` |
-| `L3` | Linear issue `state` ∈ permitted states for lane phase (In Review or Done) | `1` |
-| `L4` | Linear issue PR attachment matches `manifest.pr_url` | `1` |
-| `L5` | If tier == T1, Linear PR carries label `t1-approved` | `1` |
+Ordinary truth-check uses the admitted manifest, local work contract, GitHub merge/check state and exact-SHA proof. L1–L4 are optional tracker diagnostics and skip in the default path even when credentials exist. A timeout, rejected token, deleted issue or tracker cap must not change a repository pass into a failure. L5 remains the applicable GitHub approval check; tracker optionality does not waive approvals.
 
-#### 4.3.1 Tracker independence — L1–L4, C1 and C7 with no tracker
+`tracker_ref` retains compatibility: an explicit legacy UTV2/UNI key names an optional mirror, null declares no mirror, and an absent field may resolve the legacy `issue_id`. WORK identity is not a tracker key. Resolution never itself authorizes a network request or supplies risk authority.
 
-Ratified 2026-09-05 (`docs/mission/intent.md` § "Execution must not depend on the
-tracker"). A lane must be closeable without tracker access.
+The admitted manifest tier is checked against repository scope/risk floors; no tracker result overwrites it. Tracker-dependent C1 and C7 transitions skip by default. Repository consistency checks continue unconditionally, including finding a manifest incorrectly closed without its required merge/proof.
 
-A lane's tracker reference is resolved by `resolveTrackerRef(manifest)`
-(`scripts/ops/shared.ts`), which is three-valued and deliberately so:
-
-| `manifest.tracker_ref` | Meaning |
-|---|---|
-| a `UTV2-###` / `UNI-###` string | that tracker issue is this lane's tracker key |
-| `null` (explicit) | this lane declares it has **no** tracker issue |
-| absent (`undefined`) | unstated — fall back to `issue_id` when that is itself a tracker key |
-
-Absent must never be read as `null`: an older manifest predating the field says nothing
-about its tracker, and reading silence as a declaration would silently skip a check the
-lane never opted out of.
-
-The tracker is **available** when a tracker ref resolves *and* a credential is present.
-When it is not available:
-
-| ID | Status | Why |
-|---|---|---|
-| `L1` | `skip` | issue existence is unverifiable without the tracker |
-| `L2` | `skip` | **the manifest tier stands.** L2 previously *overwrote* `manifest.tier` from the tracker label; with no tracker there is nothing to overwrite it with, and the manifest tier is the authority. |
-| `L3` | `skip` | workflow state is unverifiable |
-| `L4` | `skip` | the PR attachment is created by the tracker's own GitHub integration, which this repository never calls |
-| `C1` | `skip` | the tracker-Done merge-SHA requirement was never evaluated |
-| `C7` | partial — see below | |
-
-Every one of these is `skip` and never `pass`. A `pass` would assert a requirement was
-satisfied that was never evaluated, which is the aggregate-conflation failure class this
-repository keeps re-encountering.
-
-**C7 does not skip wholesale.** Its three failure modes split by what they actually
-depend on. The mode `manifest.status == done` while the PR is **not** merged is a
-repository-and-GitHub fact, needs no tracker, and **continues to fire unconditionally**.
-Only the two tracker-transition modes skip. A control that fires on everything conveys no
-information; a control that skips more than it must conveys less than it should.
+P0 classification is shared with CI and `ops:p0-detect` through `scripts/ops/tracker-independence/p0-classifier.cjs` and the reviewed registry `docs/governance/tracker-independence/p0-classifications.json`. Positive history and trusted-base positive declarations cannot be cleared by candidate changes. Unknown classification fails H1. An unmerged negative declaration requires the existing authorized, exact-head `pm-verdict/v1` approval; it is not inferred from a missing field or tracker outage.
 
 ### 4.4 Proof Checks (tier-gated)
 
@@ -260,11 +220,11 @@ Output must be written to stdout. Logs and explanations go to stderr. No other s
 
 ## 6. Pass/Fail Behavior
 
-- **Pass (`0`):** Write pass record into manifest `truth_check_history[]` with `checked_at` and merge SHA. `ops:lane-close` proceeds. Linear transitioned to Done. Manifest `status` → `done`, `closed_at` set.
+- **Pass (`0`):** Write pass record into manifest `truth_check_history[]` with `checked_at` and merge SHA. `ops:lane-close` proceeds. Optional tracker mirroring is best-effort. Manifest `status` → `done`, `closed_at` set.
 - **Fail (`1`):** Write fail record into manifest. Lane stays in `merged` or previous state. Do not transition Linear. Emit failures to stderr for agent visibility.
 - **Ineligible (`2`):** No state mutation. Caller should retry later.
 - **Infra error (`3`):** No state mutation. Alert PM via daily digest if persistent.
-- **Reopen (`4`):** Manifest `status` → `reopened`, `reopen_history[]` appended with reasons, Linear transitioned back to In Progress, PM notified via digest. This is the only automated Linear transition out of Done.
+- **Reopen (`4`):** Manifest `status` → `reopened`, `reopen_history[]` appended with reasons, optional tracker mirror requested best-effort, PM notified through repository review. Tracker state is not the reopen authority.
 
 Truth-check is idempotent for `0` and `2`. For `1` and `4`, each run appends to history.
 
@@ -276,7 +236,8 @@ Truth-check is idempotent for `0` and `2`. For `1` and `4`, each run appends to 
 |---|:-:|:-:|:-:|
 | Manifest (M1–M7) | required | required | required |
 | GitHub (G1–G5) | required | required | required |
-| Linear (L1–L5) | required | required | L5 skipped |
+| Optional tracker diagnostics (L1–L4) | non-blocking | non-blocking | non-blocking |
+| GitHub approval (L5) | required by tier | required by tier | skipped |
 | Proof base (P1–P4) | required | required | required |
 | Proof T1 (P5–P10) | required | — | — |
 | Proof T2 (P11–P12) | — | required | — |
@@ -308,7 +269,7 @@ A previously-Done issue is re-checked on:
 If re-check returns exit `4`:
 1. Manifest `status` → `reopened`.
 2. `reopen_history[]` gets `{timestamp, reasons[], detected_by}`.
-3. Linear issue transitioned to In Progress.
+3. Repository reopen is recorded; any optional tracker mirror is non-blocking.
 4. PM notified via daily digest.
 5. A new lane **may not** be started on the same issue until the reopen reason is acknowledged by `ops:lane:resume <issue_id> --ack <reason_id>`.
 
@@ -340,4 +301,6 @@ If re-check returns exit `4`:
 - All external calls must have a 10s timeout and 1 retry; timeouts → exit `3`.
 - Unit tests must cover each check ID with a pass and a fail fixture.
 - Integration test: run `ops:truth-check` against a real merged T3 issue and assert `verdict: pass`.
-- The script must be idempotent, side-effect-free **except** for writing to the manifest's `truth_check_history[]` and, on pass/reopen, transitioning Linear.
+- The script must be idempotent, side-effect-free **except** for writing to the manifest's `truth_check_history[]` and explicit best-effort tracker mirroring on pass/reopen.
+
+Repository closeout records explicit completion intent with `ops:lane-close <ID> --complete-work` after merge/proof verification. Tracker transition is opt-in via `--sync-tracker`; default closeout performs no tracker request, including for legacy identities with configured credentials. Neither flag bypasses proof, required checks, or approval.

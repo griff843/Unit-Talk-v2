@@ -128,7 +128,8 @@ try {
   const configPath = '$ROOT/docs/governance/CONCURRENCY_CONFIG.json';
   const config = fs.existsSync(configPath)
     ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
-    : { executors: { claude: 2, codex: 4 } };
+    : null;
+  if (!config) { process.stdout.write('slots:unknown-config'); process.exit(0); }
   if (!fs.existsSync(dir)) { process.stdout.write('slots:unknown'); process.exit(0); }
   const active = fs.readdirSync(dir)
     .filter(f => f.endsWith('.json') && f !== 'README.md')
@@ -161,19 +162,13 @@ try {
 } catch(e) { process.stdout.write(''); }
 " 2>/dev/null || echo "")
 
-# Dispatch candidates — read from today's cached digest if available (no network)
+# Local work discovery only; cached tracker digests are not execution authority.
 DISPATCH_SUMMARY=$(node -e "
-try {
-  const fs = require('fs');
-  const path = require('path');
-  const today = new Date().toISOString().slice(0,10);
-  const digestPath = path.join('$ROOT', '.out', 'ops', 'digest', today + '.json');
-  if (!fs.existsSync(digestPath)) { process.stdout.write('dispatch:no-digest'); process.exit(0); }
-  const d = JSON.parse(fs.readFileSync(digestPath, 'utf8'));
-  const candidates = (d.dispatch_candidates || []).length;
-  process.stdout.write('dispatch:' + candidates + '-ready');
-} catch(e) { process.stdout.write('dispatch:error'); }
-" 2>/dev/null || echo "dispatch:unavailable")
+const fs = require('fs'), path = require('path');
+const dir = path.join('$ROOT', '.ops', 'work');
+const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter(n => n.endsWith('.md')) : [];
+process.stdout.write('local-work:' + names.join(','));
+" 2>/dev/null || echo "local-work:unavailable")
 
 # Codex health check (fast — 5s timeout)
 CODEX_STATUS=$(node -e "
@@ -191,7 +186,10 @@ cat > "$STATE_FILE" << STATE
 ## Branch
 $BRANCH
 
-## Active Milestone
+## Mission authority
+Read docs/mission/intent.md, spec.md and plan.md.
+
+## Active Milestone (cached view)
 $MILESTONE
 
 ## Active Lanes
@@ -226,7 +224,7 @@ GHOST_PART=""
 [ -n "$GHOST_WARNING" ] && GHOST_PART=" | $GHOST_WARNING"
 GUARDRAIL_PART=""
 [ -n "$GUARDRAILS_OUT" ] && GUARDRAIL_PART=" | guardrails: $(printf '%s' "$GUARDRAILS_OUT" | tr '\n' ';' | head -c 300)"
-MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE$GUARDRAIL_PART | Full state: .out/ops/session-state/SYSTEM_STATE.md"
+MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE$GUARDRAIL_PART | Recover mission intent/spec/plan, .ops/work/<ID>.md, current PRs and runtime evidence; no Linear required. | Full state: .out/ops/session-state/SYSTEM_STATE.md"
 
 # ── Output systemMessage JSON ─────────────────────────────────────────────────
 python3 -c "

@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { ROOT } from './shared.js';
 import {
   buildOrchestrationReconcilerReport,
   classifyLinearLookupError,
@@ -1144,4 +1146,48 @@ test('an active manifest at the open PR head satisfies ORCH-LINEAR-ACTIVE-RECORD
     now: NOW,
   });
   assert.equal(check(terminalHead.checks, 'ORCH-LINEAR-ACTIVE-RECORD').verdict, 'fail');
+});
+
+
+test('WORK recovery selects no tracker queries even with optional reference and unrelated legacy lanes', async () => {
+  const { selectTrackerIssueIds } = await import('./orchestration-reconciler.js');
+  const work = lane({ issue_id: 'WORK-903', branch: 'codex/work-903-product', tracker_ref: 'UTV2-1837' });
+  assert.deepEqual(selectTrackerIssueIds(['WORK-903', 'UTV2-1059'], [work], [], 'WORK-903'), []);
+  assert.deepEqual(selectTrackerIssueIds(['WORK-903', 'UTV2-1059'], [work], []), ['UTV2-1059']);
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [], manifests: [work], leases: [], branches: [], now: NOW,
+    pullRequests: [{ number: 903, branch: work.branch, state: 'open',
+      url: 'https://github.com/griff843/Unit-Talk-v2/pull/903', checks: [] }],
+    issueId: 'WORK-903', mode: 'current',
+  });
+  const binding = report.checks.find((check) => check.id === 'ORCH-OPEN-PR-MANIFEST-URL');
+  assert.ok(binding, 'WORK PR consistency must remain visible');
+  assert.equal(binding.verdict, 'fail', 'missing manifest PR binding still fails');
+});
+
+
+test('current reconciliation CLI never reads the tracker for legacy work with invalid credentials', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tracker-free-reconcile-'));
+  try {
+    const bin = path.join(root, 'bin');
+    fs.mkdirSync(bin);
+    fs.mkdirSync(path.join(root, 'docs/06_status/lanes'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.ops/leases'), { recursive: true });
+    assert.equal(spawnSync('git', ['init', '-q', '-b', 'main', root]).status, 0);
+    fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\nprintf "[]"\n', { mode: 0o755 });
+
+    const marker = path.join(root, 'network-call');
+    const preload = path.join(root, 'block-network.cjs');
+    fs.writeFileSync(preload, `const fs = require('node:fs'); globalThis.fetch = async () => { fs.writeFileSync(${JSON.stringify(marker)}, 'unexpected fetch'); throw new Error('network blocked'); };`);
+    const result = spawnSync(process.execPath, [
+      '--require', preload, '--import', path.join(ROOT, 'node_modules/tsx/dist/loader.mjs'),
+      path.join(ROOT, 'scripts/ops/orchestration-reconciler.ts'), '--issue', 'UTV2-999930', '--json',
+    ], { cwd: root, encoding: 'utf8', timeout: 30000,
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+        LINEAR_API_TOKEN: 'invalid-stored-token', LINEAR_API_KEY: 'invalid-key' } });
+    assert.equal(fs.existsSync(marker), false, result.stderr);
+    assert.equal(result.status, 0, result.stderr + result.stdout);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.buckets.infra_errors.length, 0);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

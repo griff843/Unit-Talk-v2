@@ -6,13 +6,13 @@ Load current system state before acting. Run at session start and after `/clear`
 
 ## Steps
 
-1. **Run ops:brief** — get lane health, Linear queue, runtime status:
+1. **Run ops:brief** — get lane health, local work, runtime status:
    ```bash
    pnpm ops:brief
    ```
    If active Codex lanes exist: `pnpm codex:status`
 
-2. **Read Linear queue** — via `pnpm linear:work` or Linear MCP. Note Ready, In Progress, In Review issues.
+2. **Read mission and local scope** — `docs/mission/{intent,spec,plan}.md`, `.ops/work/<ID>.md`, current PRs, active manifests, leases and worktrees. No Linear access is required, including with a configured token.
 
 3. **Reconcile** — for each In Progress/In Review issue:
    - PR merged → mark Done
@@ -33,4 +33,4 @@ Load current system state before acting. Run at session start and after `/clear`
 
 **Proceed** when milestone is clear, executable issues exist, no stale conflicts.
 
-**Stop** when Linear conflicts with repo truth, milestone is unclear, baseline is red, or a T1 issue has no contract.
+**Stop** when manifest, worktree or PR state conflicts with repo truth, milestone is unclear, baseline is red, or a T1 issue has no contract.

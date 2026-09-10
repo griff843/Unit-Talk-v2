@@ -4303,6 +4303,7 @@ test('UTV2-1837: a tracker write failure is recorded as tracker_sync skipped, no
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-skip-'));
   try {
     const completion = await closeWithTracker(repoRoot, {
+      syncTracker: true,
       transitionLinear: async () => {
         throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY is required to close the Linear issue');
       },
@@ -4323,6 +4324,7 @@ test('UTV2-1837 AC4 inversion: a working tracker still transitions and reports s
   try {
     let called = 0;
     const completion = await closeWithTracker(repoRoot, {
+      syncTracker: true,
       transitionLinear: async () => {
         called += 1;
       },
@@ -4383,3 +4385,21 @@ test('close_refused_on_main_checkout carries actionable remediation', () => {
   assert.match(remediation, /DIRECT_MAIN_BYPASS_POLICY\.md/);
   assert.match(remediation, /\.out\/worktrees\//);
 });
+
+for (const failure of ['invalid token', 'API timeout', 'issue deleted', 'issue cap reached']) {
+  test(`default legacy closeout does not contact optional tracker: ${failure}`, async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tracker-free-close-'));
+    try {
+      let calls = 0;
+      const completion = await closeWithTracker(repoRoot, {
+        transitionLinear: async () => { calls += 1; throw new Error(failure); },
+      });
+      assert.equal(calls, 0);
+      assert.equal(completion.manifest.status, 'done');
+      assert.equal(completion.tracker_sync, 'skipped');
+      assert.deepEqual(completion.warnings, []);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+}

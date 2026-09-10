@@ -2,7 +2,7 @@
 
 **Linear:** UTV2-948
 **Status:** Ratified 2026-05-12
-**Supersedes:** Tier-based auto-merge for any PR whose Linear issue is in the Runtime Hardening P0 project.
+**Supersedes:** Tier-based auto-merge for any repository work classified P0.
 
 This document is the canonical mechanical enforcement spec for the P0 merge protocol. Memory entries describe intent; this file describes how the gate is enforced.
 
@@ -10,11 +10,13 @@ This document is the canonical mechanical enforcement spec for the P0 merge prot
 
 ## 1. What is "P0"
 
-A Linear issue is "P0" if and only if its `project.id` equals **`46229dc4-c7c1-4ccb-af0d-dedaf8147a97`** (project name: *Runtime Hardening P0 - Runtime Trustworthiness*).
+Repository classification is authoritative. `scripts/ops/tracker-independence/p0-classifier.cjs` is shared by CI, `ops:p0-detect` and truth-check. Its reviewed registry is `docs/governance/tracker-independence/p0-classifications.json` (`schema_version: 1`, classifications with `issue_id`, `required` and `evidence`). Legacy UTV2/UNI and new WORK identities use the same rules.
 
-Issues UTV2-914 through UTV2-923 are the initial P0 batch; UTV2-948 (this spec) is also P0. Future issues added to that project automatically inherit the protocol.
+Classification is `p0`, `non_p0` or `unknown`; `is_p0` is respectively true, false or null. Historical positives include UTV2-914 through UTV2-923, UTV2-948, UTV2-949 and UTV2-953. The initial batch is not an exhaustive negative classification of every other item. Trusted-base positive evidence or a candidate positive declaration requires the protocol; a candidate cannot clear that classification by deleting or editing a field or registry entry.
 
-P0 detection is performed by `pnpm ops:p0-detect <UTV2-###>` (single source of truth used by CI, truth-check, and the dispatch-board skill).
+A negative declaration on an unmerged candidate requires an authorized exact-head `PM_VERDICT` with schema `pm-verdict/v1`, matching work ID, PR and Head SHA, validated through the existing merge-gate verdict validator. Trusted-base negative evidence remains usable after merge. Missing or unknown classification is a blocking condition, never an implicit non-P0 result. Tracker credentials, project reads and outages do not influence classification.
+
+Run `pnpm ops:p0-detect <WORK-ID>` before merge; existing UTV2/UNI identifiers remain compatible.
 
 ## 2. The five required steps
 
@@ -78,7 +80,7 @@ Branch protection requires four checks. The fourth is added by UTV2-948:
 3. `Merge Gate`
 4. **`P0 Protocol`** (new — added by UTV2-948)
 
-The `P0 Protocol` check auto-passes for non-P0 PRs (skip path), so adding it as required does not affect non-P0 work.
+The `P0 Protocol` check skips protocol artifacts only for authoritatively classified non-P0 PRs, so adding it as required does not affect non-P0 work.
 
 ### Apply / inspect via GitHub CLI
 
@@ -101,13 +103,13 @@ gh api -X PUT repos/griff843/Unit-Talk-v2/branches/main/protection/required_stat
 
 | Check | What it verifies |
 |---|---|
-| **H1** | P0 detection is consistent between Linear (`issue.project.id`) and manifest (`p0_protocol.required`). |
+| **H1** | Shared repository classification is known and consistent with the required protocol; preserved positives cannot be cleared by the candidate. |
 | **H2** | `claude_critique` artifact recorded, non-empty, references the merge SHA. |
 | **H3** | `runtime_verification` artifact recorded, has `result: pass`, no FAIL/SKIP items, manifest `result === 'pass'`. |
 | **H4** | PR has `PM_VERDICT: APPROVED` comment from a CODEOWNERS member. |
 | **H5** | `merge_type === 'manual'` (never `auto`). |
 
-Non-P0 lanes skip all H-checks. P0 lanes fail truth-check on any H violation.
+Authoritatively classified non-P0 lanes skip protocol artifact checks; unknown classification fails H1. P0 lanes fail truth-check on any H violation.
 
 ## 7. Orchestrator behavior
 
@@ -146,3 +148,7 @@ After the P0 batch (UTV2-914 through UTV2-923) closes:
 - If all ten lanes shipped under this protocol without a regression, the protocol becomes the default for P1.
 - If any guardrail was skipped and produced a defect, tighten before any P1 work begins.
 - If the protocol blocked a legitimate merge for an artifact-formatting reason rather than a real risk, refine the artifact schema before broadening.
+
+## Tracker cutover bootstrap boundary
+
+The new workflow checks out its evaluator from the trusted protected base, never candidate implementation. If that base does not yet contain the evaluator, the check must refuse with a governed bootstrap review requirement. This specification describes the intended cutover behavior; it is not evidence that bootstrap, independent exact-head review, protected integration or tracker-free closeout has occurred. Prepare the existing required approval/bootstrap artifact before requesting the reserved action; do not direct-push main, fabricate checks or execute candidate code as merge authority.
