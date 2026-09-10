@@ -1,6 +1,6 @@
 # Diff summary — UTV2-1815
 
-MERGE_SHA: pending merge
+MERGE_SHA: ec9952c28bb32b172bcc2c9b7c7c9242729a9fec
 
 Anchor: `7b9dcde2a19c23345a1a334590d07fb15be27d7a`
 

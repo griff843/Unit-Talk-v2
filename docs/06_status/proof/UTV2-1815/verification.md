@@ -1,6 +1,6 @@
 # PROOF: UTV2-1815
 
-MERGE_SHA: pending merge
+MERGE_SHA: ec9952c28bb32b172bcc2c9b7c7c9242729a9fec
 
 Lane: claude / `claude/utv2-1815-null-stake-computation-truth`
 Tier: T1 (modeling lane — settlement, grading and attribution computation)
@@ -403,7 +403,7 @@ No unpark.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: ec9952c28bb32b172bcc2c9b7c7c9242729a9fec
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1479
 Approved PR head: pending merge
 Execution SHA: fb5962bc37bf554fc6d8deaafee0e6ad9ca00860

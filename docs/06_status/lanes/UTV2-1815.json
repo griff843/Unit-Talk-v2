@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1815-null-stake-computation-truth",
   "branch": "claude/utv2-1815-null-stake-computation-truth",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "ec9952c28bb32b172bcc2c9b7c7c9242729a9fec",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1479",
   "files_changed": [],
   "file_scope_lock": [
@@ -26,14 +26,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1815/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-01T22:30:39.135Z",
-  "heartbeat_at": "2026-09-05T13:03:49.230Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-10T23:50:10.309Z",
+  "closed_at": "2026-09-10T23:50:10.309Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1815-null-stake-computation-truth.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-10T23:50:07.682Z",
+      "verdict": "pass",
+      "merge_sha": "ec9952c28bb32b172bcc2c9b7c7c9242729a9fec",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
