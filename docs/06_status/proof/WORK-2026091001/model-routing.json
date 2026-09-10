@@ -1,0 +1,28 @@
+{
+  "issue_id": "WORK-2026091001",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "codex_cli_version": null,
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "generated_at": "2026-09-10T13:08:55.631Z",
+  "execution_source": "codex-desktop-subagent",
+  "agent_task": "/root/revision_checks",
+  "scope": [
+    "scripts/ops/tracker-independence/p0-classifier.test.cjs",
+    "docs/05_operations/P0_PROTOCOL_SPEC.md",
+    "docs/05_operations/TRUTH_CHECK_SPEC.md"
+  ],
+  "provenance_note": "Observed assigned subagent gpt-5.6-sol/high completed these bounded revision edits and checks. This is not a claim of codex CLI execution or routing provenance for every prior lane action.",
+  "checks": [
+    "P0 classifier 13/13 passed",
+    "Merge Gate verdict 23/23 passed",
+    "scoped eslint passed",
+    "scoped diff check passed"
+  ]
+}

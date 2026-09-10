@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026091001",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "2a24a307e6ff000faf5e234a4aec7cb28c0241de",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "partial",
+    "local_verification": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "tests_reported": 6323,
+      "passed": 6323,
+      "failed": 0,
+      "skipped": 0,
+      "result": "local static/build/test stages passed; writable DB stage refused containment URL",
+      "limitation": "Not a full verify pass. Smart Form browser E2E was not requested by its environment flag. Final-head CI staging verification required.",
+      "log_sha256": "90f53e55a640494513d96a2834632c35c58764b49bc78bb6d41830eb42eb3626"
+    },
+    "independent_review": {
+      "source_sha": "2a24a307e6ff000faf5e234a4aec7cb28c0241de",
+      "targeted_tests": 528,
+      "passed": 528,
+      "failed": 0,
+      "disposition": "No additional blocking code defect found in reviewed paths; not merge approval"
+    },
+    "r_level": {
+      "verdict": "PASS",
+      "matched_rules": [],
+      "changed_files": 79
+    },
+    "prior_head_ci": {
+      "source_sha": "cf702af5a1f2ffaa2f7f6ba857d212968a48c194",
+      "verify": "success",
+      "staging_db": "success",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34477871838",
+      "applies_to_current_source": false
+    }
+  }
+}
