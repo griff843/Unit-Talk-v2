@@ -8,15 +8,15 @@
   "branch": "claude/utv2-1881-staging-proof-concurrency",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1559",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-10T18:08:51.081Z",
-  "heartbeat_at": "2026-09-10T18:08:51.081Z",
+  "heartbeat_at": "2026-09-10T18:19:15.334Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1881-staging-proof-concurrency.json",
