@@ -1,0 +1,165 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1881
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1881
+  objective: "Staging DB proof cannot run concurrently: the UTV2-1842
+    fallback-event-gate test's leak assertion is global while its own cleanup is
+    run-scoped"
+  acceptance_criteria:
+    - |-
+      `apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts` fails the **required** `verify` check whenever two runs touch the staging database at the same time. Three lanes have now paid for it ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), [griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed)), and every pending resync will hit it again.
+
+      ## The defect, in one `after` hook
+
+      The hook contradicts itself six lines apart.
+
+      The DELETE is deliberately **run-scoped**, and its comment says so in as many words (`:163-165`):
+
+      > Deleted by external_id, which is this run's own namespace (`utv2-1842-<RUN_ID>-<label>`), so a concurrent run's arming rows and every pre-existing row are untouched.
+
+      The leak assertion immediately after is **global** (`:185-188`):
+
+      ```
+      'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+      ```
+
+      So run A deletes only its own rows — correctly — and then asserts that *nobody's* rows exist. Any concurrent run B that is still holding its arming rows fails run A, and run A fails run B. Both `verify` checks go red for a reason neither diff caused.
+
+      ## Why "one PR at a time" is not a workaround
+
+      A merge to `main` fires its own `ci.yml`, which runs the same staging job. Serialising PR CI cannot prevent the collision, because the collision's second participant is the post-merge run of the PR that just landed. This is exactly how [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed) hit it.
+
+      ## The repair
+
+      `RUN_ID` (`randomUUID().slice(0, 8)`, `:136`) is **already** in the row's `event_name` at creation (`:224`, `UTV2-1842 unrelated event ${RUN_ID} ${label}`). The assertion simply does not use it:
+
+      ```diff
+      -    'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+      +    `events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20${RUN_ID}%20*`,
+      ```
+
+      This makes the assertion exactly as run-scoped as the DELETE already is. It requires no new tagging, and it weakens nothing: the hook still proves this run restored every global precondition it personally mutated, which is the property the comment at `:182-184` claims. What it stops doing is holding this run responsible for another run's in-flight state.
+
+      The comment at `:182-184` is updated in the same change, because it currently says "this file's own name prefix" while the code matches the whole file's prefix across all runs — the wording is what made the global match look intentional.
+
+      ## Filing basis
+
+      Ratified threshold in `docs/mission/intent.md` § "Governance and tooling debt policy": affects at least two real lanes (three: [griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), [griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed)) and blocks a required check on concurrent runs. Searched for a canonical owner first; [UTV2-1827](https://linear.app/unit-talk-v2/issue/UTV2-1827/governed-staging-proof-runner-execute-allowlisted-lane-scripts-under) (governed staging proof runner) is adjacent but is about executing allowlisted lane scripts, not this assertion's scoping. No existing owner, so this is the canonical issue for the class.
+
+      Tier: mechanical floor classifies `apps/api/src/t1-proof-*.test.ts` as **T3** (`classifyMechanicalMinimum` returns T3, no matches).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      `apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts` fails the **required** `verify` check whenever two runs touch the staging database at the same time. Three lanes have now paid for it ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), [griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed)), and every pending resync will hit it again.
+    - >-
+      The defect, in one `after` hook
+
+      The hook contradicts itself six lines apart.
+
+
+      The DELETE is deliberately **run-scoped**, and its comment says so in as
+      many words (`:163-165`):
+
+
+      > Deleted by external_id, which is this run's own namespace
+      (`utv2-1842-<RUN_ID>-<label>`), so a concurrent run's arming rows and
+      every pre-existing row are untouched.
+
+
+      The leak assertion immediately after is **global** (`:185-188`):
+
+
+      ```
+
+      'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+
+      ```
+
+
+      So run A deletes only its own rows — correctly — and then asserts that
+      *nobody's* rows exist. Any concurrent run B that is still holding its
+      arming rows fails run A, and run A fails run B. Both `verify` checks go
+      red for a reason neither diff caused.
+    - |-
+      Why "one PR at a time" is not a workaround
+      A merge to `main` fires its own `ci.yml`, which runs the same staging job. Serialising PR CI cannot prevent the collision, because the collision's second participant is the post-merge run of the PR that just landed. This is exactly how [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed) hit it.
+    - |-
+      The repair
+      `RUN_ID` (`randomUUID().slice(0, 8)`, `:136`) is **already** in the row's `event_name` at creation (`:224`, `UTV2-1842 unrelated event ${RUN_ID} ${label}`). The assertion simply does not use it:
+
+      ```diff
+      -    'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+      +    `events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20${RUN_ID}%20*`,
+      ```
+
+      This makes the assertion exactly as run-scoped as the DELETE already is. It requires no new tagging, and it weakens nothing: the hook still proves this run restored every global precondition it personally mutated, which is the property the comment at `:182-184` claims. What it stops doing is holding this run responsible for another run's in-flight state.
+
+      The comment at `:182-184` is updated in the same change, because it currently says "this file's own name prefix" while the code matches the whole file's prefix across all runs — the wording is what made the global match look intentional.
+    - |-
+      Filing basis
+      Ratified threshold in `docs/mission/intent.md` § "Governance and tooling debt policy": affects at least two real lanes (three: [griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), [griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed)) and blocks a required check on concurrent runs. Searched for a canonical owner first; [UTV2-1827](https://linear.app/unit-talk-v2/issue/UTV2-1827/governed-staging-proof-runner-execute-allowlisted-lane-scripts-under) (governed staging proof runner) is adjacent but is about executing allowlisted lane scripts, not this assertion's scoping. No existing owner, so this is the canonical issue for the class.
+
+      Tier: mechanical floor classifies `apps/api/src/t1-proof-*.test.ts` as **T3** (`classifyMechanicalMinimum` returns T3, no matches).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1881/staging-db-proof-cannot-run-concurrently-the-utv2-1842-fallback-event
+    title: "Staging DB proof cannot run concurrently: the UTV2-1842
+      fallback-event-gate test's leak assertion is global while its own cleanup
+      is run-scoped"
+    description: |-
+      `apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts` fails the **required** `verify` check whenever two runs touch the staging database at the same time. Three lanes have now paid for it ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), [griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed)), and every pending resync will hit it again.
+
+      ## The defect, in one `after` hook
+
+      The hook contradicts itself six lines apart.
+
+      The DELETE is deliberately **run-scoped**, and its comment says so in as many words (`:163-165`):
+
+      > Deleted by external_id, which is this run's own namespace (`utv2-1842-<RUN_ID>-<label>`), so a concurrent run's arming rows and every pre-existing row are untouched.
+
+      The leak assertion immediately after is **global** (`:185-188`):
+
+      ```
+      'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+      ```
+
+      So run A deletes only its own rows — correctly — and then asserts that *nobody's* rows exist. Any concurrent run B that is still holding its arming rows fails run A, and run A fails run B. Both `verify` checks go red for a reason neither diff caused.
+
+      ## Why "one PR at a time" is not a workaround
+
+      A merge to `main` fires its own `ci.yml`, which runs the same staging job. Serialising PR CI cannot prevent the collision, because the collision's second participant is the post-merge run of the PR that just landed. This is exactly how [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed) hit it.
+
+      ## The repair
+
+      `RUN_ID` (`randomUUID().slice(0, 8)`, `:136`) is **already** in the row's `event_name` at creation (`:224`, `UTV2-1842 unrelated event ${RUN_ID} ${label}`). The assertion simply does not use it:
+
+      ```diff
+      -    'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+      +    `events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20${RUN_ID}%20*`,
+      ```
+
+      This makes the assertion exactly as run-scoped as the DELETE already is. It requires no new tagging, and it weakens nothing: the hook still proves this run restored every global precondition it personally mutated, which is the property the comment at `:182-184` claims. What it stops doing is holding this run responsible for another run's in-flight state.
+
+      The comment at `:182-184` is updated in the same change, because it currently says "this file's own name prefix" while the code matches the whole file's prefix across all runs — the wording is what made the global match look intentional.
+
+      ## Filing basis
+
+      Ratified threshold in `docs/mission/intent.md` § "Governance and tooling debt policy": affects at least two real lanes (three: [griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), [griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), [griff843/Unit-Talk-v2#1558](https://linear.app/unit-talk-v2/review/utv2-1880-reconcile-the-mission-plan-against-main-ecfe3fc99-ad25f20e85ed)) and blocks a required check on concurrent runs. Searched for a canonical owner first; [UTV2-1827](https://linear.app/unit-talk-v2/issue/UTV2-1827/governed-staging-proof-runner-execute-allowlisted-lane-scripts-under) (governed staging proof runner) is adjacent but is about executing allowlisted lane scripts, not this assertion's scoping. No existing owner, so this is the canonical issue for the class.
+
+      Tier: mechanical floor classifies `apps/api/src/t1-proof-*.test.ts` as **T3** (`classifyMechanicalMinimum` returns T3, no matches).
+    captured_at: 2026-09-10T18:08:39.261Z
+    description_sha256: a4f1db4668166a97c7d10a0941afe34cf6f8f2941e8754908791658d6d5e3a2b
+  contract_hash: 606e2500d261dd242a2b5425ffe2324b30c699a4753b1367b242df911eb14744
