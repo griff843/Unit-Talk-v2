@@ -66,6 +66,9 @@ test('fresh and compacted hooks recover local work and mission without tracker a
     assert.match(fresh, /WORK-2026091099/);
     assert.match(fresh, /mission intent\/spec\/plan/);
     assert.match(fresh, /no Linear required/);
+    const state = fs.readFileSync(path.join(f.dir, '.out/ops/session-state/SYSTEM_STATE.md'), 'utf8');
+    assert.match(state, /CURRENT_STATE\.md/);
+    assert.doesNotMatch(state, /PROGRAM_STATUS\.md/);
     assert.match(fresh, /claude:0\/3 codex:0\/5/);
     const compact = JSON.parse(run('post-compact-reinjector.sh', f)).systemMessage;
     assert.match(compact, /mission intent\/spec\/plan/);

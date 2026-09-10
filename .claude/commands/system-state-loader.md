@@ -14,15 +14,17 @@ Load current system state before acting. Run at session start and after `/clear`
 
 2. **Read mission and local scope** — `docs/mission/{intent,spec,plan}.md`, `.ops/work/<ID>.md`, current PRs, active manifests, leases and worktrees. No Linear access is required, including with a configured token.
 
-3. **Reconcile** — for each In Progress/In Review issue:
-   - PR merged → mark Done
-   - Branch stale/abandoned → mark blocked
-   - Code on main already → mark Done
+3. **Reconcile** — compare active manifests with PR, branch and lease evidence.
+   A merged PR or code already on main is not sufficient evidence of completed work;
+   use the existing truth-check and lane-close controls. Investigate stale branches
+   against current work before changing their state.
    ```bash
    pnpm github:current
    ```
 
-4. **Read program status** — `docs/06_status/PROGRAM_STATUS.md`. Identify active milestone, open risks, live routing.
+4. **Read program status** — `docs/06_status/CURRENT_STATE.md` and `docs/mission/plan.md`.
+   Identify active milestone, open risks and live routing; verify snapshots against
+   current evidence. `PROGRAM_STATUS.md` is superseded history, not status authority.
 
 5. **Answer three questions before touching code:**
    - What milestone is active?

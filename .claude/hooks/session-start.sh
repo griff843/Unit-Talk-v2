@@ -11,7 +11,7 @@
 #
 # Sources (local only — no MCP, no network):
 #   - docs/06_status/lanes/*.json → active lane state
-#   - docs/06_status/PROGRAM_STATUS.md → active milestone
+#   - docs/mission/plan.md + docs/06_status/CURRENT_STATE.md → mission snapshots
 #   - docs/05_operations/STANDING_GUARDRAILS.md → PM-maintained guardrails
 #   - git log / git status      → recent commits and working tree
 #
@@ -70,16 +70,8 @@ else
   TREE_LINE="Clean"
 fi
 
-# Active milestone — extract from PROGRAM_STATUS.md if it exists
-MILESTONE="unknown"
-PROG_FILE="$ROOT/docs/06_status/PROGRAM_STATUS.md"
-if [ -f "$PROG_FILE" ]; then
-  MILESTONE=$(grep -m1 -iE '\|\s*Phase\s*\|' "$PROG_FILE" 2>/dev/null \
-    | sed 's/.*|\s*//' | sed 's/\s*|.*//' | head -c 80 || echo "")
-  [ -z "$MILESTONE" ] && MILESTONE=$(grep -m1 -iE 'Phase [0-9]' "$PROG_FILE" 2>/dev/null \
-    | sed 's/.*\(Phase [0-9A-Za-z ]*\).*/\1/' | head -c 80 || echo "")
-  [ -z "$MILESTONE" ] && MILESTONE="see PROGRAM_STATUS.md"
-fi
+# Do not infer current runtime readiness from a historical phase label.
+MILESTONE="read docs/mission/plan.md and docs/06_status/CURRENT_STATE.md; verify against current evidence"
 
 # Lane state — parse canonical lane manifests with node (always available in this repo)
 LANES_OUT=$(node -e "
