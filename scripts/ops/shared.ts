@@ -1176,15 +1176,110 @@ export function readAllManifestPaths(manifestDir = MANIFEST_DIR): string[] {
   return paths.sort((left, right) => left.localeCompare(right));
 }
 
-export function readAllManifestEntries(manifestDir = MANIFEST_DIR): LaneManifestEntry[] {
-  return readAllManifestPaths(manifestDir).map((filePath) => ({
-    path: filePath,
-    manifest: parseJsonFile<LaneManifest>(filePath),
-  }));
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1708: manifest reads must tolerate a readdir/readFile race.
+//
+// `readAllManifestPaths` enumerates the directory and the caller then reads each
+// path individually. `docs/06_status/lanes/` is a LIVE directory: lane lifecycle
+// actions create and delete manifests in it, and several suites in one
+// `pnpm test:ops` run write real fixture manifests there and delete them again
+// (`lane-link-pr.test.ts` uses the `UTV2-991xx` range) while node:test runs test
+// files concurrently. A path present at enumeration can therefore be gone by the
+// time the read reaches it, and the unguarded read threw `ENOENT`, taking down
+// `pnpm test` -> `pnpm verify` -> preflight PB2 on lanes that never touched
+// `scripts/ops/`. Observed twice: 2026-09-07 (UTV2-1851) and 2026-09-09
+// (UTV2-1868, via `reclaimLease`, which UTV2-1863 had just made a *production*
+// reader of this population).
+//
+// The classification is narrow on purpose, because the failure mode this must
+// not create is a partial board presented as complete:
+//
+//   * `ENOENT` where the path is confirmed gone  -> concurrent deletion. The
+//     lane genuinely does not exist at read completion, so omitting it yields a
+//     correct population rather than a truncated one. It is still reported, so a
+//     caller that wants provenance can have it.
+//   * `ENOENT` where the path is present again   -> retried once, then rethrown.
+//     A file that reappears is not a deletion, and guessing is not allowed.
+//   * malformed JSON, EACCES, EISDIR, anything else -> rethrown unchanged.
+//
+// No error path returns a population. Every failure that is not a confirmed
+// concurrent deletion still throws, so an empty or short result can only mean
+// "these are the manifests that exist", never "the read partly failed".
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A manifest population together with the provenance of what was dropped.
+ *
+ * `concurrentlyDeleted` holds paths that `readAllManifestPaths` enumerated and
+ * that were confirmed absent when the read reached them. It is empty on the
+ * overwhelmingly common path.
+ */
+export interface LaneManifestPopulation {
+  entries: LaneManifestEntry[];
+  concurrentlyDeleted: string[];
 }
 
-export function readAllManifests(manifestDir = MANIFEST_DIR): LaneManifest[] {
-  return readAllManifestEntries(manifestDir).map((entry) => entry.manifest);
+/**
+ * Injectable seam, for deterministically simulating the race in tests.
+ *
+ * Production callers never pass this: the race is real but not schedulable, so a
+ * test that waits for it to happen is a test that passes vacuously. `listPaths`
+ * returning a path that has already been removed reproduces exactly the state
+ * the race produces — an enumeration that outlived one of its entries — against
+ * the real filesystem and the real reader.
+ */
+export interface ManifestReadSeam {
+  listPaths?: (manifestDir: string) => string[];
+  readManifestFile?: (filePath: string) => LaneManifest;
+  exists?: (filePath: string) => boolean;
+}
+
+export function readAllManifestPopulation(
+  manifestDir = MANIFEST_DIR,
+  seam: ManifestReadSeam = {},
+): LaneManifestPopulation {
+  const listPaths = seam.listPaths ?? readAllManifestPaths;
+  const readManifestFile =
+    seam.readManifestFile ?? ((filePath: string) => parseJsonFile<LaneManifest>(filePath));
+  const exists = seam.exists ?? ((filePath: string) => fs.existsSync(filePath));
+
+  const entries: LaneManifestEntry[] = [];
+  const concurrentlyDeleted: string[] = [];
+
+  for (const filePath of listPaths(manifestDir)) {
+    let manifest: LaneManifest;
+    try {
+      manifest = readManifestFile(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+      if (!exists(filePath)) {
+        concurrentlyDeleted.push(filePath);
+        continue;
+      }
+      // The path is back. That is not a deletion, so it is read again rather
+      // than classified; a second failure is surfaced unchanged.
+      manifest = readManifestFile(filePath);
+    }
+    entries.push({ path: filePath, manifest });
+  }
+
+  return { entries, concurrentlyDeleted };
+}
+
+export function readAllManifestEntries(
+  manifestDir = MANIFEST_DIR,
+  seam: ManifestReadSeam = {},
+): LaneManifestEntry[] {
+  return readAllManifestPopulation(manifestDir, seam).entries;
+}
+
+export function readAllManifests(
+  manifestDir = MANIFEST_DIR,
+  seam: ManifestReadSeam = {},
+): LaneManifest[] {
+  return readAllManifestEntries(manifestDir, seam).map((entry) => entry.manifest);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

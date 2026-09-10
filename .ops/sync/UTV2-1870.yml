@@ -1,0 +1,120 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1870
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1870
+  objective: Write the results-backfill authorization packet — the blast radius is
+    now measured, so the ask can be a decision instead of a question
+  acceptance_criteria:
+    - The packet states the blast radius as the enforced set, citing the control
+      that enforces it — not a reading of `ingest-league.ts`.
+    - The exact operator commands appear, with a non-secret success criterion
+      for each.
+    - The dry-run step is required before the write step, and the packet says
+      what a dry-run report must show before the write is authorized.
+    - Both reserved branches (key active / key inactive) are stated with their
+      consequences.
+    - "`plan.md` no longer claims the blast radius is unmeasured, and item 4 is
+      marked done with its evidence."
+    - Nothing in the change requests or performs an unpark, a provider call, or
+      a database write.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why now
+      `docs/mission/plan.md` records, under **Requires Griff item 6a**, that the follow-on ask after confirming the provider key is a *bounded* operator-run results backfill — and that **"that packet is not written yet and is not requested here"**, because `ingestLeague` "writes offers and events broadly rather than results alone, so its blast radius has to be measured before it is put in front of anyone."
+
+      That premise no longer holds. [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) ([griff843/Unit-Talk-v2#1544](https://linear.app/unit-talk-v2/review/utv2-1866-bound-the-results-only-ingestor-write-surface-and-prove-the-79e66d6b831e), merged `9bef2bd3b`) measured it, disproved the "writes broadly" reading, and — more importantly — replaced the reading with a control:
+
+      * `apps/ingestor/src/write-surface.ts` classifies every method on all eight ingestor repositories as a write (mapped to its physical table) or a read, with a completeness assertion that fails on any unclassified method rather than defaulting.
+      * `ingestor.test.ts` proxies the repository bundle and asserts that a `resultsOnly` run performs **only** `runs.startRun`, `runs.completeRun`, `rawPayloads.insert`, `events.upsertByExternalId`, `participants.upsertByExternalId`, `participants.updateMetadata`, `eventParticipants.upsert`, `gradeResults.insert` — six physical tables.
+      * A dry-run repository bundle reports per-table write counts without performing them, and a separate test asserts the report and the blast-radius set cannot disagree.
+
+      So the preparation `intent.md` § "How a reserved decision is surfaced" asks for is now possible: dependent work staged and verified as far as existing authority allows, evidence measured rather than recalled, one recommendation with its exact inputs.
+    - >-
+      Scope
+
+      Author the packet and reconcile the plan. **No code, no containment
+      change, no provider call, nothing written to any database.**
+
+
+      1. New governance doc carrying the packet: the mechanically enforced blast
+      radius; the exact operator command (`pnpm backfill:sgo-history
+      --results-only --dry-run` with a bounded window, then the same without
+      `--dry-run`); what each of the six tables would receive; the rollback
+      position; and what the packet explicitly does **not** ask for.
+
+      2. State plainly that this is **not** an unpark request and does not touch
+      `SYNDICATE_MACHINE_MODE`. The operator CLI reaches the results writers
+      in-process; the daemon is not involved. The plan's withdrawal of the
+      unpark ask stands.
+
+      3. Reconcile `docs/mission/plan.md`: Milestone 2 executable item 4 ("bound
+      the results backfill before requesting it") is **done**; item 6a gains its
+      follow-on packet; the "blast radius has to be measured" caveat is retired
+      with the measurement that retired it.
+    - >-
+      What stays reserved and is not decided here
+
+      * Whether the production `SGO_API_KEY` is active — reserved decision 4
+      (secrets). The key available to tooling returns `403 Inactive API key`.
+
+      * If it is inactive, the results supply becomes a **paid provider
+      commitment** — reserved decision 3. The packet must say so rather than
+      routing around it.
+
+      * Authorizing the run itself, under `DB_ENVIRONMENT_OPERATOR_POLICY.md`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1870/write-the-results-backfill-authorization-packet-the-blast-radius-is
+    title: Write the results-backfill authorization packet — the blast radius is now
+      measured, so the ask can be a decision instead of a question
+    description: |-
+      ## Why now
+
+      `docs/mission/plan.md` records, under **Requires Griff item 6a**, that the follow-on ask after confirming the provider key is a *bounded* operator-run results backfill — and that **"that packet is not written yet and is not requested here"**, because `ingestLeague` "writes offers and events broadly rather than results alone, so its blast radius has to be measured before it is put in front of anyone."
+
+      That premise no longer holds. [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) ([griff843/Unit-Talk-v2#1544](https://linear.app/unit-talk-v2/review/utv2-1866-bound-the-results-only-ingestor-write-surface-and-prove-the-79e66d6b831e), merged `9bef2bd3b`) measured it, disproved the "writes broadly" reading, and — more importantly — replaced the reading with a control:
+
+      * `apps/ingestor/src/write-surface.ts` classifies every method on all eight ingestor repositories as a write (mapped to its physical table) or a read, with a completeness assertion that fails on any unclassified method rather than defaulting.
+      * `ingestor.test.ts` proxies the repository bundle and asserts that a `resultsOnly` run performs **only** `runs.startRun`, `runs.completeRun`, `rawPayloads.insert`, `events.upsertByExternalId`, `participants.upsertByExternalId`, `participants.updateMetadata`, `eventParticipants.upsert`, `gradeResults.insert` — six physical tables.
+      * A dry-run repository bundle reports per-table write counts without performing them, and a separate test asserts the report and the blast-radius set cannot disagree.
+
+      So the preparation `intent.md` § "How a reserved decision is surfaced" asks for is now possible: dependent work staged and verified as far as existing authority allows, evidence measured rather than recalled, one recommendation with its exact inputs.
+
+      ## Scope
+
+      Author the packet and reconcile the plan. **No code, no containment change, no provider call, nothing written to any database.**
+
+      1. New governance doc carrying the packet: the mechanically enforced blast radius; the exact operator command (`pnpm backfill:sgo-history --results-only --dry-run` with a bounded window, then the same without `--dry-run`); what each of the six tables would receive; the rollback position; and what the packet explicitly does **not** ask for.
+      2. State plainly that this is **not** an unpark request and does not touch `SYNDICATE_MACHINE_MODE`. The operator CLI reaches the results writers in-process; the daemon is not involved. The plan's withdrawal of the unpark ask stands.
+      3. Reconcile `docs/mission/plan.md`: Milestone 2 executable item 4 ("bound the results backfill before requesting it") is **done**; item 6a gains its follow-on packet; the "blast radius has to be measured" caveat is retired with the measurement that retired it.
+
+      ## What stays reserved and is not decided here
+
+      * Whether the production `SGO_API_KEY` is active — reserved decision 4 (secrets). The key available to tooling returns `403 Inactive API key`.
+      * If it is inactive, the results supply becomes a **paid provider commitment** — reserved decision 3. The packet must say so rather than routing around it.
+      * Authorizing the run itself, under `DB_ENVIRONMENT_OPERATOR_POLICY.md`.
+
+      ## Acceptance criteria
+
+      1. The packet states the blast radius as the enforced set, citing the control that enforces it — not a reading of `ingest-league.ts`.
+      2. The exact operator commands appear, with a non-secret success criterion for each.
+      3. The dry-run step is required before the write step, and the packet says what a dry-run report must show before the write is authorized.
+      4. Both reserved branches (key active / key inactive) are stated with their consequences.
+      5. `plan.md` no longer claims the blast radius is unmeasured, and item 4 is marked done with its evidence.
+      6. Nothing in the change requests or performs an unpark, a provider call, or a database write.
+    captured_at: 2026-09-09T14:59:01.889Z
+    description_sha256: cbf114e5dab2f03f8278fe23f1467c84df3614a7803568a5d92332a2ea1e3867
+  contract_hash: e45a6fe8d4d1bd0d2714684b570f7d9d0bc3dc6c1c4407cae32fe6b2aa214238

@@ -29,9 +29,10 @@
  *
  * ## Read-only guarantee
  *
- * The only database surface in this file is {@link ReadOnlyDb}, whose two methods
- * issue `select` reads. There is no insert/update/upsert/delete/rpc path to reach,
- * and `readiness-refresh.test.ts` scans this source to keep it that way.
+ * The only database surface in this file is {@link ReadOnlyDb}, whose three
+ * methods all issue `select` reads. There is no insert/update/upsert/delete/rpc
+ * path to reach, and `readiness-refresh.test.ts` scans this source to keep it
+ * that way.
  *
  * Usage:
  *   pnpm ops:readiness-refresh                 # measure and write the canonical ledger
@@ -51,6 +52,7 @@ import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   extractProjectRefFromUrl,
 } from '../ci/isolated-proof-attestation.js';
+import { classifyDeadLetter } from './outbox-triage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -103,7 +105,7 @@ export const SCHEDULED_OBSERVERS = [
   'reconcile-stale-lanes.yml',
 ] as const;
 
-export const QUEUE_SEMANTICS_VERSION = '1.0';
+export const QUEUE_SEMANTICS_VERSION = '1.1';
 export const QUEUE_SEMANTICS_DOC = 'docs/05_operations/QUEUE_READINESS_SEMANTICS.md';
 
 // ── Ledger shape ─────────────────────────────────────────────────────────────
@@ -180,6 +182,19 @@ export interface ReadOnlyDb {
     orderColumn: string,
   ): Promise<Record<string, unknown> | null>;
   countRows(table: string, filters: DbFilter[]): Promise<number>;
+  /**
+   * Rows, not a count. `countRows` filters are `eq/neq/gt/gte/lt` against a
+   * literal, which cannot express "the reason string is one of the recognised
+   * governance dispositions" -- that classification is a prefix/substring rule
+   * owned by `classifyDeadLetter`. A probe that needs it has to read the rows
+   * and classify them here rather than pushing a weaker predicate to Postgres.
+   */
+  selectRows(
+    table: string,
+    columns: string,
+    filters: DbFilter[],
+    limit: number,
+  ): Promise<Record<string, unknown>[]>;
 }
 
 export interface WorkflowRun {
@@ -505,6 +520,82 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
   }
 }
 
+/**
+ * The whole dead-letter queue is well under this; the probe fails closed rather
+ * than truncating (see the completeness check below).
+ */
+export const DEAD_LETTER_READ_LIMIT = 20000;
+
+export interface DeadLetterBuckets {
+  governanceHold: number;
+  unattemptedUnclassified: number;
+  trueFailure: number;
+}
+
+/**
+ * Bucket the dead-letter queue. Three buckets, disjoint, covering every row.
+ *
+ * ## Why neither signal alone is enough
+ *
+ * This probe used to bucket on `attempt_count` alone: `=0` was a governance
+ * hold, `>0` was a true delivery failure. Measured against production on
+ * 2026-09-09, that made a **blocking** readiness dimension fail on a single row
+ * whose `target` and `last_error` are byte-identical to 1,613 rows the same
+ * probe called governance holds -- `proof-pick-blocked: source 't1-proof' is not
+ * a live source`, to `discord:canary`. It differed only in having consumed one
+ * attempt before the guard refused it. A guard refusing a delivery is not a
+ * delivery failing.
+ *
+ * The obvious correction -- bucket on the reason instead -- is wrong in the
+ * other direction. Four rows carry a NULL `last_error` and an `updated_at`
+ * identical to the microsecond (a bulk operator update that recorded no
+ * reason). A reason-only rule would newly count those as failures, but their
+ * `attempt_count` is 0: nothing ever tried to deliver them, so whatever they
+ * are, they are not *delivery* failures.
+ *
+ * So both are load-bearing, and the fail-closed direction is `true_failure`:
+ * a row that was attempted and whose reason is not a recognised disposition
+ * counts as a failure. An unexplained failed attempt is a failure until
+ * something classifies it.
+ *
+ * `classifyDeadLetter` is imported from `outbox-triage.ts` (UTV2-1744) rather
+ * than reimplemented. `runtime-health.ts:147` and `pipeline-health.ts:80`
+ * already carry their own prefix-matching copies of the same rule; a fourth
+ * copy here is how the readiness gate and the triage tool would come to
+ * disagree about the same row.
+ */
+export function bucketDeadLetterRows(
+  rows: readonly Record<string, unknown>[],
+): DeadLetterBuckets {
+  const buckets: DeadLetterBuckets = {
+    governanceHold: 0,
+    unattemptedUnclassified: 0,
+    trueFailure: 0,
+  };
+
+  for (const row of rows) {
+    const rawReason = row['last_error'];
+    const reason = typeof rawReason === 'string' ? rawReason : null;
+    const rawAttempts = row['attempt_count'];
+    // A non-numeric or absent attempt count is not evidence of "never
+    // attempted", so it must not buy the row a pass. Treat it as attempted.
+    const attempted = typeof rawAttempts === 'number' ? rawAttempts > 0 : true;
+    const classification = classifyDeadLetter(reason);
+    const recognised =
+      classification !== 'unrecognised' && classification !== 'unclassified_null_reason';
+
+    if (recognised) {
+      buckets.governanceHold += 1;
+    } else if (attempted) {
+      buckets.trueFailure += 1;
+    } else {
+      buckets.unattemptedUnclassified += 1;
+    }
+  }
+
+  return buckets;
+}
+
 export async function probeDeadLetterCount(ctx: ProbeContext): Promise<ReadinessDimension> {
   const base = {
     id: 'dead_letter_count',
@@ -515,37 +606,55 @@ export async function probeDeadLetterCount(ctx: ProbeContext): Promise<Readiness
       source: `supabase:${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}`,
       query:
         "count distribution_outbox where status='dead_letter'; " +
-        "count distribution_outbox where status='dead_letter' and attempt_count=0 (bucket:governance_hold); " +
-        "count distribution_outbox where status='dead_letter' and attempt_count>0 (bucket:true_failure)",
+        "select attempt_count, last_error from distribution_outbox where status='dead_letter', " +
+        'bucketed by classifyDeadLetter(last_error) x attempt_count>0',
     },
   };
 
   try {
     const db = requireDb(ctx);
-    const [total, governanceHolds, trueFailures] = await Promise.all([
-      db.countRows('distribution_outbox', [{ column: 'status', op: 'eq', value: 'dead_letter' }]),
-      db.countRows('distribution_outbox', [
-        { column: 'status', op: 'eq', value: 'dead_letter' },
-        { column: 'attempt_count', op: 'eq', value: 0 },
-      ]),
-      db.countRows('distribution_outbox', [
-        { column: 'status', op: 'eq', value: 'dead_letter' },
-        { column: 'attempt_count', op: 'gt', value: 0 },
-      ]),
+    const deadLetterOnly: DbFilter[] = [{ column: 'status', op: 'eq', value: 'dead_letter' }];
+    const [total, rows] = await Promise.all([
+      db.countRows('distribution_outbox', deadLetterOnly),
+      db.selectRows(
+        'distribution_outbox',
+        'attempt_count, last_error',
+        deadLetterOnly,
+        DEAD_LETTER_READ_LIMIT,
+      ),
     ]);
+
+    // Under-reading shrinks every bucket, and it shrinks `true_failure` toward
+    // zero -- the reassuring direction. A partial read must therefore be an
+    // unreadable dimension, never a quiet pass on the rows that happened to
+    // come back.
+    if (rows.length !== total) {
+      return unreadable(
+        base,
+        `read ${rows.length} of ${total} dead_letter rows (limit ${DEAD_LETTER_READ_LIMIT}); ` +
+          'a partial read would under-count true failures, so no verdict is issued',
+        ctx.now,
+      );
+    }
+
+    const buckets = bucketDeadLetterRows(rows);
 
     return {
       ...base,
-      status: trueFailures === 0 ? 'pass' : 'fail',
+      status: buckets.trueFailure === 0 ? 'pass' : 'fail',
       observed_at: ctx.now.toISOString(),
       evidence:
-        `${total} dead_letter rows: ${governanceHolds} bucket:governance_hold (attempt_count=0) + ` +
-        `${trueFailures} bucket:true_failure (attempt_count>0). Governance holds do not fail readiness under ` +
-        `${QUEUE_SEMANTICS_DOC} v${QUEUE_SEMANTICS_VERSION}; true delivery failures do.`,
+        `${total} dead_letter rows: ${buckets.governanceHold} bucket:governance_hold ` +
+        `(recognised disposition, any attempt_count) + ${buckets.unattemptedUnclassified} ` +
+        'bucket:unattempted_unclassified (attempt_count=0, no recorded reason) + ' +
+        `${buckets.trueFailure} bucket:true_failure (attempt_count>0 and no recognised reason). ` +
+        `Only true delivery failures fail readiness under ${QUEUE_SEMANTICS_DOC} ` +
+        `v${QUEUE_SEMANTICS_VERSION}.`,
       measured: {
         dead_letter_total: total,
-        governance_hold_count: governanceHolds,
-        true_failure_count: trueFailures,
+        governance_hold_count: buckets.governanceHold,
+        unattempted_unclassified_count: buckets.unattemptedUnclassified,
+        true_failure_count: buckets.trueFailure,
       },
       unreadable_reason: null,
     };
@@ -965,6 +1074,14 @@ export function wrapReadOnlyClient(client: ReadOnlyClient, projectRef: string): 
       if (error) throw new Error(`${table} count failed: ${error.message}`);
       if (count === null || count === undefined) throw new Error(`${table} count returned no value`);
       return count;
+    },
+    async selectRows(table, columns, filters, limit) {
+      const { data, error } = await applyFilters(
+        client.from(table).select(columns),
+        filters,
+      ).limit(limit);
+      if (error) throw new Error(`${table} read failed: ${error.message}`);
+      return (data ?? []) as Record<string, unknown>[];
     },
   };
 }

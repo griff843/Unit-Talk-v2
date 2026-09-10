@@ -24,6 +24,37 @@ async function readPersistedPick(request: APIRequestContext, pickId: string) {
   return pick as Record<string, unknown>;
 }
 
+/**
+ * UTV2-1864 -- resolves a canonical participant id from the SAME reference-data
+ * endpoint the browser reads and the server validates against.
+ *
+ * The connected cases below must not mock `/api/reference-data/search/*`. The
+ * server re-resolves every structured participant itself
+ * (`smart-form-validation.ts:376` / `:406`, via `searchTeams` / `searchPlayers`),
+ * so a mocked id the browser sends is refused with
+ * `SMART_FORM_RELATIONSHIP_INVALID` no matter how well-formed it looks. The
+ * in-memory QA seed mints fresh UUIDs on every server start, so the id also
+ * cannot be hardcoded -- it has to be read at run time, from the one source both
+ * sides agree on.
+ */
+async function canonicalParticipantId(
+  request: APIRequestContext,
+  kind: 'teams' | 'players',
+  sportId: string,
+  displayName: string,
+) {
+  const response = await request.get(
+    `${apiBaseUrl}/api/reference-data/search/${kind}?sport=${sportId}&q=${encodeURIComponent(displayName)}`,
+  );
+  expect(response.status(), `canonical ${kind} search must return HTTP 200`).toBe(200);
+  const payload = await response.json() as {
+    data?: Array<{ participantId: string; displayName: string; teamId?: string | null }>;
+  };
+  const match = payload.data?.find((row) => row.displayName === displayName);
+  expect(match, `${displayName} must exist in the canonical ${kind} catalog`).toBeTruthy();
+  return match as { participantId: string; displayName: string; teamId?: string | null };
+}
+
 async function assertTrackOnlyHasNoOutbox(request: APIRequestContext, pickId: string) {
   const response = await request.get(`${apiBaseUrl}/api/qa/pick-status/${pickId}`);
   expect(response.status(), 'Track Only delivery-state lookup must return HTTP 200').toBe(200);
@@ -274,19 +305,13 @@ test('structured fallback persists canonical side IDs with signed spread values 
     contentType: 'application/json',
     body: JSON.stringify({ data: [] }),
   }));
-  await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ data: [
-      { participantId: 'team:NBA:Celtics', displayName: 'Celtics', participantType: 'team' },
-      { participantId: 'team:NBA:Knicks', displayName: 'Knicks', participantType: 'team' },
-    ] }),
-  }));
-  await page.route('**/api/reference-data/search?**', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ data: [] }),
-  }));
+  // UTV2-1864: deliberately NOT mocked. This case asserts a persisted row, and the
+  // server re-resolves both sides against its own reference data, so a mocked
+  // participant id is refused with SMART_FORM_RELATIONSHIP_INVALID. Before this
+  // lane the two ids below were mocked as `team:NBA:Celtics` / `team:NBA:Knicks`
+  // and the submission returned 422 -- invisible because the e2e gate defaults off.
+  const celtics = await canonicalParticipantId(request, 'teams', 'NBA', 'Celtics');
+  const knicks = await canonicalParticipantId(request, 'teams', 'NBA', 'Knicks');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/submit');
@@ -332,16 +357,16 @@ test('structured fallback persists canonical side IDs with signed spread values 
   expect(metadata).toMatchObject({
     distributionMode: 'track-only',
     eventId: null,
-    teamId: 'team:NBA:Celtics',
+    teamId: celtics.participantId,
     playerId: null,
     participantResolution: {
       resolution: 'canonical',
       sportId: 'NBA',
       eventId: null,
       eventName: 'Celtics @ Knicks',
-      away: { participantId: 'team:NBA:Celtics', displayName: 'Celtics' },
-      home: { participantId: 'team:NBA:Knicks', displayName: 'Knicks' },
-      team: { participantId: 'team:NBA:Celtics', displayName: 'Celtics' },
+      away: { participantId: celtics.participantId, displayName: 'Celtics' },
+      home: { participantId: knicks.participantId, displayName: 'Knicks' },
+      team: { participantId: celtics.participantId, displayName: 'Celtics' },
       player: null,
     },
   });
@@ -616,4 +641,166 @@ test('editing a selected team as free text clears the dependent canonical player
   await page.getByLabel('Team', { exact: true }).fill('UNC');
   await expect(page.getByLabel('Player', { exact: true })).toHaveValue('');
   await expect(page.getByLabel('Player', { exact: true })).toBeDisabled();
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1864 -- persistence coverage for the three supported market families that
+// had none.
+//
+// Before this lane the suite had 30 tests and exactly three of them read a
+// persisted row back out of the API: two moneylines and one spread. `player-prop`,
+// `total` and `team-total` were asserted only through the browser, or at best
+// through a captured request payload -- and those three are precisely the families
+// that persist a real `line`, which is the field a mocked route can never prove
+// survived the schema, the request, the API and the repository.
+//
+// Milestone 1 was performed with a single MLB moneyline. Milestone 2 condition 2
+// is a claim about EVERY submitted pick persisting with truthful provenance, so
+// the families that carry a line have to be exercised the same way the moneyline
+// was, not argued from it.
+//
+// Each case below is connected: real catalog, real participant search, real API,
+// row read back, and delivery records asserted absent.
+// ---------------------------------------------------------------------------
+
+async function openManualNbaMatchup(page: Page) {
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NBA', exact: true }).click();
+  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByLabel('Away Team').fill('Celtics');
+  await page.getByRole('button', { name: /Celtics\s+team/i }).first().click();
+  await page.getByLabel('Home Team').fill('Knicks');
+  await page.getByRole('button', { name: /Knicks\s+team/i }).first().click();
+  await expect(page.getByText('Celtics @ Knicks', { exact: true })).toBeVisible();
+}
+
+async function submitAndReadPersistedPick(page: Page, request: APIRequestContext) {
+  const submissionResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
+  await page.getByTestId('smart-form-submit-button').first().click();
+  const submissionResponse = await submissionResponsePromise;
+  expect(
+    submissionResponse.status(),
+    `Browser submission must reach the real local API: ${await submissionResponse.text()}`,
+  ).toBe(201);
+  const submission = await submissionResponse.json() as {
+    data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
+  };
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+  const persistedPick = await readPersistedPick(request, submission.data.pickId);
+  return { pickId: submission.data.pickId, persistedPick };
+}
+
+test('structured player prop persists its line, stat and canonical player with no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const celtics = await canonicalParticipantId(request, 'teams', 'NBA', 'Celtics');
+  const starter = await canonicalParticipantId(request, 'players', 'NBA', 'Celtics Starter');
+  expect(
+    starter.teamId,
+    'the seeded player must resolve to exactly the team id searchTeams returns -- the equality validateSearchBackedPlayer requires',
+  ).toBe(celtics.participantId);
+
+  await openManualNbaMatchup(page);
+  await page.getByRole('button', { name: /PROP\s*Player Prop/i }).first().click();
+  await page.getByLabel('Team', { exact: true }).fill('Celtics');
+  await page.getByRole('button', { name: /Celtics\s+team/i }).last().click();
+  await page.getByLabel('Player', { exact: true }).fill('Celtics Starter');
+  await page.getByRole('button', { name: /^Celtics Starter/ }).click();
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await page.getByRole('option', { name: 'Points', exact: true }).click();
+  await page.getByLabel('Over / Under').click();
+  await page.getByRole('option', { name: 'Over', exact: true }).click();
+  await page.locator('input[name="line"]').fill('27.5');
+  await page.locator('input[name="odds"]').fill('-115');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+
+  const { pickId, persistedPick } = await submitAndReadPersistedPick(page, request);
+  expect(persistedPick['line'], 'a player prop line must persist as the number that was typed').toBe(27.5);
+  expect(persistedPick['odds']).toBe(-115);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
+  expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
+    eventId: null,
+    teamId: celtics.participantId,
+    playerId: starter.participantId,
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'NBA',
+      eventId: null,
+      eventName: 'Celtics @ Knicks',
+      player: { participantId: starter.participantId, displayName: 'Celtics Starter' },
+    },
+  });
+  await assertTrackOnlyHasNoOutbox(request, pickId);
+});
+
+test('structured game total persists its line and direction with no participant and no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const celtics = await canonicalParticipantId(request, 'teams', 'NBA', 'Celtics');
+  const knicks = await canonicalParticipantId(request, 'teams', 'NBA', 'Knicks');
+
+  await openManualNbaMatchup(page);
+  await page.getByRole('button', { name: /TOT\s*Total/i }).first().click();
+  await page.getByLabel('Over / Under').click();
+  await page.getByRole('option', { name: 'Over', exact: true }).click();
+  await page.locator('input[name="line"]').fill('220.5');
+  await page.locator('input[name="odds"]').fill('-108');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+
+  const { pickId, persistedPick } = await submitAndReadPersistedPick(page, request);
+  expect(persistedPick['line'], 'a game total is the family whose whole meaning is the line').toBe(220.5);
+  expect(persistedPick['odds']).toBe(-108);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
+  expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
+    eventId: null,
+    playerId: null,
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'NBA',
+      eventId: null,
+      eventName: 'Celtics @ Knicks',
+      away: { participantId: celtics.participantId },
+      home: { participantId: knicks.participantId },
+    },
+  });
+  // A game total belongs to no side. `classifyMarketFamilyForGrading` forbids a
+  // participant on `game_total_ou` outright, so a persisted team here would make
+  // the pick ungradeable rather than merely untidy.
+  expect(metadata['teamId'], 'a game total must not carry a side').toBeNull();
+  await assertTrackOnlyHasNoOutbox(request, pickId);
+});
+
+test('structured team total persists its line against the selected canonical team with no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const celtics = await canonicalParticipantId(request, 'teams', 'NBA', 'Celtics');
+
+  await openManualNbaMatchup(page);
+  await page.getByRole('button', { name: /T-TOT\s*Team Total/i }).first().click();
+  await page.getByLabel('Team', { exact: true }).fill('Celtics');
+  await page.getByRole('button', { name: /Celtics\s+team/i }).last().click();
+  await page.getByLabel('Over / Under').click();
+  await page.getByRole('option', { name: 'Under', exact: true }).click();
+  await page.locator('input[name="line"]').fill('112.5');
+  await page.locator('input[name="odds"]').fill('+104');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+
+  const { pickId, persistedPick } = await submitAndReadPersistedPick(page, request);
+  expect(persistedPick['line']).toBe(112.5);
+  expect(persistedPick['odds'], 'a positive American price must persist unsigned, not as a string').toBe(104);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
+  expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
+    eventId: null,
+    teamId: celtics.participantId,
+    playerId: null,
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'NBA',
+      eventId: null,
+      team: { participantId: celtics.participantId, displayName: 'Celtics' },
+    },
+  });
+  await assertTrackOnlyHasNoOutbox(request, pickId);
 });

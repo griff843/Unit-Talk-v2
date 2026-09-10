@@ -1,0 +1,120 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1862
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1862
+  objective: Reconcile the mission plan — Milestone 2's results-supply question is
+    answered, and an unpark is the wrong ask
+  acceptance_criteria:
+    - The three findings above are recorded in `plan.md` with their file:line
+      and SQL evidence, not as assertions.
+    - Milestone 2's condition-3 row states the measured position rather than the
+      previous inference.
+    - The "Requires Griff" section states the smaller reserved pair and
+      explicitly withdraws the implied unpark request.
+    - No canonical contract, gate, tier or merge authority is changed.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Reconcile `docs/mission/plan.md` against measurements taken 2026-09-09
+      that change Milestone 2's stated position in three ways.
+
+
+      1. **The grading population contains no real pick and never has.** Of the
+      5,151 unsettled `posted` picks with a line, 5,147 are `nba-spread` (an
+      unsupported market family) and the remaining 2 are `db-smoke-*` fixtures.
+      So the settlement drought since 2026-07-30 is not evidence grading is
+      broken, and 13,720 succeeded `grading.run` rows are not evidence it works.
+
+      2. **Containment is binary, so "unpark the ingestor" is not an available
+      action.** `deploy.yml:440-483` admits only `active|parked`; `active` also
+      starts the outbox worker and releases `UNIT_TALK_ENABLED_TARGETS` from the
+      forced `none` to `best-bets`. The readiness assertion that delivery is off
+      runs *only* in parked mode (`:1475-1480`).
+
+      3. **A results supply does not require an unpark.** `events` and
+      `game_results` each have exactly one repository writer, both ingestor-only
+      — but several operator CLI scripts reach them in-process without the
+      daemon. The remaining dependency is the provider key (403 Inactive for
+      tooling; the production secret is unreadable), not containment.
+
+
+      Together these replace the plan's open question ("does settlement need
+      provider ingestion unparked?") with a measured answer, and replace the
+      implied reserved request (decision 6, containment) with a smaller and more
+      honest pair (decision 4 key confirmation, then a bounded governed write
+      under `DB_ENVIRONMENT_OPERATOR_POLICY.md`).
+    - |-
+      File scope
+      * `docs/mission/plan.md`
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1862/reconcile-the-mission-plan-milestone-2s-results-supply-question-is
+    title: Reconcile the mission plan — Milestone 2's results-supply question is
+      answered, and an unpark is the wrong ask
+    description: >-
+      Reconcile `docs/mission/plan.md` against measurements taken 2026-09-09
+      that change Milestone 2's stated position in three ways.
+
+
+      1. **The grading population contains no real pick and never has.** Of the
+      5,151 unsettled `posted` picks with a line, 5,147 are `nba-spread` (an
+      unsupported market family) and the remaining 2 are `db-smoke-*` fixtures.
+      So the settlement drought since 2026-07-30 is not evidence grading is
+      broken, and 13,720 succeeded `grading.run` rows are not evidence it works.
+
+      2. **Containment is binary, so "unpark the ingestor" is not an available
+      action.** `deploy.yml:440-483` admits only `active|parked`; `active` also
+      starts the outbox worker and releases `UNIT_TALK_ENABLED_TARGETS` from the
+      forced `none` to `best-bets`. The readiness assertion that delivery is off
+      runs *only* in parked mode (`:1475-1480`).
+
+      3. **A results supply does not require an unpark.** `events` and
+      `game_results` each have exactly one repository writer, both ingestor-only
+      — but several operator CLI scripts reach them in-process without the
+      daemon. The remaining dependency is the provider key (403 Inactive for
+      tooling; the production secret is unreadable), not containment.
+
+
+      Together these replace the plan's open question ("does settlement need
+      provider ingestion unparked?") with a measured answer, and replace the
+      implied reserved request (decision 6, containment) with a smaller and more
+      honest pair (decision 4 key confirmation, then a bounded governed write
+      under `DB_ENVIRONMENT_OPERATOR_POLICY.md`).
+
+
+      ## File scope
+
+
+      * `docs/mission/plan.md`
+
+
+      ## Acceptance criteria
+
+
+      1. The three findings above are recorded in `plan.md` with their file:line
+      and SQL evidence, not as assertions.
+
+      2. Milestone 2's condition-3 row states the measured position rather than
+      the previous inference.
+
+      3. The "Requires Griff" section states the smaller reserved pair and
+      explicitly withdraws the implied unpark request.
+
+      4. No canonical contract, gate, tier or merge authority is changed.
+    captured_at: 2026-09-09T06:15:53.391Z
+    description_sha256: 7ce6036aa1dc2548672599ec35e97bf0ebc619fdcd3fb3d04933041668e3fae3
+  contract_hash: daa3d2cc4d7490eb4bf7d3bf382bf55d64e92806888f465d088d1fed340a3693

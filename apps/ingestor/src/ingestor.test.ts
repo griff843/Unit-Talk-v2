@@ -44,6 +44,13 @@ import {
   collectConfiguredSgoApiKeyCandidates,
   resolveActiveSgoApiKey,
 } from './sgo-key-manager.js';
+import { createDryRunIngestorRepositoryBundle } from './dry-run-repositories.js';
+import {
+  enumerateRepositoryMethods,
+  INGESTOR_READ_SURFACE,
+  INGESTOR_WRITE_SURFACE,
+} from './write-surface.js';
+import type { IngestorRepositoryBundle } from '@unit-talk/db';
 
 test('normalizeSGOPairedProp returns a PAIRED normalized offer with stripped market key and idempotency key', () => {
   const normalized = normalizeSGOPairedProp({
@@ -2297,6 +2304,7 @@ test('fetchSGOResults extracts scored markets from explicit SGO odd and particip
       oddId: 'assists-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'assists-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 7,
       scoringSupported: true,
     },
@@ -2304,6 +2312,7 @@ test('fetchSGOResults extracts scored markets from explicit SGO odd and particip
       oddId: 'points-LEBRON_JAMES_1_NBA-game-ou-over',
       baseMarketKey: 'points-all-game-ou',
       providerParticipantId: 'LEBRON_JAMES_1_NBA',
+      providerSide: null,
       score: 31,
       scoringSupported: true,
     },
@@ -2531,6 +2540,7 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
             oddId: 'points-player-UNKNOWN_PLAYER-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: 'UNKNOWN_PLAYER',
+            providerSide: null,
             score: 9,
             scoringSupported: true,
           },
@@ -2538,6 +2548,7 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
             oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+            providerSide: null,
             score: 9,
             scoringSupported: true,
           },
@@ -2601,6 +2612,7 @@ test('resolveAndInsertResults warns and skips malformed scored markets', async (
             oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+            providerSide: null,
             score: 31,
             scoringSupported: true,
           },
@@ -2608,6 +2620,7 @@ test('resolveAndInsertResults warns and skips malformed scored markets', async (
             oddId: 'broken',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: undefined as unknown as string,
+            providerSide: null,
             score: 12,
             scoringSupported: true,
           },
@@ -2665,6 +2678,7 @@ test('resolveAndInsertResults inserts game-line result with null participant_id'
             oddId: 'points-all-game-ou-over',
             baseMarketKey: 'points-all-game-ou',
             providerParticipantId: null,
+            providerSide: null,
             score: 227,
             scoringSupported: true,
           },
@@ -2688,6 +2702,211 @@ test('resolveAndInsertResults inserts game-line result with null participant_id'
   assert.equal(results[0]?.actual_value, 227);
 });
 
+const COMPLETED_SGO_STATUS = {
+  started: true,
+  completed: true,
+  cancelled: false,
+  ended: true,
+  live: false,
+  delayed: false,
+  finalized: true,
+  oddsAvailable: false,
+} as const;
+
+/*
+ * UTV2-1868 — a game-line market whose SGO stat entity is `home` or `away` is one
+ * team's score, not the game's.
+ *
+ * Before this repair, `normalizeExplicitParticipantId` discarded the `home`/`away`
+ * entity (correctly: it is not a provider participant id) and the resolver then wrote
+ * the score with participant_id NULL. Both sides therefore landed on the same address,
+ * `game_results_game_line_unique_idx` rejected the second, and
+ * DatabaseGradeResultRepository.insert swallowed the 23505 and returned the first row
+ * — so one team's score was lost and still counted as inserted. Measured in production:
+ * every game-line family holds exactly one row per event and zero with a participant.
+ */
+test('UTV2-1868: home and away game-line scores land on distinct participants', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const event = createResolvedEvent({ status: { ...COMPLETED_SGO_STATUS } });
+  await resolveSgoEntities([event], repositories);
+
+  const summary = await resolveAndInsertResults(
+    [
+      {
+        providerEventId: 'evt-entity-1',
+        status: { ...COMPLETED_SGO_STATUS },
+        playerStats: [],
+        scoredMarkets: [
+          {
+            oddId: 'points-home-game-ml-home',
+            baseMarketKey: 'nba-ml-all-game',
+            providerParticipantId: null,
+            providerSide: 'home',
+            score: 118,
+            scoringSupported: true,
+          },
+          {
+            oddId: 'points-away-game-ml-away',
+            baseMarketKey: 'nba-ml-all-game',
+            providerParticipantId: null,
+            providerSide: 'away',
+            score: 109,
+            scoringSupported: true,
+          },
+        ],
+        resolvedEvent: null,
+      },
+    ],
+    repositories,
+  );
+
+  assert.equal(summary.insertedResults, 2);
+  assert.equal(summary.skippedTeamSideUnresolved, 0);
+
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+  const links = await repositories.eventParticipants.listByEvent(
+    resolvedEvent.id,
+  );
+  const homeParticipantId = links.find(
+    (link) => link.role === 'home',
+  )?.participant_id;
+  const awayParticipantId = links.find(
+    (link) => link.role === 'away',
+  )?.participant_id;
+  assert.ok(homeParticipantId);
+  assert.ok(awayParticipantId);
+  assert.notEqual(homeParticipantId, awayParticipantId);
+
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  assert.equal(results.length, 2);
+  // Both sides survive, each addressed to its own team, with its own score.
+  assert.equal(
+    results.find((row) => row.participant_id === homeParticipantId)
+      ?.actual_value,
+    118,
+  );
+  assert.equal(
+    results.find((row) => row.participant_id === awayParticipantId)
+      ?.actual_value,
+    109,
+  );
+  // ...and neither is the participant-less row that used to swallow the other.
+  assert.equal(
+    results.filter((row) => row.participant_id === null).length,
+    0,
+  );
+});
+
+test('UTV2-1868: an unresolvable team side is skipped and counted, never written participant-less', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  // Deliberately no resolveSgoEntities call: the event exists but carries no
+  // event_participants rows, so the home side cannot be resolved.
+  const insertedEvent = await repositories.events.upsertByExternalId({
+    externalId: 'evt-no-links',
+    sportId: 'NBA',
+    eventName: 'Unlinked Event',
+    eventDate: '2026-03-26T23:30:00.000Z',
+    status: 'completed',
+    metadata: {},
+  });
+
+  const warnings: string[] = [];
+  const summary = await resolveAndInsertResults(
+    [
+      {
+        providerEventId: 'evt-no-links',
+        status: { ...COMPLETED_SGO_STATUS },
+        playerStats: [],
+        scoredMarkets: [
+          {
+            oddId: 'points-home-game-ml-home',
+            baseMarketKey: 'nba-ml-all-game',
+            providerParticipantId: null,
+            providerSide: 'home',
+            score: 118,
+            scoringSupported: true,
+          },
+        ],
+        resolvedEvent: null,
+      },
+    ],
+    repositories,
+    {
+      warn: (message: string) => warnings.push(message),
+      info: () => {},
+    },
+  );
+
+  assert.equal(summary.insertedResults, 0);
+  assert.equal(summary.skippedTeamSideUnresolved, 1);
+  // The skip is its own counter, not folded into the aggregate.
+  assert.equal(summary.skippedResults, 0);
+  assert.ok(
+    warnings.some((message) => message.includes('unresolved home participant')),
+  );
+  const results = await repositories.gradeResults.listByEvent(insertedEvent.id);
+  assert.equal(results.length, 0);
+});
+
+test('UTV2-1868: the fetcher carries the home/away stat entity as providerSide', async () => {
+  const results = await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-03-27T02:00:00.000Z',
+    fetchImpl: (async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              eventID: 'evt-side-1',
+              status: { finalized: true, completed: true, started: true },
+              odds: {
+                'points-home-game-ml-home': {
+                  oddID: 'points-home-game-ml-home',
+                  statEntityID: 'home',
+                  scoringSupported: true,
+                  score: 118,
+                },
+                'points-away-game-ml-away': {
+                  oddID: 'points-away-game-ml-away',
+                  statEntityID: 'away',
+                  scoringSupported: true,
+                  score: 109,
+                },
+                'points-all-game-ou-over': {
+                  oddID: 'points-all-game-ou-over',
+                  statEntityID: 'all',
+                  scoringSupported: true,
+                  score: 227,
+                },
+                // A sided market whose stat entity is genuinely `all`: the side
+                // survives via the oddID's own sideID segment.
+                'points-all-reg-ml3way-home': {
+                  oddID: 'points-all-reg-ml3way-home',
+                  statEntityID: 'all',
+                  scoringSupported: true,
+                  score: 118,
+                },
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch,
+  });
+
+  const markets = results[0]?.scoredMarkets ?? [];
+  const sideOf = (oddId: string) =>
+    markets.find((market) => market.oddId === oddId)?.providerSide;
+  assert.equal(sideOf('points-home-game-ml-home'), 'home');
+  assert.equal(sideOf('points-away-game-ml-away'), 'away');
+  // A genuinely game-scoped market keeps a null side and stays a participant-less row.
+  assert.equal(sideOf('points-all-game-ou-over'), null);
+  assert.equal(sideOf('points-all-reg-ml3way-home'), 'home');
+});
+
 test('resolveAndInsertResults deduplicates game-line results (idempotent for null participant)', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
   const event = createResolvedEvent({
@@ -2708,6 +2927,7 @@ test('resolveAndInsertResults deduplicates game-line results (idempotent for nul
     oddId: 'points-all-game-ou-over',
     baseMarketKey: 'points-all-game-ou',
     providerParticipantId: null as null,
+    providerSide: null,
     score: 227,
     scoringSupported: true,
   };
@@ -3375,6 +3595,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'points-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 31,
       scoringSupported: true,
     },
@@ -3382,6 +3603,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'assists-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'assists-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 7,
       scoringSupported: true,
     },
@@ -3389,6 +3611,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'rebounds-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'rebounds-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 4,
       scoringSupported: true,
     },
@@ -3396,6 +3619,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'pra-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'pra-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 42,
       scoringSupported: true,
     },
@@ -3403,6 +3627,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'pts-rebs-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'pts-rebs-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 35,
       scoringSupported: true,
     },
@@ -3410,6 +3635,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'pts-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'pts-asts-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 38,
       scoringSupported: true,
     },
@@ -3417,6 +3643,7 @@ function createCompletedEventResult(): SGOEventResult {
       oddId: 'rebs-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over',
       baseMarketKey: 'rebs-asts-all-game-ou',
       providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      providerSide: null,
       score: 11,
       scoringSupported: true,
     },
@@ -3932,4 +4159,205 @@ test('triggerGradingRun omits Authorization header when no apiKey', async () => 
 
   const authHeader = (capturedInit?.headers as Record<string, string>)?.['Authorization'];
   assert.equal(authHeader, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1866 -- what a results-only run is allowed to write, enforced rather than read.
+//
+// Milestone 2 needs a results supply, and authorizing an operator-run results backfill
+// means being able to state its blast radius. That statement used to be a reading of
+// ingest-league.ts: `resultsOnly` replaces the fetch with an empty result at :252, so the
+// whole odds branch -- offers, odds_snapshots, closing lines -- never runs. A reading is
+// not a control. An edit that moved one write out of that branch would be invisible to
+// every test in this repository, and the next person to bound a backfill would be
+// bounding it against a comment.
+// ---------------------------------------------------------------------------
+
+/** Every write a results-only run is permitted to perform, as `repository.method`. */
+const RESULTS_ONLY_ALLOWED_WRITES = new Set([
+  'runs.startRun',
+  'runs.completeRun',
+  'rawPayloads.insert',
+  'events.upsertByExternalId',
+  'participants.upsertByExternalId',
+  'participants.updateMetadata',
+  'eventParticipants.upsert',
+  'gradeResults.insert',
+]);
+
+function recordRepositoryCalls(bundle: IngestorRepositoryBundle): {
+  repositories: IngestorRepositoryBundle;
+  calls: string[];
+} {
+  const calls: string[] = [];
+  const wrapped = Object.fromEntries(
+    Object.entries(bundle as unknown as Record<string, object>).map(
+      ([name, repository]) => [
+        name,
+        new Proxy(repository, {
+          get(target, property, receiver) {
+            const value = Reflect.get(target, property, target) as unknown;
+            if (typeof value !== 'function') {
+              return Reflect.get(target, property, receiver) as unknown;
+            }
+            return (...args: unknown[]) => {
+              calls.push(`${name}.${String(property)}`);
+              return (value as (...a: unknown[]) => unknown).apply(target, args);
+            };
+          },
+        }),
+      ],
+    ),
+  ) as unknown as IngestorRepositoryBundle;
+  return { repositories: wrapped, calls };
+}
+
+function completedResultsResponse(): Response {
+  return new Response(
+    JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  );
+}
+
+test('the ingestor write surface classifies every method the repository bundle exposes', () => {
+  // Guards the two tests below. They are only meaningful if no method can exist that
+  // write-surface.ts has never seen: an unclassified write would be counted as a read
+  // and would pass the blast-radius assertion silently. A newly added method therefore
+  // fails here until somebody classifies it.
+  const bundle = createInMemoryIngestorRepositoryBundle() as unknown as Record<
+    string,
+    object
+  >;
+  const unclassified: string[] = [];
+  for (const [name, repository] of Object.entries(bundle)) {
+    for (const method of enumerateRepositoryMethods(repository)) {
+      const key = `${name}.${method}`;
+      if (key in INGESTOR_WRITE_SURFACE) continue;
+      if (INGESTOR_READ_SURFACE.has(key)) continue;
+      unclassified.push(key);
+    }
+  }
+  assert.deepEqual(
+    unclassified,
+    [],
+    `unclassified repository methods -- add each to INGESTOR_WRITE_SURFACE or INGESTOR_READ_SURFACE: ${unclassified.join(', ')}`,
+  );
+});
+
+test('a resultsOnly run writes only results, their entities and its own run record', async () => {
+  const { repositories, calls } = recordRepositoryCalls(
+    createInMemoryIngestorRepositoryBundle(),
+  );
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    resultsOnly: true,
+    fetchImpl: async () => completedResultsResponse(),
+  });
+
+  const writes = [...new Set(calls)]
+    .filter((call) => call in INGESTOR_WRITE_SURFACE)
+    .sort();
+
+  // Stated as a set difference, not a deepEqual: the invariant is that nothing OUTSIDE
+  // the allowed set was written. Which subset a given fixture happens to exercise is
+  // not the invariant, and pinning it would make this test fail on unrelated fixture
+  // edits while still not catching the thing it exists to catch.
+  const forbidden = writes.filter((call) => !RESULTS_ONLY_ALLOWED_WRITES.has(call));
+  assert.deepEqual(
+    forbidden,
+    [],
+    `a resultsOnly run wrote outside its blast radius: ${forbidden
+      .map((call) => `${call} -> ${INGESTOR_WRITE_SURFACE[call]}`)
+      .join(', ')}`,
+  );
+
+  // Non-vacuity: the run must have written the results it exists to write, or an empty
+  // `forbidden` would prove only that nothing ran.
+  assert.ok(writes.includes('gradeResults.insert'), 'no game_results write occurred');
+  assert.ok(writes.includes('events.upsertByExternalId'), 'no events write occurred');
+
+  // The writes an operator would otherwise have to reason about, named individually so
+  // a regression reports which one came back rather than only that the set grew.
+  for (const call of [
+    'providerOffers.upsertBatch',
+    'providerOffers.stageBatch',
+    'providerOffers.mergeStagedCycle',
+    'providerOffers.markClosingLines',
+    'oddsSnapshots.insert',
+  ]) {
+    assert.equal(
+      calls.includes(call),
+      false,
+      `${call} must not run under resultsOnly`,
+    );
+  }
+});
+
+test('a dry run performs no writes at all while still reporting them', async () => {
+  const { repositories, calls } = recordRepositoryCalls(
+    createInMemoryIngestorRepositoryBundle(),
+  );
+  const dryRun = createDryRunIngestorRepositoryBundle(repositories);
+
+  await ingestLeague('NBA', 'test-key', dryRun.repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    resultsOnly: true,
+    fetchImpl: async () => completedResultsResponse(),
+  });
+
+  const leaked = calls.filter((call) => call in INGESTOR_WRITE_SURFACE);
+  assert.deepEqual(
+    leaked,
+    [],
+    `dry run reached real write methods: ${leaked.join(', ')}`,
+  );
+
+  // ...and the report is non-empty, so "no writes" is a property of the wrapper rather
+  // than of a run that did nothing.
+  const report = dryRun.report();
+  assert.ok(report.writes.length > 0, 'dry run reported no writes at all');
+  assert.ok(
+    report.byTable.some((row) => row.table === 'game_results' && row.count > 0),
+    'dry run did not report the game_results writes it would perform',
+  );
+  assert.ok(report.newEventExternalIds.includes('evt-entity-1'));
+
+  // Every reported table is one the allowed set maps to -- the report and the
+  // blast-radius assertion above must not be able to disagree.
+  const allowedTables = new Set(
+    [...RESULTS_ONLY_ALLOWED_WRITES].map((call) => INGESTOR_WRITE_SURFACE[call]),
+  );
+  for (const row of report.byTable) {
+    assert.ok(allowedTables.has(row.table), `unexpected table in report: ${row.table}`);
+  }
+});
+
+test('a dry run intercepts a provider-offer write instead of performing it', async () => {
+  // The providerOffers proxy is the one repository the dry-run bundle wraps generically
+  // rather than by hand, so its interception is worth asserting directly: a results-only
+  // run never reaches these methods, which means the blast-radius test above cannot tell
+  // whether the wrapper would have stopped them.
+  const { repositories, calls } = recordRepositoryCalls(
+    createInMemoryIngestorRepositoryBundle(),
+  );
+  const dryRun = createDryRunIngestorRepositoryBundle(repositories);
+
+  await dryRun.repositories.providerOffers.upsertBatch([]);
+  await dryRun.repositories.providerOffers.listByProvider('sgo');
+
+  assert.equal(
+    calls.includes('providerOffers.upsertBatch'),
+    false,
+    'the write reached the real repository',
+  );
+  assert.equal(
+    calls.includes('providerOffers.listByProvider'),
+    true,
+    'the read did not pass through',
+  );
+  assert.deepEqual(
+    dryRun.report().byTable,
+    [{ table: 'provider_offers', count: 1 }],
+  );
 });

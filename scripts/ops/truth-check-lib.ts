@@ -671,17 +671,34 @@ export function evaluateCloseEligibilityPreflight(
   const combined = artifacts.map((a) => a.content).join('\n');
 
   // ── 1. Evidence readiness ────────────────────────────────────────────────
+  const tier = String(input.manifest.tier ?? '');
   const expected = input.manifest.expected_proof_paths ?? [];
+
+  // A T3 lane's proof is green CI on the merge SHA, not a bundle. That is not
+  // an exemption invented here: `defaultProofPaths` returns [] for T3 by
+  // design, and the close gate's own M7 passes a T3 manifest with an empty
+  // list. CEP-E1/E3 had no tier condition, so they failed a lane the gate they
+  // claim to predict closes cleanly -- and CEP-C1 then named them in a specific
+  // prediction an operator is meant to act on (UTV2-1876).
+  //
+  // Keyed on the ABSENCE of a declared obligation, never on the tier alone: a
+  // T3 lane that does declare expected_proof_paths is still held to every one
+  // of them. Both directions are asserted.
+  const noProofObligation = tier === 'T3' && expected.length === 0;
+
   const missing = expected.filter((p) => !byPath.has(p));
   add(
     'CEP-E1',
     'evidence',
-    missing.length === 0 && expected.length > 0 ? 'pass' : 'fail',
-    expected.length === 0
-      ? 'manifest declares no expected_proof_paths'
-      : missing.length === 0
-        ? 'every declared proof artifact is present at the PR head'
-        : `declared proof artifacts missing at the PR head: ${missing.join(', ')}`,
+    noProofObligation || (missing.length === 0 && expected.length > 0) ? 'pass' : 'fail',
+    noProofObligation
+      ? 'T3 lane declares no expected_proof_paths; green CI on the merge SHA is its proof, ' +
+        'which is what close-gate M7 accepts'
+      : expected.length === 0
+        ? 'manifest declares no expected_proof_paths'
+        : missing.length === 0
+          ? 'every declared proof artifact is present at the PR head'
+          : `declared proof artifacts missing at the PR head: ${missing.join(', ')}`,
   );
 
   // Emptiness is only meaningful for artifacts the manifest actually DECLARES.
@@ -709,7 +726,15 @@ export function evaluateCloseEligibilityPreflight(
 
   // Required sections, checked on the verification document specifically.
   const verification = artifacts.find((a) => /verification\.md$/i.test(a.path));
-  if (verification) {
+  if (noProofObligation) {
+    add(
+      'CEP-E3',
+      'evidence',
+      'pass',
+      'T3 lane carries no proof bundle, so no verification document is required',
+      'UTV2-1661',
+    );
+  } else if (verification) {
     const required = ['# PROOF:', 'MERGE_SHA:', 'ASSERTIONS:', 'EVIDENCE:'];
     const absent = required.filter((token) => !verification.content.includes(token));
     add(
@@ -725,17 +750,33 @@ export function evaluateCloseEligibilityPreflight(
     add('CEP-E3', 'evidence', 'fail', 'no verification document found among proof artifacts', 'UTV2-1661');
   }
 
-  // Required command references -- REUSES the close gate's own P11-P14 rules.
-  for (const check of evaluateT2ProofEvidence({
-    proofPaths: artifacts.map((a) => a.path),
-    proofContents: combined,
-  })) {
+  // Required command references -- REUSES the close gate's own P11-P14 rules,
+  // and now reuses its tier condition too. The gate runs this exact function
+  // inside `} else if (tier === 'T2') {`, so P11-P14 are T2-only by its own
+  // construction; applying them at every tier made this preflight predict a
+  // failure the gate cannot produce (UTV2-1876). The predicate is spelled the
+  // same way deliberately, so the two cannot drift apart unnoticed.
+  if (tier === 'T2') {
+    for (const check of evaluateT2ProofEvidence({
+      proofPaths: artifacts.map((a) => a.path),
+      proofContents: combined,
+    })) {
+      add(
+        `CEP-E4/${check.id}`,
+        'evidence',
+        check.status === 'pass' ? 'pass' : 'fail',
+        check.detail,
+        check.id === 'P13' || check.id === 'P14' ? 'UTV2-1619' : 'UTV2-1661',
+      );
+    }
+  } else {
     add(
-      `CEP-E4/${check.id}`,
+      'CEP-E4',
       'evidence',
-      check.status === 'pass' ? 'pass' : 'fail',
-      check.detail,
-      check.id === 'P13' || check.id === 'P14' ? 'UTV2-1619' : 'UTV2-1661',
+      'pass',
+      `T2 proof-evidence rules P11-P14 do not apply at tier ${tier || 'unresolved'}; ` +
+        'ops:lane-close evaluates them only on the T2 branch',
+      'UTV2-1661',
     );
   }
 
@@ -787,7 +828,7 @@ export function evaluateCloseEligibilityPreflight(
   }
 
   // ── 2. Manifest readiness ────────────────────────────────────────────────
-  const tierOk = /^T[123]$/.test(String(input.manifest.tier ?? ''));
+  const tierOk = /^T[123]$/.test(tier);
   add(
     'CEP-M1',
     'manifest',

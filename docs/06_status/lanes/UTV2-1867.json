@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1867",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1867-delivery-ui-product-docs",
+  "branch": "claude/utv2-1867-delivery-ui-product-docs",
+  "base_branch": "main",
+  "commit_sha": "70b402a0e51a81d5bd14f8b2c278e58954009714",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1545",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/lanes/delivery-ui.yml"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-09-09T09:23:18.649Z",
+  "heartbeat_at": "2026-09-09T12:53:22.201Z",
+  "closed_at": "2026-09-09T12:53:22.201Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-09T12:53:19.630Z",
+      "verdict": "pass",
+      "merge_sha": "70b402a0e51a81d5bd14f8b2c278e58954009714",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1867-delivery-ui-product-docs",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -28,6 +28,9 @@ import {
   ROOT,
   worktreePathForBranch,
   getRepoRoot,
+  readAllManifestPopulation,
+  readAllManifestEntries,
+  readAllManifests,
   type LaneManifest,
 } from './shared.js';
 
@@ -2095,4 +2098,196 @@ test('createManifest refuses an unrecognised deferral value rather than dropping
       /cannot create lane manifest for UTV2-1842/,
     );
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1708: readdir/readFile race in the manifest registry reader.
+//
+// The race is real but not schedulable, so a test that waits for it is a test
+// that passes vacuously. These drive it deterministically instead: `listPaths`
+// returns a path that has already been removed, which is exactly the state the
+// race produces — an enumeration that outlived one of its entries — while the
+// read itself stays the real one against the real filesystem.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function utv2_1708_manifestFixtureRoot(label: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `utv2-1708-${label}-`));
+  return dir;
+}
+
+function utv2_1708_writeManifest(dir: string, issueId: string): string {
+  const filePath = path.join(dir, `${issueId}.json`);
+  fs.writeFileSync(
+    filePath,
+    `${JSON.stringify({ schema_version: 1, issue_id: issueId, status: 'started' }, null, 2)}\n`,
+    'utf8',
+  );
+  return filePath;
+}
+
+test('UTV2-1708: a manifest deleted between enumeration and read is classified, not thrown', () => {
+  const dir = utv2_1708_manifestFixtureRoot('vanished');
+  const survivor = utv2_1708_writeManifest(dir, 'UTV2-70801');
+  const vanished = utv2_1708_writeManifest(dir, 'UTV2-70802');
+
+  // Enumerate first, exactly as the reader does, then delete — the file is in
+  // the listing and gone from disk, which is the race.
+  const stalePaths = [survivor, vanished].sort((a, b) => a.localeCompare(b));
+  fs.rmSync(vanished);
+
+  const population = readAllManifestPopulation(dir, { listPaths: () => stalePaths });
+
+  assert.equal(
+    population.entries.length,
+    1,
+    'the surviving manifest must still be returned',
+  );
+  assert.equal(population.entries[0]?.path, survivor);
+  assert.equal(
+    (population.entries[0]?.manifest as unknown as { issue_id: string }).issue_id,
+    'UTV2-70801',
+    'the survivor must be a real parsed manifest, not a placeholder',
+  );
+  assert.deepEqual(
+    population.concurrentlyDeleted,
+    [vanished],
+    'the vanished path must be reported rather than silently dropped',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: the concurrent-deletion case does not crash the wrapper callers', () => {
+  const dir = utv2_1708_manifestFixtureRoot('callers');
+  const survivor = utv2_1708_writeManifest(dir, 'UTV2-70803');
+  const vanished = utv2_1708_writeManifest(dir, 'UTV2-70804');
+  const stalePaths = [survivor, vanished].sort((a, b) => a.localeCompare(b));
+  fs.rmSync(vanished);
+
+  // `readAllManifests` is the reader `reclaimLease` reaches (lease-registry.ts,
+  // via UTV2-1863), and `readAllManifestEntries` is what the reconciliation and
+  // planning paths use. Both must survive.
+  const entries = readAllManifestEntries(dir, { listPaths: () => stalePaths });
+  const manifests = readAllManifests(dir, { listPaths: () => stalePaths });
+
+  assert.equal(entries.length, 1);
+  assert.equal(manifests.length, 1);
+  assert.equal(
+    (manifests[0] as unknown as { issue_id: string }).issue_id,
+    'UTV2-70803',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: malformed JSON is still a failure', () => {
+  const dir = utv2_1708_manifestFixtureRoot('malformed');
+  utv2_1708_writeManifest(dir, 'UTV2-70805');
+  const bad = path.join(dir, 'UTV2-70806.json');
+  fs.writeFileSync(bad, '{ "issue_id": "UTV2-70806",\n', 'utf8');
+
+  assert.throws(
+    () => readAllManifestPopulation(dir),
+    (error: unknown) => error instanceof SyntaxError,
+    'a manifest that exists but does not parse must not be classified as deleted',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: a non-ENOENT read failure is still a failure', () => {
+  const dir = utv2_1708_manifestFixtureRoot('eacces');
+  const filePath = utv2_1708_writeManifest(dir, 'UTV2-70807');
+
+  const denied = Object.assign(new Error('EACCES: permission denied'), {
+    code: 'EACCES',
+  });
+
+  assert.throws(
+    () =>
+      readAllManifestPopulation(dir, {
+        listPaths: () => [filePath],
+        readManifestFile: () => {
+          throw denied;
+        },
+      }),
+    /EACCES/,
+    'permission denied must stay visible rather than shrinking the board',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: a persistent ENOENT on a path that still exists is retried, then thrown', () => {
+  const dir = utv2_1708_manifestFixtureRoot('reappears');
+  const filePath = utv2_1708_writeManifest(dir, 'UTV2-70808');
+
+  let reads = 0;
+  const missing = Object.assign(new Error('ENOENT: no such file or directory'), {
+    code: 'ENOENT',
+  });
+
+  assert.throws(
+    () =>
+      readAllManifestPopulation(dir, {
+        listPaths: () => [filePath],
+        readManifestFile: () => {
+          reads += 1;
+          throw missing;
+        },
+        // The path is present, so this is not a deletion and must not be
+        // classified as one.
+        exists: () => true,
+      }),
+    /ENOENT/,
+  );
+  assert.equal(reads, 2, 'the read must be retried exactly once before rethrowing');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: an ENOENT that resolves on retry yields the manifest, not a deletion', () => {
+  const dir = utv2_1708_manifestFixtureRoot('retry-succeeds');
+  const filePath = utv2_1708_writeManifest(dir, 'UTV2-70809');
+
+  let reads = 0;
+  const population = readAllManifestPopulation(dir, {
+    listPaths: () => [filePath],
+    readManifestFile: (target) => {
+      reads += 1;
+      if (reads === 1) {
+        throw Object.assign(new Error('ENOENT: no such file or directory'), {
+          code: 'ENOENT',
+        });
+      }
+      return JSON.parse(fs.readFileSync(target, 'utf8')) as LaneManifest;
+    },
+    exists: () => true,
+  });
+
+  assert.equal(population.entries.length, 1);
+  assert.deepEqual(
+    population.concurrentlyDeleted,
+    [],
+    'a path that read successfully on retry is not a concurrent deletion',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: an intact directory reports nothing deleted', () => {
+  const dir = utv2_1708_manifestFixtureRoot('intact');
+  utv2_1708_writeManifest(dir, 'UTV2-70810');
+  utv2_1708_writeManifest(dir, 'UTV2-70811');
+
+  const population = readAllManifestPopulation(dir);
+
+  assert.equal(population.entries.length, 2);
+  assert.deepEqual(
+    population.concurrentlyDeleted,
+    [],
+    'the classification must not fire on a directory nothing raced',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
 });
