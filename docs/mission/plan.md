@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-09 (third pass, against `main` `c37097fee`)
+**Last reconciled against live truth:** 2026-09-10 (fourth pass, against `main` `ecfe3fc99`)
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -73,28 +73,33 @@ earned — and it is recorded here rather than filed, per the ratified filing th
 
 ---
 
-## Reconciled current truth (2026-09-09, re-measured late the same day)
+## Reconciled current truth (2026-09-10, re-measured against `main` `ecfe3fc99`)
 
 Verified against `origin/main`, the GitHub API, git ancestry, live production SQL and the current
 readiness ledger. Not against docs or chat history.
 
-- `main` is `c37097fee`. **The entry on this page naming `3cab0a2c5` was true when written and was
-  stale by 31 commits within nine hours** — the third consecutive reconciliation to have to say
-  that about its own predecessor. The rate is the finding: a SHA written into prose is wrong before
-  the next lane closes, which is why the drift below is recorded as a *command* rather than a count.
-- **Production is `755e52a6c`, and re-measured on 2026-09-09 the drift still does not request a
-  deploy.** Ten more commits than the previous reconciliation measured, and **the same five
+- `main` is `ecfe3fc99`. **The entry on this page naming `c37097fee` was true when written and was
+  stale by 6 commits within a day** — the fourth consecutive reconciliation to have to say that
+  about its own predecessor, and the first where the reconciliation's *own* merge is two of the
+  six. Four of the six are `ops(readiness): refresh ledger [skip ci]`; the other two are #1554
+  (this page's previous pass) and its closeout commit. The rate is the finding: a SHA written into
+  prose is wrong before the next lane closes, which is why the drift below is recorded as a
+  *command* rather than a count.
+- **Production is `755e52a6c`, and re-measured on 2026-09-10 the drift still does not request a
+  deploy.** Six more commits than the previous reconciliation measured, and **the same five
   container files** — not five more:
 
   ```
-  git rev-list --count 755e52a6c..origin/main                                    -> 31
+  git rev-list --count 755e52a6c..origin/main                                    -> 37
   git diff --name-only 755e52a6c origin/main -- 'apps/**' 'packages/**' 'deploy/**' \
     | grep -v '\.test\.' | wc -l                                                 -> 5
   git diff --name-only 755e52a6c origin/main -- 'supabase/migrations/'  | wc -l  -> 0
   ```
 
-  That is the useful shape of the finding: **the conclusion survived a 48% increase in the commit
-  count because it was never about the count.** Every commit since has been ops scripts and docs.
+  That is the useful shape of the finding: **the conclusion has now survived the commit count
+  growing from 21 to 31 to 37 because it was never about the count.** Every commit since has been
+  ops scripts and docs. The count is the number this page keeps having to correct; the file list is
+  the number that decides whether a deploy is owed, and it has not moved in three reconciliations.
 
   **The five container files are named rather than counted, because the count alone would read as
   a deploy obligation and it is not one:**
@@ -114,23 +119,87 @@ readiness ledger. Not against docs or chat history.
   consequential fact on this page" stays closed.
 
   **The generalisable point is about this document, not about the deploy.** A drift measurement is
-  a reading taken at an instant, and this page carried one for less than a day before it was wrong
-  by 21 commits. The durable form is the *command*, which is why it is written out above — a reader
-  who runs it gets the current answer, and a reader who trusts the prose gets the morning's.
-- **11 PRs are open** (down from 13): #1429, #1451, #1479, #1484, #1491, #1492, #1495, #1496, #1498,
-  #1505, #1513. Two left by merging — #1521 (UTV2-1843) and #1536 (UTV2-1856) — and #1539
-  (UTV2-1859) merged after them, which is what removed the client-side player-prop refusal.
+  a reading taken at an instant, and this page has now carried three of them that were wrong within
+  a day. The durable form is the *command*, which is why it is written out above — a reader who
+  runs it gets the current answer, and a reader who trusts the prose gets the morning's.
+- **13 PRs are open**, measured rather than carried: #1429, #1451, #1479, #1484, #1491, #1492,
+  #1495, #1496, #1498, #1505, #1513, #1556, #1557. **The bullet that stood here said 11, and it was
+  the count at the moment it was written** — #1554 merged and closed out, and #1556 and #1557 opened
+  after it. Two of the thirteen are new work rather than backlog:
   - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six, unchanged
-    for six reconciliations. All were opened with no `UTV2-###` in the branch, so `Merge Gate`
+    for seven reconciliations. All were opened with no `UTV2-###` in the branch, so `Merge Gate`
     cannot resolve a tier. Self-inflicted; the remedy is readmission, not a gate change.
-  - **Admissible, awaiting a T1 verdict** (#1484, #1505, #1513) — three.
+  - **Admissible, awaiting a T1 verdict** (#1479, #1484, #1505, #1513, #1557) — five. #1557 is new:
+    it is the membership product contract plus the `intent.md` pointer, and four of its five
+    required checks are green with `Merge Gate` the only one failing, which is the signature of a
+    PR that needs an approval artifact rather than a repair.
   - **Admissible, `verify` red** (#1451) — real repair work, production DDL, PM-gated.
-  - **#1479** — `verify` green, needs an approval artifact rather than a repair.
+  - **#1556** — the Codex tracker-independence lane, in its own category. It is not awaiting a
+    verdict; it is awaiting a decision about how it closes out. See the packet section below.
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
-- **No lane manifest is `in_progress` on `main`**, and `ops:brief` reports `claude_lanes=0`,
-  `codex_cli_lanes=0`. The board is free.
+- **The board was free when this lane opened** — no lane manifest `in_progress` on `main`, and
+  `ops:brief` reporting `claude_lanes=0`, `codex_cli_lanes=0`. It is not free now, because this
+  reconciliation is itself a lane. Stated that way deliberately: every previous version of this
+  bullet reported a count taken before the reporting lane existed, which is a small instance of the
+  same measurement-at-an-instant problem the drift block above is written to absorb.
+
+### Three approval packets are outstanding, and all three are `BEHIND` on a head that has not moved
+
+Delivered and re-verified on 2026-09-10, and the re-verification is what makes this section worth
+writing. **All three heads are exactly where their packets pinned them, and all three PRs are
+nonetheless `BEHIND`** — `mergeable: MERGEABLE`, `mergeStateStatus: BEHIND`, measured on all three
+after #1554 merged. Nothing moved on the branches; `main` moved underneath them, and under
+`strict: true` that is enough.
+
+**The lane that moved it was this page's own previous reconciliation.** #1554 merged at
+`6bb0cb204`, its closeout commit landed on top, and between them they made every open PR on the
+board stale for merge purposes. That is not an argument against reconciling the plan — it is the
+head-pinning tax this page has recorded four times, now observed being levied by the reconciliation
+that records it. The rule it produces is unchanged and is the operative one here: **resync
+immediately before the verdict is requested, not after**, and not earlier than that, because the
+readiness bot moves `main` on a schedule and this lane will move it again.
+
+| PR | Lane | Head the packet is pinned to | State | What it needs |
+|---|---|---|---|---|
+| #1479 | UTV2-1815, T1 | `933abcc4739a5b3843cf429f5b6fb095b7ab10e5` | `BEHIND` | a resync, then the `t1-approved` label **and** a `pm-verdict/v1` APPROVED comment from CODEOWNERS, both re-pinned to the post-resync head |
+| #1557 | UTV2-1878, T1 | `12fd9ac11cf20262035b7a750465856778359556` | `BEHIND` | the same sequence |
+| #1556 | WORK-2026091001 | `0c219025f0793d4117d088c6f634d59e444ea705` | `BEHIND` | a choice among three exits, none of which is a verdict |
+
+**#1479's pin is not the one this page recorded, and the state it recorded has come back around.**
+The "Requires Griff" entry below named `d180096cc` and `BEHIND`. The head is superseded — the lane
+was resynced to `933abcc47` and its artifacts re-bound — but `BEHIND` is true again, for a different
+reason than the first time. **A stale head and a stale mergeability are two different kinds of
+staleness, and only one of them is fixed by re-pinning the packet.** The first needs the packet
+rewritten; the second needs `pnpm ops:merge-wrapper main-sync` and then the packet rewritten again,
+which is precisely why the artifacts are requested last.
+
+### #1554 merged under T3 authority, and the diagnosis it produced is reusable
+
+UTV2-1877 (the previous pass of this page) merged at
+`6bb0cb204ed81f1c5c584418c1596e1bf057f726` with all four required checks green at `71d7dc704`, and
+closed out automatically through `post-merge-lane-close.yml` run `34508067850`. No Griff action was
+involved, which is what T3 authority is for: green CI on the merge SHA plus a valid executor result,
+no PM verdict.
+
+Two things are worth carrying forward rather than the merge itself.
+
+**`UNSTABLE` is not a blocker when the red check is `Check issue references`.** A plan-reconciliation
+commit necessarily cites the issues it reconciles, so `Branch Discipline Guard` reports
+`multiple_issue_references` on every pass of this page. It is non-required, it is correct about what
+it found, and it is not a repair — clearing it means rewriting commit messages, which moves the head
+and invalidates the executor result bound to it. This page has recorded that trade twice before; it
+is recorded here a third time because `mergeStateStatus: UNSTABLE` reads as a refusal and is not one.
+
+**The ERV trigger semantics, stated once so the next lane does not re-derive them.** The
+`pull_request` trigger deliberately creates only the non-required *"Executor Result Preflight"*
+context (UTV2-1550). The required `Executor Result Validation` context is created **only** by
+`issue_comment` and `workflow_dispatch`. That is the whole mechanism behind the already-recorded
+"a PR can sit BLOCKED with everything green" class: the required context does not exist yet, so
+there is no red check to look at. The operational consequence is a rule, not a diagnosis —
+**post the `EXECUTOR_RESULT` comment after `verify` concludes and pinned to the then-current head**,
+because that comment is what creates the context in the first place.
 
 ### What the deploy changed about readiness, and what it did not
 
@@ -1687,15 +1756,16 @@ Every other item below blocks only itself.
    2's list waits on it." Both were understatements** — approving it releases the whole grading
    pass, not one step.
 
-   **Two corrections to the mechanics of approving it, measured the same day.** `verify` and
-   `Writable DB proof (staging only)` were green at `d180096cc`, but `main` has since advanced
-   **18 commits** — 16 of them real lanes, not only readiness-bot noise — and `gh pr view` now
-   reports `mergeStateStatus: BEHIND`. Under `strict: true` it cannot merge without a resync, and
-   the resync moves the head and invalidates every artifact pinned to it. So the claim that "a
-   verdict binds a mergeable head rather than one that would need a resync afterwards" is no
-   longer true. Per this plan's own recorded lesson, **resync immediately before the verdict is
-   requested, not after** — and not earlier than that, because the readiness bot will move `main`
-   again in the meantime.
+   **Corrected 2026-09-10 — the `d180096cc` / `BEHIND` text above is superseded.** The lane has
+   been resynced since, and the approval packet is pinned to
+   `933abcc4739a5b3843cf429f5b6fb095b7ab10e5`, which was re-verified as still the live head on
+   2026-09-10. So the resync this row previously said was owed has been performed — **and the PR is
+   `BEHIND` again anyway**, because #1554 merged afterwards and moved `main`. `gh pr view` reports
+   `mergeable: MERGEABLE`, `mergeStateStatus: BEHIND`. The order of operations is therefore
+   unchanged and is the whole content of this correction: **resync immediately before the verdict is
+   requested, not after** — the resync moves the head, so the `t1-approved` label and the
+   `pm-verdict/v1` APPROVED comment must both be bound to the head that resync produces, not to the
+   one named above. The pin above is a measurement with an expiry, and it has already expired once.
 1. **Approve #1513** (UTV2-1802, T1) — the Command Center management token can no longer be handed
    arbitrary SQL. Green `verify`. Pre-deployment hardening: the Command Center is in no production
    compose service and behind no Caddy route, so this closes a surface #1496 would create rather
@@ -1776,6 +1846,35 @@ granted; the `ALLOWED_CAPPER_EMAILS` reshape; the #1477 decision; the #1501 appr
 scope override.
 
 ## Learned
+
+- **A lease leaked `active` on a terminal lane *after* the gate that was supposed to close that
+  class had already landed.** UTV2-1863 (#1542) types reclaim admission as
+  `'terminal_lane' | 'lapsed_ttl' | 'surrendered_status'` and gates it on
+  `findLeasesHeldByTerminalLanes` rather than on the clock — the repair this page recommended, built
+  and merged. On 2026-09-10 `.ops/leases/UTV2-1877.json` was nonetheless still `active`, with a dead
+  `owner_pid` (3576109) and a `file_scope_lock` of `["docs/mission/plan.md"]`, on a lane whose
+  manifest read `done` on `main`. `pnpm ops:lease release --issue UTV2-1877 --actor claude --reason
+  "<why>"` cleared it, which is the same escape the pre-gate occurrences needed. **The gate changed
+  what `reclaim` will admit; it did not make closeout release the lease.** Those are different
+  operations, and the five recorded occurrences were all diagnosed as the first one. The next lane
+  should sweep terminal leases before `lane-start` rather than after a refusal — and this is the
+  sixth occurrence of the class, which is what the filing threshold's "repeatedly strands lanes"
+  clause exists for. Recorded here rather than filed only because the escape is one command and it
+  stranded nothing this time.
+
+- **A root-checkout copy of a lane manifest is always the stale lane-start snapshot, and `main` or
+  the lane branch always wins.** `git pull --ff-only origin main` aborted on 2026-09-10 with
+  *"Please move or remove them before you merge"*, because #1554's merge put
+  `.ops/sync/UTV2-1877.yml` and `docs/06_status/lanes/UTV2-1877.json` on `main` while untracked
+  copies of both sat in the root checkout. The untracked copies read `status: "started"`,
+  `commit_sha: null`, `pr_url: null` — the snapshot written at lane-start, before the lane did
+  anything. The authoritative copy on `main` read `status: done` with the merge SHA. The same
+  situation existed for UTV2-1878, whose authoritative copy lives on its **own branch** rather than
+  on `main`, because that lane is still open. **The rule is mechanical and the order matters: diff
+  the root copy against its authoritative version *first*, establish which is which, and only then
+  remove.** Deleting first and reasoning afterwards would have destroyed a live lane's manifest in
+  the UTV2-1878 case, where the authoritative copy happened to be safe on a branch — the outcome was
+  correct by luck of where the file lived, not by the procedure used.
 
 - **The plan can be stale against work this same session merged, and the injected copy is what
   makes that invisible.** `CLAUDE.md` `@`-includes `docs/mission/plan.md` at session start, so the
