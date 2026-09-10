@@ -16,6 +16,24 @@ import { ROOT } from './shared.js';
 
 type WorkflowDocument = Record<string, unknown>;
 
+test('return review workflow resolves repository and legacy identities through environment data', () => {
+  const workflow = readWorkflow('return-review-packet.yml');
+  const line = workflow.split('\n').find((value) => value.trim().startsWith('ISSUE='));
+  assert.ok(line);
+  assert.ok(!line.includes('${{'), 'branch content must not be interpolated into shell code');
+  for (const [branch, expected] of [
+    ['codex/work-999-ordinary', 'WORK-999'], ['codex/uni-42-review', 'UNI-42'],
+    ['codex/utv2-123-review', 'UTV2-123'], ['codex/unclassified', ''],
+    ['codex/work-999x', ''],
+  ]) {
+    const result = spawnSync('bash', ['-c', `${line}\nprintf '%s' "$ISSUE"`], {
+      encoding: 'utf8', env: { ...process.env, HEAD_REF: branch },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, expected);
+  }
+});
+
 function readWorkflow(name: string): string {
   return fs.readFileSync(path.join(ROOT, '.github', 'workflows', name), 'utf8');
 }
