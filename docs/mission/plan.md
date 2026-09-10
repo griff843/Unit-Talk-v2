@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-09 (second pass, against `main` `3cab0a2c5`)
+**Last reconciled against live truth:** 2026-09-10 (fourth pass, against `main` `ecfe3fc99`)
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -73,24 +73,33 @@ earned — and it is recorded here rather than filed, per the ratified filing th
 
 ---
 
-## Reconciled current truth (2026-09-09, re-measured late the same day)
+## Reconciled current truth (2026-09-10, re-measured against `main` `ecfe3fc99`)
 
 Verified against `origin/main`, the GitHub API, git ancestry, live production SQL and the current
 readiness ledger. Not against docs or chat history.
 
-- `main` is `3cab0a2c5`. The tip is still `ops(readiness): refresh ledger [skip ci]` — the bot
-  commit that has been taxing every open lane's head-pinned artifact for seven consecutive
-  reconciliations. **The earlier entry on this page naming `17741e6a4` was true when written and is
-  now stale by 21 commits**, which is exactly the drift rate this section exists to absorb.
-- **Production is `755e52a6c` and has begun to drift again.** The morning measurement of one
-  bot commit and zero container files no longer holds:
+- `main` is `ecfe3fc99`. **The entry on this page naming `c37097fee` was true when written and was
+  stale by 6 commits within a day** — the fourth consecutive reconciliation to have to say that
+  about its own predecessor, and the first where the reconciliation's *own* merge is two of the
+  six. Four of the six are `ops(readiness): refresh ledger [skip ci]`; the other two are #1554
+  (this page's previous pass) and its closeout commit. The rate is the finding: a SHA written into
+  prose is wrong before the next lane closes, which is why the drift below is recorded as a
+  *command* rather than a count.
+- **Production is `755e52a6c`, and re-measured on 2026-09-10 the drift still does not request a
+  deploy.** Six more commits than the previous reconciliation measured, and **the same five
+  container files** — not five more:
 
   ```
-  git rev-list --count 755e52a6c..origin/main                                    -> 21
+  git rev-list --count 755e52a6c..origin/main                                    -> 37
   git diff --name-only 755e52a6c origin/main -- 'apps/**' 'packages/**' 'deploy/**' \
     | grep -v '\.test\.' | wc -l                                                 -> 5
   git diff --name-only 755e52a6c origin/main -- 'supabase/migrations/'  | wc -l  -> 0
   ```
+
+  That is the useful shape of the finding: **the conclusion has now survived the commit count
+  growing from 21 to 31 to 37 because it was never about the count.** Every commit since has been
+  ops scripts and docs. The count is the number this page keeps having to correct; the file list is
+  the number that decides whether a deploy is owed, and it has not moved in three reconciliations.
 
   **The five container files are named rather than counted, because the count alone would read as
   a deploy obligation and it is not one:**
@@ -110,23 +119,87 @@ readiness ledger. Not against docs or chat history.
   consequential fact on this page" stays closed.
 
   **The generalisable point is about this document, not about the deploy.** A drift measurement is
-  a reading taken at an instant, and this page carried one for less than a day before it was wrong
-  by 21 commits. The durable form is the *command*, which is why it is written out above — a reader
-  who runs it gets the current answer, and a reader who trusts the prose gets the morning's.
-- **11 PRs are open** (down from 13): #1429, #1451, #1479, #1484, #1491, #1492, #1495, #1496, #1498,
-  #1505, #1513. Two left by merging — #1521 (UTV2-1843) and #1536 (UTV2-1856) — and #1539
-  (UTV2-1859) merged after them, which is what removed the client-side player-prop refusal.
+  a reading taken at an instant, and this page has now carried three of them that were wrong within
+  a day. The durable form is the *command*, which is why it is written out above — a reader who
+  runs it gets the current answer, and a reader who trusts the prose gets the morning's.
+- **13 PRs are open**, measured rather than carried: #1429, #1451, #1479, #1484, #1491, #1492,
+  #1495, #1496, #1498, #1505, #1513, #1556, #1557. **The bullet that stood here said 11, and it was
+  the count at the moment it was written** — #1554 merged and closed out, and #1556 and #1557 opened
+  after it. Two of the thirteen are new work rather than backlog:
   - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six, unchanged
-    for six reconciliations. All were opened with no `UTV2-###` in the branch, so `Merge Gate`
+    for seven reconciliations. All were opened with no `UTV2-###` in the branch, so `Merge Gate`
     cannot resolve a tier. Self-inflicted; the remedy is readmission, not a gate change.
-  - **Admissible, awaiting a T1 verdict** (#1484, #1505, #1513) — three.
+  - **Admissible, awaiting a T1 verdict** (#1479, #1484, #1505, #1513, #1557) — five. #1557 is new:
+    it is the membership product contract plus the `intent.md` pointer, and four of its five
+    required checks are green with `Merge Gate` the only one failing, which is the signature of a
+    PR that needs an approval artifact rather than a repair.
   - **Admissible, `verify` red** (#1451) — real repair work, production DDL, PM-gated.
-  - **#1479** — `verify` green, needs an approval artifact rather than a repair.
+  - **#1556** — the Codex tracker-independence lane, in its own category. It is not awaiting a
+    verdict; it is awaiting a decision about how it closes out. See the packet section below.
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
-- **No lane manifest is `in_progress` on `main`**, and `ops:brief` reports `claude_lanes=0`,
-  `codex_cli_lanes=0`. The board is free.
+- **The board was free when this lane opened** — no lane manifest `in_progress` on `main`, and
+  `ops:brief` reporting `claude_lanes=0`, `codex_cli_lanes=0`. It is not free now, because this
+  reconciliation is itself a lane. Stated that way deliberately: every previous version of this
+  bullet reported a count taken before the reporting lane existed, which is a small instance of the
+  same measurement-at-an-instant problem the drift block above is written to absorb.
+
+### Three approval packets are outstanding, and all three are `BEHIND` on a head that has not moved
+
+Delivered and re-verified on 2026-09-10, and the re-verification is what makes this section worth
+writing. **All three heads are exactly where their packets pinned them, and all three PRs are
+nonetheless `BEHIND`** — `mergeable: MERGEABLE`, `mergeStateStatus: BEHIND`, measured on all three
+after #1554 merged. Nothing moved on the branches; `main` moved underneath them, and under
+`strict: true` that is enough.
+
+**The lane that moved it was this page's own previous reconciliation.** #1554 merged at
+`6bb0cb204`, its closeout commit landed on top, and between them they made every open PR on the
+board stale for merge purposes. That is not an argument against reconciling the plan — it is the
+head-pinning tax this page has recorded four times, now observed being levied by the reconciliation
+that records it. The rule it produces is unchanged and is the operative one here: **resync
+immediately before the verdict is requested, not after**, and not earlier than that, because the
+readiness bot moves `main` on a schedule and this lane will move it again.
+
+| PR | Lane | Head the packet is pinned to | State | What it needs |
+|---|---|---|---|---|
+| #1479 | UTV2-1815, T1 | `933abcc4739a5b3843cf429f5b6fb095b7ab10e5` | `BEHIND` | a resync, then the `t1-approved` label **and** a `pm-verdict/v1` APPROVED comment from CODEOWNERS, both re-pinned to the post-resync head |
+| #1557 | UTV2-1878, T1 | `12fd9ac11cf20262035b7a750465856778359556` | `BEHIND` | the same sequence |
+| #1556 | WORK-2026091001 | `0c219025f0793d4117d088c6f634d59e444ea705` | `BEHIND` | a choice among three exits, none of which is a verdict |
+
+**#1479's pin is not the one this page recorded, and the state it recorded has come back around.**
+The "Requires Griff" entry below named `d180096cc` and `BEHIND`. The head is superseded — the lane
+was resynced to `933abcc47` and its artifacts re-bound — but `BEHIND` is true again, for a different
+reason than the first time. **A stale head and a stale mergeability are two different kinds of
+staleness, and only one of them is fixed by re-pinning the packet.** The first needs the packet
+rewritten; the second needs `pnpm ops:merge-wrapper main-sync` and then the packet rewritten again,
+which is precisely why the artifacts are requested last.
+
+### #1554 merged under T3 authority, and the diagnosis it produced is reusable
+
+UTV2-1877 (the previous pass of this page) merged at
+`6bb0cb204ed81f1c5c584418c1596e1bf057f726` with all four required checks green at `71d7dc704`, and
+closed out automatically through `post-merge-lane-close.yml` run `34508067850`. No Griff action was
+involved, which is what T3 authority is for: green CI on the merge SHA plus a valid executor result,
+no PM verdict.
+
+Two things are worth carrying forward rather than the merge itself.
+
+**`UNSTABLE` is not a blocker when the red check is `Check issue references`.** A plan-reconciliation
+commit necessarily cites the issues it reconciles, so `Branch Discipline Guard` reports
+`multiple_issue_references` on every pass of this page. It is non-required, it is correct about what
+it found, and it is not a repair — clearing it means rewriting commit messages, which moves the head
+and invalidates the executor result bound to it. This page has recorded that trade twice before; it
+is recorded here a third time because `mergeStateStatus: UNSTABLE` reads as a refusal and is not one.
+
+**The ERV trigger semantics, stated once so the next lane does not re-derive them.** The
+`pull_request` trigger deliberately creates only the non-required *"Executor Result Preflight"*
+context (UTV2-1550). The required `Executor Result Validation` context is created **only** by
+`issue_comment` and `workflow_dispatch`. That is the whole mechanism behind the already-recorded
+"a PR can sit BLOCKED with everything green" class: the required context does not exist yet, so
+there is no red check to look at. The operational consequence is a rule, not a diagnosis —
+**post the `EXECUTOR_RESULT` comment after `verify` concludes and pinned to the then-current head**,
+because that comment is what creates the context in the first place.
 
 ### What the deploy changed about readiness, and what it did not
 
@@ -140,7 +213,7 @@ mean the same thing as each other:
 | `deploy_sha_alignment` | back to bookkeeping | 1 commit, **0** container files, 0 migrations. |
 | `ingestor_health` | fail | **Containment.** `SYNDICATE_MACHINE_MODE=parked` sets `UNIT_TALK_INGESTOR_AUTORUN=false`. |
 | `worker_outbox_health` | fail | **Containment.** Same mechanism — `UNIT_TALK_WORKER_AUTORUN=false`. Confirmed live: the last `worker.heartbeat` in `system_runs` is 2026-08-17. |
-| `dead_letter_count` | fail | 1953 of 1954 rows are `bucket:governance_hold` with `attempt_count=0`, which `QUEUE_READINESS_SEMANTICS.md` v1.0 says do not fail readiness. The bucketing defect (`readiness-refresh.ts:517-532` buckets on `attempt_count`, not on reason) is unrepaired and recorded rather than filed. |
+| `dead_letter_count` | **repaired 2026-09-09** | The bucketing defect is closed by UTV2-1875 (#1552, `6307d8f44`). `probeDeadLetterCount` now buckets on the recorded reason **and** whether delivery was attempted, reusing `classifyDeadLetter` from `outbox-triage.ts` rather than adding a fourth copy of that rule, and a partial read yields `unknown` rather than a quiet pass — under-reading shrinks `true_failure` toward zero, the reassuring direction. `QUEUE_READINESS_SEMANTICS.md` is at v1.1: its v1.0 definition cited `attempt_count >= max_attempts`, and `max_attempts` is not a column on `distribution_outbox`, which is why the code had diverged from its own cited contract. |
 | `db_tripwires` | unknown | The observer itself is red, so tripwire state is **unproven** and correctly not scored as passing. |
 
 **Readiness still cannot reach GREEN while containment holds**, because two blocking dimensions
@@ -871,7 +944,7 @@ own merits.
 | #1479 null-stake computation truth | **`verify` is green.** Only `Merge Gate` fails, so what it needs is an approval artifact, not a repair, and three of its non-required reds are each closed only by a Griff action (a `scope-override/v1` or `skip-proof-coverage` for the cross-PR proof-coverage rule; a commit-message rewrite that would move the anchor its staging receipt is bound to; and a read-only production credential, reserved decision 4). This plan states no verdict on it. |
 | #1451 June offer-history partitions | `verify` red; production DDL; PM-gated |
 | #1484 canonical reference bootstrap | `verify` green; needs a verdict (Wave 0 row 4) |
-| **The one `true_failure` dead-letter row** | **Read 2026-09-06 — done, and it was not a delivery failure.** It is the `proof-pick-blocked` guard refusing a `t1-proof` fixture to `discord:canary`, with its own run recorded `succeeded`. See the readiness section above. What remains is the *bucketing* defect it exposed in `readiness-refresh.ts:517-532`, recorded rather than filed. |
+| **The one `true_failure` dead-letter row** | **Read 2026-09-06 — done, and it was not a delivery failure.** It is the `proof-pick-blocked` guard refusing a `t1-proof` fixture to `discord:canary`, with its own run recorded `succeeded`. See the readiness section above. The *bucketing* defect it exposed is now closed too — UTV2-1875 (#1552, `6307d8f44`). |
 | Closing-line truth | Not yet a branch |
 
 ### Wave 3 — Command Center
@@ -954,19 +1027,34 @@ recommendation below is kept only as the record of why it was chosen.** Verified
 `findLeasesHeldByTerminalLanes` (`:557`) rather than on the clock alone, with the helper *reused*
 rather than reimplemented so the definition of terminal cannot fork. The refusal message now names
 all three conditions. **The governance slot is empty again, and the five-occurrence defect that was
-its strongest claimant is closed.** The `pre-proof-validator` classification repair is now the
-leading candidate.
+its strongest claimant is closed.**
 
-The original entry follows.
+**And so is the candidate that replaced it — 2026-09-09.** The previous reconciliation named the
+`pre-proof-validator` classification repair as the leading candidate. Verified on `main` before
+opening a lane for it: `.claude/hooks/pre-proof-validator.sh:19-38` already classifies with a
+`case` statement *before* any `mktemp`, and carries a comment recording why the filter that avoids
+an allocation must not itself spawn a process. **An agent following this page would have opened a
+lane to fix code that already carries the fix** — which is precisely the cost the Learned entry on
+snapshot staleness names, paid by the document that records it.
+
+**The slot is empty and has no qualifying claimant today.** Under the ratified debt policy that is
+a correct state, not a gap to fill. Three governance defects closed on 2026-09-09 — UTV2-1874
+(review-packet proof scope), UTV2-1875 (dead-letter bucketing) and UTV2-1876 (the CEP tier
+conditions) — and what remains recorded is repair 2 of the CEP pair: stop `ops:lane-start`
+creating a `.gitkeep` for a lane whose `expected_proof_paths` is empty. It costs a lane one `rm`
+today, so it does not meet the threshold on its own.
+
+The original entry follows, superseded twice over.
 
 **The strongest candidate when the slot is next spent is the lease-reclaim terminality gate, now at
 five recorded occurrences** — UTV2-1830, UTV2-1835, UTV2-1838, UTV2-1840 and, on 2026-09-08,
 UTV2-1849, whose lease refused UTV2-1858's lane start (`lease_conflict Requested scope overlaps
 active lease for UTV2-1849`) while its own manifest read `done` on `main` and its `owner_pid` was
-`null`. Reclaim is purely TTL-gated (`lease-registry.ts:523-531`), so a provably finished lease
-stays unreclaimable for 48 hours and `ops:lease release` is the only escape. `findLeasesHeldByTerminalLanes`
-(`:769-800`) already computes exactly the predicate the reclaim path should be using. The
-`pre-proof-validator` classification repair recorded under Learned is the second candidate.
+`null`. Reclaim was purely TTL-gated, so a provably finished lease stayed unreclaimable for 48
+hours and `ops:lease release` was the only escape. `findLeasesHeldByTerminalLanes` already computed
+exactly the predicate the reclaim path should have been using — which is how UTV2-1863 fixed it,
+by reusing that helper rather than re-deriving the definition of terminal. Both candidates named
+here are now closed; see the two supersessions above.
 
 ---
 
@@ -1409,11 +1497,15 @@ The system contradicts itself here in two directions, and both were hit on one l
 - **`ops:lane-manifest update` cannot add either one.** It supports `--pr-url`, `--commit-sha` and
   `--files-changed`; `expected_proof_paths` is settable only at `create` (`lane-manifest.ts:128`).
 
-`Return review packet` is not one of the four required checks, so this blocks no merge — it emits a
-`FAIL` verdict on a correctly-constructed bundle. The repair is one of: give the packet a
-`docs/06_status/proof/<ID>/**` glob the way `sameIssueLaneMetadataPaths` already does for the sync
-file and manifest, or teach `ops:lane-manifest update` to extend `expected_proof_paths`. Recorded
-here rather than filed, per the filing threshold.
+`Return review packet` is not one of the four required checks, so this blocked no merge — it
+emitted a `FAIL` verdict on a correctly-constructed bundle.
+
+**Repaired 2026-09-09 — UTV2-1874 (#1551, `2b58117a2`).** The first of the two options above was
+taken: `sameIssueLaneMetadataPaths` now returns a third entry, `docs/06_status/proof/<ID>/**`,
+alongside the sync file and manifest it already covered. Deliberately keyed to **this** lane's
+issue id rather than to `docs/06_status/proof/**`, because editing another lane's proof bundle is
+real scope bleed and must still be reported — and both directions are asserted, since a scope check
+that is too wide fails silently.
 
 The earlier micromatch reading above stands corrected on its own terms as well: `{ dot: true }` was
 always present, and the fix this plan once proposed would have been a no-op.
@@ -1480,16 +1572,27 @@ wrong to imply otherwise. CEP reads the manifest, never the proof directory, so 
 `.gitkeep` would not quiet it. The two repairs are therefore complementary, not alternatives, and
 neither subsumes the other:
 
-1. **For CEP only** — give CEP-E1/E3/E4 the same `tier === 'T1' || tier === 'T2'` condition M7
-   already has. This was named as *the* repair in the first draft; it fixes exactly one of the four,
+1. **For CEP only** — give CEP-E1/E3/E4 the tier conditions the close gate already applies to the
+   same rules. This was named as *the* repair in the first draft; it fixes exactly one of the four,
    because the other three never consult the tier at all.
+
+   **Done 2026-09-09 — UTV2-1876 (#1553, `fa7ede27a`).** One correction to how it was framed here:
+   CEP-E4 needed the close gate's `tier === 'T2'` predicate, not M7's `T1 || T2` one. The gate runs
+   `evaluateT2ProofEvidence` at `truth-check-lib.ts:1618` inside `} else if (tier === 'T2') {`
+   while CEP ran the identical function unconditionally, so P11-P14 were T2-only by the gate's own
+   construction and applying M7's condition would have left them firing at T1. The exemption is
+   keyed on the **absence of a declared obligation**, never on the tier alone, so a T3 lane that
+   does declare `expected_proof_paths` is still held to every one of them.
+
+   **Its own PR is the evidence.** `Close eligibility preflight` was red on #1524, #1527, #1551 and
+   #1552, and green on #1553 — the lane that repaired it.
 2. **For the three proof gates** — stop `ops:lane-start` creating `docs/06_status/proof/<ID>/.gitkeep`
    for a lane whose `expected_proof_paths` is empty. It also removes an artifact the repo already
    knows is unsatisfiable: the review packet demands the `.gitkeep` be declared in scope while CEP-E2
    refuses it once declared, and `expected_proof_paths` is settable only at `create`.
 
-Neither is done here: this lane's `file_scope_lock` is `docs/mission/plan.md` alone, and a lock
-cannot be widened by an agent. Recorded rather than filed, per the filing threshold.
+Repair 1 is done, as recorded above. Repair 2 is not, and is not filed: it costs a lane a single
+`rm` today, which does not meet the ratified threshold on its own.
 
 **Repair 2 is now confirmed empirically rather than argued.** UTV2-1849 (#1527) is the same shape as
 UTV2-1846 — T3, `expected_proof_paths: []`, `docs/mission/plan.md` alone — and deleted the
@@ -1549,7 +1652,7 @@ covers `lane-close.ts`, `lane-finalize.ts` and `t2-proof-bundle.ts` — not thes
 
 | Item | File | State |
 |---|---|---|
-| A provably terminal lane's lease cannot be reclaimed for 48h — reclaim is purely TTL-gated (`lease-registry.ts:523-531`, `claude` TTL at `:133`). Observed live on UTV2-1830: merged `1cb31a43e`, truth-closed, lease still `active` with a dead owning PID. `ops:lease release` is the working escape, but reclaim should not require knowing that | `scripts/ops/lease-registry.ts` | **Real, not done.** Gate reclaim on lane terminality, reusing `findLeasesHeldByTerminalLanes` (`:769-800`) rather than the clock. Out of scope; recorded, not filed |
+| A provably terminal lane's lease cannot be reclaimed for 48h — reclaim was purely TTL-gated. Observed live on UTV2-1830: merged `1cb31a43e`, truth-closed, lease still `active` with a dead owning PID | `scripts/ops/lease-registry.ts` | **Done — UTV2-1863 (#1542, `d48e46f41`).** Reclaim is gated on lane terminality via `findLeasesHeldByTerminalLanes`, *reused* rather than reimplemented so the definition of terminal cannot fork. Closeout still leaves the lease `active` with `owner_pid: null`, so the leak itself is unchanged — reclaim now self-heals it instead of `ops:lease release` being the only escape |
 | `truth_check_history` grows on every non-`done` run, so an infra-error early return records a `fail` for what was a token blip | `scripts/ops/truth-check-lib.ts` | **The defect does not exist.** See below |
 
 **Corrected 2026-09-06: the `truth_check_history` defect this plan and UTV2-1838's own issue text
@@ -1573,9 +1676,9 @@ predate the issue. So this was never fixed recently; **it was wrong when written
 criterion 3 already holds on `main`. What is genuinely missing is a regression test locking it, and
 that test file is also outside this lane's lock.
 
-The lease item is survivable by hand today and blocks no production, so per the ratified filing
-threshold it is recorded here rather than filed. It is the natural content of the next governance
-lane if the slot is spent, alongside the `pre-proof-validator` classification repair under Learned.
+Both items are now closed — the lease item by UTV2-1863, and the `pre-proof-validator` repair that
+this paragraph paired it with, which was already on `main` when the previous reconciliation named
+it as a candidate.
 
 The general lesson is the expensive one: **an issue's own file:line citations are a snapshot, and a
 lane that implements against them without re-measuring implements against a stale repo.** Two of
@@ -1653,15 +1756,16 @@ Every other item below blocks only itself.
    2's list waits on it." Both were understatements** — approving it releases the whole grading
    pass, not one step.
 
-   **Two corrections to the mechanics of approving it, measured the same day.** `verify` and
-   `Writable DB proof (staging only)` were green at `d180096cc`, but `main` has since advanced
-   **18 commits** — 16 of them real lanes, not only readiness-bot noise — and `gh pr view` now
-   reports `mergeStateStatus: BEHIND`. Under `strict: true` it cannot merge without a resync, and
-   the resync moves the head and invalidates every artifact pinned to it. So the claim that "a
-   verdict binds a mergeable head rather than one that would need a resync afterwards" is no
-   longer true. Per this plan's own recorded lesson, **resync immediately before the verdict is
-   requested, not after** — and not earlier than that, because the readiness bot will move `main`
-   again in the meantime.
+   **Corrected 2026-09-10 — the `d180096cc` / `BEHIND` text above is superseded.** The lane has
+   been resynced since, and the approval packet is pinned to
+   `933abcc4739a5b3843cf429f5b6fb095b7ab10e5`, which was re-verified as still the live head on
+   2026-09-10. So the resync this row previously said was owed has been performed — **and the PR is
+   `BEHIND` again anyway**, because #1554 merged afterwards and moved `main`. `gh pr view` reports
+   `mergeable: MERGEABLE`, `mergeStateStatus: BEHIND`. The order of operations is therefore
+   unchanged and is the whole content of this correction: **resync immediately before the verdict is
+   requested, not after** — the resync moves the head, so the `t1-approved` label and the
+   `pm-verdict/v1` APPROVED comment must both be bound to the head that resync produces, not to the
+   one named above. The pin above is a measurement with an expiry, and it has already expired once.
 1. **Approve #1513** (UTV2-1802, T1) — the Command Center management token can no longer be handed
    arbitrary SQL. Green `verify`. Pre-deployment hardening: the Command Center is in no production
    compose service and behind no Caddy route, so this closes a surface #1496 would create rather
@@ -1742,6 +1846,35 @@ granted; the `ALLOWED_CAPPER_EMAILS` reshape; the #1477 decision; the #1501 appr
 scope override.
 
 ## Learned
+
+- **A lease leaked `active` on a terminal lane *after* the gate that was supposed to close that
+  class had already landed.** UTV2-1863 (#1542) types reclaim admission as
+  `'terminal_lane' | 'lapsed_ttl' | 'surrendered_status'` and gates it on
+  `findLeasesHeldByTerminalLanes` rather than on the clock — the repair this page recommended, built
+  and merged. On 2026-09-10 `.ops/leases/UTV2-1877.json` was nonetheless still `active`, with a dead
+  `owner_pid` (3576109) and a `file_scope_lock` of `["docs/mission/plan.md"]`, on a lane whose
+  manifest read `done` on `main`. `pnpm ops:lease release --issue UTV2-1877 --actor claude --reason
+  "<why>"` cleared it, which is the same escape the pre-gate occurrences needed. **The gate changed
+  what `reclaim` will admit; it did not make closeout release the lease.** Those are different
+  operations, and the five recorded occurrences were all diagnosed as the first one. The next lane
+  should sweep terminal leases before `lane-start` rather than after a refusal — and this is the
+  sixth occurrence of the class, which is what the filing threshold's "repeatedly strands lanes"
+  clause exists for. Recorded here rather than filed only because the escape is one command and it
+  stranded nothing this time.
+
+- **A root-checkout copy of a lane manifest is always the stale lane-start snapshot, and `main` or
+  the lane branch always wins.** `git pull --ff-only origin main` aborted on 2026-09-10 with
+  *"Please move or remove them before you merge"*, because #1554's merge put
+  `.ops/sync/UTV2-1877.yml` and `docs/06_status/lanes/UTV2-1877.json` on `main` while untracked
+  copies of both sat in the root checkout. The untracked copies read `status: "started"`,
+  `commit_sha: null`, `pr_url: null` — the snapshot written at lane-start, before the lane did
+  anything. The authoritative copy on `main` read `status: done` with the merge SHA. The same
+  situation existed for UTV2-1878, whose authoritative copy lives on its **own branch** rather than
+  on `main`, because that lane is still open. **The rule is mechanical and the order matters: diff
+  the root copy against its authoritative version *first*, establish which is which, and only then
+  remove.** Deleting first and reasoning afterwards would have destroyed a live lane's manifest in
+  the UTV2-1878 case, where the authoritative copy happened to be safe on a branch — the outcome was
+  correct by luck of where the file lived, not by the procedure used.
 
 - **The plan can be stale against work this same session merged, and the injected copy is what
   makes that invisible.** `CLAUDE.md` `@`-includes `docs/mission/plan.md` at session start, so the
@@ -1887,8 +2020,11 @@ scope override.
   `main`, `owner_pid: null` — and its lease refused UTV2-1858 with `lease_conflict`. Reclaim is
   purely TTL-gated, so the only escape is knowing that `ops:lease release --issue <ID> --actor
   <who> --reason <why>` exists. `findLeasesHeldByTerminalLanes` already computes the right
-  predicate; the reclaim path consults the clock instead. Fifth occurrence: UTV2-1830, 1835, 1838,
-  1840, 1849. It is now the strongest candidate for the governance slot.
+  predicate; the reclaim path consulted the clock instead. Fifth occurrence: UTV2-1830, 1835, 1838,
+  1840, 1849. **Closed by UTV2-1863 (#1542) — reclaim now admits a terminal lane's lease and reuses
+  that helper.** The *leak* is unchanged: closeout still leaves every merged lane's lease `active`
+  with `owner_pid: null`, observed again on UTV2-1874, 1875 and 1876. What changed is that it
+  self-heals on reclaim instead of requiring an operator to know `ops:lease release` exists.
 
 - **A failed `lane-start` leaves a branch and worktree the retry then refuses**, and the sanctioned
   cleaner does not model that state. `ops:lane-start` created both before failing the lease check;
@@ -2067,11 +2203,13 @@ scope override.
   when allocation fails. A full `/tmp` therefore denied every Bash call in every session — including
   the `rm` that would clear it — while the hook's actual validation (lines 367-374) only ever runs
   on staged `docs/06_status/proof/*` paths. Cost: an entire session segment, more than any gate
-  cost that day. **Repair candidate:** command classification must happen *before* any
-  temp-workspace requirement, so ordinary diagnostics and recovery commands can never be globally
-  denied by ENOSPC, while actual proof and commit mutations stay fail-closed. The detection step
-  writes to stdout and can be captured in a shell variable, so no temp file is needed to decide
-  whether the command is in scope. This is an instance of the same aggregate-conflation class as
+  cost that day. **Repaired — verified on `main` 2026-09-09 at `.claude/hooks/pre-proof-validator.sh:19-38`.**
+  A `case` statement now classifies before any `mktemp`, and its comment records the reasoning the
+  repair candidate called for, including that `case` rather than `grep` is used on purpose because
+  the filter that exists to avoid allocating a resource must not itself spawn a process. The second
+  allocation is deliberately left where it is, after the commit verdict, where failing closed is
+  correct. **This entry stood as "the leading candidate for the governance slot" after the fix had
+  already landed** — the recorded cost of a snapshot read as current state. This is an instance of the same aggregate-conflation class as
   `UTV2-1730`/`UTV2-1724` — infrastructure failure and policy refusal reported as one verdict —
   and is recorded here rather than filed, per the filing threshold.
 
