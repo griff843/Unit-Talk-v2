@@ -4,9 +4,23 @@ import { createHash } from 'node:crypto';
 import {
   evaluateFileScopeGuard,
   matchesLockPattern,
+  laneLifecycleScopePatterns,
   resolveTrustedManifests,
   type GitManifestSource,
 } from './file-scope-guard.js';
+
+for (const identity of ['WORK-999', 'UTV2-999', 'UNI-999']) {
+  test(`${identity} owns only its exact generated lifecycle paths`, () => {
+    const branch = `codex/${identity.toLowerCase()}-scope`;
+    const manifest = {issue_id: identity, branch, status: 'started', file_scope_lock: ['README.md'], expected_proof_paths: []};
+    const own = [`.ops/sync/${identity}.yml`, `docs/06_status/lanes/${identity}.json`, `docs/06_status/proof/${identity}/evidence.json`];
+    assert.equal(evaluateFileScopeGuard({prBranch: branch, changedFiles: own, manifests: [manifest]}).verdict, 'PASS');
+    for (const file of [`.ops/sync/${identity}0.yml`, `docs/06_status/lanes/${identity}0.json`, 'apps/api/src/auth.ts']) {
+      assert.equal(evaluateFileScopeGuard({prBranch: branch, changedFiles: [file], manifests: [manifest]}).verdict, 'FAIL', file);
+    }
+    assert.deepEqual(laneLifecycleScopePatterns(`${identity}/../other`), []);
+  });
+}
 
 /**
  * In-memory fake of the git-backed manifest source so the "trusted baseline"

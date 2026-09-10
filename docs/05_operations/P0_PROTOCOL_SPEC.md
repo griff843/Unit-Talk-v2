@@ -10,11 +10,11 @@ This document is the canonical mechanical enforcement spec for the P0 merge prot
 
 ## 1. What is "P0"
 
-Repository classification is authoritative. `scripts/ops/tracker-independence/p0-classifier.cjs` is shared by CI, `ops:p0-detect` and truth-check. Its reviewed registry is `docs/governance/tracker-independence/p0-classifications.json` (`schema_version: 1`, classifications with `issue_id`, `required` and `evidence`). Legacy UTV2/UNI and new WORK identities use the same rules.
+Repository classification is authoritative. `scripts/ops/tracker-independence/p0-classifier.cjs` is the shared evaluator foundation for CI, `ops:p0-detect` and truth-check. Its reviewed registry is `docs/governance/tracker-independence/p0-classifications.json` (`schema_version: 1`, classifications with `issue_id`, `required` and `evidence`). Legacy UTV2/UNI and new WORK identities use the same rules.
 
 Classification is `p0`, `non_p0` or `unknown`; `is_p0` is respectively true, false or null. Historical positives include UTV2-914 through UTV2-923, UTV2-948, UTV2-949 and UTV2-953. The initial batch is not an exhaustive negative classification of every other item. Trusted-base positive evidence or a candidate positive declaration requires the protocol; a candidate cannot clear that classification by deleting or editing a field or registry entry.
 
-A negative declaration on an unmerged candidate requires an authorized exact-head `PM_VERDICT` with schema `pm-verdict/v1`, matching work ID, PR and Head SHA, validated through the existing merge-gate verdict validator. Trusted-base negative evidence remains usable after merge. Missing or unknown classification is a blocking condition, never an implicit non-P0 result. Tracker credentials, project reads and outages do not influence classification.
+A candidate manifest that explicitly declares `p0_protocol.required: false` is classified non-P0 when that same manifest carries a valid T1, T2 or T3 tier. This applicability decision does not require a second P0-specific human verdict. The protected Merge Gate evaluates the declared tier independently and continues to enforce its ordinary T1 and T2 review and approval requirements, including exact-head approval where the tier policy requires it. Trusted-base negative evidence remains usable after merge. Missing flags, missing or invalid tiers, and unknown classification are blocking conditions, never implicit non-P0 results. Tracker credentials, project reads and outages do not influence classification.
 
 Run `pnpm ops:p0-detect <WORK-ID>` before merge; existing UTV2/UNI identifiers remain compatible.
 
@@ -151,4 +151,6 @@ After the P0 batch (UTV2-914 through UTV2-923) closes:
 
 ## Tracker cutover bootstrap boundary
 
-The new workflow checks out its evaluator from the trusted protected base, never candidate implementation. If that base does not yet contain the evaluator, the check must refuse with a governed bootstrap review requirement. This specification describes the intended cutover behavior; it is not evidence that bootstrap, independent exact-head review, protected integration or tracker-free closeout has occurred. Prepare the existing required approval/bootstrap artifact before requesting the reserved action; do not direct-push main, fabricate checks or execute candidate code as merge authority.
+PR #1556 carries the evaluator foundation. Until that foundation lands on the protected base, `.github/workflows/p0-protocol.yml` remains the existing base consumer and does not treat candidate-only evaluator code as merge authority. The follow-up workflow patch must be applied only after the foundation lands, and must check out and execute the evaluator from the trusted protected base rather than from candidate implementation.
+
+This specification describes the intended cutover behavior; it is not evidence that bootstrap, independent exact-head review, protected integration or tracker-free closeout has occurred. P0 work still requires its human verdict bound to the exact reviewed head, complete runtime evidence and manual merge. Prepare the existing required approval/bootstrap artifact before requesting the reserved action; do not direct-push main, fabricate checks or execute candidate code as merge authority.

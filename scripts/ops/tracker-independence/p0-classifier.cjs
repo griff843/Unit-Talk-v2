@@ -75,10 +75,17 @@ function classifyP0Evidence(input) {
     if (candidateManifest === true || candidateRegistry === true) return result('p0', 'candidate', 'Candidate explicitly requires P0 protocol');
     if (baseManifest === false || baseRegistry === false) return result('non_p0', 'base', 'Explicit reviewed classification committed on trusted base');
     if (candidateManifest === false || candidateRegistry === false) {
-      if (input.approval === true) return result('non_p0', 'review', 'Explicit candidate non-P0 classification approved at exact head');
-      return result('unknown', 'review_required', 'Candidate non-P0 classification requires an authorized exact-head PM verdict');
+      const tier = input.candidateManifest?.tier;
+      if (!['T1', 'T2', 'T3'].includes(tier)) {
+        return result('unknown', 'missing', 'An explicit non-P0 declaration requires a repository manifest with a valid risk tier');
+      }
+      // Applicability is not merge authorization. This trusted classifier
+      // preserves every positive obligation above and reads the existing lane
+      // declaration. The required Merge Gate still applies T3/T2/T1 approval
+      // policy; classification must not add a second, universal human gate.
+      return result('non_p0', 'manifest', `Explicit repository non-P0 declaration; existing ${tier} merge and review requirements still apply`);
     }
-    return result('unknown', 'missing', 'No explicit repository P0 classification; declare p0_protocol.required and obtain review for non-P0');
+    return result('unknown', 'missing', 'No explicit repository P0 classification; resolve applicability in the existing lane manifest');
   } catch (error) {
     return result('unknown', 'error', error instanceof Error ? error.message : String(error));
   }

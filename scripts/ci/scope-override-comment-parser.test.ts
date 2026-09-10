@@ -68,3 +68,14 @@ test('rejects a comment with a malformed Issue field', () => {
   const badIssue = REASON_AFTER_PATHS.replace('Issue: UTV2-1524', 'Issue: not-an-issue');
   assert.equal(parseScopeOverrideComment(badIssue), null);
 });
+
+test('accepts repository and legacy identities without relaxing field requirements', () => {
+  for (const issueId of ['WORK-2026091001', 'UNI-123', 'UTV2-1524']) {
+    const body = REASON_AFTER_PATHS.replace('UTV2-1524', issueId);
+    assert.equal(parseScopeOverrideComment(body)?.issue_id, issueId);
+    assert.equal(parseScopeOverrideComment(body.replace('PR: #1200', 'PR: missing')), null);
+  }
+  for (const issueId of ['WORK-123/../456', 'WORK-x', 'WORK-123-extra']) {
+    assert.equal(parseScopeOverrideComment(REASON_AFTER_PATHS.replace('UTV2-1524', issueId)), null);
+  }
+});

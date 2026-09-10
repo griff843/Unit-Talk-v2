@@ -20,11 +20,8 @@ async function evaluatePullRequest({ github, repo, number, headSha }) {
   };
   const json = async (file, ref) => { const text = await read(file, ref); return text === null ? null : JSON.parse(text); };
   const manifestPath = `docs/06_status/lanes/${issueId}.json`;
-  const comments = await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: number, per_page: 100 });
-  // Authorized human matches existing Merge Gate; candidate CODEOWNERS is never read.
-  const approval = validateClassificationApproval({ issueId, prNumber: number, headSha, comments, authorizedReviewers: ['griff843'] });
   const evidence = {
-    issueId, approval,
+    issueId,
     baseManifest: await json(manifestPath, pr.base.sha),
     baseRegistry: await json(REGISTRY_PATH, pr.base.sha),
     candidateManifest: await json(manifestPath, headSha),
@@ -34,6 +31,9 @@ async function evaluatePullRequest({ github, repo, number, headSha }) {
   const summary = `${issueId}: ${classification.classification} — ${classification.reason}`;
   if (classification.classification === 'unknown') throw new Error(summary);
   if (classification.is_p0) {
+    const comments = await github.paginate(github.rest.issues.listComments, { ...repo, issue_number: number, per_page: 100 });
+    // P0 retains its reserved human approval, regardless of the lane tier.
+    const approval = validateClassificationApproval({ issueId, prNumber: number, headSha, comments, authorizedReviewers: ['griff843'] });
     if (evidence.candidateManifest?.p0_protocol?.required !== true) throw new Error('Known P0 candidate must retain p0_protocol.required=true');
     if (evidence.candidateManifest.p0_protocol.merge_type !== 'manual') throw new Error('P0 requires manifest merge_type=manual');
     if (pr.auto_merge || pr.labels.some((label) => /^(automerge|auto-merge|auto_merge)$/i.test(label.name))) throw new Error('P0 forbids auto-merge');

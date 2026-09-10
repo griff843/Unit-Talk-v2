@@ -136,7 +136,9 @@ Ordinary truth-check uses the admitted manifest, local work contract, GitHub mer
 
 The admitted manifest tier is checked against repository scope/risk floors; no tracker result overwrites it. Tracker-dependent C1 and C7 transitions skip by default. Repository consistency checks continue unconditionally, including finding a manifest incorrectly closed without its required merge/proof.
 
-P0 classification is shared with CI and `ops:p0-detect` through `scripts/ops/tracker-independence/p0-classifier.cjs` and the reviewed registry `docs/governance/tracker-independence/p0-classifications.json`. Positive history and trusted-base positive declarations cannot be cleared by candidate changes. Unknown classification fails H1. An unmerged negative declaration requires the existing authorized, exact-head `pm-verdict/v1` approval; it is not inferred from a missing field or tracker outage.
+P0 classification uses `scripts/ops/tracker-independence/p0-classifier.cjs` and the reviewed registry `docs/governance/tracker-independence/p0-classifications.json`. Positive history and trusted-base positive declarations cannot be cleared by candidate changes. Unknown classification fails H1. A candidate manifest's explicit `p0_protocol.required: false` declaration classifies non-P0 only when the same manifest carries a valid T1, T2 or T3 tier; it is not inferred from a missing field or tracker outage and does not add a universal P0-specific human verdict. The protected Merge Gate still enforces the ordinary review and approval policy for that declared tier.
+
+PR #1556 carries this shared evaluator foundation. Until it lands on the protected base, `.github/workflows/p0-protocol.yml` remains the existing base consumer. Its follow-up exact workflow patch is applied only after the foundation lands, so candidate code never becomes its own merge authority.
 
 ### 4.4 Proof Checks (tier-gated)
 

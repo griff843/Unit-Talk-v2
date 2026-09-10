@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { classifyRepositoryP0, validateClassificationApproval } from './tracker-independence/p0-classifier.cjs';
+import { classifyRepositoryP0 } from './tracker-independence/p0-classifier.cjs';
 
 import { parseScopeOverrideComment } from '../ci/scope-override-comment-parser.ts';
 
@@ -1657,23 +1657,13 @@ export async function runTruthCheck(
     }
 
     const manifestP0 = manifest.p0_protocol;
-    let classificationApproval = false;
-    try {
-      const comments = await fetchGitHubPullRequestComments(prRef.owner, prRef.repo, prRef.number, githubToken);
-      classificationApproval = validateClassificationApproval({
-        issueId, prNumber: prRef.number, headSha: pullRequest.head?.sha,
-        comments, authorizedReviewers: [...PM_VERDICT_CODEOWNERS],
-      });
-    } catch {
-      // Unavailable review evidence cannot authorize a new negative classification.
-    }
     const p0 = classifyRepositoryP0({
       root: ROOT, issueId, baseRef: pullRequest.base?.sha ?? 'origin/main',
-      headRef: pullRequest.head?.sha ?? undefined, approval: classificationApproval,
+      headRef: pullRequest.head?.sha ?? undefined,
     });
     if (p0.classification === 'non_p0') {
       for (const id of ['H1', 'H2', 'H3', 'H4', 'H5']) {
-        addCheck(id, 'skip', 'reviewed repository classification is non-P0');
+        addCheck(id, 'skip', 'repository classification is non-P0; required merge and tier checks remain applicable');
       }
     } else if (p0.classification === 'unknown') {
       addCheck('H1', 'fail', `P0 classification unresolved: ${p0.reason}`);

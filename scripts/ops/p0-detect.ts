@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { emitJson, parseArgs, requireIssueId } from './shared.js';
@@ -15,30 +14,15 @@ export interface P0DetectResult {
   reason: string;
 }
 interface DetectOptions { root?: string; baseRef?: string; headRef?: string; prNumber?: number }
-interface ApprovalComment { body: string; user: { login: string; type: string }; created_at: string }
 const require = createRequire(import.meta.url);
 const classifier = require('./tracker-independence/p0-classifier.cjs') as {
   classifyRepositoryP0(input: DetectOptions & {root: string; issueId: string; approval?: boolean}): P0DetectResult;
-  validateClassificationApproval(input: {issueId: string; prNumber: number; headSha: string; comments: ApprovalComment[]; authorizedReviewers: string[]}): boolean;
 };
 
 export async function detectP0(issueId: string, options: DetectOptions = {}): Promise<P0DetectResult> {
   const root = options.root ?? process.cwd();
   const input = { ...options, root, issueId: issueId.toUpperCase(), baseRef: options.baseRef ?? 'origin/main' };
-  const result = classifier.classifyRepositoryP0(input);
-  if (result.source !== 'review_required' || !options.prNumber) return result;
-  try {
-    const gh = (args: string[]) => execFileSync('gh', args, { cwd: root, encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] });
-    const pr = JSON.parse(gh(['pr', 'view', String(options.prNumber), '--json', 'headRefOid,baseRefOid'])) as {headRefOid: string; baseRefOid: string};
-    const localHead = execFileSync('git', ['rev-parse', '--verify', `${options.headRef ?? 'HEAD'}^{commit}`], {cwd: root, encoding: 'utf8'}).trim();
-    if (pr.headRefOid !== localHead) return {...result, reason: 'PR head does not match local candidate commit'};
-    // An approval must bind committed candidate bytes, never uncommitted files.
-    const comments = (JSON.parse(gh(['api', '--paginate', '--slurp', `repos/{owner}/{repo}/issues/${options.prNumber}/comments`])) as ApprovalComment[][]).flat();
-    const approval = classifier.validateClassificationApproval({issueId: input.issueId, prNumber: options.prNumber, headSha: localHead, comments, authorizedReviewers: ['griff843']});
-    return classifier.classifyRepositoryP0({...input, baseRef: pr.baseRefOid, headRef: localHead, approval});
-  } catch {
-    return {...result, reason: 'Unable to verify exact-head GitHub classification review; classification remains unknown'};
-  }
+  return classifier.classifyRepositoryP0(input);
 }
 
 async function main(): Promise<void> {
