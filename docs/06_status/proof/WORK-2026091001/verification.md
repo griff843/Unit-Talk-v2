@@ -69,3 +69,10 @@ These checks do not prove a real ordinary task and existing PR have completed pr
 ## Remaining integration controls
 
 The trusted-base scope guard requires its existing external authorization for nine paths: manifest/sync, scope guard/parser and their tests, scope and return-review workflows, and the return-review test file. No human verdict is fabricated and admission history is unchanged. T1 review/merge controls remain binding. The evaluator foundation precedes the recorded consumer patch; see integration.md. No cutover completion or closeout is claimed.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1556
+Approved PR head: pending merge
+Execution SHA: 2cbe26c35dc11b5ff3a80b67ae196efe80602e52
