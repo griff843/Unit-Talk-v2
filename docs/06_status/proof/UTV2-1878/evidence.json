@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1878",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "a615ba0aa5d9d6aef5e7539dc7a04c8e49e1c2d9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at_sha": "a615ba0aa5d9d6aef5e7539dc7a04c8e49e1c2d9",
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0,
+      "result": "pass"
+    },
+    "test": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "result": "pass",
+      "test_files": 100,
+      "tests": 6118,
+      "passed": 6118,
+      "failed": 0,
+      "note": "pnpm test emits one TAP aggregate per test file; the totals above are the sum across all 100 files, not the tail block."
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "result": "deferred_to_ci",
+      "note": "pnpm verify invokes ci:assert-staging-target and fails closed outside CI. The manifest records t1_live_db_precondition: deferred_to_ci; the required verify check and Writable DB proof (staging only) on the merge SHA are the evidence, enforced at closeout by truth-check G6."
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base 7b3fd41115d7ddd21815f0309b0ebf600f6d1f13 --head a615ba0aa5d9d6aef5e7539dc7a04c8e49e1c2d9",
+      "verdict": "PASS",
+      "changed_files": 4,
+      "rules_matched": []
+    },
+    "diff": {
+      "merge_base": "7b3fd41115d7ddd21815f0309b0ebf600f6d1f13",
+      "files_changed": 4,
+      "insertions": 553,
+      "deletions": 0,
+      "scope": "documentation only — no application code, schema, workflow, gate or entitlement enforcement path"
+    }
+  }
+}
