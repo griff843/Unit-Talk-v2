@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1882",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "53eecffab9de8a4185534c26556741e656147423",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "tests": {
+      "command": "pnpm test",
+      "test_files_green": 100,
+      "test_files_failed": 0
+    },
+    "validator_suite": {
+      "command": "pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts",
+      "tests": 35,
+      "pass": 35,
+      "fail": 0
+    },
+    "workflow_hardening": {
+      "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+      "pass": 66,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS"
+    },
+    "verify": {
+      "status": "delegated_to_ci",
+      "reason": "ci:assert-staging-target refuses the containment placeholder locally; the required verify check on PR #1560 is the authority"
+    }
+  },
+  "runtime_proof": {
+    "status": "not_applicable",
+    "reason": "CI validator identifier rules only; no apps/** or packages/** file is touched, so no deployed service behaviour changes.",
+    "t1_live_db_precondition": "deferred_to_ci",
+    "live_db_evidence": "Writable DB proof (staging only) on PR #1560"
+  },
+  "mutation_results": [
+    {
+      "mutation": "revert only the workflow inline copy (gates merges)",
+      "failures": 1
+    },
+    {
+      "mutation": "revert only the exported script copy",
+      "failures": 4
+    },
+    {
+      "mutation": "over-widen to admit any namespace",
+      "failures": 3
+    },
+    {
+      "mutation": "delete the Branch == head-ref binding",
+      "failures": 2
+    },
+    {
+      "mutation": "baseline",
+      "failures": 0
+    }
+  ]
+}
