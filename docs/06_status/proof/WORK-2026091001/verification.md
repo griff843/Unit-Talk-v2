@@ -1,16 +1,28 @@
-# WORK-2026091001 verification
+# PROOF: WORK-2026091001
 
 MERGE_SHA: pending merge
-Execution SHA: 2a24a307e6ff000faf5e234a4aec7cb28c0241de
+Execution SHA: 5634aed5bb9930c36dc77fe90cc10d4080c4d6cc
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1556
 
 ## Summary
 
 Ordinary explicit non-P0 classification uses the repository tier declaration without a second PM approval. Historical and trusted-base positive P0 obligations, unknown refusal, and existing tier review requirements remain. The lane is bound to PR #1556 through ops:lane-link-pr; files_changed is populated through ops:lane-manifest update. Proof was generated with ops:proof-generate and replaced with measured results.
 
+## ASSERTIONS:
+
+- [x] Ordinary non-P0 classification does not add a universal PM approval gate.
+- [x] Historical P0 obligations and ordinary tier approvals remain binding.
+- [x] Existing lane binding and measured proof are present.
+- [ ] Exact-head scope and T1 integration approvals are issued.
+- [ ] Consumer activation and real tracker-free integration/closeout are proven.
+
+## EVIDENCE:
+
+Measured commands and their limits follow.
+
 ## Verification
 
-Local pnpm verify: 6323 passes, 0 failures, 0 skips across reported TAP suites. All local static/build/test stages completed; the command exits 1 when the writable DB stage refuses the containment URL. This is not a full gate pass. No staging credentials entered the fixture environment. Smart Form browser E2E was not enabled.
+Local pnpm verify on source 2a24a307e6ff000faf5e234a4aec7cb28c0241de: 6323 passes, 0 failures, 0 skips across reported TAP suites. All local static/build/test stages completed; the command exits 1 when the writable DB stage refuses the containment URL. This is not a full gate pass. No staging credentials entered the fixture environment. Smart Form browser E2E was not enabled. The subsequent return-review workflow namespace correction at 5634aed5bb9930c36dc77fe90cc10d4080c4d6cc passed 67 workflow tests and scoped lint; a full rerun and final-head CI are required for that source.
 
 ```text
 $ pnpm verify
@@ -55,4 +67,4 @@ These component checks do not establish successful real ordinary/legacy integrat
 
 ## Remaining integration controls
 
-The trusted-base scope guard reports exactly seven paths requiring its existing external scope authorization: the lane manifest/sync, scope guard/parser and their tests, and scope workflow. No human scope verdict has been fabricated. The evaluator foundation must land before the recorded workflow activation patch. Required CI and T1 approval remain binding. See integration.md for the staged commands and dependency. No cutover completion or lane closeout is claimed.
+The trusted-base scope guard requires its existing external scope authorization for eight paths: the lane manifest/sync, scope guard/parser and their tests, scope workflow, and return-review workflow. No human scope verdict has been fabricated. The evaluator foundation must land before the recorded workflow activation patch. Required CI and T1 approval remain binding. See integration.md for the staged commands and dependency. No cutover completion or lane closeout is claimed.

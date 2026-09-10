@@ -23,7 +23,8 @@ checks out that trusted base, and evaluates the candidate without running its co
 1. Independently review the corrected exact head of #1556. Satisfy its existing
    T1 Merge Gate and exact-head scope controls. No approval is asserted here.
    The scope override must name the existing lane's own manifest and sync file,
-   plus the file-scope guard, comment parser, their tests and the scope workflow.
+   plus the file-scope guard, comment parser, their tests, scope workflow and
+   return-review workflow namespace correction.
    The original admission scope is retained; no history rewrite grants authority.
 2. Integrate #1556 through the existing serialized merge wrapper after required
    checks pass. Verify its merge is reachable from protected `main` and that

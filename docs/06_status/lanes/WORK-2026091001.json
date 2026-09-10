@@ -36,6 +36,7 @@
     ".github/workflows/merge-gate.yml",
     ".github/workflows/post-merge-lane-close.yml",
     ".github/workflows/proof-gate.yml",
+    ".github/workflows/return-review-packet.yml",
     ".github/workflows/tier-label-apply.yml",
     ".github/workflows/tier-label-check.yml",
     ".ops/sync/WORK-2026091001.yml",
@@ -98,7 +99,8 @@
     "scripts/ops/tracker-independence/p0-workflow.cjs",
     "scripts/ops/tracker-independence/truth-entry.test.ts",
     "scripts/ops/truth-check-lib.test.ts",
-    "scripts/ops/truth-check-lib.ts"
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/workflow-hardening.test.ts"
   ],
   "file_scope_lock": [
     ".agents/skills/dispatch/SKILL.md",
@@ -183,7 +185,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-09-10T12:05:29.711Z",
-  "heartbeat_at": "2026-09-10T13:08:57.274Z",
+  "heartbeat_at": "2026-09-10T13:13:13.397Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026091001-tracker-independence.json",

@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "2a24a307e6ff000faf5e234a4aec7cb28c0241de",
+    "verified_source_sha": "5634aed5bb9930c36dc77fe90cc10d4080c4d6cc",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -22,7 +22,8 @@
       "skipped": 0,
       "result": "local static/build/test stages passed; writable DB stage refused containment URL",
       "limitation": "Not a full verify pass. Smart Form browser E2E was not requested by its environment flag. Final-head CI staging verification required.",
-      "log_sha256": "90f53e55a640494513d96a2834632c35c58764b49bc78bb6d41830eb42eb3626"
+      "log_sha256": "90f53e55a640494513d96a2834632c35c58764b49bc78bb6d41830eb42eb3626",
+      "source_sha": "2a24a307e6ff000faf5e234a4aec7cb28c0241de"
     },
     "independent_review": {
       "source_sha": "2a24a307e6ff000faf5e234a4aec7cb28c0241de",
@@ -42,6 +43,14 @@
       "staging_db": "success",
       "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34477871838",
       "applies_to_current_source": false
+    },
+    "additional_checks": {
+      "source_sha": "5634aed5bb9930c36dc77fe90cc10d4080c4d6cc",
+      "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+      "passed": 67,
+      "failed": 0,
+      "scoped_lint": "pass",
+      "full_verify": "rerun in progress; final-head CI required"
     }
   }
 }
