@@ -88,18 +88,75 @@ Track Only marker afterwards, which is the real ordering that shape models.
 ## Runtime Verification
 
 Runtime evidence is the hosted `Writable DB proof (staging only)` job on this PR
-head, against staging `xskgrzbteyqdufktjrjx`. The block in `evidence.json` is
-derived mechanically from that job's receipt and log by the UTV2-1641 harvester's
-own exported functions — not written by hand.
+head, against staging `xskgrzbteyqdufktjrjx`: run `34547046223`, job
+`staging-db-proof`, attempt 1, `exit_code 0`, TAP 7/7 pass, 0 fail, **0 skipped**.
+`assert-staging-target.ts` confirmed `host=xskgrzbteyqdufktjrjx.supabase.co`
+against canonical production ref `zfzdnfwdarxucxtaojxm` before any test ran.
+
+**How the block was produced, stated exactly.** The UTV2-1641 harvester
+(`harvestCiDbProofForMergeSha`) was run first and **refused**, so the block in
+`evidence.json` was assembled by hand from the run's own
+`ci-db-proof-receipt/v2` artifact (`receipt_sha256`
+`f6890151a5bbf707a876d7c8ec9b987d795e8b72df0560b57bdc58350c059f37`,
+`output_sha256` `586f1ca5009cf874bffed70e9dadf9583338d9111cdb9b3377c0011e8801ddaa`),
+downloaded from that run. Every value in the block is copied from that artifact;
+none is recalled or inferred.
+
+The refusal is a real tooling defect and is recorded rather than worked around
+silently. `locateCiDbProofRun` step 1 calls `findWorkflowJobForHeadSha(mergeSha)`
+and, when it hits, labels the result `identity_source: 'merge_sha_run'` — which
+then demands `receipt.github_sha === mergeSha` exactly. On a `pull_request` run
+`GITHUB_SHA` is the merge-ref commit (`71ef808ba…`, `refs/pull/1561/merge`), not
+the PR head (`2848f0cb3…`), so the harvester fails closed with
+`receipt_invalid`. The module already contains the correct rule for this case —
+the `pr_head_run` branch, which accepts a receipt whose merge-ref second parent
+is the PR head — but step 1 shadows it, so that branch is only reachable through
+the step-2 fallback. Consequence: **pre-merge harvest of a PR-head receipt is
+structurally unavailable**, and every populated `runtime_proof` in this
+repository was therefore written either post-merge or by hand. The binding facts
+are recorded explicitly in `runtime_proof.binding` so a reader is not left to
+infer which SHA the receipt is bound to.
+
+A second, smaller finding from the same run: the first CI run on this branch
+(`34547012191`) was **cancelled** by the concurrency group when `lane-pr-binding`
+auto-committed `pr_url` and moved the head 30 seconds later. Its artifact upload
+failed with *"No files were found with the provided path:
+.out/ci-db-proof-receipt.json"*, and because `verify` is a summarising job that
+fails closed on a non-success staging result, `verify` went red for a reason that
+had nothing to do with the code. The green receipt above is from the second run,
+on the real head.
 
 **What this runtime proof does and does not cover, stated plainly.** It attests
-that the live database contract is intact at this head. It is **not** a
-UTV2-1861-specific live assertion, and one was deliberately not added: a new
-`t1-proof-*.test.ts` is only reachable through the `test:t1-proof:live` script in
-root `package.json`, and `package.json` is outside this lane's
-`file_scope_lock`, which is pinned at lane-start and cannot be widened by an
-agent. The behavioural evidence for this change is therefore the five new unit
-tests and the four-way mutation battery above.
+that the live database contract is intact at this head — the repository bundle's
+submission and settlement write path, three UTV2-920 atomic-rollback invariants,
+the UTV2-883 participant uniqueness invariant, and the two UTV2-996 settlement
+correction invariants, all against real staging. `0 skipped` is the load-bearing
+number: the suite elides itself when staging credentials are absent, so a
+non-zero skip count would mean nothing reached a database.
+
+It is **not** a UTV2-1861-specific live assertion, and the same statement is
+carried inside `runtime_proof.note` so it cannot be separated from the evidence
+it qualifies. No query in the block exercises the Track Only grading admission.
+The staging job's receipted command is `pnpm test:db`, which runs
+`apps/api/src/database-smoke.test.ts` and nothing else.
+
+One was not added, and the reason is mechanical rather than a preference. A
+lane-specific live suite must be a new `apps/api/src/t1-proof-utv2-1861-*.test.ts`
+wired into `test:t1-proof:live`, and that script is an **explicit enumerated list
+of 17 files, not a glob** — so it needs both root `package.json` and a new
+`apps/api/src` file. Both are outside this lane's `file_scope_lock`, which is
+pinned at lane-start and cannot be widened by an agent. `--files` additionally
+refuses a path that does not exist yet, and only a trailing `/**` glob is legal
+in a scope declaration, so the only route that would have admitted the new file
+is locking `apps/api/src/**` for a four-file change. This lane declined that as a
+worse trade than the honest gap.
+
+The behavioural evidence for this change is therefore `static_proof`: 96/96 lane
+tests, 6137 pass / 0 fail across the full suite, and the four-way mutation
+battery above in which M1–M4 each turn the suite red. `Proof Coverage Guard` is
+red on this PR for exactly the reason stated here; it is not one of the four
+required checks, and #1479 merged with the identical red for the identical
+reason.
 
 ## Measured effect on Milestone 1's pick
 

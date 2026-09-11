@@ -103,5 +103,87 @@
       },
       "note": "This is why the filter is load-bearing: admitting `validated` wholesale would add 21,364 picks to every grading pass. The single Track Only row is dfcd9486-cba2-4bb5-b684-beec36e52c0b, Milestone 1's pick. Nothing was written."
     }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "executed_at": "2026-09-11T00:34:57.750Z/2026-09-11T00:37:32.057Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials materialized by ci.yml. Never production. assert-staging-target.ts confirmed host=xskgrzbteyqdufktjrjx.supabase.co against canonical production ref zfzdnfwdarxucxtaojxm before any test ran.",
+    "command": "pnpm test:db -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts",
+    "receipt": "ci-db-proof-receipt/v2, job \"staging-db-proof\" (\"Writable DB proof (staging only)\"), run 34547046223 attempt 1, exit_code 0, TAP 7/7 pass 0 fail 0 skipped. receipt_sha256 f6890151a5bbf707a876d7c8ec9b987d795e8b72df0560b57bdc58350c059f37, output_sha256 586f1ca5009cf874bffed70e9dadf9583338d9111cdb9b3377c0011e8801ddaa, repo_migration_head 20260901150000_utv2_1811_rate_limit_buckets.sql. https://github.com/griff843/Unit-Talk-v2/actions/runs/34547046223",
+    "skipped": 0,
+    "binding": {
+      "pr": 1561,
+      "pr_head_sha": "2848f0cb39f7e9623a8a2bfb866d5f85136d1197",
+      "receipt_github_sha": "71ef808ba4d1cb2fc9cbf2456c387b8cd62ce7e0",
+      "receipt_github_ref_name": "1561/merge",
+      "binding_rule": "pr_head_run: this was a pull_request-triggered run, so the receipt's github_sha is the merge-ref commit refs/pull/1561/merge, whose second parent is the PR head 2848f0cb3. It is NOT the branch head and must not be read as one."
+    },
+    "note": "LOAD-BEARING SCOPE STATEMENT, stated here rather than only in verification.md so it cannot be separated from the evidence it qualifies. This is the generic staging live-DB proof for this lane's merge candidate. It is NOT a UTV2-1861-specific live assertion: no query below exercises the Track Only grading admission. The staging job's receipted command is `pnpm test:db`, which runs apps/api/src/database-smoke.test.ts and nothing else. A lane-specific live suite would have to be a new apps/api/src/t1-proof-utv2-1861-*.test.ts wired into the `test:t1-proof:live` script, and that script is an explicit enumerated list of 17 files rather than a glob -- so it needs both root package.json and a new apps/api/src file, both outside this lane's pinned file_scope_lock, which an agent cannot widen. `--files` additionally refuses a path that does not exist yet and only a trailing /** glob is legal, so the sole route would be locking apps/api/src/** for a four-file change. The lane declined that. The substantive evidence for this change is static_proof: 96/96 lane tests, 6137/0 full suite, and a four-mutation battery in which M1-M4 each turn the suite red. This is recorded as a known gap on the PR and in the EXECUTOR_RESULT rather than presented as a UTV2-1861 runtime assertion.",
+    "queries": [
+      {
+        "op": "DatabaseRepositoryBundle -> submissions/picks/settlement_records write path against staging PostgREST",
+        "purpose": "database-smoke test 1 -- the repository bundle persists a submission and a settlement end to end",
+        "observed": "ok 1, duration_ms 25270.883321",
+        "rows_affected": 0
+      },
+      {
+        "op": "atomic enqueue RPC with an invalid payload",
+        "purpose": "UTV2-920 test 2 -- an invalid atomic enqueue must write no lifecycle event and no outbox row",
+        "observed": "ok 2, duration_ms 25998.783161",
+        "rows_affected": 0
+      },
+      {
+        "op": "atomic delivery-confirmation RPC with an invalid payload",
+        "purpose": "UTV2-920 test 3 -- rolls back outbox status, receipt, lifecycle and audit writes together",
+        "observed": "ok 3, duration_ms 25016.806932",
+        "rows_affected": 0
+      },
+      {
+        "op": "atomic settlement RPC with an invalid payload",
+        "purpose": "UTV2-920 test 4 -- writes no settlement, lifecycle event or audit row",
+        "observed": "ok 4, duration_ms 24356.468451",
+        "rows_affected": 0
+      },
+      {
+        "op": "SELECT over participants grouped by (external_id, sport)",
+        "purpose": "UTV2-883 test 5 -- no duplicate participants for the same external_id and sport",
+        "observed": "ok 5, duration_ms 169.517085",
+        "rows_affected": 0
+      },
+      {
+        "op": "re-settle an already-settled pick via the settlement path",
+        "purpose": "UTV2-996 test 6 -- produces a correction rather than a duplicate base row",
+        "observed": "ok 6, duration_ms 25984.999333",
+        "rows_affected": 0
+      },
+      {
+        "op": "read back the correction chain for the re-settled pick",
+        "purpose": "UTV2-996 test 7 -- the chain is additive; the original settlement row is not mutated",
+        "observed": "ok 7, duration_ms 25969.056511",
+        "rows_affected": 0
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "database-smoke TAP tests executed against staging",
+        "count": 7
+      },
+      {
+        "label": "database-smoke TAP tests passed",
+        "count": 7
+      },
+      {
+        "label": "database-smoke TAP tests failed",
+        "count": 0
+      },
+      {
+        "label": "database-smoke TAP tests skipped (0 is load-bearing: the suite elides itself without staging credentials)",
+        "count": 0
+      },
+      {
+        "label": "UTV2-1861-specific live assertions executed (see note)",
+        "count": 0
+      }
+    ]
   }
 }
