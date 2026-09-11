@@ -26,6 +26,10 @@ Path 3 exists because **the orchestrator cannot always self-approve**: when the 
 
 ---
 
+## Verification scope
+
+Choose additional behavioral checks from changed paths and concrete failure risks. Required tier, R-level, CI, and proof obligations below still apply; this skill grants no waiver. Do not add a second verification pass solely because work was delegated. Preserve independent review where policy requires it. Stop optional testing once acceptance evidence is sufficient.
+
 ## Pre-merge checklist
 
 **Step 0 — R-level lookup (run before any other check, all tiers):**
@@ -74,7 +78,7 @@ Do not proceed to ops:truth-check without a PASS from r-level-check.ts.
 - **Runtime proof** = requires merged code against real infra (test:db, row counts, receipts, audit entries)
 - **T1 requires both.** Neither substitutes for the other.
 - Proof must reference the merge SHA. Stale proof (pre-merge mtime or wrong SHA) is invalid.
-- A verification claim requires: ran in current session, output captured, output checked. Stale runs don't count.
+- A verification claim requires inspectable output, provenance, and valid source/environment/SHA binding under the current proof policy. A session change alone does not invalidate evidence. Re-run when relevant inputs changed, freshness expired, or a required gate demands it.
 
 ---
 
@@ -106,7 +110,7 @@ Replace `NNN` with the issue number. Replace `APPROVED` with `CHANGES_REQUIRED` 
 **Forbidden completion language** — never use these when claiming work is done:
 - "should work", "probably", "seems to", "I believe", "looks good"
 
-**Required instead:** state what you ran, paste the output, cite the SHA. Evidence, not confidence.
+**Required instead:** state the result, cite the evidence and applicable SHA, and disclose limitations. Keep raw logs in the proof artifact; include only excerpts needed to explain a failure or decision.
 
 **When receiving review feedback:**
 - Never respond with "Great point!", "You're absolutely right!", or "Thanks for catching that!"
@@ -122,6 +126,6 @@ Replace `NNN` with the issue number. Replace `APPROVED` with `CHANGES_REQUIRED` 
 |---|---|
 | "Tests pass, so it's done" | Tests passing is necessary but not sufficient. truth-check requires SHA-tied proof. |
 | "CI is green on the branch" | Branch CI ≠ merge CI. Proof must reference the merge SHA on `main`. |
-| "I ran this last session" | Stale verification is not verification. Re-run in current session or don't claim. |
+| "I ran this last session" | Inspect the recorded evidence and its binding. Reuse it only if applicable policy and unchanged inputs permit it. |
 | "It's only T3, I can skip the checklist" | T3 still requires type-check + test + green CI. No tier skips verification. |
 | "The proof file exists" | Existence ≠ validity. Check the header SHA matches the merge SHA. |
