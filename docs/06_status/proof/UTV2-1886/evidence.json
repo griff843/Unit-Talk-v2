@@ -1,0 +1,304 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1886",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "86e46745a7368855f053814c33076b55634311aa",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "note": "86e46745a7368855f053814c33076b55634311aa is the last commit authored by this lane that changes anything outside docs/06_status/proof/UTV2-1886/. The lane has two implementation commits. a024baecb carries the chunk-size correction, the three URL-budget invariants, the live-PostgREST t1-proof suite, its test:t1-proof:live wiring and its db-writer-classification entry. The bound head then routes the URL measurement through packages/db/src/privileged-client-boundary.ts: at a024baecb that measurement imported createClient directly, which put a path from a pnpm test entrypoint to a raw driver constructor, and scripts/ci/privileged-db-client-guard.ts rule 3 refuses any such path regardless of inventory classification -- two tests inside the required `verify` job were red at a024baecb and are green at the bound head. Both supersede 3d9886e58, which was the anchor while the live-DB remedy was still uncommitted. The proof commit that carries this file sits on top of the bound head and changes nothing the assertions below are about.",
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-11T12:30:00.000Z",
+    "ci_sentinels": {
+      "run_id": 34598633546,
+      "run_attempt": 1,
+      "head_sha": "c4244f041bd6abacfbdc6313c34812a5c89a4739",
+      "verify": {
+        "job_id": 103262329594,
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "job_id": 103260375614,
+        "conclusion": "success"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. These sentinels pin the CI results to the PR head that produced them, not to the anchor -- the anchor 3d9886e58 is the last non-proof commit and c4244f041 is that commit plus the lane-PR binding and the proof bundle."
+    }
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test packages/db/src/settlement-invariants.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 21,
+          "pass": 21,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 12,
+          "new": 9
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ci/privileged-db-client-guard.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 17,
+          "pass": 17,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 17,
+          "new": 0
+        },
+        "label": "No test is added here. This suite is recorded because the lane's first implementation commit turned two of its tests RED inside the required `verify` job -- `ok 15 - the checked-in inventory clears the repository as it stands` and `ok 16 - nothing reachable from pnpm test constructs a client outside the boundary` -- by importing createClient directly in the URL measurement. Both are green at the bound head, where the measurement goes through createPrivilegedClient."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 71,
+          "pass": 71,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 69,
+          "new": 2
+        }
+      }
+    ],
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "row_counts": {
+        "pass": 6181,
+        "fail": 0,
+        "not_ok_lines": 0
+      }
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not run on the workstation: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses a workstation target (expected xskgrzbteyqdufktjrjx) by design. The CI `verify` job on PR 1565 is the authoritative run and is recorded under runtime_proof."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1886 --base origin/main --head 86e46745a",
+      "verdict": "PASS",
+      "changed_files": 13,
+      "rules_matched": [],
+      "advisory_missing": []
+    },
+    "mutation_battery": {
+      "command": "pnpm exec tsx --test packages/db/src/settlement-invariants.test.ts ; pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+      "baseline": {
+        "settlement_invariants": {
+          "tests": 21,
+          "pass": 21,
+          "fail": 0
+        },
+        "grading_service": {
+          "tests": 71,
+          "pass": 71,
+          "fail": 0
+        }
+      },
+      "mutations": [
+        {
+          "id": "a",
+          "change": "drop the .range pagination loop -- read only the first page of each chunk",
+          "failing": 1,
+          "failing_assertion": "collectLatestSettlementsByPick reads every page of a chunk, not just the first"
+        },
+        {
+          "id": "b",
+          "change": "reduce with record.created_at > current.created_at instead of compareSettlementRecordsDescending",
+          "failing": 1,
+          "failing_assertion": "collectLatestSettlementsByPick breaks a created_at tie on id, in either page order"
+        },
+        {
+          "id": "c",
+          "change": "catch the prefetch rejection and substitute an empty map",
+          "failing": 1,
+          "failing_assertion": "UTV2-1886: a failed settlement prefetch rejects the pass instead of reading as an empty map"
+        },
+        {
+          "id": "d",
+          "change": "revert the loop body to await repositories.settlements.findLatestForPick(pick.id)",
+          "failing": 1,
+          "failing_assertion": "UTV2-1886: the settlement lookup is one batched read, not one read per pick"
+        }
+      ],
+      "note": "Mutation (b) SURVIVED the first attempt and that is recorded rather than smoothed over. The correction-chain test used distinct created_at values, so it never exercised the comparator's tiebreak and `>` passed. The gap was in the test, not the implementation: a tie-ordering test was added, asserting both page orders because a one-order test passes by luck half the time, and the mutation is now caught. A surviving mutation is evidence the assertion is weak, never evidence the condition is unprovable."
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed",
+      "executed_at": "2026-09-11",
+      "observed": {
+        "grading_run_rows_7d": 108,
+        "median_gap_minutes": 91.1,
+        "min_gap_minutes": 88.1,
+        "max_gap_minutes": 152.5,
+        "poll_interval_minutes": 5,
+        "posted": 7306,
+        "awaiting_approval": 14984,
+        "track_only_validated": 1,
+        "population_total": 22291,
+        "settlement_records_rows": 37496,
+        "settlement_records_distinct_picks": 25430
+      },
+      "note": "The population and the settlement row count are what make pagination mandatory rather than precautionary: 37496 settlement rows over 25430 distinct picks average 1.47 rows per pick, and the average is not the bound -- a correction chain is unbounded, so any chunk can exceed PostgREST's 1000-row page. A truncated page does not raise; it silently omits picks, which reads as 'no settlement exists' and makes the caller settle an already-settled pick. The earlier form of this note said 'a 500-pick chunk can hold far more than PostgREST's default 1000-row page', which conflated a ROW cap with the BYTE cap that actually sets the chunk size: 500 ids produce a 19630-byte request line against the ~8 KiB proxy header buffer, so 500 was never a legal chunk. The chunk is now 98, derived in packages/db/src/runtime-repositories.ts and asserted against a real query builder."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "executed_at": "2026-09-11T12:23:36.863Z/2026-09-11T12:30:30.762Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials materialized by ci.yml. Never production. assert-staging-target.ts ran first and reported \"OK: target is the approved staging project\" before any test executed.",
+    "command": "job \"Writable DB proof (staging only)\", run 34598633546 attempt 1, job 103260375614, at head c4244f041 -- the head PRECEDING both of this lane's implementation commits. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 18 t1-proof suites wired at that head. This lane wires a 19th, apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts, whose staging evidence is produced by the CI run at the final head rather than by this receipt.",
+    "receipt": "ci-db-proof-receipt written to .out/ci-db-proof-receipt.json, sha256 6348d39d8285f7a3603605331c9f4aba441dd5f299b558409a08a4b540ceb5ff, uploaded as artifact utv2-1630-db-proof-receipt-34598633546-1. The receipt wraps `pnpm test:db` only; the t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34598633546/job/103260375614.",
+    "row_counts": [
+      {
+        "label": "TAP assertions executed against staging across both credentialed steps",
+        "count": 123
+      },
+      {
+        "label": "TAP assertions failed",
+        "count": 0
+      },
+      {
+        "label": "TAP assertions skipped (0 is load-bearing: a missing staging credential elides these suites silently)",
+        "count": 0
+      },
+      {
+        "label": "test files executed against staging (1 database-smoke + 18 t1-proof)",
+        "count": 19
+      },
+      {
+        "label": "live assertions exercising findLatestForPicks / collectLatestSettlementsByPick IN THIS RECEIPT, which is from the preceding head c4244f041. The suite that does exercise them is wired at the bound head and runs in the CI job at the final head",
+        "count": 0
+      },
+      {
+        "label": "live assertions touching settlement_records at all (suite 1136 immutability 4/4, suite 1137 correction chain 4/4). Both operate on the table directly through SQL and the repository's single-pick path; neither reaches the batched read",
+        "count": 8
+      },
+      {
+        "label": "production database connections opened by this job",
+        "count": 0
+      }
+    ],
+    "skipped": 0,
+    "binding": {
+      "pr": 1565,
+      "pr_head_sha": "c4244f041bd6abacfbdc6313c34812a5c89a4739",
+      "run_id": 34598633546,
+      "job_id": 103260375614,
+      "binding_rule": "pr_head_run: pull_request-triggered run at PR head c4244f041. `verify` and `Writable DB proof (staging only)` are both SUCCESS in this same run."
+    },
+    "coverage_gap": {
+      "status": "OPEN",
+      "statement": "The receipt recorded above is from head c4244f041, which PRECEDES the bound head, and it does NOT exercise the code this lane changed: none of the 18 t1-proof suites wired at that head, and not database-smoke, calls findLatestForPicks or collectLatestSettlementsByPick. This lane closes that gap in the repository rather than in prose -- apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts is committed, classified in docs/05_operations/db-writer-classification.json, and appended to the test:t1-proof:live script that ci.yml:143 runs. Its staging evidence therefore arrives with the CI run at the final head; this receipt cannot carry it, and saying so is the point of leaving this block open.",
+      "what_is_unproven": [
+        ".in('pick_id', chunk) returns rows for every id in the list against real PostgREST",
+        ".range(offset, offset + limit - 1) under the two-key ordering yields disjoint, consecutive pages",
+        ".order('created_at', desc).order('id', desc) agrees with compareSettlementRecordsDescending"
+      ],
+      "why_it_matters": "An under-read is the fail-OPEN direction: an omitted pick reads as 'no settlement exists' and the caller re-settles it. This is the exact class `Require live-DB proof for runtime changes` names (UTV2-519, UTV2-521).",
+      "guard_state": "`Require live-DB proof for runtime changes` is RED on this PR and is CORRECT. It is not the recorded #1479 false positive: no t1-proof file for UTV2-1886 exists on main or on this branch. It is not one of the four required checks, so it blocks no merge.",
+      "landed_remedy": "apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts, committed and present at the bound head. Test 1 builds three settled picks (1, 2 and 3 settlements chained through corrects_id) plus a deliberately unsettled control and asserts the real DatabaseSettlementRepository's findLatestForPicks agrees id-for-id with findLatestForPick, omits the unsettled pick, and returns exactly the settled count -- this is what proves .in() completeness and the ordering agreement against real PostgREST. Test 2 reads the same six-row, two-pick population at pageSize 1000, 1 and 2 and asserts all three maps are identical and match the single-pick path -- this is what proves later-page settlements are not missed. Test 3 reads three picks at chunkSize 1 and asserts the per-chunk results union rather than replace. The suite is gated on SUPABASE_SERVICE_ROLE_KEY and deletes no rows.",
+      "scope_consequence": "file_scope_lock is settable only at `ops:lane-manifest create` and this lane declared five files, so three of the five paths in this lane's diff sit outside it: apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts (the new suite), package.json (the only test:t1-proof:live wiring point -- pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on an unreachable test file), and docs/05_operations/db-writer-classification.json (scripts/ci/db-writer-inventory.ts discovers the file on its createDatabaseRepositoryBundle marker and rejects it unregistered; that validator runs at .github/workflows/ci.yml:243 INSIDE the required `verify` job, so this third path is not optional -- omitting it would turn a required check red). A lock cannot be widened by an agent and a scope-override/v1 is a CODEOWNERS artifact that is never self-authored. Measured on #1565 at 485cc944b the two scope checks DISAGREE and the disagreement is correct: `File scope lock` is RED and `Lane authority` is GREEN, because they read different sources. `Lane authority` evaluates the lane TYPE contract, and .lane/lanes/runtime.yml admits all three paths -- apps/api/** (:5), docs/05_operations/db-writer-classification.json (:42) and package.json (:48), the last two registered there by UTV2-1842 for exactly this case. `File scope lock` and `Return review packet` evaluate this lane's MANIFEST lock, pinned at ops:lane-manifest create to the five implementation files. An earlier draft of this bundle predicted both checks RED; that prediction was wrong about `Lane authority` and is corrected here from the measurement. None of the three is one of the four required checks, and each is reporting a real fact rather than a defect."
+    },
+    "queries": [
+      {
+        "label": "[assert-staging] target guard ran before any test in both credentialed steps and reported \"OK: target is the approved staging project\" (project ref masked by GitHub secret redaction)",
+        "result": "ok -- staging confirmed, production never contacted"
+      },
+      {
+        "label": "step `pnpm test:db` -- apps/api/src/database-smoke.test.ts against staging Postgres. This is the receipted step; ci-db-proof-receipt.json covers this step and no other",
+        "result": "7/7 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "step `pnpm test:t1-proof:live` -- the 18 t1-proof suites wired at head c4244f041 against staging Postgres (this lane wires a 19th, which this receipt predates), including t1-proof-utv2-1136-settlement-records-immutability.test.ts and t1-proof-utv2-1137-settlement-corrections.test.ts, the two that touch settlement_records",
+        "result": "all pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "COVERAGE GAP, stated as a query result because it is the load-bearing fact: NO suite in either step calls findLatestForPicks or collectLatestSettlementsByPick. Verified by grepping the two identifiers across apps/**/t1-proof-*.test.ts and apps/api/src/database-smoke.test.ts on this head -- zero hits. The 1136/1137 suites exercise settlement_records immutability and correction chains directly against the table (4 assertions each, verified in the job log); neither calls either function, and grep for both identifiers across database-smoke.test.ts and every apps/*/src/t1-proof-*.test.ts on head c4244f041 returns zero hits",
+        "result": "0 live assertions exercise the changed code path"
+      },
+      {
+        "label": "what the batched read was evidenced by at THIS head: the in-process unit tests in packages/db/src/settlement-invariants.test.ts (including the both-page-orders created_at tie test and the three URL-budget invariants this lane added) and the 71 in apps/api/src/grading-service.test.ts, all of which run against the in-memory repository and a stubbed fetchPage rather than PostgREST. At the bound head this is no longer the ONLY evidence -- the live suite named under landed_remedy exercises the real repository against staging Postgres",
+        "result": "21/21 and 71/71 pass -- static proof at this head, recorded as such"
+      }
+    ],
+    "live_suite_receipt": {
+      "what": "The staging execution of the suite THIS LANE ADDS, apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts. The `command` field above is bound to run 34598633546 at head c4244f041, which PRECEDES the suite; this entry is the receipt for the suite itself.",
+      "run": 34635996613,
+      "job": "Writable DB proof (staging only)",
+      "job_id": 103383898788,
+      "head_sha": "485cc944b4fba2946c1efdedfa8089822c576f77",
+      "job_conclusion": "success",
+      "steps": [
+        {
+          "number": 6,
+          "name": "Assert staging credentials present",
+          "conclusion": "success"
+        },
+        {
+          "number": 7,
+          "name": "Materialize staging-only environment",
+          "conclusion": "success"
+        },
+        {
+          "number": 10,
+          "name": "Run writable DB proof against staging",
+          "conclusion": "success"
+        },
+        {
+          "number": 11,
+          "name": "Run the T1 live proof suites against staging",
+          "conclusion": "success"
+        },
+        {
+          "number": 12,
+          "name": "Scrub credentials",
+          "conclusion": "success"
+        }
+      ],
+      "why_step_11_is_the_load_bearing_one": "Step 11 executes `pnpm test:t1-proof:live`, the script this lane appended the new suite to. Steps 6 and 7 run first and assert the target; scripts/ci/assert-staging-target.ts pins the project ref to xskgrzbteyqdufktjrjx, so a green step 11 is a statement about staging and cannot be a statement about production.",
+      "head_binding_note": "485cc944b is a proof-only commit on top of the bound head 86e46745a7368855f053814c33076b55634311aa: `git diff --name-only 86e46745a 485cc944b` returns exactly two paths, docs/06_status/proof/UTV2-1886/evidence.json and docs/06_status/proof/UTV2-1886/verification.md, and zero files outside that directory. The code the staging job exercised is therefore byte-identical to the bound head's code. A proof bundle can never carry a receipt for its own commit, because writing the receipt moves the head; binding it to the last non-proof commit and stating the diff is the honest form.",
+      "tap_output": {
+        "what": "The per-test TAP emitted by apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts inside step 11, read from the completed job log rather than inferred from the step conclusion.",
+        "lines": [
+          "ok 1 - UTV2-1886: findLatestForPicks agrees with findLatestForPick against live Postgres, and omits unsettled picks",
+          "ok 2 - UTV2-1886: a page-size-1 live read returns the same map as a single-page read",
+          "ok 3 - UTV2-1886: a chunk smaller than the id list still returns every settled pick"
+        ],
+        "counts": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "duration_ms": 6043.675016,
+        "durations_ms": {
+          "test_1": 2267.367153,
+          "test_2": 2212.835379,
+          "test_3": 1266.296877
+        },
+        "zero_skips": "skipped 0 and todo 0 are read from the TAP summary, not asserted. A gated suite that found no SUPABASE_SERVICE_ROLE_KEY would report its tests as skipped; these three ran. The per-test durations (2.27s, 2.21s, 1.27s) are the second, independent evidence that they performed real round trips rather than short-circuiting.",
+        "position_in_step": "The suite is the LAST of the 19 tsx --test invocations chained by test:t1-proof:live, so its TAP block is the final one in the step and the step's exit code is this suite's exit code."
+      }
+    }
+  }
+}

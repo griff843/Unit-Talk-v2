@@ -512,6 +512,20 @@ export interface SettlementRepository {
   record(input: SettlementCreateInput): Promise<SettlementRecord>;
   settlePickAtomic(input: SettlePickAtomicInput): Promise<SettlePickAtomicResult>;
   findLatestForPick(pickId: string): Promise<SettlementRecord | null>;
+  /**
+   * UTV2-1886: the batch form of `findLatestForPick`. `runGradingPass` asked the
+   * single-pick question once per pick over the whole population — 22,291 picks in
+   * production on 2026-09-11 — which is what put a median 91 minutes between
+   * consecutive grading runs against a 5-minute poll interval.
+   *
+   * Returns an entry only for picks that HAVE a settlement. An absent key therefore
+   * means "no settlement exists", and an implementation that under-reads reports a
+   * settled pick as unsettled, which makes the caller settle it again. Completeness
+   * is the load-bearing property of this method, not speed.
+   */
+  findLatestForPicks(
+    pickIds: readonly string[],
+  ): Promise<Map<string, SettlementRecord>>;
   listByPick(pickId: string): Promise<SettlementRecord[]>;
   listRecent(limit?: number | undefined, since?: string | undefined): Promise<SettlementRecord[]>;
 }

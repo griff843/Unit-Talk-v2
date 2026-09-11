@@ -1589,41 +1589,31 @@ test('runGradingPass writes a grading.run system_runs row on completion', async 
   assert.equal((runs[0]?.details as Record<string, unknown>)?.['failed'], 0);
 });
 
-test('runGradingPass writes grading.run row with failed count when errors occur', async () => {
-  const repositories = createInMemoryRepositoryBundle();
+// UTV2-1886: overriding a repository method has to preserve the prototype chain --
+// the in-memory repositories are class instances, so `{ ...repo, override }` silently
+// drops every method the test did not name and the failure reads as a missing method
+// rather than as the condition under test.
+function withRepositoryOverride<T extends object>(
+  repository: T,
+  overrides: Partial<T>,
+): T {
+  return Object.assign(
+    Object.create(repository as object),
+    repository,
+    overrides,
+  ) as T;
+}
 
-  const created = await processSubmission(
-    {
-      source: 'api',
-      market: 'points-all-game-ou',
-      selection: 'Over 24.5',
-      line: 24.5,
-      odds: -105,
-    },
-    repositories,
-  );
-  await transitionPickLifecycle(
-    repositories.picks,
-    created.pick.id,
-    'queued',
-    'queued',
-  );
-  await transitionPickLifecycle(
-    repositories.picks,
-    created.pick.id,
-    'posted',
-    'posted',
-    'poster',
-  );
+test('runGradingPass writes grading.run row with failed count when a pick fails to grade', async () => {
+  const { repositories } = await createPostedGameLinePickFixture();
 
   const brokenRepos = {
     ...repositories,
-    settlements: {
-      ...repositories.settlements,
-      findLatestForPick: async () => {
-        throw new Error('forced settlement error');
+    events: withRepositoryOverride(repositories.events, {
+      listByName: async () => {
+        throw new Error('forced event lookup error');
       },
-    },
+    }),
   };
 
   await runGradingPass(brokenRepos as typeof repositories);
@@ -1631,6 +1621,92 @@ test('runGradingPass writes grading.run row with failed count when errors occur'
   const runs = await repositories.runs.listByType('grading.run');
   assert.equal(runs.length, 1);
   assert.equal((runs[0]?.details as Record<string, unknown>)?.['failed'], 1);
+});
+
+test('UTV2-1886: a failed settlement prefetch rejects the pass instead of reading as an empty map', async () => {
+  const { repositories } = await createPostedGameLinePickFixture();
+
+  const brokenRepos = {
+    ...repositories,
+    settlements: withRepositoryOverride(repositories.settlements, {
+      findLatestForPicks: async () => {
+        throw new Error('forced settlement prefetch error');
+      },
+    }),
+  };
+
+  // An empty map is indistinguishable from "nothing is settled", so a prefetch that
+  // fails must stop the pass rather than hand the loop a map it can misread. Nothing
+  // is recorded, because the run row is only opened once the loop has finished.
+  await assert.rejects(
+    () => runGradingPass(brokenRepos as typeof repositories),
+    /forced settlement prefetch error/,
+  );
+
+  const runs = await repositories.runs.listByType('grading.run');
+  assert.equal(runs.length, 0);
+});
+
+test('UTV2-1886: the settlement lookup is one batched read, not one read per pick', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const pickIds: string[] = [];
+  for (let index = 0; index < 6; index += 1) {
+    const created = await processSubmission(
+      {
+        source: 'api',
+        market: 'points-all-game-ou',
+        selection: `Over ${24.5 + index}`,
+        line: 24.5 + index,
+        odds: -105,
+      },
+      repositories,
+    );
+    await transitionPickLifecycle(
+      repositories.picks,
+      created.pick.id,
+      'queued',
+      'queued',
+    );
+    await transitionPickLifecycle(
+      repositories.picks,
+      created.pick.id,
+      'posted',
+      'posted',
+      'poster',
+    );
+    pickIds.push(created.pick.id);
+  }
+
+  let perPickCalls = 0;
+  let batchCalls = 0;
+  let batchedIds: readonly string[] = [];
+
+  const countingRepos = {
+    ...repositories,
+    settlements: withRepositoryOverride(repositories.settlements, {
+      findLatestForPick: async (pickId: string) => {
+        perPickCalls += 1;
+        return repositories.settlements.findLatestForPick(pickId);
+      },
+      findLatestForPicks: async (ids: readonly string[]) => {
+        batchCalls += 1;
+        batchedIds = ids;
+        return repositories.settlements.findLatestForPicks(ids);
+      },
+    }),
+  };
+
+  await runGradingPass(countingRepos as typeof repositories);
+
+  assert.equal(batchCalls, 1);
+  assert.equal(perPickCalls, 0);
+  for (const pickId of pickIds) {
+    assert.ok(
+      batchedIds.includes(pickId),
+      `expected the batched read to cover ${pickId}`,
+    );
+  }
 });
 // --- Game-line grading tests (UTV2-385) ---
 
