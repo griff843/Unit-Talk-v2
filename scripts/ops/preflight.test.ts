@@ -16,6 +16,8 @@ import {
   branchContainsExactIssue,
   isLaneRegistryPath,
   createToken,
+  isDocsOnlyFastPathFile,
+  validateDocsOnlyFastPath,
   FULL_VERIFY_THROTTLE_DIR,
   FULL_VERIFY_THROTTLE_STALE_MS,
   configuredFullVerifyConcurrency,
@@ -667,4 +669,76 @@ test('UTV2-1851: the admitted token records the deferral, and an ordinary token 
     false,
   ) as PreflightToken;
   assert.equal('t1_live_db_precondition' in ordinary, false);
+});
+
+
+// --- UTV2-1884: the docs-only fast path admits product intent, not policy ---
+
+function collectFastPathChecks(
+  tier: 'T1' | 'T2' | 'T3',
+  docsOnlyFastPath: boolean,
+  candidateFiles: string[],
+): CheckResult[] {
+  const checks: CheckResult[] = [];
+  validateDocsOnlyFastPath(tier, docsOnlyFastPath, candidateFiles, (id, status, detail) => {
+    checks.push({ id, status, detail } as CheckResult);
+  });
+  return checks;
+}
+
+test('UTV2-1884: the docs-only fast path admits docs/03_product paths', () => {
+  assert.strictEqual(isDocsOnlyFastPathFile('docs/03_product/brand/README.md'), true);
+  assert.strictEqual(isDocsOnlyFastPathFile('docs/03_product/smart-form/intent.md'), true);
+  // The paths it already admitted are unchanged.
+  assert.strictEqual(isDocsOnlyFastPathFile('docs/06_status/CURRENT_STATE.md'), true);
+  assert.strictEqual(isDocsOnlyFastPathFile('.claude/commands/dispatch.md'), true);
+});
+
+test('UTV2-1884: the docs-only fast path still excludes policy and code paths', () => {
+  // intent.md: "A document that changes security or approval policy still
+  // requires substantive review." These must stay out, or the fast path becomes
+  // a way to land an approval-policy change without the local suite.
+  assert.strictEqual(isDocsOnlyFastPathFile('docs/05_operations/STANDING_GUARDRAILS.md'), false);
+  assert.strictEqual(isDocsOnlyFastPathFile('docs/mission/intent.md'), false);
+  assert.strictEqual(isDocsOnlyFastPathFile('docs/governance/LANE_CONCURRENCY_POLICY.md'), false);
+  assert.strictEqual(isDocsOnlyFastPathFile('.github/workflows/merge-gate.yml'), false);
+  assert.strictEqual(isDocsOnlyFastPathFile('scripts/ops/shared.ts'), false);
+  assert.strictEqual(isDocsOnlyFastPathFile('apps/api/src/grading-service.ts'), false);
+  // A path that merely starts with the admitted prefix as a substring is not
+  // admitted -- the separator is load-bearing.
+  assert.strictEqual(isDocsOnlyFastPathFile('docs/03_product_policy/secret.md'), false);
+});
+
+test('UTV2-1884: the docs-only fast path remains opt-in', () => {
+  const checks = collectFastPathChecks('T3', false, ['docs/03_product/brand/README.md']);
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [['PF1', 'skip']],
+    'PF1 must skip when the flag is not passed, leaving PB1/PB2 to run',
+  );
+});
+
+test('UTV2-1884: the docs-only fast path remains T3-only', () => {
+  for (const tier of ['T1', 'T2'] as const) {
+    const checks = collectFastPathChecks(tier, true, ['docs/03_product/brand/README.md']);
+    assert.deepStrictEqual(checks.map((check) => [check.id, check.status]), [['PF1', 'fail']]);
+    assert.match(checks[0]!.detail, /restricted to T3 lanes/);
+  }
+  const t3 = collectFastPathChecks('T3', true, ['docs/03_product/brand/README.md']);
+  assert.deepStrictEqual(t3.map((check) => [check.id, check.status]), [['PF1', 'pass']]);
+});
+
+test('UTV2-1884: one non-admitted path fails the whole fast-path scope', () => {
+  const checks = collectFastPathChecks('T3', true, [
+    'docs/03_product/brand/README.md',
+    'docs/mission/intent.md',
+  ]);
+  assert.deepStrictEqual(checks.map((check) => [check.id, check.status]), [['PF1', 'fail']]);
+  assert.match(checks[0]!.detail, /docs\/mission\/intent\.md/);
+});
+
+test('UTV2-1884: the fast path only skips the local duplicate, never a CI obligation', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts/ops/preflight.ts'), 'utf8');
+  assert.match(source, /PB1 skipped via T3 docs-only fast path; CI\/pnpm verify remains required before PR/);
+  assert.match(source, /PB2 skipped via T3 docs-only fast path; CI\/pnpm verify remains required before PR/);
 });

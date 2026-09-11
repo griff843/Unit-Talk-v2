@@ -1596,7 +1596,7 @@ function fastBaselineAllowed(tier: LaneTier, linearLabels: string[]): boolean {
   );
 }
 
-function validateDocsOnlyFastPath(
+export function validateDocsOnlyFastPath(
   tier: LaneTier,
   docsOnlyFastPath: boolean,
   candidateFiles: string[],
@@ -1630,10 +1630,18 @@ function validateDocsOnlyFastPath(
   addCheck('PF1', 'pass', 'T3 docs-only fast path scope is limited to docs/status paths');
 }
 
-function isDocsOnlyFastPathFile(repoRelativePath: string): boolean {
+// UTV2-1884: `docs/03_product/**` carries product intent and brand assets.
+// CLAUDE.md states that product intent docs "add no check, no approval artifact
+// and no lane type", so running the full local type-check and test suite before
+// such a lane may open duplicates work CI performs anyway. `docs/05_operations/`
+// and `docs/mission/` are deliberately NOT admitted: intent.md requires that
+// "a document that changes security or approval policy still requires
+// substantive review", and proportionality cuts both ways.
+export function isDocsOnlyFastPathFile(repoRelativePath: string): boolean {
   const normalized = normalizeRepoRelativePath(repoRelativePath);
   return (
     normalized.startsWith('docs/06_status/') ||
+    normalized.startsWith('docs/03_product/') ||
     (normalized.startsWith('.claude/commands/') && normalized.endsWith('.md'))
   );
 }

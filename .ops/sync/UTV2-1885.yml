@@ -1,0 +1,109 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1885
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1885
+  objective: "Outcome-first instruction revision: /verification and /three-brain"
+  acceptance_criteria:
+    - |-
+      Apply the outcome-first instruction revisions to the two skill files that sit outside PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)'s `file_scope_lock`:
+
+      * `.claude/commands/verification.md`
+      * `.claude/commands/three-brain.md`
+
+      **Why these two only.** Every other file in the proposal (`CLAUDE.md`, `AGENTS.md`, `.claude/commands/lane-recovery.md`, `.claude/commands/dispatch.md`, `.agents/skills/dispatch/SKILL.md`, `.claude/hooks/session-start.sh`) is inside PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)'s pinned `file_scope_lock` at status `in_review`, so `ops:lane-start` refuses them with `file_scope_conflict`, which has no override. Those revisions are carried in [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) itself, which already rewrites the same files.
+
+      **What changes.**
+
+      `verification.md` — replaces session-freshness as the verification criterion with evidence provenance and head binding. Adds a "Verification scope" section that selects behavioral checks from changed paths and concrete failure risks, and states explicitly that it grants no waiver of tier, R-level, CI or proof obligations.
+
+      `three-brain.md` — replaces the hardcoded Haiku subagent routing table with a policy-referencing statement about supported model profiles; replaces the "more than 3 files" mechanical delegation trigger with a substance-based one; and corrects the escalation rule so a reserved gate pauses only its dependent work rather than all work, matching `docs/mission/intent.md` § "Stop conditions".
+
+      **Acceptance criteria.**
+
+      1. Both files carry the revised text.
+      2. No tier, R-level, CI, proof, lane-admission, P0 or merge-authority obligation is waived or weakened anywhere in the diff.
+      3. The escalation change matches `intent.md` § "Stop conditions" rather than introducing a new rule.
+      4. `pnpm verify` green on the branch.
+      5. Green CI on the merge SHA.
+
+      **File scope:** `.claude/commands/verification.md`, `.claude/commands/three-brain.md`
+
+      **Verification:** `pnpm verify`; diff review against `intent.md` stop conditions and against `docs/05_operations/OPERATING_MODEL_SONNET5.md` for the model-routing claim.
+
+      **Dependencies:** none. Complements PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309); does not depend on it.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Apply the outcome-first instruction revisions to the two skill files that sit outside PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)'s `file_scope_lock`:
+
+      * `.claude/commands/verification.md`
+      * `.claude/commands/three-brain.md`
+
+      **Why these two only.** Every other file in the proposal (`CLAUDE.md`, `AGENTS.md`, `.claude/commands/lane-recovery.md`, `.claude/commands/dispatch.md`, `.agents/skills/dispatch/SKILL.md`, `.claude/hooks/session-start.sh`) is inside PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)'s pinned `file_scope_lock` at status `in_review`, so `ops:lane-start` refuses them with `file_scope_conflict`, which has no override. Those revisions are carried in [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) itself, which already rewrites the same files.
+
+      **What changes.**
+
+      `verification.md` — replaces session-freshness as the verification criterion with evidence provenance and head binding. Adds a "Verification scope" section that selects behavioral checks from changed paths and concrete failure risks, and states explicitly that it grants no waiver of tier, R-level, CI or proof obligations.
+
+      `three-brain.md` — replaces the hardcoded Haiku subagent routing table with a policy-referencing statement about supported model profiles; replaces the "more than 3 files" mechanical delegation trigger with a substance-based one; and corrects the escalation rule so a reserved gate pauses only its dependent work rather than all work, matching `docs/mission/intent.md` § "Stop conditions".
+
+      **Acceptance criteria.**
+
+      1. Both files carry the revised text.
+      2. No tier, R-level, CI, proof, lane-admission, P0 or merge-authority obligation is waived or weakened anywhere in the diff.
+      3. The escalation change matches `intent.md` § "Stop conditions" rather than introducing a new rule.
+      4. `pnpm verify` green on the branch.
+      5. Green CI on the merge SHA.
+
+      **File scope:** `.claude/commands/verification.md`, `.claude/commands/three-brain.md`
+
+      **Verification:** `pnpm verify`; diff review against `intent.md` stop conditions and against `docs/05_operations/OPERATING_MODEL_SONNET5.md` for the model-routing claim.
+
+      **Dependencies:** none. Complements PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309); does not depend on it.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1885/outcome-first-instruction-revision-verification-and-three-brain
+    title: "Outcome-first instruction revision: /verification and /three-brain"
+    description: |-
+      Apply the outcome-first instruction revisions to the two skill files that sit outside PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)'s `file_scope_lock`:
+
+      * `.claude/commands/verification.md`
+      * `.claude/commands/three-brain.md`
+
+      **Why these two only.** Every other file in the proposal (`CLAUDE.md`, `AGENTS.md`, `.claude/commands/lane-recovery.md`, `.claude/commands/dispatch.md`, `.agents/skills/dispatch/SKILL.md`, `.claude/hooks/session-start.sh`) is inside PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)'s pinned `file_scope_lock` at status `in_review`, so `ops:lane-start` refuses them with `file_scope_conflict`, which has no override. Those revisions are carried in [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) itself, which already rewrites the same files.
+
+      **What changes.**
+
+      `verification.md` — replaces session-freshness as the verification criterion with evidence provenance and head binding. Adds a "Verification scope" section that selects behavioral checks from changed paths and concrete failure risks, and states explicitly that it grants no waiver of tier, R-level, CI or proof obligations.
+
+      `three-brain.md` — replaces the hardcoded Haiku subagent routing table with a policy-referencing statement about supported model profiles; replaces the "more than 3 files" mechanical delegation trigger with a substance-based one; and corrects the escalation rule so a reserved gate pauses only its dependent work rather than all work, matching `docs/mission/intent.md` § "Stop conditions".
+
+      **Acceptance criteria.**
+
+      1. Both files carry the revised text.
+      2. No tier, R-level, CI, proof, lane-admission, P0 or merge-authority obligation is waived or weakened anywhere in the diff.
+      3. The escalation change matches `intent.md` § "Stop conditions" rather than introducing a new rule.
+      4. `pnpm verify` green on the branch.
+      5. Green CI on the merge SHA.
+
+      **File scope:** `.claude/commands/verification.md`, `.claude/commands/three-brain.md`
+
+      **Verification:** `pnpm verify`; diff review against `intent.md` stop conditions and against `docs/05_operations/OPERATING_MODEL_SONNET5.md` for the model-routing claim.
+
+      **Dependencies:** none. Complements PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309); does not depend on it.
+    captured_at: 2026-09-11T12:10:09.927Z
+    description_sha256: 325ff22593de77720d3ba95663384f4a785c0c874130608363913179316dba47
+  contract_hash: b05ca3bbd4108d26750cc943355420dfa4793beeb51a177e3bced49b191870aa
