@@ -1,0 +1,175 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1877
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1877
+  objective: Mission plan reconciliation — five recorded findings the plan lists
+    as open are closed, and one of them is its own named next candidate
+  acceptance_criteria:
+    - |-
+      ## Why now
+
+      `docs/mission/plan.md` is `@`-included into every session at start, so its staleness is not a documentation problem — it is the input agents plan against. This reconciliation is not routine tidying: **the plan currently directs the next governance lane at a defect that is already fixed on** `main`**.**
+
+      Measured 2026-09-09 against `origin/main` `c37097fee`, live GitHub and live git ancestry.
+
+      ## What is stale, measured rather than recalled
+
+      | Plan claim | Measured truth |
+      | -- | -- |
+      | `main` is `3cab0a2c5` | `c37097fee` — 31 commits on |
+      | "the `pre-proof-validator` classification repair is now the leading candidate" for the governance slot | **Already fixed.** `.claude/hooks/pre-proof-validator.sh:19-38` now classifies with a `case` statement *before* any `mktemp`, with a comment explaining that the filter avoiding an allocation must not itself spawn a process |
+      | lease reclaim is "purely TTL-gated (`lease-registry.ts:523-531`)", repeated in Learned and in Wave 6 | Fixed by [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its). `reclaimLease` computes `admittedBy: terminal_lane / lapsed_ttl / surrendered_status` and reuses `findLeasesHeldByTerminalLanes`. One section supersedes it; two others still assert it |
+      | `pr-review-packet.ts:487-491` proof-path scope bleed — "recorded rather than filed" | Fixed by [UTV2-1874](https://linear.app/unit-talk-v2/issue/UTV2-1874/return-review-packet-rejects-a-lanes-own-proof-directory-because-the) ([griff843/Unit-Talk-v2#1551](https://linear.app/unit-talk-v2/review/utv2-1874-admit-a-lanes-own-proof-directory-to-the-review-packets-a0fc79dcc125), `2b58117a2`) |
+      | `readiness-refresh.ts:517-532` dead-letter bucketing — "the bucketing defect … is unrepaired and recorded rather than filed" | Fixed by [UTV2-1875](https://linear.app/unit-talk-v2/issue/UTV2-1875/readiness-dead-letter-count-buckets-on-attempt-count-not-on-the) ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), `6307d8f44`). `QUEUE_READINESS_SEMANTICS.md` is at v1.1 |
+      | CEP-E1/E3/E4 lack M7's tier condition — "recorded rather than filed", named as repair 1 of 2 | Fixed by [UTV2-1876](https://linear.app/unit-talk-v2/issue/UTV2-1876/close-eligibility-preflight-predicts-a-closeout-failure-that-cannot) ([griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), `fa7ede27a`). Repair 2 (stop `lane-start` creating `.gitkeep`) is still open |
+
+      **Five closed findings, four of which the plan describes in the present tense as open.** The `pre-proof-validator` one is the expensive kind: an agent following the plan would have opened a lane to fix code that already carries the fix.
+
+      ## What is confirmed unchanged, and is worth saying so
+
+      * **Production drift still does not request a deploy.** `755e52a6c..origin/main` is 31 commits, **zero** migrations, and the same five container files the plan already named and dismissed — four ingestor modules unreachable while `SYNDICATE_MACHINE_MODE=parked`, plus a Playwright spec not shipped in the image. The plan's conclusion holds at a larger commit count, which is the useful form of the finding.
+      * **11 PRs open**, the same set. Six still inadmissible for want of a `UTV2-###` in the branch.
+      * **No lane manifest is active on** `main`**.** The board is free.
+      * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) still owns four of the seven "Executable now" Milestone 2 items via `grading-service.ts`; [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) still gates the whole `migration` lane type, and with it [UTV2-1871](https://linear.app/unit-talk-v2/issue/UTV2-1871/repair-the-awaiting-approval-drift-monitors-classification-12634).
+
+      ## Scope
+
+      `docs/mission/plan.md` only. T3, `governance`.
+
+      ## Acceptance
+
+      1. Every row in the table above is corrected at **all** its occurrences, not only the first — the lease-reclaim claim currently appears three times and is superseded in exactly one of them, which is what let it keep steering the Wave 6 recommendation.
+      2. Wave 6 names a candidate that is actually open, or states plainly that the slot has no qualifying claimant. An empty slot is a correct state under the ratified debt policy; naming a fixed defect is not.
+      3. The drift measurement is written as the **command** plus its result, not as a bare count, so the next reader can re-measure rather than trust a number that was true for one afternoon.
+      4. Nothing is marked done that cannot be tied to a merge SHA on `main`.
+      5. No new contract, threshold, gate or lane type is introduced. This is a reconciliation.
+
+      ## Filing note
+
+      The failure mode this closes is already recorded in the plan's own Learned section — "the injected plan is a session-start snapshot; grep the file on disk before re-deriving work your own lane already merged". This lane is that lesson applied to the document itself: three of the five closed findings were closed by *this session*, and the plan still describes them as open.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Why now
+
+      `docs/mission/plan.md` is `@`-included into every session at start, so its
+      staleness is not a documentation problem — it is the input agents plan
+      against. This reconciliation is not routine tidying: **the plan currently
+      directs the next governance lane at a defect that is already fixed on**
+      `main`**.**
+
+
+      Measured 2026-09-09 against `origin/main` `c37097fee`, live GitHub and
+      live git ancestry.
+    - |-
+      What is stale, measured rather than recalled
+      | Plan claim | Measured truth |
+      | -- | -- |
+      | `main` is `3cab0a2c5` | `c37097fee` — 31 commits on |
+      | "the `pre-proof-validator` classification repair is now the leading candidate" for the governance slot | **Already fixed.** `.claude/hooks/pre-proof-validator.sh:19-38` now classifies with a `case` statement *before* any `mktemp`, with a comment explaining that the filter avoiding an allocation must not itself spawn a process |
+      | lease reclaim is "purely TTL-gated (`lease-registry.ts:523-531`)", repeated in Learned and in Wave 6 | Fixed by [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its). `reclaimLease` computes `admittedBy: terminal_lane / lapsed_ttl / surrendered_status` and reuses `findLeasesHeldByTerminalLanes`. One section supersedes it; two others still assert it |
+      | `pr-review-packet.ts:487-491` proof-path scope bleed — "recorded rather than filed" | Fixed by [UTV2-1874](https://linear.app/unit-talk-v2/issue/UTV2-1874/return-review-packet-rejects-a-lanes-own-proof-directory-because-the) ([griff843/Unit-Talk-v2#1551](https://linear.app/unit-talk-v2/review/utv2-1874-admit-a-lanes-own-proof-directory-to-the-review-packets-a0fc79dcc125), `2b58117a2`) |
+      | `readiness-refresh.ts:517-532` dead-letter bucketing — "the bucketing defect … is unrepaired and recorded rather than filed" | Fixed by [UTV2-1875](https://linear.app/unit-talk-v2/issue/UTV2-1875/readiness-dead-letter-count-buckets-on-attempt-count-not-on-the) ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), `6307d8f44`). `QUEUE_READINESS_SEMANTICS.md` is at v1.1 |
+      | CEP-E1/E3/E4 lack M7's tier condition — "recorded rather than filed", named as repair 1 of 2 | Fixed by [UTV2-1876](https://linear.app/unit-talk-v2/issue/UTV2-1876/close-eligibility-preflight-predicts-a-closeout-failure-that-cannot) ([griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), `fa7ede27a`). Repair 2 (stop `lane-start` creating `.gitkeep`) is still open |
+
+      **Five closed findings, four of which the plan describes in the present tense as open.** The `pre-proof-validator` one is the expensive kind: an agent following the plan would have opened a lane to fix code that already carries the fix.
+    - |-
+      What is confirmed unchanged, and is worth saying so
+      * **Production drift still does not request a deploy.** `755e52a6c..origin/main` is 31 commits, **zero** migrations, and the same five container files the plan already named and dismissed — four ingestor modules unreachable while `SYNDICATE_MACHINE_MODE=parked`, plus a Playwright spec not shipped in the image. The plan's conclusion holds at a larger commit count, which is the useful form of the finding.
+      * **11 PRs open**, the same set. Six still inadmissible for want of a `UTV2-###` in the branch.
+      * **No lane manifest is active on** `main`**.** The board is free.
+      * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) still owns four of the seven "Executable now" Milestone 2 items via `grading-service.ts`; [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) still gates the whole `migration` lane type, and with it [UTV2-1871](https://linear.app/unit-talk-v2/issue/UTV2-1871/repair-the-awaiting-approval-drift-monitors-classification-12634).
+    - |-
+      Scope
+      `docs/mission/plan.md` only. T3, `governance`.
+    - >-
+      Acceptance
+
+      1. Every row in the table above is corrected at **all** its occurrences,
+      not only the first — the lease-reclaim claim currently appears three times
+      and is superseded in exactly one of them, which is what let it keep
+      steering the Wave 6 recommendation.
+
+      2. Wave 6 names a candidate that is actually open, or states plainly that
+      the slot has no qualifying claimant. An empty slot is a correct state
+      under the ratified debt policy; naming a fixed defect is not.
+
+      3. The drift measurement is written as the **command** plus its result,
+      not as a bare count, so the next reader can re-measure rather than trust a
+      number that was true for one afternoon.
+
+      4. Nothing is marked done that cannot be tied to a merge SHA on `main`.
+
+      5. No new contract, threshold, gate or lane type is introduced. This is a
+      reconciliation.
+    - >-
+      Filing note
+
+      The failure mode this closes is already recorded in the plan's own Learned
+      section — "the injected plan is a session-start snapshot; grep the file on
+      disk before re-deriving work your own lane already merged". This lane is
+      that lesson applied to the document itself: three of the five closed
+      findings were closed by *this session*, and the plan still describes them
+      as open.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as
+    title: Mission plan reconciliation — five recorded findings the plan lists as
+      open are closed, and one of them is its own named next candidate
+    description: |-
+      ## Why now
+
+      `docs/mission/plan.md` is `@`-included into every session at start, so its staleness is not a documentation problem — it is the input agents plan against. This reconciliation is not routine tidying: **the plan currently directs the next governance lane at a defect that is already fixed on** `main`**.**
+
+      Measured 2026-09-09 against `origin/main` `c37097fee`, live GitHub and live git ancestry.
+
+      ## What is stale, measured rather than recalled
+
+      | Plan claim | Measured truth |
+      | -- | -- |
+      | `main` is `3cab0a2c5` | `c37097fee` — 31 commits on |
+      | "the `pre-proof-validator` classification repair is now the leading candidate" for the governance slot | **Already fixed.** `.claude/hooks/pre-proof-validator.sh:19-38` now classifies with a `case` statement *before* any `mktemp`, with a comment explaining that the filter avoiding an allocation must not itself spawn a process |
+      | lease reclaim is "purely TTL-gated (`lease-registry.ts:523-531`)", repeated in Learned and in Wave 6 | Fixed by [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its). `reclaimLease` computes `admittedBy: terminal_lane / lapsed_ttl / surrendered_status` and reuses `findLeasesHeldByTerminalLanes`. One section supersedes it; two others still assert it |
+      | `pr-review-packet.ts:487-491` proof-path scope bleed — "recorded rather than filed" | Fixed by [UTV2-1874](https://linear.app/unit-talk-v2/issue/UTV2-1874/return-review-packet-rejects-a-lanes-own-proof-directory-because-the) ([griff843/Unit-Talk-v2#1551](https://linear.app/unit-talk-v2/review/utv2-1874-admit-a-lanes-own-proof-directory-to-the-review-packets-a0fc79dcc125), `2b58117a2`) |
+      | `readiness-refresh.ts:517-532` dead-letter bucketing — "the bucketing defect … is unrepaired and recorded rather than filed" | Fixed by [UTV2-1875](https://linear.app/unit-talk-v2/issue/UTV2-1875/readiness-dead-letter-count-buckets-on-attempt-count-not-on-the) ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf), `6307d8f44`). `QUEUE_READINESS_SEMANTICS.md` is at v1.1 |
+      | CEP-E1/E3/E4 lack M7's tier condition — "recorded rather than filed", named as repair 1 of 2 | Fixed by [UTV2-1876](https://linear.app/unit-talk-v2/issue/UTV2-1876/close-eligibility-preflight-predicts-a-closeout-failure-that-cannot) ([griff843/Unit-Talk-v2#1553](https://linear.app/unit-talk-v2/review/utv2-1876-give-the-close-eligibility-preflight-the-tier-conditions-its-195dbf35c0e7), `fa7ede27a`). Repair 2 (stop `lane-start` creating `.gitkeep`) is still open |
+
+      **Five closed findings, four of which the plan describes in the present tense as open.** The `pre-proof-validator` one is the expensive kind: an agent following the plan would have opened a lane to fix code that already carries the fix.
+
+      ## What is confirmed unchanged, and is worth saying so
+
+      * **Production drift still does not request a deploy.** `755e52a6c..origin/main` is 31 commits, **zero** migrations, and the same five container files the plan already named and dismissed — four ingestor modules unreachable while `SYNDICATE_MACHINE_MODE=parked`, plus a Playwright spec not shipped in the image. The plan's conclusion holds at a larger commit count, which is the useful form of the finding.
+      * **11 PRs open**, the same set. Six still inadmissible for want of a `UTV2-###` in the branch.
+      * **No lane manifest is active on** `main`**.** The board is free.
+      * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) still owns four of the seven "Executable now" Milestone 2 items via `grading-service.ts`; [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) still gates the whole `migration` lane type, and with it [UTV2-1871](https://linear.app/unit-talk-v2/issue/UTV2-1871/repair-the-awaiting-approval-drift-monitors-classification-12634).
+
+      ## Scope
+
+      `docs/mission/plan.md` only. T3, `governance`.
+
+      ## Acceptance
+
+      1. Every row in the table above is corrected at **all** its occurrences, not only the first — the lease-reclaim claim currently appears three times and is superseded in exactly one of them, which is what let it keep steering the Wave 6 recommendation.
+      2. Wave 6 names a candidate that is actually open, or states plainly that the slot has no qualifying claimant. An empty slot is a correct state under the ratified debt policy; naming a fixed defect is not.
+      3. The drift measurement is written as the **command** plus its result, not as a bare count, so the next reader can re-measure rather than trust a number that was true for one afternoon.
+      4. Nothing is marked done that cannot be tied to a merge SHA on `main`.
+      5. No new contract, threshold, gate or lane type is introduced. This is a reconciliation.
+
+      ## Filing note
+
+      The failure mode this closes is already recorded in the plan's own Learned section — "the injected plan is a session-start snapshot; grep the file on disk before re-deriving work your own lane already merged". This lane is that lesson applied to the document itself: three of the five closed findings were closed by *this session*, and the plan still describes them as open.
+    captured_at: 2026-09-09T18:49:50.066Z
+    description_sha256: 553ebec959641bd3b315af87ce618aa84156f1c4fd7f89175b5bfd791613aac2
+  contract_hash: 89e44c204925a0efc85706b1c8dacfd88d7fcaf4b956b7c2fba32d79106461f9

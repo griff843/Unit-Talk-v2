@@ -180,10 +180,16 @@ after(async () => {
   );
 
   // The global precondition this file mutated must be restored, not merely
-  // "probably restored". Any row left matching this file's own name prefix is
+  // "probably restored". Any row left matching *this run's* own name prefix is
   // leaked state that would arm the gate for the next run.
+  //
+  // Scoped by RUN_ID for the same reason the DELETE above is: the prefix without
+  // it also matches a concurrently running job's in-flight arming rows, so two
+  // runs sharing the staging database would fail each other's required `verify`
+  // for a reason neither diff caused. RUN_ID is already carried in `event_name`
+  // at creation, so this asserts exactly what this run is responsible for.
   const leaked = await restQuery<{ id: string }>(
-    'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+    `events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20${RUN_ID}%20*`,
   );
   assert.equal(leaked.length, 0, `${leaked.length} UTV2-1842 arming event(s) leaked into the database`);
 });

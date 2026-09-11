@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
+import type { CanonicalPick } from '@unit-talk/contracts';
 import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
-import { runGradingPass, readEventStartTime, type GradingRetryState } from './grading-service.js';
-import { recordGradedSettlement } from './settlement-service.js';
+import {
+  runGradingPass,
+  readEventStartTime,
+  postSettlementRecapIfPossible,
+  type GradingRetryState,
+} from './grading-service.js';
+import { recordEvidenceSettlement, recordGradedSettlement } from './settlement-service.js';
 
 async function createPostedPickFixture(
   overrides: {
@@ -2450,4 +2456,336 @@ test('runGradingPass processes both posted and awaiting_approval picks in same p
 
   const evidenceAfter = await posted.repositories.picks.findPickById(evidenceCreated.pick.id);
   assert.equal(evidenceAfter?.status, 'awaiting_approval', 'evidence pick stays awaiting_approval');
+});
+
+// ── UTV2-1815: null-stake computation truth ─────────────────────────────────
+// The recap embed renders a profit/loss figure and takes a non-nullable
+// `profitLossUnits`. Grading used to compute it with `stakeUnits ?? 1`, so a
+// pick with no recorded stake was published to Discord with a number a reader
+// could not tell apart from a real one. There is no way to render "unknown"
+// inside this lane's scope, so the only honest outcome is to not publish.
+
+function recapHarness(stakeUnits: unknown) {
+  const pick = {
+    id: 'pick-1815',
+    market: 'points-all-game-ou',
+    selection: 'Over 24.5',
+    odds: 100,
+    stake_units: stakeUnits,
+    metadata: {},
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[0];
+
+  const settlementRecord = {
+    id: 'settlement-1815',
+    result: 'win',
+    payload: {},
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[1];
+
+  const repositories = {
+    outbox: {
+      findLatestByPick: async () => ({ id: 'outbox-1', target: '123456789012345678' }),
+    },
+    receipts: { findLatestByOutboxId: async () => null },
+    runs: {},
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[2];
+
+  const warnings: string[] = [];
+  const posted: unknown[] = [];
+  const options = {
+    logger: { warn: (message: string) => warnings.push(message) },
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[3];
+
+  return { pick, settlementRecord, repositories, options, warnings, posted };
+}
+
+async function runRecap(stakeUnits: unknown) {
+  const h = recapHarness(stakeUnits);
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = (async (_url: unknown, init: { body?: string } = {}) => {
+    h.posted.push(JSON.parse(init.body ?? '{}'));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'message-1' }),
+      text: async () => '',
+    };
+  }) as unknown as typeof globalThis.fetch;
+
+  try {
+    await postSettlementRecapIfPossible(
+      h.pick,
+      h.settlementRecord,
+      h.repositories,
+      h.options,
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+
+  return h;
+}
+
+test('UTV2-1815 grading refuses to publish a recap for a NULL stake', async () => {
+  const { posted, warnings } = await runRecap(null);
+  assert.equal(posted.length, 0, 'no recap may be published against an unknown stake');
+  assert.ok(
+    warnings.some((w) => w.includes('historical_unknown')),
+    `expected a historical_unknown refusal, got ${JSON.stringify(warnings)}`,
+  );
+});
+
+test('UTV2-1815 grading refuses to publish a recap for a NaN stake', async () => {
+  const { posted, warnings } = await runRecap(Number.NaN);
+  assert.equal(posted.length, 0, 'no recap may be published against a NaN stake');
+  assert.ok(
+    warnings.some((w) => w.includes('historical_unknown')),
+    `expected a historical_unknown refusal, got ${JSON.stringify(warnings)}`,
+  );
+});
+
+test('UTV2-1815 grading still publishes a recap for a real stake (negative control)', async () => {
+  const { posted, warnings } = await runRecap(2);
+  assert.equal(posted.length, 1, `expected one recap post, warnings: ${JSON.stringify(warnings)}`);
+  const body = posted[0] as { embeds: unknown[] };
+  assert.equal(body.embeds.length, 1);
+});
+
+
+// ---------------------------------------------------------------------------
+// UTV2-1861: admit Track Only picks to the grading population
+//
+// A Track Only pick is structurally unable to be delivered, so it never reaches
+// `queued` or `posted` -- it stops at `validated`, which `runGradingPass` did
+// not read. Milestone 1's pick has therefore sat ungradeable since it was
+// submitted. These tests assert the admission is real, that it is *narrow*
+// (a `validated` pick with no Track Only marker must stay out), and that
+// grading a Track Only pick still creates no delivery.
+// ---------------------------------------------------------------------------
+
+async function createTrackOnlyValidatedPickFixture(
+  overrides: { eventName?: string; trackOnly?: boolean } = {},
+) {
+  const repositories = createInMemoryRepositoryBundle();
+  const eventName = overrides.eventName ?? 'Track Only Fixture Event';
+  const trackOnly = overrides.trackOnly ?? true;
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'points-all-game-ou',
+      selection: 'Over 24.5',
+      line: 24.5,
+      odds: -105,
+      stakeUnits: 3,
+      eventName,
+      metadata: {
+        ...(trackOnly ? { distributionMode: 'track-only' } : {}),
+      },
+    },
+    repositories,
+  );
+
+  // No lifecycle transition: `validated` is where a Track Only pick stays.
+  const pick = await repositories.picks.findPickById(created.pick.id);
+  assert.equal(
+    pick?.status,
+    'validated',
+    'fixture precondition: a smart-form submission materializes at validated',
+  );
+
+  return { repositories, pickId: created.pick.id, eventName };
+}
+
+test('runGradingPass grades a Track Only validated pick and records an evidence settlement', async () => {
+  const { repositories, pickId, eventName } =
+    await createTrackOnlyValidatedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 27,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1, 'the Track Only pick must be graded');
+  assert.equal(result.errors, 0);
+
+  // `validated -> settled` is not a legal transition, so the pick must not move.
+  const afterPick = await repositories.picks.findPickById(pickId);
+  assert.equal(
+    afterPick?.status,
+    'validated',
+    'a Track Only pick stays validated -- grading must not transition it',
+  );
+
+  const settlements = await repositories.settlements.listByPick(pickId);
+  assert.equal(settlements.length, 1);
+  assert.equal(settlements[0]!.result, 'win');
+});
+
+test('runGradingPass creates no delivery for a graded Track Only pick', async () => {
+  const { repositories, pickId, eventName } =
+    await createTrackOnlyValidatedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 20,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  const outboxEntries = await repositories.outbox.listByPickId(pickId);
+  assert.equal(
+    outboxEntries.length,
+    0,
+    'grading a Track Only pick must not enqueue any delivery',
+  );
+});
+
+test('runGradingPass does NOT admit a validated pick without the Track Only marker', async () => {
+  // The inversion that matters: dropping the Track Only filter would sweep the
+  // entire pre-delivery backlog into the grading population.
+  const { repositories, pickId, eventName } =
+    await createTrackOnlyValidatedPickFixture({ trackOnly: false });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 27,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(
+    result.attempted,
+    0,
+    'a validated pick with no Track Only marker must not enter the grading population',
+  );
+  assert.equal(result.graded, 0);
+  const settlements = await repositories.settlements.listByPick(pickId);
+  assert.equal(settlements.length, 0, 'and it must not be settled');
+});
+
+test('recordEvidenceSettlement refuses a validated pick that is not Track Only', async () => {
+  const { repositories, pickId } = await createTrackOnlyValidatedPickFixture({
+    trackOnly: false,
+  });
+
+  await assert.rejects(
+    () =>
+      recordEvidenceSettlement(
+        pickId,
+        'win',
+        {
+          actualValue: 27,
+          marketKey: 'points-all-game-ou',
+          eventId: 'event-unused',
+          gameResultId: 'result-unused',
+        },
+        repositories,
+      ),
+    /Evidence settlement requires awaiting_approval state, or validated with Track Only distribution/,
+    'the state guard must fail closed on a validated pick with no Track Only marker',
+  );
+});
+
+test('runGradingPass never posts a settlement recap for a Track Only pick, even when a sent delivery row exists', async () => {
+  // The adversarial case for the recap skip. `resolveRecapChannel` needs a
+  // `sent` outbox row, and a Track Only pick can normally never have one --
+  // which would make the skip untestable and therefore unenforced. Model the
+  // one shape where it can: the delivery row existed before the pick became
+  // Track Only (the same shape distribution-service.test.ts uses for retry).
+  // The pick is submitted WITHOUT the Track Only marker so the delivery row can
+  // be created at all: `InMemoryOutboxRepository.enqueue` is itself a Track Only
+  // chokepoint (UTV2-1672, runtime-repositories.ts:800-806) and refuses the
+  // enqueue outright. The marker is stamped afterwards -- which is the real
+  // ordering this shape models.
+  const { repositories, pickId, eventName } =
+    await createTrackOnlyValidatedPickFixture({ trackOnly: false });
+  await seedDistributionReceipt(repositories, pickId, 'discord:1234567890');
+  const beforeTrackOnly = await repositories.picks.findPickById(pickId);
+  assert.ok(beforeTrackOnly);
+  await repositories.picks.savePick({
+    id: beforeTrackOnly.id,
+    submissionId: beforeTrackOnly.submission_id ?? 'submission-track-only',
+    source: beforeTrackOnly.source as CanonicalPick['source'],
+    market: beforeTrackOnly.market,
+    selection: beforeTrackOnly.selection,
+    line: beforeTrackOnly.line ?? undefined,
+    odds: beforeTrackOnly.odds ?? undefined,
+    stakeUnits: beforeTrackOnly.stake_units ?? undefined,
+    confidence: beforeTrackOnly.confidence ?? undefined,
+    lifecycleState: 'validated',
+    approvalStatus:
+      beforeTrackOnly.approval_status as CanonicalPick['approvalStatus'],
+    promotionStatus:
+      beforeTrackOnly.promotion_status as CanonicalPick['promotionStatus'],
+    createdAt: beforeTrackOnly.created_at,
+    metadata: {
+      ...(beforeTrackOnly.metadata as Record<string, unknown>),
+      distributionMode: 'track-only',
+    },
+  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 27,
+  });
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  const discordCalls: string[] = [];
+  process.env.DISCORD_BOT_TOKEN = 'test-bot-token';
+  globalThis.fetch = (async (input: unknown) => {
+    discordCalls.push(String(input));
+    return new Response('{}', { status: 200 });
+  }) as typeof globalThis.fetch;
+
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1, 'the Track Only pick is still graded');
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+
+  assert.deepEqual(
+    discordCalls,
+    [],
+    'no Discord request may be made for a Track Only pick -- a recap is member delivery',
+  );
 });

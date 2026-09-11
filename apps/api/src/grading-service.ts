@@ -2,7 +2,9 @@ import {
   resolveOutcome,
   buildRecapEmbedData,
   normalizeMarketKey,
+  resolveStakeUnits,
 } from '@unit-talk/domain';
+import type { StakeUnitsResolution } from '@unit-talk/domain';
 import type { CanonicalPick } from '@unit-talk/contracts';
 import type {
   EventRow,
@@ -11,7 +13,11 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
-import { recordGradedSettlement, recordEvidenceSettlement } from './settlement-service.js';
+import {
+  isEvidencePlanePick,
+  recordGradedSettlement,
+  recordEvidenceSettlement,
+} from './settlement-service.js';
 
 export interface GradingPickResult {
   pickId: string;
@@ -93,11 +99,21 @@ export async function runGradingPass(
   // Evidence plane: also process awaiting_approval picks so outcome data
   // accumulates without requiring public delivery approval. Per UTV2-1253.
   // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
-  const [postedPicks, evidencePicks] = await Promise.all([
+  // UTV2-1861: Track Only picks never reach `posted`. They are structurally
+  // unable to be delivered, so `validated` is where they stop, and grading
+  // never saw them. Admit the Track Only subset of `validated` -- and only
+  // that subset: `validated` on its own is the entire pre-delivery backlog
+  // (21,364 rows in production on 2026-09-10, against 1 Track Only pick), so
+  // the filter is what keeps this a targeted admission rather than a sweep.
+  const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
     fetchAllByLifecycleState(repositories.picks, 'posted'),
     fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
+    fetchAllByLifecycleState(repositories.picks, 'validated'),
   ]);
-  const picks = [...postedPicks, ...evidencePicks];
+  const trackOnlyPicks = validatedPicks.filter((pick) =>
+    isEvidencePlanePick(pick),
+  );
+  const picks = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
   const details: GradingPickResult[] = [];
   const retryState = options.retryState;
 
@@ -289,7 +305,7 @@ export async function runGradingPass(
       };
 
       let settlementResult;
-      if (pick.status === 'awaiting_approval') {
+      if (isEvidencePlanePick(pick)) {
         // Evidence plane: record outcome without lifecycle transition.
         // atomicClaimForTransition is skipped — pick.status stays awaiting_approval.
         settlementResult = await recordEvidenceSettlement(
@@ -322,7 +338,9 @@ export async function runGradingPass(
       }
 
       // Evidence-plane picks have no outbox record; skip Discord recap.
-      if (pick.status !== 'awaiting_approval') {
+      // For Track Only this is not merely an optimisation -- publishing a recap
+      // would be member delivery, which Track Only exists to make impossible.
+      if (!isEvidencePlanePick(pick)) {
         await postSettlementRecapIfPossible(
           pick,
           settlementResult.settlementRecord,
@@ -601,6 +619,27 @@ export async function postSettlementRecapIfPossible(
     return;
   }
 
+  // UTV2-1815: fail closed on an unknown stake. The recap renders a
+  // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
+  // non-nullable number -- so publishing here with an unknown stake is exactly
+  // the "emit a value indistinguishable from an observed one" failure. Refuse
+  // to publish and say why, rather than substituting a stake of 1. Changing how
+  // the embed RENDERS an unknown stake is deliberately not in this scope.
+  const stakeResolution = readStakeUnitsResolution(pick);
+  const profitLossUnits = computeProfitLossUnits(
+    normalizeSettlementResult(settlementRecord.result),
+    stakeResolution.stake_units,
+    pick.odds,
+  );
+  if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
+    options.logger?.warn?.(
+      `Skipping recap for pick ${pick.id}: stake_units is ` +
+        `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
+        'computed against an assumed stake',
+    );
+    return;
+  }
+
   const response = await fetch(
     `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
     {
@@ -615,12 +654,8 @@ export async function postSettlementRecapIfPossible(
             market: pick.market,
             selection: pick.selection,
             result: normalizeSettlementResult(settlementRecord.result),
-            stakeUnits: readStakeUnits(pick),
-            profitLossUnits: computeProfitLossUnits(
-              normalizeSettlementResult(settlementRecord.result),
-              readStakeUnits(pick),
-              pick.odds,
-            ),
+            stakeUnits: stakeResolution.stake_units,
+            profitLossUnits,
             clvPercent: readClvPercent(settlementRecord.payload),
             submittedBy: readSubmittedBy(pick),
           }),
@@ -973,19 +1008,35 @@ function readSubmittedBy(pick: PickRecord) {
   return capper?.trim() || 'Unit Talk';
 }
 
-function readStakeUnits(pick: PickRecord) {
-  return typeof pick.stake_units === 'number' &&
-    Number.isFinite(pick.stake_units)
-    ? pick.stake_units
-    : null;
+/**
+ * Apply the shared stake-units contract (UTV2-1815) to a pick.
+ *
+ * A pick row always carries the column, so a missing stake arrives here as
+ * `null`, never as `undefined` -- which means it resolves to
+ * `historical_unknown` and this path refuses. The flat-bet `assumed_flat` case
+ * belongs to callers that genuinely omit the field; grading is not one of them.
+ */
+function readStakeUnitsResolution(pick: PickRecord): StakeUnitsResolution {
+  return resolveStakeUnits(
+    typeof pick.stake_units === 'number' ? pick.stake_units : null,
+  );
 }
 
+/**
+ * UTV2-1815: this used to be `const stake = stakeUnits ?? 1`, which emitted a
+ * profit/loss figure indistinguishable from one computed against a real stake.
+ * It now returns null when the stake is unknown, and the caller refuses to
+ * publish rather than publishing a fabricated number.
+ */
 function computeProfitLossUnits(
   result: 'win' | 'loss' | 'push',
   stakeUnits: number | null,
   odds: number | null,
-) {
-  const stake = stakeUnits ?? 1;
+): number | null {
+  if (stakeUnits === null) {
+    return null;
+  }
+  const stake = stakeUnits;
 
   if (result === 'push') {
     return 0;

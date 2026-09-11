@@ -765,3 +765,60 @@ test('InMemoryPickOfferSnapshotRepository countByKind returns 0 for unknown kind
   const count = await repo.countByKind('closing_for_clv');
   assert.equal(count, 0);
 });
+
+// ── UTV2-1815: null-stake computation truth ─────────────────────────────────
+// The NULL case is covered above. NaN is the case the old
+// `stakeUnits ?? 1` guard let through: `??` only fires on null/undefined, so a
+// NaN stake reached the arithmetic and produced NaN, or was coerced. Both
+// fixtures must land on the same refusal.
+
+test('UTV2-1815 recordPickSettlement refuses a NaN stake the same way it refuses NULL', async () => {
+  const { repositories, pick } = await createPostedPick();
+  const stored = await repositories.picks.findPickById(pick.id);
+  assert.ok(stored);
+  stored!.stake_units = Number.NaN;
+
+  const result = await recordPickSettlement(
+    pick.id,
+    {
+      status: 'settled',
+      result: 'win',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'proof://nan-stake',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload['stakeUnitsStatus'], 'historical_unknown');
+  assert.equal(payload['stakeUnitsHistoricalUnknown'], true);
+  assert.equal('profitLossUnits' in payload, false);
+});
+
+test('UTV2-1815 a real stake still produces a real profit/loss (negative control)', async () => {
+  const { repositories, pick } = await createPostedPick();
+  const stored = await repositories.picks.findPickById(pick.id);
+  assert.ok(stored);
+  stored!.stake_units = 2;
+  stored!.odds = 100;
+
+  const result = await recordPickSettlement(
+    pick.id,
+    {
+      status: 'settled',
+      result: 'win',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'proof://canonical-stake',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload['stakeUnitsStatus'], 'canonical');
+  assert.equal(payload['stakeUnitsHistoricalUnknown'], undefined);
+  assert.equal(payload['profitLossUnits'], 2);
+});
