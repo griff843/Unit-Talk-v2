@@ -1,0 +1,107 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1861",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "proof_profile": "app-runtime",
+  "status": "pending_hosted_verification",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "2b4342515dbd86cd4ed32ac495308053eb5daebf",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "note": "2b4342515dbd86cd4ed32ac495308053eb5daebf is the last non-proof commit on this branch -- the implementation commit. Every commit after it touches only docs/06_status/proof/UTV2-1861/, verifiable at any head with `git diff --name-only 2b4342515dbd86cd4ed32ac495308053eb5daebf..HEAD`. evidence_commit_sha and current_pr_head_sha are CI-resolved sentinels rather than literal SHAs: a bundle cannot know the SHA of the commit that contains it, and any literal written here goes false on the next proof commit. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM."
+  },
+  "static_proof": {
+    "unit_tests": {
+      "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts apps/api/src/settlement-service.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 96,
+        "pass": 96,
+        "fail": 0,
+        "skipped": 0,
+        "pre_existing": 91,
+        "new": 5
+      }
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "row_counts": {
+        "pass": 6137,
+        "fail": 0,
+        "not_ok_lines": 0
+      }
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not run on the workstation: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses a workstation target (expected xskgrzbteyqdufktjrjx) by design. The hosted `verify` check on this PR head is the authoritative run and is NOT counted as a pass here."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1861",
+      "verdict": "PASS",
+      "changed_files": 6,
+      "rules_matched": [
+        "settlement-grading"
+      ],
+      "advisory_missing": [
+        "r4-fault-report"
+      ]
+    },
+    "mutation_battery": {
+      "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+      "baseline": {
+        "tests": 69,
+        "pass": 69,
+        "fail": 0
+      },
+      "mutations": [
+        {
+          "id": "M1",
+          "change": "const trackOnlyPicks = validatedPicks; (drop the Track Only filter)",
+          "failing": 1
+        },
+        {
+          "id": "M2",
+          "change": "revert the recordEvidenceSettlement state guard to pick.status !== 'awaiting_approval'",
+          "failing": 3
+        },
+        {
+          "id": "M3",
+          "change": "revert the recap skip to the pick.status !== 'awaiting_approval' literal",
+          "failing": 1
+        },
+        {
+          "id": "M4",
+          "change": "drop ...trackOnlyPicks from the grading population",
+          "failing": 3
+        }
+      ],
+      "note": "M3 was vacuous on first attempt and a fixture had to be built for it; doing so surfaced an eighth Track Only chokepoint (InMemoryOutboxRepository.enqueue, runtime-repositories.ts:800-806) that the recorded list of seven did not include."
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed",
+      "executed_at": "2026-09-10",
+      "query": "select count(*) filter (where status='validated') , count(*) filter (where status='validated' and metadata->>'distributionMode'='track-only') from picks",
+      "observed": {
+        "validated_total": 21364,
+        "validated_track_only": 1,
+        "posted_total": 7306,
+        "awaiting_approval_total": 14984
+      },
+      "note": "This is why the filter is load-bearing: admitting `validated` wholesale would add 21,364 picks to every grading pass. The single Track Only row is dfcd9486-cba2-4bb5-b684-beec36e52c0b, Milestone 1's pick. Nothing was written."
+    }
+  }
+}
