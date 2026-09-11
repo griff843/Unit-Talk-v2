@@ -140,6 +140,26 @@ rather than on the contained workstation, and closeout check `G6` refuses to clo
 both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral
 moves where the evidence is obtained and changes nothing about whether it is obtained.
 
+That evidence now exists. Run `34650795093`, job `103432338406`, at head `139187832`:
+
+```
+job "Writable DB proof (staging only)" -- all 16 steps success
+  [assert-staging] OK: target is the approved staging project   (x3, before any test)
+  pnpm test:db            -> apps/api/src/database-smoke.test.ts  7/7 pass, 0 fail, 0 skipped
+  pnpm test:t1-proof:live -> 19 suites                         119/119 pass, 0 fail, 0 skipped
+  aggregate across both credentialed steps                     126 assertions, 0 fail, 0 skipped
+  receipt .out/ci-db-proof-receipt.json
+    sha256 75561c7dcc694e804423b1a8776a675be1b28a1b6b01441c792b23a061c62674
+    artifact utv2-1630-db-proof-receipt-34650795093-1 (id 10283712879)
+```
+
+The receipt binds the bound head rather than a preceding one, and that is checkable rather
+than asserted: `git diff --name-only 2b0a01e02 139187832` returns `evidence.json` and
+`verification.md` and nothing else, so the source tree this job compiled is byte-identical
+to the tree at `verified_source_sha`. A proof bundle can never carry a receipt for its own
+commit -- writing the receipt moves the head -- but it can carry one whose only distance
+from the bound head is the proof directory itself.
+
 The coverage gap is stated rather than papered over, and it is recorded OPEN in
 `evidence.json`. This lane adds no `t1-proof` suite, so no live assertion exercises the
 moneyline branch, the market-key guard, the provenance check or the aggregate against real
