@@ -824,7 +824,7 @@ export function preflightResultPathForBranch(branch: string): string {
 
 export function normalizeRepoRelativePath(
   input: string,
-  options: { requireExistingFile?: boolean } = {},
+  options: { requireExistingParent?: boolean } = {},
 ): string {
   let normalized = input.trim().replaceAll('\\', '/');
   normalized = normalized.replace(/^\.\/+/, '');
@@ -848,24 +848,49 @@ export function normalizeRepoRelativePath(
     throw new Error(`Only a trailing /** directory glob is allowed in file scope: ${input}`);
   }
 
-  if (options.requireExistingFile) {
-    if (hasTrailingDirectoryGlob) {
-      const directory = normalized.slice(0, -3);
-      const absoluteDirectory = path.join(ROOT, directory);
-      if (!fs.existsSync(absoluteDirectory)) {
-        throw new Error(`File scope directory does not exist: ${directory}`);
+  // UTV2-1884: a lane routinely declares a file or a directory it is about to
+  // *create*. Requiring the declared path itself to exist left those lanes only
+  // one legal declaration — the nearest ancestor directory that already exists —
+  // which is how UTV2-1878 (creating a file in docs/03_product/) and UTV2-1883
+  // (creating docs/03_product/brand/) came to hold an identical
+  // `docs/03_product/**` lock and collide at PL6. The parent directory must
+  // exist, so a misspelled path is still refused; the leaf need not.
+  if (options.requireExistingParent) {
+    const declared = pathWithoutTrailingDirectoryGlob;
+    const parent = path.posix.dirname(declared);
+
+    if (parent !== '.') {
+      const absoluteParent = path.join(ROOT, parent);
+      if (!fs.existsSync(absoluteParent)) {
+        throw new Error(`File scope parent directory does not exist: ${parent}`);
       }
-      if (!fs.statSync(absoluteDirectory).isDirectory()) {
+      if (!fs.statSync(absoluteParent).isDirectory()) {
+        throw new Error(`File scope parent must reference a directory: ${parent}`);
+      }
+      // The structural `../` refusal above cannot see a symlink, and the parent
+      // is now allowed to be the last existing component, so containment is
+      // asserted against the resolved path rather than the declared one.
+      const resolvedRoot = fs.realpathSync(ROOT);
+      const resolvedParent = fs.realpathSync(absoluteParent);
+      if (
+        resolvedParent !== resolvedRoot &&
+        !resolvedParent.startsWith(resolvedRoot + path.sep)
+      ) {
+        throw new Error(`File scope parent escapes the repository: ${parent}`);
+      }
+    }
+
+    // Where the declared path already exists, its kind is still enforced: a
+    // trailing glob must name a directory and a bare path must name a file.
+    const absoluteDeclared = path.join(ROOT, declared);
+    if (fs.existsSync(absoluteDeclared)) {
+      const declaredStat = fs.statSync(absoluteDeclared);
+      if (hasTrailingDirectoryGlob && !declaredStat.isDirectory()) {
         throw new Error(`File scope glob must reference a directory: ${normalized}`);
       }
-      return normalized;
-    }
-    const absolute = path.join(ROOT, normalized);
-    if (!fs.existsSync(absolute)) {
-      throw new Error(`File scope path does not exist: ${normalized}`);
-    }
-    if (!fs.statSync(absolute).isFile()) {
-      throw new Error(`File scope must reference a file, not a directory: ${normalized}`);
+      if (!hasTrailingDirectoryGlob && !declaredStat.isFile()) {
+        throw new Error(`File scope must reference a file, not a directory: ${normalized}`);
+      }
     }
   }
 
@@ -876,8 +901,9 @@ const PROOF_PATH_PREFIX = 'docs/06_status/proof/';
 
 /**
  * Normalize a file-scope path. Paths under `docs/06_status/proof/**` are
- * intent declarations — the lane will create them — so the existence check
- * is skipped for those entries. All other paths must already exist on disk.
+ * intent declarations — the lane will create them — so no existence check runs
+ * for those entries at all. Every other path must sit inside a directory that
+ * already exists; the path itself may be one the lane is about to create.
  */
 export function normalizeFileScopePath(input: string): string {
   // Perform structural normalization first (without existence check).
@@ -886,8 +912,8 @@ export function normalizeFileScopePath(input: string): string {
   if (normalized.startsWith(PROOF_PATH_PREFIX)) {
     return normalized;
   }
-  // All other paths must exist on disk.
-  return normalizeRepoRelativePath(input, { requireExistingFile: true });
+  // Every other path must have an existing parent directory.
+  return normalizeRepoRelativePath(input, { requireExistingParent: true });
 }
 
 export function normalizeFileScope(pathsToNormalize: string[]): string[] {
@@ -2414,8 +2440,18 @@ export function assertStatusTransition(
   }
 }
 
+// UTV2-1884: a trailing `/**` covers the directory it names, so it must compare
+// as that directory. Left literal, `scripts/ops/**` matched neither
+// `scripts/ops/shared.ts` nor `scripts/ops/lane-start/**` -- a glob lock only
+// ever collided with a byte-identical glob, which is the sole reason the
+// UTV2-1878 / UTV2-1883 collision was caught at all. Stripping it here is the
+// fail-closed direction: overlap is reported more often, never less.
 function normalizeLockPath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  return p
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/\*\*$/, '')
+    .replace(/\/+$/, '');
 }
 
 export function pathsOverlap(a: string, b: string): boolean {

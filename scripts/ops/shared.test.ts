@@ -19,6 +19,7 @@ import {
   mergeVerifierIdentity,
   normalizeFileScopePath,
   normalizeRepoRelativePath,
+  pathsOverlap,
   requireVerificationTarget,
   validateBranchName,
   validateManifest,
@@ -78,6 +79,147 @@ test('normalizeFileScopePath still rejects parent traversal for proof paths', ()
     () => normalizeFileScopePath('../docs/06_status/proof/UTV2-9999/diff-summary.md'),
     /Parent traversal is not allowed/,
   );
+});
+
+// --- UTV2-1884: file scope declares intent, so the parent must exist, not the leaf ---
+
+test('normalizeFileScopePath admits a file the lane will create inside an existing directory', () => {
+  // The whole point: scripts/ops exists, this file does not, and the lane is
+  // about to add it. Before UTV2-1884 this threw and the lane had to widen its
+  // lock to scripts/ops/**.
+  assert.strictEqual(
+    fs.existsSync(path.join(ROOT, 'scripts/ops/utv2-1884-not-a-real-file.ts')),
+    false,
+    'fixture precondition: the declared file must not exist',
+  );
+  assert.strictEqual(
+    normalizeFileScopePath('scripts/ops/utv2-1884-not-a-real-file.ts'),
+    'scripts/ops/utv2-1884-not-a-real-file.ts',
+  );
+});
+
+test('normalizeFileScopePath admits a directory glob the lane will create', () => {
+  // This is the exact UTV2-1883 declaration that was refused, forcing the lane
+  // onto docs/03_product/** and into a collision with UTV2-1878.
+  assert.strictEqual(
+    fs.existsSync(path.join(ROOT, 'docs/03_product/utv2-1884-unborn-directory')),
+    false,
+    'fixture precondition: the declared directory must not exist',
+  );
+  assert.strictEqual(
+    normalizeFileScopePath('docs/03_product/utv2-1884-unborn-directory/**'),
+    'docs/03_product/utv2-1884-unborn-directory/**',
+  );
+});
+
+test('normalizeFileScopePath still refuses a path whose parent directory does not exist', () => {
+  // Typo protection is the reason the old rule existed, and it survives:
+  // "03_prodcut" is not a directory, so the declaration is refused.
+  assert.throws(
+    () => normalizeFileScopePath('docs/03_prodcut/brand/**'),
+    /File scope parent directory does not exist: docs\/03_prodcut/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('scripts/utv2-1884-no-such-dir/thing.ts'),
+    /File scope parent directory does not exist: scripts\/utv2-1884-no-such-dir/,
+  );
+});
+
+test('normalizeFileScopePath refuses a parent that is a file rather than a directory', () => {
+  assert.throws(
+    () => normalizeFileScopePath('scripts/ops/shared.ts/nested.ts'),
+    /File scope parent must reference a directory: scripts\/ops\/shared\.ts/,
+  );
+});
+
+test('normalizeFileScopePath still enforces the kind of a path that does exist', () => {
+  assert.throws(
+    () => normalizeFileScopePath('scripts/ops/shared.ts/**'),
+    /File scope glob must reference a directory/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('scripts/ops'),
+    /File scope must reference a file, not a directory/,
+  );
+});
+
+test('normalizeFileScopePath still refuses traversal and absolute paths', () => {
+  assert.throws(
+    () => normalizeFileScopePath('../etc/passwd'),
+    /Parent traversal is not allowed/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('scripts/../../etc/passwd'),
+    /Parent traversal is not allowed/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('/etc/passwd'),
+    /Absolute paths are not allowed in file scope/,
+  );
+});
+
+test('normalizeFileScopePath refuses a parent that symlinks outside the repository', (t) => {
+  // The structural `../` refusal cannot see a symlink, and the parent is now
+  // allowed to be the last existing component, so containment is asserted
+  // against the resolved path.
+  const linkDirectory = path.join(ROOT, '.out');
+  fs.mkdirSync(linkDirectory, { recursive: true });
+  const linkPath = path.join(linkDirectory, 'utv2-1884-escape-link');
+  const outsideTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1884-outside-'));
+  fs.rmSync(linkPath, { force: true });
+  fs.symlinkSync(outsideTarget, linkPath, 'dir');
+  t.after(() => {
+    fs.rmSync(linkPath, { force: true });
+    fs.rmSync(outsideTarget, { recursive: true, force: true });
+  });
+
+  // Control: the link really does resolve outside the repository, so the
+  // assertion below is not passing for an unrelated reason.
+  assert.strictEqual(
+    fs.realpathSync(linkPath).startsWith(fs.realpathSync(ROOT) + path.sep),
+    false,
+  );
+
+  assert.throws(
+    () => normalizeFileScopePath('.out/utv2-1884-escape-link/smuggled.ts'),
+    /File scope parent escapes the repository/,
+  );
+});
+
+test('normalizeFileScopePath leaves proof paths exempt from every existence check', () => {
+  // Proof paths never reach the parent check at all, so a proof directory that
+  // does not exist yet is still admitted.
+  assert.strictEqual(
+    normalizeFileScopePath('docs/06_status/proof/UTV2-9999/nested/evidence.json'),
+    'docs/06_status/proof/UTV2-9999/nested/evidence.json',
+  );
+});
+
+test('UTV2-1884: a trailing directory glob overlaps everything inside the directory it names', () => {
+  // Found while testing the parent-existence change, and it is why that change
+  // could not ship alone: a glob lock used to compare as a literal string, so
+  // it collided only with a byte-identical glob.
+  assert.strictEqual(pathsOverlap('scripts/ops/**', 'scripts/ops/shared.ts'), true);
+  assert.strictEqual(pathsOverlap('scripts/ops/shared.ts', 'scripts/ops/**'), true);
+  assert.strictEqual(pathsOverlap('docs/03_product/**', 'docs/03_product/brand/**'), true);
+  assert.strictEqual(pathsOverlap('docs/03_product/**', 'docs/03_product/X.md'), true);
+  assert.strictEqual(pathsOverlap('scripts/**', 'scripts/ops/**'), true);
+  // The directory itself, named with and without the glob, is one scope.
+  assert.strictEqual(pathsOverlap('scripts/ops/**', 'scripts/ops'), true);
+});
+
+test('the narrower declarations UTV2-1884 admits are genuinely disjoint under pathsOverlap', () => {
+  // The payoff. Before this change both lanes could only say docs/03_product/**,
+  // and they collided. Declared precisely, they do not overlap at all.
+  assert.strictEqual(
+    pathsOverlap('docs/03_product/brand/**', 'docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md'),
+    false,
+  );
+  assert.strictEqual(pathsOverlap('docs/03_product/brand/**', 'docs/03_product/pricing/**'), false);
+  assert.strictEqual(pathsOverlap('scripts/ops/shared.ts', 'scripts/ops/preflight.ts'), false);
+  // Isolation is not weakened in the other direction: a sibling whose name is a
+  // string prefix of another is still disjoint.
+  assert.strictEqual(pathsOverlap('docs/03_product/brand/**', 'docs/03_product/branding/**'), false);
 });
 
 test('normalizeRepoRelativePath allows canonical deleted-file style paths', () => {
