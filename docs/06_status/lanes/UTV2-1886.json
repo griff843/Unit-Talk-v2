@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1886-grading-settlement-prefetch",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1565",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/grading-service.test.ts",
@@ -20,9 +20,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1886/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-11T12:02:33.287Z",
-  "heartbeat_at": "2026-09-11T12:02:33.287Z",
+  "heartbeat_at": "2026-09-11T12:21:44.145Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1886-grading-settlement-prefetch.json",
