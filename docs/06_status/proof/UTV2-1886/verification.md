@@ -229,6 +229,34 @@ present` and step 7 `Materialize staging-only environment` precede it, and
 `scripts/ci/assert-staging-target.ts` pins the project ref to the staging value, so a green step 11
 is a statement about staging and cannot be a statement about production.
 
+**The step conclusion is not the whole receipt, and the per-test TAP is now read rather than
+inferred.** The job log became retrievable once run `34635996613` completed; the new suite is the
+last of the nineteen `tsx --test` invocations `test:t1-proof:live` chains, so its TAP block is the
+final one in step 11 and the step's exit code is this suite's exit code:
+
+```
+TAP version 13
+ok 1 - UTV2-1886: findLatestForPicks agrees with findLatestForPick against live Postgres, and omits unsettled picks
+ok 2 - UTV2-1886: a page-size-1 live read returns the same map as a single-page read
+ok 3 - UTV2-1886: a chunk smaller than the id list still returns every settled pick
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6043.675016
+```
+
+**`skipped 0` and `todo 0` are read from that summary rather than asserted**, which is the specific
+thing a gated live suite can get wrong: this suite refuses to run without
+`SUPABASE_SERVICE_ROLE_KEY`, and had the credential been absent the three tests would have reported
+as *skipped* inside a step that still exited 0. They did not. The per-test durations are the second,
+independent witness that real round trips happened — 2,267 ms, 2,213 ms and 1,266 ms, against
+6,044 ms for the file. A suite that short-circuited would not spend six seconds.
+
 ### Three files sit outside the pinned `file_scope_lock`, and one of them is not optional
 
 `file_scope_lock` is settable only at `ops:lane-manifest create` and an agent cannot widen it. This
