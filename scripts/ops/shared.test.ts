@@ -10,6 +10,11 @@ import {
 } from './branch-discipline-guard.js';
 import {
   ISSUE_ID_NAMESPACES,
+  ROOT,
+  P0_ACTIONS_CONSUMER_PATH,
+  P0_TRUSTED_EVALUATOR_PATH,
+  evaluateRepoMintedP0Coverage,
+  isRepoMintedWorkIdentity,
   issueIdScanPattern,
   createManifest,
   requireIssueId,
@@ -2432,4 +2437,82 @@ test('UTV2-1708: an intact directory reports nothing deleted', () => {
   );
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// WORK-2026091001: the mechanical P0 block on repo-minted work identities.
+//
+// The P0 Actions consumer currently on `main` resolves `/(?:UTV2|UNI)-\d+/i`
+// and auto-passes anything it cannot match, so a `WORK-###` PR clears the
+// required `P0 Protocol` check with no evaluation at all. Execution of
+// repo-minted work stays blocked at lane admission until the consumer
+// delegates to the trusted-base evaluator. These tests pin the predicate that
+// block reads, in both directions, because a guard that can only be observed
+// failing is a guard whose release condition is untested.
+test('isRepoMintedWorkIdentity separates repo-minted identity from tracker keys', () => {
+  assert.equal(isRepoMintedWorkIdentity('WORK-2026091001'), true);
+  assert.equal(isRepoMintedWorkIdentity('work-902'), true);
+  assert.equal(isRepoMintedWorkIdentity('UTV2-1556'), false);
+  assert.equal(isRepoMintedWorkIdentity('UNI-12'), false);
+  assert.equal(isRepoMintedWorkIdentity('WORKER-1'), false);
+  assert.equal(isRepoMintedWorkIdentity(''), false);
+  assert.equal(isRepoMintedWorkIdentity(null), false);
+});
+
+test('evaluateRepoMintedP0Coverage fails closed and releases only on real delegation', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p0-coverage-'));
+  const consumer = path.join(dir, P0_ACTIONS_CONSUMER_PATH);
+  const evaluator = path.join(dir, P0_TRUSTED_EVALUATOR_PATH);
+  fs.mkdirSync(path.dirname(consumer), { recursive: true });
+  fs.mkdirSync(path.dirname(evaluator), { recursive: true });
+
+  // 1. No consumer at all. A missing required-check workflow is the single
+  //    state in which assuming coverage would be worst, so it must not pass.
+  const absent = evaluateRepoMintedP0Coverage(dir);
+  assert.equal(absent.covered, false);
+  assert.match(absent.reason, /missing or unreadable/);
+
+  // 2. The consumer as it stands on main -- narrow alternation, auto-pass.
+  fs.writeFileSync(
+    consumer,
+    "name: P0 Protocol\njobs:\n  p0:\n    steps:\n      - run: echo /(?:UTV2|UNI)-\\d+/i\n",
+  );
+  const narrow = evaluateRepoMintedP0Coverage(dir);
+  assert.equal(narrow.covered, false);
+  assert.match(narrow.reason, /does not delegate/);
+
+  // 3. Delegation declared but the evaluator absent from the tree. A consumer
+  //    that names a file it cannot require is not coverage.
+  fs.writeFileSync(consumer, `steps:\n  - run: require('./${P0_TRUSTED_EVALUATOR_PATH}')\n`);
+  const dangling = evaluateRepoMintedP0Coverage(dir);
+  assert.equal(dangling.covered, false);
+  assert.match(dangling.reason, /not present in this tree/);
+
+  // 4. Both halves present -- and only then does the block release itself.
+  fs.writeFileSync(evaluator, "module.exports = {};\n");
+  const activated = evaluateRepoMintedP0Coverage(dir);
+  assert.equal(activated.covered, true);
+  assert.match(activated.reason, /delegates repo-minted work identities/);
+
+  // 5. Re-arms if the delegation is later removed from the consumer.
+  fs.writeFileSync(consumer, "steps:\n  - run: echo no delegation\n");
+  assert.equal(evaluateRepoMintedP0Coverage(dir).covered, false);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the installed P0 consumer and the coverage predicate agree on this tree', () => {
+  const consumerPath = path.join(ROOT, P0_ACTIONS_CONSUMER_PATH);
+  const consumer = fs.readFileSync(consumerPath, 'utf8');
+  const delegates =
+    consumer.includes(P0_TRUSTED_EVALUATOR_PATH) &&
+    fs.existsSync(path.join(ROOT, P0_TRUSTED_EVALUATOR_PATH));
+  assert.equal(evaluateRepoMintedP0Coverage(ROOT).covered, delegates);
+  if (!delegates) {
+    // While the block is armed, the reason it is armed must still be true: the
+    // consumer resolves a tracker-keyed identifier and nothing else. If this
+    // assertion ever fails while `delegates` is false, the consumer changed in
+    // some other way and the block's premise needs re-reading rather than
+    // trusting.
+    assert.match(consumer, /UTV2\|UNI/);
+  }
 });

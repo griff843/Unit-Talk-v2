@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type { CheckResult, PreflightToken } from './shared.js';
 import {
@@ -27,6 +28,7 @@ import {
   parseAheadBehind,
   resolveVerdict,
   runLinearChecks,
+  runRepoMintedP0Checks,
   runT1Checks,
 } from './preflight.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
@@ -741,4 +743,92 @@ test('UTV2-1884: the fast path only skips the local duplicate, never a CI obliga
   const source = fs.readFileSync(path.join(ROOT, 'scripts/ops/preflight.ts'), 'utf8');
   assert.match(source, /PB1 skipped via T3 docs-only fast path; CI\/pnpm verify remains required before PR/);
   assert.match(source, /PB2 skipped via T3 docs-only fast path; CI\/pnpm verify remains required before PR/);
+});
+
+function seedP0CoverageTree(opts: { consumer?: string; evaluator?: boolean }): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-pw1-'));
+  if (opts.consumer !== undefined) {
+    fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.github', 'workflows', 'p0-protocol.yml'), opts.consumer);
+  }
+  if (opts.evaluator) {
+    fs.mkdirSync(path.join(root, 'scripts', 'ops', 'tracker-independence'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'scripts', 'ops', 'tracker-independence', 'p0-workflow.cjs'),
+      'module.exports = {};\n',
+    );
+  }
+  return root;
+}
+
+function collectPw1(issueId: string, root: string): CheckResult {
+  const checks: CheckResult[] = [];
+  runRepoMintedP0Checks(
+    issueId,
+    (id, status, detail) => { checks.push({ id, status, detail } as CheckResult); },
+    root,
+  );
+  assert.equal(checks.length, 1, 'PW1 must emit exactly one check result');
+  return checks[0] as CheckResult;
+}
+
+test('PW1 refuses a repo-minted identity until the installed P0 consumer delegates', () => {
+  // The narrow consumer is the one on `main`: it resolves UTV2/UNI only and
+  // auto-passes everything else, so a WORK PR clears the required check with no
+  // evaluation. PW1 exists to refuse admission while that is true.
+  const narrow = seedP0CoverageTree({
+    consumer: "const pattern = /(?:UTV2|UNI)-\\d+/i;\n",
+    evaluator: true,
+  });
+  const narrowCheck = collectPw1('WORK-2026091001', narrow);
+  assert.equal(narrowCheck.status, 'fail');
+  assert.match(narrowCheck.detail, /does not delegate/u);
+
+  // A consumer that is absent entirely fails closed the same way rather than
+  // being read as "nothing to enforce".
+  const absentCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({ evaluator: true }));
+  assert.equal(absentCheck.status, 'fail');
+  assert.match(absentCheck.detail, /missing or unreadable/u);
+
+  // A consumer that names the evaluator while the evaluator is not in the tree
+  // is a declaration without an implementation, and must not release the block.
+  const danglingCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({
+    consumer: 'run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
+  }));
+  assert.equal(danglingCheck.status, 'fail');
+  assert.match(danglingCheck.detail, /not present in this tree/u);
+
+  // Real delegation to an evaluator that exists releases it.
+  const activeCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({
+    consumer: 'run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
+    evaluator: true,
+  }));
+  assert.equal(activeCheck.status, 'pass');
+
+  // And the refusal is scoped to repo-minted identity. A tracker key skips even
+  // in the worst tree, because the installed consumer already evaluates those.
+  const trackerCheck = collectPw1('UTV2-1556', seedP0CoverageTree({}));
+  assert.equal(trackerCheck.status, 'skip');
+  assert.match(trackerCheck.detail, /tracker-keyed identity/u);
+});
+
+test('PW1 is non-waivable at every tier and decides the verdict', () => {
+  // A check that any tier could waive would not be enforcement. Read from the
+  // source rather than from a re-declared copy, so deleting PW1's absence is
+  // what fails -- not a fixture that agrees with itself.
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  const waivableBlock = source.match(/const WAIVABLE_CHECKS[\s\S]*?\n};/);
+  assert.ok(waivableBlock, 'WAIVABLE_CHECKS block should exist');
+  assert.doesNotMatch(waivableBlock[0], /PW1/u, 'PW1 must not be waivable at any tier');
+
+  // The production call site must not pass a root override, or the guard could
+  // be pointed at a tree that is not the one being admitted.
+  assert.match(source, /\n  runRepoMintedP0Checks\(issueId, addCheck\);\n/u);
+
+  // And a failing PW1 has to actually decide the verdict.
+  const failing = collectPw1('WORK-2026091001', seedP0CoverageTree({ evaluator: true }));
+  assert.equal(resolveVerdict([
+    { id: 'PB1', status: 'pass', detail: 'ok' } as CheckResult,
+    failing,
+  ]), 'FAIL');
 });

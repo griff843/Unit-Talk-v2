@@ -23,7 +23,11 @@ import {
   currentHeadSha,
   defaultProofPaths,
   emitJson,
+  evaluateRepoMintedP0Coverage,
   git,
+  isRepoMintedWorkIdentity,
+  P0_ACTIONS_CONSUMER_PATH,
+  P0_TRUSTED_EVALUATOR_PATH,
   issueToManifestPath,
   manifestExists,
   normalizeFileScope,
@@ -669,6 +673,36 @@ function main(): void {
         message: delegationCheck.message,
       });
       process.exit(1);
+    }
+
+    // Repo-minted WORK execution stays mechanically blocked until the P0
+    // Actions consumer actually evaluates a `WORK-###` identity. The consumer
+    // currently on `main` resolves `/(?:UTV2|UNI)-\d+/i` and auto-passes
+    // anything else, so a WORK PR clears the required `P0 Protocol` check in
+    // ~10s with no evaluation at all. This refusal is placed at lane admission
+    // rather than in a required check because the activation's own foundation
+    // PR is itself a `WORK-###` PR whose base lacks the evaluator -- a required
+    // check predicated on activation would refuse the change that delivers it.
+    // Admission is nonetheless a complete chokepoint: `merge-gate.yml` resolves
+    // tier from `docs/06_status/lanes/<ID>.json`, which only this command
+    // writes, so no new WORK lane reaches a merge while this holds. The
+    // predicate reads the installed consumer, so the block releases itself the
+    // moment activation lands and re-arms if the delegation is removed.
+    if (isRepoMintedWorkIdentity(issueId)) {
+      const p0Coverage = evaluateRepoMintedP0Coverage();
+      if (!p0Coverage.covered) {
+        emitJson({
+          ok: false,
+          code: 'p0_consumer_not_activated',
+          message:
+            `Repo-minted work identity ${issueId} cannot open a lane: ${p0Coverage.reason}`,
+          consumer_path: P0_ACTIONS_CONSUMER_PATH,
+          evaluator_path: P0_TRUSTED_EVALUATOR_PATH,
+          remediation:
+            'Land the P0 consumer activation (docs/06_status/proof/WORK-2026091001/p0-consumer-activation.patch) through its own reviewed lane. This refusal clears itself once the installed consumer delegates to the trusted-base evaluator. Do not disable the required check to pass.',
+        });
+        process.exit(1);
+      }
     }
 
     const missing: string[] = [];

@@ -764,6 +764,77 @@ export function isTrackerIndependent(
   return /^WORK-\d+$/i.test(manifest.issue_id) || manifest.tracker_ref === null;
 }
 
+/**
+ * Repo-minted work identity. `WORK-###` is the namespace a task uses when it
+ * has no tracker issue at all; `UTV2-###` / `UNI-###` remain tracker keys.
+ */
+export function isRepoMintedWorkIdentity(issueId: string | null | undefined): boolean {
+  return /^WORK-\d+$/i.test(String(issueId ?? '').trim());
+}
+
+/** The P0 Actions consumer -- the required `P0 Protocol` check's workflow. */
+export const P0_ACTIONS_CONSUMER_PATH = '.github/workflows/p0-protocol.yml';
+/** The trusted-base repository P0 evaluator the consumer must delegate to. */
+export const P0_TRUSTED_EVALUATOR_PATH = 'scripts/ops/tracker-independence/p0-workflow.cjs';
+
+export interface RepoMintedP0Coverage {
+  covered: boolean;
+  reason: string;
+}
+
+/**
+ * Does the installed P0 Actions consumer actually evaluate a repo-minted
+ * `WORK-###` identity?
+ *
+ * The consumer on `main` resolves an identifier with `/(?:UTV2|UNI)-\d+/i` and
+ * auto-passes anything it cannot match, so a `WORK-###` PR clears the required
+ * `P0 Protocol` check without any P0 evaluation ever running. That is a hole in
+ * a required safety check, not an administrative gap.
+ *
+ * The cutover closes it by delegating the consumer to the trusted-base
+ * evaluator, which resolves `WORK-###` and throws on an unresolved
+ * classification. Until that activation lands, repo-minted WORK execution is
+ * refused at lane admission -- the only chokepoint that does not deadlock the
+ * foundation PR the activation itself depends on. `merge-gate.yml` resolves a
+ * tier from `docs/06_status/lanes/<ID>.json`, which only `ops:lane-start`
+ * creates, so no WORK lane can reach a merge without passing through here.
+ *
+ * The predicate is self-releasing: it reads the installed consumer rather than
+ * a flag, so the block lifts by itself the moment the activation is on the
+ * branch, and re-arms if the delegation is ever removed. It fails closed on an
+ * unreadable or absent consumer -- a missing required-check workflow is the one
+ * state in which "assume it is covered" would be worst.
+ */
+export function evaluateRepoMintedP0Coverage(root: string = ROOT): RepoMintedP0Coverage {
+  const consumerPath = path.join(root, P0_ACTIONS_CONSUMER_PATH);
+  let consumer: string;
+  try {
+    consumer = fs.readFileSync(consumerPath, 'utf8');
+  } catch {
+    return {
+      covered: false,
+      reason: `P0 Actions consumer ${P0_ACTIONS_CONSUMER_PATH} is missing or unreadable; repo-minted WORK execution stays blocked.`,
+    };
+  }
+  if (!consumer.includes(P0_TRUSTED_EVALUATOR_PATH)) {
+    return {
+      covered: false,
+      reason:
+        `${P0_ACTIONS_CONSUMER_PATH} does not delegate to ${P0_TRUSTED_EVALUATOR_PATH}, so a WORK-### PR auto-passes the required P0 Protocol check without evaluation.`,
+    };
+  }
+  if (!fs.existsSync(path.join(root, P0_TRUSTED_EVALUATOR_PATH))) {
+    return {
+      covered: false,
+      reason: `${P0_ACTIONS_CONSUMER_PATH} delegates to ${P0_TRUSTED_EVALUATOR_PATH}, but that evaluator is not present in this tree.`,
+    };
+  }
+  return {
+    covered: true,
+    reason: `${P0_ACTIONS_CONSUMER_PATH} delegates repo-minted work identities to ${P0_TRUSTED_EVALUATOR_PATH}.`,
+  };
+}
+
 export function resolveTrackerRef(
   manifest: Pick<LaneManifest, 'issue_id'> & { tracker_ref?: string | null },
 ): string | null {

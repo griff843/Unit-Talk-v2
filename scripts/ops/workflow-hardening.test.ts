@@ -1939,3 +1939,38 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
     'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
   );
 });
+
+test('the repo-minted P0 admission block cannot be removed without a test failing', () => {
+  // The block that keeps `WORK-###` execution refused until the P0 Actions
+  // consumer actually evaluates a repo-minted identity lives at lane admission,
+  // not in a required check -- a required check predicated on activation would
+  // refuse the very PR that delivers the evaluator. Admission is a complete
+  // chokepoint because `merge-gate.yml` resolves tier from the lane manifest,
+  // which only `ops:lane-start` writes. Nothing else in the suite fails if the
+  // block is deleted, so this asserts its presence directly.
+  const laneStart = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    laneStart,
+    /if \(isRepoMintedWorkIdentity\(issueId\)\) \{[\s\S]{0,400}?evaluateRepoMintedP0Coverage\(\)[\s\S]{0,600}?code: 'p0_consumer_not_activated'/u,
+    'lane-start must refuse a repo-minted identity whose P0 consumer cannot evaluate it',
+  );
+  assert.match(
+    laneStart.slice(laneStart.indexOf("code: 'p0_consumer_not_activated'")),
+    /process\.exit\(1\)/u,
+    'the refusal must exit non-zero rather than warn and continue',
+  );
+
+  // The same predicate is the preflight check PW1, so the refusal is reported
+  // before an operator ever reaches lane-start.
+  const preflight = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  assert.match(preflight, /runRepoMintedP0Checks\(issueId, addCheck\);/u);
+
+  // The merge gate's tier source is what makes admission sufficient. If it ever
+  // stops reading the lane manifest, the chokepoint argument stops holding and
+  // this assertion is where that is noticed.
+  assert.match(
+    readWorkflow('merge-gate.yml'),
+    /docs\/06_status\/lanes/u,
+    'merge-gate must keep resolving tier from the lane manifest that only lane-start writes',
+  );
+});

@@ -24,9 +24,11 @@ import {
   T1_LIVE_DB_PRECONDITION_DEFERRED,
   branchExists,
   currentHeadSha,
+  evaluateRepoMintedP0Coverage,
   getFlag,
   getFlags,
   git,
+  isRepoMintedWorkIdentity,
   normalizeRepoRelativePath,
   parseArgs,
   preflightResultPathForBranch,
@@ -378,6 +380,7 @@ async function main(): Promise<number> {
       })
     : null;
   runRepoChecks(issueId, branch, addCheck, readmitExistingBranch, readmissionContext);
+  runRepoMintedP0Checks(issueId, addCheck);
   runDependencyChecks(addCheck);
   validateDocsOnlyFastPath(tier, docsOnlyFastPath, normalizedCandidateFiles, addCheck);
   const linearState = await runLinearChecks(
@@ -1016,6 +1019,30 @@ function runRepoChecks(
   } else {
     addCheck('PG9', 'pass', 'git config user.name and user.email are set');
   }
+}
+
+/**
+ * PW1 -- repo-minted WORK execution is refused while the required `P0 Protocol`
+ * check cannot evaluate a `WORK-###` identity.
+ *
+ * The consumer on `main` matches `/(?:UTV2|UNI)-\d+/i` and auto-passes anything
+ * else, so a WORK PR clears a required safety check without any P0 evaluation.
+ * This is deliberately NOT waivable at any tier (see WAIVABLE_CHECKS) and it is
+ * self-releasing: it reads the installed consumer, so it lifts the moment the
+ * activation lands and re-arms if the delegation is removed. Tracker-keyed
+ * identities are unaffected -- the existing consumer evaluates those already.
+ */
+export function runRepoMintedP0Checks(
+  issueId: string,
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
+  root: string = ROOT,
+): void {
+  if (!isRepoMintedWorkIdentity(issueId)) {
+    addCheck('PW1', 'skip', `${issueId} is a tracker-keyed identity; the installed P0 consumer already evaluates it`);
+    return;
+  }
+  const coverage = evaluateRepoMintedP0Coverage(root);
+  addCheck('PW1', coverage.covered ? 'pass' : 'fail', coverage.reason);
 }
 
 function runDependencyChecks(

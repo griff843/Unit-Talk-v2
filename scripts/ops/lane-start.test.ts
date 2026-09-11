@@ -836,7 +836,10 @@ interface LaneFixture {
   branch: string;
 }
 
-function seedLaneFixture(issueId: string, opts: { withWorktree: boolean; localTitle?: string }): LaneFixture {
+function seedLaneFixture(
+  issueId: string,
+  opts: { withWorktree: boolean; localTitle?: string; activateP0Consumer?: boolean },
+): LaneFixture {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-lanestart-'));
   const root = path.join(dir, 'repo');
   const slug = issueId.toLowerCase();
@@ -868,6 +871,23 @@ function seedLaneFixture(issueId: string, opts: { withWorktree: boolean; localTi
   // Fresh admission creates the worktree under .out/ and installs into it;
   // both must be ignored or the clean-control-checkout assertion refuses first.
   fs.writeFileSync(path.join(root, '.gitignore'), '.out/\nnode_modules/\n');
+
+  // The repo-minted P0 refusal reads the *installed* consumer, so an activated
+  // fixture is one whose consumer genuinely delegates to a trusted evaluator
+  // that exists on disk -- never a flag the test sets. Written before `git
+  // init` so the tree stays clean.
+  if (opts.activateP0Consumer) {
+    fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, '.github', 'workflows', 'p0-protocol.yml'),
+      'name: P0 Protocol\njobs:\n  evaluate:\n    steps:\n      - run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
+    );
+    fs.mkdirSync(path.join(root, 'scripts', 'ops', 'tracker-independence'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'scripts', 'ops', 'tracker-independence', 'p0-workflow.cjs'),
+      'module.exports = { evaluatePullRequest: async () => ({}) };\n',
+    );
+  }
 
   const git = (args: string[], cwd = root): void => {
     const r = spawnSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
@@ -2205,5 +2225,75 @@ test('G50: readmission refuses when the metadata commit fails', () => {
     `${run.stdout}\n${run.stderr}`,
     /failed to commit regenerated readmission metadata/u,
     'the commit-failure guard must be the thing that refuses',
+  );
+});
+
+test('lane-start refuses a repo-minted WORK lane while the P0 consumer cannot evaluate it', () => {
+  // The fixture repo carries no `.github/workflows/p0-protocol.yml` at all,
+  // which is the fail-closed half of the predicate: an absent or unreadable
+  // consumer keeps WORK execution blocked rather than admitting it.
+  const f = seedLaneFixture('WORK-999901', { withWorktree: false });
+  const run = runLaneStart(f);
+
+  assert.notEqual(run.status, 0, `admission must fail closed:\n${run.stdout}\n${run.stderr}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'p0_consumer_not_activated');
+  assert.equal(out['consumer_path'], '.github/workflows/p0-protocol.yml');
+  assert.equal(out['evaluator_path'], 'scripts/ops/tracker-independence/p0-workflow.cjs');
+  assert.match(
+    String(out['message']),
+    /WORK-999901/u,
+    'the refusal must name the identity it refused',
+  );
+  assert.match(
+    String(out['remediation']),
+    /Do not disable the required check/u,
+    'the remediation must not offer disabling the required check as an exit',
+  );
+
+  // Refused at admission means refused before any state exists: no manifest,
+  // no lease, no worktree. A refusal that fired after the manifest was written
+  // would leave a lane the merge gate can resolve a tier for.
+  assert.equal(
+    fs.existsSync(path.join(f.root, 'docs', '06_status', 'lanes', `${f.issueId}.json`)),
+    false,
+    'no manifest may be written for a refused repo-minted lane',
+  );
+  assert.equal(
+    fs.existsSync(path.join(f.root, '.ops', 'leases', `${f.issueId}.json`)),
+    false,
+    'no lease may be reserved for a refused repo-minted lane',
+  );
+});
+
+test('the repo-minted refusal releases itself once the consumer delegates, and never fires on a tracker key', () => {
+  // Same identity, same command, one difference: the installed consumer now
+  // delegates to an evaluator that exists. The block must be gone -- otherwise
+  // it is not self-releasing and the activation could never land.
+  const activated = seedLaneFixture('WORK-999902', { withWorktree: false, activateP0Consumer: true });
+  const activatedRun = runLaneStart(activated);
+  // Asserted positively rather than as an absence: the run must reach a
+  // strictly later stage of admission. `doesNotMatch` alone would also pass if
+  // the command had failed before the guard ran, which is the vacuous form.
+  const activatedOut = laneJson(activatedRun.stdout);
+  assert.notEqual(activatedOut['code'], 'p0_consumer_not_activated');
+  assert.equal(
+    activatedOut['code'],
+    'lane_start_failed',
+    'an activated consumer must let admission proceed past the repo-minted gate',
+  );
+  assert.match(String(activatedOut['message']), /Missing local task contract for WORK-999902/u);
+
+  // And the block is scoped to repo-minted identity: a tracker key is already
+  // evaluated by the narrow consumer, so it must pass through untouched even
+  // in a tree with no consumer at all.
+  const tracker = seedLaneFixture('UTV2-999903', { withWorktree: false });
+  const trackerRun = runLaneStart(tracker);
+  const trackerOut = laneJson(trackerRun.stdout);
+  assert.notEqual(trackerOut['code'], 'p0_consumer_not_activated');
+  assert.equal(
+    trackerOut['code'],
+    'lane_start_failed',
+    'a tracker-keyed identity must reach the same later stage with no consumer present',
   );
 });
