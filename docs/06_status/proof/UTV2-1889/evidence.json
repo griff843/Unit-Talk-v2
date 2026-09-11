@@ -367,7 +367,7 @@
       "pr_head_sha": "139187832d1a6b4e9dc05bd7f48c6e0ae1e46f4f",
       "run_id": 34650795093,
       "job_id": 103432338406,
-      "binding_rule": "pr_head_run: pull_request-triggered run at PR head 139187832. That head differs from sha_binding.verified_source_sha (2b0a01e02) by exactly two files, both under docs/06_status/proof/UTV2-1889/ -- `git diff --name-only 2b0a01e02 139187832` returns evidence.json and verification.md and nothing else. So the source tree this job compiled and ran is byte-identical to the bound head's, and the receipt is not a preceding-head receipt in the sense UTV2-1886's was."
+      "binding_rule": "lane_source_tree_run: a pull_request-triggered run at head 139187832. That head is not necessarily the current PR head -- writing a receipt into a proof bundle moves the head, so no bundle can ever cite a run at its own head. The claim made instead is one that does not go stale: every commit on this lane after 2b0a01e02 (= sha_binding.verified_source_sha) touches only docs/06_status/proof/UTV2-1889/, so every such head compiles a source tree byte-identical to the bound head's. Checkable with `git diff --name-only 2b0a01e02 <any later head on this lane>`, which returns proof-directory files and nothing else. `verify` and `Writable DB proof (staging only)` are asserted green on the MERGE SHA by closeout check G6, which is where the route B deferral is actually enforced."
     }
   }
 }

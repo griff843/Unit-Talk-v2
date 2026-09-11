@@ -153,12 +153,14 @@ job "Writable DB proof (staging only)" -- all 16 steps success
     artifact utv2-1630-db-proof-receipt-34650795093-1 (id 10283712879)
 ```
 
-The receipt binds the bound head rather than a preceding one, and that is checkable rather
-than asserted: `git diff --name-only 2b0a01e02 139187832` returns `evidence.json` and
-`verification.md` and nothing else, so the source tree this job compiled is byte-identical
-to the tree at `verified_source_sha`. A proof bundle can never carry a receipt for its own
-commit -- writing the receipt moves the head -- but it can carry one whose only distance
-from the bound head is the proof directory itself.
+The receipt binds the bound head's source tree rather than a preceding one, and the claim
+is written so it cannot go stale as further proof commits move the head. Every commit on
+this lane after `2b0a01e02` -- which is `verified_source_sha` -- touches only
+`docs/06_status/proof/UTV2-1889/`. So for any later head on this lane,
+`git diff --name-only 2b0a01e02 <head>` returns proof-directory files and nothing else,
+and the tree this job compiled is byte-identical to the tree at the bound head. A proof
+bundle can never carry a receipt for its own commit, because writing the receipt moves the
+head; what it can carry is one whose only distance from the bound head is this directory.
 
 The coverage gap is stated rather than papered over, and it is recorded OPEN in
 `evidence.json`. This lane adds no `t1-proof` suite, so no live assertion exercises the
