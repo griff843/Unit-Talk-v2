@@ -29,6 +29,12 @@ import {
   validateAttestation,
   type AttestationInput,
 } from './track-only/operator-attest-result.ts';
+import {
+  assertFixtureIsIdentifiable,
+  buildStagingResultsPayload,
+  runSgoJourneyProof,
+  STAGING_FIXTURE_PREFIX,
+} from './track-only/sgo-journey-proof.ts';
 
 function event(overrides: Record<string, unknown> = {}) {
   return {
@@ -775,4 +781,139 @@ test('the --help text names every flag the parser actually reads', () => {
   assert.ok(documented.has('--apply'));
   assert.ok(documented.has('--correction-of'));
   assert.ok(!documented.has('--correction'.concat('X')));
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1889 -- SGO submission-to-result journey proof.
+//
+// These live here rather than beside the module because `test:ops` is an explicit
+// file list, not a glob, and `package.json` is outside this lane's pinned
+// file_scope_lock. Same resolution UTV2-1840 took for the same reason.
+// ---------------------------------------------------------------------------
+
+// The whole point of these assertions is that they run the SHIPPED normalizer and the
+// SHIPPED classifier. If a future change repairs a gap, the corresponding test here
+// fails and has to be rewritten deliberately -- which is the intended alarm, not a
+// nuisance. Each test names the gap it pins.
+
+test('the real SGO normalizer emits <statId>-all-<period>-<betType>, erasing the side from the key', async () => {
+  const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
+
+  const keys = report.parse.scoredMarkets.map((m) => m.baseMarketKey).sort();
+  // `points-home-game-ml-home` and `points-away-game-ml-away` BOTH normalize to the
+  // same key. The `-all-` segment is a hardcoded literal in the normalizer's template,
+  // so the side cannot survive into the market key -- which is exactly why
+  // `providerSide` had to be added as a separate field (UTV2-1868).
+  assert.deepEqual(keys, [
+    'points-all-game-ml',
+    'points-all-game-ml',
+    'points-all-game-ou',
+  ]);
+});
+
+test('GAP A: SGO_GAME_LINE_CANONICAL_ID never matches a moneyline, so the raw key is written', async () => {
+  const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
+
+  const moneylineWrites = report.resolve.writes.filter(
+    (w) => w.baseMarketKey === 'points-all-game-ml',
+  );
+  assert.equal(moneylineWrites.length, 2);
+  for (const write of moneylineWrites) {
+    assert.equal(write.canonicalTableMatched, false);
+    // NOT 'game_ml_mlb' -- the table's key 'mlb-ml-all-game' is a shape the
+    // normalizer's template cannot produce.
+    assert.equal(write.writtenMarketKey, 'points-all-game-ml');
+    assert.notEqual(write.writtenMarketKey, 'game_ml_mlb');
+  }
+
+  // The one entry that IS reachable, for contrast -- so this test cannot pass by the
+  // table being ignored altogether.
+  const totalWrite = report.resolve.writes.find(
+    (w) => w.baseMarketKey === 'points-all-game-ou',
+  );
+  assert.equal(totalWrite?.canonicalTableMatched, true);
+  assert.equal(totalWrite?.writtenMarketKey, 'game_total_ou');
+
+  assert.ok(report.gaps.some((g) => g.id === 'A-canonical-table-unreachable'));
+});
+
+test('GAP B: the resolver writes a raw team score where grading expects 1 | 0 | 0.5', async () => {
+  const report = await runSgoJourneyProof({
+    pickMarket: 'moneyline',
+    payload: buildStagingResultsPayload({ homeScore: 3, awayScore: 5 }),
+  });
+
+  const values = report.resolve.writes
+    .filter((w) => w.providerSide !== null)
+    .map((w) => w.writtenActualValue)
+    .sort();
+  assert.deepEqual(values, [3, 5]);
+  // Neither 3 nor 5 is a moneyline outcome. The away side won, and that fact exists
+  // only in the COMPARISON of the two rows -- never in either row alone.
+  for (const value of values) {
+    assert.ok(![1, 0, 0.5].includes(value));
+  }
+
+  assert.ok(report.gaps.some((g) => g.id === 'B-raw-score-is-not-an-outcome'));
+});
+
+test('GAP C: the journey does not complete -- no written key is one grading looks for', async () => {
+  const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
+
+  assert.equal(report.journeyCompletes, false);
+  assert.deepEqual(report.joinedMarketKeys, []);
+  // Grading looks for the pick's own key and its static alias...
+  assert.deepEqual(report.grade.staticCandidateMarketKeys.sort(), [
+    'game_moneyline_win',
+    'moneyline',
+  ]);
+  // ...and the resolver writes neither.
+  const written = report.resolve.writes.map((w) => w.writtenMarketKey);
+  assert.ok(!written.includes('moneyline'));
+  assert.ok(!written.includes('game_moneyline_win'));
+
+  assert.ok(report.gaps.some((g) => g.id === 'C-no-market-key-join'));
+});
+
+test('the grading classifier does reach a moneyline rule, so the gap is the join and not the classifier', async () => {
+  const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
+
+  // Worth pinning separately: the moneyline family and the `usesLine: false` fix are
+  // real and working. A reader must not conclude from the failing journey that
+  // moneyline grading was never wired -- it was; it just has nothing to join to.
+  assert.equal(report.grade.rule.family, 'game_moneyline');
+  assert.equal(report.grade.rule.gradeable, true);
+  assert.equal(report.grade.rule.usesLine, false);
+  assert.equal(report.grade.rule.participantRequirement, 'required');
+});
+
+test('a game total DOES complete the journey, which is what makes the moneyline failure specific', async () => {
+  const report = await runSgoJourneyProof({ pickMarket: 'game_total_ou' });
+
+  // This is the control. The same fixture, the same real code, a different market --
+  // and the join succeeds. Without it, the four gaps above could be explained by the
+  // harness being wrong rather than by the code.
+  assert.equal(report.journeyCompletes, true);
+  assert.deepEqual(report.joinedMarketKeys, ['game_total_ou']);
+  assert.equal(report.grade.rule.family, 'game_total');
+  assert.ok(!report.gaps.some((g) => g.id === 'C-no-market-key-join'));
+});
+
+test('the proof refuses a fixture that could be mistaken for real data', () => {
+  assert.throws(
+    () => assertFixtureIsIdentifiable({ data: [{ eventID: 'real-mlb-2026-09-09' }] }),
+    /does not carry UTV2-1889-STAGING-FIXTURE/,
+  );
+  // An empty payload must not read as a pass either.
+  assert.throws(() => assertFixtureIsIdentifiable({ data: [] }), /vacuous/);
+  assert.doesNotThrow(() => assertFixtureIsIdentifiable(buildStagingResultsPayload()));
+});
+
+test('the fixture is served without reaching the provider', async () => {
+  // If the injected transport were bypassed, this would attempt a real request with a
+  // non-credential key and fail. Completing the parse is the evidence that no paid
+  // call was made -- SGO activation is unapproved.
+  const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
+  assert.equal(report.parse.events.length, 1);
+  assert.ok(report.fixtureEventId.startsWith(STAGING_FIXTURE_PREFIX));
 });

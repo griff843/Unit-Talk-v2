@@ -73,7 +73,7 @@ const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
 // with `participant_id = NULL`. A score read as a win flag would settle a pick wrongly
 // and silently, so the win flag gets a key of its own and every pre-existing row stays
 // uninterpretable by this path.
-const MONEYLINE_RESULT_MARKET_KEY = 'game_moneyline_win';
+export const MONEYLINE_RESULT_MARKET_KEY = 'game_moneyline_win';
 
 // The attested win flag, and nothing else. A `Map` rather than a comparison chain so
 // that an unlisted value (a score, a NaN, a 2) has no branch to fall into and is
@@ -104,14 +104,14 @@ export async function fetchAllByLifecycleState(
   return all;
 }
 
-type ParticipantRequirement = 'required' | 'forbidden';
-type GradeableMarketFamily =
+export type ParticipantRequirement = 'required' | 'forbidden';
+export type GradeableMarketFamily =
   | 'player_prop'
   | 'team_total'
   | 'game_total'
   | 'game_moneyline';
 
-interface MarketFamilyRule {
+export interface MarketFamilyRule {
   family: GradeableMarketFamily | 'unsupported';
   participantRequirement: ParticipantRequirement;
   gradeable: boolean;
@@ -495,7 +495,7 @@ export async function runGradingPass(
   };
 }
 
-function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
+export function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
   if (marketKey === 'moneyline' || marketKey === 'game_moneyline') {
     return {
       family: 'game_moneyline',
@@ -604,7 +604,7 @@ async function findFirstGradeResult(
   return null;
 }
 
-const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
+export const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   moneyline: MONEYLINE_RESULT_MARKET_KEY,
   game_moneyline: MONEYLINE_RESULT_MARKET_KEY,
   'points-all-game-ou': 'player_points_ou',
