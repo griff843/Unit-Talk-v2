@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1878-membership-product-contract
 PR URL: N/A
 Head SHA: 455f38fb9a4895630dcc0178c6fc22923b4f7b87
-Merge SHA: N/A
+Merge SHA: 2269bd630011f6c522ae1f76aba4535317c4d309
 Diff base: 7b3fd41115d7ddd21815f0309b0ebf600f6d1f13
 Diff target: 455f38fb9a4895630dcc0178c6fc22923b4f7b87
 
@@ -33,4 +33,4 @@ M	docs/mission/intent.md
 
 ## SHA Binding
 Head SHA: 455f38fb9a4895630dcc0178c6fc22923b4f7b87
-Merge SHA: N/A
+Merge SHA: 2269bd630011f6c522ae1f76aba4535317c4d309
