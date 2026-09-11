@@ -7,7 +7,7 @@ Lane type: modeling
 Branch: claude/utv2-1861-admit-track-only-to-grading
 PR URL: N/A
 Head SHA: 2b4342515dbd86cd4ed32ac495308053eb5daebf
-Merge SHA: N/A
+Merge SHA: ed336a1502874a375e66490891390d6efeeac07d
 Diff base: 3ed5a940e130c5f9e79c67de47acc02bec9034eb
 Diff target: 2b4342515dbd86cd4ed32ac495308053eb5daebf
 
@@ -37,4 +37,4 @@ A	docs/06_status/proof/UTV2-1861/.gitkeep
 
 ## SHA Binding
 Head SHA: 2b4342515dbd86cd4ed32ac495308053eb5daebf
-Merge SHA: N/A
+Merge SHA: ed336a1502874a375e66490891390d6efeeac07d

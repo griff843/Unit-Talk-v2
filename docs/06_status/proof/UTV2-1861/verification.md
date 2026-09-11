@@ -1,6 +1,6 @@
 # PROOF: UTV2-1861
 
-MERGE_SHA: pending merge
+MERGE_SHA: ed336a1502874a375e66490891390d6efeeac07d
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -208,7 +208,7 @@ does: it is a moneyline, and `classifyMarketFamilyForGrading` returns
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: ed336a1502874a375e66490891390d6efeeac07d
 PR: pending
 Approved PR head: pending merge
 Execution SHA: 24412c77979c8280ffbce7c124ba83dd5ebbe25b
