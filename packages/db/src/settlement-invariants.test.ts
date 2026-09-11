@@ -15,7 +15,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
+import { createPrivilegedClient } from "./privileged-client-boundary.js";
+import {
+  CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
+  EXPECTED_STAGING_SUPABASE_PROJECT_REF,
+  PROJECT_REF_PATTERN,
+} from "./target-identity.js";
 import { assertSettlementCorrectionReference } from "./constraint-guards.js";
 import {
   InMemorySettlementRepository,
@@ -358,12 +363,26 @@ test("InMemorySettlementRepository: findLatestForPicks agrees with findLatestFor
  * The exact query shape of `DatabaseSettlementRepository.findLatestForPicks`.
  * postgrest-js exposes the built URL before the request is sent, so this needs
  * no network, no credentials and no live database -- it is a byte measurement,
- * not a round trip.
+ * not a round trip. Nothing is awaited, so no request is ever issued.
+ *
+ * The client comes from `createPrivilegedClient` rather than `createClient`
+ * because `scripts/ci/privileged-db-client-guard.ts` rule 3 refuses ANY path
+ * from a `pnpm test` entrypoint to a raw driver constructor, whatever the
+ * inventory says, and the boundary is its sole exemption. A measurement is not
+ * an exception to that: the guard's invariant is that no such path exists, and
+ * a path that only reads `.url` is still a path.
+ *
+ * The target is the approved staging ref, not production. That is a real
+ * substitution and it changes no measured byte: `PROJECT_REF_PATTERN` fixes
+ * every project ref at exactly 20 characters, so the base URL is the same
+ * length either way -- asserted below rather than asserted by this comment.
  */
 function settlementBatchQueryUrl(idCount: number): string {
-  const client = createClient(
-    "https://zfzdnfwdarxucxtaojxm.supabase.co",
+  const client = createPrivilegedClient(
+    `https://${EXPECTED_STAGING_SUPABASE_PROJECT_REF}.supabase.co`,
     "anon-key-placeholder",
+    undefined,
+    "UTV2-1886 settlement batch URL byte measurement (no request is issued)",
   );
   const ids = Array.from({ length: idCount }, () => randomUUID());
   const builder = client
@@ -378,6 +397,23 @@ function settlementBatchQueryUrl(idCount: number): string {
 }
 
 test("UTV2-1886: a full chunk's PostgREST URL fits the byte budget", () => {
+  // The measurement is taken against the approved staging ref while the request
+  // that matters in production is taken against the production ref. That is
+  // only legitimate if the two produce the same number of bytes, so assert it
+  // rather than assume it: a project ref is a fixed-width 20-character token,
+  // so the base URL length is ref-independent.
+  assert.equal(
+    PROJECT_REF_PATTERN.test(EXPECTED_STAGING_SUPABASE_PROJECT_REF),
+    true,
+    "the staging project ref must match the fixed-width ref pattern, else the " +
+      "byte measurement below is not transferable to the production target",
+  );
+  assert.equal(
+    EXPECTED_STAGING_SUPABASE_PROJECT_REF.length,
+    CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF.length,
+    "staging and production refs must be the same width for this measurement to hold",
+  );
+
   const bytes = Buffer.byteLength(
     settlementBatchQueryUrl(SETTLEMENT_BATCH_CHUNK_SIZE),
     "utf8",
