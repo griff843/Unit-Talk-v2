@@ -96,7 +96,6 @@ function createInput(overrides: Partial<PacketInput['prebuilt']> = {}): PacketIn
         },
       },
       untracked_artifacts: [],
-      scope_override_comments: [],
       generated_at: '2026-05-18T00:00:00.000Z',
       ...overrides,
     },
@@ -140,85 +139,6 @@ test('generatePRReviewPacket detects out-of-scope files', async () => {
   assert.strictEqual(packet.verdict, 'FAIL');
   assert.deepStrictEqual(packet.out_of_scope_files, ['scripts/ops/unexpected.ts']);
   assert.equal(packet.checks.find((check) => check.id === 'scope')?.status, 'FAIL');
-});
-
-function scopeOverrideComment(overrides: {
-  issueId?: string;
-  prNumber?: number;
-  headSha?: string;
-  path?: string;
-  login?: string;
-  userType?: string;
-} = {}) {
-  const issueId = overrides.issueId ?? 'UTV2-1057';
-  const prNumber = overrides.prNumber ?? 1057;
-  const headSha = overrides.headSha ?? 'abc123def456';
-  const authorizedPath = overrides.path ?? 'scripts/ops/authorized-by-review.ts';
-  return {
-    body: [
-      'SCOPE_OVERRIDE: APPROVED',
-      'schema: scope-override/v1',
-      `Issue: ${issueId}`,
-      `PR: #${prNumber}`,
-      `Head-SHA: ${headSha}`,
-      'Paths:',
-      `- ${authorizedPath}`,
-      'Reason: reviewed scope correction',
-    ].join('\n'),
-    user: {
-      login: overrides.login ?? 'griff843',
-      type: overrides.userType ?? 'User',
-    },
-  };
-}
-
-function inputWithScopeOverride(comment: ReturnType<typeof scopeOverrideComment> | null): PacketInput {
-  return createInput({
-    pull_request: {
-      number: 1057,
-      url: 'https://github.com/unit-talk/unit-talk-v2/pull/1057',
-      title: 'feat(ops): UTV2-1057 automated return review packet',
-      headRefName: 'codex/utv2-1057-automated-return-review-packet-for-t1t2-prs',
-      headRefOid: 'abc123def456',
-      labels: [{ name: 'tier:T2' }],
-      files: [
-        { path: 'scripts/ops/pr-review-packet.ts' },
-        { path: 'scripts/ops/authorized-by-review.ts' },
-      ],
-      statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }],
-    },
-    scope_override_comments: comment === null ? null : [comment],
-  });
-}
-
-test('generatePRReviewPacket grants paths from an authorized exact-head scope override', async () => {
-  const packet = await generatePRReviewPacket(inputWithScopeOverride(scopeOverrideComment()));
-
-  assert.strictEqual(packet.verdict, 'PASS');
-  assert.deepStrictEqual(packet.out_of_scope_files, []);
-  assert.ok(packet.allowed_file_scope.includes('scripts/ops/authorized-by-review.ts'));
-});
-
-for (const [name, comment] of [
-  ['stale head', scopeOverrideComment({headSha: 'deadbeef'})],
-  ['wrong issue', scopeOverrideComment({issueId: 'WORK-999'})],
-  ['wrong PR', scopeOverrideComment({prNumber: 999})],
-  ['unauthorized human', scopeOverrideComment({login: 'outsider'})],
-  ['bot author', scopeOverrideComment({userType: 'Bot'})],
-] as const) {
-  test(`generatePRReviewPacket rejects a ${name} scope override`, async () => {
-    const packet = await generatePRReviewPacket(inputWithScopeOverride(comment));
-
-    assert.strictEqual(packet.verdict, 'FAIL');
-    assert.deepStrictEqual(packet.out_of_scope_files, ['scripts/ops/authorized-by-review.ts']);
-  });
-}
-
-test('generatePRReviewPacket grants no paths when scope override comment fetch is unavailable', async () => {
-  const packet = await generatePRReviewPacket(inputWithScopeOverride(null));
-
-  assert.strictEqual(packet.verdict, 'FAIL');
-  assert.deepStrictEqual(packet.out_of_scope_files, ['scripts/ops/authorized-by-review.ts']);
 });
 
 test('generatePRReviewPacket allows same-issue lane metadata outside explicit scope lock', async () => {
