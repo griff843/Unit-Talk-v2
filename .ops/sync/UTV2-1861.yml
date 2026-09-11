@@ -1,0 +1,186 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1861
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1861
+  objective: Admit Track Only picks into the grading population via the evidence plane
+  acceptance_criteria:
+    - A `validated` Track Only pick enters the grading population; a `validated`
+      pick that is not Track Only does not.
+    - Such a pick settles through `recordEvidenceSettlement` — `status` stays
+      `validated`, `posted_at` stays null, no `atomicClaimForTransition` call.
+    - "No delivery artifact is produced: zero `distribution_outbox` rows, and
+      the existing Track Only chokepoints remain unmodified."
+    - "Mutation check: reverting the population change alone turns a test red
+      (the admission is asserted, not incidental)."
+    - The `settlement-service.ts` guard still rejects a `validated` pick that is
+      not Track Only, and still rejects a `posted` pick — the existing UTV2-1251
+      assertions stay green.
+    - "`pnpm verify` green; `pnpm test:db` green on the merge SHA."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Milestone 2 condition 3 blocker. Ordinary engineering — no reserved
+      surface, no containment change.
+    - >-
+      The defect
+
+      `runGradingPass` (`apps/api/src/grading-service.ts:96-100`) builds its
+      population from exactly two lifecycle states:
+
+
+      ```ts
+
+      fetchAllByLifecycleState(repositories.picks, 'posted'),
+
+      fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
+
+      ```
+
+
+      The pick FSM (mirrored at
+      `packages/verification/src/engine/v2-type-bridge.ts:62-69`) is `draft ->
+      validated -> {queued, awaiting_approval, voided}`, `queued -> posted`,
+      `posted -> settled`. Only `posted` reaches `settled`, and `posted` means
+      delivered — which Track Only exists to prevent.
+
+
+      A Smart Form Track Only submission therefore persists at `validated` and
+      nothing advances it. **No Track Only pick can ever enter grading, so none
+      can ever settle.**
+
+
+      Measured in production `zfzdnfwdarxucxtaojxm` on 2026-09-09:
+
+
+      * `validated` is the largest bucket: 21,364 picks; grading never reads it
+
+      * Milestone 1's pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b` is one of them
+
+      * every `grading.run` reports `picksGraded: 0`, latest 2026-09-09T02:49Z
+
+      * latest `settlement_records` row is 2026-07-30
+    - |-
+      The fix
+      Admit picks that are `validated` **and** Track Only into the grading population, and route them through the existing `recordEvidenceSettlement` branch (`grading-service.ts:291-299`) that UTV2-1253 already built for `awaiting_approval` — outcome recorded, no lifecycle transition, no delivery.
+
+      Use the canonical predicate `isTrackOnlyPickMetadata` (`packages/contracts/src/smart-form.ts:52-56`) — the same one all seven delivery chokepoints use. Do not re-derive the distribution mode.
+
+      ### There are FOUR sites, not one — introduce a single predicate
+
+      The evidence-plane condition is currently written as a literal `pick.status === 'awaiting_approval'` comparison in four places. Adding `|| validated` to each is the duplicated-rule shape this repo has already paid for twice ([UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace), and the Smart Form client/server mirror). Introduce one exported predicate and use it at every site, so a future divergence is a compile-or-test failure rather than silent drift:
+
+      | # | Site | Current | If missed |
+      | -- | -- | -- | -- |
+      | 1 | `grading-service.ts:96-100` population | fetches `posted` + `awaiting_approval` | pick never enters grading |
+      | 2 | `grading-service.ts:292` settle branch | `=== 'awaiting_approval'` | falls into `atomicClaimForTransition(id,'posted','settled')`, which cannot claim a `validated` pick — silently skipped as `already_claimed_by_another_process` |
+      | 3 | `grading-service.ts:325` recap skip | `!== 'awaiting_approval'` | attempts a Discord settlement recap for a Track Only pick, relying on the outbox chokepoint to throw rather than not asking |
+      | 4 | `settlement-service.ts:321-325` guard | throws unless `awaiting_approval` | the settle call throws outright |
+
+      Site 4 is a fail-closed control with an existing T1 proof test (`t1-proof-utv2-1251-evidence-settlement.test.ts:153`) asserting it rejects non-`awaiting_approval` picks. **That assertion must stay true** for every pick that is not `validated` + Track Only — widen the guard, do not remove it, and add a case proving a `validated` pick that is NOT Track Only is still rejected.
+    - >-
+      Why `validated` + Track Only, and not the two alternatives
+
+      * **Moving Track Only picks to** `awaiting_approval` would reuse the
+      evidence plane unchanged, but it feeds
+      `governance.awaiting-approval-drift`, which has failed 12,634 consecutive
+      times on a static 14,984-row backlog. Routing new picks into a population
+      a permanently-red monitor watches makes that monitor worse.
+
+      * **Admitting all** `validated` **picks** would sweep in 21,364 historical
+      rows in one pass.
+
+
+      The narrow predicate is provably narrow: measured in production, exactly
+      **1** `validated` pick is Track Only today. That bound is itself an
+      acceptance assertion.
+    - |-
+      Known gaps this does NOT close — recorded, not in scope
+      * **Market family.** Grading supports only `game_total_ou`, `team_total_ou` and player props (`classifyMarketFamilyForGrading`, `:389-419`), plus a `Number.isFinite(pick.line)` guard. Smart Form offers five families; **moneyline and spread can never grade**, and Milestone 1's pick is a moneyline. Moneyline results are stored (`points-all-game-ml`, 280 rows) but as a bare scalar with `participant_id` null — no side attached — so settling one needs a score-provenance design against `SCORE_PROVENANCE_STANDARD.md`. Separate lane.
+      * **Results supply.** `game_results` is written only by `apps/ingestor/src/results-resolver.ts`, every row `source: 'sgo'`. Latest row 2026-06-30; `ingestor.cycle` has not run since 2026-06-30; the SGO key available to tooling reports `Inactive API key`. Restarting results ingestion touches provider ingestion (reserved) and possibly a paid subscription (reserved). Not in scope and not requested here.
+
+      So this lane is deliberately preparatory: it makes the lifecycle correct so that when results and market coverage land, nothing else blocks settlement. Same shape as [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) landing enforcement before the admission it protects.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1861/admit-track-only-picks-into-the-grading-population-via-the-evidence
+    title: Admit Track Only picks into the grading population via the evidence plane
+    description: |-
+      Milestone 2 condition 3 blocker. Ordinary engineering — no reserved surface, no containment change.
+
+      ## The defect
+
+      `runGradingPass` (`apps/api/src/grading-service.ts:96-100`) builds its population from exactly two lifecycle states:
+
+      ```ts
+      fetchAllByLifecycleState(repositories.picks, 'posted'),
+      fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
+      ```
+
+      The pick FSM (mirrored at `packages/verification/src/engine/v2-type-bridge.ts:62-69`) is `draft -> validated -> {queued, awaiting_approval, voided}`, `queued -> posted`, `posted -> settled`. Only `posted` reaches `settled`, and `posted` means delivered — which Track Only exists to prevent.
+
+      A Smart Form Track Only submission therefore persists at `validated` and nothing advances it. **No Track Only pick can ever enter grading, so none can ever settle.**
+
+      Measured in production `zfzdnfwdarxucxtaojxm` on 2026-09-09:
+
+      * `validated` is the largest bucket: 21,364 picks; grading never reads it
+      * Milestone 1's pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b` is one of them
+      * every `grading.run` reports `picksGraded: 0`, latest 2026-09-09T02:49Z
+      * latest `settlement_records` row is 2026-07-30
+
+      ## The fix
+
+      Admit picks that are `validated` **and** Track Only into the grading population, and route them through the existing `recordEvidenceSettlement` branch (`grading-service.ts:291-299`) that UTV2-1253 already built for `awaiting_approval` — outcome recorded, no lifecycle transition, no delivery.
+
+      Use the canonical predicate `isTrackOnlyPickMetadata` (`packages/contracts/src/smart-form.ts:52-56`) — the same one all seven delivery chokepoints use. Do not re-derive the distribution mode.
+
+      ### There are FOUR sites, not one — introduce a single predicate
+
+      The evidence-plane condition is currently written as a literal `pick.status === 'awaiting_approval'` comparison in four places. Adding `|| validated` to each is the duplicated-rule shape this repo has already paid for twice ([UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace), and the Smart Form client/server mirror). Introduce one exported predicate and use it at every site, so a future divergence is a compile-or-test failure rather than silent drift:
+
+      | # | Site | Current | If missed |
+      | -- | -- | -- | -- |
+      | 1 | `grading-service.ts:96-100` population | fetches `posted` + `awaiting_approval` | pick never enters grading |
+      | 2 | `grading-service.ts:292` settle branch | `=== 'awaiting_approval'` | falls into `atomicClaimForTransition(id,'posted','settled')`, which cannot claim a `validated` pick — silently skipped as `already_claimed_by_another_process` |
+      | 3 | `grading-service.ts:325` recap skip | `!== 'awaiting_approval'` | attempts a Discord settlement recap for a Track Only pick, relying on the outbox chokepoint to throw rather than not asking |
+      | 4 | `settlement-service.ts:321-325` guard | throws unless `awaiting_approval` | the settle call throws outright |
+
+      Site 4 is a fail-closed control with an existing T1 proof test (`t1-proof-utv2-1251-evidence-settlement.test.ts:153`) asserting it rejects non-`awaiting_approval` picks. **That assertion must stay true** for every pick that is not `validated` + Track Only — widen the guard, do not remove it, and add a case proving a `validated` pick that is NOT Track Only is still rejected.
+
+      ## Why `validated` + Track Only, and not the two alternatives
+
+      * **Moving Track Only picks to** `awaiting_approval` would reuse the evidence plane unchanged, but it feeds `governance.awaiting-approval-drift`, which has failed 12,634 consecutive times on a static 14,984-row backlog. Routing new picks into a population a permanently-red monitor watches makes that monitor worse.
+      * **Admitting all** `validated` **picks** would sweep in 21,364 historical rows in one pass.
+
+      The narrow predicate is provably narrow: measured in production, exactly **1** `validated` pick is Track Only today. That bound is itself an acceptance assertion.
+
+      ## Acceptance criteria
+
+      1. A `validated` Track Only pick enters the grading population; a `validated` pick that is not Track Only does not.
+      2. Such a pick settles through `recordEvidenceSettlement` — `status` stays `validated`, `posted_at` stays null, no `atomicClaimForTransition` call.
+      3. No delivery artifact is produced: zero `distribution_outbox` rows, and the existing Track Only chokepoints remain unmodified.
+      4. Mutation check: reverting the population change alone turns a test red (the admission is asserted, not incidental).
+      5. The `settlement-service.ts` guard still rejects a `validated` pick that is not Track Only, and still rejects a `posted` pick — the existing UTV2-1251 assertions stay green.
+      6. `pnpm verify` green; `pnpm test:db` green on the merge SHA.
+
+      ## Known gaps this does NOT close — recorded, not in scope
+
+      * **Market family.** Grading supports only `game_total_ou`, `team_total_ou` and player props (`classifyMarketFamilyForGrading`, `:389-419`), plus a `Number.isFinite(pick.line)` guard. Smart Form offers five families; **moneyline and spread can never grade**, and Milestone 1's pick is a moneyline. Moneyline results are stored (`points-all-game-ml`, 280 rows) but as a bare scalar with `participant_id` null — no side attached — so settling one needs a score-provenance design against `SCORE_PROVENANCE_STANDARD.md`. Separate lane.
+      * **Results supply.** `game_results` is written only by `apps/ingestor/src/results-resolver.ts`, every row `source: 'sgo'`. Latest row 2026-06-30; `ingestor.cycle` has not run since 2026-06-30; the SGO key available to tooling reports `Inactive API key`. Restarting results ingestion touches provider ingestion (reserved) and possibly a paid subscription (reserved). Not in scope and not requested here.
+
+      So this lane is deliberately preparatory: it makes the lifecycle correct so that when results and market coverage land, nothing else blocks settlement. Same shape as [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) landing enforcement before the admission it protects.
+    captured_at: 2026-09-11T00:13:18.546Z
+    description_sha256: 94e10fe504507305cf5e4a1246acf9534bfa791b73196129c46f1b087ac0ef65
+  contract_hash: cfda6776bbbc4bd3875b4e17261d29d421e3da69cfa65856d4c78dc5d579b2e8

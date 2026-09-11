@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1861",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1861-admit-track-only-to-grading",
+  "branch": "claude/utv2-1861-admit-track-only-to-grading",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1561",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/settlement-service.test.ts",
+    "apps/api/src/settlement-service.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1861/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-11T00:13:30.668Z",
+  "heartbeat_at": "2026-09-11T00:34:11.503Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1861-admit-track-only-to-grading.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1861-admit-track-only-to-grading",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
