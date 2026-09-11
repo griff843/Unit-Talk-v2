@@ -13,7 +13,11 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
-import { recordGradedSettlement, recordEvidenceSettlement } from './settlement-service.js';
+import {
+  isEvidencePlanePick,
+  recordGradedSettlement,
+  recordEvidenceSettlement,
+} from './settlement-service.js';
 
 export interface GradingPickResult {
   pickId: string;
@@ -95,11 +99,21 @@ export async function runGradingPass(
   // Evidence plane: also process awaiting_approval picks so outcome data
   // accumulates without requiring public delivery approval. Per UTV2-1253.
   // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
-  const [postedPicks, evidencePicks] = await Promise.all([
+  // UTV2-1861: Track Only picks never reach `posted`. They are structurally
+  // unable to be delivered, so `validated` is where they stop, and grading
+  // never saw them. Admit the Track Only subset of `validated` -- and only
+  // that subset: `validated` on its own is the entire pre-delivery backlog
+  // (21,364 rows in production on 2026-09-10, against 1 Track Only pick), so
+  // the filter is what keeps this a targeted admission rather than a sweep.
+  const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
     fetchAllByLifecycleState(repositories.picks, 'posted'),
     fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
+    fetchAllByLifecycleState(repositories.picks, 'validated'),
   ]);
-  const picks = [...postedPicks, ...evidencePicks];
+  const trackOnlyPicks = validatedPicks.filter((pick) =>
+    isEvidencePlanePick(pick),
+  );
+  const picks = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
   const details: GradingPickResult[] = [];
   const retryState = options.retryState;
 
@@ -291,7 +305,7 @@ export async function runGradingPass(
       };
 
       let settlementResult;
-      if (pick.status === 'awaiting_approval') {
+      if (isEvidencePlanePick(pick)) {
         // Evidence plane: record outcome without lifecycle transition.
         // atomicClaimForTransition is skipped — pick.status stays awaiting_approval.
         settlementResult = await recordEvidenceSettlement(
@@ -324,7 +338,9 @@ export async function runGradingPass(
       }
 
       // Evidence-plane picks have no outbox record; skip Discord recap.
-      if (pick.status !== 'awaiting_approval') {
+      // For Track Only this is not merely an optimisation -- publishing a recap
+      // would be member delivery, which Track Only exists to make impossible.
+      if (!isEvidencePlanePick(pick)) {
         await postSettlementRecapIfPossible(
           pick,
           settlementResult.settlementRecord,

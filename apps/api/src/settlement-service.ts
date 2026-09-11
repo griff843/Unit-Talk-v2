@@ -1,5 +1,6 @@
 import {
   createLifecycleEvent,
+  isTrackOnlyPickMetadata,
   validateSettlementRequest,
   type PickLifecycleState,
   type SettlementRequest,
@@ -293,6 +294,42 @@ export async function recordGradedSettlement(
  * Evidence counting scripts (roi-by-sport.ts, model-edge-proof.ts) query
  * settlement_records directly, so these records contribute to thresholds.
  */
+/**
+ * UTV2-1861: the single definition of "this pick belongs to the evidence plane".
+ *
+ * Two populations grade without a lifecycle transition and without any delivery:
+ *  - `awaiting_approval` — the Phase 7A governance brake (UTV2-1251).
+ *  - `validated` **and** Track Only — an operator pick submitted through the
+ *    Smart Form with `distributionMode: "track-only"`. Track Only picks are
+ *    structurally unable to be delivered, so they never reach `queued` or
+ *    `posted`, and `validated` is where they stay. `validated -> settled` is not
+ *    a legal transition in the canonical FSM (`pickLifecycleTransitions`), so the
+ *    only honest outcome for them is an evidence settlement.
+ *
+ * The Track Only condition is load-bearing and must not be dropped: `validated`
+ * on its own is the entire pre-delivery backlog, which grading must never sweep.
+ *
+ * Exported so `grading-service.ts` selects the population with the same rule
+ * this module enforces — one rule, one copy.
+ */
+export function isEvidencePlanePick(
+  pick: Pick<PickRecord, 'status' | 'metadata'>,
+): boolean {
+  if (pick.status === 'awaiting_approval') {
+    return true;
+  }
+  return (
+    pick.status === 'validated' &&
+    isTrackOnlyPickMetadata(
+      pick.metadata !== null &&
+        typeof pick.metadata === 'object' &&
+        !Array.isArray(pick.metadata)
+        ? (pick.metadata as Record<string, unknown>)
+        : null,
+    )
+  );
+}
+
 export async function recordEvidenceSettlement(
   pickId: string,
   result: 'win' | 'loss' | 'push',
@@ -319,9 +356,9 @@ export async function recordEvidenceSettlement(
     throw new Error(`Pick not found for evidence settlement: ${pickId}`);
   }
 
-  if (pick.status !== 'awaiting_approval') {
+  if (!isEvidencePlanePick(pick)) {
     throw new Error(
-      `Evidence settlement requires awaiting_approval state; found ${pick.status}. Use recordGradedSettlement for posted picks.`,
+      `Evidence settlement requires awaiting_approval state, or validated with Track Only distribution; found ${pick.status}. Use recordGradedSettlement for posted picks.`,
     );
   }
 
