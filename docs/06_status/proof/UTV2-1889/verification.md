@@ -12,7 +12,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1889-operator-attested-results
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1567
-Head SHA: ba24e12158a84d314ecba228c536944c586bac9d
+Head SHA: 2b0a01e02a6a4c887496e79eb66622cc2b38f7ef
 result: pass
 
 ## ASSERTIONS:
@@ -53,6 +53,11 @@ result: pass
 - [x] A settlement row with a null result is distinguished from no settlement row at all:
       both are pending, but only one can later carry a correction. Mutation `adapter-1`
       conflates them and test 24 fails.
+- [x] The writer and the reader cannot drift apart. The dedicated market key and the
+      operator provenance pair are declared independently in the attest CLI and in the
+      grading pass; each side's own test pinned only its own literal, so a *coherent*
+      rename on one side alone was invisible. A cross-file assertion now compares them.
+      Mutations `couple-1` and `couple-2` each rename one side and test 32 fails.
 - [x] The operator CLI's `--help` cannot drift from the flags the parser reads. Mutation
       `help-1` renames `--evidence` throughout `USAGE` and test 39 fails.
 - [x] No member delivery is created and no path to one is added. Containment is untouched:
@@ -69,8 +74,8 @@ $ pnpm lint
   exit 0
 
 $ pnpm exec tsx --test scripts/ops/track-only-report.test.ts
-  # tests 39
-  # pass 39
+  # tests 40
+  # pass 40
   # fail 0
   # skipped 0
 
@@ -91,7 +96,7 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main
   Changed files: 10
   Rules matched: (none) - no R-level artifacts required for this diff
 
-$ mutation battery -- 12 mutations, each applied at a single anchor, suite run, file restored
+$ mutation battery -- 14 mutations, each applied at a single anchor, suite run, file restored
   stats-1     1 failing  not ok 19 - an unrecognised result is excluded, NOT folded into pending
   stats-2     4 failing  not ok 15 - an empty cohort reports null ROI, never 0
   stats-3     2 failing  not ok 20 - the settlement's own stake wins over the pick's
@@ -104,6 +109,8 @@ $ mutation battery -- 12 mutations, each applied at a single anchor, suite run, 
   grading-4   1 failing  not ok 76 - provenance is keyed by provider: neither class may borrow the other's source
   grading-5   1 failing  not ok 71 - an operator-attested loss and push settle as loss and push
   help-1      1 failing  not ok 39 - the --help text names every flag the parser actually reads
+  couple-1    1 failing  not ok 32 - the writer and the reader agree on the market key and the provenance pair
+  couple-2    1 failing  not ok 32 - the writer and the reader agree on the market key and the provenance pair
   working tree clean after every restore
 
 $ read-only governed production measurement (zfzdnfwdarxucxtaojxm, one SELECT, no write)
@@ -150,4 +157,4 @@ prove the seed, not the journey.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1567
 Approved PR head: pending merge
-Execution SHA: ba24e12158a84d314ecba228c536944c586bac9d
+Execution SHA: 2b0a01e02a6a4c887496e79eb66622cc2b38f7ef

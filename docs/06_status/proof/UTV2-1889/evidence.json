@@ -7,11 +7,11 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "ba24e12158a84d314ecba228c536944c586bac9d",
+    "verified_source_sha": "2b0a01e02a6a4c887496e79eb66622cc2b38f7ef",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "ba24e12158a84d314ecba228c536944c586bac9d is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1889/. The lane has one implementation commit, 4701685541dfc537ee46b3fdc0b41fe3819d5554, carrying all seven changed source files; ba24e1215 is the lane-PR binding commit that CI wrote on top of it and it touches only docs/06_status/lanes/UTV2-1889.json. Every assertion below was measured at one of those two heads, which are byte-identical outside that manifest. The proof commit carrying this file sits on top of the bound head and changes nothing the assertions are about -- a proof bundle can never carry a receipt for its own commit, because writing the receipt moves the head.",
+    "note": "2b0a01e02a6a4c887496e79eb66622cc2b38f7ef is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1889/. The lane has three such commits: 4701685541dfc537ee46b3fdc0b41fe3819d5554 carries all seven changed source files; ba24e12158a84d314ecba228c536944c586bac9d is the lane-PR binding commit CI wrote on top of it, touching only docs/06_status/lanes/UTV2-1889.json; and the bound head adds one test asserting the attest writer and the grading reader agree on the market key and the provenance pair. The proof commit carrying this file sits on top of the bound head and changes nothing the assertions are about -- a proof bundle can never carry a receipt for its own commit, because writing the receipt moves the head.",
     "bound_at": "2026-09-11T21:45:00Z"
   },
   "static_proof": {
@@ -20,14 +20,14 @@
         "command": "pnpm exec tsx --test scripts/ops/track-only-report.test.ts",
         "exit_code": 0,
         "row_counts": {
-          "tests": 39,
-          "pass": 39,
+          "tests": 40,
+          "pass": 40,
           "fail": 0,
           "skipped": 0,
           "pre_existing": 9,
-          "new": 30
+          "new": 31
         },
-        "label": "The stats aggregate, the report adapter, the operator-attest CLI and the --help anti-drift control. 9 pre-existing tests in this file are untouched."
+        "label": "The stats aggregate, the report adapter, the operator-attest CLI, the --help anti-drift control and the writer/reader coupling assertion. 9 pre-existing tests in this file are untouched."
       },
       {
         "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
@@ -74,8 +74,8 @@
       "command": "scripted: for each mutation, apply a single-anchor edit, run the named suite, restore the file from the captured original, and assert the working tree is clean afterwards",
       "baseline": {
         "track_only_report": {
-          "tests": 39,
-          "pass": 39,
+          "tests": 40,
+          "pass": 40,
           "fail": 0
         },
         "grading_service": {
@@ -206,9 +206,27 @@
           "failing_assertions": [
             "not ok 71 - an operator-attested loss and push settle as loss and push"
           ]
+        },
+        {
+          "id": "couple-1",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "coherently rename the reader's market key (grading side only)",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 32 - the writer and the reader agree on the market key and the provenance pair"
+          ]
+        },
+        {
+          "id": "couple-2",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "point the reader's required ingestion source for operator at ingestor.cycle",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 32 - the writer and the reader agree on the market key and the provenance pair"
+          ]
         }
       ],
-      "note": "Twelve mutations, every one fires on the condition it names. Three are worth naming because they are the ones a reader would otherwise have to take on trust. `grading-4` is the load-bearing one: it replaces provider-keyed ingestion provenance with the cheaper flat two-value allow-list, and test 76 fails -- which is what makes admitting `operator` to the trusted set a widening rather than a loosening, since under a flat list an `operator` event could claim `ingestor.cycle`. `grading-2` disables the result-market-key guard and tests 72 and 73 fail, proving the 280 production `points-all-game-ml` score rows really are refused rather than merely unlikely to be selected. `stats-1` folds an unrecognised settlement result into `pending`, and test 19 fails -- the silent-forever failure mode. An earlier, weaker form of the help-drift mutation did NOT fire, and that is recorded rather than smoothed over: replacing `--evidence` in only the flag list left it present in the worked example lower in USAGE, so the mutation was ineffective rather than the test blind. `help-1` above is the corrected form, which replaces every occurrence and fires."
+      "note": "Fourteen mutations, every one fires on the condition it names. Four are worth naming because they are the ones a reader would otherwise have to take on trust. `grading-4` replaces provider-keyed ingestion provenance with the cheaper flat two-value allow-list and test 76 fails -- which is what makes admitting `operator` to the trusted set a widening rather than a loosening, since under a flat list an `operator` event could claim `ingestor.cycle`. `couple-2` catches that same loosening from the opposite side, by pointing the READER's required source for `operator` at `ingestor.cycle` and failing the writer/reader coupling assertion. `grading-2` disables the result-market-key guard and tests 72 and 73 fail, proving the 280 production `points-all-game-ml` score rows are refused rather than merely unlikely to be selected. `stats-1` folds an unrecognised settlement result into `pending`, and test 19 fails -- the silent-forever failure mode. An earlier, weaker form of the help-drift mutation did NOT fire, and that is recorded rather than smoothed over: replacing `--evidence` in only the flag list left it present in the worked example lower in USAGE, so the mutation was ineffective rather than the test blind; `help-1` is the corrected form, which replaces every occurrence and fires."
     },
     "production_measurement": {
       "target": "production zfzdnfwdarxucxtaojxm, read-only, governed -- one SELECT, no write, no containment setting touched",
