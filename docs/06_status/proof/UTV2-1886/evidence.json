@@ -4,13 +4,13 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "pending_scope_override_for_live_db_proof",
+  "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "3d9886e586f15686a0ae1baa310fd615e2d59dbb",
+    "verified_source_sha": "86e46745a7368855f053814c33076b55634311aa",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "note": "3d9886e586f15686a0ae1baa310fd615e2d59dbb is the last commit authored by this lane that changes anything outside docs/06_status/proof/UTV2-1886/ -- the implementation and its tests. The proof commit that carries this file sits on top of it and changes nothing the assertions below are about.",
+    "note": "86e46745a7368855f053814c33076b55634311aa is the last commit authored by this lane that changes anything outside docs/06_status/proof/UTV2-1886/. The lane has two implementation commits. a024baecb carries the chunk-size correction, the three URL-budget invariants, the live-PostgREST t1-proof suite, its test:t1-proof:live wiring and its db-writer-classification entry. The bound head then routes the URL measurement through packages/db/src/privileged-client-boundary.ts: at a024baecb that measurement imported createClient directly, which put a path from a pnpm test entrypoint to a raw driver constructor, and scripts/ci/privileged-db-client-guard.ts rule 3 refuses any such path regardless of inventory classification -- two tests inside the required `verify` job were red at a024baecb and are green at the bound head. Both supersede 3d9886e58, which was the anchor while the live-DB remedy was still uncommitted. The proof commit that carries this file sits on top of the bound head and changes nothing the assertions below are about.",
     "sha_type": "verified_source_sha",
     "bound_at": "2026-09-11T12:30:00.000Z",
     "ci_sentinels": {
@@ -34,13 +34,26 @@
         "command": "pnpm exec tsx --test packages/db/src/settlement-invariants.test.ts",
         "exit_code": 0,
         "row_counts": {
-          "tests": 18,
-          "pass": 18,
+          "tests": 21,
+          "pass": 21,
           "fail": 0,
           "skipped": 0,
           "pre_existing": 12,
-          "new": 6
+          "new": 9
         }
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ci/privileged-db-client-guard.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 17,
+          "pass": 17,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 17,
+          "new": 0
+        },
+        "label": "No test is added here. This suite is recorded because the lane's first implementation commit turned two of its tests RED inside the required `verify` job -- `ok 15 - the checked-in inventory clears the repository as it stands` and `ok 16 - nothing reachable from pnpm test constructs a client outside the boundary` -- by importing createClient directly in the URL measurement. Both are green at the bound head, where the measurement goes through createPrivilegedClient."
       },
       {
         "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
@@ -59,7 +72,7 @@
       "command": "pnpm test",
       "exit_code": 0,
       "row_counts": {
-        "pass": 6153,
+        "pass": 6181,
         "fail": 0,
         "not_ok_lines": 0
       }
@@ -80,9 +93,9 @@
       "note": "Not run on the workstation: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses a workstation target (expected xskgrzbteyqdufktjrjx) by design. The CI `verify` job on PR 1565 is the authoritative run and is recorded under runtime_proof."
     },
     "r_level": {
-      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1886 --base origin/main --head 3d9886e58",
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1886 --base origin/main --head 86e46745a",
       "verdict": "PASS",
-      "changed_files": 15,
+      "changed_files": 13,
       "rules_matched": [],
       "advisory_missing": []
     },
@@ -90,8 +103,8 @@
       "command": "pnpm exec tsx --test packages/db/src/settlement-invariants.test.ts ; pnpm exec tsx --test apps/api/src/grading-service.test.ts",
       "baseline": {
         "settlement_invariants": {
-          "tests": 18,
-          "pass": 18,
+          "tests": 21,
+          "pass": 21,
           "fail": 0
         },
         "grading_service": {
@@ -144,14 +157,14 @@
         "settlement_records_rows": 37496,
         "settlement_records_distinct_picks": 25430
       },
-      "note": "The population and the settlement row count are what make pagination mandatory rather than precautionary: a 500-pick chunk can hold far more than PostgREST's default 1000-row page, and a truncated page does not raise -- it silently omits picks, which reads as 'no settlement exists' and makes the caller settle an already-settled pick."
+      "note": "The population and the settlement row count are what make pagination mandatory rather than precautionary: 37496 settlement rows over 25430 distinct picks average 1.47 rows per pick, and the average is not the bound -- a correction chain is unbounded, so any chunk can exceed PostgREST's 1000-row page. A truncated page does not raise; it silently omits picks, which reads as 'no settlement exists' and makes the caller settle an already-settled pick. The earlier form of this note said 'a 500-pick chunk can hold far more than PostgREST's default 1000-row page', which conflated a ROW cap with the BYTE cap that actually sets the chunk size: 500 ids produce a 19630-byte request line against the ~8 KiB proxy header buffer, so 500 was never a legal chunk. The chunk is now 98, derived in packages/db/src/runtime-repositories.ts and asserted against a real query builder."
     }
   },
   "runtime_proof": {
     "profile": "hosted_live_db",
     "executed_at": "2026-09-11T12:23:36.863Z/2026-09-11T12:30:30.762Z",
     "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials materialized by ci.yml. Never production. assert-staging-target.ts ran first and reported \"OK: target is the approved staging project\" before any test executed.",
-    "command": "job \"Writable DB proof (staging only)\", run 34598633546 attempt 1, job 103260375614. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 18 wired t1-proof suites.",
+    "command": "job \"Writable DB proof (staging only)\", run 34598633546 attempt 1, job 103260375614, at head c4244f041 -- the head PRECEDING both of this lane's implementation commits. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 18 t1-proof suites wired at that head. This lane wires a 19th, apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts, whose staging evidence is produced by the CI run at the final head rather than by this receipt.",
     "receipt": "ci-db-proof-receipt written to .out/ci-db-proof-receipt.json, sha256 6348d39d8285f7a3603605331c9f4aba441dd5f299b558409a08a4b540ceb5ff, uploaded as artifact utv2-1630-db-proof-receipt-34598633546-1. The receipt wraps `pnpm test:db` only; the t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34598633546/job/103260375614.",
     "row_counts": [
       {
@@ -171,7 +184,7 @@
         "count": 19
       },
       {
-        "label": "live assertions exercising findLatestForPicks / collectLatestSettlementsByPick",
+        "label": "live assertions exercising findLatestForPicks / collectLatestSettlementsByPick IN THIS RECEIPT, which is from the preceding head c4244f041. The suite that does exercise them is wired at the bound head and runs in the CI job at the final head",
         "count": 0
       },
       {
@@ -193,7 +206,7 @@
     },
     "coverage_gap": {
       "status": "OPEN",
-      "statement": "This runtime proof does NOT exercise the code this lane changed. None of the 18 wired t1-proof suites, and not database-smoke, calls findLatestForPicks or collectLatestSettlementsByPick. What it establishes is that the staging suites are green at this head -- not that the batched PostgREST read behaves as the pure logic assumes.",
+      "statement": "The receipt recorded above is from head c4244f041, which PRECEDES the bound head, and it does NOT exercise the code this lane changed: none of the 18 t1-proof suites wired at that head, and not database-smoke, calls findLatestForPicks or collectLatestSettlementsByPick. This lane closes that gap in the repository rather than in prose -- apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts is committed, classified in docs/05_operations/db-writer-classification.json, and appended to the test:t1-proof:live script that ci.yml:143 runs. Its staging evidence therefore arrives with the CI run at the final head; this receipt cannot carry it, and saying so is the point of leaving this block open.",
       "what_is_unproven": [
         ".in('pick_id', chunk) returns rows for every id in the list against real PostgREST",
         ".range(offset, offset + limit - 1) under the two-key ordering yields disjoint, consecutive pages",
@@ -201,8 +214,8 @@
       ],
       "why_it_matters": "An under-read is the fail-OPEN direction: an omitted pick reads as 'no settlement exists' and the caller re-settles it. This is the exact class `Require live-DB proof for runtime changes` names (UTV2-519, UTV2-521).",
       "guard_state": "`Require live-DB proof for runtime changes` is RED on this PR and is CORRECT. It is not the recorded #1479 false positive: no t1-proof file for UTV2-1886 exists on main or on this branch. It is not one of the four required checks, so it blocks no merge.",
-      "prepared_remedy": "apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts is written and type-checks clean: batch-vs-single agreement with an unsettled-pick control; the same population read at pageSize 1, 2 and 1000 asserted identical; and a chunkSize-1 read asserting the per-chunk results union rather than replace.",
-      "why_not_landed": "file_scope_lock is settable only at `ops:lane-manifest create` and this lane declared five files. Landing the proof needs three paths outside it: the new test file, package.json (the test:t1-proof:live wiring point), and docs/05_operations/db-writer-classification.json (db-writer-inventory.ts rejects an unregistered credentialed DB test). Widening requires a CODEOWNERS scope-override/v1, which is reserved. Requested, not assumed."
+      "landed_remedy": "apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts, committed and present at the bound head. Test 1 builds three settled picks (1, 2 and 3 settlements chained through corrects_id) plus a deliberately unsettled control and asserts the real DatabaseSettlementRepository's findLatestForPicks agrees id-for-id with findLatestForPick, omits the unsettled pick, and returns exactly the settled count -- this is what proves .in() completeness and the ordering agreement against real PostgREST. Test 2 reads the same six-row, two-pick population at pageSize 1000, 1 and 2 and asserts all three maps are identical and match the single-pick path -- this is what proves later-page settlements are not missed. Test 3 reads three picks at chunkSize 1 and asserts the per-chunk results union rather than replace. The suite is gated on SUPABASE_SERVICE_ROLE_KEY and deletes no rows.",
+      "scope_consequence": "file_scope_lock is settable only at `ops:lane-manifest create` and this lane declared five files, so three of the five paths in this lane's diff sit outside it: apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts (the new suite), package.json (the only test:t1-proof:live wiring point -- pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on an unreachable test file), and docs/05_operations/db-writer-classification.json (scripts/ci/db-writer-inventory.ts discovers the file on its createDatabaseRepositoryBundle marker and rejects it unregistered; that validator runs at .github/workflows/ci.yml:243 INSIDE the required `verify` job, so this third path is not optional -- omitting it would turn a required check red). A lock cannot be widened by an agent and a scope-override/v1 is a CODEOWNERS artifact that is never self-authored. `File scope lock` and `Lane authority` are therefore expected RED on this PR; neither is one of the four required checks, and both are reporting a real fact rather than a defect."
     },
     "queries": [
       {
@@ -214,7 +227,7 @@
         "result": "7/7 pass, 0 fail, 0 skipped"
       },
       {
-        "label": "step `pnpm test:t1-proof:live` -- the 18 wired t1-proof suites against staging Postgres, including t1-proof-utv2-1136-settlement-records-immutability.test.ts and t1-proof-utv2-1137-settlement-corrections.test.ts, the two that touch settlement_records",
+        "label": "step `pnpm test:t1-proof:live` -- the 18 t1-proof suites wired at head c4244f041 against staging Postgres (this lane wires a 19th, which this receipt predates), including t1-proof-utv2-1136-settlement-records-immutability.test.ts and t1-proof-utv2-1137-settlement-corrections.test.ts, the two that touch settlement_records",
         "result": "all pass, 0 fail, 0 skipped"
       },
       {
@@ -222,8 +235,8 @@
         "result": "0 live assertions exercise the changed code path"
       },
       {
-        "label": "what the batched read is therefore evidenced by instead: the 18 in-process unit tests in packages/db/src/settlement-invariants.test.ts (including the both-page-orders created_at tie test) and the 71 in apps/api/src/grading-service.test.ts, all of which run against the in-memory repository and a stubbed fetchPage rather than PostgREST",
-        "result": "18/18 and 71/71 pass -- static proof only, recorded as such"
+        "label": "what the batched read was evidenced by at THIS head: the in-process unit tests in packages/db/src/settlement-invariants.test.ts (including the both-page-orders created_at tie test and the three URL-budget invariants this lane added) and the 71 in apps/api/src/grading-service.test.ts, all of which run against the in-memory repository and a stubbed fetchPage rather than PostgREST. At the bound head this is no longer the ONLY evidence -- the live suite named under landed_remedy exercises the real repository against staging Postgres",
+        "result": "21/21 and 71/71 pass -- static proof at this head, recorded as such"
       }
     ]
   }
