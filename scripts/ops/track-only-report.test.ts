@@ -575,6 +575,54 @@ test('the result market key is the dedicated one, not the ambiguous production k
   }
 });
 
+test('the writer and the reader agree on the market key and the provenance pair', () => {
+  // These three values are declared independently in two modules: the operator
+  // CLI that WRITES the attested result, and the grading pass that READS it. A
+  // coherent rename on either side alone -- constant plus that side's own test --
+  // would leave the writer emitting a key the reader refuses, and the only
+  // symptom would be a `moneyline_result_market_key_unsupported` skip reason
+  // buried in a pass detail. Nothing else in the repository compares them, so
+  // this assertion is the coupling's only enforcement.
+  const grading = readFileSync(
+    new URL('../../apps/api/src/grading-service.ts', import.meta.url),
+    'utf8',
+  );
+
+  const literal = (name: string): string => {
+    const hit = grading.match(
+      new RegExp(`const ${name}\\s*=\\s*'([^']+)'`),
+    );
+    assert.ok(hit, `grading-service.ts no longer declares ${name}`);
+    return hit![1]!;
+  };
+
+  assert.equal(
+    literal('MONEYLINE_RESULT_MARKET_KEY'),
+    MONEYLINE_RESULT_MARKET_KEY,
+    'the grading pass reads a different market key than the operator CLI writes',
+  );
+
+  // The same coupling, one level up: the provider and its required ingestion
+  // source are what make the attested event trusted at all, and grading keys
+  // them to each other rather than accepting a flat allow-list.
+  const provenance = grading.match(
+    /REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = \{([^}]*)\}/,
+  );
+  assert.ok(provenance, 'grading-service.ts no longer keys provenance by provider');
+  const entry = provenance![1]!.match(
+    new RegExp(`${OPERATOR_PROVIDER_KEY}:\\s*'([^']+)'`),
+  );
+  assert.ok(
+    entry,
+    `grading-service.ts no longer trusts provider ${OPERATOR_PROVIDER_KEY}`,
+  );
+  assert.equal(
+    entry![1],
+    OPERATOR_INGESTION_SOURCE,
+    'the grading pass requires a different ingestion source than the operator CLI records',
+  );
+});
+
 test('the plan writes the event, both links and both results under the dedicated market key', () => {
   const writes = planAttestation(attestation(), attestContext);
   assert.deepEqual(
