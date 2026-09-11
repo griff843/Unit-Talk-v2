@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1886-grading-settlement-prefetch
 PR URL: N/A
 Head SHA: 3d9886e586f15686a0ae1baa310fd615e2d59dbb
-Merge SHA: N/A
+Merge SHA: 5a9c70bb10ecbb240443ac403a243d2ac7b0a64e
 Diff base: a24cd7bf74a773f010d1ac9e6ef5f112c4183548
 Diff target: 3d9886e586f15686a0ae1baa310fd615e2d59dbb
 
@@ -39,4 +39,4 @@ M	packages/db/src/settlement-invariants.test.ts
 
 ## SHA Binding
 Head SHA: 3d9886e586f15686a0ae1baa310fd615e2d59dbb
-Merge SHA: N/A
+Merge SHA: 5a9c70bb10ecbb240443ac403a243d2ac7b0a64e

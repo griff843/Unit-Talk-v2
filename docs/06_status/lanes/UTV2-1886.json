@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1886-grading-settlement-prefetch",
   "branch": "claude/utv2-1886-grading-settlement-prefetch",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "5a9c70bb10ecbb240443ac403a243d2ac7b0a64e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1565",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1886/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-11T12:02:33.287Z",
-  "heartbeat_at": "2026-09-11T12:21:44.145Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-11T21:10:29.094Z",
+  "closed_at": "2026-09-11T21:10:29.094Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1886-grading-settlement-prefetch.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-11T21:10:25.740Z",
+      "verdict": "pass",
+      "merge_sha": "5a9c70bb10ecbb240443ac403a243d2ac7b0a64e",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

@@ -6,13 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "5a9c70bb10ecbb240443ac403a243d2ac7b0a64e",
     "verified_source_sha": "86e46745a7368855f053814c33076b55634311aa",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "note": "86e46745a7368855f053814c33076b55634311aa is the last commit authored by this lane that changes anything outside docs/06_status/proof/UTV2-1886/. The lane has two implementation commits. a024baecb carries the chunk-size correction, the three URL-budget invariants, the live-PostgREST t1-proof suite, its test:t1-proof:live wiring and its db-writer-classification entry. The bound head then routes the URL measurement through packages/db/src/privileged-client-boundary.ts: at a024baecb that measurement imported createClient directly, which put a path from a pnpm test entrypoint to a raw driver constructor, and scripts/ci/privileged-db-client-guard.ts rule 3 refuses any such path regardless of inventory classification -- two tests inside the required `verify` job were red at a024baecb and are green at the bound head. Both supersede 3d9886e58, which was the anchor while the live-DB remedy was still uncommitted. The proof commit that carries this file sits on top of the bound head and changes nothing the assertions below are about.",
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-11T12:30:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-11T21:10:25.735Z",
     "ci_sentinels": {
       "run_id": 34598633546,
       "run_attempt": 1,
