@@ -1,0 +1,177 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1884
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1884
+  objective: File-scope existence rule forces lanes to widen their lock to a whole
+    directory, colliding unrelated lanes
+  acceptance_criteria:
+    - |-
+      ## Defect
+
+      `normalizeFileScopePath` (`scripts/ops/shared.ts:882`) calls `normalizeRepoRelativePath(input, { requireExistingFile: true })`, which refuses:
+
+      * a bare path that does not exist yet, and
+      * a trailing `/**` glob whose directory does not exist yet.
+
+      A lane that **creates** a file or a directory therefore cannot name it, and the only admitted declaration is the nearest *existing* ancestor directory glob. The lock is pinned at lane-start and cannot be narrowed afterwards, so the cost is paid as permanently looser scope than the work needed.
+
+      ## Measured cost — 2026-09-11
+
+      * [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) created `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`, so it could not name the file and widened to `docs/03_product/**`.
+      * [UTV2-1883](https://linear.app/unit-talk-v2/issue/UTV2-1883/add-unit-talk-brand-reference-assets-to-docs03-productbrand) (three brand asset files) creates `docs/03_product/brand/`, so it could not name `docs/03_product/brand/**` and widened to the same glob.
+      * Two locks that should have been disjoint became identical. Preflight `PL6` refused [UTV2-1883](https://linear.app/unit-talk-v2/issue/UTV2-1883/add-unit-talk-brand-reference-assets-to-docs03-productbrand) with `candidate file scope overlaps with active manifest UTV2-1878`, after all 37 other checks — including `PB1` type-check and `PB2` full `pnpm test` — had already passed. That entire run was discarded and repeated.
+      * [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) is T1, so a three-file asset lane inherited a T1 lane's `G6` staging-database wait and a dispatch replay, purely through a scope-declaration rule rather than any rule about its own risk.
+
+      This is the same rule already recorded in `docs/mission/plan.md` as the `--files` / `PG2` deadlock: `--files` refuses a path that does not exist, and pre-creating it fails preflight `PG2` (working tree not clean).
+
+      ## Proposed correction
+
+      In `normalizeFileScopePath`, require the **immediate parent directory** to exist rather than the declared path itself.
+
+      * `docs/03_product/brand/**` → parent `docs/03_product` exists → admitted.
+      * `docs/03_prodcut/brand/**` → parent `docs/03_prodcut` does not exist → still refused. Typo protection survives.
+      * `scripts/ops/new-thing.ts` → parent `scripts/ops` exists → admitted, closing the `--files`/`PG2` deadlock.
+      * Where the leaf does exist, the existing type checks are kept: a glob must reference a directory, a bare path must reference a file.
+
+      `normalizeRepoRelativePath({ requireExistingFile: true })` has exactly one caller (`normalizeFileScopePath`), so the change is confined to file-scope declarations and touches no other validation.
+
+      ## Second, separable correction
+
+      `isDocsOnlyFastPathFile` (`scripts/ops/preflight.ts:1710`) admits only `docs/06_status/` and `.claude/commands/*.md`, so an asset or product-intent change under `docs/03_product/` cannot use `--docs-only-fast-path` and runs the full local `PB1` + `PB2` suite before the lane can even open — on top of the CI run that performs the same work. `CLAUDE.md` states product intent docs "add no check, no approval artifact and no lane type". `docs/05_operations/**` and `docs/mission/**` stay deliberately out, per `intent.md`: "A document that changes security or approval policy still requires substantive review."
+
+      Bounded three ways: opt-in flag, T3 only, and it skips only the local duplicate of work CI still performs.
+
+      ## Preserved
+
+      No change to merge authority, required checks, branch protection, tier semantics, proof obligations, or lane concurrency. Validation for runtime and production changes is unchanged.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Defect
+
+      `normalizeFileScopePath` (`scripts/ops/shared.ts:882`) calls
+      `normalizeRepoRelativePath(input, { requireExistingFile: true })`, which
+      refuses:
+
+
+      * a bare path that does not exist yet, and
+
+      * a trailing `/**` glob whose directory does not exist yet.
+
+
+      A lane that **creates** a file or a directory therefore cannot name it,
+      and the only admitted declaration is the nearest *existing* ancestor
+      directory glob. The lock is pinned at lane-start and cannot be narrowed
+      afterwards, so the cost is paid as permanently looser scope than the work
+      needed.
+    - |-
+      Measured cost — 2026-09-11
+      * [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) created `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`, so it could not name the file and widened to `docs/03_product/**`.
+      * [UTV2-1883](https://linear.app/unit-talk-v2/issue/UTV2-1883/add-unit-talk-brand-reference-assets-to-docs03-productbrand) (three brand asset files) creates `docs/03_product/brand/`, so it could not name `docs/03_product/brand/**` and widened to the same glob.
+      * Two locks that should have been disjoint became identical. Preflight `PL6` refused [UTV2-1883](https://linear.app/unit-talk-v2/issue/UTV2-1883/add-unit-talk-brand-reference-assets-to-docs03-productbrand) with `candidate file scope overlaps with active manifest UTV2-1878`, after all 37 other checks — including `PB1` type-check and `PB2` full `pnpm test` — had already passed. That entire run was discarded and repeated.
+      * [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) is T1, so a three-file asset lane inherited a T1 lane's `G6` staging-database wait and a dispatch replay, purely through a scope-declaration rule rather than any rule about its own risk.
+
+      This is the same rule already recorded in `docs/mission/plan.md` as the `--files` / `PG2` deadlock: `--files` refuses a path that does not exist, and pre-creating it fails preflight `PG2` (working tree not clean).
+    - >-
+      Proposed correction
+
+      In `normalizeFileScopePath`, require the **immediate parent directory** to
+      exist rather than the declared path itself.
+
+
+      * `docs/03_product/brand/**` → parent `docs/03_product` exists → admitted.
+
+      * `docs/03_prodcut/brand/**` → parent `docs/03_prodcut` does not exist →
+      still refused. Typo protection survives.
+
+      * `scripts/ops/new-thing.ts` → parent `scripts/ops` exists → admitted,
+      closing the `--files`/`PG2` deadlock.
+
+      * Where the leaf does exist, the existing type checks are kept: a glob
+      must reference a directory, a bare path must reference a file.
+
+
+      `normalizeRepoRelativePath({ requireExistingFile: true })` has exactly one
+      caller (`normalizeFileScopePath`), so the change is confined to file-scope
+      declarations and touches no other validation.
+    - >-
+      Second, separable correction
+
+      `isDocsOnlyFastPathFile` (`scripts/ops/preflight.ts:1710`) admits only
+      `docs/06_status/` and `.claude/commands/*.md`, so an asset or
+      product-intent change under `docs/03_product/` cannot use
+      `--docs-only-fast-path` and runs the full local `PB1` + `PB2` suite before
+      the lane can even open — on top of the CI run that performs the same work.
+      `CLAUDE.md` states product intent docs "add no check, no approval artifact
+      and no lane type". `docs/05_operations/**` and `docs/mission/**` stay
+      deliberately out, per `intent.md`: "A document that changes security or
+      approval policy still requires substantive review."
+
+
+      Bounded three ways: opt-in flag, T3 only, and it skips only the local
+      duplicate of work CI still performs.
+    - >-
+      Preserved
+
+      No change to merge authority, required checks, branch protection, tier
+      semantics, proof obligations, or lane concurrency. Validation for runtime
+      and production changes is unchanged.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1884/file-scope-existence-rule-forces-lanes-to-widen-their-lock-to-a-whole
+    title: File-scope existence rule forces lanes to widen their lock to a whole
+      directory, colliding unrelated lanes
+    description: |-
+      ## Defect
+
+      `normalizeFileScopePath` (`scripts/ops/shared.ts:882`) calls `normalizeRepoRelativePath(input, { requireExistingFile: true })`, which refuses:
+
+      * a bare path that does not exist yet, and
+      * a trailing `/**` glob whose directory does not exist yet.
+
+      A lane that **creates** a file or a directory therefore cannot name it, and the only admitted declaration is the nearest *existing* ancestor directory glob. The lock is pinned at lane-start and cannot be narrowed afterwards, so the cost is paid as permanently looser scope than the work needed.
+
+      ## Measured cost — 2026-09-11
+
+      * [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) created `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`, so it could not name the file and widened to `docs/03_product/**`.
+      * [UTV2-1883](https://linear.app/unit-talk-v2/issue/UTV2-1883/add-unit-talk-brand-reference-assets-to-docs03-productbrand) (three brand asset files) creates `docs/03_product/brand/`, so it could not name `docs/03_product/brand/**` and widened to the same glob.
+      * Two locks that should have been disjoint became identical. Preflight `PL6` refused [UTV2-1883](https://linear.app/unit-talk-v2/issue/UTV2-1883/add-unit-talk-brand-reference-assets-to-docs03-productbrand) with `candidate file scope overlaps with active manifest UTV2-1878`, after all 37 other checks — including `PB1` type-check and `PB2` full `pnpm test` — had already passed. That entire run was discarded and repeated.
+      * [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) is T1, so a three-file asset lane inherited a T1 lane's `G6` staging-database wait and a dispatch replay, purely through a scope-declaration rule rather than any rule about its own risk.
+
+      This is the same rule already recorded in `docs/mission/plan.md` as the `--files` / `PG2` deadlock: `--files` refuses a path that does not exist, and pre-creating it fails preflight `PG2` (working tree not clean).
+
+      ## Proposed correction
+
+      In `normalizeFileScopePath`, require the **immediate parent directory** to exist rather than the declared path itself.
+
+      * `docs/03_product/brand/**` → parent `docs/03_product` exists → admitted.
+      * `docs/03_prodcut/brand/**` → parent `docs/03_prodcut` does not exist → still refused. Typo protection survives.
+      * `scripts/ops/new-thing.ts` → parent `scripts/ops` exists → admitted, closing the `--files`/`PG2` deadlock.
+      * Where the leaf does exist, the existing type checks are kept: a glob must reference a directory, a bare path must reference a file.
+
+      `normalizeRepoRelativePath({ requireExistingFile: true })` has exactly one caller (`normalizeFileScopePath`), so the change is confined to file-scope declarations and touches no other validation.
+
+      ## Second, separable correction
+
+      `isDocsOnlyFastPathFile` (`scripts/ops/preflight.ts:1710`) admits only `docs/06_status/` and `.claude/commands/*.md`, so an asset or product-intent change under `docs/03_product/` cannot use `--docs-only-fast-path` and runs the full local `PB1` + `PB2` suite before the lane can even open — on top of the CI run that performs the same work. `CLAUDE.md` states product intent docs "add no check, no approval artifact and no lane type". `docs/05_operations/**` and `docs/mission/**` stay deliberately out, per `intent.md`: "A document that changes security or approval policy still requires substantive review."
+
+      Bounded three ways: opt-in flag, T3 only, and it skips only the local duplicate of work CI still performs.
+
+      ## Preserved
+
+      No change to merge authority, required checks, branch protection, tier semantics, proof obligations, or lane concurrency. Validation for runtime and production changes is unchanged.
+    captured_at: 2026-09-11T11:34:30.695Z
+    description_sha256: f84314b35d0e32a0a4d3506e47913fac5e20fc6fd21b4596ee62826e730f9e77
+  contract_hash: 40d53f74829e46856cb74e6e3d30c4d5ed5d5359a28231149aef893190cd77ae
