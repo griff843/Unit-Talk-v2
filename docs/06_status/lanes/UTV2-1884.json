@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1884-file-scope-parent-existence",
   "branch": "claude/utv2-1884-file-scope-parent-existence",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "3063a077240a4275fc4b1890513280f76dc19202",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1563",
   "files_changed": [],
   "file_scope_lock": [
@@ -17,14 +17,22 @@
     "scripts/ops/shared.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-11T11:34:53.286Z",
-  "heartbeat_at": "2026-09-11T11:45:56.859Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-11T12:10:32.071Z",
+  "closed_at": "2026-09-11T12:10:32.071Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1884-file-scope-parent-existence.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-11T12:10:29.455Z",
+      "verdict": "pass",
+      "merge_sha": "3063a077240a4275fc4b1890513280f76dc19202",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
