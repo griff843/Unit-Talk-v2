@@ -4,7 +4,7 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "pending_hosted_verification",
+  "status": "pending_scope_override_for_live_db_proof",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "3d9886e586f15686a0ae1baa310fd615e2d59dbb",
@@ -12,7 +12,21 @@
     "current_pr_head_sha": "set-by-ci",
     "note": "3d9886e586f15686a0ae1baa310fd615e2d59dbb is the last commit authored by this lane that changes anything outside docs/06_status/proof/UTV2-1886/ -- the implementation and its tests. The proof commit that carries this file sits on top of it and changes nothing the assertions below are about.",
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-11T12:30:00.000Z"
+    "bound_at": "2026-09-11T12:30:00.000Z",
+    "ci_sentinels": {
+      "run_id": 34598633546,
+      "run_attempt": 1,
+      "head_sha": "c4244f041bd6abacfbdc6313c34812a5c89a4739",
+      "verify": {
+        "job_id": 103262329594,
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "job_id": 103260375614,
+        "conclusion": "success"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. These sentinels pin the CI results to the PR head that produced them, not to the anchor -- the anchor 3d9886e58 is the last non-proof commit and c4244f041 is that commit plus the lane-PR binding and the proof bundle."
+    }
   },
   "static_proof": {
     "unit_tests": [
@@ -132,5 +146,85 @@
       },
       "note": "The population and the settlement row count are what make pagination mandatory rather than precautionary: a 500-pick chunk can hold far more than PostgREST's default 1000-row page, and a truncated page does not raise -- it silently omits picks, which reads as 'no settlement exists' and makes the caller settle an already-settled pick."
     }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "executed_at": "2026-09-11T12:23:36.863Z/2026-09-11T12:30:30.762Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials materialized by ci.yml. Never production. assert-staging-target.ts ran first and reported \"OK: target is the approved staging project\" before any test executed.",
+    "command": "job \"Writable DB proof (staging only)\", run 34598633546 attempt 1, job 103260375614. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 18 wired t1-proof suites.",
+    "receipt": "ci-db-proof-receipt written to .out/ci-db-proof-receipt.json, sha256 6348d39d8285f7a3603605331c9f4aba441dd5f299b558409a08a4b540ceb5ff, uploaded as artifact utv2-1630-db-proof-receipt-34598633546-1. The receipt wraps `pnpm test:db` only; the t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34598633546/job/103260375614.",
+    "row_counts": [
+      {
+        "label": "TAP assertions executed against staging across both credentialed steps",
+        "count": 123
+      },
+      {
+        "label": "TAP assertions failed",
+        "count": 0
+      },
+      {
+        "label": "TAP assertions skipped (0 is load-bearing: a missing staging credential elides these suites silently)",
+        "count": 0
+      },
+      {
+        "label": "test files executed against staging (1 database-smoke + 18 t1-proof)",
+        "count": 19
+      },
+      {
+        "label": "live assertions exercising findLatestForPicks / collectLatestSettlementsByPick",
+        "count": 0
+      },
+      {
+        "label": "live assertions touching settlement_records at all (suite 1136 immutability 4/4, suite 1137 correction chain 4/4). Both operate on the table directly through SQL and the repository's single-pick path; neither reaches the batched read",
+        "count": 8
+      },
+      {
+        "label": "production database connections opened by this job",
+        "count": 0
+      }
+    ],
+    "skipped": 0,
+    "binding": {
+      "pr": 1565,
+      "pr_head_sha": "c4244f041bd6abacfbdc6313c34812a5c89a4739",
+      "run_id": 34598633546,
+      "job_id": 103260375614,
+      "binding_rule": "pr_head_run: pull_request-triggered run at PR head c4244f041. `verify` and `Writable DB proof (staging only)` are both SUCCESS in this same run."
+    },
+    "coverage_gap": {
+      "status": "OPEN",
+      "statement": "This runtime proof does NOT exercise the code this lane changed. None of the 18 wired t1-proof suites, and not database-smoke, calls findLatestForPicks or collectLatestSettlementsByPick. What it establishes is that the staging suites are green at this head -- not that the batched PostgREST read behaves as the pure logic assumes.",
+      "what_is_unproven": [
+        ".in('pick_id', chunk) returns rows for every id in the list against real PostgREST",
+        ".range(offset, offset + limit - 1) under the two-key ordering yields disjoint, consecutive pages",
+        ".order('created_at', desc).order('id', desc) agrees with compareSettlementRecordsDescending"
+      ],
+      "why_it_matters": "An under-read is the fail-OPEN direction: an omitted pick reads as 'no settlement exists' and the caller re-settles it. This is the exact class `Require live-DB proof for runtime changes` names (UTV2-519, UTV2-521).",
+      "guard_state": "`Require live-DB proof for runtime changes` is RED on this PR and is CORRECT. It is not the recorded #1479 false positive: no t1-proof file for UTV2-1886 exists on main or on this branch. It is not one of the four required checks, so it blocks no merge.",
+      "prepared_remedy": "apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts is written and type-checks clean: batch-vs-single agreement with an unsettled-pick control; the same population read at pageSize 1, 2 and 1000 asserted identical; and a chunkSize-1 read asserting the per-chunk results union rather than replace.",
+      "why_not_landed": "file_scope_lock is settable only at `ops:lane-manifest create` and this lane declared five files. Landing the proof needs three paths outside it: the new test file, package.json (the test:t1-proof:live wiring point), and docs/05_operations/db-writer-classification.json (db-writer-inventory.ts rejects an unregistered credentialed DB test). Widening requires a CODEOWNERS scope-override/v1, which is reserved. Requested, not assumed."
+    },
+    "queries": [
+      {
+        "label": "[assert-staging] target guard ran before any test in both credentialed steps and reported \"OK: target is the approved staging project\" (project ref masked by GitHub secret redaction)",
+        "result": "ok -- staging confirmed, production never contacted"
+      },
+      {
+        "label": "step `pnpm test:db` -- apps/api/src/database-smoke.test.ts against staging Postgres. This is the receipted step; ci-db-proof-receipt.json covers this step and no other",
+        "result": "7/7 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "step `pnpm test:t1-proof:live` -- the 18 wired t1-proof suites against staging Postgres, including t1-proof-utv2-1136-settlement-records-immutability.test.ts and t1-proof-utv2-1137-settlement-corrections.test.ts, the two that touch settlement_records",
+        "result": "all pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "COVERAGE GAP, stated as a query result because it is the load-bearing fact: NO suite in either step calls findLatestForPicks or collectLatestSettlementsByPick. Verified by grepping the two identifiers across apps/**/t1-proof-*.test.ts and apps/api/src/database-smoke.test.ts on this head -- zero hits. The 1136/1137 suites exercise settlement_records immutability and correction chains directly against the table (4 assertions each, verified in the job log); neither calls either function, and grep for both identifiers across database-smoke.test.ts and every apps/*/src/t1-proof-*.test.ts on head c4244f041 returns zero hits",
+        "result": "0 live assertions exercise the changed code path"
+      },
+      {
+        "label": "what the batched read is therefore evidenced by instead: the 18 in-process unit tests in packages/db/src/settlement-invariants.test.ts (including the both-page-orders created_at tie test) and the 71 in apps/api/src/grading-service.test.ts, all of which run against the in-memory repository and a stubbed fetchPage rather than PostgREST",
+        "result": "18/18 and 71/71 pass -- static proof only, recorded as such"
+      }
+    ]
   }
 }

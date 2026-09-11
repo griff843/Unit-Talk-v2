@@ -98,7 +98,47 @@ A 500-pick chunk can therefore hold far more than PostgREST's default 1000-row p
 truncated page does not raise — it silently omits picks.
 
 ## Runtime Verification
-- Pending: the `verify` and `Writable DB proof (staging only)` jobs on PR #1565. Their results are recorded in `evidence.json` under `runtime_proof` once the run concludes, bound to the run and job ids.
+
+Harvested from CI run `34598633546` (attempt 1) at PR head
+`c4244f041bd6abacfbdc6313c34812a5c89a4739`. Both credentialed jobs concluded SUCCESS in that run:
+`Writable DB proof (staging only)` (job `103260375614`) and `verify` (job `103262329594`).
+
+| Fact | Value |
+|---|---|
+| Target | approved staging project; `[assert-staging] OK: target is the approved staging project` ran first in both steps. Production never contacted. |
+| Window | 2026-09-11T12:23:36.863Z -> 2026-09-11T12:30:30.762Z |
+| Steps | `pnpm test:db` (database-smoke) and `pnpm test:t1-proof:live` (18 wired suites) |
+| TAP | 123 pass, 0 fail, 0 skipped across 19 test files |
+| Receipt | `.out/ci-db-proof-receipt.json`, sha256 `6348d39d8285f7a3603605331c9f4aba441dd5f299b558409a08a4b540ceb5ff`, artifact `utv2-1630-db-proof-receipt-34598633546-1`. It covers `pnpm test:db` only; the t1-proof step emits no receipt of its own. |
+
+**This runtime proof does not exercise the code this lane changed, and that is stated here rather
+than left to be inferred.** No suite in either step calls `findLatestForPicks` or
+`collectLatestSettlementsByPick` — grep for both identifiers across `apps/api/src/database-smoke.test.ts`
+and every `apps/*/src/t1-proof-*.test.ts` on this head returns zero hits. The two suites that touch
+`settlement_records` at all — UTV2-1136 immutability (4/4) and UTV2-1137 correction chain (4/4) —
+operate on the table directly and reach neither function.
+
+What is therefore still unproven against real PostgREST, and why it matters:
+
+1. `.in('pick_id', chunk)` returns rows for every id in the list.
+2. `.range(offset, offset + limit - 1)` under the two-key ordering yields disjoint, consecutive pages.
+3. `.order('created_at', desc).order('id', desc)` agrees with `compareSettlementRecordsDescending`.
+
+An under-read is the fail-OPEN direction: an omitted pick reads as "no settlement exists" and the
+caller re-settles it. This is the exact class `Require live-DB proof for runtime changes` names
+(UTV2-519, UTV2-521), and that guard is RED on this PR **correctly** — it is not the recorded #1479
+false positive, since no `t1-proof` file for UTV2-1886 exists on `main` or on this branch. It is not
+one of the four required checks and blocks no merge.
+
+The remedy is written and type-checks clean —
+`apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts`: batch-vs-single agreement with an
+unsettled-pick control, the same population read at pageSize 1, 2 and 1000 asserted identical, and a
+`chunkSize: 1` read asserting the per-chunk results union rather than replace. It is **not committed**,
+because landing it needs three paths outside this lane's `file_scope_lock` (the test file, root
+`package.json` for the `test:t1-proof:live` wiring, and
+`docs/05_operations/db-writer-classification.json`, which `db-writer-inventory.ts` requires for any
+credentialed DB test). `file_scope_lock` is settable only at `ops:lane-manifest create`, so widening
+it requires a CODEOWNERS `scope-override/v1` — reserved, and requested rather than assumed.
 
 ## Merge SHA Binding
 
