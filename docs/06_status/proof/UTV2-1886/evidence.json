@@ -215,7 +215,7 @@
       "why_it_matters": "An under-read is the fail-OPEN direction: an omitted pick reads as 'no settlement exists' and the caller re-settles it. This is the exact class `Require live-DB proof for runtime changes` names (UTV2-519, UTV2-521).",
       "guard_state": "`Require live-DB proof for runtime changes` is RED on this PR and is CORRECT. It is not the recorded #1479 false positive: no t1-proof file for UTV2-1886 exists on main or on this branch. It is not one of the four required checks, so it blocks no merge.",
       "landed_remedy": "apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts, committed and present at the bound head. Test 1 builds three settled picks (1, 2 and 3 settlements chained through corrects_id) plus a deliberately unsettled control and asserts the real DatabaseSettlementRepository's findLatestForPicks agrees id-for-id with findLatestForPick, omits the unsettled pick, and returns exactly the settled count -- this is what proves .in() completeness and the ordering agreement against real PostgREST. Test 2 reads the same six-row, two-pick population at pageSize 1000, 1 and 2 and asserts all three maps are identical and match the single-pick path -- this is what proves later-page settlements are not missed. Test 3 reads three picks at chunkSize 1 and asserts the per-chunk results union rather than replace. The suite is gated on SUPABASE_SERVICE_ROLE_KEY and deletes no rows.",
-      "scope_consequence": "file_scope_lock is settable only at `ops:lane-manifest create` and this lane declared five files, so three of the five paths in this lane's diff sit outside it: apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts (the new suite), package.json (the only test:t1-proof:live wiring point -- pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on an unreachable test file), and docs/05_operations/db-writer-classification.json (scripts/ci/db-writer-inventory.ts discovers the file on its createDatabaseRepositoryBundle marker and rejects it unregistered; that validator runs at .github/workflows/ci.yml:243 INSIDE the required `verify` job, so this third path is not optional -- omitting it would turn a required check red). A lock cannot be widened by an agent and a scope-override/v1 is a CODEOWNERS artifact that is never self-authored. `File scope lock` and `Lane authority` are therefore expected RED on this PR; neither is one of the four required checks, and both are reporting a real fact rather than a defect."
+      "scope_consequence": "file_scope_lock is settable only at `ops:lane-manifest create` and this lane declared five files, so three of the five paths in this lane's diff sit outside it: apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts (the new suite), package.json (the only test:t1-proof:live wiring point -- pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on an unreachable test file), and docs/05_operations/db-writer-classification.json (scripts/ci/db-writer-inventory.ts discovers the file on its createDatabaseRepositoryBundle marker and rejects it unregistered; that validator runs at .github/workflows/ci.yml:243 INSIDE the required `verify` job, so this third path is not optional -- omitting it would turn a required check red). A lock cannot be widened by an agent and a scope-override/v1 is a CODEOWNERS artifact that is never self-authored. Measured on #1565 at 485cc944b the two scope checks DISAGREE and the disagreement is correct: `File scope lock` is RED and `Lane authority` is GREEN, because they read different sources. `Lane authority` evaluates the lane TYPE contract, and .lane/lanes/runtime.yml admits all three paths -- apps/api/** (:5), docs/05_operations/db-writer-classification.json (:42) and package.json (:48), the last two registered there by UTV2-1842 for exactly this case. `File scope lock` and `Return review packet` evaluate this lane's MANIFEST lock, pinned at ops:lane-manifest create to the five implementation files. An earlier draft of this bundle predicted both checks RED; that prediction was wrong about `Lane authority` and is corrected here from the measurement. None of the three is one of the four required checks, and each is reporting a real fact rather than a defect."
     },
     "queries": [
       {
@@ -238,6 +238,44 @@
         "label": "what the batched read was evidenced by at THIS head: the in-process unit tests in packages/db/src/settlement-invariants.test.ts (including the both-page-orders created_at tie test and the three URL-budget invariants this lane added) and the 71 in apps/api/src/grading-service.test.ts, all of which run against the in-memory repository and a stubbed fetchPage rather than PostgREST. At the bound head this is no longer the ONLY evidence -- the live suite named under landed_remedy exercises the real repository against staging Postgres",
         "result": "21/21 and 71/71 pass -- static proof at this head, recorded as such"
       }
-    ]
+    ],
+    "live_suite_receipt": {
+      "what": "The staging execution of the suite THIS LANE ADDS, apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts. The `command` field above is bound to run 34598633546 at head c4244f041, which PRECEDES the suite; this entry is the receipt for the suite itself.",
+      "run": 34635996613,
+      "job": "Writable DB proof (staging only)",
+      "job_id": 103383898788,
+      "head_sha": "485cc944b4fba2946c1efdedfa8089822c576f77",
+      "job_conclusion": "success",
+      "steps": [
+        {
+          "number": 6,
+          "name": "Assert staging credentials present",
+          "conclusion": "success"
+        },
+        {
+          "number": 7,
+          "name": "Materialize staging-only environment",
+          "conclusion": "success"
+        },
+        {
+          "number": 10,
+          "name": "Run writable DB proof against staging",
+          "conclusion": "success"
+        },
+        {
+          "number": 11,
+          "name": "Run the T1 live proof suites against staging",
+          "conclusion": "success"
+        },
+        {
+          "number": 12,
+          "name": "Scrub credentials",
+          "conclusion": "success"
+        }
+      ],
+      "why_step_11_is_the_load_bearing_one": "Step 11 executes `pnpm test:t1-proof:live`, the script this lane appended the new suite to. Steps 6 and 7 run first and assert the target; scripts/ci/assert-staging-target.ts pins the project ref to xskgrzbteyqdufktjrjx, so a green step 11 is a statement about staging and cannot be a statement about production.",
+      "head_binding_note": "485cc944b is a proof-only commit on top of the bound head 86e46745a7368855f053814c33076b55634311aa: `git diff --name-only 86e46745a 485cc944b` returns exactly two paths, docs/06_status/proof/UTV2-1886/evidence.json and docs/06_status/proof/UTV2-1886/verification.md, and zero files outside that directory. The code the staging job exercised is therefore byte-identical to the bound head's code. A proof bundle can never carry a receipt for its own commit, because writing the receipt moves the head; binding it to the last non-proof commit and stating the diff is the honest form.",
+      "log_availability": "Per-test TAP output for this job was not retrievable while run 34635996613 was still in progress -- GitHub refuses job logs until the run completes. The job and step conclusions above are read from the API and are authoritative on their own terms; they establish that the step ran and exited 0, which is what `Writable DB proof (staging only)` gates on."
+    }
   }
 }

@@ -206,8 +206,28 @@ skips cleanly when `SUPABASE_SERVICE_ROLE_KEY` is absent — which is why it can
 contained workstation, exactly as every sibling `t1-proof` file behaves there.
 
 `Require live-DB proof for runtime changes` was RED and **correct** at the previous head. The new
-path matches that guard's accepted pattern `apps/[^/]+/src/t1-proof-.*\.test\.ts$`, so it should
-now be satisfied by evidence rather than by an exemption.
+path matches that guard's accepted pattern `apps/[^/]+/src/t1-proof-.*\.test\.ts$`, and it is now
+**SUCCESS** — satisfied by evidence rather than by an exemption.
+
+#### The suite has run against staging, and that is measured rather than predicted
+
+The claim this lane owes is that the batched read works against a real database, not a fake one.
+Measured on PR #1565 at `485cc944b`:
+
+| Receipt | Value |
+|---|---|
+| Workflow run | `34635996613` |
+| Job | `Writable DB proof (staging only)`, id `103383898788` |
+| Job conclusion | **success** |
+| Step 10 | `Run writable DB proof against staging` — success |
+| **Step 11** | **`Run the T1 live proof suites against staging` — success** |
+| Step 12 | `Scrub credentials` — success |
+
+Step 11 is the step that executes `test:t1-proof:live`, the script this lane appended the new suite
+to. The job asserts its own target before running anything: step 6 `Assert staging credentials
+present` and step 7 `Materialize staging-only environment` precede it, and
+`scripts/ci/assert-staging-target.ts` pins the project ref to the staging value, so a green step 11
+is a statement about staging and cannot be a statement about production.
 
 ### Three files sit outside the pinned `file_scope_lock`, and one of them is not optional
 
@@ -216,12 +236,26 @@ lane's lock is the five implementation files; landing the proof needed three mor
 
 | Path | Why | Consequence |
 |---|---|---|
-| `apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts` | the proof itself | `File scope lock` / `Lane authority` red |
+| `apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts` | the proof itself | `File scope lock` red |
 | `package.json` | the `test:t1-proof:live` wiring `ci.yml` executes — without it the proof exists and never runs | same |
 | `docs/05_operations/db-writer-classification.json` | **not optional.** `scripts/ci/db-writer-inventory.ts` runs inside `verify`, a REQUIRED check. Before the entry was added it reported two errors — `unclassified credentialed DB test` and `package script test:t1-proof:live reaches unclassified DB test` — so omitting it would have turned a required check red | same |
 
-`File scope lock` and `Lane authority` are **non-required** and block no merge. A
-`scope-override/v1` is a CODEOWNERS artifact and is **not** self-authored; these two reds are
+**Measured on #1565 at `485cc944b`, the two scope checks disagree, and the disagreement is correct
+rather than a defect: `File scope lock` is RED and `Lane authority` is GREEN.** They read different
+sources. `Lane authority` evaluates the *lane type's* contract, and `.lane/lanes/runtime.yml` admits
+all three paths — `apps/api/**` (:5), `docs/05_operations/db-writer-classification.json` (:42) and
+`package.json` (:48). The second and third were registered there by UTV2-1842 for precisely this
+case, and the file's own comment at `:33-41` says so: *"a live-DB proof under apps/api/src has TWO
+mandatory registration points"*. `File scope lock` evaluates this lane's *manifest* lock, which was
+pinned at `ops:lane-manifest create` to the five implementation files and cannot be widened by an
+agent. So the repository has already decided a `runtime` lane may touch these paths; what it has not
+got is a manifest that was created knowing the proof would need them.
+
+An earlier draft of this bundle predicted both checks RED. That prediction was wrong about
+`Lane authority` and is corrected here from the measurement rather than left standing.
+`Return review packet` is RED for the same reason as `File scope lock` — it builds its allowed
+scope from the manifest lock, not the lane contract. All three are **non-required** and block no
+merge. A `scope-override/v1` is a CODEOWNERS artifact and is **not** self-authored; the red is
 reported honestly rather than cleared.
 
 ## Merge SHA Binding
