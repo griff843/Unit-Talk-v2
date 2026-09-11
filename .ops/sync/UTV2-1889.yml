@@ -1,0 +1,437 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1889
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1889
+  objective: "Operator-attested results: settle the real Track Only pick without
+    SGO, with authenticated attribution and correction history"
+  acceptance_criteria:
+    - >-
+      Milestone 2 condition 3 for the contained pilot, on the operator-attested
+      route Griff selected. SGO stays disabled, containment is unchanged, and no
+      member delivery is created.
+
+
+      ## Why this route
+
+
+      `game_results` and `events` both stop at 2026-06-30, so nothing after that
+      date resolves an event. The SGO key available to tooling returns `403
+      Inactive API key`. An ingestion unpark is binary
+      (`SYNDICATE_MACHINE_MODE`) and therefore amounts to a member-delivery
+      activation request, which is separately reserved. The operator-attested
+      route needs neither: the operator supplies the score, authenticated and
+      audited, and grading treats `operator` as a **peer trusted provider**,
+      never as a disguise for SGO.
+
+
+      ## Scope — gate and writer land in ONE lane
+
+
+      They must not split. A writer shipped ahead of the gate produces rows the
+      gate refuses; a gate shipped ahead of the writer admits a provider nothing
+      can write. Neither half is independently useful.
+
+
+      ### A. `apps/api/src/grading-service.ts`
+
+
+      1. `TRUSTED_GRADING_EVENT_PROVIDERS` gains `'operator'`.
+
+      2. `validateEventProvenanceForGrading` becomes **keyed by provider in both
+      directions** — `sgo -> ingestor.cycle`, `operator ->
+      operator.attestation`, unknown provider fails closed. This is strictly
+      tighter than today: an SGO event naming `operator.attestation` is
+      currently accepted and will be refused. `ingestionCycleRunId` stays
+      required; for an operator event it points at the `system_runs` row the
+      attestation opened, which is the authenticated attribution.
+
+      3. `game_moneyline` becomes a real market family (participant required,
+      type `team`).
+
+      4. `MarketFamilyRule.usesLine` so the `missing_line` skip stops firing on
+      a market that correctly has no line. A moneyline's `line = null` is
+      correct data, not missing data.
+
+      5. A moneyline outcome path keyed on a dedicated `game_moneyline_win`
+      result market key: `actual_value` 1/0/0.5 -> WIN/LOSS/PUSH, anything else
+      skips with `moneyline_result_value_invalid`. **The dedicated key is
+      load-bearing** — production holds 280 `points-all-game-ml` rows carrying a
+      raw score with `participant_id = NULL`. Without the guard a score of 7
+      reads as a win flag at worst. The guard leaves every existing row
+      uninterpretable by this path, which is the correct direction.
+
+      6. Alias `moneyline -> game_moneyline_win`.
+
+
+      ### B. `scripts/ops/operator-attest-result.ts` (new)
+
+
+      Dry-run by default; `--apply` required; refuses any host but the declared
+      project ref. Writes, in order: `system_runs` (`run_type:
+      operator.result_attestation`, `actor: <attestedBy>`) returning `runId`;
+      `events` upsert by `external_id = operator:<sport>:<date>:<slug>` with
+      provenance metadata pointing at `runId`; `event_participants` home/away
+      rows (required — `resolvePickEvent` reaches the event through
+      `eventParticipants.listByParticipant`); `game_results`, one row per team,
+      `market_key: game_moneyline_win`, `source: operator:<attestedBy>`.
+
+
+      **Corrections need no DDL and no new code.** `game_results` is `UNIQUE
+      (event_id, participant_id, market_key, source)` and
+      `DatabaseGradeResultRepository.findResult` already orders `sourced_at`
+      descending, taking one row. A correction is an append under
+      `operator:<who>:correction-<n>` with a later `sourced_at`; the original
+      survives as history and `ops:track-only-report` lists it under
+      `supersededSources`.
+
+
+      **Running** `--apply` **against production is an operator action, not an
+      agent one** (`DB_ENVIRONMENT_OPERATOR_POLICY.md`). The script is built and
+      dry-run-proven in the lane; Griff runs the write.
+
+
+      ### C. `docs/05_operations/OPERATOR_ATTESTATION_RUNBOOK.md` (new)
+
+
+      The operator procedure, the exact commands, and the correction path.
+
+
+      ## Acceptance
+
+
+      1. An `operator`-provider event with `ingestionSource:
+      operator.attestation` grades; an `sgo` event claiming
+      `operator.attestation` is refused, and so is the reverse — asserted in
+      both directions, since a provenance check that is too loose fails
+      silently.
+
+      2. An unknown provider fails closed.
+
+      3. A `points-all-game-ml` row does **not** settle a moneyline pick, and
+      removing the A5 market-key guard turns that test red (mutation-proven).
+
+      4. A moneyline pick with `line = null` is no longer skipped
+      `missing_line`.
+
+      5. A correction appended under a new `source` supersedes the original
+      without deleting it, and both rows remain readable.
+
+      6. No `distribution_outbox` row is created by any path this lane adds.
+
+
+      ## Measured facts — do not re-derive
+
+
+      * Pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b`: `participant_id` is NULL
+      but `metadata.teamId = 8a4dcd49-fcc4-4999-976a-6b1b1143e5f6` (Dodgers),
+      which `resolvePickParticipantId(..., 'team')` resolves.
+      `metadata.eventName = 'Dodgers @ Brewers'`.
+
+      * `events` columns are `event_name` / `event_date`, not `name` /
+      `start_time`.
+
+      * `events.status` CHECK: scheduled | in_progress | completed | postponed |
+      cancelled.
+
+      * `game_results` has no `metadata` column; `source` is part of its unique
+      key.
+
+      * `event_participants.role` CHECK: home | away | competitor; UNIQUE
+      (event_id, participant_id).
+
+
+      Declare root `package.json` in the lane scope — the new test file needs
+      the `test:ops` wiring or `pnpm verify` fails closed with
+      `WIRING_TEST_UNWIRED_NEW`.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Milestone 2 condition 3 for the contained pilot, on the operator-attested
+      route Griff selected. SGO stays disabled, containment is unchanged, and no
+      member delivery is created.
+    - >-
+      Why this route
+
+      `game_results` and `events` both stop at 2026-06-30, so nothing after that
+      date resolves an event. The SGO key available to tooling returns `403
+      Inactive API key`. An ingestion unpark is binary
+      (`SYNDICATE_MACHINE_MODE`) and therefore amounts to a member-delivery
+      activation request, which is separately reserved. The operator-attested
+      route needs neither: the operator supplies the score, authenticated and
+      audited, and grading treats `operator` as a **peer trusted provider**,
+      never as a disguise for SGO.
+    - >-
+      Scope — gate and writer land in ONE lane
+
+      They must not split. A writer shipped ahead of the gate produces rows the
+      gate refuses; a gate shipped ahead of the writer admits a provider nothing
+      can write. Neither half is independently useful.
+
+
+      ### A. `apps/api/src/grading-service.ts`
+
+
+      1. `TRUSTED_GRADING_EVENT_PROVIDERS` gains `'operator'`.
+
+      2. `validateEventProvenanceForGrading` becomes **keyed by provider in both
+      directions** — `sgo -> ingestor.cycle`, `operator ->
+      operator.attestation`, unknown provider fails closed. This is strictly
+      tighter than today: an SGO event naming `operator.attestation` is
+      currently accepted and will be refused. `ingestionCycleRunId` stays
+      required; for an operator event it points at the `system_runs` row the
+      attestation opened, which is the authenticated attribution.
+
+      3. `game_moneyline` becomes a real market family (participant required,
+      type `team`).
+
+      4. `MarketFamilyRule.usesLine` so the `missing_line` skip stops firing on
+      a market that correctly has no line. A moneyline's `line = null` is
+      correct data, not missing data.
+
+      5. A moneyline outcome path keyed on a dedicated `game_moneyline_win`
+      result market key: `actual_value` 1/0/0.5 -> WIN/LOSS/PUSH, anything else
+      skips with `moneyline_result_value_invalid`. **The dedicated key is
+      load-bearing** — production holds 280 `points-all-game-ml` rows carrying a
+      raw score with `participant_id = NULL`. Without the guard a score of 7
+      reads as a win flag at worst. The guard leaves every existing row
+      uninterpretable by this path, which is the correct direction.
+
+      6. Alias `moneyline -> game_moneyline_win`.
+
+
+      ### B. `scripts/ops/operator-attest-result.ts` (new)
+
+
+      Dry-run by default; `--apply` required; refuses any host but the declared
+      project ref. Writes, in order: `system_runs` (`run_type:
+      operator.result_attestation`, `actor: <attestedBy>`) returning `runId`;
+      `events` upsert by `external_id = operator:<sport>:<date>:<slug>` with
+      provenance metadata pointing at `runId`; `event_participants` home/away
+      rows (required — `resolvePickEvent` reaches the event through
+      `eventParticipants.listByParticipant`); `game_results`, one row per team,
+      `market_key: game_moneyline_win`, `source: operator:<attestedBy>`.
+
+
+      **Corrections need no DDL and no new code.** `game_results` is `UNIQUE
+      (event_id, participant_id, market_key, source)` and
+      `DatabaseGradeResultRepository.findResult` already orders `sourced_at`
+      descending, taking one row. A correction is an append under
+      `operator:<who>:correction-<n>` with a later `sourced_at`; the original
+      survives as history and `ops:track-only-report` lists it under
+      `supersededSources`.
+
+
+      **Running** `--apply` **against production is an operator action, not an
+      agent one** (`DB_ENVIRONMENT_OPERATOR_POLICY.md`). The script is built and
+      dry-run-proven in the lane; Griff runs the write.
+
+
+      ### C. `docs/05_operations/OPERATOR_ATTESTATION_RUNBOOK.md` (new)
+
+
+      The operator procedure, the exact commands, and the correction path.
+    - >-
+      Acceptance
+
+      1. An `operator`-provider event with `ingestionSource:
+      operator.attestation` grades; an `sgo` event claiming
+      `operator.attestation` is refused, and so is the reverse — asserted in
+      both directions, since a provenance check that is too loose fails
+      silently.
+
+      2. An unknown provider fails closed.
+
+      3. A `points-all-game-ml` row does **not** settle a moneyline pick, and
+      removing the A5 market-key guard turns that test red (mutation-proven).
+
+      4. A moneyline pick with `line = null` is no longer skipped
+      `missing_line`.
+
+      5. A correction appended under a new `source` supersedes the original
+      without deleting it, and both rows remain readable.
+
+      6. No `distribution_outbox` row is created by any path this lane adds.
+    - >-
+      Measured facts — do not re-derive
+
+      * Pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b`: `participant_id` is NULL
+      but `metadata.teamId = 8a4dcd49-fcc4-4999-976a-6b1b1143e5f6` (Dodgers),
+      which `resolvePickParticipantId(..., 'team')` resolves.
+      `metadata.eventName = 'Dodgers @ Brewers'`.
+
+      * `events` columns are `event_name` / `event_date`, not `name` /
+      `start_time`.
+
+      * `events.status` CHECK: scheduled | in_progress | completed | postponed |
+      cancelled.
+
+      * `game_results` has no `metadata` column; `source` is part of its unique
+      key.
+
+      * `event_participants.role` CHECK: home | away | competitor; UNIQUE
+      (event_id, participant_id).
+
+
+      Declare root `package.json` in the lane scope — the new test file needs
+      the `test:ops` wiring or `pnpm verify` fails closed with
+      `WIRING_TEST_UNWIRED_NEW`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1889/operator-attested-results-settle-the-real-track-only-pick-without-sgo
+    title: "Operator-attested results: settle the real Track Only pick without SGO,
+      with authenticated attribution and correction history"
+    description: >-
+      Milestone 2 condition 3 for the contained pilot, on the operator-attested
+      route Griff selected. SGO stays disabled, containment is unchanged, and no
+      member delivery is created.
+
+
+      ## Why this route
+
+
+      `game_results` and `events` both stop at 2026-06-30, so nothing after that
+      date resolves an event. The SGO key available to tooling returns `403
+      Inactive API key`. An ingestion unpark is binary
+      (`SYNDICATE_MACHINE_MODE`) and therefore amounts to a member-delivery
+      activation request, which is separately reserved. The operator-attested
+      route needs neither: the operator supplies the score, authenticated and
+      audited, and grading treats `operator` as a **peer trusted provider**,
+      never as a disguise for SGO.
+
+
+      ## Scope — gate and writer land in ONE lane
+
+
+      They must not split. A writer shipped ahead of the gate produces rows the
+      gate refuses; a gate shipped ahead of the writer admits a provider nothing
+      can write. Neither half is independently useful.
+
+
+      ### A. `apps/api/src/grading-service.ts`
+
+
+      1. `TRUSTED_GRADING_EVENT_PROVIDERS` gains `'operator'`.
+
+      2. `validateEventProvenanceForGrading` becomes **keyed by provider in both
+      directions** — `sgo -> ingestor.cycle`, `operator ->
+      operator.attestation`, unknown provider fails closed. This is strictly
+      tighter than today: an SGO event naming `operator.attestation` is
+      currently accepted and will be refused. `ingestionCycleRunId` stays
+      required; for an operator event it points at the `system_runs` row the
+      attestation opened, which is the authenticated attribution.
+
+      3. `game_moneyline` becomes a real market family (participant required,
+      type `team`).
+
+      4. `MarketFamilyRule.usesLine` so the `missing_line` skip stops firing on
+      a market that correctly has no line. A moneyline's `line = null` is
+      correct data, not missing data.
+
+      5. A moneyline outcome path keyed on a dedicated `game_moneyline_win`
+      result market key: `actual_value` 1/0/0.5 -> WIN/LOSS/PUSH, anything else
+      skips with `moneyline_result_value_invalid`. **The dedicated key is
+      load-bearing** — production holds 280 `points-all-game-ml` rows carrying a
+      raw score with `participant_id = NULL`. Without the guard a score of 7
+      reads as a win flag at worst. The guard leaves every existing row
+      uninterpretable by this path, which is the correct direction.
+
+      6. Alias `moneyline -> game_moneyline_win`.
+
+
+      ### B. `scripts/ops/operator-attest-result.ts` (new)
+
+
+      Dry-run by default; `--apply` required; refuses any host but the declared
+      project ref. Writes, in order: `system_runs` (`run_type:
+      operator.result_attestation`, `actor: <attestedBy>`) returning `runId`;
+      `events` upsert by `external_id = operator:<sport>:<date>:<slug>` with
+      provenance metadata pointing at `runId`; `event_participants` home/away
+      rows (required — `resolvePickEvent` reaches the event through
+      `eventParticipants.listByParticipant`); `game_results`, one row per team,
+      `market_key: game_moneyline_win`, `source: operator:<attestedBy>`.
+
+
+      **Corrections need no DDL and no new code.** `game_results` is `UNIQUE
+      (event_id, participant_id, market_key, source)` and
+      `DatabaseGradeResultRepository.findResult` already orders `sourced_at`
+      descending, taking one row. A correction is an append under
+      `operator:<who>:correction-<n>` with a later `sourced_at`; the original
+      survives as history and `ops:track-only-report` lists it under
+      `supersededSources`.
+
+
+      **Running** `--apply` **against production is an operator action, not an
+      agent one** (`DB_ENVIRONMENT_OPERATOR_POLICY.md`). The script is built and
+      dry-run-proven in the lane; Griff runs the write.
+
+
+      ### C. `docs/05_operations/OPERATOR_ATTESTATION_RUNBOOK.md` (new)
+
+
+      The operator procedure, the exact commands, and the correction path.
+
+
+      ## Acceptance
+
+
+      1. An `operator`-provider event with `ingestionSource:
+      operator.attestation` grades; an `sgo` event claiming
+      `operator.attestation` is refused, and so is the reverse — asserted in
+      both directions, since a provenance check that is too loose fails
+      silently.
+
+      2. An unknown provider fails closed.
+
+      3. A `points-all-game-ml` row does **not** settle a moneyline pick, and
+      removing the A5 market-key guard turns that test red (mutation-proven).
+
+      4. A moneyline pick with `line = null` is no longer skipped
+      `missing_line`.
+
+      5. A correction appended under a new `source` supersedes the original
+      without deleting it, and both rows remain readable.
+
+      6. No `distribution_outbox` row is created by any path this lane adds.
+
+
+      ## Measured facts — do not re-derive
+
+
+      * Pick `dfcd9486-cba2-4bb5-b684-beec36e52c0b`: `participant_id` is NULL
+      but `metadata.teamId = 8a4dcd49-fcc4-4999-976a-6b1b1143e5f6` (Dodgers),
+      which `resolvePickParticipantId(..., 'team')` resolves.
+      `metadata.eventName = 'Dodgers @ Brewers'`.
+
+      * `events` columns are `event_name` / `event_date`, not `name` /
+      `start_time`.
+
+      * `events.status` CHECK: scheduled | in_progress | completed | postponed |
+      cancelled.
+
+      * `game_results` has no `metadata` column; `source` is part of its unique
+      key.
+
+      * `event_participants.role` CHECK: home | away | competitor; UNIQUE
+      (event_id, participant_id).
+
+
+      Declare root `package.json` in the lane scope — the new test file needs
+      the `test:ops` wiring or `pnpm verify` fails closed with
+      `WIRING_TEST_UNWIRED_NEW`.
+    captured_at: 2026-09-11T21:20:59.623Z
+    description_sha256: 01637f2673d1177fb93bc0656a4b39cda10cce54d6b91f6c2e608e092b8a7c0b
+  contract_hash: e1cf00339418d380a46c6f0b38ea72cdfaaaee5438c968363dc7501a8075cd08
