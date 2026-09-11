@@ -1,0 +1,187 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1861",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "proof_profile": "app-runtime",
+  "status": "pending_hosted_verification",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "24412c77979c8280ffbce7c124ba83dd5ebbe25b",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "note": "24412c77979c8280ffbce7c124ba83dd5ebbe25b is the last commit authored by this lane that changes anything outside docs/06_status/proof/UTV2-1861/ -- the fixture repair that the staging run in runtime_proof actually executed. Verifiable with `git diff --name-only 24412c77979c8280ffbce7c124ba83dd5ebbe25b..HEAD`, which lists only this proof directory. The branch head is 39b68f573ab3e0c0f7ac29acd7b85c775a77871a, a `git-merge-main` commit that carries no changes of its own (`git show --name-only` on it is empty); it brought #1560's merge commit 257910cda into this branch's history, and those files belong to main rather than to this lane. The anchor is deliberately not advanced to it: the proof attests what this lane changed, and a resync changes nothing this lane authored. The previous value of this field was 2b4342515 and its note claimed every later commit touched only the proof directory. That was true when written and went false the moment this lane added live test cases; it is corrected here rather than left standing. evidence_commit_sha and current_pr_head_sha are CI-resolved sentinels rather than literal SHAs: a bundle cannot know the SHA of the commit that contains it, and any literal written here goes false on the next proof commit. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM."
+  },
+  "static_proof": {
+    "unit_tests": {
+      "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts apps/api/src/settlement-service.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 96,
+        "pass": 96,
+        "fail": 0,
+        "skipped": 0,
+        "pre_existing": 91,
+        "new": 5
+      }
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "row_counts": {
+        "pass": 6137,
+        "fail": 0,
+        "not_ok_lines": 0
+      }
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not run on the workstation: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses a workstation target (expected xskgrzbteyqdufktjrjx) by design. The hosted `verify` check on this PR head is the authoritative run and is NOT counted as a pass here."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1861",
+      "verdict": "PASS",
+      "changed_files": 6,
+      "rules_matched": [
+        "settlement-grading"
+      ],
+      "advisory_missing": [
+        "r4-fault-report"
+      ]
+    },
+    "mutation_battery": {
+      "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+      "baseline": {
+        "tests": 69,
+        "pass": 69,
+        "fail": 0
+      },
+      "mutations": [
+        {
+          "id": "M1",
+          "change": "const trackOnlyPicks = validatedPicks; (drop the Track Only filter)",
+          "failing": 1
+        },
+        {
+          "id": "M2",
+          "change": "revert the recordEvidenceSettlement state guard to pick.status !== 'awaiting_approval'",
+          "failing": 3
+        },
+        {
+          "id": "M3",
+          "change": "revert the recap skip to the pick.status !== 'awaiting_approval' literal",
+          "failing": 1
+        },
+        {
+          "id": "M4",
+          "change": "drop ...trackOnlyPicks from the grading population",
+          "failing": 3
+        }
+      ],
+      "note": "M3 was vacuous on first attempt and a fixture had to be built for it; doing so surfaced an eighth Track Only chokepoint (InMemoryOutboxRepository.enqueue, runtime-repositories.ts:800-806) that the recorded list of seven did not include."
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed",
+      "executed_at": "2026-09-10",
+      "query": "select count(*) filter (where status='validated') , count(*) filter (where status='validated' and metadata->>'distributionMode'='track-only') from picks",
+      "observed": {
+        "validated_total": 21364,
+        "validated_track_only": 1,
+        "posted_total": 7306,
+        "awaiting_approval_total": 14984
+      },
+      "note": "This is why the filter is load-bearing: admitting `validated` wholesale would add 21,364 picks to every grading pass. The single Track Only row is dfcd9486-cba2-4bb5-b684-beec36e52c0b, Milestone 1's pick. Nothing was written."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "executed_at": "2026-09-11T01:34:57.318Z/2026-09-11T01:49:02.500Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials materialized by ci.yml. Never production. assert-staging-target.ts confirmed host=xskgrzbteyqdufktjrjx.supabase.co against canonical production ref zfzdnfwdarxucxtaojxm before any test ran.",
+    "command": "two steps of job \"staging-db-proof\". Step 10 `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step 11 `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && 18 tsx --test suites, the last of which is apps/api/src/t1-proof-utv2-1251-evidence-settlement.test.ts. This lane added that suite to test:t1-proof:live; before this lane it was wired only through apps/api/package.json's `test` script, which runs in the credential-free `verify` job and therefore skipped.",
+    "receipt": "ci-db-proof-receipt/v2 covers STEP 10 ONLY, job \"staging-db-proof\" run 34551219661 attempt 1, exit_code 0, TAP 7/7 pass 0 fail 0 skipped. receipt_sha256 c36f77450ecbad1a45ed7abe2217cce6138a9c2b4b4c22cdd0a5145633df12fe, output_sha256 b4ff6cb955a1bcf698f9a1eb9bed779cba5469a5925ab5c803af577279b3f419, repo_migration_head 20260901150000_utv2_1811_rate_limit_buckets.sql, fixture_run_id utv2-1630-34551219661-1. Step 11 emits NO receipt of its own -- the receipt generator wraps `pnpm test:db` only -- so the UTV2-1861 evidence below is the step-11 TAP stream read from the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34551219661/job/103114350408, in the same job, same run, same attempt, on the same staging credentials the receipt attests. That distinction is stated rather than elided: a reader must not take the receipt's digests as covering the UTV2-1861 assertions.",
+    "skipped": 0,
+    "binding": {
+      "pr": 1561,
+      "pr_head_sha": "39b68f573ab3e0c0f7ac29acd7b85c775a77871a",
+      "receipt_github_sha": "7e5e1b49c5b1ba55d78b79f5b5adec5ca5ed2d92",
+      "receipt_github_ref_name": "1561/merge",
+      "binding_rule": "pr_head_run: this was a pull_request-triggered run, so the receipt's github_sha 7e5e1b49c5b1ba55d78b79f5b5adec5ca5ed2d92 is the merge-ref commit refs/pull/1561/merge, whose second parent is the PR head 39b68f573ab3e0c0f7ac29acd7b85c775a77871a. It is NOT the branch head and must not be read as one. The UTV2-1641 harvester cannot produce this block pre-merge: locateCiDbProofRun step 1 calls findWorkflowJobForHeadSha(mergeSha) and on a hit labels the result identity_source 'merge_sha_run', which then demands receipt.github_sha === mergeSha exactly and fails closed with receipt_invalid. Its own correct 'pr_head_run' branch is reachable only via the step-2 fallback and is shadowed. This block was therefore assembled by hand from the downloaded artifact and the job log; it was not harvested."
+    },
+    "note": "SCOPE. Unlike this lane's earlier evidence, this is a UTV2-1861-SPECIFIC live assertion, not only the generic staging smoke. Four cases in t1-proof-utv2-1251-evidence-settlement.test.ts executed against staging with skipped 0, and two of them are new in this lane and exercise the widened guard directly. What it does NOT prove: that the deployed Smart Form produces a validated Track Only pick. The fixture submits with source 'api' because validateSmartFormRelationships (submit-pick-controller.ts:46) applies the full Smart Form contract to any smart-form payload carrying a distributionMode, and satisfying it would make this proof depend on staging reference-data coverage that containment deliberately leaves unpopulated -- testing the catalog, not the guard. isEvidencePlanePick reads exactly two fields, status and metadata, and reads neither source nor any Smart Form field. That the deployed form produces such a pick is Milestone 1's evidence (production pick dfcd9486-cba2-4bb5-b684-beec36e52c0b), not this file's. Both fixtures in the first staging attempt were REFUSED and both refusals were defects in the fixtures rather than in the guard; that run is recorded in verification.md rather than discarded, because the control's first form discriminated on lifecycle state instead of on the Track Only marker and would have left the positive case satisfied by a guard admitting the whole pre-delivery backlog.",
+    "queries": [
+      {
+        "label": "UTV2-1861 A (new): evidence settlement for a validated Track Only pick -- picks.status stays validated, pick_lifecycle has no transition to settled, distribution_outbox has 0 rows, settlement_records has exactly 1",
+        "result": "ok 3 -- pass"
+      },
+      {
+        "label": "UTV2-1861 B (new, discriminating control): recordEvidenceSettlement still rejects a validated pick WITHOUT the Track Only marker, and writes no settlement record. Built from the same fixture as A and stripped of exactly one field, so the two picks differ only in the marker",
+        "result": "ok 4 -- pass"
+      },
+      {
+        "label": "UTV2-1251 (pre-existing, first live execution ever): settlement record written for an awaiting_approval pick -- picks.status unchanged, zero outbox rows",
+        "result": "ok 1 -- pass"
+      },
+      {
+        "label": "UTV2-1251 (pre-existing, first live execution ever): recordEvidenceSettlement rejects a non-awaiting_approval pick",
+        "result": "ok 2 -- pass"
+      },
+      {
+        "label": "step 10 database-smoke TAP against staging (the receipted step)",
+        "result": "7/7 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "step 11 preceding 17 t1-proof suites against staging",
+        "result": "all pass, 0 fail, 0 skipped"
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "UTV2-1861-specific live assertions executed against staging",
+        "count": 2
+      },
+      {
+        "label": "evidence-plane live assertions executed in the 1251 suite (2 new + 2 pre-existing)",
+        "count": 4
+      },
+      {
+        "label": "evidence-plane live assertions passed",
+        "count": 4
+      },
+      {
+        "label": "evidence-plane live assertions failed",
+        "count": 0
+      },
+      {
+        "label": "evidence-plane live assertions skipped (0 is load-bearing: the suite elides itself without staging credentials, and did exactly that in every CI run before this lane wired it into test:t1-proof:live)",
+        "count": 0
+      },
+      {
+        "label": "delivery rows created by the Track Only pick in distribution_outbox",
+        "count": 0
+      },
+      {
+        "label": "pick_lifecycle transitions to settled for the Track Only pick",
+        "count": 0
+      },
+      {
+        "label": "settlement_records written for the refused control pick",
+        "count": 0
+      },
+      {
+        "label": "database-smoke TAP tests passed in the receipted step",
+        "count": 7
+      }
+    ]
+  }
+}
