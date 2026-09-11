@@ -823,7 +823,7 @@ test('PW1 is non-waivable at every tier and decides the verdict', () => {
 
   // The production call site must not pass a root override, or the guard could
   // be pointed at a tree that is not the one being admitted.
-  assert.match(source, /\n  runRepoMintedP0Checks\(issueId, addCheck\);\n/u);
+  assert.match(source, /\n {2}runRepoMintedP0Checks\(issueId, addCheck\);\n/u);
 
   // And a failing PW1 has to actually decide the verdict.
   const failing = collectPw1('WORK-2026091001', seedP0CoverageTree({ evaluator: true }));

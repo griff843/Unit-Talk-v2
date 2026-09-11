@@ -20,12 +20,23 @@ checks out that trusted base, and evaluates the candidate without running its co
 
 ## Integration order
 
-1. Independently review the corrected exact head of #1556. Satisfy its existing
-   T1 Merge Gate and exact-head scope controls. No approval is asserted here.
-   The scope override must name the existing lane's own manifest and sync file,
-   plus the file-scope guard, comment parser, their tests, scope workflow and
-   return-review workflow namespace correction and its existing test file.
-   The original admission scope is retained; no history rewrite grants authority.
+1. Land the scope-authorization bootstrap (UTV2-1887) on protected `main`
+   first, then resync #1556. The nine paths the trusted-base guard reports
+   outside scope are the lane's own manifest and sync file plus the file-scope
+   guard, the comment parser, their tests, the scope workflow and the
+   return-review workflow namespace correction with its existing test file.
+   They are resolved through the supported bootstrap route rather than through a
+   self-authored override: the guard on `main` keys its lane-lifecycle scope
+   grant on `ISSUE_ID_PATTERN = /^UTV2-\d+$/`, so a `WORK-###` lane is granted
+   no lifecycle paths at all, and the change that would fix that is inside the
+   PR being evaluated. UTV2-1887 carries those seven paths byte-identical to
+   this lane's versions; once they are on `main` the resync drops them from this
+   diff and the lifecycle grant admits the remaining two. A `scope-override/v1`
+   comment remains reserved to CODEOWNERS and is not authored here, and a
+   non-required check being red is not treated as authorization. Independently
+   review the corrected exact head of #1556 and satisfy its existing T1 Merge
+   Gate and exact-head scope controls. No approval is asserted here. The original
+   admission scope is retained; no history rewrite grants authority.
 2. Integrate #1556 through the existing serialized merge wrapper after required
    checks pass. Verify its merge is reachable from protected `main` and that
    `scripts/ops/tracker-independence/p0-workflow.cjs` exists at that exact SHA.
@@ -40,6 +51,23 @@ checks out that trusted base, and evaluates the candidate without running its co
    refuse progression without the applicable evidence. Recover mission and active
    work in fresh and compacted sessions using repository state. Capture real merged
    workflow evidence before claiming tracker independence or closing this lane.
+
+## Repo-minted execution is mechanically blocked between the phases
+
+Between phase 2 and phase 3 the installed consumer is still the narrow one, and
+it *auto-passes* a `WORK-###` PR: the required `P0 Protocol` check concluded
+`success` on this PR's own head in 10s (run `34599912852`). That window is closed
+in code, not by a condition attached to a verdict:
+`evaluateRepoMintedP0Coverage` (`scripts/ops/shared.ts`) reads the installed
+consumer, preflight check `PW1` fails on it at every tier, and `ops:lane-start`
+refuses a repo-minted identity with `p0_consumer_not_activated` before any lease,
+worktree or manifest exists. The refusal is at admission rather than in a required
+check because an activation-predicated required check would refuse this very PR —
+the foundation whose base lacks the evaluator. Admission is a complete chokepoint:
+`merge-gate.yml` resolves tier from `docs/06_status/lanes/<ID>.json`, and
+`ops:lane-start` is its only writer. The block releases itself when the patch in
+this directory lands, and re-arms if the delegation is removed. See
+`docs/05_operations/P0_PROTOCOL_SPEC.md` § "The staged block is mechanical".
 
 The old P0 consumer can still attempt Linear access during phase 1. If its check
 cannot pass under its existing authority, that is a concrete bootstrap integration

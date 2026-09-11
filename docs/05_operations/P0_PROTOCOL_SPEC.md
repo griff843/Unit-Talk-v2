@@ -154,3 +154,30 @@ After the P0 batch (UTV2-914 through UTV2-923) closes:
 PR #1556 carries the evaluator foundation. Until that foundation lands on the protected base, `.github/workflows/p0-protocol.yml` remains the existing base consumer and does not treat candidate-only evaluator code as merge authority. The follow-up workflow patch must be applied only after the foundation lands, and must check out and execute the evaluator from the trusted protected base rather than from candidate implementation.
 
 This specification describes the intended cutover behavior; it is not evidence that bootstrap, independent exact-head review, protected integration or tracker-free closeout has occurred. P0 work still requires its human verdict bound to the exact reviewed head, complete runtime evidence and manual merge. Prepare the existing required approval/bootstrap artifact before requesting the reserved action; do not direct-push main, fabricate checks or execute candidate code as merge authority.
+
+### The staged block is mechanical, not a condition of approval
+
+The two phases above create a window: the foundation lands while the base consumer still resolves
+`/(?:UTV2|UNI)-\d+/i` and **auto-passes anything else**, so a `WORK-###` PR clears the required
+`P0 Protocol` check in seconds with no evaluation at all. Measured on #1556's own required check —
+run `34599912852`, conclusion `success` in 10s, log line *"No UTV2-### / UNI-### identifier found in
+PR title, body, or branch — treating as non-P0."*
+
+That window is closed in code rather than by a note here:
+
+| Site | Behaviour |
+|---|---|
+| `scripts/ops/shared.ts` — `evaluateRepoMintedP0Coverage` | reads the *installed* consumer and reports whether it delegates to `scripts/ops/tracker-independence/p0-workflow.cjs`. Fails closed when the consumer is missing, still narrow, or names an evaluator that is not in the tree. |
+| `scripts/ops/preflight.ts` — check `PW1` | `fail` for a repo-minted identity while coverage is absent; `skip` for a tracker key, which the existing consumer already evaluates. Not waivable at any tier. |
+| `scripts/ops/lane-start.ts` | refuses admission with `p0_consumer_not_activated` before any lease, worktree or manifest is written. |
+
+**Why admission and not a required check.** A block placed inside `p0-protocol.yml` or
+`merge-gate.yml` and predicated on activation would refuse #1556 itself — a `WORK-###` PR whose base
+does not yet contain the evaluator — deadlocking the foundation the activation depends on. Lane
+admission has no such inversion, and it is a complete chokepoint: `merge-gate.yml` resolves the
+authoritative tier from `docs/06_status/lanes/<ID>.json`, and `ops:lane-start` is the only writer of
+that file, so no new repo-minted lane can reach a merge while the block holds.
+
+**It releases itself.** The predicate reads the installed consumer, so landing the activation patch
+lifts the refusal with no second edit — and removing the delegation re-arms it. Disabling the
+required check to make either phase pass is not an available exit.
