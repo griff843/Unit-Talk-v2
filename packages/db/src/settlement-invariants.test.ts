@@ -14,9 +14,14 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { assertSettlementCorrectionReference } from "./constraint-guards.js";
 import {
   InMemorySettlementRepository,
+  SETTLEMENT_BATCH_CHUNK_SIZE,
+  SETTLEMENT_BATCH_ID_URL_COST_BYTES,
+  SETTLEMENT_BATCH_URL_BUDGET_BYTES,
   collectLatestSettlementsByPick,
 } from "./runtime-repositories.js";
 import type { SettlementCreateInput } from "./repositories.js";
@@ -334,4 +339,89 @@ test("InMemorySettlementRepository: findLatestForPicks agrees with findLatestFor
   assert.equal(batch.get("p1")?.id, second.id);
   assert.equal(batch.has("p3"), false);
   assert.equal(batch.has("unknown"), false);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1886: the chunk size is a URL byte budget, asserted against the real
+// query builder
+//
+// `pick_id=in.(...)` travels in the request LINE. Supabase fronts PostgREST with
+// a proxy whose request line must fit a single 8 KiB header buffer, so a chunk
+// that is correct as logic can still be refused as bytes -- with a 414 that no
+// amount of unit testing against an injected fetcher would ever surface. These
+// assertions build the actual URL `DatabaseSettlementRepository.findLatestForPicks`
+// issues and measure it, so the constant cannot drift away from the limit it
+// exists to respect.
+// ---------------------------------------------------------------------------
+
+/**
+ * The exact query shape of `DatabaseSettlementRepository.findLatestForPicks`.
+ * postgrest-js exposes the built URL before the request is sent, so this needs
+ * no network, no credentials and no live database -- it is a byte measurement,
+ * not a round trip.
+ */
+function settlementBatchQueryUrl(idCount: number): string {
+  const client = createClient(
+    "https://zfzdnfwdarxucxtaojxm.supabase.co",
+    "anon-key-placeholder",
+  );
+  const ids = Array.from({ length: idCount }, () => randomUUID());
+  const builder = client
+    .from("settlement_records")
+    .select()
+    .in("pick_id", ids)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(0, 999);
+
+  return String((builder as unknown as { url: URL }).url);
+}
+
+test("UTV2-1886: a full chunk's PostgREST URL fits the byte budget", () => {
+  const bytes = Buffer.byteLength(
+    settlementBatchQueryUrl(SETTLEMENT_BATCH_CHUNK_SIZE),
+    "utf8",
+  );
+
+  assert.ok(
+    bytes <= SETTLEMENT_BATCH_URL_BUDGET_BYTES,
+    `a full chunk of ${SETTLEMENT_BATCH_CHUNK_SIZE} ids builds a ${bytes}-byte URL, ` +
+      `over the ${SETTLEMENT_BATCH_URL_BUDGET_BYTES}-byte budget`,
+  );
+});
+
+test("UTV2-1886: the budget is under the 8 KiB proxy request-line limit, and the previous chunk size was not", () => {
+  // Non-vacuity in both directions. Without the first assertion the budget could
+  // be raised past the limit and the test above would still pass; without the
+  // second, a budget so small that no chunk size could ever fail would also pass
+  // and prove nothing. 500 was this file's shipped chunk size before UTV2-1886
+  // measured it: it builds a URL more than twice the proxy's limit.
+  const PROXY_REQUEST_LINE_LIMIT_BYTES = 8192;
+
+  assert.ok(
+    SETTLEMENT_BATCH_URL_BUDGET_BYTES <= PROXY_REQUEST_LINE_LIMIT_BYTES / 2,
+    "the budget must leave at least half the proxy request-line limit as headroom",
+  );
+
+  const previousChunkBytes = Buffer.byteLength(settlementBatchQueryUrl(500), "utf8");
+  assert.ok(
+    previousChunkBytes > PROXY_REQUEST_LINE_LIMIT_BYTES,
+    `the 500-id chunk this lane replaced must exceed the ${PROXY_REQUEST_LINE_LIMIT_BYTES}-byte ` +
+      `proxy limit, else the budget is measuring nothing; measured ${previousChunkBytes}`,
+  );
+});
+
+test("UTV2-1886: the per-id URL cost constant matches what the query builder actually emits", () => {
+  // The chunk size is computed FROM this constant, so a drift here silently
+  // resizes the chunk. Measured as a difference so the fixed base URL cancels.
+  const small = Buffer.byteLength(settlementBatchQueryUrl(10), "utf8");
+  const large = Buffer.byteLength(settlementBatchQueryUrl(110), "utf8");
+  const measuredCost = (large - small) / 100;
+
+  assert.equal(
+    measuredCost,
+    SETTLEMENT_BATCH_ID_URL_COST_BYTES,
+    `each additional pick id costs ${measuredCost} URL bytes, not the ` +
+      `${SETTLEMENT_BATCH_ID_URL_COST_BYTES} the chunk size is derived from`,
+  );
 });
