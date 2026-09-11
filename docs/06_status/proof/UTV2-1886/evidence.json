@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1886",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pending_hosted_verification",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "3d9886e586f15686a0ae1baa310fd615e2d59dbb",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "note": "3d9886e586f15686a0ae1baa310fd615e2d59dbb is the last commit authored by this lane that changes anything outside docs/06_status/proof/UTV2-1886/ -- the implementation and its tests. The proof commit that carries this file sits on top of it and changes nothing the assertions below are about.",
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-11T12:30:00.000Z"
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test packages/db/src/settlement-invariants.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 18,
+          "pass": 18,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 12,
+          "new": 6
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 71,
+          "pass": 71,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 69,
+          "new": 2
+        }
+      }
+    ],
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "row_counts": {
+        "pass": 6153,
+        "fail": 0,
+        "not_ok_lines": 0
+      }
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not run on the workstation: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses a workstation target (expected xskgrzbteyqdufktjrjx) by design. The CI `verify` job on PR 1565 is the authoritative run and is recorded under runtime_proof."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1886 --base origin/main --head 3d9886e58",
+      "verdict": "PASS",
+      "changed_files": 15,
+      "rules_matched": [],
+      "advisory_missing": []
+    },
+    "mutation_battery": {
+      "command": "pnpm exec tsx --test packages/db/src/settlement-invariants.test.ts ; pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+      "baseline": {
+        "settlement_invariants": {
+          "tests": 18,
+          "pass": 18,
+          "fail": 0
+        },
+        "grading_service": {
+          "tests": 71,
+          "pass": 71,
+          "fail": 0
+        }
+      },
+      "mutations": [
+        {
+          "id": "a",
+          "change": "drop the .range pagination loop -- read only the first page of each chunk",
+          "failing": 1,
+          "failing_assertion": "collectLatestSettlementsByPick reads every page of a chunk, not just the first"
+        },
+        {
+          "id": "b",
+          "change": "reduce with record.created_at > current.created_at instead of compareSettlementRecordsDescending",
+          "failing": 1,
+          "failing_assertion": "collectLatestSettlementsByPick breaks a created_at tie on id, in either page order"
+        },
+        {
+          "id": "c",
+          "change": "catch the prefetch rejection and substitute an empty map",
+          "failing": 1,
+          "failing_assertion": "UTV2-1886: a failed settlement prefetch rejects the pass instead of reading as an empty map"
+        },
+        {
+          "id": "d",
+          "change": "revert the loop body to await repositories.settlements.findLatestForPick(pick.id)",
+          "failing": 1,
+          "failing_assertion": "UTV2-1886: the settlement lookup is one batched read, not one read per pick"
+        }
+      ],
+      "note": "Mutation (b) SURVIVED the first attempt and that is recorded rather than smoothed over. The correction-chain test used distinct created_at values, so it never exercised the comparator's tiebreak and `>` passed. The gap was in the test, not the implementation: a tie-ordering test was added, asserting both page orders because a one-order test passes by luck half the time, and the mutation is now caught. A surviving mutation is evidence the assertion is weak, never evidence the condition is unprovable."
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed",
+      "executed_at": "2026-09-11",
+      "observed": {
+        "grading_run_rows_7d": 108,
+        "median_gap_minutes": 91.1,
+        "min_gap_minutes": 88.1,
+        "max_gap_minutes": 152.5,
+        "poll_interval_minutes": 5,
+        "posted": 7306,
+        "awaiting_approval": 14984,
+        "track_only_validated": 1,
+        "population_total": 22291,
+        "settlement_records_rows": 37496,
+        "settlement_records_distinct_picks": 25430
+      },
+      "note": "The population and the settlement row count are what make pagination mandatory rather than precautionary: a 500-pick chunk can hold far more than PostgREST's default 1000-row page, and a truncated page does not raise -- it silently omits picks, which reads as 'no settlement exists' and makes the caller settle an already-settled pick."
+    }
+  }
+}
