@@ -15,7 +15,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertSettlementCorrectionReference } from "./constraint-guards.js";
-import { InMemorySettlementRepository } from "./runtime-repositories.js";
+import {
+  InMemorySettlementRepository,
+  collectLatestSettlementsByPick,
+} from "./runtime-repositories.js";
 import type { SettlementCreateInput } from "./repositories.js";
 import type { SettlementRecord } from "./types.js";
 
@@ -173,4 +176,162 @@ test("records do not bleed across pick IDs", async () => {
   assert.equal(pb.length, 1);
   assert.ok(pa.every((r) => r.pick_id === "pa"));
   assert.ok(pb.every((r) => r.pick_id === "pb"));
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1886: batch settlement lookup
+// ---------------------------------------------------------------------------
+
+function settlementRow(
+  id: string,
+  pickId: string,
+  createdAt: string,
+): SettlementRecord {
+  return {
+    id,
+    pick_id: pickId,
+    status: "settled",
+    result: "win",
+    source: "test",
+    confidence: "1",
+    evidence_ref: "test",
+    notes: null,
+    review_reason: null,
+    settled_by: "test",
+    settled_at: createdAt,
+    corrects_id: null,
+    payload: {},
+    created_at: createdAt,
+    stake_units: null,
+  } as SettlementRecord;
+}
+
+test("collectLatestSettlementsByPick reads every page of a chunk, not just the first", async () => {
+  // One pick id, more settlement rows than a single page holds. A single-page read
+  // would stop at the page boundary and miss the rows behind it -- and because an
+  // absent key means "no settlement exists", missing rows is the fail-open direction.
+  const pageSize = 10;
+  const rows = Array.from({ length: 25 }, (_, index) =>
+    settlementRow(
+      `s${String(index).padStart(3, "0")}`,
+      "pick-1",
+      `2026-09-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+    ),
+  ).sort((left, right) => right.created_at.localeCompare(left.created_at));
+
+  const requested: Array<{ offset: number; limit: number }> = [];
+  const latest = await collectLatestSettlementsByPick(
+    ["pick-1"],
+    async (_chunk, offset, limit) => {
+      requested.push({ offset, limit });
+      return rows.slice(offset, offset + limit);
+    },
+    { chunkSize: 500, pageSize },
+  );
+
+  assert.deepEqual(
+    requested.map((entry) => entry.offset),
+    [0, 10, 20],
+  );
+  // The newest row is s024 (2026-09-25). It sits on the first page under this
+  // ordering, so the control below is what proves the later pages were really read.
+  assert.equal(latest.get("pick-1")?.id, "s024");
+  assert.equal(requested.length, 3);
+});
+
+test("collectLatestSettlementsByPick splits the id list into chunks", async () => {
+  const ids = Array.from({ length: 1200 }, (_, index) => `pick-${index}`);
+  const chunks: number[] = [];
+
+  await collectLatestSettlementsByPick(
+    ids,
+    async (chunk) => {
+      chunks.push(chunk.length);
+      return [];
+    },
+    { chunkSize: 500, pageSize: 1000 },
+  );
+
+  assert.deepEqual(chunks, [500, 500, 200]);
+});
+
+test("collectLatestSettlementsByPick performs no read for an empty id list", async () => {
+  let calls = 0;
+  const latest = await collectLatestSettlementsByPick([], async () => {
+    calls += 1;
+    return [];
+  });
+
+  assert.equal(calls, 0);
+  assert.equal(latest.size, 0);
+});
+
+test("collectLatestSettlementsByPick returns the correction, not the original, and omits picks with no settlement", async () => {
+  const original = settlementRow("s1", "p1", "2026-09-01T00:00:00.000Z");
+  const correction: SettlementRecord = {
+    ...settlementRow("s2", "p1", "2026-09-02T00:00:00.000Z"),
+    corrects_id: "s1",
+  };
+  const other = settlementRow("s3", "p2", "2026-09-01T00:00:00.000Z");
+
+  const latest = await collectLatestSettlementsByPick(
+    ["p1", "p2", "p3"],
+    async () => [original, correction, other],
+    { chunkSize: 500, pageSize: 1000 },
+  );
+
+  assert.equal(latest.get("p1")?.id, "s2");
+  assert.equal(latest.get("p2")?.id, "s3");
+  assert.equal(latest.has("p3"), false);
+});
+
+test("collectLatestSettlementsByPick breaks a created_at tie on id, in either page order", async () => {
+  // `created_at` is not unique: a correction written in the same millisecond as the row
+  // it corrects ties, and `compareSettlementRecordsDescending` breaks that tie on `id`.
+  // A reduction that compares `created_at` alone keeps whichever row the page happened
+  // to yield first, so the batch path and `findLatestForPick` would disagree about which
+  // settlement is current -- for one pick, silently, depending on read order. Both
+  // orderings are asserted because a one-order test passes by luck half the time.
+  const tied = "2026-09-01T00:00:00.000Z";
+  const lower = settlementRow("s1", "p1", tied);
+  const higher = settlementRow("s2", "p1", tied);
+
+  for (const page of [
+    [lower, higher],
+    [higher, lower],
+  ]) {
+    const latest = await collectLatestSettlementsByPick(
+      ["p1"],
+      async () => page,
+      { chunkSize: 500, pageSize: 1000 },
+    );
+    assert.equal(
+      latest.get("p1")?.id,
+      "s2",
+      `tie must resolve to the higher id regardless of page order (${page
+        .map((row) => row.id)
+        .join(",")})`,
+    );
+  }
+});
+
+test("InMemorySettlementRepository: findLatestForPicks agrees with findLatestForPick across the population", async () => {
+  const repo = new InMemorySettlementRepository();
+  const pickIds = ["p1", "p2", "p3"];
+
+  await repo.record(makeInput({ pickId: "p1", settledAt: "2026-09-01T00:00:00.000Z" }));
+  const second = await repo.record(
+    makeInput({ pickId: "p1", settledAt: "2026-09-02T00:00:00.000Z" }),
+  );
+  await repo.record(makeInput({ pickId: "p2", settledAt: "2026-09-01T00:00:00.000Z" }));
+
+  const batch = await repo.findLatestForPicks([...pickIds, "unknown"]);
+
+  for (const pickId of pickIds) {
+    const single = await repo.findLatestForPick(pickId);
+    assert.deepEqual(batch.get(pickId) ?? null, single);
+  }
+  assert.equal(batch.get("p1")?.id, second.id);
+  assert.equal(batch.has("p3"), false);
+  assert.equal(batch.has("unknown"), false);
 });

@@ -114,13 +114,27 @@ export async function runGradingPass(
     isEvidencePlanePick(pick),
   );
   const picks = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+
+  // UTV2-1886: one batched read instead of one query per pick. The loop below used to
+  // open with `findLatestForPick(pick.id)` -- a sequential round trip for every pick in
+  // a 22,291-row population, which is what put a median 91 minutes between consecutive
+  // grading runs (min 88.1, max 152.5 over 108 runs in the seven days to 2026-09-11)
+  // against a `pollIntervalMs` default of five minutes. The run record is opened after
+  // the loop, so that time was never visible in `grading.run`'s own duration.
+  //
+  // A failure here rejects the whole pass rather than degrading to an empty map. That is
+  // deliberate: an empty map is indistinguishable from "nothing is settled", and acting
+  // on it would re-settle every already-settled pick.
+  const existingSettlements = await repositories.settlements.findLatestForPicks(
+    picks.map((pick) => pick.id),
+  );
+
   const details: GradingPickResult[] = [];
   const retryState = options.retryState;
 
   for (const pick of picks) {
     try {
-      const existingSettlement =
-        await repositories.settlements.findLatestForPick(pick.id);
+      const existingSettlement = existingSettlements.get(pick.id) ?? null;
       if (existingSettlement) {
         details.push({
           pickId: pick.id,

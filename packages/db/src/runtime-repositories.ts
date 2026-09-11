@@ -1521,6 +1521,30 @@ export class InMemorySettlementRepository implements SettlementRepository {
     return matches[0] ?? null;
   }
 
+  async findLatestForPicks(
+    pickIds: readonly string[],
+  ): Promise<Map<string, SettlementRecord>> {
+    const wanted = new Set(pickIds);
+    const latest = new Map<string, SettlementRecord>();
+    if (wanted.size === 0) {
+      return latest;
+    }
+
+    // Sorted once, descending, so the first record seen for a pick is its latest --
+    // the same ordering `findLatestForPick` returns, from the same comparator, so the
+    // two paths cannot disagree about which settlement is current.
+    for (const record of [...this.settlements].sort(
+      compareSettlementRecordsDescending,
+    )) {
+      if (!wanted.has(record.pick_id) || latest.has(record.pick_id)) {
+        continue;
+      }
+      latest.set(record.pick_id, record);
+    }
+
+    return latest;
+  }
+
   async listByPick(pickId: string): Promise<SettlementRecord[]> {
     return this.settlements
       .filter((record) => record.pick_id === pickId)
@@ -4716,6 +4740,29 @@ export class DatabaseSettlementRepository implements SettlementRepository {
     }
 
     return data;
+  }
+
+  async findLatestForPicks(
+    pickIds: readonly string[],
+  ): Promise<Map<string, SettlementRecord>> {
+    return collectLatestSettlementsByPick(
+      pickIds,
+      async (chunk, offset, limit) => {
+        const { data, error } = await this.client
+          .from('settlement_records')
+          .select()
+          .in('pick_id', chunk)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (error) {
+          throw new Error(`Failed to load latest settlements: ${error.message}`);
+        }
+
+        return data ?? [];
+      },
+    );
   }
 
   async listByPick(pickId: string): Promise<SettlementRecord[]> {
@@ -9770,6 +9817,70 @@ function fromUntyped(client: UnitTalkSupabaseClient, table: string) {
 
 function isRecord(value: unknown): value is Record<string, Json | undefined> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// UTV2-1886: batch settlement lookup. The chunk bounds the `in (...)` list sent to
+// PostgREST; the page size is the row cap each chunk is read back through.
+export const SETTLEMENT_BATCH_CHUNK_SIZE = 500;
+export const SETTLEMENT_BATCH_PAGE_SIZE = 1000;
+
+/**
+ * UTV2-1886: chunk, paginate and reduce a batch settlement read.
+ *
+ * Split out of `DatabaseSettlementRepository.findLatestForPicks` so the part that can
+ * be wrong -- chunking, pagination and which row wins -- is testable without a live
+ * PostgREST connection; the repository supplies only the query itself.
+ *
+ * Pagination is the load-bearing half. A chunk of 500 picks can hold far more than the
+ * PostgREST default 1000-row page (production carries 37,496 settlement rows across
+ * 25,430 picks), and a short read does not fail -- it silently omits picks. An omitted
+ * pick reads as "no settlement exists", which is the fail-OPEN direction: the caller
+ * would settle an already-settled pick.
+ */
+export async function collectLatestSettlementsByPick(
+  pickIds: readonly string[],
+  fetchPage: (
+    chunk: string[],
+    offset: number,
+    limit: number,
+  ) => Promise<SettlementRecord[]>,
+  options: { chunkSize?: number; pageSize?: number } = {},
+): Promise<Map<string, SettlementRecord>> {
+  const chunkSize = options.chunkSize ?? SETTLEMENT_BATCH_CHUNK_SIZE;
+  const pageSize = options.pageSize ?? SETTLEMENT_BATCH_PAGE_SIZE;
+  const latest = new Map<string, SettlementRecord>();
+  const ids = [...new Set(pickIds)];
+  if (ids.length === 0) {
+    return latest;
+  }
+
+  for (let start = 0; start < ids.length; start += chunkSize) {
+    const chunk = ids.slice(start, start + chunkSize);
+    let offset = 0;
+
+    for (;;) {
+      const page = await fetchPage(chunk, offset, pageSize);
+      for (const record of page) {
+        const current = latest.get(record.pick_id);
+        // Negative means `record` sorts earlier in descending order, i.e. it is the
+        // newer of the two. Reduced through the shared comparator rather than a second
+        // ordering rule, so "latest" has one definition in this file.
+        if (
+          current === undefined ||
+          compareSettlementRecordsDescending(record, current) < 0
+        ) {
+          latest.set(record.pick_id, record);
+        }
+      }
+
+      if (page.length < pageSize) {
+        break;
+      }
+      offset += pageSize;
+    }
+  }
+
+  return latest;
 }
 
 function compareSettlementRecordsDescending(
