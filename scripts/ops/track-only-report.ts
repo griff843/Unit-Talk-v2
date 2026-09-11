@@ -34,6 +34,11 @@ import {
   type PickRow,
   type SettlementRow,
 } from './pick-truth-audit.ts';
+import {
+  computeTrackOnlyStats,
+  toStatsInput,
+  type TrackOnlyStats,
+} from './track-only/stats.ts';
 
 const DEFAULT_PROJECT_REF = 'zfzdnfwdarxucxtaojxm';
 
@@ -106,6 +111,12 @@ export interface TrackOnlyPickReport {
     rows: number;
     result: string | null;
     settledAt: string | null;
+    /**
+     * The settlement's own stake, authoritative over the pick's when present.
+     * Read off the SAME row as `result` -- taking the result from the newest
+     * settlement and the stake from another would be a silent mismatch.
+     */
+    stakeUnits: number | null;
   };
   delivery: Record<string, number>;
   deliveryClean: boolean;
@@ -117,6 +128,12 @@ export interface TrackOnlyReport {
   cohortSize: number;
   picks: TrackOnlyPickReport[];
   transportEvidence: { methods: Record<string, number>; requests: number };
+  /**
+   * The aggregate. Computed from `picks` above rather than from a second query,
+   * so the record cannot disagree with the rows printed beside it, and it
+   * inherits the governed cohort predicate rather than re-deriving one.
+   */
+  stats: TrackOnlyStats;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -287,6 +304,7 @@ export function buildPickReport(
       rows: settlements.length,
       result: settlements[0]?.result ?? null,
       settledAt: settlements[0]?.settled_at ?? null,
+      stakeUnits: settlements[0]?.stake_units ?? null,
     },
     delivery,
     deliveryClean: Object.values(delivery).every((count) => count === 0),
@@ -416,12 +434,17 @@ export async function runTrackOnlyReport(
 ): Promise<TrackOnlyReport> {
   const client = new ReadOnlyPostgrestClient(options.url, options.key);
   const contexts = await loadContexts(client, options.pickId);
+  const picks = contexts.map(buildPickReport);
   return {
     projectRef: options.projectRef,
     generatedAt: new Date().toISOString(),
     cohortSize: contexts.length,
-    picks: contexts.map(buildPickReport),
+    picks,
     transportEvidence: client.transportEvidence(),
+    // Built from `picks`, not from a second read: an aggregate that queries
+    // separately can disagree with the rows printed next to it, and the
+    // disagreement is invisible to whoever reads only the total.
+    stats: computeTrackOnlyStats(picks.map(toStatsInput)),
   };
 }
 
