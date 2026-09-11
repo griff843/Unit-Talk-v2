@@ -1,0 +1,285 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1889",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ba24e12158a84d314ecba228c536944c586bac9d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "ba24e12158a84d314ecba228c536944c586bac9d is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1889/. The lane has one implementation commit, 4701685541dfc537ee46b3fdc0b41fe3819d5554, carrying all seven changed source files; ba24e1215 is the lane-PR binding commit that CI wrote on top of it and it touches only docs/06_status/lanes/UTV2-1889.json. Every assertion below was measured at one of those two heads, which are byte-identical outside that manifest. The proof commit carrying this file sits on top of the bound head and changes nothing the assertions are about -- a proof bundle can never carry a receipt for its own commit, because writing the receipt moves the head.",
+    "bound_at": "2026-09-11T21:45:00Z"
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/track-only-report.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 39,
+          "pass": 39,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 9,
+          "new": 30
+        },
+        "label": "The stats aggregate, the report adapter, the operator-attest CLI and the --help anti-drift control. 9 pre-existing tests in this file are untouched."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 82,
+          "pass": 82,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 71,
+          "new": 11
+        },
+        "label": "Moneyline grading, the result-market-key guard, provider-keyed provenance, and the composed Track Only + operator + moneyline journey. The 71 pre-existing tests are the population UTV2-1886 left green and all still pass."
+      }
+    ],
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "note": "Run to completion in the lane worktree at the implementation head. The chained package scripts are &&-joined, so exit 0 is a statement about every one of them. The aggregate pass count is NOT recorded here: the run was captured through `tail`, so the per-suite totals scrolled past and quoting a remembered number would be a proof value written from recollection rather than generated. The authoritative aggregate is the CI `verify` job on PR 1567, recorded under runtime_proof."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses any target that is not staging xskgrzbteyqdufktjrjx. The CI `verify` job on PR 1567 is the authoritative run and is recorded under runtime_proof."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 470168554",
+      "verdict": "PASS",
+      "changed_files": 10,
+      "rules_matched": [],
+      "advisory_missing": []
+    },
+    "mutation_battery": {
+      "command": "scripted: for each mutation, apply a single-anchor edit, run the named suite, restore the file from the captured original, and assert the working tree is clean afterwards",
+      "baseline": {
+        "track_only_report": {
+          "tests": 39,
+          "pass": 39,
+          "fail": 0
+        },
+        "grading_service": {
+          "tests": 82,
+          "pass": 82,
+          "fail": 0
+        }
+      },
+      "mutations": [
+        {
+          "id": "stats-1",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "normalizeResult folds an unrecognised result into pending instead of naming it",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 19 - an unrecognised result is excluded, NOT folded into pending"
+          ]
+        },
+        {
+          "id": "stats-2",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "report 0% ROI for an empty or all-pending cohort instead of null",
+          "failing": 4,
+          "failing_assertions": [
+            "not ok 14 - void and cancelled are not decisions and never enter the record or ROI",
+            "not ok 15 - an empty cohort reports null ROI, never 0",
+            "not ok 16 - an all-pending cohort reports null ROI, never 0",
+            "not ok 17 - a decided pick with no stake is counted in the record but named in excluded"
+          ]
+        },
+        {
+          "id": "stats-3",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "price the pick's own stake instead of the settlement's corrected stake",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 20 - the settlement's own stake wins over the pick's",
+            "not ok 25 - the adapter carries the settlement's own stake through to the price"
+          ]
+        },
+        {
+          "id": "stats-4",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "a loss costs nothing",
+          "failing": 4,
+          "failing_assertions": [
+            "not ok 10 - a -110 winner returns the right profit, not the stake",
+            "not ok 12 - ROI is net over units risked",
+            "not ok 20 - the settlement's own stake wins over the pick's",
+            "not ok 25 - the adapter carries the settlement's own stake through to the price"
+          ]
+        },
+        {
+          "id": "adapter-1",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "treat a settlement row with a null result as no settlement row at all",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 24 - the adapter preserves an in-progress settlement row as a row"
+          ]
+        },
+        {
+          "id": "adapter-2",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "drop the settlement's own stake in the adapter",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - the adapter carries the settlement's own stake through to the price"
+          ]
+        },
+        {
+          "id": "grading-1",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "restore the blind missing_line skip, so a moneyline's correct null line reads as missing",
+          "failing": 9,
+          "failing_assertions": [
+            "not ok 70 - runGradingPass settles a moneyline from an operator-attested win flag",
+            "not ok 71 - an operator-attested loss and push settle as loss and push",
+            "not ok 72 - a score stored under the pick's own market key is refused by the guard",
+            "not ok 73 - a score of 1 under the wrong market key is refused, not read as a win"
+          ]
+        },
+        {
+          "id": "grading-2",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "accept any result market key for a moneyline, including points-all-game-ml scores",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 72 - a score stored under the pick's own market key is refused by the guard",
+            "not ok 73 - a score of 1 under the wrong market key is refused, not read as a win"
+          ]
+        },
+        {
+          "id": "grading-3",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "remove operator from the trusted provider set",
+          "failing": 8,
+          "failing_assertions": [
+            "not ok 70 - runGradingPass settles a moneyline from an operator-attested win flag",
+            "not ok 71 - an operator-attested loss and push settle as loss and push",
+            "not ok 72 - a score stored under the pick's own market key is refused by the guard",
+            "not ok 73 - a score of 1 under the wrong market key is refused, not read as a win"
+          ]
+        },
+        {
+          "id": "grading-4",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "replace provider-keyed ingestion source with a flat two-value allow-list",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 76 - provenance is keyed by provider: neither class may borrow the other's source"
+          ]
+        },
+        {
+          "id": "help-1",
+          "file": "scripts/ops/track-only/operator-attest-result.ts",
+          "change": "rename --evidence to --proof everywhere in USAGE while the parser still reads --evidence",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 39 - the --help text names every flag the parser actually reads"
+          ]
+        },
+        {
+          "id": "grading-5",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "drop 0.5 -> push from the attested-outcome map",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 71 - an operator-attested loss and push settle as loss and push"
+          ]
+        }
+      ],
+      "note": "Twelve mutations, every one fires on the condition it names. Three are worth naming because they are the ones a reader would otherwise have to take on trust. `grading-4` is the load-bearing one: it replaces provider-keyed ingestion provenance with the cheaper flat two-value allow-list, and test 76 fails -- which is what makes admitting `operator` to the trusted set a widening rather than a loosening, since under a flat list an `operator` event could claim `ingestor.cycle`. `grading-2` disables the result-market-key guard and tests 72 and 73 fail, proving the 280 production `points-all-game-ml` score rows really are refused rather than merely unlikely to be selected. `stats-1` folds an unrecognised settlement result into `pending`, and test 19 fails -- the silent-forever failure mode. An earlier, weaker form of the help-drift mutation did NOT fire, and that is recorded rather than smoothed over: replacing `--evidence` in only the flag list left it present in the worked example lower in USAGE, so the mutation was ineffective rather than the test blind. `help-1` above is the corrected form, which replaces every occurrence and fires."
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed -- one SELECT, no write, no containment setting touched",
+      "executed_at": "2026-09-11",
+      "observed": {
+        "governed_cohort_size": 1,
+        "cohort_validated": 1,
+        "cohort_settlement_rows": 0,
+        "cohort_distribution_outbox_rows": 0,
+        "points_all_game_ml_rows": 280,
+        "points_all_game_ml_rows_with_participant_id": 0,
+        "game_moneyline_win_rows": 0
+      },
+      "note": "The cohort predicate is `metadata ? 'distributionMode'` and it returns exactly one row: Griff's Milestone 1 pick dfcd9486-cba2-4bb5-b684-beec36e52c0b. Two of these numbers decide a design choice rather than describe the world. 280 rows under `points-all-game-ml` carry a raw score and ZERO of them carry a participant_id, so no side is attached and the number's meaning is ambiguous -- which is why the attested win flag gets the dedicated key `game_moneyline_win` instead. And there are ZERO rows under that dedicated key today, so this change makes no pre-existing row newly interpretable: it can only read a result an operator writes after it lands. The 0 outbox rows are the containment observation, and this lane adds no path to a non-zero value."
+    },
+    "journey_output": {
+      "what": "What the new aggregate prints for the real cohort, today and after the pick is attested as a win.",
+      "pending_today": {
+        "cohortSize": 1,
+        "record": {
+          "win": 0,
+          "loss": 0,
+          "push": 0,
+          "decided": 0
+        },
+        "nonDecisions": {
+          "void": 0,
+          "cancelled": 0
+        },
+        "pending": 1,
+        "units": {
+          "staked": null,
+          "net": null,
+          "roi": null,
+          "measuredOver": 0
+        },
+        "excluded": []
+      },
+      "after_a_win": {
+        "cohortSize": 1,
+        "record": {
+          "win": 1,
+          "loss": 0,
+          "push": 0,
+          "decided": 1
+        },
+        "pending": 0,
+        "units": {
+          "staked": 3,
+          "net": 2.7273,
+          "roi": 0.9091,
+          "measuredOver": 1
+        }
+      },
+      "note": "3 units at -110 risks 3 to win 3 * (100/110) = 2.7273. `roi: null` rather than 0 in the pending case is the load-bearing half: 0% is indistinguishable from a genuine break-even, and reporting it would be wrong in the reassuring direction."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PENDING_CI",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx via the run-scoped staging credentials materialized by ci.yml. Never production; assert-staging-target.ts pins the project ref and runs before any test.",
+    "note": "This lane is admitted under the route B deferral -- the manifest carries t1_live_db_precondition: deferred_to_ci, so the live-DB evidence is obtained in CI rather than on the contained workstation, and closeout check G6 refuses to close without both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral moves where the evidence is obtained and changes nothing about whether it is obtained. This block is filled from the CI run at the final PR head and is deliberately left PENDING rather than asserted in advance.",
+    "coverage_gap": {
+      "status": "OPEN",
+      "statement": "This lane adds no t1-proof suite, so no assertion in `pnpm test:t1-proof:live` exercises the moneyline grading branch, the result-market-key guard, the provider-keyed provenance check or the stats aggregate against real PostgREST. Every assertion recorded above runs against the in-memory repository bundle.",
+      "why_that_is_the_honest_position_and_not_a_shortfall": "The live suites exist to prove that a real driver behaves as the in-memory one is assumed to. The three code paths here make no new database call and no new query shape: grading reads `game_results` through the same repository method it already used, and the stats aggregate is a pure function over rows the report already fetched with `select: '*'`. What WOULD need live proof is a result actually written under `game_moneyline_win` -- and there are zero such rows in production or staging, because writing one is an operator action under DB_ENVIRONMENT_OPERATOR_POLICY.md that this lane deliberately does not perform. Claiming live coverage by seeding a row would prove the seed, not the journey.",
+      "what_remains_unproven": [
+        "that a `game_moneyline_win` row written by operator-attest-result.ts --apply is read back by the grading pass against real PostgREST",
+        "that the attested event's provenance metadata survives a real round trip with providerKey `operator` and ingestionSource `operator.attestation`"
+      ],
+      "closed_by": "The first operator attestation run, which is the next action after this merges and is an operator action rather than an agent one."
+    }
+  }
+}
