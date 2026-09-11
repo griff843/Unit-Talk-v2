@@ -238,9 +238,11 @@ Block on the planning result.
 **Deliver the T1 plan through the governed repository/PR path:**
 Record the Outcome Contract in the local work/proof artifact and make it reviewable on the PR. Preserve required PM plan approval before implementation. Existing explicit user authorization applies to its stated scope; it is not an exact-head merge verdict. Do not require a Linear comment, reply or label to deliver or approve the plan.
 
-**Execution — background subagent, orchestrator stays control-plane:**
+**Execution — delegate when it earns its cost, and say why:**
 
-Every Claude lane (T1 after plan approval, T2, T3) implements via a background `Agent` call in the worktree `ops:lane-start` already created — the same pattern already used for Codex. The orchestrator session never edits lane implementation files, never runs `pnpm verify`/tests for the lane, and never pushes lane commits directly; it dispatches, waits for the completion notification, then reviews/merges/closes exactly like a returned Codex PR (Phase 5).
+A Claude lane implements either directly in the worktree `ops:lane-start` created, or via a background `Agent` call in that same worktree. Delegate when delegation does real work: several lanes are executable at once and would otherwise serialize, the implementation is long-running and the orchestrator has independent control-plane work to continue, or the task genuinely benefits from a separate context. Implement directly when the lane is small, sequential, or when the orchestrator would only sit and wait — a background call that the orchestrator immediately blocks on buys nothing and costs a context hop.
+
+Delegation changes **who types**, never **what is owed**. Either way the work happens in the lane worktree and inside its pinned `file_scope_lock`, `pnpm verify` must exit 0, the R-level artifacts must exist, T1 still owes `pnpm test:db`, the PR still carries `## R-level compliance`, and the `EXECUTOR_RESULT` comment is still posted after `verify` concludes and bound to the then-current head. Choosing to implement directly waives none of that and is not a reason to skip Phase 5.
 
 ```typescript
 Agent({
@@ -269,9 +271,9 @@ Return the PR URL and final head SHA as the last line of your output — the orc
 
 Multiple Claude lanes may be dispatched this way concurrently — one `Agent` call per lane, up to the Claude executor slots `ops:execution-state` reports. Each must already have a distinct worktree path and a disjoint `file_scope_lock` (Phase 3's parallel dispatch guard is unconditional, not just for Codex). This is what produces overlapping execution windows across lanes; the orchestrator's own timeline is just dispatch calls plus completion notifications, not lane implementation work.
 
-**T2/T3 Claude lanes:** No planning subagent — go straight to the background execution step above.
+**T2/T3 Claude lanes:** No planning subagent — go straight to the execution step above. The T1 planning subagent is *not* subject to the judgment call above: it is mandated by `docs/05_operations/OPERATING_MODEL_SONNET5.md`, which is canonical and wins over this file.
 
-The background agent's own instructions (steps 1–7 above) cover what used to be the separate "before opening PR" batch sequence for Claude lanes — `pnpm verify`, R-level check plus any flagged artifacts, `pnpm test:db` for T1, `gh pr create`, and the executor-result comment. Tier label is auto-applied by `ops:lane-finalize` — no manual `gh pr edit --add-label` needed; verify CI picks up the label before merge.
+The lane's own step list (steps 1–7 above) covers what used to be the separate "before opening PR" batch sequence for Claude lanes — `pnpm verify`, R-level check plus any flagged artifacts, `pnpm test:db` for T1, `gh pr create`, and the executor-result comment. Tier label is auto-applied by `ops:lane-finalize` — no manual `gh pr edit --add-label` needed; verify CI picks up the label before merge.
 
 **Codex lanes** (T2 clear-scope, only when Codex health check passes):
 - Execute via the canonical Codex entry point — never call `codex exec` or `codex run` directly:
@@ -302,16 +304,17 @@ Paste the PASS output into PR body under `## R-level compliance`.
 
 ### Phase 5: Concurrent execution for multiple lanes
 
-Claude lanes are no longer single-threaded. Both executors run their implementation step as background agents, and the orchestrator's job for either is identical from here: dispatch, wait for a completion notification, review, merge, close. Never implement a lane directly in the orchestrator session, for either executor.
+Claude lanes are not single-threaded. When more than one lane is executable at once, run them concurrently rather than in sequence — that is what this phase is for. A single executable lane does not need this machinery.
 
-1. Dispatch every validated Claude lane via Phase 4's background `Agent` call (one call per lane) — do not execute any of them directly.
+1. Dispatch each validated Claude lane per Phase 4 — background `Agent` calls when concurrency or long-running work makes them worth it, directly otherwise.
 2. Dispatch every validated Codex lane via `npx tsx scripts/ops/codex-exec.ts --issue UTV2-{number}`, wrapped in a background call the same way.
 3. Continue other control-plane work (board reads, monitoring) — you will be **automatically notified** when each background lane completes, Claude or Codex.
-4. On any lane's completion notification, spawn a background review agent — do not review inline in the orchestrator session. The same reviewer works for a returned Claude-lane PR as for Codex; it inspects the diff, not who wrote it:
+4. Every returned lane is reviewed against its diff before merge. **What the merge actually requires is mechanical and is not negotiable here:** `.github/workflows/merge-gate.yml` defines merge authority, T1 additionally requires the `t1-approved` label and a `pm-verdict/v1` APPROVED comment from CODEOWNERS, and T2 requires a GitHub PR review approval or a `pm-verdict/v1` comment. None of that is satisfied by a subagent's verdict.
+
+   The `codex-return-reviewer` agent below is **advisory** — its own definition says GitHub checks, Merge Gate and PM policy remain the blocking authority. Spawn it when a separate pair of eyes adds real signal: a diff you wrote yourself, a Tier C path touch, a large or unfamiliar diff, or a returned Codex PR. Review inline when the diff is small and you did not author it. Do not spawn it purely because the work was delegated — that is a second pass bought with a context hop, not independent review. It inspects the diff, not who wrote it:
 
 ```typescript
 Agent({
-  model: touchesTierC ? "opus" : "sonnet",  // tier C paths → opus critique
   subagent_type: "codex-return-reviewer",
   description: `Lane return review: ${issue_id}`,
   prompt: `Review the returned diff for ${issue_id} (executor: ${executor}).
@@ -329,7 +332,7 @@ Return: APPROVE or REJECT with findings.`
 })
 ```
 
-**Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, use `model: "opus"`. Otherwise `model: "sonnet"`.
+**Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. A Tier C path touch makes the review non-optional and warrants an adversarial critique pass; `docs/05_operations/DELEGATION_POLICY.md` reserves Opus for exactly that critique rather than for routine Tier C execution. Select the model profile from current policy rather than from a value hardcoded here.
 
 5. On APPROVE (and, for T1, after PM_VERDICT): `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then acquire the closeout mutex and close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`. **Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently** — if two lanes both want to merge around the same time, queue the second: wait for the first's `ops:lane-close` to exit before acquiring the mutex for the next. Concurrent execution windows are fine; concurrent merge/close attempts are not.
 6. If abandoning an active lane before work begins, release the lease explicitly:

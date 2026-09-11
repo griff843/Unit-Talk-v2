@@ -4,6 +4,16 @@ This file is read by Codex before every task. Follow every rule here exactly.
 
 ---
 
+## Outcome-first execution
+
+Deliver the authorized product outcome at its intended scope. Use the membership product contract for the destination and the active work contract for acceptance criteria. Give delegated work its purpose, relevant sources, observable result, and material boundaries; leave routine implementation choices to the executor.
+
+For an assessment request, provide findings without unsolicited changes. During authorized execution, incorporate questions and corrections without abandoning the active task. Consult existing decisions before asking Griff; ask only when a material ambiguity or action outside existing authority remains. Existing authorization does not replace a required exact-head approval artifact or independent review.
+
+Use relevant context and proportionate verification. Reuse evidence only when its source, environment, head binding, and applicable freshness rules remain valid. Avoid additional checks solely because a session changed. Required gates still apply. Report outcomes, material evidence, limitations, and a specific decision if needed; keep routine progress brief.
+
+Complete bounded tasks when their acceptance criteria and required closeout are satisfied. Continue broader mission work only when that broader execution is authorized. Do not turn a small task into an unsolicited board audit or cleanup project.
+
 ## Mission Context
 
 Before executing work, read:

@@ -107,7 +107,7 @@ Codex health: OK  |  Claude slots: {available}/{configured}  |  Codex slots: {av
 
 If any T1 in routing:
 
-1. Dispatch all non-T1 issues first — Claude lanes run concurrently as background agents (Phase 5), so this is a sequencing preference (get T1 plan gates in front of PM early), not a concurrency limitation
+1. Dispatch all non-T1 issues first — Claude lanes can run concurrently (Phase 5), so this is a sequencing preference (get T1 plan gates in front of PM early), not a concurrency limitation
 2. Surface T1 gates one at a time:
    ```
    [dispatch-board] T1 PLAN GATE — UTV2-### {title}
@@ -136,7 +136,7 @@ Parallel dispatch guard:
 
 ## Phase 5: Monitor → verify → close
 
-**Both executors run implementation as background agents; the orchestrator is control-plane only for either.** Claude lanes dispatch via the background `Agent` call defined in `/dispatch` Phase 4 (subagents run in the background natively and notify on completion) — one call per lane, in the worktree `ops:lane-start` already created. The orchestrator session never implements a lane directly (no editing lane files, no running the lane's own `pnpm verify`/tests, no pushing lane commits) for either executor. Dispatch, wait for the automatic completion notification, then run the same monitor → verify → close cycle below regardless of which executor produced the PR.
+**Codex lanes always run as background agents. Claude lanes run as background agents when concurrency makes that worth it** — which, on a board with several executable lanes, it usually does: one `Agent` call per lane per `/dispatch` Phase 4, each in the worktree `ops:lane-start` already created, so the lanes overlap instead of serializing. A board holding one executable lane does not need the hop; implement it directly. Either way the work happens in the lane worktree, inside its pinned `file_scope_lock`, and owes the same `pnpm verify`, R-level, proof and `EXECUTOR_RESULT` obligations. Then run the same monitor → verify → close cycle below regardless of which executor produced the PR.
 
 **Pre-merge verification is not `ops:truth-check`.** `ops:truth-check` is the **done-gate**: it requires a merged/Done lane and the merge SHA, so it cannot pass before merge. `ops:lane-close` runs it *after* merge. Pre-merge, validate merge-readiness with verification + proof-check + merge-ready + R-level; never call `ops:truth-check` to "pass" a branch before merge.
 

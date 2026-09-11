@@ -218,6 +218,17 @@ GUARDRAIL_PART=""
 [ -n "$GUARDRAILS_OUT" ] && GUARDRAIL_PART=" | guardrails: $(printf '%s' "$GUARDRAILS_OUT" | tr '\n' ';' | head -c 300)"
 MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE$GUARDRAIL_PART | Recover mission intent/spec/plan, .ops/work/<ID>.md, current PRs and runtime evidence; no Linear required. | Full state: .out/ops/session-state/SYSTEM_STATE.md"
 
+# This hook is wired to UserPromptSubmit, but the message below is NOT emitted on
+# every prompt: the staleness check above short-circuits to a guardrails-only
+# message whenever the cached state is younger than MAX_AGE. So this full message
+# is the session-start / state-is-stale path, which is exactly where CLAUDE.md
+# § "Mission — mandatory context" says to establish mission context. The recovery
+# pointer therefore belongs here and must stay — asserted by
+# scripts/ops/tracker-independence/instruction-hooks.test.ts, alongside the same
+# assertion on post-compact-reinjector.sh for the after-context-loss path.
+# Do not "de-duplicate" it against the PostCompact hook: the two fire on
+# different events and neither covers the other's case.
+
 # ── Output systemMessage JSON ─────────────────────────────────────────────────
 python3 -c "
 import json, sys

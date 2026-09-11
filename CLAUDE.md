@@ -6,6 +6,16 @@ If this file and a canonical doc disagree, **the canonical doc wins**. Update th
 
 ---
 
+## Outcome-first execution
+
+Deliver the authorized product outcome at its intended scope. Use the membership product contract for the destination and the active work contract for acceptance criteria. Give delegated work its purpose, relevant sources, observable result, and material boundaries; leave routine implementation choices to the executor.
+
+For an assessment request, provide findings without unsolicited changes. During authorized execution, incorporate questions and corrections without abandoning the active task. Consult existing decisions before asking Griff; ask only when a material ambiguity or action outside existing authority remains. Existing authorization does not replace a required exact-head approval artifact or independent review.
+
+Use relevant context and proportionate verification. Reuse evidence only when its source, environment, head binding, and applicable freshness rules remain valid. Avoid additional checks solely because a session changed. Required gates still apply. Report outcomes, material evidence, limitations, and a specific decision if needed; keep routine progress brief.
+
+Complete bounded tasks when their acceptance criteria and required closeout are satisfied. Continue broader mission work only when that broader execution is authorized. Do not turn a small task into an unsolicited board audit or cleanup project.
+
 ## Mission
 
 Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Claude Code is the execution orchestrator: work mission-relevant local contracts and existing PRs, merge on green per tier policy, and keep execution truth mechanical rather than narrative.
@@ -14,7 +24,7 @@ Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Clau
 
 ## Mission — mandatory context
 
-Before planning, executing, reviewing, delegating, or resuming work, read:
+Establish mission context at session start or after context loss. Reuse unchanged context within the session; refresh current state when the decision depends on it. Read:
 
 @docs/mission/intent.md
 @docs/mission/spec.md
@@ -88,7 +98,7 @@ Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH
 8. Apps own side effects. Packages never import from apps. Apps never import from apps.
 9. Postgres outbox is the only delivery queue. Exactly one `DeliveryOutcome` per attempt.
 10. Fail closed — never silent fallback to `qualified`, `pass`, or `done`.
-11. If a rule can be enforced mechanically, it must not live only in prose.
+11. Enforce concrete safety and data-truth invariants mechanically where warranted. New gates require a defined risk, bounded scope, and review; do not create gates merely because a preference is automatable.
 
 ---
 

@@ -8,6 +8,8 @@ Triage and repair a lane whose state has already broken. `/lane-management` is t
 
 ## Rule 0 — identify the symptom before touching anything
 
+Start with the actual refusal and the affected lane. Select relevant diagnostics below; do not run a full orchestration sweep for every local failure unless the command policy requires it or evidence suggests a shared problem. Check cheap prerequisites before expensive retries. Use governed recovery within existing authority, and stop retrying an unchanged failure whose prerequisite remains unresolved. A gate blocks its dependent work, not unrelated authorized work.
+
 ```bash
 pnpm ops:substrate-guard            # fail-closed: is the substrate even safe?
 pnpm ops:execution-state            # active lanes, slots, stale heartbeats, merge mutex
