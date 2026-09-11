@@ -306,9 +306,9 @@
       "why_it_matters": "These are the three joins between halves that were built separately. The static proof covers each half and the cross-file assertion added at 2b0a01e02 covers the one contract they share (the market key and the operator provenance pair), which is the join that could drift silently. What remains unproven is the database round trip, and the honest way to close it is a real operator attestation against a real event -- an operator action under DB_ENVIRONMENT_OPERATOR_POLICY.md, not an agent one.",
       "guard_state": "`Require live-DB proof for runtime changes` is PASS on this PR at this head. It is not being evaded: the guard reads the diff, and this lane's proof bundle is present. The gap above is recorded because the guard passing is not the same as the journey being exercised."
     },
-    "executed_at": "2026-09-11T21:45:00.135Z/2026-09-11T21:52:00.481Z",
-    "command": "job \"Writable DB proof (staging only)\", run 34650795093 attempt 1, job 103432338406, at head 139187832d1a6b4e9dc05bd7f48c6e0ae1e46f4f. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 19 t1-proof suites wired in package.json at that head.",
-    "receipt": "ci-db-proof-receipt written to .out/ci-db-proof-receipt.json, sha256 75561c7dcc694e804423b1a8776a675be1b28a1b6b01441c792b23a061c62674, uploaded as artifact utv2-1630-db-proof-receipt-34650795093-1 (artifact id 10283712879). The receipt wraps `pnpm test:db` only; the t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34650795093/job/103432338406.",
+    "executed_at": "2026-09-11T21:56:57.133Z/2026-09-11T22:10:09.181Z",
+    "command": "job \"Writable DB proof (staging only)\", run 34651506561 attempt 1, job 103435276859, at head 7dd4ccb69872b6934bc552ae01415d2f25d29461. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 19 t1-proof suites wired in package.json at that head. Run conclusion SUCCESS; `verify` (job 103438524053) is green in the same run.",
+    "receipt": "ci-db-proof-receipt written to .out/ci-db-proof-receipt.json, sha256 3fb82300deb8a1fb04188cee9465f17581cfb8d10512b5b171fdc941a669159e, uploaded as artifact utv2-1630-db-proof-receipt-34651506561-1 (artifact id 10284626309). The receipt wraps `pnpm test:db` only; the t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34651506561/job/103435276859.",
     "queries": [
       {
         "label": "[assert-staging] target guard ran before any test in all three credentialed invocations and reported \"OK: target is the approved staging project\"",
@@ -319,11 +319,11 @@
         "result": "7/7 pass, 0 fail, 0 skipped"
       },
       {
-        "label": "step `pnpm test:t1-proof:live` -- the 19 t1-proof suites wired at this head against staging Postgres, 19 TAP summary blocks in the job log",
+        "label": "step `pnpm test:t1-proof:live` -- the 19 t1-proof suites wired at head 7dd4ccb69 against staging Postgres, 19 TAP summary blocks in the job log",
         "result": "119/119 pass, 0 fail, 0 skipped"
       },
       {
-        "label": "COVERAGE GAP, stated as a query result because it is the load-bearing fact for THIS lane: no suite in either step reaches any path this lane changed. Verified by grepping game_moneyline_win, MONEYLINE_RESULT_MARKET_KEY, operator.attestation, computeTrackOnlyStats and planAttestation across apps/*/src/t1-proof-*.test.ts and apps/api/src/database-smoke.test.ts at this head -- zero files match. This lane wires no live suite of its own, and the reason is recorded under coverage_gap rather than repaired by seeding a row",
+        "label": "COVERAGE GAP, stated as a query result because it is the load-bearing fact for THIS lane: no suite in either step reaches any path this lane changed. Verified by grepping game_moneyline_win, MONEYLINE_RESULT_MARKET_KEY, operator.attestation, computeTrackOnlyStats and planAttestation across apps/*/src/t1-proof-*.test.ts and apps/api/src/database-smoke.test.ts at head 7dd4ccb69 -- zero files match. This lane wires no live suite of its own, and the reason is recorded under coverage_gap rather than repaired by seeding a row",
         "result": "0 live assertions exercise the changed code paths"
       },
       {
@@ -364,10 +364,11 @@
     "skipped": 0,
     "binding": {
       "pr": 1567,
-      "pr_head_sha": "139187832d1a6b4e9dc05bd7f48c6e0ae1e46f4f",
-      "run_id": 34650795093,
-      "job_id": 103432338406,
-      "binding_rule": "lane_source_tree_run: a pull_request-triggered run at head 139187832. That head is not necessarily the current PR head -- writing a receipt into a proof bundle moves the head, so no bundle can ever cite a run at its own head. The claim made instead is one that does not go stale: every commit on this lane after 2b0a01e02 (= sha_binding.verified_source_sha) touches only docs/06_status/proof/UTV2-1889/, so every such head compiles a source tree byte-identical to the bound head's. Checkable with `git diff --name-only 2b0a01e02 <any later head on this lane>`, which returns proof-directory files and nothing else. `verify` and `Writable DB proof (staging only)` are asserted green on the MERGE SHA by closeout check G6, which is where the route B deferral is actually enforced."
+      "run_head_sha": "7dd4ccb69872b6934bc552ae01415d2f25d29461",
+      "run_id": 34651506561,
+      "job_id": 103435276859,
+      "run_conclusion": "success",
+      "binding_rule": "completed_lane_run: run 34651506561 had ALREADY CONCLUDED SUCCESS before the commit carrying this citation was written, which is the whole point of choosing it. An earlier draft of this block cited run 34650795093; that run's staging job went green and produced a valid receipt, but the run itself was then CANCELLED during `verify` -- by my own subsequent pushes to this branch, via the concurrency group. Citing an in-flight run means the act of recording the citation can invalidate it, and that loop only ends by citing a run that is already finished. Recorded rather than quietly swapped, because the failure mode is the point.\nThe head this run used is not necessarily the current PR head -- writing a receipt into a proof bundle moves the head, so no bundle can cite a run at its own head. The claim that does not go stale: every commit on this lane after 2b0a01e02 (= sha_binding.verified_source_sha) touches only docs/06_status/proof/UTV2-1889/, so every such head compiles a source tree byte-identical to the bound head's. Checkable with `git diff --name-only 2b0a01e02 <any later head on this lane>`.\n`verify` and `Writable DB proof (staging only)` green on the MERGE SHA is asserted separately by closeout check G6, which is where the route B deferral is actually enforced."
     }
   }
 }

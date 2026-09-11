@@ -140,7 +140,8 @@ rather than on the contained workstation, and closeout check `G6` refuses to clo
 both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral
 moves where the evidence is obtained and changes nothing about whether it is obtained.
 
-That evidence now exists. Run `34650795093`, job `103432338406`, at head `139187832`:
+That evidence now exists. Run `34651506561`, job `103435276859`, at head `7dd4ccb69` --
+run conclusion **success**, with `verify` green in the same run:
 
 ```
 job "Writable DB proof (staging only)" -- all 16 steps success
@@ -149,9 +150,16 @@ job "Writable DB proof (staging only)" -- all 16 steps success
   pnpm test:t1-proof:live -> 19 suites                         119/119 pass, 0 fail, 0 skipped
   aggregate across both credentialed steps                     126 assertions, 0 fail, 0 skipped
   receipt .out/ci-db-proof-receipt.json
-    sha256 75561c7dcc694e804423b1a8776a675be1b28a1b6b01441c792b23a061c62674
-    artifact utv2-1630-db-proof-receipt-34650795093-1 (id 10283712879)
+    sha256 3fb82300deb8a1fb04188cee9465f17581cfb8d10512b5b171fdc941a669159e
+    artifact utv2-1630-db-proof-receipt-34651506561-1 (id 10284626309)
 ```
+
+An earlier draft of this section cited run `34650795093` instead. That run's staging job
+went green and produced a valid receipt, and the run was then **cancelled during `verify`
+by my own later pushes to this branch**, through the concurrency group. The lesson is
+recorded rather than the citation quietly swapped: citing an in-flight run means the act of
+writing the citation can invalidate it, and the loop ends only by citing a run that has
+already concluded. `34651506561` had.
 
 The receipt binds the bound head's source tree rather than a preceding one, and the claim
 is written so it cannot go stale as further proof commits move the head. Every commit on
