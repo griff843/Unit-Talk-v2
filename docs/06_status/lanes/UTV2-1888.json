@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1888-track-only-observation",
   "branch": "claude/utv2-1888-track-only-observation",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "0fbb07cab0e71960d08208a2c4151d1f4f9f14d4",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1566",
   "files_changed": [],
   "file_scope_lock": [
@@ -16,14 +16,22 @@
     "scripts/ops/track-only-report.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-11T16:22:26.495Z",
-  "heartbeat_at": "2026-09-11T16:24:42.190Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-11T16:48:03.561Z",
+  "closed_at": "2026-09-11T16:48:03.561Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1888-track-only-observation.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-11T16:48:01.032Z",
+      "verdict": "pass",
+      "merge_sha": "0fbb07cab0e71960d08208a2c4151d1f4f9f14d4",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
