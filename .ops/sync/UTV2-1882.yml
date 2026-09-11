@@ -1,0 +1,223 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1882
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1882
+  objective: Executor Result Validator rejects the WORK-### repository-minted namespace
+  acceptance_criteria:
+    - Both copies admit `WORK-###` / `work-` alongside the existing namespaces,
+      and the drift tests still bind them byte-identically.
+    - A test asserts a valid `WORK-###` issue ID and a `codex/work-###-*` branch
+      **pass**.
+    - "Tests assert malformed identifiers are **still rejected** — shown failing
+      on the condition each names, not merely passing: a bare `WORK`, a `WORK-`
+      with no digits, a wrong-namespace `FOO-123`, and a branch whose namespace
+      segment does not match."
+    - The three existing controls (head-ref mismatch, PR mismatch, stale head
+      SHA) still fail on the conditions they name.
+    - No change to required-check configuration, branch protection, or any
+      bypass.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Authorized by Griff on 2026-09-10 as a **narrow required-validator
+      compatibility repair**. The authorization covers implementing this change
+      through the governed PR process. It explicitly does **not** authorize
+      disabling checks, bypassing branch protection, or weakening approval
+      requirements, and nothing here does any of those.
+    - |-
+      Problem
+      `Executor Result Validation` is one of four required status contexts on `main`. Its identifier rules are duplicated in two byte-identical copies:
+
+      1. `scripts/ops/executor-result-validate.ts:122-123` — `EXECUTOR_RESULT_ISSUE_ID_RE` / `EXECUTOR_RESULT_BRANCH_RE`, used by the unit tests.
+      2. `.github/workflows/executor-result-validator.yml:215,223` — an inline `actions/github-script` copy. **This is the copy that gates merges.**
+
+      Both currently read:
+
+      ```
+      /^(UTV2|UNI)-\d+$/i
+      /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i
+      ```
+
+      The repository already mints `WORK-###` identities — `shared.ts` `BRANCH_PATTERN` has accepted `work-\d+` since [UTV2-1837](https://linear.app/unit-talk-v2/issue/UTV2-1837/tracker-independence-make-linear-optional-and-non-blocking-across), and `ISSUE_ID_NAMESPACES` since [UTV2-1840](https://linear.app/unit-talk-v2/issue/UTV2-1840/tracker-independence-exit-condition-1-branch-discipline-guard-still) — but the required validator does not admit them, so a `WORK-###` lane can never produce the required context and is permanently unmergeable without an admin bypass.
+    - |-
+      Measured, not assumed
+      PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (`codex/work-2026091001-tracker-independence`) **already carries the widened regexes in both copies on its own branch**, verified at `origin/codex/work-2026091001-tracker-independence`:
+
+      ```
+      :122 export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI|WORK)-\d+$/i;
+      :215 if (!r.issueId || !/^(UTV2|UNI|WORK)-\d+$/i.test(r.issueId)) {
+      ```
+
+      Its `Executor Result Validation`, triggered by an `issue_comment` on 2026-09-10, nonetheless returned **INVALID** quoting the *narrow* rule:
+
+      ```
+      - Invalid Issue ID: "WORK-2026091001". Must match UTV2-NNN or UNI-NNN.
+      - Invalid branch: "codex/work-2026091001-tracker-independence". Must match … utv2-NNN-* or uni-NNN-*.
+      ```
+
+      **That is direct empirical proof the validator executes from trusted** `main`**, not from the PR head.** The mechanism is deliberate and documented in the workflow at `.github/workflows/executor-result-validator.yml:73-86`: the checkout ref is `github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha`, so the script is *always* the trusted main-branch version, "regardless of what the PR itself contains", because the job holds `checks: write`.
+
+      **Consequence: this repair must land on** `main` **in its own lane before it can take effect anywhere.** That is the bootstrap integration sequence, and it is why this lane carries a `UTV2-###` identity — its own executor result validates under the current narrow rule.
+    - >-
+      The change
+
+      Two words, in four literals:
+
+
+      ```diff
+
+      -export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI)-\d+$/i;
+
+      -export const EXECUTOR_RESULT_BRANCH_RE =
+      /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i;
+
+      +export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI|WORK)-\d+$/i;
+
+      +export const EXECUTOR_RESULT_BRANCH_RE =
+      /^(claude|codex|bootstrap)\/(utv2|uni|work)-\d+/i;
+
+      ```
+
+
+      plus the byte-identical edit to the inline copies at `:215,223`, and the
+      error strings widened to name `WORK-NNN`. The existing drift tests
+      (`executor-result-validate.test.ts:289,299`) read the workflow file and
+      assert both inline literals are byte-identical to the exported ones, so
+      the pair cannot drift.
+    - >-
+      What is preserved unchanged
+
+      * **An absent issue ID still fails.** Every executor result must still
+      declare an identifier. This is the specific line #1492 crosses and this
+      diff does not.
+
+      * `Branch:` **must still equal the PR head ref.**
+
+      * **The declared PR must still equal the actual PR.**
+
+      * **The declared head SHA must still equal the current head.**
+
+      * Required-check configuration, branch protection, CODEOWNERS, the merge
+      gate, tier semantics and approval policy are untouched.
+    - |-
+      Non-secret success criterion
+      After this lands on `main`, re-dispatching `Executor Result Validation` on PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) produces a **green** required context with no other change to that PR.
+    - |-
+      Relationship to [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)
+      Same defect class, second namespace. [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace) is Done and its acceptance criteria — all of which name `bootstrap/` — were fully satisfied by [griff843/Unit-Talk-v2#1519](https://linear.app/unit-talk-v2/review/utv2-1688-recognize-the-bootstrap-branch-namespace-in-both-copies-of-b168ad4471d2); it is not reopened, because it closed exactly what it named. This issue records the `WORK-###` occurrence, which [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace) explicitly left out of scope as a reserved decision.
+    - >-
+      Lane typing
+
+      `.github/workflows/executor-result-validator.yml` is admitted by exactly
+      one currently-available lane type. `migration` names five workflow files
+      and this is not among them; `governance` admits no `.github/workflows/**`
+      path at all. `runtime` admits both `.github/workflows/**` and
+      `scripts/**`, and no active lane holds the `runtime` singleton. The type
+      is chosen because it is the only one that admits the work, not to route
+      around a gate.
+
+
+      Tier: `classifyMechanicalMinimum` returns **T1** on `rule_id:
+      tier-c-prefix` for the workflow path.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1882/executor-result-validator-rejects-the-work-repository-minted-namespace
+    title: Executor Result Validator rejects the WORK-### repository-minted namespace
+    description: |-
+      Authorized by Griff on 2026-09-10 as a **narrow required-validator compatibility repair**. The authorization covers implementing this change through the governed PR process. It explicitly does **not** authorize disabling checks, bypassing branch protection, or weakening approval requirements, and nothing here does any of those.
+
+      ## Problem
+
+      `Executor Result Validation` is one of four required status contexts on `main`. Its identifier rules are duplicated in two byte-identical copies:
+
+      1. `scripts/ops/executor-result-validate.ts:122-123` — `EXECUTOR_RESULT_ISSUE_ID_RE` / `EXECUTOR_RESULT_BRANCH_RE`, used by the unit tests.
+      2. `.github/workflows/executor-result-validator.yml:215,223` — an inline `actions/github-script` copy. **This is the copy that gates merges.**
+
+      Both currently read:
+
+      ```
+      /^(UTV2|UNI)-\d+$/i
+      /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i
+      ```
+
+      The repository already mints `WORK-###` identities — `shared.ts` `BRANCH_PATTERN` has accepted `work-\d+` since [UTV2-1837](https://linear.app/unit-talk-v2/issue/UTV2-1837/tracker-independence-make-linear-optional-and-non-blocking-across), and `ISSUE_ID_NAMESPACES` since [UTV2-1840](https://linear.app/unit-talk-v2/issue/UTV2-1840/tracker-independence-exit-condition-1-branch-discipline-guard-still) — but the required validator does not admit them, so a `WORK-###` lane can never produce the required context and is permanently unmergeable without an admin bypass.
+
+      ## Measured, not assumed
+
+      PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (`codex/work-2026091001-tracker-independence`) **already carries the widened regexes in both copies on its own branch**, verified at `origin/codex/work-2026091001-tracker-independence`:
+
+      ```
+      :122 export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI|WORK)-\d+$/i;
+      :215 if (!r.issueId || !/^(UTV2|UNI|WORK)-\d+$/i.test(r.issueId)) {
+      ```
+
+      Its `Executor Result Validation`, triggered by an `issue_comment` on 2026-09-10, nonetheless returned **INVALID** quoting the *narrow* rule:
+
+      ```
+      - Invalid Issue ID: "WORK-2026091001". Must match UTV2-NNN or UNI-NNN.
+      - Invalid branch: "codex/work-2026091001-tracker-independence". Must match … utv2-NNN-* or uni-NNN-*.
+      ```
+
+      **That is direct empirical proof the validator executes from trusted** `main`**, not from the PR head.** The mechanism is deliberate and documented in the workflow at `.github/workflows/executor-result-validator.yml:73-86`: the checkout ref is `github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha`, so the script is *always* the trusted main-branch version, "regardless of what the PR itself contains", because the job holds `checks: write`.
+
+      **Consequence: this repair must land on** `main` **in its own lane before it can take effect anywhere.** That is the bootstrap integration sequence, and it is why this lane carries a `UTV2-###` identity — its own executor result validates under the current narrow rule.
+
+      ## The change
+
+      Two words, in four literals:
+
+      ```diff
+      -export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI)-\d+$/i;
+      -export const EXECUTOR_RESULT_BRANCH_RE = /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i;
+      +export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI|WORK)-\d+$/i;
+      +export const EXECUTOR_RESULT_BRANCH_RE = /^(claude|codex|bootstrap)\/(utv2|uni|work)-\d+/i;
+      ```
+
+      plus the byte-identical edit to the inline copies at `:215,223`, and the error strings widened to name `WORK-NNN`. The existing drift tests (`executor-result-validate.test.ts:289,299`) read the workflow file and assert both inline literals are byte-identical to the exported ones, so the pair cannot drift.
+
+      ## What is preserved unchanged
+
+      * **An absent issue ID still fails.** Every executor result must still declare an identifier. This is the specific line #1492 crosses and this diff does not.
+      * `Branch:` **must still equal the PR head ref.**
+      * **The declared PR must still equal the actual PR.**
+      * **The declared head SHA must still equal the current head.**
+      * Required-check configuration, branch protection, CODEOWNERS, the merge gate, tier semantics and approval policy are untouched.
+
+      ## Acceptance criteria
+
+      * Both copies admit `WORK-###` / `work-` alongside the existing namespaces, and the drift tests still bind them byte-identically.
+      * A test asserts a valid `WORK-###` issue ID and a `codex/work-###-*` branch **pass**.
+      * Tests assert malformed identifiers are **still rejected** — shown failing on the condition each names, not merely passing: a bare `WORK`, a `WORK-` with no digits, a wrong-namespace `FOO-123`, and a branch whose namespace segment does not match.
+      * The three existing controls (head-ref mismatch, PR mismatch, stale head SHA) still fail on the conditions they name.
+      * No change to required-check configuration, branch protection, or any bypass.
+
+      ## Non-secret success criterion
+
+      After this lands on `main`, re-dispatching `Executor Result Validation` on PR [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) produces a **green** required context with no other change to that PR.
+
+      ## Relationship to [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)
+
+      Same defect class, second namespace. [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace) is Done and its acceptance criteria — all of which name `bootstrap/` — were fully satisfied by [griff843/Unit-Talk-v2#1519](https://linear.app/unit-talk-v2/review/utv2-1688-recognize-the-bootstrap-branch-namespace-in-both-copies-of-b168ad4471d2); it is not reopened, because it closed exactly what it named. This issue records the `WORK-###` occurrence, which [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace) explicitly left out of scope as a reserved decision.
+
+      ## Lane typing
+
+      `.github/workflows/executor-result-validator.yml` is admitted by exactly one currently-available lane type. `migration` names five workflow files and this is not among them; `governance` admits no `.github/workflows/**` path at all. `runtime` admits both `.github/workflows/**` and `scripts/**`, and no active lane holds the `runtime` singleton. The type is chosen because it is the only one that admits the work, not to route around a gate.
+
+      Tier: `classifyMechanicalMinimum` returns **T1** on `rule_id: tier-c-prefix` for the workflow path.
+    captured_at: 2026-09-10T22:07:49.872Z
+    description_sha256: 4451755898146df890c9bba70bf744b40a4c62c152488711d4f20fa4959d591a
+  contract_hash: aad7a1e9e53165d5d6a0ec99cc5372abfccdbb12981e7f5656fd84fe376dc6fb
