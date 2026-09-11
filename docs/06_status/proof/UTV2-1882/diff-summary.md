@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1882-erv-work-namespace
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1560
 Head SHA: 53eecffab9de8a4185534c26556741e656147423
-Merge SHA: N/A
+Merge SHA: 257910cdad9f46115a9d994eea55bdf5914107e2
 Diff base: 162bfee9505c5f71062caf8a5f89f5793094c755
 Diff target: 53eecffab9de8a4185534c26556741e656147423
 
@@ -42,4 +42,4 @@ scope while CEP-E2 refuses it once declared) and this lane declares real proof a
 
 ## SHA Binding
 Head SHA: 53eecffab9de8a4185534c26556741e656147423
-Merge SHA: N/A
+Merge SHA: 257910cdad9f46115a9d994eea55bdf5914107e2
