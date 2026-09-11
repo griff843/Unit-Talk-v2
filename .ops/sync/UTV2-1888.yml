@@ -1,0 +1,154 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1888
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1888
+  objective: >-
+    Give Griff a governed, read-only daily view of every internally submitted
+    Track Only pick: what persisted, how truthful its provenance is, **which
+    precondition is currently stopping it from settling**, and mechanical
+    evidence that nothing was delivered to members.
+
+    This is Milestone 2 condition 5 ("an operator can observe all of the above
+    through a governed internal surface") for the contained pilot, via the same
+    governed read-only path PM ratified for Milestone 1 step 7. It is not the
+    Command Center, which is undeployed and needs reserved secrets.
+  acceptance_criteria:
+    - Running it against production prints the current Track Only cohort with
+      every section above populated for the one existing pick.
+    - The non-delivery enumeration is derived from `information_schema` (columns
+      named `pick_id`), not hard-coded.
+    - It performs no writes, asserted by a test that fails if any write method
+      is reached.
+    - A pick with no matching `events` row reports that as the blocking
+      precondition rather than as an error.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Why this is needed now
+
+      Measured in production on 2026-09-11: exactly **1** Track Only pick exists
+      (`dfcd9486-cba2-4bb5-b684-beec36e52c0b`, MLB moneyline, `status =
+      validated`, 0 settlements, 0 outbox rows). Nothing tells an operator *why*
+      it has not settled, and nothing will, because `runGradingPass` records
+      only `{picksGraded, failed}` and discards the per-pick `outcome:
+      'skipped'` + `reason` it already computes. A pass that examined 22,290
+      picks and graded none is byte-identical to one that examined zero.
+
+
+      So the only way to answer "why has my pick not settled" today is ad hoc
+      SQL. That does not scale to a daily operating history and it is not
+      reproducible.
+    - >-
+      Scope
+
+      * `scripts/ops/track-only-report.ts` (new)
+
+      * `scripts/ops/track-only-report.test.ts` (new)
+
+      * `package.json` (test wiring only — `pnpm verify` fails closed with
+      `WIRING_TEST_UNWIRED_NEW` otherwise)
+
+
+      Mechanical tier floor for this file set is **T3** (no Tier C matches).
+    - >-
+      What it reports, per pick
+
+      1. **Persisted identity** — id, capper, market, selection, line, odds,
+      stake units, book, event name, created_at, status.
+
+      2. **Provenance honesty** — `metadata.participantResolution.resolution`,
+      whether `eventId` is null vs fabricated, and which submission path was
+      used.
+
+      3. **Settlement preconditions observed** — as observable database facts,
+      not a re-implementation of the grading classifier: is there a matching
+      `events` row, is it `completed`, does its metadata carry the provider key
+      and ingestion-cycle fields the grading gate reads, and does a
+      `game_results` row exist for the market. Each is reported as
+      observed/absent with a pointer to `apps/api/src/grading-service.ts`, so
+      the report never claims to *be* the classifier.
+
+      4. **Settlement state** — `settlement_records` for the pick, and
+      `pick_lifecycle` transitions.
+
+      5. **Non-delivery evidence** — row counts for the pick across
+      `distribution_outbox`, `command_center_delivery_mappings`,
+      `execution_intents`, enumerated from `information_schema` rather than from
+      a remembered list.
+
+
+      Human-readable and `--json` output. Read-only: it must issue no write of
+      any kind.
+    - |-
+      Deliberate non-goal
+      It does not duplicate `classifyMarketFamilyForGrading` or `TRUSTED_GRADING_EVENT_PROVIDERS`. Those are not exported and `apps/api/src/grading-service.ts` is currently inside another lane's `file_scope_lock`. Duplicating them here would create exactly the two-copies-of-one-rule defect [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace) and [UTV2-1856](https://linear.app/unit-talk-v2/issue/UTV2-1856/event-browse-resolves-participant-identity-from-the-empty-canonical) are both recorded instances of. When the grading trust gate is next edited, the predicate is exported and this report imports it; recorded here so the follow-up is not rediscovered.
+    - >-
+      Verification
+
+      `pnpm verify` green on the branch, plus a recorded read-only run against
+      production showing the real cohort.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1888/governed-daily-observation-for-track-only-picks-show-why-a-pick-has-or
+    title: Governed daily observation for Track Only picks — show why a pick has or
+      has not settled
+    description: |-
+      ## Objective
+
+      Give Griff a governed, read-only daily view of every internally submitted Track Only pick: what persisted, how truthful its provenance is, **which precondition is currently stopping it from settling**, and mechanical evidence that nothing was delivered to members.
+
+      This is Milestone 2 condition 5 ("an operator can observe all of the above through a governed internal surface") for the contained pilot, via the same governed read-only path PM ratified for Milestone 1 step 7. It is not the Command Center, which is undeployed and needs reserved secrets.
+
+      ## Why this is needed now
+
+      Measured in production on 2026-09-11: exactly **1** Track Only pick exists (`dfcd9486-cba2-4bb5-b684-beec36e52c0b`, MLB moneyline, `status = validated`, 0 settlements, 0 outbox rows). Nothing tells an operator *why* it has not settled, and nothing will, because `runGradingPass` records only `{picksGraded, failed}` and discards the per-pick `outcome: 'skipped'` + `reason` it already computes. A pass that examined 22,290 picks and graded none is byte-identical to one that examined zero.
+
+      So the only way to answer "why has my pick not settled" today is ad hoc SQL. That does not scale to a daily operating history and it is not reproducible.
+
+      ## Scope
+
+      * `scripts/ops/track-only-report.ts` (new)
+      * `scripts/ops/track-only-report.test.ts` (new)
+      * `package.json` (test wiring only — `pnpm verify` fails closed with `WIRING_TEST_UNWIRED_NEW` otherwise)
+
+      Mechanical tier floor for this file set is **T3** (no Tier C matches).
+
+      ## What it reports, per pick
+
+      1. **Persisted identity** — id, capper, market, selection, line, odds, stake units, book, event name, created_at, status.
+      2. **Provenance honesty** — `metadata.participantResolution.resolution`, whether `eventId` is null vs fabricated, and which submission path was used.
+      3. **Settlement preconditions observed** — as observable database facts, not a re-implementation of the grading classifier: is there a matching `events` row, is it `completed`, does its metadata carry the provider key and ingestion-cycle fields the grading gate reads, and does a `game_results` row exist for the market. Each is reported as observed/absent with a pointer to `apps/api/src/grading-service.ts`, so the report never claims to *be* the classifier.
+      4. **Settlement state** — `settlement_records` for the pick, and `pick_lifecycle` transitions.
+      5. **Non-delivery evidence** — row counts for the pick across `distribution_outbox`, `command_center_delivery_mappings`, `execution_intents`, enumerated from `information_schema` rather than from a remembered list.
+
+      Human-readable and `--json` output. Read-only: it must issue no write of any kind.
+
+      ## Deliberate non-goal
+
+      It does not duplicate `classifyMarketFamilyForGrading` or `TRUSTED_GRADING_EVENT_PROVIDERS`. Those are not exported and `apps/api/src/grading-service.ts` is currently inside another lane's `file_scope_lock`. Duplicating them here would create exactly the two-copies-of-one-rule defect [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace) and [UTV2-1856](https://linear.app/unit-talk-v2/issue/UTV2-1856/event-browse-resolves-participant-identity-from-the-empty-canonical) are both recorded instances of. When the grading trust gate is next edited, the predicate is exported and this report imports it; recorded here so the follow-up is not rediscovered.
+
+      ## Acceptance criteria
+
+      * Running it against production prints the current Track Only cohort with every section above populated for the one existing pick.
+      * The non-delivery enumeration is derived from `information_schema` (columns named `pick_id`), not hard-coded.
+      * It performs no writes, asserted by a test that fails if any write method is reached.
+      * A pick with no matching `events` row reports that as the blocking precondition rather than as an error.
+
+      ## Verification
+
+      `pnpm verify` green on the branch, plus a recorded read-only run against production showing the real cohort.
+    captured_at: 2026-09-11T16:22:11.357Z
+    description_sha256: 212bef79ef113b927dd16969f2ffdfc093fd068762ec388052e81059fa6dbe40
+  contract_hash: 000c6c92c1323d0d1c93359e8f350e8376d16165d7676ee33c3ad818ebe2ed17

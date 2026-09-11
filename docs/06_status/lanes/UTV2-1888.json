@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1888",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1888-track-only-observation",
+  "branch": "claude/utv2-1888-track-only-observation",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "package.json",
+    "scripts/ops/track-only-report.test.ts",
+    "scripts/ops/track-only-report.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-09-11T16:22:26.495Z",
+  "heartbeat_at": "2026-09-11T16:22:26.495Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1888-track-only-observation.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1888-track-only-observation",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
