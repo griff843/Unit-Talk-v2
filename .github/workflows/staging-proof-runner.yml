@@ -1,0 +1,204 @@
+# UTV2-1827 — governed staging proof runner.
+#
+# Why this workflow exists
+# ------------------------
+# `staging-db-proof.yml` (UTV2-1630) supplies a writable non-production target,
+# but its command is hardcoded to `pnpm test:db`. A lane whose proof is a
+# lane-owned script has had exactly two options: get its command added to a
+# shared Tier C workflow, or go without a receipt. UTV2-1773 is the concrete
+# case — its required first-run + second-run idempotency proof of
+# `scripts/run-canonical-reference-bootstrap.ts` is mechanically unreachable
+# without editing a workflow outside its own scope.
+#
+# What this is NOT
+# ----------------
+# It is not a remote shell. The dispatch input is a KEY, and the argv that key
+# names lives in `scripts/ci/staging-proof-commands.ts` — in the repository,
+# changed only through a reviewed PR. Nothing a dispatcher types is interpolated
+# into a command line: `run-staging-proof-command.ts` spawns the registry's argv
+# with `shell: false`, so there is no injection point to filter.
+#
+# Isolation properties (identical to staging-db-proof.yml, deliberately)
+# ---------------------------------------------------------------------
+#   * The job binds the `staging-ci` GitHub environment and reads ONLY
+#     `CI_SUPABASE_*`. It never references SUPABASE_URL,
+#     SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY or SUPABASE_DB_URL.
+#   * Supabase API keys are project-scoped JWTs, so the staging key returns 401
+#     against production — credential substitution is structurally impossible
+#     rather than merely forbidden.
+#   * `assertStagingTarget` refuses unless the resolved target is positively
+#     xskgrzbteyqdufktjrjx, before the proof command is spawned.
+#   * The checked-out commit must be reachable from the default branch. The
+#     registry is only as trustworthy as the commit it is read from: anyone who
+#     can push a branch could otherwise rewrite staging-proof-commands.ts on
+#     that branch and dispatch it. "Cannot tell" is refused, not assumed.
+#   * Credentials are never echoed and never reach the receipt.
+name: Staging Proof Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      command_key:
+        description: >-
+          Which allowlisted proof command to run. Adding a key requires a
+          reviewed change to scripts/ci/staging-proof-commands.ts.
+        required: true
+        # A closed choice list, not a string. A free-form input here would
+        # reintroduce exactly the surface the registry exists to remove.
+        type: choice
+        options:
+          - canonical-reference-bootstrap
+          - canonical-reference-bootstrap-report
+      ref:
+        description: The commit, branch or tag to execute. Recorded in the receipt.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-proof-runner-${{ inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  staging-proof:
+    name: Governed staging proof (${{ inputs.command_key }})
+    runs-on: ubuntu-latest
+    # Binding the environment is what releases CI_SUPABASE_*.
+    environment: staging-ci
+    outputs:
+      receipt_sha256: ${{ steps.run.outputs.receipt_sha256 }}
+      observed_ref: ${{ steps.run.outputs.observed_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Execution is pinned to the requested commit, not to the default
+          # branch, so the receipt describes the code that actually ran.
+          ref: ${{ inputs.ref }}
+          # Full history: the runner refuses unless the checked-out commit is
+          # reachable from the default branch, and `merge-base --is-ancestor`
+          # cannot answer that on a shallow clone. The runner treats "cannot
+          # tell" as a refusal, so a depth-1 checkout would fail every dispatch
+          # closed rather than silently admit one.
+          fetch-depth: 0
+
+      - name: Fetch the default branch for the ancestry check
+        run: git fetch origin main --no-tags
+
+      - name: Record execution identity
+        run: |
+          set -euo pipefail
+          echo "command key: ${{ inputs.command_key }}"
+          echo "requested ref: ${{ inputs.ref }}"
+          echo "resolved sha: $(git rev-parse HEAD)"
+          echo "actor: ${{ github.actor }}"
+          echo "reachable from main: $(git merge-base --is-ancestor HEAD origin/main && echo yes || echo NO)"
+          echo "run: ${{ github.run_id }} attempt ${{ github.run_attempt }}"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fail before anything else if the environment did not release the staging
+      # secrets, rather than falling through to a confusing DB error.
+      - name: Assert staging credentials present
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          for name in CI_SUPABASE_URL CI_SUPABASE_PROJECT_REF CI_SUPABASE_SECRET_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty — staging-ci did not release its secrets."
+              exit 1
+            fi
+          done
+          # Echo identity only. Never the credential.
+          echo "resolved project ref: $CI_SUPABASE_PROJECT_REF"
+          echo "expected staging ref: xskgrzbteyqdufktjrjx"
+          if [ "$CI_SUPABASE_PROJECT_REF" != "xskgrzbteyqdufktjrjx" ]; then
+            echo "::error::project ref is not the approved staging project"
+            exit 1
+          fi
+
+      # `local.env` is written from CI_SUPABASE_* only. @unit-talk/config reads
+      # SUPABASE_* keys, so the staging values are mapped onto those names — the
+      # production secrets are never referenced anywhere in this workflow.
+      - name: Materialize staging-only environment
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo "NODE_ENV=test"
+            echo "UNIT_TALK_APP_ENV=test"
+            echo "UNIT_TALK_ACTIVE_WORKSPACE=staging-ci"
+            echo "UNIT_TALK_LEGACY_WORKSPACE=staging-ci"
+            echo "LINEAR_TEAM_ID=staging-ci"
+            echo "LINEAR_TEAM_KEY=UTV2"
+            echo "LINEAR_TEAM_NAME=staging-ci"
+            echo "UNIT_TALK_API_RUNTIME_MODE=fail_open"
+            echo "UNIT_TALK_JWT_SECRET=staging-ci-not-a-production-secret"
+            echo "SUPABASE_URL=${CI_SUPABASE_URL}"
+            echo "SUPABASE_PROJECT_REF=${CI_SUPABASE_PROJECT_REF}"
+            echo "SUPABASE_ANON_KEY=${CI_SUPABASE_PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${CI_SUPABASE_SECRET_KEY}"
+            echo "UNIT_TALK_DB_ACCESS_MODE=writable-isolated"
+          } > local.env
+          echo "local.env written (values redacted); keys:"
+          cut -d= -f1 local.env | sed 's/^/  /'
+
+      - name: Run the allowlisted proof command
+        id: run
+        env:
+          STAGING_PROOF_RECEIPT_PATH: ${{ github.workspace }}/.out/staging-proof-receipt.json
+        run: |
+          set -euo pipefail
+          mkdir -p .out
+          # The key is passed as a single argument to a script that resolves it
+          # against the repository-owned registry. It is never expanded into a
+          # command line.
+          pnpm exec tsx scripts/ci/run-staging-proof-command.ts \
+            --command-key '${{ inputs.command_key }}' \
+            --receipt "$STAGING_PROOF_RECEIPT_PATH"
+          receipt="$STAGING_PROOF_RECEIPT_PATH"
+          test -f "$receipt" || { echo "::error::receipt was not produced"; exit 1; }
+          python3 - "$receipt" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          receipt = json.load(open(sys.argv[1]))
+          print(f"receipt_sha256={receipt['receipt_sha256']}")
+          print(f"observed_ref={receipt['observed_project_ref']}")
+          PY
+
+      # Remove local.env before anything else can read it, and before upload.
+      - name: Scrub credentials
+        if: always()
+        run: |
+          rm -f local.env
+          echo "local.env removed"
+
+      # The receipt carries identity, timings, exit status and hashes — never a
+      # credential.
+      - name: Upload staging proof receipt (same-run artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: utv2-1827-staging-proof-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .out/staging-proof-receipt.json
+            .out/staging-proof-dispatch.json
+          if-no-files-found: error
+          retention-days: 30
