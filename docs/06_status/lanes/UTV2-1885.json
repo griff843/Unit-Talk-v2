@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1885-outcome-first-instructions",
   "branch": "claude/utv2-1885-outcome-first-instructions",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "4ad9a246b14f245b3d700b51e1c9bc3b92ba6cbd",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1564",
   "files_changed": [],
   "file_scope_lock": [
@@ -15,14 +15,22 @@
     ".claude/commands/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-11T12:10:25.054Z",
-  "heartbeat_at": "2026-09-11T12:11:22.729Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-11T12:37:52.223Z",
+  "closed_at": "2026-09-11T12:37:52.223Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1885-outcome-first-instructions.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-11T12:37:49.761Z",
+      "verdict": "pass",
+      "merge_sha": "4ad9a246b14f245b3d700b51e1c9bc3b92ba6cbd",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

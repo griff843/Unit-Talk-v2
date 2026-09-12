@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1886",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1886-grading-settlement-prefetch",
+  "branch": "claude/utv2-1886-grading-settlement-prefetch",
+  "base_branch": "main",
+  "commit_sha": "5a9c70bb10ecbb240443ac403a243d2ac7b0a64e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1565",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/grading-service.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "packages/db/src/settlement-invariants.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1886/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-11T12:02:33.287Z",
+  "heartbeat_at": "2026-09-11T21:10:29.094Z",
+  "closed_at": "2026-09-11T21:10:29.094Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-11T21:10:25.740Z",
+      "verdict": "pass",
+      "merge_sha": "5a9c70bb10ecbb240443ac403a243d2ac7b0a64e",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1886-grading-settlement-prefetch",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
