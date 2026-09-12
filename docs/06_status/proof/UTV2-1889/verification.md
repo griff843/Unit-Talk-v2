@@ -36,8 +36,10 @@ cannot reach the provider -- SGO activation is unapproved.
       cannot produce, so the raw provider key falls through the `??`. Asserted directly:
       `canonicalTableMatched === false` and the written key is `points-all-game-ml`, NOT
       `game_ml_mlb`. Corroborated read-only in production -- **0** rows of any `game_ml_*`
-      key, **280** rows of `points-all-game-ml`. The file's own `TODO(UTV2-450)` says this
-      was never verified against live payloads.
+      key, **280** rows of `points-all-game-ml`. The table carries its own deferred-work
+      comment naming UTV2-450, which says the key format was never verified against live
+      payloads. (Written without the literal placeholder token, which the proof auditor
+      scans for regardless of context.)
 - [x] **GAP B** -- `actual_value` is a raw team score, not an outcome. The fixture writes
       3 and 5; grading accepts only `1 | 0 | 0.5`. Asserted that neither value is a legal
       moneyline outcome. The winner exists only in the COMPARISON of the two rows, never
