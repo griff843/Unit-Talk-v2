@@ -880,7 +880,7 @@ function seedLaneFixture(
     fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
     fs.writeFileSync(
       path.join(root, '.github', 'workflows', 'p0-protocol.yml'),
-      'name: P0 Protocol\njobs:\n  evaluate:\n    steps:\n      - run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
+      'name: P0 Protocol\non: [pull_request]\njobs:\n  p0-protocol:\n    name: P0 Protocol\n    runs-on: ubuntu-latest\n    steps:\n      - name: Classify and enforce P0\n        run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
     );
     fs.mkdirSync(path.join(root, 'scripts', 'ops', 'tracker-independence'), { recursive: true });
     fs.writeFileSync(
@@ -898,6 +898,11 @@ function seedLaneFixture(
   git(['config', 'user.name', 'Test']);
   git(['add', '-A']);
   git(['commit', '-qm', 'seed']);
+  // The repo-minted P0 predicate reads the consumer at the installed trusted
+  // base (`origin/main`), never the working tree, so an activated fixture must
+  // carry the activation on that ref. The un-activated fixture deliberately
+  // has no such ref: an unresolvable trusted base is itself a refusal.
+  if (opts.activateP0Consumer) git(['update-ref', 'refs/remotes/origin/main', 'HEAD']);
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
 
   if (opts.withWorktree) {
@@ -2229,9 +2234,10 @@ test('G50: readmission refuses when the metadata commit fails', () => {
 });
 
 test('lane-start refuses a repo-minted WORK lane while the P0 consumer cannot evaluate it', () => {
-  // The fixture repo carries no `.github/workflows/p0-protocol.yml` at all,
-  // which is the fail-closed half of the predicate: an absent or unreadable
-  // consumer keeps WORK execution blocked rather than admitting it.
+  // The fixture repo carries no `.github/workflows/p0-protocol.yml` and no
+  // `origin/main` at all, which is the fail-closed half of the predicate: an
+  // unresolvable trusted base or an absent consumer keeps WORK execution
+  // blocked rather than admitting it.
   const f = seedLaneFixture('WORK-999901', { withWorktree: false });
   const run = runLaneStart(f);
 
@@ -2247,7 +2253,7 @@ test('lane-start refuses a repo-minted WORK lane while the P0 consumer cannot ev
   );
   assert.match(
     String(out['remediation']),
-    /Do not disable the required check/u,
+    /disabling the required check does not release it/u,
     'the remediation must not offer disabling the required check as an exit',
   );
 
@@ -2267,9 +2273,10 @@ test('lane-start refuses a repo-minted WORK lane while the P0 consumer cannot ev
 });
 
 test('the repo-minted refusal releases itself once the consumer delegates, and never fires on a tracker key', () => {
-  // Same identity, same command, one difference: the installed consumer now
-  // delegates to an evaluator that exists. The block must be gone -- otherwise
-  // it is not self-releasing and the activation could never land.
+  // Same identity, same command, one difference: the consumer installed on the
+  // fixture's `origin/main` now executes an evaluator that exists there. The
+  // block must be gone -- otherwise it is not self-releasing and the
+  // activation could never land.
   const activated = seedLaneFixture('WORK-999902', { withWorktree: false, activateP0Consumer: true });
   const activatedRun = runLaneStart(activated);
   // Asserted positively rather than as an absence: the run must reach a
