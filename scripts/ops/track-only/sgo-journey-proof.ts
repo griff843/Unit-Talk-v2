@@ -21,13 +21,17 @@
 //   * scripts/ops/track-only/stats.ts         -- the real Track Only statistics
 //   * @unit-talk/domain normalizeMarketKey    -- the real pick-side normalization
 //
-// TWO substitutions, both deliberate and both named:
+// ONE substitution is permanent, and one is now the caller's choice:
 //
 //   1. The HTTP transport. `fetchImpl` is injected so the fixture is served from
 //      memory. SGO activation is unapproved, so the proof must not reach the provider.
-//   2. The database. `createInMemoryRepositoryBundle()` stands in for Supabase -- the
-//      same substitution the shipped grading tests make, and the reason this proof
-//      needs no credential and writes nothing anywhere.
+//      This substitution is not optional and does not go away.
+//   2. The database. `input.repositories` decides it. Absent, an in-memory bundle
+//      stands in for Supabase, which is what keeps the unit suite credential-free.
+//      Supplied with a bundle backed by the staging database, the substitution is
+//      WITHDRAWN and every stage reads and writes real rows. Nothing else about the
+//      journey differs between the two, which is what makes the staging run evidence
+//      about this code rather than about a second code path written to mirror it.
 //
 // Nothing that decides a market key, a participant, an outcome, a settlement or a
 // statistic is mocked. In particular the rows grading reads are the rows the resolver
@@ -60,6 +64,8 @@ import {
 import type { MarketFamilyRule } from '../../../apps/api/src/grading-service.js';
 import { processSubmission } from '../../../apps/api/src/submission-service.js';
 import { createInMemoryRepositoryBundle } from '../../../apps/api/src/persistence.js';
+import { outboxStatuses } from '@unit-talk/db';
+import type { RepositoryBundle } from '@unit-talk/db';
 import { computeTrackOnlyStats } from './stats.js';
 import type { StatsInputPick, TrackOnlyStats } from './stats.js';
 
@@ -85,11 +91,40 @@ if (SGO_MONEYLINE_RESULT_MARKET_KEY !== MONEYLINE_RESULT_MARKET_KEY) {
  */
 export const STAGING_FIXTURE_PREFIX = 'UTV2-1889-STAGING-FIXTURE';
 
-const FIXTURE_EVENT_ID = `${STAGING_FIXTURE_PREFIX}-MLB-0001`;
 const FIXTURE_EVENT_NAME = 'Fixture Away Nine @ Fixture Home Nine';
 const FIXTURE_EVENT_DATE = '2026-09-11';
 const FIXTURE_EVENT_STARTS_AT = '2026-09-11T23:05:00.000Z';
 const FIXTURE_INGESTION_RUN_ID = 'run-utv2-1889-journey-fixture';
+
+/**
+ * A fixture namespace scopes every external identifier this module mints.
+ *
+ * In memory it is unnecessary and defaults to empty, which reproduces the original
+ * identifiers byte for byte. Against a SHARED staging database it is what keeps one
+ * run's rows from being read as another's: `upsertByExternalId` is idempotent on the
+ * external id, so two runs sharing one would silently resolve to a single event and
+ * the second run's assertions would be made about the first run's rows.
+ *
+ * Restricted to characters that cannot change the shape of an identifier, so a
+ * namespace can never smuggle in a separator or escape the prefix.
+ */
+export function fixtureNamespaceSuffix(namespace?: string): string {
+  if (namespace === undefined || namespace === '') return '';
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(namespace)) {
+    throw new Error(
+      `fixture namespace ${JSON.stringify(namespace)} must match /^[A-Za-z0-9-]{1,64}$/`,
+    );
+  }
+  return `-${namespace.toUpperCase()}`;
+}
+
+export function fixtureEventExternalId(namespace?: string): string {
+  return `${STAGING_FIXTURE_PREFIX}${fixtureNamespaceSuffix(namespace)}-MLB-0001`;
+}
+
+function fixtureTeamExternalId(side: 'HOME' | 'AWAY', namespace?: string): string {
+  return `${STAGING_FIXTURE_PREFIX}${fixtureNamespaceSuffix(namespace)}-${side}`;
+}
 
 export interface JourneyStageParse {
   /** Events the real parser accepted from the fixture payload. */
@@ -154,6 +189,12 @@ export interface JourneyStageSettle {
   /** True when the settlement was recorded on the evidence plane (no lifecycle move). */
   evidencePlane: boolean;
   profitLossUnits: number | null;
+  /**
+   * Delivery rows addressed to this pick, counted AFTER the grading pass. Track Only
+   * must produce none. Counted rather than asserted here so the caller sees the
+   * number that was read, and so zero is a measurement rather than an absence of one.
+   */
+  deliveryRowCount: number;
 }
 
 export interface JourneyGap {
@@ -196,14 +237,16 @@ export interface SgoJourneyProofReport {
 export function buildStagingResultsPayload(options?: {
   homeScore?: number;
   awayScore?: number;
+  fixtureNamespace?: string;
 }): unknown {
   const homeScore = options?.homeScore ?? 3;
   const awayScore = options?.awayScore ?? 5;
+  const namespace = options?.fixtureNamespace;
 
   return {
     data: [
       {
-        eventID: FIXTURE_EVENT_ID,
+        eventID: fixtureEventExternalId(namespace),
         status: {
           started: true,
           completed: true,
@@ -215,8 +258,14 @@ export function buildStagingResultsPayload(options?: {
           oddsAvailable: false,
         },
         teams: {
-          home: { teamID: `${STAGING_FIXTURE_PREFIX}-HOME`, names: { long: 'Fixture Home Nine' } },
-          away: { teamID: `${STAGING_FIXTURE_PREFIX}-AWAY`, names: { long: 'Fixture Away Nine' } },
+          home: {
+            teamID: fixtureTeamExternalId('HOME', namespace),
+            names: { long: 'Fixture Home Nine' },
+          },
+          away: {
+            teamID: fixtureTeamExternalId('AWAY', namespace),
+            names: { long: 'Fixture Away Nine' },
+          },
         },
         results: {},
         odds: {
@@ -311,6 +360,22 @@ export interface SgoJourneyProofInput {
    */
   pickTeamSide?: 'home' | 'away' | null;
   payload?: unknown;
+  /**
+   * The repository bundle every stage writes through and reads back. Absent, an
+   * in-memory bundle is created, which is what the unit suite uses and what keeps
+   * this proof credential-free by default.
+   *
+   * Supplying a bundle backed by the staging database is what turns this from an
+   * in-memory composition into a real persistence proof. Nothing else about the
+   * journey changes -- which is the point: the same code path is exercised, and the
+   * only substitution named in this file's header is withdrawn.
+   */
+  repositories?: RepositoryBundle;
+  /**
+   * Scopes every external identifier this run mints. Required in practice against a
+   * shared database; see `fixtureNamespaceSuffix`.
+   */
+  fixtureNamespace?: string;
 }
 
 /**
@@ -324,10 +389,13 @@ export interface SgoJourneyProofInput {
 export async function runSgoJourneyProof(
   input: SgoJourneyProofInput,
 ): Promise<SgoJourneyProofReport> {
-  const payload = input.payload ?? buildStagingResultsPayload();
+  const namespace = input.fixtureNamespace;
+  const payload =
+    input.payload ?? buildStagingResultsPayload({ fixtureNamespace: namespace });
   assertFixtureIsIdentifiable(payload);
 
-  const repositories = createInMemoryRepositoryBundle();
+  const fixtureEventId = fixtureEventExternalId(namespace);
+  const repositories = input.repositories ?? createInMemoryRepositoryBundle();
 
   // --- Stage 1: the real parser -------------------------------------------------
   const events = await fetchSGOResults({
@@ -343,7 +411,7 @@ export async function runSgoJourneyProof(
   // the event by `findByExternalId(providerEventId)` and skips everything under an
   // event it cannot find.
   const homeParticipant = await repositories.participants.upsertByExternalId({
-    externalId: `${STAGING_FIXTURE_PREFIX}-HOME`,
+    externalId: fixtureTeamExternalId('HOME', namespace),
     displayName: 'Fixture Home Nine',
     participantType: 'team',
     sport: 'MLB',
@@ -351,7 +419,7 @@ export async function runSgoJourneyProof(
     metadata: {},
   });
   const awayParticipant = await repositories.participants.upsertByExternalId({
-    externalId: `${STAGING_FIXTURE_PREFIX}-AWAY`,
+    externalId: fixtureTeamExternalId('AWAY', namespace),
     displayName: 'Fixture Away Nine',
     participantType: 'team',
     sport: 'MLB',
@@ -362,7 +430,7 @@ export async function runSgoJourneyProof(
     sportId: 'MLB',
     eventName: FIXTURE_EVENT_NAME,
     eventDate: FIXTURE_EVENT_DATE,
-    externalId: FIXTURE_EVENT_ID,
+    externalId: fixtureEventId,
     status: 'completed',
     metadata: trustedSgoEventMetadata(),
   });
@@ -459,7 +527,13 @@ export async function runSgoJourneyProof(
   );
 
   // --- Stage 5: the real grading pass -------------------------------------------
-  const gradingResult = await runGradingPass(repositories);
+  // Restricted to this run's own pick. In memory the population is this pick alone and
+  // the restriction changes nothing; against a shared staging database it is what keeps
+  // the pass from sweeping and settling an unrelated backlog, and what makes the
+  // counters below a statement about this fixture rather than about that backlog.
+  const gradingResult = await runGradingPass(repositories, {
+    restrictToPickIds: new Set([pickId]),
+  });
 
   const settlement = await repositories.settlements.findLatestForPick(pickId);
   const settlementPayload =
@@ -467,6 +541,18 @@ export async function runSgoJourneyProof(
       ? (settlement.payload as Record<string, unknown>)
       : {};
   const gradedPick = await repositories.picks.findPickById(pickId);
+
+  // Track Only must not be able to create a delivery. Read AFTER the grading pass,
+  // because a settlement is exactly the event that would plausibly enqueue one.
+  //
+  // Every status the schema defines is passed explicitly rather than taking the
+  // repository's `['sent']` default. A pick that got as far as a `pending` or
+  // `failed` outbox row has already breached Track Only, and the default would have
+  // reported that breach as clean. Sourcing the list from `outboxStatuses` means a
+  // status added later is covered without this call being revisited.
+  const deliveryRow = await repositories.outbox.findLatestByPick(pickId, [
+    ...outboxStatuses,
+  ]);
 
   const settle: JourneyStageSettle = {
     pickId,
@@ -481,6 +567,7 @@ export async function runSgoJourneyProof(
       typeof settlementPayload['profitLossUnits'] === 'number'
         ? (settlementPayload['profitLossUnits'] as number)
         : null,
+    deliveryRowCount: deliveryRow ? 1 : 0,
   };
 
   // --- Stage 6: the real Track Only statistics ----------------------------------
@@ -507,7 +594,7 @@ export async function runSgoJourneyProof(
   });
 
   return {
-    fixtureEventId: FIXTURE_EVENT_ID,
+    fixtureEventId,
     parse: { events, scoredMarkets },
     resolve: { writes, inserted, summary: resolveSummary },
     grade: {

@@ -19,9 +19,12 @@ async function createPostedPickFixture(
     line?: number | null;
     odds?: number;
     eventName?: string;
+    // UTV2-1889: lets two fixtures share one bundle, which is what makes a
+    // population-restriction test possible at all.
+    repositories?: ReturnType<typeof createInMemoryRepositoryBundle>;
   } = {},
 ) {
-  const repositories = createInMemoryRepositoryBundle();
+  const repositories = overrides.repositories ?? createInMemoryRepositoryBundle();
   const eventName = overrides.eventName ?? 'Fixture Event';
   const created = await processSubmission(
     {
@@ -3253,4 +3256,150 @@ test('the composed journey: operator attestation makes Milestone 1\'s exact pick
   assert.equal(afterPick?.status, 'validated');
   const outbox = await repositories.outbox.listByPickId(pickId);
   assert.equal(outbox.length, 0, 'Track Only must create no delivery row');
+});
+
+// --- UTV2-1889: restrictToPickIds ------------------------------------------------
+//
+// The option exists so the staging journey proof can drive the REAL grading pass
+// against the REAL staging database without sweeping and settling that database's
+// entire backlog. Three properties decide whether it is safe, and all three are
+// asserted here rather than argued in the comment on the option:
+//
+//   1. Absent, the pass is byte-for-byte what it was -- no caller in production
+//      passes it, so a change in the default is a change in production behaviour.
+//   2. Present, it can only REMOVE candidates. The restriction is intersected with
+//      the population the pass already read.
+//   3. It cannot ADMIT anything. An id outside the population -- a pick in a
+//      lifecycle state grading does not read, or one that does not exist -- stays
+//      ungraded. Without this, the option would be a second, weaker admission path
+//      into grading, which is precisely what it must not be.
+
+async function seedTwoGradeablePostedPicks(): Promise<{
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>;
+  firstPickId: string;
+  secondPickId: string;
+}> {
+  const first = await createPostedPickFixture();
+  const firstContext = await attachPlayerEventContext(
+    first.repositories,
+    first.pickId,
+    { eventName: first.eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(first.repositories, {
+    eventId: firstContext.event.id,
+    participantId: firstContext.participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  // A second gradeable pick in the SAME bundle. Without a second candidate the
+  // restriction is untestable: every assertion would pass just as well if the
+  // filter did nothing at all.
+  const second = await createPostedPickFixture({
+    repositories: first.repositories,
+    eventName: 'Fixture Event Two',
+  });
+  const secondContext = await attachPlayerEventContext(
+    first.repositories,
+    second.pickId,
+    { eventName: second.eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(first.repositories, {
+    eventId: secondContext.event.id,
+    participantId: secondContext.participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  return {
+    repositories: first.repositories,
+    firstPickId: first.pickId,
+    secondPickId: second.pickId,
+  };
+}
+
+test('runGradingPass without restrictToPickIds grades the whole population', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.attempted, 2);
+  assert.equal(result.graded, 2);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId).sort(),
+    [firstPickId, secondPickId].sort(),
+  );
+  // The control: both picks really are settleable, so a restricted pass that
+  // settles only one below is the restriction working rather than the second pick
+  // being ungradeable for some unrelated reason.
+  assert.equal(
+    (await repositories.settlements.listByPick(secondPickId)).length,
+    1,
+  );
+});
+
+test('runGradingPass with restrictToPickIds grades only the named pick and leaves the rest untouched', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set([firstPickId]),
+  });
+
+  assert.equal(result.attempted, 1);
+  assert.equal(result.graded, 1);
+  assert.equal(result.details.length, 1);
+  assert.equal(result.details[0]?.pickId, firstPickId);
+
+  // The load-bearing half: the unnamed pick was not merely absent from the
+  // counters, it was not WRITTEN to. A filter applied after settlement would
+  // satisfy the counters above and still have mutated the backlog.
+  assert.equal((await repositories.settlements.listByPick(secondPickId)).length, 0);
+  assert.equal(
+    (await repositories.picks.findPickById(secondPickId))?.status,
+    'posted',
+  );
+  assert.equal((await repositories.picks.findPickById(firstPickId))?.status, 'settled');
+});
+
+test('runGradingPass with restrictToPickIds cannot admit a pick the population never returned', async () => {
+  const { repositories, firstPickId } = await seedTwoGradeablePostedPicks();
+
+  // A real pick that the population read does not return: `processSubmission`
+  // leaves it `validated`, and `validated` enters the population only for the
+  // Track Only subset (UTV2-1861), which this one is not. If the restriction were
+  // used AS the population query rather than intersected with it, naming this id
+  // would pull it into grading -- a second, weaker admission path.
+  const outside = await processSubmission(
+    {
+      source: 'api',
+      market: 'points-all-game-ou',
+      selection: 'Over 24.5',
+      line: 24.5,
+      odds: -105,
+      stakeUnits: 1,
+      eventName: 'Fixture Event Three',
+    },
+    repositories,
+  );
+  assert.equal(
+    (await repositories.picks.findPickById(outside.pick.id))?.status,
+    'validated',
+  );
+
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set([outside.pick.id, firstPickId]),
+  });
+
+  assert.equal(result.attempted, 1);
+  assert.equal(result.details[0]?.pickId, firstPickId);
+  assert.equal(
+    (await repositories.settlements.listByPick(outside.pick.id)).length,
+    0,
+  );
+  assert.equal(
+    (await repositories.picks.findPickById(outside.pick.id))?.status,
+    'validated',
+  );
 });

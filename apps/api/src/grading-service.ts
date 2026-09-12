@@ -39,6 +39,19 @@ export interface GradingPassResult {
 export interface RunGradingPassOptions {
   logger?: Pick<Console, 'error' | 'warn'>;
   retryState?: GradingRetryState;
+  /**
+   * Restricts the pass to these pick ids, applied AFTER the normal population
+   * read. Absent -- which is how every production caller invokes this -- the
+   * pass grades its whole population exactly as before.
+   *
+   * This exists for the staging journey proof (UTV2-1889), which drives the real
+   * grading pass against the real staging database. Without it, proving one
+   * fixture pick settles would sweep and settle the entire staging backlog, and
+   * the proof's own counters would be a statement about that backlog rather than
+   * about the fixture. It narrows what is graded; it can never widen it, and it
+   * cannot admit a pick the population read did not already return.
+   */
+  restrictToPickIds?: ReadonlySet<string>;
 }
 
 export type GradingRetryState = Map<
@@ -156,7 +169,14 @@ export async function runGradingPass(
   const trackOnlyPicks = validatedPicks.filter((pick) =>
     isEvidencePlanePick(pick),
   );
-  const picks = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+  const population = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+  // Applied after the read, never instead of it: the restriction is an
+  // intersection with what the population already contained, so it can only ever
+  // remove candidates. An id that is not in the population stays ungraded.
+  const restrictToPickIds = options.restrictToPickIds;
+  const picks = restrictToPickIds
+    ? population.filter((pick) => restrictToPickIds.has(pick.id))
+    : population;
 
   // UTV2-1886: one batched read instead of one query per pick. The loop below used to
   // open with `findLatestForPick(pick.id)` -- a sequential round trip for every pick in
