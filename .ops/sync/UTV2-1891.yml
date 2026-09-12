@@ -1,0 +1,78 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1891
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1891
+  objective: Reconcile the mission plan against main 84d74f532 — grading is
+    unblocked, the deploy gap is real again
+  acceptance_criteria:
+    - |-
+      docs/mission/plan.md was last reconciled against main `ecfe3fc99` on 2026-09-10. Twelve PRs have merged since and three load-bearing claims in the plan are now false:
+
+      * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) **(**[UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)**) merged at** `ec9952c28`**.** The plan's first "Requires Griff" item says it blocks four of seven Milestone 2 items by holding `apps/api/src/grading-service.ts` in its `file_scope_lock`. That lock is gone.
+      * [UTV2-1861](https://linear.app/unit-talk-v2/issue/UTV2-1861/admit-track-only-picks-into-the-grading-population-via-the-evidence) **merged at** `ed336a150` — Track Only `validated` picks are admitted to the grading population. The plan records this as blocked.
+      * **Production drift is no longer bookkeeping.** Measured against the deployed `755e52a6c`: 68 commits and **10** container files, including `apps/api/src/grading-service.ts`, `apps/api/src/settlement-service.ts`, `packages/db/src/runtime-repositories.ts` and `packages/domain/src/attribution/attribution-engine.ts`. The plan's standing conclusion — "every changed container file is unreachable or parked" — no longer holds, and a `Deploy` dispatch is owed.
+
+      It must also record, measured read-only against production on 2026-09-12:
+
+      * the single operator pick `dfcd9486` is still `validated`, `market = moneyline`, 0 settlements, 0 outbox
+      * `events` and `game_results` both stop at 2026-06-30; `game_moneyline_win` rows: **0**; `points-all-game-ml`: 280, all score-valued
+      * grading runs (13,772 succeeded, latest 2026-09-12T13:02Z) and has still never had a real pick to grade
+
+      and the current direction: the SGO-backed journey ([griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)) is implemented and awaits a T1 verdict, operator attestation is preserved but deferred, and SGO activation, production writes, deployment and member delivery remain reserved.
+
+      Scope: `docs/mission/plan.md` only. No code, no gate, no approval artifact.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      docs/mission/plan.md was last reconciled against main `ecfe3fc99` on 2026-09-10. Twelve PRs have merged since and three load-bearing claims in the plan are now false:
+
+      * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) **(**[UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)**) merged at** `ec9952c28`**.** The plan's first "Requires Griff" item says it blocks four of seven Milestone 2 items by holding `apps/api/src/grading-service.ts` in its `file_scope_lock`. That lock is gone.
+      * [UTV2-1861](https://linear.app/unit-talk-v2/issue/UTV2-1861/admit-track-only-picks-into-the-grading-population-via-the-evidence) **merged at** `ed336a150` — Track Only `validated` picks are admitted to the grading population. The plan records this as blocked.
+      * **Production drift is no longer bookkeeping.** Measured against the deployed `755e52a6c`: 68 commits and **10** container files, including `apps/api/src/grading-service.ts`, `apps/api/src/settlement-service.ts`, `packages/db/src/runtime-repositories.ts` and `packages/domain/src/attribution/attribution-engine.ts`. The plan's standing conclusion — "every changed container file is unreachable or parked" — no longer holds, and a `Deploy` dispatch is owed.
+
+      It must also record, measured read-only against production on 2026-09-12:
+
+      * the single operator pick `dfcd9486` is still `validated`, `market = moneyline`, 0 settlements, 0 outbox
+      * `events` and `game_results` both stop at 2026-06-30; `game_moneyline_win` rows: **0**; `points-all-game-ml`: 280, all score-valued
+      * grading runs (13,772 succeeded, latest 2026-09-12T13:02Z) and has still never had a real pick to grade
+
+      and the current direction: the SGO-backed journey ([griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)) is implemented and awaits a T1 verdict, operator attestation is preserved but deferred, and SGO activation, production writes, deployment and member delivery remain reserved.
+
+      Scope: `docs/mission/plan.md` only. No code, no gate, no approval artifact.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1891/reconcile-the-mission-plan-against-main-84d74f532-grading-is-unblocked
+    title: Reconcile the mission plan against main 84d74f532 — grading is unblocked,
+      the deploy gap is real again
+    description: |-
+      docs/mission/plan.md was last reconciled against main `ecfe3fc99` on 2026-09-10. Twelve PRs have merged since and three load-bearing claims in the plan are now false:
+
+      * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) **(**[UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)**) merged at** `ec9952c28`**.** The plan's first "Requires Griff" item says it blocks four of seven Milestone 2 items by holding `apps/api/src/grading-service.ts` in its `file_scope_lock`. That lock is gone.
+      * [UTV2-1861](https://linear.app/unit-talk-v2/issue/UTV2-1861/admit-track-only-picks-into-the-grading-population-via-the-evidence) **merged at** `ed336a150` — Track Only `validated` picks are admitted to the grading population. The plan records this as blocked.
+      * **Production drift is no longer bookkeeping.** Measured against the deployed `755e52a6c`: 68 commits and **10** container files, including `apps/api/src/grading-service.ts`, `apps/api/src/settlement-service.ts`, `packages/db/src/runtime-repositories.ts` and `packages/domain/src/attribution/attribution-engine.ts`. The plan's standing conclusion — "every changed container file is unreachable or parked" — no longer holds, and a `Deploy` dispatch is owed.
+
+      It must also record, measured read-only against production on 2026-09-12:
+
+      * the single operator pick `dfcd9486` is still `validated`, `market = moneyline`, 0 settlements, 0 outbox
+      * `events` and `game_results` both stop at 2026-06-30; `game_moneyline_win` rows: **0**; `points-all-game-ml`: 280, all score-valued
+      * grading runs (13,772 succeeded, latest 2026-09-12T13:02Z) and has still never had a real pick to grade
+
+      and the current direction: the SGO-backed journey ([griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)) is implemented and awaits a T1 verdict, operator attestation is preserved but deferred, and SGO activation, production writes, deployment and member delivery remain reserved.
+
+      Scope: `docs/mission/plan.md` only. No code, no gate, no approval artifact.
+    captured_at: 2026-09-12T13:44:49.824Z
+    description_sha256: ffa206f234f0195e93aa341958d47e1215d8a86739f1f344611f02212e69f79c
+  contract_hash: c63799eb7bed01a0dc3a725420d1fe542cf65e86506c262f0a071d54b1ef48a6
