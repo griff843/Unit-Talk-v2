@@ -7,12 +7,12 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f767e81abc77b7952afe88204827e84668f41952",
+    "verified_source_sha": "b22617cae7e23e485813437173e8df2c35b2abbc",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "f767e81abc77b7952afe88204827e84668f41952 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1889/. It supersedes 2b0a01e02a6a4c887496e79eb66622cc2b38f7ef, which was this field's value until the 2026-09-11 direction change. That earlier anchor carried a binding claim -- 'every later commit touches only the proof directory' -- which the direction change made FALSE the moment the journey proof landed, because that commit changes source. The anchor is moved rather than the claim reworded: a binding rule that has been falsified is not repaired by restating it. The lane's source-changing commits are now: 4701685541dfc537ee46b3fdc0b41fe3819d5554 (the original seven files), ba24e12158a84d314ecba228c536944c586bac9d (the lane-PR binding commit CI wrote, touching only the manifest), 2b0a01e02a6a4c887496e79eb66622cc2b38f7ef (the cross-file coupling test), and this head, which adds the SGO journey proof and exports the grading classifier so the proof reads the real one rather than a copy. The proof commit carrying this file sits on top and changes nothing the assertions are about.",
-    "bound_at": "2026-09-11T23:59:00Z"
+    "note": "b22617cae7e23e485813437173e8df2c35b2abbc is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1889/. It supersedes f767e81abc77b7952afe88204827e84668f41952, which was this field's value while the journey proof still failed on nine of its own assertions and while gaps A, B and D were reported rather than repaired. That anchor is moved rather than its claim reworded: the anchor carried a binding claim -- 'every later commit touches only the proof directory' -- and the repair commit falsified it by changing source in apps/ingestor and apps/api. A binding rule that has been falsified is not repaired by restating it.\nThe lane's source-changing commits are now: 4701685541dfc537ee46b3fdc0b41fe3819d5554 (the original seven files), ba24e12158a84d314ecba228c536944c586bac9d (the lane-PR binding commit CI wrote, touching only the manifest), 2b0a01e02a6a4c887496e79eb66622cc2b38f7ef (the cross-file coupling test), f767e81abc77b7952afe88204827e84668f41952 (the SGO journey proof, which at that head reported four gaps), and b22617cae7e23e485813437173e8df2c35b2abbc, which repairs gaps A, B and D in apps/ingestor/src/results-resolver.ts and drives the journey proof to 50/50. The proof commit carrying this file sits on top and changes nothing the assertions are about.",
+    "bound_at": "2026-09-12T00:00:00Z"
   },
   "static_proof": {
     "unit_tests": [
@@ -20,14 +20,14 @@
         "command": "pnpm exec tsx --test scripts/ops/track-only-report.test.ts",
         "exit_code": 0,
         "row_counts": {
-          "tests": 40,
-          "pass": 40,
+          "tests": 50,
+          "pass": 50,
           "fail": 0,
           "skipped": 0,
           "pre_existing": 9,
-          "new": 31
+          "new": 41
         },
-        "label": "The stats aggregate, the report adapter, the operator-attest CLI, the --help anti-drift control and the writer/reader coupling assertion. 9 pre-existing tests in this file are untouched."
+        "label": "The stats aggregate, the report adapter, the operator-attest CLI, the --help anti-drift control, the writer/reader coupling assertion, and the ten integrated SGO journey tests added at b22617cae7e23e485813437173e8df2c35b2abbc. The journey tests run the real SGO parser (fetchSGOResults with an injected fetchImpl, so the provider is never contacted), the real resolveAndInsertResults, the real processSubmission, the real runGradingPass and the real computeTrackOnlyStats against seeded participants, events and event_participants -- normalization, persistence, grading and stats through the shipped code rather than a restatement of it. 9 pre-existing tests in this file are untouched."
       },
       {
         "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
@@ -41,6 +41,43 @@
           "new": 11
         },
         "label": "Moneyline grading, the result-market-key guard, provider-keyed provenance, and the composed Track Only + operator + moneyline journey. The 71 pre-existing tests are the population UTV2-1886 left green and all still pass."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/ingestor/src/results-resolver.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 4,
+          "new": 5
+        },
+        "label": "The gap A/B/D repair, asserted on the resolver itself. The five new tests pin: a moneyline writes one row per side keyed game_moneyline_win with the team's participant_id and a value in {1,0} (and assert directly that neither raw score, 5 or 3, reaches an outcome-keyed row); a tie writes 0.5 on both sides; a half-scored event writes NOTHING and counts skippedMoneylineOutcomeUnresolved; an event with no event_participants rows -- the exact shape of the 3,000+ historical game-line rows -- writes NOTHING and counts skippedTeamSideUnresolved; and a game total is untouched by the moneyline path. The 4 pre-existing UTV2-1287 telemetry tests are unchanged and still pass."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/ingestor/src/ingestor.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 93,
+          "pass": 93,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 93,
+          "new": 0
+        },
+        "label": "The ingestor suite, including test 76 ('results-resolver canonical alias maps include expanded player props and game lines'), which was the one collateral failure of the gap A repair and is the reason it is recorded here. It asserted the sixteen <league>-<bet>-all-game aliases that gap A removed as unreachable by construction. It was not deleted: it now asserts the two keys normalizeSgoProviderMarketKey can actually emit AND that three of the removed keys resolve to undefined, so silently re-adding an unreachable alias fails. The 28 player-prop alias assertions above it are untouched."
+      },
+      {
+        "command": "pnpm test:ops",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 3121,
+          "pass": 3121,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The whole wired ops suite, 21 files, 64.6s, run at this head. Recorded because the journey tests live in the already-wired scripts/ops/track-only-report.test.ts rather than a new file -- pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on an unwired scripts/ test, and root package.json is outside this lane's file_scope_lock."
       }
     ],
     "full_test_suite": {
@@ -64,9 +101,9 @@
       "note": "Not runnable on the workstation by design: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses any target that is not staging xskgrzbteyqdufktjrjx. The CI `verify` job on PR 1567 is the authoritative run and is recorded under runtime_proof."
     },
     "r_level": {
-      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 470168554",
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head b22617cae",
       "verdict": "PASS",
-      "changed_files": 10,
+      "changed_files": 16,
       "rules_matched": [],
       "advisory_missing": []
     },
@@ -74,13 +111,18 @@
       "command": "scripted: for each mutation, apply a single-anchor edit, run the named suite, restore the file from the captured original, and assert the working tree is clean afterwards",
       "baseline": {
         "track_only_report": {
-          "tests": 40,
-          "pass": 40,
+          "tests": 50,
+          "pass": 50,
           "fail": 0
         },
         "grading_service": {
           "tests": 82,
           "pass": 82,
+          "fail": 0
+        },
+        "results_resolver": {
+          "tests": 9,
+          "pass": 9,
           "fail": 0
         }
       },
@@ -224,9 +266,37 @@
           "failing_assertions": [
             "not ok 32 - the writer and the reader agree on the market key and the provenance pair"
           ]
+        },
+        {
+          "id": "resolver-1",
+          "file": "apps/ingestor/src/results-resolver.ts",
+          "change": "computeMoneylineOutcomeBySide infers the winner from whichever side was scored when the other is missing, instead of returning null",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 7 - UTV2-1889: a half-scored event writes nothing -- the outcome is never inferred from one side"
+          ]
+        },
+        {
+          "id": "resolver-2",
+          "file": "apps/ingestor/src/results-resolver.ts",
+          "change": "write the raw team score as actualValue under the game_moneyline_win key instead of the computed outcome",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 5 - UTV2-1889 (gaps A+B+D): a moneyline writes an outcome per side, attributed to the team",
+            "not ok 6 - UTV2-1889: a tied moneyline is a push on both sides, not a win for whoever was read first"
+          ]
+        },
+        {
+          "id": "resolver-3",
+          "file": "apps/ingestor/src/results-resolver.ts",
+          "change": "fall back to the first event_participants row when the provider side cannot be matched, instead of skipping the write",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 8 - UTV2-1889: an unresolvable side writes nothing and is never guessed"
+          ]
         }
       ],
-      "note": "Fourteen mutations, every one fires on the condition it names. Four are worth naming because they are the ones a reader would otherwise have to take on trust. `grading-4` replaces provider-keyed ingestion provenance with the cheaper flat two-value allow-list and test 76 fails -- which is what makes admitting `operator` to the trusted set a widening rather than a loosening, since under a flat list an `operator` event could claim `ingestor.cycle`. `couple-2` catches that same loosening from the opposite side, by pointing the READER's required source for `operator` at `ingestor.cycle` and failing the writer/reader coupling assertion. `grading-2` disables the result-market-key guard and tests 72 and 73 fail, proving the 280 production `points-all-game-ml` score rows are refused rather than merely unlikely to be selected. `stats-1` folds an unrecognised settlement result into `pending`, and test 19 fails -- the silent-forever failure mode. An earlier, weaker form of the help-drift mutation did NOT fire, and that is recorded rather than smoothed over: replacing `--evidence` in only the flag list left it present in the worked example lower in USAGE, so the mutation was ineffective rather than the test blind; `help-1` is the corrected form, which replaces every occurrence and fires."
+      "note": "The three resolver mutations are the load-bearing ones for this lane's stated obligation that historical rows with missing team attribution are never guessed or silently graded. resolver-1 and resolver-3 are each a guess; both turn a test red. Restoring the file returns 9/9."
     },
     "production_measurement": {
       "target": "production zfzdnfwdarxucxtaojxm, read-only, governed -- one SELECT, no write, no containment setting touched",
@@ -286,12 +356,12 @@
   },
   "runtime_proof": {
     "profile": "hosted_live_db",
-    "status": "RECEIPTED",
+    "status": "PENDING",
     "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials ci.yml materializes. Never production. assert-staging-target.ts ran first in each of the three credentialed invocations and printed \"[assert-staging] OK: target is the approved staging project\" before any test executed (the project ref itself is masked by GitHub secret redaction).",
     "note": "This lane is admitted under the route B deferral -- the manifest carries t1_live_db_precondition: deferred_to_ci, so the live-DB evidence is obtained in CI rather than on the contained workstation, and closeout check G6 refuses to close without both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral moves where the evidence is obtained and changes nothing about whether it is obtained. This block is filled from the CI run at the final PR head and is deliberately left PENDING rather than asserted in advance.",
     "coverage_gap": {
       "status": "OPEN",
-      "statement": "The staging job is green and exercises none of this lane's changed paths. The 19 live suites wired at this head were written for other lanes, and this lane deliberately wires no twentieth. The reason is that a live suite here would have to seed its own events, event_participants and game_results rows under market_key game_moneyline_win -- and production holds zero such rows and 280 points-all-game-ml rows with no participant_id, so the suite would be proving that the seed it just wrote can be read back, not that the journey works. Asserting the seed would read as coverage and would be worth nothing.",
+      "statement": "The staging job exercises none of this lane's changed paths, and this lane deliberately wires no twentieth live suite. A live suite here would have to seed its own events, event_participants and game_results rows under market_key game_moneyline_win -- and production holds zero such rows against 280 points-all-game-ml rows with no participant_id -- so the suite would prove that the seed it just wrote can be read back, not that the journey works. What replaced it at b22617cae7e23e485813437173e8df2c35b2abbc is an INTEGRATED in-process journey: the real SGO parser, the real resolver, the real submission path, the real grading pass and the real stats aggregate, composed end to end against the in-memory repositories. That is a genuine integration claim and it is still not a live-database claim, which is why this gap stays OPEN rather than being narrowed by the journey tests.",
       "why_that_is_the_honest_position_and_not_a_shortfall": "The live suites exist to prove that a real driver behaves as the in-memory one is assumed to. The three code paths here make no new database call and no new query shape: grading reads `game_results` through the same repository method it already used, and the stats aggregate is a pure function over rows the report already fetched with `select: '*'`. What WOULD need live proof is a result actually written under `game_moneyline_win` -- and there are zero such rows in production or staging, because writing one is an operator action under DB_ENVIRONMENT_OPERATOR_POLICY.md that this lane deliberately does not perform. Claiming live coverage by seeding a row would prove the seed, not the journey.",
       "what_remains_unproven": [
         "that a `game_moneyline_win` row written by operator-attest-result.ts --apply is read back by the grading pass against real PostgREST",
@@ -368,8 +438,8 @@
       "run_id": 34651506561,
       "job_id": 103435276859,
       "run_conclusion": "success",
-      "binding_rule": "completed_lane_run: run 34651506561 had ALREADY CONCLUDED SUCCESS before the commit carrying this citation was written, which is the whole point of choosing it. An earlier draft of this block cited run 34650795093; that run's staging job went green and produced a valid receipt, but the run itself was then CANCELLED during `verify` -- by my own subsequent pushes to this branch, via the concurrency group. Citing an in-flight run means the act of recording the citation can invalidate it, and that loop only ends by citing a run that is already finished. Recorded rather than quietly swapped, because the failure mode is the point.\nThe head this run used is not necessarily the current PR head -- writing a receipt into a proof bundle moves the head, so no bundle can cite a run at its own head. The claim that does not go stale: every commit on this lane after 2b0a01e02 (= sha_binding.verified_source_sha) touches only docs/06_status/proof/UTV2-1889/, so every such head compiles a source tree byte-identical to the bound head's. Checkable with `git diff --name-only 2b0a01e02 <any later head on this lane>`.\n`verify` and `Writable DB proof (staging only)` green on the MERGE SHA is asserted separately by closeout check G6, which is where the route B deferral is actually enforced."
+      "binding_rule": "WITHDRAWN -- see runtime_proof.binding_rule. This block records the run that was cited before the repair and is retained so the withdrawal is legible rather than silent. It is not evidence for this head."
     },
-    "binding_rule": "REBOUND 2026-09-11 on the direction change. The previously cited run (34651506561, head 7dd4ccb69) is NO LONGER VALID for this bundle: it compiled the tree at 2b0a01e02a6a4c887496e79eb66622cc2b38f7ef, and the journey-proof commit f767e81abc77b7952afe88204827e84668f41952 changes source on top of it. A receipt for a superseded source tree is not weaker evidence, it is evidence for a different artifact, so it is withdrawn rather than carried forward with a caveat.\nThe replacement receipt is cited from a staging run at or after f767e81abc77b7952afe88204827e84668f41952, recorded in `queries` and `row_counts` below once that run has CONCLUDED -- never while in flight. That ordering is not fussiness: the staging DB proof job serialises through a concurrency group, so a new push CANCELS the run in progress, and the act of committing a citation to an in-flight run is what invalidates it. This lane already paid for that lesson once (run 34650795093 went green on its staging job and was then cancelled during `verify` by the very push carrying its citation). The loop terminates only by citing a finished run.\nThe head-independent claim, re-anchored: every commit on this lane after f767e81abc77b7952afe88204827e84668f41952 touches only docs/06_status/proof/UTV2-1889/, so every later head compiles a source tree byte-identical to the bound head's. Checkable with `git diff --name-only f767e81abc77b7952afe88204827e84668f41952 <head>`.\n`verify` and `Writable DB proof (staging only)` green on the MERGE SHA is asserted separately by closeout check G6, which is where the route B deferral is actually enforced."
+    "binding_rule": "REBOUND b22617cae 2026-09-12, on the gap A/B/D repair. The previously cited run (34651506561, head 7dd4ccb69) is NOT VALID for this bundle: it compiled the tree at 2b0a01e02, and two later commits change source on top of it -- f767e81abc77b7952afe88204827e84668f41952 (the journey proof) and b22617cae7e23e485813437173e8df2c35b2abbc (the repair). A receipt for a superseded source tree is not weaker evidence, it is evidence for a different artifact, so it stays withdrawn rather than being carried forward with a caveat.\nThe replacement receipt is cited from a staging run at or after b22617cae7e23e485813437173e8df2c35b2abbc, recorded in `queries` and `row_counts` below once that run has CONCLUDED -- never while in flight. That ordering is not fussiness: the staging DB proof job serialises through a concurrency group, so a new push CANCELS the run in progress, and the act of committing a citation to an in-flight run is what invalidates it. This lane already paid for that lesson once (run 34650795093 went green on its staging job and was then cancelled during `verify` by the very push carrying its citation). The loop terminates only by citing a finished run.\nThe head-independent claim, re-anchored: every commit on this lane after b22617cae7e23e485813437173e8df2c35b2abbc touches only docs/06_status/proof/UTV2-1889/, so every later head compiles a source tree byte-identical to the bound head's. Checkable with `git diff --name-only b22617cae7e23e485813437173e8df2c35b2abbc <head>`.\n`verify` and `Writable DB proof (staging only)` green on the MERGE SHA is asserted separately by closeout check G6, which is where the route B deferral is actually enforced."
   }
 }

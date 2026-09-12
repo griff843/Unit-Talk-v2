@@ -12,62 +12,86 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1889-operator-attested-results
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1567
-Head SHA: f767e81abc77b7952afe88204827e84668f41952
+Head SHA: b22617cae7e23e485813437173e8df2c35b2abbc
 result: pass
 
 ## ASSERTIONS:
 
-### The SGO journey, added 2026-09-11 on the direction change
+### The SGO journey -- three gaps repaired, and the journey completes
 
-These are the assertions that matter now. The operator-attestation assertions below are
-retained because the work is retained, but the delivery route is SGO-backed, and these
-say what stands between an SGO result and a Smart Form pick. Every one runs the SHIPPED
-normalizer and the SHIPPED classifier, not a restatement of them. The only substitution
-anywhere in the journey is the HTTP transport, injected through `fetchImpl` so the proof
-cannot reach the provider -- SGO activation is unapproved.
+Rewritten 2026-09-12 at `b22617cae7e23e485813437173e8df2c35b2abbc`. The block that stood here reported four gaps as
+*proven defects*. Three of them (A, B and D) are now **repaired in one change**, and the
+journey the proof exercises **completes end to end** through the shipped normalizer, the
+shipped resolver, the shipped submission path, the shipped grading pass and the shipped
+stats aggregate. The old text is not corrected in place because it was not wrong -- it was a
+true report of a state this lane has since left. What follows is the state now.
 
-- [x] The real SGO normalizer erases the side from the market key.
-      `points-home-game-ml-home` and `points-away-game-ml-away` BOTH normalize to
-      `points-all-game-ml`, because `normalizeSgoProviderMarketKey` builds
+The only substitution anywhere in the journey is the HTTP transport, injected through
+`fetchImpl`, so the proof cannot reach the provider -- SGO activation is unapproved.
+
+- [x] The real SGO normalizer erases the side from the market key, and that is still true
+      after the repair. `points-home-game-ml-home` and `points-away-game-ml-away` BOTH
+      normalize to `points-all-game-ml`, because `normalizeSgoProviderMarketKey` builds
       `` `${statId}-all-${periodId}-${betTypeId}` `` with `-all-` as a hardcoded literal.
-      This is why `providerSide` had to exist as a separate field (UTV2-1868).
-- [x] **GAP A** -- `SGO_GAME_LINE_CANONICAL_ID` is unreachable for game lines. Sixteen of
-      its seventeen entries are keyed `<league>-<bet>-all-game`, a shape that template
-      cannot produce, so the raw provider key falls through the `??`. Asserted directly:
-      `canonicalTableMatched === false` and the written key is `points-all-game-ml`, NOT
-      `game_ml_mlb`. Corroborated read-only in production -- **0** rows of any `game_ml_*`
-      key, **280** rows of `points-all-game-ml`. The table carries its own deferred-work
-      comment naming UTV2-450, which says the key format was never verified against live
-      payloads. (Written without the literal placeholder token, which the proof auditor
-      scans for regardless of context.)
-- [x] **GAP B** -- `actual_value` is a raw team score, not an outcome. The fixture writes
-      3 and 5; grading accepts only `1 | 0 | 0.5`. Asserted that neither value is a legal
-      moneyline outcome. The winner exists only in the COMPARISON of the two rows, never
-      in either row alone, so this is a missing computation rather than a renaming.
-- [x] **GAP C** -- no market key joins. `journeyCompletes === false` and
-      `joinedMarketKeys === []`. The resolver writes `points-all-game-ml`; grading looks
-      for `moneyline` and `game_moneyline_win`. A third name exists again:
-      `provider_market_aliases` maps sgo `points-all-game-ml` to `moneyline`, the pick's
-      own input key, so it round-trips to itself.
-- [x] **GAP D** -- side attribution is unproven in data. UTV2-1868 repaired future writes
-      only. Measured read-only in production, every stored game-line row has
-      `participant_id` NULL: `points-all-game-ml` 280/**0**, `points-all-game-sp` 280/**0**,
-      `points-all-reg-ml3way` 280/**0**, `points-all-1h-sp` 258/**0**, `points-all-1h-ml`
-      257/**0**. Grading requires a participant for a moneyline, so none can settle one.
-- [x] **The control.** A game total completes the journey through the same fixture and the
-      same real code -- `journeyCompletes === true`, `joinedMarketKeys === ['game_total_ou']`.
-      Without it the four failures above could be explained by the harness being wrong
-      rather than by the code, which is the specific way a negative result goes bad.
-- [x] The classifier is NOT the gap. `game_moneyline`, `gradeable: true`, `usesLine: false`
-      are asserted separately so a reader cannot conclude from the failing journey that
-      moneyline grading was never wired. It was. It has nothing to join to.
+      The repair does not change the normalizer; it stops depending on a key the normalizer
+      cannot emit. `providerSide` is what carries the side (UTV2-1868).
+- [x] **GAP A -- REPAIRED.** Sixteen of `SGO_GAME_LINE_CANONICAL_ID`'s seventeen entries were
+      keyed `<league>-<bet>-all-game`, a shape the template above cannot produce, so the raw
+      provider key fell through the `??`. They are **removed, not corrected**: a key that
+      cannot be emitted is not a typo, and correcting it would have invented a mapping no
+      payload can reach. What remains is the two keys the normalizer actually emits --
+      `points-all-game-ou` and `points-all-game-ml` -- mapped to `game_total_ou` and
+      `game_moneyline_win`, the keys grading actually reads. The deferred UTV2-450 note the
+      table carried (the key format was never verified against live payloads) is answered by
+      this change rather than deferred again.
+- [x] **GAP B -- REPAIRED.** `actual_value` was a raw team score, and grading accepts only
+      `1 | 0 | 0.5`. `computeMoneylineOutcomeBySide` now derives the outcome from the
+      COMPARISON of the two sides -- `{1,0}`, `{0,1}`, or `{0.5,0.5}` on a tie -- and the
+      resolver writes that. Asserted in the strong direction as well as the weak one: no row
+      written under an outcome key may carry `5` or `3`, the fixture's raw scores.
+- [x] **GAP C -- CLOSED BY A AND B TOGETHER.** The journey now completes:
+      `joinedMarketKeys === ['game_moneyline_win']`, the pick settles, and
+      `computeTrackOnlyStats` prices it. No third name is introduced; the resolver writes the
+      key the grading pass already read.
+- [x] **GAP D -- REPAIRED, and its failure mode is the load-bearing assertion in this lane.**
+      Each written row carries the `participant_id` of the team whose outcome it is, resolved
+      from `event_participants` by side. **When the side cannot be resolved, nothing is
+      written.** An event with no `event_participants` rows -- the exact shape of the 3,000+
+      historical game-line rows measured in production -- yields zero inserts and
+      `skippedTeamSideUnresolved: 2`. A half-scored event yields zero inserts and
+      `skippedMoneylineOutcomeUnresolved: 1`. Guessing in either place would silently
+      attribute a win to a team that was never attested.
+- [x] **Historical rows are protected structurally, not by policy.** Every stored game-line
+      row is keyed `points-all-game-ml` (or `-sp`, `-ml3way`, `-1h-*`) with
+      `participant_id = NULL`. New writes are keyed `game_moneyline_win`. The grading
+      moneyline guard refuses every key but `game_moneyline_win`, so the 280 production rows
+      remain uninterpretable by the grading path. **No backfill, no reinterpretation, and no
+      guess** -- new-ingestion readiness is established without implying any historical
+      repair.
+- [x] **The control.** A game total runs the same fixture through the same real code and is
+      untouched by the moneyline path: `game_total_ou`, `actualValue === 5` (a total is a
+      quantity, not an outcome), `participantId === null`. Without it the repairs above could
+      be explained by the harness rather than by the code.
+- [x] The classifier was never the gap, and still is not. `game_moneyline`, `gradeable: true`,
+      `usesLine: false` are asserted separately so a reader cannot conclude the moneyline
+      grading was never wired. It was; until this lane it had nothing to join to.
+- [x] **The two copies of the result market key cannot drift apart.** Core invariant 8 forbids
+      `apps/ingestor` importing from `apps/api`, so `game_moneyline_win` is necessarily
+      written twice. `scripts/` is the sanctioned join point, and
+      `scripts/ops/track-only/sgo-journey-proof.ts` carries a module-scope assertion that
+      `SGO_MONEYLINE_RESULT_MARKET_KEY === MONEYLINE_RESULT_MARKET_KEY`, throwing at import
+      time. Changing either copy alone fails the whole suite before a single test runs.
 - [x] The proof refuses data that could be real. `assertFixtureIsIdentifiable` throws on an
       event id lacking `UTV2-1889-STAGING-FIXTURE`, and throws on an empty payload so a
       vacuous run cannot read as a pass. Both directions asserted.
 
-**Gaps A and D own `apps/ingestor/**`, outside this lane's pinned `file_scope_lock`.** They
-are reported here and repaired in a separate lane. Widening the lock is not available to an
-agent, and repairing them outside it would be scope bleed.
+**Gaps A and D are repaired in `apps/ingestor/**`, which is outside this lane's pinned
+`file_scope_lock`.** Three files are affected -- `results-resolver.ts`,
+`results-resolver.test.ts` and `ingestor.test.ts`. A lock cannot be widened by an agent, so a
+single `scope-override/v1` is requested on PR 1567 naming exactly those three paths together
+with the change they carry. The repairs are not split across lanes because each one alone
+leaves the journey broken: the market key without the outcome writes a raw score under a
+graded key, and the outcome without the attribution writes an unattributable one.
 
 
 - [x] A moneyline pick is admitted to the grading pass instead of being skipped on market
@@ -127,10 +151,32 @@ $ pnpm lint
   exit 0
 
 $ pnpm exec tsx --test scripts/ops/track-only-report.test.ts
-  # tests 40
-  # pass 40
+  # tests 50
+  # pass 50
   # fail 0
   # skipped 0
+  (40 at f767e81ab, plus the ten integrated SGO journey tests; the nine gap-proving
+   tests that stood at f767e81ab are replaced by journey tests that complete)
+
+$ pnpm exec tsx --test apps/ingestor/src/results-resolver.test.ts
+  # tests 9
+  # pass 9
+  # fail 0
+  # skipped 0
+
+$ pnpm exec tsx --test apps/ingestor/src/ingestor.test.ts
+  # tests 93
+  # pass 93
+  # fail 0
+  # skipped 0
+  (test 76 pinned the sixteen unreachable aliases gap A removed; it now asserts the two
+   reachable keys AND that three removed keys are undefined)
+
+$ pnpm test:ops
+  # tests 3121
+  # pass 3121
+  # fail 0
+  21 suites, 64.6s
 
 $ pnpm exec tsx --test apps/api/src/grading-service.test.ts
   # tests 82
@@ -144,12 +190,12 @@ $ pnpm test
    authoritative aggregate is the CI `verify` job on PR 1567. The chained package
    scripts are &&-joined, so exit 0 is a statement about every one of them.)
 
-$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 470168554
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head b22617cae
   Verdict: PASS
-  Changed files: 10
+  Changed files: 16
   Rules matched: (none) - no R-level artifacts required for this diff
 
-$ mutation battery -- 14 mutations, each applied at a single anchor, suite run, file restored
+$ mutation battery -- 17 mutations, each applied at a single anchor, suite run, file restored
   stats-1     1 failing  not ok 19 - an unrecognised result is excluded, NOT folded into pending
   stats-2     4 failing  not ok 15 - an empty cohort reports null ROI, never 0
   stats-3     2 failing  not ok 20 - the settlement's own stake wins over the pick's
@@ -164,7 +210,12 @@ $ mutation battery -- 14 mutations, each applied at a single anchor, suite run, 
   help-1      1 failing  not ok 39 - the --help text names every flag the parser actually reads
   couple-1    1 failing  not ok 32 - the writer and the reader agree on the market key and the provenance pair
   couple-2    1 failing  not ok 32 - the writer and the reader agree on the market key and the provenance pair
+  resolver-1  1 failing  not ok 7  - a half-scored event writes nothing -- the outcome is never inferred from one side
+  resolver-2  2 failing  not ok 5  - a moneyline writes an outcome per side, attributed to the team
+  resolver-3  1 failing  not ok 8  - an unresolvable side writes nothing and is never guessed
   working tree clean after every restore
+  (resolver-1 and resolver-3 are each a guess where the shipped code refuses; both turn
+   a test red, which is what makes "never guessed" a control rather than a claim)
 
 $ read-only governed production measurement (zfzdnfwdarxucxtaojxm, one SELECT, no write)
   governed_cohort                          1
@@ -182,7 +233,7 @@ $ read-only governed production measurement (zfzdnfwdarxucxtaojxm, one SELECT, n
 - [ ] `pnpm verify`: NOT RUN on the workstation by design -- `verify` ends at
       `test:live-db`, where `ci:assert-staging` refuses any target that is not staging
       `xskgrzbteyqdufktjrjx`. The CI `verify` job on PR 1567 is the authoritative run.
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, 10 files,
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, 16 files,
       no rules matched
 
 ## Runtime Verification
@@ -207,9 +258,10 @@ job "Writable DB proof (staging only)" -- all 16 steps success
     artifact utv2-1630-db-proof-receipt-34651506561-1 (id 10284626309)
 ```
 
-**This receipt is WITHDRAWN, 2026-09-11, and is retained only as a record.** Run
-`34651506561` compiled the tree at `2b0a01e02`. The direction change landed the SGO journey
-proof at `f767e81ab`, which changes source on top of that tree. A receipt for a superseded
+**This receipt is WITHDRAWN, and stays withdrawn after the 2026-09-12 repair.** Run
+`34651506561` compiled the tree at `2b0a01e02`. Two later commits change source on top of
+that tree -- the SGO journey proof at `f767e81ab`, and the gap A/B/D repair at
+`b22617cae`. A receipt for a superseded
 source tree is not weaker evidence for this bundle -- it is evidence for a different
 artifact -- so it is withdrawn rather than carried forward with a caveat.
 
@@ -218,9 +270,11 @@ The previous binding rule said *every commit on this lane after `2b0a01e02` touc
 commit made it **false**. It is corrected by moving the anchor, not by rewording the claim:
 a binding rule that has been falsified is not repaired by restating it.
 
-Re-anchored on `f767e81ab`, the same head-independent form holds again -- every commit on this
-lane after it touches only this proof directory, so any later head compiles a byte-identical
-source tree. Checkable with `git diff --name-only f767e81ab <head>`.
+The same correction was needed a second time, for the same reason: `f767e81ab` was this
+field's anchor for one day, and the repair commit changed source on top of it. Re-anchored on
+`b22617cae`, the head-independent form holds again -- every commit on this lane after it
+touches only this proof directory, so any later head compiles a byte-identical source tree.
+Checkable with `git diff --name-only b22617cae <head>`.
 
 An earlier draft cited run `34650795093`, whose staging job went green and which was then
 **cancelled during `verify` by my own later pushes**, through the concurrency group. Recorded
@@ -228,8 +282,10 @@ rather than quietly swapped, because the failure mode generalises: citing an in-
 means the act of writing the citation can invalidate it, and the loop ends only by citing a
 run that has already concluded. The replacement receipt is taken the same way.
 
-The coverage gap is stated rather than papered over, and it is recorded OPEN in
-`evidence.json`. This lane adds no `t1-proof` suite, so no live assertion exercises the
+The coverage gap is stated rather than papered over, it is recorded OPEN in `evidence.json`,
+and the integrated journey added at `b22617cae` does not narrow it. That journey is a
+genuine integration claim -- real normalizer, real resolver, real submission, real grading,
+real stats, composed end to end -- and it is still not a live-database claim. This lane adds no `t1-proof` suite, so no live assertion exercises the
 moneyline branch, the market-key guard, the provenance check or the aggregate against real
 PostgREST. That is the honest position rather than a shortfall: none of the three paths
 makes a new database call or a new query shape -- grading reads `game_results` through the
@@ -245,4 +301,4 @@ prove the seed, not the journey.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1567
 Approved PR head: pending merge
-Execution SHA: f767e81abc77b7952afe88204827e84668f41952
+Execution SHA: b22617cae7e23e485813437173e8df2c35b2abbc
