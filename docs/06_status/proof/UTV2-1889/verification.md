@@ -244,24 +244,50 @@ rather than on the contained workstation, and closeout check `G6` refuses to clo
 both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral
 moves where the evidence is obtained and changes nothing about whether it is obtained.
 
-That evidence now exists, at the rebound head. Run `34690701925`, job `103545339988`, at
-head `bdc03146e2b9745b8abe2d61a73d191eac266c03` -- run conclusion **success**, with `verify`
-(job `103546566091`) green in the same run. Every number below was read out of that job log,
-not written from recollection:
+That evidence now exists, at the current head, and it now includes the journey itself
+running against the staging database rather than only in memory. Run `34700925304`
+**attempt 2**, job `103572734394`, at head `c4f22cc3117387dca5edd1e73ae66bb676ab9fa0` --
+run conclusion **success**, with `verify` (job `103573830766`) green in the same run. Every
+number below was read out of that job log, not written from recollection:
 
 ```
-job "Writable DB proof (staging only)" -- all 17 steps success, 11:18:46Z -> 11:29:20Z
+job "Writable DB proof (staging only)" -- all 17 steps success, 15:02:52Z -> 15:11:01Z
   [assert-staging] OK: target is the approved staging project   (x3, before any test)
-  seed-staging  distribution_receipts/outbox/system_runs reset to 0; sports 9, cappers 1,
-                market_families 6, selection_types 3, market_types 133 re-seeded
+  seed-staging  distribution_receipts 0, distribution_outbox 0, system_runs 0 rows deleted;
+                sports 9, cappers 1, market_families 6, selection_types 3,
+                market_types 133 synthetic rows upserted;
+                retained by design: settlement_records, picks, submissions
   migration head 20260901150000_utv2_1811_rate_limit_buckets.sql
   pnpm test:db            -> apps/api/src/database-smoke.test.ts  7/7 pass, 0 fail, 0 skipped
-  pnpm test:t1-proof:live -> 19 suites, 19 TAP blocks summed    119/119 pass, 0 fail, 0 skipped
-  aggregate across both credentialed steps                      126 assertions, 0 fail, 0 skipped
+  pnpm test:t1-proof:live -> 20 suites, 20 TAP blocks summed    125/125 pass, 0 fail, 0 skipped
   receipt .out/ci-db-proof-receipt.json
-    sha256 1d016102eaa14b757cb3ffb8920e8ba49377a023fefd7190e79bdaedfaaa6801
-    artifact utv2-1630-db-proof-receipt-34690701925-1 (id 10297268200, 1457 bytes)
+    sha256 054476ad638e7e717c2d6761bb8c74b1a5324c268f38fd41b4662b46a6297b99
+    artifact utv2-1630-db-proof-receipt-34700925304-2 (id 10300353136, 1459 bytes)
+  CI_FIXTURE_RUN_ID utv2-1630-34700925304-2
 ```
+
+**The twentieth suite is this lane's, and it is the one that turns an in-memory integration
+claim into a live-database one.** `pnpm test:t1-proof:live` previously listed nineteen
+suites; `package.json` now appends one entry,
+`scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts`, which contributed
+6 of the 125 assertions above:
+
+```
+ok 1 - the fixture is namespaced and identifiable, so no row it writes can be mistaken for real data
+ok 2 - the real resolver wrote real rows to staging, read back from the database
+ok 3 - the real grading pass settled the pick, and the settlement persists in staging
+ok 4 - Track Only stays validated and creates no delivery, asserted against the real tables
+ok 5 - the real statistics compute from the persisted settlement
+ok 6 - an incomplete result is refused rather than guessed, against staging
+# pass 6   # fail 0   # skipped 0
+```
+
+**Attempt 1 of this run failed, and is recorded rather than omitted.** The
+`database-smoke.test.ts` case *"UTV2-996: re-settling a settled pick creates correction"*
+failed with `TypeError: fetch failed` inside
+`DatabasePickRepository.getPromotionBoardState` -- a transient Supabase network failure in a
+pre-existing test that this lane does not touch. The **whole run** was re-run rather than
+`gh run rerun --failed`, which would have broken the attempt-scoped receipt.
 
 **The receipt this replaces is WITHDRAWN and stays withdrawn.** Run `34651506561`
 (job `103435276859`, head `7dd4ccb69`, sha256 `3fb82300deb8a1fb04188cee9465f17581cfb8d10512b5b171fdc941a669159e`, artifact id `10284626309`) compiled the tree at `2b0a01e02`. Two
@@ -279,50 +305,96 @@ The same correction was needed a second time, for the same reason: `f767e81ab` w
 field's anchor for one day, and the repair commit changed source on top of it. Re-anchored on
 `b22617cae`, the head-independent form holds again and is now verified rather than asserted.
 
-It needed one further correction, and the correction is the same move a third time rather than
-a reworded claim. A sanctioned `main` resync (`git-merge-main`, merge commit `b015c3ea6`)
-brought `docs/06_status/readiness/readiness-score.json` onto this branch from `main`, so
-*"every later commit touches only `docs/06_status/proof/UTV2-1889/`"* became literally false
-again -- this time through no commit of this lane's own. The proof-directory predicate was
-never the load-bearing one; the source-tree predicate is, and it is the one now stated:
+It has needed the same correction twice more, and each time the move is the same one: the
+anchor is moved, never the claim reworded. A sanctioned `main` resync brought main's files
+onto this branch, and then Griff's direction to finish the staging proof in-lane changed lane
+source twice -- `9a2b45786` (the staging journey, including the one-line `package.json`
+wiring entry) and `c4f22cc31` (namespacing the fixture's event name after the first staging
+run returned 4 pass / 2 fail). The proof-directory predicate was never the load-bearing one;
+the source-tree predicate is, and it is the one stated, verified at the current head:
 
 ```
-git diff --name-only b22617cae b015c3ea6 \
-  -- 'apps/**' 'packages/**' 'scripts/**' 'supabase/**' '.github/**'   ->  (empty)
-git diff --name-only b22617cae b015c3ea6                              ->  3 paths, all docs:
-    docs/06_status/proof/UTV2-1889/evidence.json
-    docs/06_status/proof/UTV2-1889/verification.md
-    docs/06_status/readiness/readiness-score.json
+git diff --name-only c4f22cc31 HEAD \
+  -- 'apps/**' 'packages/**' 'scripts/**' 'supabase/**' '.github/**' 'package.json'  ->  (empty)
 ```
 
-So the run cited above, taken at `bdc03146e`, compiled a source tree byte-identical to the
-execution anchor's -- and so does `b015c3ea6`, and so will any later head that changes only
-docs. That is what makes the receipt survive the resync instead of having to be retaken.
+So the run cited above compiled a source tree byte-identical to the execution anchor's, and
+so will any later head that changes only docs. That is what lets the receipt survive a
+docs-only commit or a further resync instead of having to be retaken.
 
-An earlier draft cited run `34650795093`, whose staging job went green and which was then
-**cancelled during `verify` by my own later pushes**, through the concurrency group. Recorded
-rather than quietly swapped, because the failure mode generalises: citing an in-flight run
-means the act of writing the citation can invalidate it, and the loop ends only by citing a
-run that has already concluded. Run `34690701925` was cited only after it concluded, which is
-how the loop terminated.
+The coverage gap that stood here is **CLOSED**, and it closed by execution rather than by
+argument. `evidence.json` now records it `CLOSED` at `c4f22cc3117387dca5edd1e73ae66bb676ab9fa0`.
 
-The coverage gap is stated rather than papered over, it is recorded OPEN in `evidence.json`,
-and the integrated journey added at `b22617cae` does not narrow it. That journey is a
-genuine integration claim -- real normalizer, real resolver, real submission, real grading,
-real stats, composed end to end -- and it is still not a live-database claim. This lane adds no `t1-proof` suite, so no live assertion exercises the
-moneyline branch, the market-key guard, the provenance check or the aggregate against real
-PostgREST. That is the honest position rather than a shortfall: none of the three paths
-makes a new database call or a new query shape -- grading reads `game_results` through the
-repository method it already used, and the aggregate is a pure function over rows the
-report already fetched with `select: '*'`. What would genuinely need live proof is a
-result actually written under `game_moneyline_win`, and there are **zero** such rows in
-production. Writing one is an operator action under `DB_ENVIRONMENT_OPERATOR_POLICY.md`
-that this lane deliberately does not perform; seeding one to claim live coverage would
-prove the seed, not the journey.
+The text this paragraph replaces asserted two things that are now refuted. It said a live
+suite here *"would prove that the seed it just wrote can be read back, not that the
+journey works"*, and it named a production operator attestation as the action that closes
+the gap. Both were wrong, and the reasoning error is nameable rather than vague: it
+conflated seeding a `game_moneyline_win` **row** with seeding a provider **payload**. The
+suite seeds neither result rows nor settlements. It hands the real SGO parser a provider
+payload and asserts what the real resolver, the real submission path, the real grading
+pass and the real stats aggregate do with it against real PostgREST. An operator
+attestation is therefore not the only way, and was not the way, this gap closed. It
+remains a genuinely deferred operator item on its own merits, no longer this gap's
+closing condition.
+
+What actually closed it:
+
+```
+CI run 34700925304, attempt 2
+job 103572734394  "Writable DB proof (staging only)"  -> success
+job 103573830766  "verify"                            -> success
+step "Run the T1 live proof suites against staging"
+  scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts
+  # pass 6   # fail 0   # skipped 0
+    ok 1 - the fixture is namespaced and identifiable, so no row it writes can be mistaken for real data
+    ok 2 - the real resolver wrote real rows to staging, read back from the database
+    ok 3 - the real grading pass settled the pick, and the settlement persists in staging
+    ok 4 - Track Only stays validated and creates no delivery, asserted against the real tables
+    ok 5 - the real statistics compute from the persisted settlement
+    ok 6 - an incomplete result is refused rather than guessed, against staging
+staging project ref  xskgrzbteyqdufktjrjx
+CI_FIXTURE_RUN_ID    utv2-1630-34700925304-2
+log sha256           01c31aac60d098105c695f7359f005084b7de8691e3000e860d87362552ca52e
+```
+
+**Zero skips is enforced, not observed.** When `CI_FIXTURE_RUN_ID` is present the suite sets
+`mustRun` and refuses to skip: a missing credential or an unapproved target fails the tests
+rather than quietly reporting them skipped. Verified in both directions before this run --
+with no staging target the suite reports 6 skipped / 0 fail; with `CI_FIXTURE_RUN_ID` set
+against a bad target it reports 0 skipped / 6 fail.
+
+**The first staging run failed, and one of its two failures was worth having.** It was 4 pass
+/ 2 fail. Failure 5 was a plain assertion bug -- `TrackOnlyStats.record` is
+`{win, loss, push, decided}` and the test read `.wins`/`.losses`; `.decided` had already
+passed. Failure 6 was an isolation hole in the fixture, and it exposed a real property of
+the grading service: `chooseEventForPick` resolves a pick's event from `metadata.eventName`,
+filters candidates by name, then orders by start-time proximity, and **never cross-checks
+the participants**. Both fixtures carried the same event name and date, so the half-scored
+run's pick settled against the fully-scored run's event -- the refusal the test exists to
+prove was real (no `game_moneyline_win` row was written for the half-scored event) and the
+test could not see it. The event name now carries the namespace alongside the id, and the
+test asserts the two fixtures differ by name as well as by row id, so a regression to a
+shared name fails loudly instead of settling against the wrong event.
+
+**What remains unproven, kept separate by interface rather than blurred together:**
+
+- **Production** -- nothing in this lane ran against production. No production row was read
+  or written, and no production claim is made.
+- **Production** -- that an operator attestation written by
+  `scripts/ops/track-only/operator-attest-result.ts --apply` lands rows in production.
+  Deferred operator work under `DB_ENVIRONMENT_OPERATOR_POLICY.md`, deliberately not
+  performed here.
+- **Browser** -- no browser interface is exercised by this suite. The Smart Form e2e suite
+  asserts the persisted pick and its gate defaults off.
+- **Scale** -- this proves one Track Only moneyline through the journey. It is not a
+  repeatability claim, and not a statistics claim over a real cohort.
+
+No containment setting was changed. SGO remains parked and member delivery remains off; the
+suite writes only namespaced fixture rows to staging.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1567
 Approved PR head: pending merge
-Execution SHA: b22617cae7e23e485813437173e8df2c35b2abbc
+Execution SHA: c4f22cc3117387dca5edd1e73ae66bb676ab9fa0
