@@ -2633,6 +2633,93 @@ test('findExecutedP0Delegation counts only a live, enforced step of the P0 Proto
   );
 });
 
+test('findExecutedP0Delegation rejects shell text that names the evaluator without executing it', () => {
+  // Independent review (round 1) probed the shell matcher with five bodies
+  // that mention the command and never run it. Each must stay refused.
+  const withRun = (lines: string[]): string =>
+    p0Consumer({ step: 'run' }).replace(
+      '        run: node scripts/ops/tracker-independence/p0-workflow.cjs',
+      ['        run: |', ...lines.map((line) => `          ${line}`)].join('\n'),
+    );
+  const probes: Record<string, string[]> = {
+    'trailing comment on an executed line': ['echo ok # node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'the command as an argument to echo': ['echo node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'the command inside a heredoc payload': [
+      "cat <<'EOF'",
+      'node scripts/ops/tracker-independence/p0-workflow.cjs',
+      'EOF',
+    ],
+    'the command inside an unquoted heredoc payload': [
+      'cat <<EOF > /dev/null',
+      'node scripts/ops/tracker-independence/p0-workflow.cjs',
+      'EOF',
+    ],
+    'the command behind a false branch': ['if false; then node scripts/ops/tracker-independence/p0-workflow.cjs; fi'],
+    'the command inside a double-quoted string': ['echo "node scripts/ops/tracker-independence/p0-workflow.cjs"'],
+    'a longer path with the evaluator as a suffix': ['node vendor/scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'the evaluator path with a suffix': ['node scripts/ops/tracker-independence/p0-workflow.cjs.bak'],
+  };
+  for (const [label, lines] of Object.entries(probes)) {
+    assert.equal(findExecutedP0Delegation(withRun(lines)).executed, false, label);
+  }
+
+  // Statement boundaries that DO execute the command still count: after a
+  // trailing comment on a different line, after `&&`, and after `;`.
+  const executed: Record<string, string[]> = {
+    'plain invocation with a comment line above': ['# classify', 'node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'invocation after &&': ['pnpm install --frozen-lockfile && node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'invocation after ;': ['set -e; tsx ./scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'invocation followed by a trailing comment': ['node scripts/ops/tracker-independence/p0-workflow.cjs # enforce'],
+    'invocation after a heredoc that has closed': ["cat <<'EOF'", 'not the command', 'EOF', 'node scripts/ops/tracker-independence/p0-workflow.cjs'],
+  };
+  for (const [label, lines] of Object.entries(executed)) {
+    assert.equal(findExecutedP0Delegation(withRun(lines)).executed, true, label);
+  }
+});
+
+test('findExecutedP0Delegation treats any non-false continue-on-error as ignorable', () => {
+  // `continue-on-error: ${{ true }}` (and any other expression) lets the step
+  // fail without failing the check, exactly like the literal `true`.
+  const withContinue = (value: string): string =>
+    p0Consumer({ step: 'run' }).replace(
+      '        run: node scripts/ops/tracker-independence/p0-workflow.cjs',
+      `        continue-on-error: ${value}\n        run: node scripts/ops/tracker-independence/p0-workflow.cjs`,
+    );
+  for (const value of ['${{ true }}', '${{ github.event_name == \'pull_request\' }}', '"true"', 'yes']) {
+    assert.equal(findExecutedP0Delegation(withContinue(value)).executed, false, value);
+  }
+  // The literal false forms are not ignorable and the step still counts.
+  for (const value of ['false', '${{ false }}', '"false"']) {
+    assert.equal(findExecutedP0Delegation(withContinue(value)).executed, true, value);
+  }
+});
+
+test('findExecutedP0Delegation rejects a github-script body that only mentions the evaluator', () => {
+  const withScript = (lines: string[]): string =>
+    p0Consumer({ step: 'script' }).replace(
+      "            const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');\n            await evaluatePullRequest({ github, repo: context.repo });",
+      lines.map((line) => `            ${line}`).join('\n'),
+    );
+  const refused: Record<string, string[]> = {
+    'the require inside a string literal': ["core.info(\"require('./scripts/ops/tracker-independence/p0-workflow.cjs')\");"],
+    'the path in a template string that is never required': ['const note = `see ./scripts/ops/tracker-independence/p0-workflow.cjs`;', 'core.info(note);'],
+    'the require nested as an argument to another call': ["core.info(String(require('./scripts/ops/tracker-independence/p0-workflow.cjs')));"],
+    'the require inside a block comment': ["/* require('./scripts/ops/tracker-independence/p0-workflow.cjs') */", 'core.info("no");'],
+  };
+  for (const [label, lines] of Object.entries(refused)) {
+    assert.equal(findExecutedP0Delegation(withScript(lines)).executed, false, label);
+  }
+  const executed: Record<string, string[]> = {
+    'bare require statement': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');"],
+    'destructured require': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
+    'awaited call on the required module': ["await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'bound identifier that is then required': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", 'const mod = require(evaluator);', 'await mod.evaluatePullRequest({ github });'],
+  };
+  for (const [label, lines] of Object.entries(executed)) {
+    assert.equal(findExecutedP0Delegation(withScript(lines)).executed, true, label);
+  }
+});
+
 test('the staged consumer activation patch is an executed delegation by this definition', () => {
   // The predicate has to be bound to the activation the lane actually
   // proposes, not to a fixture that happens to satisfy it. The patch replaces

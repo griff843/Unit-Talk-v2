@@ -86,8 +86,13 @@ These are **not** required-check enforcement, and this packet no longer claims
 that admission is "a complete chokepoint" because `ops:lane-start` is the only
 writer of the lane manifest: `merge-gate.yml` reads whatever manifest the
 candidate head carries, and any committer can write one. The controls guarantee
-that no path through the repository's own tooling admits, opens or merges a
-repo-minted lane while `origin/main` cannot evaluate it. The foundation itself
+that, for the consumer shapes the predicate enumerates (comment-only
+references, trailing comments, quoted or heredoc payloads, literal-false
+`if:`, any non-false `continue-on-error`, nested `require`, suffix paths,
+candidate-only activation and existing candidate manifests), the repository's
+own admission tooling refuses to open or authorize a repo-minted lane while
+the consumer installed on `origin/main` does not execute the evaluator. A
+runtime `if:` expression is evaluated by Actions, not here. The foundation itself
 reaches `main` through the bootstrap route in step 1 above, and the block
 releases only when the activation is installed on the base — re-arming if a
 later base commit removes the delegation. See

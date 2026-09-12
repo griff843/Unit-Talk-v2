@@ -179,10 +179,18 @@ the authoritative tier from the lane manifest carried by the candidate head, and
 of this section claimed that made admission "a complete chokepoint" because `ops:lane-start` was the
 only writer of that file. That is a statement about ordinary tooling, not an enforced trust
 guarantee — a manifest can be written by anything that can commit — and the claim is withdrawn.
-What the controls do guarantee is narrower and is what the tests exercise: **no path through the
-repository's own tooling admits, opens, or merges a repo-minted lane while the consumer installed on
-`origin/main` cannot evaluate it**, including candidate-only activation on a branch, a comment-only
-reference, and a candidate manifest that already exists.
+What the controls do guarantee is narrower and is what the tests exercise: **for the enumerated
+consumer shapes, the repository's own admission tooling refuses to open or authorize a repo-minted
+lane while the consumer installed on `origin/main` does not execute the evaluator**. The enumerated
+shapes are: candidate-only activation on a branch, a comment-only reference (shell `#`, JavaScript
+`//` and `/* */`), a trailing comment on an executed line, the command as an argument to another
+command or inside a quoted string or heredoc payload, a step or job disabled by a literal `if:
+false`, a step whose `continue-on-error` is anything other than literal false, a `require` of the
+path nested inside another expression, a longer path that merely ends in the evaluator's, and a
+candidate manifest that already exists. The predicate is a static read: a runtime `if:` expression
+is evaluated by Actions and not assessed here, and a shell body that reaches the command only
+through a `then`/`do` branch is not counted as executing it. These are local controls; they do not
+replace the required checks, and the merge gate is unchanged.
 
 **How the foundation reaches `main`, then.** The evaluator and its activation are landed through
 the **established bootstrap route**, not by widening a required check and not by admitting a

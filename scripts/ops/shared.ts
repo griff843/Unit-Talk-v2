@@ -819,12 +819,49 @@ function hasPullRequestTrigger(on: unknown): boolean {
   return false;
 }
 
-/** Drops `#` comment lines from a shell `run:` block so a commented-out call is not read as one. */
-function stripShellComments(script: string): string {
-  return script
-    .split('\n')
-    .filter((line) => !/^\s*#/.test(line))
-    .join('\n');
+/**
+ * Reduces a shell `run:` block to the statements that can execute: heredoc
+ * bodies are dropped, trailing `#` comments are removed (outside quotes), and
+ * each remaining line is split on `;`, `&&`, `||`, `|`, `(` and `{` so that
+ * every element starts with a command word. `echo node …`, a heredoc payload,
+ * a trailing comment, and `if false; then node …; fi` (whose `node` follows
+ * `then`, not a statement boundary) all fail to produce a statement that
+ * begins with the invocation.
+ */
+function shellStatements(script: string): string[] {
+  const statements: string[] = [];
+  let heredocTerminator: string | null = null;
+  for (const rawLine of script.split('\n')) {
+    if (heredocTerminator !== null) {
+      if (rawLine.trim() === heredocTerminator) heredocTerminator = null;
+      continue;
+    }
+    // Strip a trailing comment: a `#` that is not inside quotes and is at the
+    // start of the line or preceded by whitespace.
+    let line = '';
+    let quote: string | null = null;
+    for (let i = 0; i < rawLine.length; i += 1) {
+      const ch = rawLine[i]!;
+      if (quote) {
+        if (ch === quote) quote = null;
+        line += ch;
+        continue;
+      }
+      if (ch === "'" || ch === '"') { quote = ch; line += ch; continue; }
+      if (ch === '#' && (i === 0 || /\s/.test(rawLine[i - 1]!))) break;
+      line += ch;
+    }
+    const heredoc = /<<-?\s*['"]?([A-Za-z_][\w-]*)['"]?/.exec(line);
+    if (heredoc) {
+      heredocTerminator = heredoc[1]!;
+      line = line.slice(0, heredoc.index);
+    }
+    for (const part of line.split(/\s*(?:;|&&|\|\||\||\(|\{)\s*/)) {
+      const trimmed = part.trim();
+      if (trimmed) statements.push(trimmed);
+    }
+  }
+  return statements;
 }
 
 /** Drops line (`//`) and block comments from a github-script body. */
@@ -837,24 +874,33 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * True when `script` contains an actual invocation of the evaluator -- a
- * `require('<path>')` or a `node|tsx <path>` command -- rather than any
- * mention of the path. Comments have already been stripped by the caller.
+ * Does a shell `run:` body execute the evaluator? Only a statement that
+ * BEGINS with `node <path>` or `tsx <path>` counts; the path must end there.
  */
-function invokesEvaluator(script: string): boolean {
+function shellInvokesEvaluator(script: string): boolean {
+  const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
+  const command = new RegExp(String.raw`^(?:node|tsx)\s+(?:\./)?${evaluator}(?=$|\s)`);
+  return shellStatements(script).some((statement) => command.test(statement));
+}
+
+/**
+ * Does a github-script body execute the evaluator? The `require` must sit at
+ * statement level -- the start of a line, optionally as the right-hand side
+ * of a declaration -- either with the path inline or through an identifier
+ * that the same body binds to the path literal (the staged activation's
+ * shape). A path inside a string that is never required, or a `require`
+ * nested inside another call's arguments, does not count.
+ */
+function scriptInvokesEvaluator(script: string): boolean {
   const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
   const literal = String.raw`['"](?:\./)?${evaluator}['"]`;
-  // require('./path') inline.
-  const requireLiteral = new RegExp(String.raw`require\(\s*${literal}\s*\)`);
-  // const evaluator = './path'; ... require(evaluator) -- the shape the staged
-  // activation uses. The identifier must be bound to the literal in this body.
-  const binding = new RegExp(String.raw`(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}`, 'g');
-  const requiresBoundIdentifier = [...script.matchAll(binding)].some(([, name]) =>
-    new RegExp(String.raw`require\(\s*${name}\s*\)`).test(script),
+  const statementStart = String.raw`^\s*(?:(?:const|let|var)\s+(?:\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*|await\s+|return\s+)?`;
+  const requireLiteral = new RegExp(statementStart + String.raw`require\(\s*${literal}\s*\)`, 'm');
+  if (requireLiteral.test(script)) return true;
+  const binding = new RegExp(String.raw`^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}\s*;?\s*$`, 'gm');
+  return [...script.matchAll(binding)].some(([, name]) =>
+    new RegExp(statementStart + String.raw`require\(\s*${name}\s*\)`, 'm').test(script),
   );
-  // node ./path in a shell step.
-  const commandForm = new RegExp(String.raw`(?:^|[\s;&|(])(?:node|tsx)\s+(?:\./)?${evaluator}(?=$|[\s;&|)])`, 'm');
-  return requireLiteral.test(script) || requiresBoundIdentifier || commandForm.test(script);
 }
 
 /**
@@ -901,19 +947,22 @@ export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFind
       if (!stepValue || typeof stepValue !== 'object') continue;
       const step = stepValue as Record<string, unknown>;
       if (isLiteralFalse(step['if'])) continue;
-      if (step['continue-on-error'] === true) continue;
-      let body: string | null = null;
+      // Any `continue-on-error` that is not literally false -- `true`, an
+      // expression, a string -- can let the step fail without failing the
+      // check, so it is ignorable and does not count.
+      if (step['continue-on-error'] !== undefined && !isLiteralFalse(step['continue-on-error'])) continue;
+      let invoked = false;
       if (typeof step['run'] === 'string') {
-        body = stripShellComments(step['run']);
+        invoked = shellInvokesEvaluator(step['run']);
       } else if (
         typeof step['uses'] === 'string' &&
         step['uses'].startsWith('actions/github-script') &&
         step['with'] && typeof step['with'] === 'object' &&
         typeof (step['with'] as Record<string, unknown>)['script'] === 'string'
       ) {
-        body = stripJsComments((step['with'] as Record<string, unknown>)['script'] as string);
+        invoked = scriptInvokesEvaluator(stripJsComments((step['with'] as Record<string, unknown>)['script'] as string));
       }
-      if (body !== null && invokesEvaluator(body)) {
+      if (invoked) {
         const stepName = typeof step['name'] === 'string' ? step['name'] : `step ${index + 1}`;
         return { executed: true, job: context, step: stepName };
       }
