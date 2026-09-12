@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1773",
+  "generated_at": "2026-09-02T12:08:25Z",
+  "status": "REFUSED_CONFLICTS_AND_REQUIRED_DIRECT_READ",
+  "production_target": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "api_origin": "https://api.unit-talk.com",
+    "deployment_sha": "e48106fc9a5eb5904b322833d0968da5ae0b0665",
+    "writes_performed": 0
+  },
+  "read_only_evidence": {
+    "health": {
+      "path": "/health",
+      "status": 200,
+      "body_sha256": "3c2cd0868737923273eb077fb01ba3f98654d62232b808ee1261d37123d3853e",
+      "persistence_mode": "database",
+      "runtime_mode": "fail_closed",
+      "db_reachable": true
+    },
+    "catalog": {
+      "path": "/api/reference-data/catalog",
+      "status": 200,
+      "body_sha256": "d84407fb4ecfb1e3e2a0a6123b678d143a62ae22d0d91efcff0256ba99540f5c",
+      "source_team_counts": {
+        "NBA": 30,
+        "NFL": 32,
+        "MLB": 30,
+        "NHL": 32,
+        "NCAAB": 0,
+        "NCAAF": 0,
+        "Soccer": 0,
+        "MMA": 0,
+        "Tennis": 0,
+        "total": 124
+      },
+      "active_sportsbook_ids": [
+        "pinnacle",
+        "circa",
+        "draftkings",
+        "fanduel",
+        "betmgm",
+        "caesars",
+        "pointsbet",
+        "bovada",
+        "bet365",
+        "williamhill",
+        "fanatics"
+      ]
+    },
+    "canonical_leagues": [
+      { "id": "nba", "sport_id": "NBA", "display_name": "NBA" },
+      { "id": "nfl", "sport_id": "NFL", "display_name": "NFL" },
+      { "id": "mlb", "sport_id": "MLB", "display_name": "MLB" },
+      { "id": "nhl", "sport_id": "NHL", "display_name": "NHL" },
+      { "id": "ncaab", "sport_id": "NCAAB", "display_name": "NCAAB" },
+      { "id": "ncaaf", "sport_id": "NCAAF", "display_name": "NCAAF" },
+      { "id": "soccer", "sport_id": "Soccer", "display_name": "Soccer" },
+      { "id": "mma", "sport_id": "MMA", "display_name": "MMA" },
+      { "id": "tennis", "sport_id": "Tennis", "display_name": "Tennis" }
+    ],
+    "canonical_availability": {
+      "NBA": { "teams_available": false, "players_available": false },
+      "NFL": { "teams_available": false, "players_available": false },
+      "MLB": { "teams_available": false, "players_available": false },
+      "NHL": { "teams_available": false, "players_available": false },
+      "NCAAB": { "teams_available": false, "players_available": false },
+      "NCAAF": { "teams_available": false, "players_available": false },
+      "Soccer": { "teams_available": false, "players_available": false },
+      "MMA": { "teams_available": false, "players_available": false },
+      "Tennis": { "teams_available": false, "players_available": false }
+    },
+    "prior_direct_database_snapshot": {
+      "captured_at": "2026-07-06",
+      "source": "docs/06_status/audits/participant-system-audit.md",
+      "row_counts": {
+        "leagues": 9,
+        "teams": 0,
+        "players": 12,
+        "player_team_assignments": 0,
+        "provider_entity_aliases": 840,
+        "participants": 1647
+      },
+      "alias_detail": "840 player-kind aliases; zero team_id/player_id links"
+    }
+  },
+  "conflicts": [
+    {
+      "code": "CANONICAL_NHL_IDENTITY_CONFLICT",
+      "live_production_source": "Utah Hockey Club",
+      "checked_in_v1_reference": "Coyotes",
+      "disposition": "REFUSE; do not guess or insert either identity under this packet"
+    },
+    {
+      "code": "SPORTSBOOK_TARGET_CONFLICT",
+      "live_active_count": 11,
+      "checked_in_runtime_catalog_count": 10,
+      "ratified_policy_count": 15,
+      "live_only_vs_checked_in": ["williamhill"],
+      "disposition": "REFUSE completeness claim; this bootstrap does not mutate sportsbooks"
+    },
+    {
+      "code": "DIRECT_ALIAS_INVENTORY_UNAVAILABLE",
+      "detail": "The public read surface does not expose participant UUIDs, provider team keys, alias targets, or assignment natural keys.",
+      "disposition": "Run read-only inspect with production credentials before a nonzero mutation packet can exist"
+    }
+  ],
+  "governed_production_mutation_packet": {
+    "authorized": false,
+    "authorized_write_count": 0,
+    "production_command": "pnpm exec tsx scripts/run-canonical-reference-bootstrap.ts inspect --target production --output docs/06_status/proof/UTV2-1773/canonical-diff.json",
+    "note": "The command is read-only. A later live write command is intentionally absent from this lane and requires a separately PM-approved packet.",
+    "required_before_authorization": [
+      "Resolve the NHL canonical identity conflict without guessing.",
+      "Resolve the sportsbook completeness target conflict or explicitly exclude it from this recovery step.",
+      "Run the hardened production inspection through an approved read-only credential path and require conflicts=[] with the full exact logical mutation set.",
+      "Run prove-staging twice against xskgrzbteyqdufktjrjx and require the second execution to report rpc_invoked=false and identical before/after hashes.",
+      "Obtain PM approval for the exact resulting source snapshot hash and mutation identities."
+    ]
+  },
+  "rollback_and_verification_plan": {
+    "current_packet": "No rollback is required because this packet authorizes and performed zero writes.",
+    "future_authorized_packet": [
+      "Capture the full pre-bootstrap snapshot and SHA-256 immediately before execution.",
+      "Delete only packet-listed inserts by canonical or natural identity.",
+      "Restore every packet-listed preimage changed by the RPC, including metadata and updated_at.",
+      "Require the post-rollback stable snapshot hash to equal the pre-bootstrap hash.",
+      "Re-run league/team/alias coverage against the same source fingerprint without restarting ingestion or delivery."
+    ]
+  }
+}
