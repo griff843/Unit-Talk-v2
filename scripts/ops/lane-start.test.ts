@@ -880,7 +880,7 @@ function seedLaneFixture(
     fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
     fs.writeFileSync(
       path.join(root, '.github', 'workflows', 'p0-protocol.yml'),
-      'name: P0 Protocol\non: [pull_request]\njobs:\n  p0-protocol:\n    name: P0 Protocol\n    runs-on: ubuntu-latest\n    steps:\n      - name: Classify and enforce P0\n        run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
+      'name: P0 Protocol\non: [pull_request]\njobs:\n  p0-protocol:\n    name: P0 Protocol\n    runs-on: ubuntu-latest\n    steps:\n      - name: Classify and enforce P0\n        uses: actions/github-script@v7\n        with:\n          script: |\n            const { evaluatePullRequest } = require(\'./scripts/ops/tracker-independence/p0-workflow.cjs\');\n            await evaluatePullRequest({ github, repo: context.repo });\n',
     );
     fs.mkdirSync(path.join(root, 'scripts', 'ops', 'tracker-independence'), { recursive: true });
     fs.writeFileSync(

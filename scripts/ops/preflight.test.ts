@@ -770,7 +770,11 @@ const PW1_ACTIVE_CONSUMER = [
   '    runs-on: ubuntu-latest',
   '    steps:',
   '      - name: Classify and enforce P0',
-  '        run: node scripts/ops/tracker-independence/p0-workflow.cjs',
+  '        uses: actions/github-script@v7',
+  '        with:',
+  '          script: |',
+  "            const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+  '            await evaluatePullRequest({ github, repo: context.repo });',
   '',
 ].join('\n');
 

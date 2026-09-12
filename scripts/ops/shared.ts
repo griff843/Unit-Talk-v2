@@ -819,51 +819,6 @@ function hasPullRequestTrigger(on: unknown): boolean {
   return false;
 }
 
-/**
- * Reduces a shell `run:` block to the statements that can execute: heredoc
- * bodies are dropped, trailing `#` comments are removed (outside quotes), and
- * each remaining line is split on `;`, `&&`, `||`, `|`, `(` and `{` so that
- * every element starts with a command word. `echo node …`, a heredoc payload,
- * a trailing comment, and `if false; then node …; fi` (whose `node` follows
- * `then`, not a statement boundary) all fail to produce a statement that
- * begins with the invocation.
- */
-function shellStatements(script: string): string[] {
-  const statements: string[] = [];
-  let heredocTerminator: string | null = null;
-  for (const rawLine of script.split('\n')) {
-    if (heredocTerminator !== null) {
-      if (rawLine.trim() === heredocTerminator) heredocTerminator = null;
-      continue;
-    }
-    // Strip a trailing comment: a `#` that is not inside quotes and is at the
-    // start of the line or preceded by whitespace.
-    let line = '';
-    let quote: string | null = null;
-    for (let i = 0; i < rawLine.length; i += 1) {
-      const ch = rawLine[i]!;
-      if (quote) {
-        if (ch === quote) quote = null;
-        line += ch;
-        continue;
-      }
-      if (ch === "'" || ch === '"') { quote = ch; line += ch; continue; }
-      if (ch === '#' && (i === 0 || /\s/.test(rawLine[i - 1]!))) break;
-      line += ch;
-    }
-    const heredoc = /<<-?\s*['"]?([A-Za-z_][\w-]*)['"]?/.exec(line);
-    if (heredoc) {
-      heredocTerminator = heredoc[1]!;
-      line = line.slice(0, heredoc.index);
-    }
-    for (const part of line.split(/\s*(?:;|&&|\|\||\||\(|\{)\s*/)) {
-      const trimmed = part.trim();
-      if (trimmed) statements.push(trimmed);
-    }
-  }
-  return statements;
-}
-
 /** Drops line (`//`) and block comments from a github-script body. */
 function stripJsComments(script: string): string {
   return script.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
@@ -874,33 +829,59 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * Does a shell `run:` body execute the evaluator? Only a statement that
- * BEGINS with `node <path>` or `tsx <path>` counts; the path must end there.
+ * The evaluator's only entry point. `p0-workflow.cjs` exports this function
+ * and has no CLI: `node <path>` loads the module and exits 0 having evaluated
+ * nothing, which is why a shell `run:` step is never counted as a delegation
+ * (independent review, round 2). A consumer delegates only by requiring the
+ * module and calling this export.
  */
-function shellInvokesEvaluator(script: string): boolean {
-  const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
-  const command = new RegExp(String.raw`^(?:node|tsx)\s+(?:\./)?${evaluator}(?=$|\s)`);
-  return shellStatements(script).some((statement) => command.test(statement));
-}
+export const P0_EVALUATOR_ENTRY = 'evaluatePullRequest';
 
 /**
- * Does a github-script body execute the evaluator? The `require` must sit at
- * statement level -- the start of a line, optionally as the right-hand side
- * of a declaration -- either with the path inline or through an identifier
- * that the same body binds to the path literal (the staged activation's
- * shape). A path inside a string that is never required, or a `require`
- * nested inside another call's arguments, does not count.
+ * Does a github-script body delegate to the evaluator? Two statement-level
+ * facts are required, each at the start of a line (optionally as the
+ * right-hand side of a declaration, or behind `await`/`return`): a `require`
+ * of the evaluator path -- inline, or through an identifier the same body
+ * binds to the literal (the staged activation's shape) -- and a call to
+ * `evaluatePullRequest(`. `await require(path).evaluatePullRequest(...)`
+ * satisfies both at once. A path inside a string, a `require` nested inside
+ * another call's arguments, or a `require` that never reaches the entry point
+ * is a reference, not a delegation. JavaScript control flow is not analysed:
+ * a statement inside a never-called function or a false branch is not
+ * distinguished from a live one, and the reviewed bootstrap lane that installs
+ * the consumer on the base is where that reading happens.
  */
-function scriptInvokesEvaluator(script: string): boolean {
+function scriptDelegatesToEvaluator(script: string): boolean {
   const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
   const literal = String.raw`['"](?:\./)?${evaluator}['"]`;
-  const statementStart = String.raw`^\s*(?:(?:const|let|var)\s+(?:\{[^}]*\}|[A-Za-z_$][\w$]*)\s*=\s*|await\s+|return\s+)?`;
-  const requireLiteral = new RegExp(statementStart + String.raw`require\(\s*${literal}\s*\)`, 'm');
-  if (requireLiteral.test(script)) return true;
-  const binding = new RegExp(String.raw`^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}\s*;?\s*$`, 'gm');
-  return [...script.matchAll(binding)].some(([, name]) =>
-    new RegExp(statementStart + String.raw`require\(\s*${name}\s*\)`, 'm').test(script),
+  // A declaration or a plain assignment (`summary = await ...`) may prefix the statement.
+  const declaration = String.raw`(?:(?:const|let|var)\s+)?(?:\{[^}]*\}|[A-Za-z_$][\w$.]*)\s*=\s*`;
+  const statementStart = String.raw`^\s*(?:${declaration})?(?:await\s+|return\s+)?`;
+  const bindingNames = [...script.matchAll(
+    new RegExp(String.raw`^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}\s*;?\s*$`, 'gm'),
+  )].map(([, name]) => escapeRegExp(name!));
+  const moduleRef = [literal, ...bindingNames].join('|');
+  const requireStatement = new RegExp(statementStart + String.raw`require\(\s*(?:${moduleRef})\s*\)`, 'm');
+  const inlineCall = new RegExp(
+    statementStart + String.raw`require\(\s*(?:${moduleRef})\s*\)\.${P0_EVALUATOR_ENTRY}\s*\(`,
+    'm',
   );
+  const directCall = new RegExp(
+    statementStart + String.raw`(?:[A-Za-z_$][\w$]*\.)?${P0_EVALUATOR_ENTRY}\s*\(`,
+    'm',
+  );
+  if (inlineCall.test(script)) return true;
+  return requireStatement.test(script) && directCall.test(script);
+}
+
+/** True when a `strategy.matrix` cannot produce a single job instance. */
+function matrixIsEmpty(strategy: unknown): boolean {
+  if (!strategy || typeof strategy !== 'object') return false;
+  const matrix = (strategy as Record<string, unknown>)['matrix'];
+  if (!matrix || typeof matrix !== 'object') return false;
+  const entries = Object.entries(matrix as Record<string, unknown>);
+  if (entries.length === 0) return true;
+  return entries.some(([key, value]) => Array.isArray(value) && value.length === 0 && key !== 'exclude');
 }
 
 /**
@@ -943,6 +924,21 @@ export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFind
     }
     sawContextJob = true;
     if (isLiteralFalse(job['if'])) continue;
+    // A job-level `continue-on-error` that is not literally false lets the
+    // whole job fail without failing the run; a job that `needs` a job which
+    // is disabled or absent is itself skipped; an empty matrix never
+    // instantiates the job. Skipped and neutral checks satisfy branch
+    // protection, so none of these produces an enforced evaluation.
+    if (job['continue-on-error'] !== undefined && !isLiteralFalse(job['continue-on-error'])) continue;
+    const needs = Array.isArray(job['needs']) ? job['needs'] : job['needs'] === undefined ? [] : [job['needs']];
+    const needsSkipped = needs.some((needed) => {
+      if (typeof needed !== 'string') return true;
+      const upstream = (jobs as Record<string, unknown>)[needed];
+      if (!upstream || typeof upstream !== 'object') return true;
+      return isLiteralFalse((upstream as Record<string, unknown>)['if']);
+    });
+    if (needsSkipped) continue;
+    if (matrixIsEmpty(job['strategy'])) continue;
     for (const [index, stepValue] of steps.entries()) {
       if (!stepValue || typeof stepValue !== 'object') continue;
       const step = stepValue as Record<string, unknown>;
@@ -951,17 +947,14 @@ export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFind
       // expression, a string -- can let the step fail without failing the
       // check, so it is ignorable and does not count.
       if (step['continue-on-error'] !== undefined && !isLiteralFalse(step['continue-on-error'])) continue;
-      let invoked = false;
-      if (typeof step['run'] === 'string') {
-        invoked = shellInvokesEvaluator(step['run']);
-      } else if (
+      // Only a github-script step can delegate: see P0_EVALUATOR_ENTRY. A
+      // shell `run:` step naming the path is a reference, never an execution.
+      const invoked =
         typeof step['uses'] === 'string' &&
         step['uses'].startsWith('actions/github-script') &&
         step['with'] && typeof step['with'] === 'object' &&
-        typeof (step['with'] as Record<string, unknown>)['script'] === 'string'
-      ) {
-        invoked = scriptInvokesEvaluator(stripJsComments((step['with'] as Record<string, unknown>)['script'] as string));
-      }
+        typeof (step['with'] as Record<string, unknown>)['script'] === 'string' &&
+        scriptDelegatesToEvaluator(stripJsComments((step['with'] as Record<string, unknown>)['script'] as string));
       if (invoked) {
         const stepName = typeof step['name'] === 'string' ? step['name'] : `step ${index + 1}`;
         return { executed: true, job: context, step: stepName };

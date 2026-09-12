@@ -86,13 +86,18 @@ These are **not** required-check enforcement, and this packet no longer claims
 that admission is "a complete chokepoint" because `ops:lane-start` is the only
 writer of the lane manifest: `merge-gate.yml` reads whatever manifest the
 candidate head carries, and any committer can write one. The controls guarantee
-that, for the consumer shapes the predicate enumerates (comment-only
-references, trailing comments, quoted or heredoc payloads, literal-false
-`if:`, any non-false `continue-on-error`, nested `require`, suffix paths,
-candidate-only activation and existing candidate manifests), the repository's
-own admission tooling refuses to open or authorize a repo-minted lane while
-the consumer installed on `origin/main` does not execute the evaluator. A
-runtime `if:` expression is evaluated by Actions, not here. The foundation itself
+that the repository's own admission tooling refuses to open or authorize a
+repo-minted lane unless the consumer installed on `origin/main` contains a live
+`actions/github-script` step in the `P0 Protocol` job that `require`s the
+evaluator and calls `evaluatePullRequest` at statement level. A shell `run:`
+never counts: the evaluator has no CLI entry point. Refused shapes the tests
+enumerate: any shell form, comment-only references, string literals, nested
+`require`, a bare `require` with no call, suffix paths, literal-false `if:`,
+non-false `continue-on-error` at step or job level, `needs:` on a disabled or
+absent job, an empty matrix, candidate-only activation and existing candidate
+manifests. Not assessed: JavaScript control flow, runtime `if:` expressions,
+and duplicate check names in other workflows — none introducible by a WORK PR
+author, since the predicate never reads candidate content. The foundation itself
 reaches `main` through the bootstrap route in step 1 above, and the block
 releases only when the activation is installed on the base — re-arming if a
 later base commit removes the delegation. See
