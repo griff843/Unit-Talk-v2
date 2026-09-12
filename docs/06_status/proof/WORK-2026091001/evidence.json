@@ -7,33 +7,33 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "2cbe26c35dc11b5ff3a80b67ae196efe80602e52",
+    "verified_source_sha": "1759314ea7e34addf3cb9f6b57488d6f6e9509a4",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "partial",
     "local_verification": {
-      "source_sha": "2cbe26c35dc11b5ff3a80b67ae196efe80602e52",
+      "source_sha": "1759314ea7e34addf3cb9f6b57488d6f6e9509a4",
       "command": "pnpm verify",
       "exit_code": 1,
-      "tests_reported": 6331,
-      "passed": 6331,
+      "tests_reported": 6404,
+      "passed": 6404,
       "failed": 0,
       "skipped": 0,
       "result": "Static/build/test and command stages passed; writable DB target guard refused the containment URL",
-      "limitation": "Not a full verify pass; final-head staging CI required. Smart Form browser E2E was not enabled.",
-      "log_sha256": "b94ab4a57972246fdf0c64c36ec93c135721050d56408e9bfb360124eadf1e64"
+      "limitation": "Not a full verify pass: pnpm verify exits 1 at ci:assert-staging, the documented containment refusal on a workstation, not a regression. Final-head staging CI is required. Smart Form browser E2E is not enabled in this suite and is not claimed here.",
+      "log_sha256": "e61725922396cc7b0e79151c906df26fd4457c08c5e399e7dc818892aafd5778"
     },
     "independent_review": {
-      "source_sha": "2cbe26c35dc11b5ff3a80b67ae196efe80602e52",
+      "source_sha": "1759314ea7e34addf3cb9f6b57488d6f6e9509a4",
       "disposition": "No additional defect found; not merge approval",
       "checks": "528 earlier targeted tests, 67 workflow tests, 26 final packet/recovery tests passed in independent review; runs overlap"
     },
     "r_level": {
       "verdict": "PASS",
       "matched_rules": [],
-      "changed_files": 88
+      "changed_files": 89
     },
     "prior_head_ci": {
       "source_sha": "cf702af5a1f2ffaa2f7f6ba857d212968a48c194",
@@ -45,6 +45,50 @@
     "recovery": {
       "fresh_agent": "Recovered mission, lane, PR and next safe action from repository records without network; stale loader findings corrected and rechecked at source SHA",
       "compacted_session": "Actual post-compaction hook passes with tracker tools blocked; a separate end-to-end compacted-agent experiment remains unproven"
+    },
+    "amendment_integration": {
+      "source": "PR #1556 comment 5646174137, authored by griff843",
+      "applied_at_commit": "02146f9ce07e88ebe223a2df93379a900291e0b3",
+      "files": [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "docs/05_operations/EXECUTION_TRUTH_MODEL.md",
+        ".agents/skills/system-state-loader/SKILL.md",
+        ".claude/commands/system-state-loader.md"
+      ],
+      "applied_verbatim": true,
+      "non_author_review": {
+        "reviewer": "Claude (non-author; the amendment was authored by griff843)",
+        "reserved_surface_touched": false,
+        "reserved_surface_check": "grep for ^.github/, CODEOWNERS, merge-gate, p0-protocol, executor-result, tier-label, RESERVED_RISK, r1-r5 across the five files returned no match",
+        "branch_protection_unchanged": "required contexts remain verify, Executor Result Validation, Merge Gate, P0 Protocol; strict true; enforce_admins false",
+        "contract_validator": "scripts/ops/contract-validator.test.ts 55/55 pass, including the edited system-state-loader skill",
+        "controls_strengthened": [
+          "T1 now requires both the approval label and a valid exact-head PM verdict; a label alone is stated insufficient",
+          "Discord targets demoted from Live to Configured; activation requires current containment authority",
+          "pnpm test:db may no longer be described as non-destructive"
+        ],
+        "control_loosened": "the system-state-loader's blanket stop becomes a scoped reconcile, aligning it with intent.md's already-ratified stop conditions; it adds an explicit 'preserve required admission controls' clause",
+        "structural_note": "griff843 is the sole CODEOWNER and the sole AUTHORIZED_REVIEWERS entry, so independent review of his own amendment cannot mean a second human's pm-verdict/v1 in this repository",
+        "disposition": "No additional defect found. This is not merge approval."
+      }
+    },
+    "file_scope_lock_status": {
+      "check": "File scope lock",
+      "state": "fail",
+      "required": false,
+      "out_of_scope_paths": [
+        ".github/workflows/file-scope-lock-check.yml",
+        ".github/workflows/return-review-packet.yml",
+        ".ops/sync/WORK-2026091001.yml",
+        "docs/06_status/lanes/WORK-2026091001.json",
+        "scripts/ci/file-scope-guard.test.ts",
+        "scripts/ci/file-scope-guard.ts",
+        "scripts/ci/scope-override-comment-parser.test.ts",
+        "scripts/ci/scope-override-comment-parser.ts"
+      ],
+      "why_unrepairable": "CI runs the trusted copy of scope-override-comment-parser.ts from origin/main, whose issue regex is /^UTV2-\\d+$/. A WORK-### override is unparseable by it. This branch is what widens that regex to accept WORK-###, so the PR contains the fix for the check failing it. The check is not one of the four required contexts, so it blocks no merge.",
+      "verified_at": "2026-09-12, run 34697473572"
     }
   }
 }

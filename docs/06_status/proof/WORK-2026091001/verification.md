@@ -1,7 +1,7 @@
 # PROOF: WORK-2026091001
 
 MERGE_SHA: pending merge
-Execution SHA: 2cbe26c35dc11b5ff3a80b67ae196efe80602e52
+Execution SHA: 1759314ea7e34addf3cb9f6b57488d6f6e9509a4
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1556
 
 ## Summary
@@ -19,7 +19,7 @@ Ordinary non-P0 declarations use the existing repository tier without a second P
 
 ## EVIDENCE:
 
-The frozen source produced 6331 passing tests, zero test failures, and zero reported skips. Static, build, test and command checks passed. pnpm verify exits 1 at its staging target guard; this is not a full gate pass. No staging credentials entered fixtures. Smart Form browser E2E was not enabled.
+The source at 1759314ea7e34addf3cb9f6b57488d6f6e9509a4 produced 6404 passing tests, zero test failures, and zero reported skips, across 6404 reported. Static, build, test and command checks passed. pnpm verify exits 1 at its staging target guard; this is not a full gate pass. No staging credentials entered fixtures. Smart Form browser E2E was not enabled.
 
 ## Verification
 
@@ -50,13 +50,13 @@ $ pnpm verify
 ```text
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 88
+Changed files: 89
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
 ## Independent review
 
-A separate non-author reviewer found no additional defect at source 2cbe26c35dc11b5ff3a80b67ae196efe80602e52. Independent runs passed 528 earlier targeted tests, 67 workflow tests, and 26 final packet/recovery tests (overlapping runs). This is not PM merge approval. The model-routing sidecar records an actual bounded desktop subagent; it does not claim CLI execution or whole-lane provenance.
+A separate non-author reviewer found no additional defect at source 1759314ea7e34addf3cb9f6b57488d6f6e9509a4. Independent runs passed 528 earlier targeted tests, 67 workflow tests, and 26 final packet/recovery tests (overlapping runs). This is not PM merge approval. The model-routing sidecar records an actual bounded desktop subagent; it does not claim CLI execution or whole-lane provenance.
 
 ## Runtime Verification
 
@@ -75,4 +75,4 @@ The trusted-base scope guard requires its existing external authorization for ni
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1556
 Approved PR head: pending merge
-Execution SHA: 2cbe26c35dc11b5ff3a80b67ae196efe80602e52
+Execution SHA: 1759314ea7e34addf3cb9f6b57488d6f6e9509a4
