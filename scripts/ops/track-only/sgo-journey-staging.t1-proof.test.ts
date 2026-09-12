@@ -258,8 +258,8 @@ test('Track Only stays validated and creates no delivery, asserted against the r
 
 test('the real statistics compute from the persisted settlement', { skip: skipReason }, () => {
   assert.equal(report.stats.record.decided, 1);
-  assert.equal(report.stats.record.wins, 1);
-  assert.equal(report.stats.record.losses, 0);
+  assert.equal(report.stats.record.win, 1);
+  assert.equal(report.stats.record.loss, 0);
   assert.equal(report.journeyCompletes, true);
   assert.deepEqual(
     report.gaps,
@@ -292,6 +292,20 @@ test('an incomplete result is refused rather than guessed, against staging', { s
     halfReport.fixtureEventId,
   );
   assert.ok(eventRow);
+
+  // The two fixtures must be distinct rows, and distinct by *name* as well as by id.
+  // The grading service resolves a pick's event from `metadata.eventName` and start-time
+  // proximity, never from the participants, so a shared name would let this pick settle
+  // against the fully-scored fixture and report a refusal that never happened.
+  const mainEventRow = await repositories.events.findByExternalId(report.fixtureEventId);
+  assert.ok(mainEventRow);
+  assert.notEqual(eventRow.id, mainEventRow.id);
+  assert.notEqual(
+    eventRow.event_name,
+    mainEventRow.event_name,
+    'both fixtures share an event name, so grading cannot tell them apart',
+  );
+
   const rows = await repositories.gradeResults.listByEvent(eventRow.id);
   const moneyline = rows.filter((row) => row.market_key === 'game_moneyline_win');
   assert.equal(

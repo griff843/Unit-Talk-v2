@@ -92,6 +92,21 @@ if (SGO_MONEYLINE_RESULT_MARKET_KEY !== MONEYLINE_RESULT_MARKET_KEY) {
 export const STAGING_FIXTURE_PREFIX = 'UTV2-1889-STAGING-FIXTURE';
 
 const FIXTURE_EVENT_NAME = 'Fixture Away Nine @ Fixture Home Nine';
+
+/**
+ * The event *name* carries the namespace too, and that is load-bearing rather than
+ * tidy. `chooseEventForPick` in the grading service resolves a pick's event by
+ * `metadata.eventName` and then by start-time proximity -- it never cross-checks the
+ * participants. So two fixtures that share a name and a date are indistinguishable to
+ * it, and a pick from one run can be settled against the other run's result. That is
+ * exactly what happened the first time this proof ran against staging: the
+ * half-scored fixture correctly wrote no moneyline result, and its pick settled
+ * anyway, against the fully-scored fixture's event. Namespacing the id alone was not
+ * isolation.
+ */
+function fixtureEventName(namespace?: string): string {
+  return `${FIXTURE_EVENT_NAME}${fixtureNamespaceSuffix(namespace)}`;
+}
 const FIXTURE_EVENT_DATE = '2026-09-11';
 const FIXTURE_EVENT_STARTS_AT = '2026-09-11T23:05:00.000Z';
 const FIXTURE_INGESTION_RUN_ID = 'run-utv2-1889-journey-fixture';
@@ -428,7 +443,7 @@ export async function runSgoJourneyProof(
   });
   const event = await repositories.events.upsertByExternalId({
     sportId: 'MLB',
-    eventName: FIXTURE_EVENT_NAME,
+    eventName: fixtureEventName(namespace),
     eventDate: FIXTURE_EVENT_DATE,
     externalId: fixtureEventId,
     status: 'completed',
@@ -483,7 +498,7 @@ export async function runSgoJourneyProof(
     // routes it down the evidence plane (UTV2-1861) instead of a lifecycle move.
     distributionMode: 'track-only',
     sport: 'MLB',
-    eventName: FIXTURE_EVENT_NAME,
+    eventName: fixtureEventName(namespace),
   };
   if (pickParticipant) {
     submissionMetadata['teamId'] = pickParticipant.id;
@@ -504,7 +519,7 @@ export async function runSgoJourneyProof(
         : { line: input.pickLine }),
       odds: -110,
       stakeUnits: 1,
-      eventName: FIXTURE_EVENT_NAME,
+      eventName: fixtureEventName(namespace),
       metadata: submissionMetadata,
     },
     repositories,
