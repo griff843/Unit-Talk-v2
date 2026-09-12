@@ -811,7 +811,7 @@ test('the real SGO normalizer emits <statId>-all-<period>-<betType>, erasing the
   ]);
 });
 
-test('GAP A: SGO_GAME_LINE_CANONICAL_ID never matches a moneyline, so the raw key is written', async () => {
+test('the canonical table maps the key the normalizer can emit onto the key grading reads', async () => {
   const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
 
   const moneylineWrites = report.resolve.writes.filter(
@@ -819,84 +819,150 @@ test('GAP A: SGO_GAME_LINE_CANONICAL_ID never matches a moneyline, so the raw ke
   );
   assert.equal(moneylineWrites.length, 2);
   for (const write of moneylineWrites) {
-    assert.equal(write.canonicalTableMatched, false);
-    // NOT 'game_ml_mlb' -- the table's key 'mlb-ml-all-game' is a shape the
-    // normalizer's template cannot produce.
-    assert.equal(write.writtenMarketKey, 'points-all-game-ml');
-    assert.notEqual(write.writtenMarketKey, 'game_ml_mlb');
+    // Before UTV2-1889 this table was keyed `mlb-ml-all-game` -- a shape the
+    // normalizer's template cannot produce -- so it never matched and the raw
+    // provider key was written instead. Keying it on the emitted shape is the repair.
+    assert.equal(write.canonicalTableMatched, true);
+    assert.equal(write.writtenMarketKey, 'game_moneyline_win');
+    assert.notEqual(write.writtenMarketKey, 'points-all-game-ml');
   }
 
-  // The one entry that IS reachable, for contrast -- so this test cannot pass by the
-  // table being ignored altogether.
+  // The entry that was always reachable, kept for contrast -- so this test cannot
+  // pass by the table having become an unconditional rewrite.
   const totalWrite = report.resolve.writes.find(
     (w) => w.baseMarketKey === 'points-all-game-ou',
   );
   assert.equal(totalWrite?.canonicalTableMatched, true);
   assert.equal(totalWrite?.writtenMarketKey, 'game_total_ou');
-
-  assert.ok(report.gaps.some((g) => g.id === 'A-canonical-table-unreachable'));
 });
 
-test('GAP B: the resolver writes a raw team score where grading expects 1 | 0 | 0.5', async () => {
+test('a moneyline row carries an outcome in {1, 0, 0.5} and never a raw team score', async () => {
   const report = await runSgoJourneyProof({
     pickMarket: 'moneyline',
     payload: buildStagingResultsPayload({ homeScore: 3, awayScore: 5 }),
   });
 
-  const values = report.resolve.writes
-    .filter((w) => w.providerSide !== null)
-    .map((w) => w.writtenActualValue)
-    .sort();
-  assert.deepEqual(values, [3, 5]);
-  // Neither 3 nor 5 is a moneyline outcome. The away side won, and that fact exists
-  // only in the COMPARISON of the two rows -- never in either row alone.
-  for (const value of values) {
-    assert.ok(![1, 0, 0.5].includes(value));
-  }
+  const moneylineRows = report.resolve.inserted.filter(
+    (row) => row.marketKey === 'game_moneyline_win',
+  );
+  assert.equal(moneylineRows.length, 2);
 
-  assert.ok(report.gaps.some((g) => g.id === 'B-raw-score-is-not-an-outcome'));
+  const values = moneylineRows.map((row) => row.actualValue).sort();
+  assert.deepEqual(values, [0, 1]);
+  // 3 and 5 are the scores. Neither may appear: the away side won, and that fact
+  // exists only in the COMPARISON of the two rows, never in either score alone.
+  assert.ok(!values.includes(3));
+  assert.ok(!values.includes(5));
+
+  // And every one of them says whose outcome it is.
+  for (const row of moneylineRows) {
+    assert.ok(row.participantId, 'a moneyline outcome must name its side');
+  }
+  assert.equal(new Set(moneylineRows.map((r) => r.participantId)).size, 2);
 });
 
-test('GAP C: the journey does not complete -- no written key is one grading looks for', async () => {
+test('the journey completes: the pick settles on a row the resolver wrote, and the settlement counts', async () => {
   const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
 
-  assert.equal(report.journeyCompletes, false);
-  assert.deepEqual(report.joinedMarketKeys, []);
-  // Grading looks for the pick's own key and its static alias...
+  // The full chain, asserted at each seam rather than only at the end -- a failure
+  // anywhere between the parse and the statistic has to name where it happened.
   assert.deepEqual(report.grade.staticCandidateMarketKeys.sort(), [
     'game_moneyline_win',
     'moneyline',
   ]);
-  // ...and the resolver writes neither.
-  const written = report.resolve.writes.map((w) => w.writtenMarketKey);
-  assert.ok(!written.includes('moneyline'));
-  assert.ok(!written.includes('game_moneyline_win'));
+  assert.deepEqual(report.joinedMarketKeys, ['game_moneyline_win']);
 
-  assert.ok(report.gaps.some((g) => g.id === 'C-no-market-key-join'));
+  assert.equal(report.settle.graded, 1, 'the grading pass must settle exactly this pick');
+  // The default fixture is home 3, away 5, and the pick is on the away side.
+  assert.equal(report.settle.settlementResult, 'win');
+  assert.equal(
+    report.settle.evidencePlane,
+    true,
+    'a Track Only pick settles on the evidence plane, with no lifecycle move',
+  );
+  assert.equal(
+    report.settle.pickStatus,
+    'validated',
+    'the evidence plane must not advance the pick out of validated',
+  );
+
+  assert.equal(report.stats.record.win, 1);
+  assert.equal(report.stats.record.decided, 1);
+  assert.equal(report.stats.pending, 0);
+  assert.deepEqual(report.stats.excluded, []);
+
+  assert.equal(report.journeyCompletes, true);
+  assert.deepEqual(report.gaps, []);
 });
 
-test('the grading classifier does reach a moneyline rule, so the gap is the join and not the classifier', async () => {
+test('a pick on the losing side grades a loss, so the outcome is read and not assumed', async () => {
+  // The control for the test above. Same fixture, same code, the other side --
+  // and if the resolver were writing a constant, or grading were defaulting to a
+  // win, this is where it would show.
+  const report = await runSgoJourneyProof({
+    pickMarket: 'moneyline',
+    pickSelection: 'Fixture Home Nine',
+    pickTeamSide: 'home',
+  });
+
+  assert.equal(report.settle.graded, 1);
+  assert.equal(report.settle.settlementResult, 'loss');
+  assert.equal(report.stats.record.loss, 1);
+  assert.equal(report.stats.record.win, 0);
+  assert.equal(report.journeyCompletes, true);
+});
+
+test('the grading classifier reaches a moneyline rule with usesLine false', async () => {
   const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
 
-  // Worth pinning separately: the moneyline family and the `usesLine: false` fix are
-  // real and working. A reader must not conclude from the failing journey that
-  // moneyline grading was never wired -- it was; it just has nothing to join to.
+  // Worth pinning separately from the journey: a moneyline has no line, so a rule
+  // that demanded one would skip every moneyline on `missing_line` long before the
+  // market keys were ever compared.
   assert.equal(report.grade.rule.family, 'game_moneyline');
   assert.equal(report.grade.rule.gradeable, true);
   assert.equal(report.grade.rule.usesLine, false);
   assert.equal(report.grade.rule.participantRequirement, 'required');
 });
 
-test('a game total DOES complete the journey, which is what makes the moneyline failure specific', async () => {
-  const report = await runSgoJourneyProof({ pickMarket: 'game_total_ou' });
+test('a game total completes the journey too, by a different rule and a different row', async () => {
+  const report = await runSgoJourneyProof({
+    pickMarket: 'game_total',
+    pickSelection: 'Over 7.5',
+    pickLine: 7.5,
+    pickTeamSide: null,
+  });
 
-  // This is the control. The same fixture, the same real code, a different market --
-  // and the join succeeds. Without it, the four gaps above could be explained by the
-  // harness being wrong rather than by the code.
-  assert.equal(report.journeyCompletes, true);
-  assert.deepEqual(report.joinedMarketKeys, ['game_total_ou']);
+  // The second market shape. It resolves its event by NAME rather than by
+  // participant (participantRequirement is `forbidden` for a game total), reads a
+  // quantity rather than an outcome, and settles through the same pass -- so the
+  // moneyline result above cannot be an artifact of one hard-coded path.
   assert.equal(report.grade.rule.family, 'game_total');
-  assert.ok(!report.gaps.some((g) => g.id === 'C-no-market-key-join'));
+  assert.equal(report.grade.rule.participantRequirement, 'forbidden');
+  assert.deepEqual(report.joinedMarketKeys, ['game_total_ou']);
+
+  const totalRow = report.resolve.inserted.find((row) => row.marketKey === 'game_total_ou');
+  assert.equal(totalRow?.actualValue, 8, '3 + 5 -- a total is a quantity, not an outcome');
+  assert.equal(totalRow?.participantId, null, 'a total belongs to the game, not a side');
+
+  // Over 7.5 against an actual 8.
+  assert.equal(report.settle.settlementResult, 'win');
+  assert.equal(report.journeyCompletes, true);
+  assert.deepEqual(report.gaps, []);
+});
+
+test('every inserted row is attributed to the sgo source, which is what grading trusts', async () => {
+  const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
+
+  // `validateEventProvenanceForGrading` admits only `sgo` and `operator` events, and
+  // this journey is the SGO one. If the resolver ever wrote under a different source
+  // the rows would still exist and would silently stop being gradeable.
+  assert.ok(report.resolve.inserted.length > 0);
+  for (const row of report.resolve.inserted) {
+    assert.equal(row.source, 'sgo');
+  }
+  assert.equal(report.resolve.summary.insertedResults, report.resolve.inserted.length);
+  assert.equal(report.resolve.summary.skippedTeamSideUnresolved, 0);
+  assert.equal(report.resolve.summary.skippedMoneylineOutcomeUnresolved, 0);
 });
 
 test('the proof refuses a fixture that could be mistaken for real data', () => {

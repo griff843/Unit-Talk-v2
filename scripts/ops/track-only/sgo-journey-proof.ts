@@ -1,26 +1,37 @@
-// UTV2-1889 -- submission-to-result journey proof, driven through the REAL SGO
-// normalization and the REAL grading classification.
+// UTV2-1889 -- submission-to-result journey proof, driven end to end through the
+// REAL normalization, the REAL persistence path, the REAL grading pass and the REAL
+// statistics computation.
 //
 // Why this file exists. The operator-attestation route is deferred, and the intended
 // route is SGO-backed. Before paid data is activated, the question worth answering is
-// not "does the grading code work?" but "does an SGO-written result actually JOIN to a
-// Smart Form pick?" -- and that join is where every gap below lives.
+// not "does the grading code work?" but "does an SGO-written result actually settle a
+// Track Only pick, and does the settled row then count?" -- and that is the whole
+// journey, not one seam of it.
 //
-// What is real here and what is not. Everything that normalizes, canonicalizes or
-// classifies is the shipped code, imported directly:
+// What is real here and what is not. Everything that normalizes, canonicalizes,
+// classifies, persists, grades or counts is the shipped code, imported directly:
 //
 //   * apps/ingestor/src/sgo-fetcher.ts        -- the real payload parse and the real
 //                                                extractScoredMarkets / normalizeMarketKey
-//   * apps/ingestor/src/results-resolver.ts   -- the real SGO_GAME_LINE_CANONICAL_ID
-//                                                and the real write path
-//   * apps/api/src/grading-service.ts         -- the real classifier and the real
-//                                                market-key candidate aliases
+//   * apps/ingestor/src/results-resolver.ts   -- the real canonicalization, the real
+//                                                moneyline outcome derivation, the real
+//                                                side attribution and the real write
+//   * apps/api/src/submission-service.ts      -- the real submission -> canonical pick
+//   * apps/api/src/grading-service.ts         -- the real grading pass, end to end
+//   * scripts/ops/track-only/stats.ts         -- the real Track Only statistics
 //   * @unit-talk/domain normalizeMarketKey    -- the real pick-side normalization
 //
-// The ONLY substitution is the HTTP transport: `fetchImpl` is injected so the fixture
-// is served from memory. That substitution is deliberate and is the point -- SGO
-// activation is unapproved, so the proof must not reach the provider. Nothing that
-// decides a market key, a participant or an outcome is mocked.
+// TWO substitutions, both deliberate and both named:
+//
+//   1. The HTTP transport. `fetchImpl` is injected so the fixture is served from
+//      memory. SGO activation is unapproved, so the proof must not reach the provider.
+//   2. The database. `createInMemoryRepositoryBundle()` stands in for Supabase -- the
+//      same substitution the shipped grading tests make, and the reason this proof
+//      needs no credential and writes nothing anywhere.
+//
+// Nothing that decides a market key, a participant, an outcome, a settlement or a
+// statistic is mocked. In particular the rows grading reads are the rows the resolver
+// actually inserted, read back out of the repository rather than predicted.
 //
 // The fixture is clearly identified as a fixture. Its provider event id carries the
 // STAGING_FIXTURE_PREFIX below and its teams are named so no real slate can collide
@@ -34,19 +45,51 @@ import type {
   SGOEventResult,
   SGOMarketScore,
 } from '../../../apps/ingestor/src/sgo-fetcher.js';
-import { SGO_GAME_LINE_CANONICAL_ID } from '../../../apps/ingestor/src/results-resolver.js';
+import {
+  SGO_GAME_LINE_CANONICAL_ID,
+  SGO_MONEYLINE_RESULT_MARKET_KEY,
+  resolveAndInsertResults,
+} from '../../../apps/ingestor/src/results-resolver.js';
+import type { ResultsResolutionSummary } from '../../../apps/ingestor/src/results-resolver.js';
 import {
   classifyMarketFamilyForGrading,
   COMMON_GRADING_MARKET_ALIASES,
   MONEYLINE_RESULT_MARKET_KEY,
+  runGradingPass,
 } from '../../../apps/api/src/grading-service.js';
 import type { MarketFamilyRule } from '../../../apps/api/src/grading-service.js';
+import { processSubmission } from '../../../apps/api/src/submission-service.js';
+import { createInMemoryRepositoryBundle } from '../../../apps/api/src/persistence.js';
+import { computeTrackOnlyStats } from './stats.js';
+import type { StatsInputPick, TrackOnlyStats } from './stats.js';
+
+/**
+ * The moneyline result market key is duplicated across the app boundary on purpose:
+ * `apps/ingestor` may not import from `apps/api` (core invariant 8). The duplication
+ * is ENFORCED rather than documented -- this module imports both copies and refuses to
+ * load when they disagree, so changing either one alone fails the suite. A `file:line`
+ * comment would document the coupling; this fails on it.
+ */
+if (SGO_MONEYLINE_RESULT_MARKET_KEY !== MONEYLINE_RESULT_MARKET_KEY) {
+  throw new Error(
+    `moneyline result market key drift: apps/ingestor says ${JSON.stringify(
+      SGO_MONEYLINE_RESULT_MARKET_KEY,
+    )}, apps/api says ${JSON.stringify(MONEYLINE_RESULT_MARKET_KEY)}. ` +
+      'These are two copies of one literal and must be changed together.',
+  );
+}
 
 /**
  * Every fixture this module builds carries this in its provider event id. It is
  * asserted rather than assumed: see `assertFixtureIsIdentifiable`.
  */
 export const STAGING_FIXTURE_PREFIX = 'UTV2-1889-STAGING-FIXTURE';
+
+const FIXTURE_EVENT_ID = `${STAGING_FIXTURE_PREFIX}-MLB-0001`;
+const FIXTURE_EVENT_NAME = 'Fixture Away Nine @ Fixture Home Nine';
+const FIXTURE_EVENT_DATE = '2026-09-11';
+const FIXTURE_EVENT_STARTS_AT = '2026-09-11T23:05:00.000Z';
+const FIXTURE_INGESTION_RUN_ID = 'run-utv2-1889-journey-fixture';
 
 export interface JourneyStageParse {
   /** Events the real parser accepted from the fixture payload. */
@@ -57,8 +100,8 @@ export interface JourneyStageParse {
 
 export interface JourneyStageResolve {
   /**
-   * The market_key the REAL resolver would write, per scored market, computed with
-   * the resolver's own table and its own `??` fallback rather than re-derived.
+   * The market_key the REAL resolver canonicalizes to, per scored market, computed
+   * with the resolver's own table and its own `??` fallback rather than re-derived.
    */
   writes: Array<{
     oddId: string;
@@ -67,11 +110,22 @@ export interface JourneyStageResolve {
     writtenMarketKey: string;
     /** True when the canonical table actually matched. False means the raw key fell through. */
     canonicalTableMatched: boolean;
-    /** The value the resolver writes into `actual_value`. */
-    writtenActualValue: number;
     providerSide: 'home' | 'away' | null;
     providerParticipantId: string | null;
   }>;
+  /**
+   * The rows the resolver ACTUALLY inserted, read back out of the repository. This is
+   * deliberately not the `writes` prediction above: the value written for a moneyline
+   * is derived by comparing both sides, so predicting it here would re-implement the
+   * thing under proof.
+   */
+  inserted: Array<{
+    marketKey: string;
+    participantId: string | null;
+    actualValue: number;
+    source: string;
+  }>;
+  summary: ResultsResolutionSummary;
 }
 
 export interface JourneyStageGrade {
@@ -87,9 +141,24 @@ export interface JourneyStageGrade {
   unresolvedDynamicAliases: string[];
 }
 
+export interface JourneyStageSettle {
+  pickId: string;
+  /** The lifecycle state the pick holds AFTER the grading pass ran. */
+  pickStatus: string;
+  attempted: number;
+  graded: number;
+  skipped: number;
+  errors: number;
+  /** `win` | `loss` | `push` | ... as recorded on the settlement row, or null. */
+  settlementResult: string | null;
+  /** True when the settlement was recorded on the evidence plane (no lifecycle move). */
+  evidencePlane: boolean;
+  profitLossUnits: number | null;
+}
+
 export interface JourneyGap {
   id: string;
-  stage: 'parse' | 'resolve' | 'grade' | 'join';
+  stage: 'parse' | 'resolve' | 'grade' | 'join' | 'settle' | 'stats';
   summary: string;
   evidence: string;
   /** Where the repair has to land. Recorded because it decides lane scope. */
@@ -101,9 +170,16 @@ export interface SgoJourneyProofReport {
   parse: JourneyStageParse;
   resolve: JourneyStageResolve;
   grade: JourneyStageGrade;
+  settle: JourneyStageSettle;
+  stats: TrackOnlyStats;
   /** Market keys written by the resolver that grading would actually find. */
   joinedMarketKeys: string[];
-  /** True only when at least one written key is one grading looks for. */
+  /**
+   * True only when the pick actually settled with a decided outcome AND that
+   * settlement is countable by the Track Only statistics. A market-key join alone is
+   * no longer sufficient -- the earlier version of this proof stopped there, and a key
+   * that joins but never settles is exactly the state this file exists to detect.
+   */
   journeyCompletes: boolean;
   gaps: JourneyGap[];
 }
@@ -112,9 +188,10 @@ export interface SgoJourneyProofReport {
  * A faithful slice of an SGO results payload for a finalized MLB game.
  *
  * The `oddID` shapes are the real provider shapes -- `points-home-game-ml-home`
- * carries stat entity `home`, which is the case UTV2-1868 exists for. They are NOT
- * the shapes `SGO_GAME_LINE_CANONICAL_ID` is keyed on, and proving that mismatch
- * against the real normalizer is most of the value of this fixture.
+ * carries stat entity `home`, which is the case UTV2-1868 exists for. The real
+ * normalizer erases that entity from the key (`points-all-game-ml` for BOTH sides),
+ * so the side survives only on `providerSide`, and proving the journey against that
+ * is most of the value of this fixture.
  */
 export function buildStagingResultsPayload(options?: {
   homeScore?: number;
@@ -126,7 +203,7 @@ export function buildStagingResultsPayload(options?: {
   return {
     data: [
       {
-        eventID: `${STAGING_FIXTURE_PREFIX}-MLB-0001`,
+        eventID: FIXTURE_EVENT_ID,
         status: {
           started: true,
           completed: true,
@@ -206,19 +283,51 @@ function fixtureFetchImpl(payload: unknown): typeof fetch {
 }
 
 /**
- * Runs the fixture through the real parse, then computes -- using the resolver's and
- * the grader's own tables -- whether the written result would join to the pick.
- *
- * No database is required. The join is a pure comparison of market keys and values,
- * which is precisely where the journey breaks, so proving it needs no rows.
+ * The event provenance grading requires. Written out rather than imported because the
+ * shape lives in a test file; every field here is read by
+ * `validateEventProvenanceForGrading`, and omitting any one of them fails the pass
+ * closed, which is the point of seeding it explicitly.
  */
-export async function runSgoJourneyProof(input: {
+function trustedSgoEventMetadata(): Record<string, unknown> {
+  return {
+    starts_at: FIXTURE_EVENT_STARTS_AT,
+    source: 'sgo',
+    providerKey: 'sgo',
+    ingestionSource: 'ingestor.cycle',
+    ingestionCycleRunId: FIXTURE_INGESTION_RUN_ID,
+  };
+}
+
+export interface SgoJourneyProofInput {
   /** The pick's `market` as persisted. Milestone 1's pick carries `moneyline`. */
   pickMarket: string;
+  /** The pick's selection text. Defaults to the away team, which wins the fixture. */
+  pickSelection?: string;
+  /** The pick's line. A moneyline has none; a total must have one. */
+  pickLine?: number | null;
+  /**
+   * Which seeded team the pick is on, when the market needs one. `null` is the correct
+   * value for a game total, which belongs to the game rather than a side.
+   */
+  pickTeamSide?: 'home' | 'away' | null;
   payload?: unknown;
-}): Promise<SgoJourneyProofReport> {
+}
+
+/**
+ * Runs the fixture through the real parse, the real resolver (writing into a real
+ * repository), the real grading pass and the real statistics computation.
+ *
+ * No credential and no database are required, and nothing outside this process is
+ * written. What IS required is that every row grading reads was produced by the
+ * resolver rather than by this function.
+ */
+export async function runSgoJourneyProof(
+  input: SgoJourneyProofInput,
+): Promise<SgoJourneyProofReport> {
   const payload = input.payload ?? buildStagingResultsPayload();
   assertFixtureIsIdentifiable(payload);
+
+  const repositories = createInMemoryRepositoryBundle();
 
   // --- Stage 1: the real parser -------------------------------------------------
   const events = await fetchSGOResults({
@@ -229,7 +338,46 @@ export async function runSgoJourneyProof(input: {
   });
   const scoredMarkets = events.flatMap((event) => event.scoredMarkets);
 
-  // --- Stage 2: the real resolver's canonicalization ----------------------------
+  // --- Stage 2a: seed the canonical rows the resolver resolves against ----------
+  // The external id MUST equal the provider event id: `resolveAndInsertResults` finds
+  // the event by `findByExternalId(providerEventId)` and skips everything under an
+  // event it cannot find.
+  const homeParticipant = await repositories.participants.upsertByExternalId({
+    externalId: `${STAGING_FIXTURE_PREFIX}-HOME`,
+    displayName: 'Fixture Home Nine',
+    participantType: 'team',
+    sport: 'MLB',
+    league: 'MLB',
+    metadata: {},
+  });
+  const awayParticipant = await repositories.participants.upsertByExternalId({
+    externalId: `${STAGING_FIXTURE_PREFIX}-AWAY`,
+    displayName: 'Fixture Away Nine',
+    participantType: 'team',
+    sport: 'MLB',
+    league: 'MLB',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    sportId: 'MLB',
+    eventName: FIXTURE_EVENT_NAME,
+    eventDate: FIXTURE_EVENT_DATE,
+    externalId: FIXTURE_EVENT_ID,
+    status: 'completed',
+    metadata: trustedSgoEventMetadata(),
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: homeParticipant.id,
+    role: 'home',
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: awayParticipant.id,
+    role: 'away',
+  });
+
+  // --- Stage 2b: the real resolver, writing real rows ---------------------------
   const writes = scoredMarkets.map((market) => {
     const canonical = SGO_GAME_LINE_CANONICAL_ID[market.baseMarketKey];
     return {
@@ -237,13 +385,65 @@ export async function runSgoJourneyProof(input: {
       baseMarketKey: market.baseMarketKey,
       writtenMarketKey: canonical ?? market.baseMarketKey,
       canonicalTableMatched: canonical !== undefined,
-      writtenActualValue: market.score,
       providerSide: market.providerSide,
       providerParticipantId: market.providerParticipantId,
     };
   });
 
-  // --- Stage 3: the real grading classification ---------------------------------
+  const resolveSummary = await resolveAndInsertResults(events, repositories, {
+    warn: () => {},
+    info: () => {},
+  });
+
+  // Read the rows back rather than restating what was predicted.
+  const insertedRows = await repositories.gradeResults.listByEvent(event.id);
+  const inserted = insertedRows.map((row) => ({
+    marketKey: row.market_key,
+    participantId: row.participant_id,
+    actualValue: Number(row.actual_value),
+    source: row.source,
+  }));
+
+  // --- Stage 3: the real submission path ----------------------------------------
+  const teamSide =
+    input.pickTeamSide === undefined ? 'away' : input.pickTeamSide;
+  const pickParticipant =
+    teamSide === 'home' ? homeParticipant : teamSide === 'away' ? awayParticipant : null;
+
+  const submissionMetadata: Record<string, unknown> = {
+    // Track Only is what makes this pick admissible to grading at `validated` and
+    // routes it down the evidence plane (UTV2-1861) instead of a lifecycle move.
+    distributionMode: 'track-only',
+    sport: 'MLB',
+    eventName: FIXTURE_EVENT_NAME,
+  };
+  if (pickParticipant) {
+    submissionMetadata['teamId'] = pickParticipant.id;
+    submissionMetadata['team'] = pickParticipant.display_name;
+  }
+
+  const submissionResult = await processSubmission(
+    {
+      // `api` is a human-ingress source: it bypasses neither validation nor the
+      // automated-write boundary, it simply is not an automated producer. Using
+      // `smart-form` here would add the event-existence gate, which is a Smart Form
+      // concern and not part of what this proof is measuring.
+      source: 'api',
+      market: input.pickMarket,
+      selection: input.pickSelection ?? 'Fixture Away Nine',
+      ...(input.pickLine === undefined || input.pickLine === null
+        ? {}
+        : { line: input.pickLine }),
+      odds: -110,
+      stakeUnits: 1,
+      eventName: FIXTURE_EVENT_NAME,
+      metadata: submissionMetadata,
+    },
+    repositories,
+  );
+  const pickId = submissionResult.pick.id;
+
+  // --- Stage 4: the real grading classification (reported, not re-implemented) ---
   const normalizedPickMarketKey = normalizePickMarketKey(input.pickMarket);
   const rule = classifyMarketFamilyForGrading(normalizedPickMarketKey);
   const staticCandidates = new Set<string>([normalizedPickMarketKey]);
@@ -253,23 +453,63 @@ export async function runSgoJourneyProof(input: {
   }
   const staticCandidateMarketKeys = [...staticCandidates];
 
-  // --- The join -----------------------------------------------------------------
-  const writtenKeys = new Set(writes.map((write) => write.writtenMarketKey));
+  const writtenKeys = new Set(inserted.map((row) => row.marketKey));
   const joinedMarketKeys = staticCandidateMarketKeys.filter((key) =>
     writtenKeys.has(key),
   );
 
+  // --- Stage 5: the real grading pass -------------------------------------------
+  const gradingResult = await runGradingPass(repositories);
+
+  const settlement = await repositories.settlements.findLatestForPick(pickId);
+  const settlementPayload =
+    settlement && settlement.payload && typeof settlement.payload === 'object'
+      ? (settlement.payload as Record<string, unknown>)
+      : {};
+  const gradedPick = await repositories.picks.findPickById(pickId);
+
+  const settle: JourneyStageSettle = {
+    pickId,
+    pickStatus: gradedPick?.status ?? 'unknown',
+    attempted: gradingResult.attempted,
+    graded: gradingResult.graded,
+    skipped: gradingResult.skipped,
+    errors: gradingResult.errors,
+    settlementResult: settlement?.result ?? null,
+    evidencePlane: settlementPayload['evidencePlane'] === true,
+    profitLossUnits:
+      typeof settlementPayload['profitLossUnits'] === 'number'
+        ? (settlementPayload['profitLossUnits'] as number)
+        : null,
+  };
+
+  // --- Stage 6: the real Track Only statistics ----------------------------------
+  const statsInput: StatsInputPick[] = [
+    {
+      pickId,
+      odds: gradedPick?.odds ?? null,
+      stakeUnits: gradedPick?.stake_units ?? null,
+      latestSettlement: settlement
+        ? { result: settlement.result, stakeUnits: settlement.stake_units }
+        : null,
+    },
+  ];
+  const stats = computeTrackOnlyStats(statsInput);
+
   const gaps = collectJourneyGaps({
     rule,
-    writes,
+    inserted,
     staticCandidateMarketKeys,
     joinedMarketKeys,
+    resolveSummary,
+    settle,
+    stats,
   });
 
   return {
-    fixtureEventId: `${STAGING_FIXTURE_PREFIX}-MLB-0001`,
+    fixtureEventId: FIXTURE_EVENT_ID,
     parse: { events, scoredMarkets },
-    resolve: { writes },
+    resolve: { writes, inserted, summary: resolveSummary },
     grade: {
       normalizedPickMarketKey,
       rule,
@@ -278,78 +518,108 @@ export async function runSgoJourneyProof(input: {
         `provider_market_aliases(provider='sgo', provider_market_key='${normalizedPickMarketKey}')`,
       ],
     },
+    settle,
+    stats,
     joinedMarketKeys,
-    journeyCompletes: joinedMarketKeys.length > 0,
+    journeyCompletes:
+      settle.graded === 1 &&
+      settle.settlementResult !== null &&
+      stats.record.decided === 1,
     gaps,
   };
 }
 
+/**
+ * Reports what is still broken, stage by stage. Every entry here is a genuine
+ * failure of the journey -- the three defects this lane repaired (the unreachable
+ * canonical table, the raw score written under an outcome key, and the unattributed
+ * side) each produce one, so a regression of any of them reappears as a gap rather
+ * than as a silently weaker pass.
+ */
 function collectJourneyGaps(input: {
   rule: MarketFamilyRule;
-  writes: JourneyStageResolve['writes'];
+  inserted: JourneyStageResolve['inserted'];
   staticCandidateMarketKeys: string[];
   joinedMarketKeys: string[];
+  resolveSummary: ResultsResolutionSummary;
+  settle: JourneyStageSettle;
+  stats: TrackOnlyStats;
 }): JourneyGap[] {
   const gaps: JourneyGap[] = [];
 
-  // Gap A -- the canonical table is keyed on a shape the normalizer cannot emit.
-  const unmatched = input.writes.filter(
-    (write) => !write.canonicalTableMatched && write.providerParticipantId === null,
-  );
-  if (unmatched.length > 0) {
+  if (input.inserted.length === 0) {
     gaps.push({
-      id: 'A-canonical-table-unreachable',
+      id: 'A-resolver-wrote-nothing',
       stage: 'resolve',
       summary:
-        'SGO_GAME_LINE_CANONICAL_ID is keyed on market strings the SGO normalizer cannot produce, so the raw provider key falls through the `??` instead.',
-      evidence: `normalizer emitted ${unmatched
-        .map((write) => write.baseMarketKey)
-        .join(', ')}; the table is keyed on e.g. 'mlb-ml-all-game'. normalizeSgoProviderMarketKey builds '<statId>-all-<period>-<betType>', so a '<league>-<bet>-all-game' key is structurally unreachable.`,
+        'The resolver inserted no rows for the fixture event, so nothing downstream can join.',
+      evidence: `summary: inserted=${input.resolveSummary.insertedResults}, skippedEventNotFound=${input.resolveSummary.skippedEventNotFound}, skippedEventNotCompleted=${input.resolveSummary.skippedEventNotCompleted}, skippedTeamSideUnresolved=${input.resolveSummary.skippedTeamSideUnresolved}, skippedMoneylineOutcomeUnresolved=${input.resolveSummary.skippedMoneylineOutcomeUnresolved}.`,
       owningPath: 'apps/ingestor/src/results-resolver.ts',
     });
   }
 
-  // Gap B -- value semantics. A raw team score is not a win/loss/push indicator.
-  const rawScoreWrites = input.writes.filter(
-    (write) => write.providerSide !== null,
+  // A moneyline row must be an outcome attributed to a side. Either half missing is
+  // the defect, not a partial success.
+  const moneylineRows = input.inserted.filter(
+    (row) => row.marketKey === MONEYLINE_RESULT_MARKET_KEY,
   );
-  if (input.rule.family === 'game_moneyline' && rawScoreWrites.length > 0) {
+  const unattributed = moneylineRows.filter((row) => row.participantId === null);
+  if (unattributed.length > 0) {
     gaps.push({
-      id: 'B-raw-score-is-not-an-outcome',
-      stage: 'join',
+      id: 'B-moneyline-row-has-no-side',
+      stage: 'resolve',
       summary:
-        "resolveAndInsertResults writes `actual_value: scoredMarket.score` -- the team's raw score. Moneyline grading reads a single value as an outcome, which a score cannot express.",
-      evidence: `fixture writes ${rawScoreWrites
-        .map((write) => `${write.providerSide}=${write.writtenActualValue}`)
-        .join(', ')}; grading accepts only 1 | 0 | 0.5 under ${MONEYLINE_RESULT_MARKET_KEY}. Settling a moneyline from SGO requires COMPARING the two sides' rows, not reading one.`,
-      owningPath: 'apps/api/src/grading-service.ts + apps/ingestor/src/results-resolver.ts',
+        'A moneyline result row carries no participant_id, so no side owns the outcome and grading (participantRequirement=required) can never read it.',
+      evidence: `${unattributed.length} of ${moneylineRows.length} ${MONEYLINE_RESULT_MARKET_KEY} rows have participant_id = null.`,
+      owningPath: 'apps/ingestor/src/results-resolver.ts',
+    });
+  }
+  const nonOutcome = moneylineRows.filter(
+    (row) => ![1, 0, 0.5].includes(row.actualValue),
+  );
+  if (nonOutcome.length > 0) {
+    gaps.push({
+      id: 'C-moneyline-value-is-not-an-outcome',
+      stage: 'resolve',
+      summary:
+        'A moneyline result row carries a value outside {1, 0, 0.5}, which grading refuses as moneyline_result_value_invalid. A raw team score is the usual cause.',
+      evidence: `offending values: ${nonOutcome.map((row) => row.actualValue).join(', ')}.`,
+      owningPath: 'apps/ingestor/src/results-resolver.ts',
     });
   }
 
-  // Gap C -- the join itself.
   if (input.joinedMarketKeys.length === 0) {
     gaps.push({
-      id: 'C-no-market-key-join',
+      id: 'D-no-market-key-join',
       stage: 'join',
       summary:
-        'No market_key the resolver writes is one the grading pass looks for, so the result and the pick never meet.',
-      evidence: `resolver writes [${input.writes
-        .map((write) => write.writtenMarketKey)
+        'No market_key the resolver wrote is one the grading pass looks for, so the result and the pick never meet.',
+      evidence: `resolver wrote [${input.inserted
+        .map((row) => row.marketKey)
         .join(', ')}]; grading looks for [${input.staticCandidateMarketKeys.join(', ')}].`,
       owningPath: 'apps/api/src/grading-service.ts',
     });
   }
 
-  // Gap D -- side attribution exists in code but not in any stored row.
-  if (rawScoreWrites.length > 0) {
+  if (input.settle.graded !== 1 || input.settle.settlementResult === null) {
     gaps.push({
-      id: 'D-side-attribution-unproven-in-data',
-      stage: 'resolve',
+      id: 'E-pick-did-not-settle',
+      stage: 'settle',
       summary:
-        'The per-side write path (UTV2-1868) fires only when providerSide resolves AND event_participants already carries home/away roles. It cannot repair rows already stored.',
-      evidence:
-        'Measured read-only in production: every game-line market_key (points-all-game-ml 280 rows, points-all-game-sp 280, points-all-reg-ml3way 280, points-all-1h-sp 258, points-all-1h-ml 257) has 0 rows with a participant_id. Grading classifies a moneyline participantRequirement=required, so none of them can settle one.',
-      owningPath: 'apps/ingestor/src/results-resolver.ts',
+        'The grading pass did not settle the pick, so the journey stops before it produces any record at all.',
+      evidence: `attempted=${input.settle.attempted}, graded=${input.settle.graded}, skipped=${input.settle.skipped}, errors=${input.settle.errors}, settlementResult=${String(input.settle.settlementResult)}.`,
+      owningPath: 'apps/api/src/grading-service.ts',
+    });
+  }
+
+  if (input.stats.record.decided !== 1) {
+    gaps.push({
+      id: 'F-settlement-is-not-countable',
+      stage: 'stats',
+      summary:
+        'A settlement exists but the Track Only statistics refuse to count it, so the pick settles without producing a record.',
+      evidence: `decided=${input.stats.record.decided}, pending=${input.stats.pending}, excluded=${JSON.stringify(input.stats.excluded)}.`,
+      owningPath: 'scripts/ops/track-only/stats.ts',
     });
   }
 
