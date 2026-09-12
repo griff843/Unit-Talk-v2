@@ -277,10 +277,27 @@ a binding rule that has been falsified is not repaired by restating it.
 
 The same correction was needed a second time, for the same reason: `f767e81ab` was this
 field's anchor for one day, and the repair commit changed source on top of it. Re-anchored on
-`b22617cae`, the head-independent form holds again and is now verified rather than asserted:
-`git diff --name-only b22617cae bdc03146e` returns exactly two paths,
-`docs/06_status/proof/UTV2-1889/evidence.json` and `verification.md`. So the run cited above,
-taken at `bdc03146e`, compiled a source tree byte-identical to the execution anchor's.
+`b22617cae`, the head-independent form holds again and is now verified rather than asserted.
+
+It needed one further correction, and the correction is the same move a third time rather than
+a reworded claim. A sanctioned `main` resync (`git-merge-main`, merge commit `b015c3ea6`)
+brought `docs/06_status/readiness/readiness-score.json` onto this branch from `main`, so
+*"every later commit touches only `docs/06_status/proof/UTV2-1889/`"* became literally false
+again -- this time through no commit of this lane's own. The proof-directory predicate was
+never the load-bearing one; the source-tree predicate is, and it is the one now stated:
+
+```
+git diff --name-only b22617cae b015c3ea6 \
+  -- 'apps/**' 'packages/**' 'scripts/**' 'supabase/**' '.github/**'   ->  (empty)
+git diff --name-only b22617cae b015c3ea6                              ->  3 paths, all docs:
+    docs/06_status/proof/UTV2-1889/evidence.json
+    docs/06_status/proof/UTV2-1889/verification.md
+    docs/06_status/readiness/readiness-score.json
+```
+
+So the run cited above, taken at `bdc03146e`, compiled a source tree byte-identical to the
+execution anchor's -- and so does `b015c3ea6`, and so will any later head that changes only
+docs. That is what makes the receipt survive the resync instead of having to be retaken.
 
 An earlier draft cited run `34650795093`, whose staging job went green and which was then
 **cancelled during `verify` by my own later pushes**, through the concurrency group. Recorded
