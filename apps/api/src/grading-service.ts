@@ -39,6 +39,19 @@ export interface GradingPassResult {
 export interface RunGradingPassOptions {
   logger?: Pick<Console, 'error' | 'warn'>;
   retryState?: GradingRetryState;
+  /**
+   * Restricts the pass to these pick ids, applied AFTER the normal population
+   * read. Absent -- which is how every production caller invokes this -- the
+   * pass grades its whole population exactly as before.
+   *
+   * This exists for the staging journey proof (UTV2-1889), which drives the real
+   * grading pass against the real staging database. Without it, proving one
+   * fixture pick settles would sweep and settle the entire staging backlog, and
+   * the proof's own counters would be a statement about that backlog rather than
+   * about the fixture. It narrows what is graded; it can never widen it, and it
+   * cannot admit a pick the population read did not already return.
+   */
+  restrictToPickIds?: ReadonlySet<string>;
 }
 
 export type GradingRetryState = Map<
@@ -49,7 +62,37 @@ export type GradingRetryState = Map<
   }
 >;
 
+// Only ingested provider data may settle a pick. The operator-attestation route
+// (UTV2-1889, commit 4701685541) was deferred and then removed from the release
+// before merge, so `operator` is deliberately NOT here: with no shipped writer for
+// that provenance, an allow-list entry for it would be trust with nothing to trust.
+// Re-admitting it is a review decision that arrives with its writer, not before.
 const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
+
+// Keyed by provider rather than a flat allow-list of sources, so a provider can never
+// borrow another's ingestion source. An unknown provider has no entry and fails closed.
+const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
+  sgo: 'ingestor.cycle',
+};
+
+// The dedicated result key for a moneyline outcome. Deliberately NOT
+// `points-all-game-ml`: production holds 280 rows under that key carrying a *score*
+// with `participant_id = NULL`. A score read as a win flag would settle a pick wrongly
+// and silently, so the win flag gets a key of its own and every pre-existing row stays
+// uninterpretable by this path.
+export const MONEYLINE_RESULT_MARKET_KEY = 'game_moneyline_win';
+
+// The attested win flag, and nothing else. A `Map` rather than a comparison chain so
+// that an unlisted value (a score, a NaN, a 2) has no branch to fall into and is
+// skipped by name instead of being coerced into a verdict.
+const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
+  number,
+  'win' | 'loss' | 'push'
+>([
+  [1, 'win'],
+  [0, 'loss'],
+  [0.5, 'push'],
+]);
 const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
 const GRADING_FETCH_PAGE_SIZE = 500;
 
@@ -68,14 +111,21 @@ export async function fetchAllByLifecycleState(
   return all;
 }
 
-type ParticipantRequirement = 'required' | 'forbidden';
-type GradeableMarketFamily = 'player_prop' | 'team_total' | 'game_total';
+export type ParticipantRequirement = 'required' | 'forbidden';
+export type GradeableMarketFamily =
+  | 'player_prop'
+  | 'team_total'
+  | 'game_total'
+  | 'game_moneyline';
 
-interface MarketFamilyRule {
+export interface MarketFamilyRule {
   family: GradeableMarketFamily | 'unsupported';
   participantRequirement: ParticipantRequirement;
   gradeable: boolean;
   participantType?: 'player' | 'team' | undefined;
+  // Whether this family's picks carry a line at all. A moneyline's `line = null` is
+  // correct data, not missing data, so the `missing_line` skip must not fire on it.
+  usesLine: boolean;
 }
 
 export async function runGradingPass(
@@ -113,7 +163,14 @@ export async function runGradingPass(
   const trackOnlyPicks = validatedPicks.filter((pick) =>
     isEvidencePlanePick(pick),
   );
-  const picks = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+  const population = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+  // Applied after the read, never instead of it: the restriction is an
+  // intersection with what the population already contained, so it can only ever
+  // remove candidates. An id that is not in the population stays ungraded.
+  const restrictToPickIds = options.restrictToPickIds;
+  const picks = restrictToPickIds
+    ? population.filter((pick) => restrictToPickIds.has(pick.id))
+    : population;
 
   // UTV2-1886: one batched read instead of one query per pick. The loop below used to
   // open with `findLatestForPick(pick.id)` -- a sequential round trip for every pick in
@@ -180,7 +237,7 @@ export async function runGradingPass(
         continue;
       }
 
-      if (!Number.isFinite(pick.line ?? null)) {
+      if (marketRule.usesLine && !Number.isFinite(pick.line ?? null)) {
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
@@ -284,16 +341,6 @@ export async function runGradingPass(
 
       retryState?.delete(pick.id);
 
-      const selectionSide = inferSelectionSide(pick.selection);
-      if (!selectionSide) {
-        details.push({
-          pickId: pick.id,
-          outcome: 'skipped',
-          reason: 'selection_side_not_supported',
-        });
-        continue;
-      }
-
       if (!Number.isFinite(gameResult.actual_value)) {
         details.push({
           pickId: pick.id,
@@ -303,13 +350,57 @@ export async function runGradingPass(
         continue;
       }
 
-      const gradedResult = mapOutcomeToSettlementResult(
-        selectionSide === 'over'
-          ? resolveOutcome(gameResult.actual_value, pick.line as number)
-          : invertOutcome(
-              resolveOutcome(gameResult.actual_value, pick.line as number),
-            ),
-      );
+      let gradedResult;
+      if (marketRule.family === 'game_moneyline') {
+        // A moneyline is not an over/under. `inferSelectionSide('Dodgers')` returns
+        // null and `resolveOutcome` needs a line, so both are bypassed and the
+        // outcome is read directly off the attested win flag.
+        //
+        // The market-key guard is load-bearing rather than defensive. The candidate
+        // lookup can reach `points-all-game-ml`, where 280 production rows carry a
+        // raw *score*; under that key an `actual_value` of 7 is neither 1 nor 0 and
+        // a value of 1 would read as a win that was never attested. Refusing any key
+        // but the dedicated one makes the number's meaning unambiguous.
+        if (gameResult.market_key !== MONEYLINE_RESULT_MARKET_KEY) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: `moneyline_result_market_key_unsupported: market_key=${gameResult.market_key} for result=${gameResult.id}`,
+          });
+          continue;
+        }
+
+        const moneylineOutcome = MONEYLINE_OUTCOME_BY_ACTUAL_VALUE.get(
+          gameResult.actual_value,
+        );
+        if (!moneylineOutcome) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: `moneyline_result_value_invalid: actual_value=${gameResult.actual_value} for result=${gameResult.id}`,
+          });
+          continue;
+        }
+        gradedResult = moneylineOutcome;
+      } else {
+        const selectionSide = inferSelectionSide(pick.selection);
+        if (!selectionSide) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: 'selection_side_not_supported',
+          });
+          continue;
+        }
+
+        gradedResult = mapOutcomeToSettlementResult(
+          selectionSide === 'over'
+            ? resolveOutcome(gameResult.actual_value, pick.line as number)
+            : invertOutcome(
+                resolveOutcome(gameResult.actual_value, pick.line as number),
+              ),
+        );
+      }
 
       const gradingArgs = {
         actualValue: gameResult.actual_value,
@@ -418,12 +509,23 @@ export async function runGradingPass(
   };
 }
 
-function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
+export function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
+  if (marketKey === 'moneyline' || marketKey === 'game_moneyline') {
+    return {
+      family: 'game_moneyline',
+      participantRequirement: 'required',
+      participantType: 'team',
+      gradeable: true,
+      usesLine: false,
+    };
+  }
+
   if (marketKey === 'game_total_ou') {
     return {
       family: 'game_total',
       participantRequirement: 'forbidden',
       gradeable: true,
+      usesLine: true,
     };
   }
 
@@ -433,6 +535,7 @@ function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
       participantRequirement: 'required',
       participantType: 'team',
       gradeable: true,
+      usesLine: true,
     };
   }
 
@@ -442,6 +545,7 @@ function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
       participantRequirement: 'required',
       participantType: 'player',
       gradeable: true,
+      usesLine: true,
     };
   }
 
@@ -449,6 +553,7 @@ function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
     family: 'unsupported',
     participantRequirement: 'forbidden',
     gradeable: false,
+    usesLine: false,
   };
 }
 
@@ -513,7 +618,9 @@ async function findFirstGradeResult(
   return null;
 }
 
-const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
+export const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
+  moneyline: MONEYLINE_RESULT_MARKET_KEY,
+  game_moneyline: MONEYLINE_RESULT_MARKET_KEY,
   'points-all-game-ou': 'player_points_ou',
   player_points_ou: 'points-all-game-ou',
   'rebounds-all-game-ou': 'player_rebounds_ou',
@@ -565,8 +672,12 @@ function validateEventProvenanceForGrading(
   if (!ingestionCycleRunId) {
     return { ok: false, reason: 'event_provenance_missing_ingestion_cycle' };
   }
+  const requiredIngestionSource = REQUIRED_INGESTION_SOURCE_BY_PROVIDER[provider];
+  if (!requiredIngestionSource) {
+    return { ok: false, reason: 'event_provenance_untrusted_provider' };
+  }
   const ingestionSource = readNonEmptyString(metadata?.ingestionSource);
-  if (ingestionSource !== 'ingestor.cycle') {
+  if (ingestionSource !== requiredIngestionSource) {
     return { ok: false, reason: 'event_provenance_invalid_ingestion_cycle' };
   }
 

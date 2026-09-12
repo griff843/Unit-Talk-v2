@@ -1,0 +1,457 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1889",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9e3554df42a99c90d41b0c153adfd018beeeb3d2",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "9e3554df42a99c90d41b0c153adfd018beeeb3d2 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1889/. It supersedes c4f22cc3117387dca5edd1e73ae66bb676ab9fa0, which was this field's value while the operator-attestation route was still in the tree. The anchor is moved rather than its claim reworded, on the same standard this note has applied to every previous anchor: an anchor carries the binding claim 'every later commit touches only the proof directory or carries main's files forward', and a commit that changes lane source falsifies it.\nThe lane's source-changing commits are: 4701685541 (the original seven files, including the operator-attestation CLI that is now removed -- the design is preserved there), 2b0a01e02 (the cross-file coupling test, since removed with its subject), f767e81ab (the SGO journey proof), b22617cae (the repair of gaps A, B and D in apps/ingestor/src/results-resolver.ts), 9a2b45786 (the staging journey and the one-line package.json wiring entry), c4f22cc31 (namespacing the fixture's event name), and 9e3554df42a99c90d41b0c153adfd018beeeb3d2 (removing the operator route, taking `operator` out of the trust allow-list, and correcting the failure-6 explanation). The proof commit carrying this file sits on top and changes nothing the assertions are about.",
+    "bound_at": "2026-09-12T00:00:00Z"
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/track-only-report.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 35,
+          "pass": 35,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 9,
+          "new": 26
+        },
+        "label": "The stats aggregate, the report adapter and the ten integrated SGO journey tests. Down from 50 at 8c57fc3f4: the fifteen tests whose subject was the operator-attestation CLI (its planner, its --help anti-drift control, its parseCli and entrypoint tests, and the writer/reader coupling assertion between that CLI and the grading pass) are removed with the CLI itself at 9e3554df42a99c90d41b0c153adfd018beeeb3d2. The journey tests run the real SGO parser (fetchSGOResults with an injected fetchImpl, so the provider is never contacted), the real resolveAndInsertResults, the real processSubmission, the real runGradingPass and the real computeTrackOnlyStats against seeded participants, events and event_participants. The read-side classifyResultProvenance tests keep an `operator` fixture because that function reports a row's provenance by name and is not a trust decision. 9 pre-existing tests in this file are untouched."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 86,
+          "pass": 86,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 71,
+          "new": 15
+        },
+        "label": "Moneyline grading from an ingested win flag, the result-market-key guard, provider-keyed provenance, and the composed Track Only + SGO moneyline journey. Up from 82 at 8c57fc3f4: the provenance-crossing test is replaced by two -- `operator provenance is refused: the deferred attestation route has no trust entry` (event_provenance_untrusted_provider) and `provenance is keyed by provider: sgo may not borrow another source` (event_provenance_invalid_ingestion_cycle) -- and the restrictToPickIds tests from 9a2b45786 remain. Every moneyline fixture now carries `sgo` / `ingestor.cycle` provenance, the only provenance that ships. The 71 pre-existing tests are the population UTV2-1886 left green and all still pass."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/ingestor/src/results-resolver.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 4,
+          "new": 5
+        },
+        "label": "The gap A/B/D repair, asserted on the resolver itself. The five new tests pin: a moneyline writes one row per side keyed game_moneyline_win with the team's participant_id and a value in {1,0} (and assert directly that neither raw score, 5 or 3, reaches an outcome-keyed row); a tie writes 0.5 on both sides; a half-scored event writes NOTHING and counts skippedMoneylineOutcomeUnresolved; an event with no event_participants rows -- the exact shape of the 3,000+ historical game-line rows -- writes NOTHING and counts skippedTeamSideUnresolved; and a game total is untouched by the moneyline path. The 4 pre-existing UTV2-1287 telemetry tests are unchanged and still pass."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/ingestor/src/ingestor.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 93,
+          "pass": 93,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 93,
+          "new": 0
+        },
+        "label": "The ingestor suite, including test 76 ('results-resolver canonical alias maps include expanded player props and game lines'), which was the one collateral failure of the gap A repair and is the reason it is recorded here. It asserted the sixteen <league>-<bet>-all-game aliases that gap A removed as unreachable by construction. It was not deleted: it now asserts the two keys normalizeSgoProviderMarketKey can actually emit AND that three of the removed keys resolve to undefined, so silently re-adding an unreachable alias fails. The 28 player-prop alias assertions above it are untouched."
+      },
+      {
+        "command": "pnpm test:ops",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 3106,
+          "pass": 3106,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The whole wired ops suite, 21 files, 98.8s, run at 9e3554df42a99c90d41b0c153adfd018beeeb3d2. 3106 rather than the 3121 recorded at 8c57fc3f4: the difference is exactly the fifteen operator-CLI tests removed from scripts/ops/track-only-report.test.ts. Recorded because the journey tests live in the already-wired track-only-report.test.ts rather than a new file -- pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on an unwired scripts/ test. A first run of this suite at this tree reported 4 failures; they were the exact signature of mutation stats-4 (`a loss costs nothing`), because the mutation battery was editing stats.ts concurrently. The suite was re-run alone and is recorded from that clean run; the contaminated one is named here rather than dropped."
+      }
+    ],
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "note": "Run to completion in the lane worktree at 9e3554df42a99c90d41b0c153adfd018beeeb3d2. The chained package scripts are &&-joined, so exit 0 is a statement about every one of them. The aggregate pass count is NOT recorded here: the run is captured through a file tail and per-suite totals are not summed by hand -- quoting a remembered number would be a proof value written from recollection rather than generated. The authoritative aggregate is the CI `verify` job recorded under runtime_proof."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint <the six changed source files>; pnpm lint is exercised by the CI verify job",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: `verify` ends at `test:live-db`, where `ci:assert-staging` refuses any target that is not staging xskgrzbteyqdufktjrjx. The CI `verify` job on PR 1567 is the authoritative run and is recorded under runtime_proof."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 9e3554df42a99c90d41b0c153adfd018beeeb3d2",
+      "verdict": "PASS",
+      "changed_files": 17,
+      "rules_matched": [
+        "ingestor-provider"
+      ],
+      "advisory_missing": [],
+      "note": "The ingestor-provider rule now matches because apps/ingestor/src/results-resolver.ts is in the diff at this base; the verdict is PASS, so every artifact the rule requires is present."
+    },
+    "mutation_battery": {
+      "command": "scripted: for each mutation, apply a single-anchor edit, run the named suite, restore the file from the captured original bytes, and assert the sha256 is unchanged afterwards",
+      "baseline": {
+        "track_only_report": {
+          "tests": 35,
+          "pass": 35,
+          "fail": 0
+        },
+        "grading_service": {
+          "tests": 86,
+          "pass": 86,
+          "fail": 0
+        },
+        "results_resolver": {
+          "tests": 9,
+          "pass": 9,
+          "fail": 0
+        }
+      },
+      "mutations": [
+        {
+          "id": "stats-1",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "normalizeResult folds an unrecognised result into pending instead of naming it",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 19 - an unrecognised result is excluded, NOT folded into pending"
+          ]
+        },
+        {
+          "id": "stats-2",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "report 0% ROI for an empty or all-pending cohort instead of null",
+          "failing": 4,
+          "failing_assertions": [
+            "not ok 14 - void and cancelled are not decisions and never enter the record or ROI",
+            "not ok 15 - an empty cohort reports null ROI, never 0",
+            "not ok 16 - an all-pending cohort reports null ROI, never 0",
+            "not ok 17 - a decided pick with no stake is counted in the record but named in excluded"
+          ]
+        },
+        {
+          "id": "stats-3",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "price the pick's own stake instead of the settlement's corrected stake",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 20 - the settlement's own stake wins over the pick's",
+            "not ok 25 - the adapter carries the settlement's own stake through to the price"
+          ]
+        },
+        {
+          "id": "stats-4",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "a loss costs nothing",
+          "failing": 4,
+          "failing_assertions": [
+            "not ok 10 - a -110 winner returns the right profit, not the stake",
+            "not ok 12 - ROI is net over units risked",
+            "not ok 20 - the settlement's own stake wins over the pick's",
+            "not ok 25 - the adapter carries the settlement's own stake through to the price"
+          ]
+        },
+        {
+          "id": "adapter-1",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "treat a settlement row with a null result as no settlement row at all",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 24 - the adapter preserves an in-progress settlement row as a row"
+          ]
+        },
+        {
+          "id": "adapter-2",
+          "file": "scripts/ops/track-only/stats.ts",
+          "change": "drop the settlement's own stake in the adapter",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - the adapter carries the settlement's own stake through to the price"
+          ]
+        },
+        {
+          "id": "grading-1",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "restore the blind missing_line skip, so a moneyline's correct null line reads as missing",
+          "failing": 10,
+          "failing_assertions": [
+            "not ok 70 - runGradingPass settles a moneyline from an ingested win flag",
+            "not ok 71 - an ingested loss and push settle as loss and push",
+            "not ok 72 - a score stored under the pick's own market key is refused by the guard",
+            "not ok 73 - a score of 1 under the wrong market key is refused, not read as a win",
+            "not ok 74 - the 280 production points-all-game-ml rows are unreachable by the lookup",
+            "not ok 75 - an out-of-range result value is skipped by name, not coerced into a verdict",
+            "not ok 76 - operator provenance is refused: the deferred attestation route has no trust entry",
+            "not ok 77 - provenance is keyed by provider: sgo may not borrow another source",
+            "not ok 78 - an untrusted provider is still refused",
+            "not ok 80 - the composed journey: an ingested result makes Milestone 1's exact pick shape settle"
+          ]
+        },
+        {
+          "id": "grading-2",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "accept any result market key for a moneyline, including points-all-game-ml scores",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 72 - a score stored under the pick's own market key is refused by the guard",
+            "not ok 73 - a score of 1 under the wrong market key is refused, not read as a win"
+          ]
+        },
+        {
+          "id": "grading-3",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "re-admit operator to the trusted provider set with its own ingestion source, as the deferred route would have",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 76 - operator provenance is refused: the deferred attestation route has no trust entry"
+          ]
+        },
+        {
+          "id": "grading-4",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "replace the provider-keyed ingestion source with a flat two-value allow-list",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 77 - provenance is keyed by provider: sgo may not borrow another source"
+          ]
+        },
+        {
+          "id": "grading-5",
+          "file": "apps/api/src/grading-service.ts",
+          "change": "drop 0.5 -> push from the attested-outcome map",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 71 - an ingested loss and push settle as loss and push"
+          ]
+        },
+        {
+          "id": "resolver-1",
+          "file": "apps/ingestor/src/results-resolver.ts",
+          "change": "computeMoneylineOutcomeBySide infers the winner from whichever side was scored when the other is missing, instead of returning null",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 7 - UTV2-1889: a half-scored event writes nothing \u2014 the outcome is never inferred from one side"
+          ]
+        },
+        {
+          "id": "resolver-2",
+          "file": "apps/ingestor/src/results-resolver.ts",
+          "change": "write the raw team score as actualValue under the game_moneyline_win key instead of the computed outcome",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 5 - UTV2-1889 (gaps A+B+D): a moneyline writes an outcome per side, attributed to the team",
+            "not ok 6 - UTV2-1889: a tied moneyline is a push on both sides, not a win for whoever was read first"
+          ]
+        },
+        {
+          "id": "resolver-3",
+          "file": "apps/ingestor/src/results-resolver.ts",
+          "change": "when the provider side cannot be matched to an event_participants row, invent a participant id and write the row anyway, instead of skipping the write",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 8 - UTV2-1889: an unresolvable side writes nothing and is never guessed"
+          ]
+        }
+      ],
+      "note": "Fourteen mutations at 9e3554df42a99c90d41b0c153adfd018beeeb3d2, re-run rather than carried: three of the seventeen recorded at 8c57fc3f4 -- help-1, couple-1 and couple-2 -- targeted scripts/ops/track-only/operator-attest-result.ts or the coupling test against it, and both are deleted, so those mutations no longer have a subject. grading-3 is INVERTED rather than dropped: it used to remove `operator` from the trusted provider set and watch eight tests fail; removing it is now the shipped state, so the mutation re-admits `operator` (with its own ingestion source, as the deferred route would have) and the refusal test `operator provenance is refused: the deferred attestation route has no trust entry` is the single assertion that turns red. That is the control the verdict asked for -- the allow-list entry cannot come back without a test noticing. grading-4 keeps its shape (flat two-value allow-list) and now fails `sgo may not borrow another source`. The three resolver mutations are the load-bearing ones for the obligation that historical rows with missing team attribution are never guessed or silently graded; resolver-3's first form (fall back to the first event_participants row) was a NO-OP against a fixture that has no such rows, and was restated as inventing a participant id before it was recorded -- a mutation that cannot fail is not a control. Every file was restored from captured bytes and its sha256 asserted equal afterwards."
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed -- one SELECT, no write, no containment setting touched",
+      "executed_at": "2026-09-11",
+      "observed": {
+        "governed_cohort_size": 1,
+        "cohort_validated": 1,
+        "cohort_settlement_rows": 0,
+        "cohort_distribution_outbox_rows": 0,
+        "points_all_game_ml_rows": 280,
+        "points_all_game_ml_rows_with_participant_id": 0,
+        "game_moneyline_win_rows": 0
+      },
+      "note": "The cohort predicate is `metadata ? 'distributionMode'` and it returns exactly one row: Griff's Milestone 1 pick dfcd9486-cba2-4bb5-b684-beec36e52c0b. Two of these numbers decide a design choice rather than describe the world. 280 rows under `points-all-game-ml` carry a raw score and ZERO of them carry a participant_id, so no side is attached and the number's meaning is ambiguous -- which is why the attested win flag gets the dedicated key `game_moneyline_win` instead. And there are ZERO rows under that dedicated key today, so this change makes no pre-existing row newly interpretable: it can only read a result an operator writes after it lands. The 0 outbox rows are the containment observation, and this lane adds no path to a non-zero value."
+    },
+    "journey_output": {
+      "what": "What the new aggregate prints for the real cohort, today and after the pick is attested as a win.",
+      "pending_today": {
+        "cohortSize": 1,
+        "record": {
+          "win": 0,
+          "loss": 0,
+          "push": 0,
+          "decided": 0
+        },
+        "nonDecisions": {
+          "void": 0,
+          "cancelled": 0
+        },
+        "pending": 1,
+        "units": {
+          "staked": null,
+          "net": null,
+          "roi": null,
+          "measuredOver": 0
+        },
+        "excluded": []
+      },
+      "after_a_win": {
+        "cohortSize": 1,
+        "record": {
+          "win": 1,
+          "loss": 0,
+          "push": 0,
+          "decided": 1
+        },
+        "pending": 0,
+        "units": {
+          "staked": 3,
+          "net": 2.7273,
+          "roi": 0.9091,
+          "measuredOver": 1
+        }
+      },
+      "note": "3 units at -110 risks 3 to win 3 * (100/110) = 2.7273. `roi: null` rather than 0 in the pending case is the load-bearing half: 0% is indistinguishable from a genuine break-even, and reporting it would be wrong in the reassuring direction."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "RECEIPTED",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials ci.yml materializes. Never production. assert-staging-target.ts ran first in each of the three credentialed invocations and printed \"[assert-staging] OK: target is the approved staging project\" before any test executed (the project ref itself is masked by GitHub secret redaction).",
+    "note": "This lane is admitted under the route B deferral -- the manifest carries t1_live_db_precondition: deferred_to_ci, so the live-DB evidence is obtained in CI rather than on the contained workstation, and closeout check G6 refuses to close without both `verify` and `Writable DB proof (staging only)` green on the merge SHA. This block is filled from ONE concluded run at the execution anchor 9e3554df42a99c90d41b0c153adfd018beeeb3d2, never from a run in flight, and every earlier run cited by previous versions of this block (34690701925 at bdc03146e, 34700925304 attempt 2 at c4f22cc31, 34702693121 at 8c57fc3f4) is withdrawn as evidence for this artifact: each compiled a source tree that still contained the operator-attestation route.",
+    "coverage_gap": {
+      "status": "CLOSED",
+      "closed_at": "9e3554df42a99c90d41b0c153adfd018beeeb3d2",
+      "closed_by": "CI run 34713309743 attempt 1, job 103605894101 (\"Writable DB proof (staging only)\"), step \"Run the T1 live proof suites against staging\", which executed scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts against the approved staging project xskgrzbteyqdufktjrjx: 6 pass, 0 fail, 0 skipped. First closed by run 34700925304 attempt 2 at c4f22cc31 and re-proven at 8c57fc3f4 (run 34702693121); re-proven again here at the tree that no longer contains the operator route.",
+      "correction": "The previous text of this block asserted two things that are now refuted by execution rather than by argument. It said a live suite here 'would prove that the seed it just wrote can be read back, not that the journey works', and it named a production operator attestation as the action that closes the gap. Both were wrong, and the reasoning error is nameable: it conflated seeding a game_moneyline_win ROW with seeding a provider PAYLOAD. The suite seeds neither result rows nor settlements. It hands the real SGO parser a provider payload and then asserts what the real resolver, the real submission path, the real grading pass and the real stats aggregate do with it against real PostgREST. A production operator attestation is therefore not the only way, and was not the way, this gap closed.",
+      "what_the_live_suite_proves_that_the_in_memory_journey_could_not": [
+        "the real resolver writes game_moneyline_win rows to staging with distinct participant_id values per side and outcome values in {1,0}, read back from the database rather than from the return value",
+        "the real grading pass settles a Track Only pick from those persisted rows, and the settlement_records row survives the round trip",
+        "the pick's lifecycle stays validated and distribution_outbox holds zero rows for it across every status the schema defines, asserted against the real tables",
+        "computeTrackOnlyStats reconciles against the persisted settlement rather than against a planned one",
+        "a half-scored event produces no game_moneyline_win row at all, and the pick does not settle"
+      ],
+      "isolation": "Every row the suite writes is namespaced by CI_FIXTURE_RUN_ID (utv2-1630-34713309743-1 on this run), carried on the provider event id, both team external ids AND the event name. The event name is load-bearing, and the first staging run of this suite (34700508935 attempt 1, 4 pass / 2 fail) showed why -- but the mechanism recorded here at 8c57fc3f4 was wrong and is corrected from measurement. It said grading `never cross-checks the participants`; that is too broad, and PM's review said so. apps/api/src/grading-service.ts resolvePickEvent DOES filter candidate events by the pick's participant (eventParticipants.listByParticipant) before chooseEventForPick orders by name and start-time proximity. The actual mechanism was upstream of grading: computeSubmissionIdempotencyKey in apps/api/src/submission-service.ts hashes source | market | selection | line | odds | eventName and NOT metadata, so two fixtures differing only in participant ids and provider event id hashed to one key and processSubmission returned the fully-scored run's existing pick -- there was no second pick, and the settlement the test read was that pick's genuine settlement. Read-only staging SQL confirms it: run 34700508935-1 holds exactly one pick (fd6423fe), whose teamId is the main fixture's AWAY participant and whose settlement is against the main event. Namespacing the event name fixed it because the name is a key input; namespacing the id alone was not isolation.",
+      "target_control": "scripts/ci/assert-staging-target.ts is called in the suite's before() hook and refuses a production, unknown, ambiguous or unresolvable target. The credentialed job separately asserts CI_SUPABASE_PROJECT_REF == xskgrzbteyqdufktjrjx before any test runs.",
+      "zero_skips_is_enforced_not_observed": "When CI_FIXTURE_RUN_ID is present the suite sets mustRun and refuses to skip: a missing credential or an unapproved target fails the tests rather than silently reporting them as skipped. Verified both ways locally before this run -- with no staging target the suite reports 6 skipped / 0 fail, and with CI_FIXTURE_RUN_ID set against a bad target it reports 0 skipped / 6 fail.",
+      "grading_population_restriction": "runGradingPass gained an optional restrictToPickIds set, applied AFTER the normal population read as an intersection. It can only remove candidates, never admit one the population did not already return, which is what keeps this suite from sweeping and settling staging's unrelated backlog. Mutation-tested three ways: ignoring the restriction fails two tests, and using it as a union or admission path fails the 'cannot admit' test specifically.",
+      "measured": {
+        "suite": "scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts",
+        "pass": 6,
+        "fail": 0,
+        "skipped": 0,
+        "tests": [
+          "the fixture is namespaced and identifiable, so no row it writes can be mistaken for real data",
+          "the real resolver wrote real rows to staging, read back from the database",
+          "the real grading pass settled the pick, and the settlement persists in staging",
+          "Track Only stays validated and creates no delivery, asserted against the real tables",
+          "the real statistics compute from the persisted settlement",
+          "an incomplete result is refused rather than guessed, against staging"
+        ],
+        "staging_project_ref": "xskgrzbteyqdufktjrjx",
+        "ci_fixture_run_id": "utv2-1630-34700925304-2",
+        "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34700925304",
+        "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34700925304/job/103572734394",
+        "log_sha256": "01c31aac60d098105c695f7359f005084b7de8691e3000e860d87362552ca52e"
+      },
+      "what_remains_unproven": [
+        "PRODUCTION: nothing in this lane ran against production. No production row was written, and no production claim is made. The only production reads are the governed read-only SELECT recorded under static_proof.production_measurement.",
+        "PRODUCTION: ambiguous-event resolution. A pick without an explicit event id resolves to the nearest participant-linked event by name and start time; whether that is always the intended event for real submissions is not proven here and is a production-acceptance check, not a fixture question.",
+        "PRODUCTION: real SGO ingestion. The resolver is exercised with a recorded provider payload through an injected transport; the provider was never contacted, SGO remains parked, and no ingestion cycle ran.",
+        "BROWSER: no browser interface is exercised by this suite. The Smart Form e2e suite asserts the persisted pick in memory and its CI gate defaults off; browser authentication and the Smart Form HTTP/controller path are evidenced only there.",
+        "SCALE: the suite proves one Track Only moneyline through the journey against staging. It is not a repeatability claim and not a statistics claim over a real cohort."
+      ],
+      "guard_state": "No containment setting was changed. SGO remains parked, member delivery remains off, no operator write route ships, and this suite writes only namespaced fixture rows to staging.",
+      "ambiguous_event_limitation": "Separate, and kept visible rather than closed by fixture naming: when a pick carries no explicit event id, resolvePickEvent chooses among the pick's participant-linked events by name match and then by start-time proximity, so with two participant-linked events on adjacent dates and an ambiguous name it selects the NEAREST rather than an explicit canonical event. Namespacing the fixture name is isolation for this suite, not a production resolution repair. This is a production-acceptance item and is listed under what_remains_unproven."
+    },
+    "executed_at": "2026-09-12T19:09:04Z/2026-09-12T19:21:05Z",
+    "command": "job \"Writable DB proof (staging only)\", run 34713309743 attempt 1, job 103605894101, at head 9e3554df42a99c90d41b0c153adfd018beeeb3d2. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 20 t1-proof suites wired in package.json at this head, the twentieth being scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts. Run conclusion SUCCESS; `verify` (job 103606950029) is green in the same run. Every value in this block was read out of that job log rather than written from recollection.",
+    "receipt": "CI run 34713309743 attempt 1. Job 103605894101 \"Writable DB proof (staging only)\" succeeded and job 103606950029 \"verify\" succeeded, both at head 9e3554df42a99c90d41b0c153adfd018beeeb3d2. pnpm test:db -> database-smoke.test.ts 7/7 pass, 0 fail, 0 skipped. pnpm test:t1-proof:live -> 20 suites, 125/125 pass, 0 fail, 0 skipped summed over the 20 TAP blocks; the journey suite contributed 6 pass, 0 fail, 0 skipped against staging project xskgrzbteyqdufktjrjx with CI_FIXTURE_RUN_ID utv2-1630-34713309743-1. Receipt artifact utv2-1630-db-proof-receipt-34713309743-1 (id 10304071606), .out/ci-db-proof-receipt.json sha256 43dc5dcdbea7d007ddfd28aabf857b044d38a45eb3844bc63b745b166eb96729. The t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34713309743/job/103605894101, whose full download has sha256 8fe2619d3e0a8ff075fb64964727d93e47798dd31f1b547164b45c8ec2a6aaa1.",
+    "queries": [
+      {
+        "label": "[assert-staging] target guard ran before any test in all three credentialed invocations and reported \"OK: target is the approved staging project\"",
+        "result": "ok -- staging confirmed, production never contacted"
+      },
+      {
+        "label": "staging fixtures seeded before either step: [seed-staging] retained by design: settlement_records, picks, submissions ; [seed-staging] reset distribution_receipts: 1 row(s) deleted ; [seed-staging] reset distribution_outbox: 12 row(s) deleted ; [seed-staging] reset system_runs: 4 row(s) deleted ; [seed-staging] sports: 9 synthetic row(s) upserted ; [seed-staging] cappers: 1 synthetic row(s) upserted ; [seed-staging] market_families: 6 synthetic row(s) upserted ; [seed-staging] selection_types: 3 synthetic row(s) upserted ; [seed-staging] market_types: 133 synthetic row(s) upserted",
+        "result": "ok -- mutable tables reset, reference data re-seeded, nothing written to game_results by the seed"
+      },
+      {
+        "label": "step `pnpm test:db` -- apps/api/src/database-smoke.test.ts against staging Postgres. This is the receipted step; ci-db-proof-receipt.json covers this step and no other",
+        "result": "7/7 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "step `pnpm test:t1-proof:live` -- the 20 t1-proof suites wired at 9e3554df42a99c90d41b0c153adfd018beeeb3d2 against staging Postgres, 20 TAP summary blocks in the job log, summed rather than recalled",
+        "result": "125/125 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "the twentieth suite, scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts: the real SGO parser, the real resolver writing game_moneyline_win rows, the real processSubmission, the real runGradingPass and the real computeTrackOnlyStats, all against staging PostgREST under a namespaced fixture",
+        "result": "6 pass, 0 fail, 0 skipped -- the fixture is namespaced and identifiable, so no row it writes can be mistaken for real data; the real resolver wrote real rows to staging, read back from the database; the real grading pass settled the pick, and the settlement persists in staging; Track Only stays validated and creates no delivery, asserted against the real tables; the real statistics compute from the persisted settlement; an incomplete result is refused rather than guessed, against staging"
+      },
+      {
+        "label": "what the changed paths are ALSO evidenced by at this head, in memory: 35 in scripts/ops/track-only-report.test.ts (including the ten integrated SGO journey tests), 86 in apps/api/src/grading-service.test.ts, 9 in apps/ingestor/src/results-resolver.test.ts and 93 in apps/ingestor/src/ingestor.test.ts, all against in-memory repositories and an injected fetchImpl. Recorded as static proof, which is what they are",
+        "result": "35/35, 86/86, 9/9 and 93/93 pass -- static proof at this head, recorded as such"
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "TAP assertions executed against staging across both credentialed steps",
+        "count": 132
+      },
+      {
+        "label": "TAP assertions failed",
+        "count": 0
+      },
+      {
+        "label": "TAP assertions skipped (0 is load-bearing: with CI_FIXTURE_RUN_ID present the journey suite sets mustRun and a missing credential FAILS it rather than skipping)",
+        "count": 0
+      },
+      {
+        "label": "test files executed against staging (1 database-smoke + 20 t1-proof)",
+        "count": 21
+      },
+      {
+        "label": "live assertions exercising the moneyline outcome branch, the participant attribution, the result market key, the sgo provenance check, and the stats aggregate against persisted rows",
+        "count": 6
+      },
+      {
+        "label": "live assertions exercising an operator-attestation write path",
+        "count": 0
+      },
+      {
+        "label": "production database connections opened by this job",
+        "count": 0
+      }
+    ],
+    "skipped": 0,
+    "binding": {
+      "pr": 1567,
+      "run_head_sha": "9e3554df42a99c90d41b0c153adfd018beeeb3d2",
+      "run_id": 34713309743,
+      "job_id": 103605894101,
+      "run_conclusion": "success",
+      "verify_job_id": 103606950029,
+      "binding_rule": "This run compiled the tree at 9e3554df42a99c90d41b0c153adfd018beeeb3d2. It CONCLUDED completed/success before this citation was written; no in-flight run is cited."
+    },
+    "binding_rule": "REBOUND and RECEIPTED at 9e3554df42a99c90d41b0c153adfd018beeeb3d2, 2026-09-12. 9e3554df42a99c90d41b0c153adfd018beeeb3d2 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1889/: it removes scripts/ops/track-only/operator-attest-result.ts, takes `operator` out of the grading trust allow-list, and drops the tests whose subject that CLI was. Every run cited before it compiled a tree containing that route, so none of them is evidence for this artifact and all are withdrawn -- a receipt for a superseded source tree is not weaker evidence, it is evidence for a different artifact. The head-independent claim is stated in its source-tree form and verified at the current head: `git diff --name-only 9e3554df42a99c90d41b0c153adfd018beeeb3d2 HEAD -- 'apps/**' 'packages/**' 'scripts/**' 'supabase/**' '.github/**' 'package.json'` returns EMPTY, so the proof commit on top of the anchor compiles a byte-identical source tree. The staging DB proof job serialises through a concurrency group and a new push CANCELS the run in progress, which is why the citation is written only after conclusion. `verify` and `Writable DB proof (staging only)` green on the MERGE SHA is asserted separately by closeout check G6, which is where the route B deferral is actually enforced."
+  }
+}
