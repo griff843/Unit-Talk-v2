@@ -153,9 +153,12 @@ function readString(
 }
 
 /**
- * Honest classification of where a result came from. `operator` is a first-class
- * class alongside `sgo`, never a disguise for it: the two are distinguished by
- * the `source` the attestation actually wrote.
+ * Honest classification of where a result came from, by the `source` the row
+ * actually carries. `operator` is kept as a distinct class on the READ side so a
+ * row with that provenance is reported as what it is rather than folded into
+ * `sgo` or `other`; it is not a trust decision. No shipped writer produces it --
+ * the operator-attestation route was removed from the release before merge
+ * (history: 4701685541) -- and the grading pass refuses it as untrusted.
  */
 export function classifyResultProvenance(
   source: string | null,

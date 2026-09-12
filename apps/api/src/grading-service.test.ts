@@ -173,10 +173,12 @@ function trustedEventMetadata(input: {
   };
 }
 
-// The operator-attested mirror of `trustedEventMetadata`. It is a separate helper on
-// purpose: the two provenance classes must be constructible independently, so a test
-// can build the crossed combinations (sgo naming operator.attestation, and operator
-// naming ingestor.cycle) that the keyed validator has to refuse.
+// Provenance shaped the way the deferred operator-attestation route would have written
+// it. That route is NOT in this release (UTV2-1889 removed it before merge) and
+// `operator` is NOT a trusted provider; this helper exists so the refusal can be
+// asserted on exactly the shape a future writer would emit, and so the crossed
+// combinations (sgo naming operator.attestation, and operator naming ingestor.cycle)
+// stay constructible for the keyed validator's tests.
 function operatorEventMetadata(input: {
   startsAt: string;
   providerKey?: string;
@@ -1864,7 +1866,7 @@ test('runGradingPass grades a legacy totals pick as a game-line market', async (
 
 test('runGradingPass fails closed for unsupported game-line families', async () => {
   // `spread` carries this assertion now. It used to be carried by `moneyline`, which
-  // is a real, participant-required family as of the operator-attested route — so
+  // is a real, participant-required family as of UTV2-1889 — so
   // this test moved to a market that is still genuinely unsupported rather than
   // being deleted along with the rule it was protecting.
   const { repositories, pickId } = await createPostedGameLinePickFixture({
@@ -1890,7 +1892,7 @@ test('runGradingPass declares moneyline participant-required and skips without a
     market: 'moneyline',
     selection: 'Lakers',
   });
-  // See the note in createOperatorMoneylineFixture: the shared helper defaults the
+  // See the note in createMoneylineResultFixture: the shared helper defaults the
   // line, so a genuine moneyline has to be written after the fact.
   mutatePick(repositories, pickId, (existing) => ({ ...existing, line: null }));
 
@@ -2917,7 +2919,7 @@ test('runGradingPass never posts a settlement recap for a Track Only pick, even 
 });
 
 
-async function createOperatorMoneylineFixture(
+async function createMoneylineResultFixture(
   options: {
     actualValue?: number;
     marketKey?: string;
@@ -2941,14 +2943,14 @@ async function createOperatorMoneylineFixture(
   });
 
   const event = await repositories.events.upsertByExternalId({
-    externalId: `operator:NBA:2026-04-04:${eventName}`,
+    externalId: `sgo:NBA:2026-04-04:${eventName}`,
     sportId: 'NBA',
     eventName,
     eventDate: '2026-04-04',
     status: 'completed',
     metadata:
       options.metadata ??
-      operatorEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
+      trustedEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
   });
 
   await repositories.eventParticipants.upsert({
@@ -2978,15 +2980,15 @@ async function createOperatorMoneylineFixture(
     participantId: team.id,
     marketKey: options.marketKey ?? 'game_moneyline_win',
     actualValue: options.actualValue ?? (options.won === false ? 0 : 1),
-    source: 'operator:griff843',
+    source: 'sgo',
     sourcedAt: '2026-04-04T22:00:00.000Z',
   });
 
   return { repositories, pickId, event, team };
 }
 
-test('runGradingPass settles a moneyline from an operator-attested win flag', async () => {
-  const { repositories, pickId } = await createOperatorMoneylineFixture({
+test('runGradingPass settles a moneyline from an ingested win flag', async () => {
+  const { repositories, pickId } = await createMoneylineResultFixture({
     actualValue: 1,
   });
 
@@ -3000,12 +3002,12 @@ test('runGradingPass settles a moneyline from an operator-attested win flag', as
   assert.equal(detail.result, 'win');
 });
 
-test('an operator-attested loss and push settle as loss and push', async () => {
+test('an ingested loss and push settle as loss and push', async () => {
   for (const [actualValue, expected] of [
     [0, 'loss'],
     [0.5, 'push'],
   ] as const) {
-    const { repositories, pickId } = await createOperatorMoneylineFixture({
+    const { repositories, pickId } = await createMoneylineResultFixture({
       actualValue,
     });
     const result = await runGradingPass(repositories);
@@ -3021,7 +3023,7 @@ test('a score stored under the pick\'s own market key is refused by the guard', 
   // result row under `moneyline` IS in the candidate set, so the lookup finds it —
   // and it carries a raw score, not a win flag. Only the market-key guard stands
   // between that number and a settled pick. Removing the guard turns this red.
-  const { repositories, pickId } = await createOperatorMoneylineFixture({
+  const { repositories, pickId } = await createMoneylineResultFixture({
     marketKey: 'moneyline',
     actualValue: 7,
   });
@@ -3039,7 +3041,7 @@ test('a score stored under the pick\'s own market key is refused by the guard', 
 test('a score of 1 under the wrong market key is refused, not read as a win', async () => {
   // The dangerous value specifically: 1 is a legal win flag and also a legal score.
   // Without the guard this grades as a win nobody attested.
-  const { repositories, pickId } = await createOperatorMoneylineFixture({
+  const { repositories, pickId } = await createMoneylineResultFixture({
     marketKey: 'moneyline',
     actualValue: 1,
   });
@@ -3058,7 +3060,7 @@ test('the 280 production points-all-game-ml rows are unreachable by the lookup',
   // for a moneyline at all, so those rows are never even considered. Asserted with
   // its own exact reason rather than folded into the guard test above — the earlier
   // draft accepted either reason and therefore proved neither.
-  const { repositories, pickId } = await createOperatorMoneylineFixture({
+  const { repositories, pickId } = await createMoneylineResultFixture({
     marketKey: 'points-all-game-ml',
     actualValue: 1,
   });
@@ -3072,8 +3074,8 @@ test('the 280 production points-all-game-ml rows are unreachable by the lookup',
   assert.match(detail.reason ?? '', /game_result_not_found|grade_skipped_final/);
 });
 
-test('an out-of-range attested value is skipped by name, not coerced into a verdict', async () => {
-  const { repositories, pickId } = await createOperatorMoneylineFixture({
+test('an out-of-range result value is skipped by name, not coerced into a verdict', async () => {
+  const { repositories, pickId } = await createMoneylineResultFixture({
     actualValue: 7,
   });
 
@@ -3086,39 +3088,47 @@ test('an out-of-range attested value is skipped by name, not coerced into a verd
   assert.match(detail.reason ?? '', /moneyline_result_value_invalid/);
 });
 
-test('provenance is keyed by provider: neither class may borrow the other\'s source', async () => {
-  // An operator event claiming the ingestor's source.
-  const borrowed = await createOperatorMoneylineFixture({
-    metadata: operatorEventMetadata({
-      startsAt: '2026-04-04T19:30:00.000Z',
-      ingestionSource: 'ingestor.cycle',
-    }),
+test('operator provenance is refused: the deferred attestation route has no trust entry', async () => {
+  // The exact shape the deferred operator-attestation writer would have produced,
+  // with its own consistent provider/source pair. It is refused on the PROVIDER,
+  // before the ingestion-source check is reached: `operator` is not in
+  // TRUSTED_GRADING_EVENT_PROVIDERS because nothing in this release writes it.
+  // Re-admitting the provider without its writer would turn this test red, which
+  // is the alarm it exists to be.
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    metadata: operatorEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
   });
-  let result = await runGradingPass(borrowed.repositories);
-  let detail = result.details.find((d) => d.pickId === borrowed.pickId);
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
   assert.ok(detail);
   assert.equal(detail.outcome, 'skipped');
-  assert.match(detail.reason ?? '', /event_provenance_invalid_ingestion_cycle/);
+  assert.match(detail.reason ?? '', /event_provenance_untrusted_provider/);
+});
 
-  // And the reverse: an sgo event claiming the operator's. This direction is
-  // accepted by a flat allow-list of sources and refused by a keyed one, which is
-  // the whole reason the map exists.
-  const reversed = await createOperatorMoneylineFixture({
+test('provenance is keyed by provider: sgo may not borrow another source', async () => {
+  // An sgo event claiming the operator route's source. A flat allow-list of sources
+  // would accept this; the keyed map refuses it, which is the whole reason the map
+  // exists. (The reverse direction -- operator naming ingestor.cycle -- is refused
+  // one step earlier, on the provider, by the test above.)
+  const borrowed = await createMoneylineResultFixture({
     metadata: operatorEventMetadata({
       startsAt: '2026-04-04T19:30:00.000Z',
       providerKey: 'sgo',
       ingestionSource: 'operator.attestation',
     }),
   });
-  result = await runGradingPass(reversed.repositories);
-  detail = result.details.find((d) => d.pickId === reversed.pickId);
+  const result = await runGradingPass(borrowed.repositories);
+  const detail = result.details.find((d) => d.pickId === borrowed.pickId);
   assert.ok(detail);
   assert.equal(detail.outcome, 'skipped');
   assert.match(detail.reason ?? '', /event_provenance_invalid_ingestion_cycle/);
 });
 
 test('an untrusted provider is still refused', async () => {
-  const { repositories, pickId } = await createOperatorMoneylineFixture({
+  const { repositories, pickId } = await createMoneylineResultFixture({
     metadata: operatorEventMetadata({
       startsAt: '2026-04-04T19:30:00.000Z',
       providerKey: 'the-odds-api',
@@ -3136,16 +3146,16 @@ test('an untrusted provider is still refused', async () => {
 // ---------------------------------------------------------------------------
 // UTV2-1889: the composed journey, which no other test in this file exercises.
 //
-// Every moneyline and operator-attestation test above builds on
-// `createPostedGameLinePickFixture` -- a `posted` pick. Every Track Only test
-// above uses `points-all-game-ou`, a market that was already gradeable. So each
-// leg is proven and their *composition* is not, and the composition is the only
-// shape that matters: Milestone 1's real pick is `validated` + Track Only +
-// moneyline + no result until an operator attests one. A suite can be entirely
-// green on the parts while the journey is broken at the joins.
+// Every moneyline test above builds on `createPostedGameLinePickFixture` -- a
+// `posted` pick. Every Track Only test above uses `points-all-game-ou`, a market
+// that was already gradeable. So each leg is proven and their *composition* is
+// not, and the composition is the only shape that matters: Milestone 1's real pick
+// is `validated` + Track Only + moneyline + no result until an ingested one exists.
+// A suite can be entirely green on the parts while the journey is broken at the
+// joins.
 // ---------------------------------------------------------------------------
 
-async function createTrackOnlyOperatorMoneylineFixture() {
+async function createTrackOnlyMoneylineFixture() {
   const repositories = createInMemoryRepositoryBundle();
   const eventName = 'Dodgers @ Brewers';
 
@@ -3185,12 +3195,12 @@ async function createTrackOnlyOperatorMoneylineFixture() {
   });
 
   const event = await repositories.events.upsertByExternalId({
-    externalId: `operator:MLB:2026-09-09:${eventName}`,
+    externalId: `sgo:MLB:2026-09-09:${eventName}`,
     sportId: 'MLB',
     eventName,
     eventDate: '2026-09-09',
     status: 'completed',
-    metadata: operatorEventMetadata({ startsAt: '2026-09-09T23:10:00.000Z' }),
+    metadata: trustedEventMetadata({ startsAt: '2026-09-09T23:10:00.000Z' }),
   });
 
   await repositories.eventParticipants.upsert({
@@ -3215,12 +3225,12 @@ async function createTrackOnlyOperatorMoneylineFixture() {
   return { repositories, pickId, event, team, eventName };
 }
 
-test('the composed journey: a Track Only validated moneyline is UNGRADEABLE until an operator attests a result', async () => {
+test('the composed journey: a Track Only validated moneyline is UNGRADEABLE until a result exists', async () => {
   const { repositories, pickId } =
-    await createTrackOnlyOperatorMoneylineFixture();
+    await createTrackOnlyMoneylineFixture();
 
   // Negative control first. Without this the test below could pass because the
-  // pick was gradeable all along rather than because the attestation supplied
+  // pick was gradeable all along rather than because the ingested result supplied
   // the missing fact -- and that is the difference the journey turns on.
   const before = await runGradingPass(repositories);
   assert.equal(before.graded, 0, 'nothing may grade before a result exists');
@@ -3228,22 +3238,22 @@ test('the composed journey: a Track Only validated moneyline is UNGRADEABLE unti
   assert.equal(settlementsBefore.length, 0);
 });
 
-test('the composed journey: operator attestation makes Milestone 1\'s exact pick shape settle', async () => {
+test('the composed journey: an ingested result makes Milestone 1\'s exact pick shape settle', async () => {
   const { repositories, pickId, event, team } =
-    await createTrackOnlyOperatorMoneylineFixture();
+    await createTrackOnlyMoneylineFixture();
 
   await repositories.gradeResults.insert({
     eventId: event.id,
     participantId: team.id,
     marketKey: 'game_moneyline_win',
     actualValue: 1,
-    source: 'operator:griff843',
+    source: 'sgo',
     sourcedAt: '2026-09-10T02:00:00.000Z',
   });
 
   const result = await runGradingPass(repositories);
 
-  assert.equal(result.graded, 1, 'the attested Track Only moneyline must grade');
+  assert.equal(result.graded, 1, 'the Track Only moneyline with a result must grade');
   assert.equal(result.errors, 0);
 
   const settlements = await repositories.settlements.listByPick(pickId);

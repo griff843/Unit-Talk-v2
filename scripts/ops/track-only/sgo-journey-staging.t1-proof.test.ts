@@ -294,9 +294,11 @@ test('an incomplete result is refused rather than guessed, against staging', { s
   assert.ok(eventRow);
 
   // The two fixtures must be distinct rows, and distinct by *name* as well as by id.
-  // The grading service resolves a pick's event from `metadata.eventName` and start-time
-  // proximity, never from the participants, so a shared name would let this pick settle
-  // against the fully-scored fixture and report a refusal that never happened.
+  // The event name is part of the submission idempotency key and the participant ids
+  // are not, so two fixtures sharing a name would hash to one key and this "pick"
+  // would silently be the fully-scored run's pick -- with its genuine settlement --
+  // reporting a refusal that was never exercised. That is what the first staging run
+  // of this suite did.
   const mainEventRow = await repositories.events.findByExternalId(report.fixtureEventId);
   assert.ok(mainEventRow);
   assert.notEqual(eventRow.id, mainEventRow.id);

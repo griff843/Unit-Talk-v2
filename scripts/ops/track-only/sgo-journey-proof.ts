@@ -2,8 +2,9 @@
 // REAL normalization, the REAL persistence path, the REAL grading pass and the REAL
 // statistics computation.
 //
-// Why this file exists. The operator-attestation route is deferred, and the intended
-// route is SGO-backed. Before paid data is activated, the question worth answering is
+// Why this file exists. The operator-attestation route was deferred and then removed
+// from this release (it is preserved in history at 4701685541); the intended route is
+// SGO-backed. Before paid data is activated, the question worth answering is
 // not "does the grading code work?" but "does an SGO-written result actually settle a
 // Track Only pick, and does the settled row then count?" -- and that is the whole
 // journey, not one seam of it.
@@ -95,14 +96,18 @@ const FIXTURE_EVENT_NAME = 'Fixture Away Nine @ Fixture Home Nine';
 
 /**
  * The event *name* carries the namespace too, and that is load-bearing rather than
- * tidy. `chooseEventForPick` in the grading service resolves a pick's event by
- * `metadata.eventName` and then by start-time proximity -- it never cross-checks the
- * participants. So two fixtures that share a name and a date are indistinguishable to
- * it, and a pick from one run can be settled against the other run's result. That is
- * exactly what happened the first time this proof ran against staging: the
- * half-scored fixture correctly wrote no moneyline result, and its pick settled
- * anyway, against the fully-scored fixture's event. Namespacing the id alone was not
- * isolation.
+ * tidy -- but not for the reason the first version of this comment gave. The name is
+ * one of the six inputs to `computeSubmissionIdempotencyKey` in the submission
+ * service (source | market | selection | line | odds | eventName); metadata is not.
+ * So two fixtures that differ only in their participant ids and provider event id
+ * hash to the SAME idempotency key, and `processSubmission` hands the second run the
+ * first run's existing pick instead of creating one. That is exactly what happened
+ * the first time this proof ran against staging: the half-scored fixture correctly
+ * wrote no moneyline result, but its "pick" was the fully-scored run's pick, carrying
+ * that run's genuine settlement. Grading resolved nothing wrongly -- `resolvePickEvent`
+ * does filter candidate events by the pick's participant -- there was simply no
+ * second pick. Namespacing the id alone was not isolation; the name is what makes the
+ * submission distinct.
  */
 function fixtureEventName(namespace?: string): string {
   return `${FIXTURE_EVENT_NAME}${fixtureNamespaceSuffix(namespace)}`;

@@ -62,23 +62,17 @@ export type GradingRetryState = Map<
   }
 >;
 
-// `operator` is an honest peer of `sgo`, not a stand-in for it. An operator-attested
-// event says so in its own provenance: it carries providerKey `operator`, the
-// ingestion source `operator.attestation`, and an `ingestionCycleRunId` pointing at
-// the `system_runs` row that names the human who attested it.
-const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo', 'operator']);
+// Only ingested provider data may settle a pick. The operator-attestation route
+// (UTV2-1889, commit 4701685541) was deferred and then removed from the release
+// before merge, so `operator` is deliberately NOT here: with no shipped writer for
+// that provenance, an allow-list entry for it would be trust with nothing to trust.
+// Re-admitting it is a review decision that arrives with its writer, not before.
+const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
 
-// Keyed by provider, in both directions, so a provider cannot borrow another's
-// ingestion source. The comparison that matters is not against today's code -- today's
-// gate is `ingestionSource !== 'ingestor.cycle'`, which already refuses everything but
-// that one value. It is against the cheaper alternative: widening the check to a flat
-// allow-list of two sources. That would let an `operator` event claim `ingestor.cycle`
-// and inherit ingestion provenance it never had. Keying by provider is what keeps
-// adding `operator` to the trusted set above from being a loosening. For `sgo` the
-// required source is unchanged; an unknown provider has no entry and fails closed.
+// Keyed by provider rather than a flat allow-list of sources, so a provider can never
+// borrow another's ingestion source. An unknown provider has no entry and fails closed.
 const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
   sgo: 'ingestor.cycle',
-  operator: 'operator.attestation',
 };
 
 // The dedicated result key for a moneyline outcome. Deliberately NOT
