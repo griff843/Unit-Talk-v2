@@ -244,26 +244,31 @@ rather than on the contained workstation, and closeout check `G6` refuses to clo
 both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral
 moves where the evidence is obtained and changes nothing about whether it is obtained.
 
-That evidence now exists. Run `34651506561`, job `103435276859`, at head `7dd4ccb69` --
-run conclusion **success**, with `verify` green in the same run:
+That evidence now exists, at the rebound head. Run `34690701925`, job `103545339988`, at
+head `bdc03146e2b9745b8abe2d61a73d191eac266c03` -- run conclusion **success**, with `verify`
+(job `103546566091`) green in the same run. Every number below was read out of that job log,
+not written from recollection:
 
 ```
-job "Writable DB proof (staging only)" -- all 16 steps success
+job "Writable DB proof (staging only)" -- all 17 steps success, 11:18:46Z -> 11:29:20Z
   [assert-staging] OK: target is the approved staging project   (x3, before any test)
+  seed-staging  distribution_receipts/outbox/system_runs reset to 0; sports 9, cappers 1,
+                market_families 6, selection_types 3, market_types 133 re-seeded
+  migration head 20260901150000_utv2_1811_rate_limit_buckets.sql
   pnpm test:db            -> apps/api/src/database-smoke.test.ts  7/7 pass, 0 fail, 0 skipped
-  pnpm test:t1-proof:live -> 19 suites                         119/119 pass, 0 fail, 0 skipped
-  aggregate across both credentialed steps                     126 assertions, 0 fail, 0 skipped
+  pnpm test:t1-proof:live -> 19 suites, 19 TAP blocks summed    119/119 pass, 0 fail, 0 skipped
+  aggregate across both credentialed steps                      126 assertions, 0 fail, 0 skipped
   receipt .out/ci-db-proof-receipt.json
-    sha256 3fb82300deb8a1fb04188cee9465f17581cfb8d10512b5b171fdc941a669159e
-    artifact utv2-1630-db-proof-receipt-34651506561-1 (id 10284626309)
+    sha256 1d016102eaa14b757cb3ffb8920e8ba49377a023fefd7190e79bdaedfaaa6801
+    artifact utv2-1630-db-proof-receipt-34690701925-1 (id 10297268200, 1457 bytes)
 ```
 
-**This receipt is WITHDRAWN, and stays withdrawn after the 2026-09-12 repair.** Run
-`34651506561` compiled the tree at `2b0a01e02`. Two later commits change source on top of
-that tree -- the SGO journey proof at `f767e81ab`, and the gap A/B/D repair at
-`b22617cae`. A receipt for a superseded
-source tree is not weaker evidence for this bundle -- it is evidence for a different
-artifact -- so it is withdrawn rather than carried forward with a caveat.
+**The receipt this replaces is WITHDRAWN and stays withdrawn.** Run `34651506561`
+(job `103435276859`, head `7dd4ccb69`, sha256 `3fb82300deb8a1fb04188cee9465f17581cfb8d10512b5b171fdc941a669159e`, artifact id `10284626309`) compiled the tree at `2b0a01e02`. Two
+later commits change source on top of that tree -- the SGO journey proof at `f767e81ab`, and
+the gap A/B/D repair at `b22617cae`. A receipt for a superseded source tree is not weaker
+evidence for this bundle -- it is evidence for a different artifact -- so it is withdrawn
+rather than carried forward with a caveat.
 
 The previous binding rule said *every commit on this lane after `2b0a01e02` touches only
 `docs/06_status/proof/UTV2-1889/`*. That claim was true when written and the journey-proof
@@ -272,15 +277,17 @@ a binding rule that has been falsified is not repaired by restating it.
 
 The same correction was needed a second time, for the same reason: `f767e81ab` was this
 field's anchor for one day, and the repair commit changed source on top of it. Re-anchored on
-`b22617cae`, the head-independent form holds again -- every commit on this lane after it
-touches only this proof directory, so any later head compiles a byte-identical source tree.
-Checkable with `git diff --name-only b22617cae <head>`.
+`b22617cae`, the head-independent form holds again and is now verified rather than asserted:
+`git diff --name-only b22617cae bdc03146e` returns exactly two paths,
+`docs/06_status/proof/UTV2-1889/evidence.json` and `verification.md`. So the run cited above,
+taken at `bdc03146e`, compiled a source tree byte-identical to the execution anchor's.
 
 An earlier draft cited run `34650795093`, whose staging job went green and which was then
 **cancelled during `verify` by my own later pushes**, through the concurrency group. Recorded
 rather than quietly swapped, because the failure mode generalises: citing an in-flight run
 means the act of writing the citation can invalidate it, and the loop ends only by citing a
-run that has already concluded. The replacement receipt is taken the same way.
+run that has already concluded. Run `34690701925` was cited only after it concluded, which is
+how the loop terminated.
 
 The coverage gap is stated rather than papered over, it is recorded OPEN in `evidence.json`,
 and the integrated journey added at `b22617cae` does not narrow it. That journey is a

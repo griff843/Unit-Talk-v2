@@ -356,9 +356,9 @@
   },
   "runtime_proof": {
     "profile": "hosted_live_db",
-    "status": "PENDING",
+    "status": "RECEIPTED",
     "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials ci.yml materializes. Never production. assert-staging-target.ts ran first in each of the three credentialed invocations and printed \"[assert-staging] OK: target is the approved staging project\" before any test executed (the project ref itself is masked by GitHub secret redaction).",
-    "note": "This lane is admitted under the route B deferral -- the manifest carries t1_live_db_precondition: deferred_to_ci, so the live-DB evidence is obtained in CI rather than on the contained workstation, and closeout check G6 refuses to close without both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral moves where the evidence is obtained and changes nothing about whether it is obtained. This block is filled from the CI run at the final PR head and is deliberately left PENDING rather than asserted in advance.",
+    "note": "This lane is admitted under the route B deferral -- the manifest carries t1_live_db_precondition: deferred_to_ci, so the live-DB evidence is obtained in CI rather than on the contained workstation, and closeout check G6 refuses to close without both `verify` and `Writable DB proof (staging only)` green on the merge SHA. The deferral moves where the evidence is obtained and changes nothing about whether it is obtained. This block is now filled from a CONCLUDED staging run at the rebound head, never from a run in flight.",
     "coverage_gap": {
       "status": "OPEN",
       "statement": "The staging job exercises none of this lane's changed paths, and this lane deliberately wires no twentieth live suite. A live suite here would have to seed its own events, event_participants and game_results rows under market_key game_moneyline_win -- and production holds zero such rows against 280 points-all-game-ml rows with no participant_id -- so the suite would prove that the seed it just wrote can be read back, not that the journey works. What replaced it at b22617cae7e23e485813437173e8df2c35b2abbc is an INTEGRATED in-process journey: the real SGO parser, the real resolver, the real submission path, the real grading pass and the real stats aggregate, composed end to end against the in-memory repositories. That is a genuine integration claim and it is still not a live-database claim, which is why this gap stays OPEN rather than being narrowed by the journey tests.",
@@ -376,34 +376,38 @@
       "why_it_matters": "These are the three joins between halves that were built separately. The static proof covers each half and the cross-file assertion added at 2b0a01e02 covers the one contract they share (the market key and the operator provenance pair), which is the join that could drift silently. What remains unproven is the database round trip, and the honest way to close it is a real operator attestation against a real event -- an operator action under DB_ENVIRONMENT_OPERATOR_POLICY.md, not an agent one.",
       "guard_state": "`Require live-DB proof for runtime changes` is PASS on this PR at this head. It is not being evaded: the guard reads the diff, and this lane's proof bundle is present. The gap above is recorded because the guard passing is not the same as the journey being exercised."
     },
-    "executed_at": "2026-09-11T21:56:57.133Z/2026-09-11T22:10:09.181Z",
-    "command": "job \"Writable DB proof (staging only)\", run 34651506561 attempt 1, job 103435276859, at head 7dd4ccb69872b6934bc552ae01415d2f25d29461. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 19 t1-proof suites wired in package.json at that head. Run conclusion SUCCESS; `verify` (job 103438524053) is green in the same run.",
-    "receipt": "ci-db-proof-receipt written to .out/ci-db-proof-receipt.json, sha256 3fb82300deb8a1fb04188cee9465f17581cfb8d10512b5b171fdc941a669159e, uploaded as artifact utv2-1630-db-proof-receipt-34651506561-1 (artifact id 10284626309). The receipt wraps `pnpm test:db` only; the t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34651506561/job/103435276859.",
+    "executed_at": "2026-09-12T11:18:59.907Z/2026-09-12T11:29:18.067Z",
+    "command": "job \"Writable DB proof (staging only)\", run 34690701925 attempt 1, job 103545339988, at head bdc03146e2b9745b8abe2d61a73d191eac266c03. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 19 t1-proof suites wired in package.json at that head. Run conclusion SUCCESS; `verify` (job 103546566091) is green in the same run. Every value in this block was read out of that job log rather than written from recollection.",
+    "receipt": "ci-db-proof-receipt written to .out/ci-db-proof-receipt.json, sha256 1d016102eaa14b757cb3ffb8920e8ba49377a023fefd7190e79bdaedfaaa6801, uploaded as artifact utv2-1630-db-proof-receipt-34690701925-1 (artifact id 10297268200, 1457 bytes, upload zip sha256 0cd21da3165032dfd07c7fca991913d601611cf6f7eaf9cba733d3e1d61776eb). The receipt wraps `pnpm test:db` only; the t1-proof suites emit no receipt of their own and are evidenced by the job log at https://github.com/griff843/Unit-Talk-v2/actions/runs/34690701925/job/103545339988.",
     "queries": [
       {
         "label": "[assert-staging] target guard ran before any test in all three credentialed invocations and reported \"OK: target is the approved staging project\"",
         "result": "ok -- staging confirmed, production never contacted"
       },
       {
-        "label": "step `pnpm test:db` -- apps/api/src/database-smoke.test.ts against staging Postgres. This is the receipted step; ci-db-proof-receipt.json covers this step and no other",
+        "label": "staging fixtures seeded before either step: distribution_receipts, distribution_outbox and system_runs reset to 0 rows; sports 9, cappers 1, market_families 6, selection_types 3, market_types 133 re-seeded. settlement_records, picks and submissions retained by design. Repository migration head recorded as 20260901150000_utv2_1811_rate_limit_buckets.sql",
+        "result": "ok -- mutable tables reset, reference data re-seeded, nothing written to game_results"
+      },
+      {
+        "label": "step `pnpm test:db` -- apps/api/src/database-smoke.test.ts against staging Postgres. This is the receipted step; ci-db-proof-receipt.json covers this step and no other. TAP summary at 11:20:49Z, duration_ms 107580.016724",
         "result": "7/7 pass, 0 fail, 0 skipped"
       },
       {
-        "label": "step `pnpm test:t1-proof:live` -- the 19 t1-proof suites wired at head 7dd4ccb69 against staging Postgres, 19 TAP summary blocks in the job log",
-        "result": "119/119 pass, 0 fail, 0 skipped"
+        "label": "step `pnpm test:t1-proof:live` -- the 19 t1-proof suites wired at head bdc03146e against staging Postgres, 19 TAP summary blocks in the job log, summed rather than recalled",
+        "result": "119/119 pass, 0 fail, 0 skipped across 19 blocks"
       },
       {
-        "label": "COVERAGE GAP, stated as a query result because it is the load-bearing fact for THIS lane: no suite in either step reaches any path this lane changed. Verified by grepping game_moneyline_win, MONEYLINE_RESULT_MARKET_KEY, operator.attestation, computeTrackOnlyStats and planAttestation across apps/*/src/t1-proof-*.test.ts and apps/api/src/database-smoke.test.ts at head 7dd4ccb69 -- zero files match. This lane wires no live suite of its own, and the reason is recorded under coverage_gap rather than repaired by seeding a row",
+        "label": "COVERAGE GAP, stated as a query result because it is the load-bearing fact for THIS lane: no suite in either step reaches any path this lane changed. Re-verified at the rebound head by grepping game_moneyline_win, MONEYLINE_RESULT_MARKET_KEY, operator.attestation, computeTrackOnlyStats, planAttestation and computeMoneylineOutcomeBySide across apps/*/src/t1-proof-*.test.ts (56 files) and apps/api/src/database-smoke.test.ts -- zero files match. This lane wires no live suite of its own, and the reason is recorded under coverage_gap rather than repaired by seeding a row",
         "result": "0 live assertions exercise the changed code paths"
       },
       {
-        "label": "what the changed paths ARE evidenced by at this head: the in-process suites -- 82 in apps/api/src/grading-service.test.ts (including tests 70-76, the moneyline settle, the loss and push cases, both market-key guards and the provider-keyed provenance check) and 40 in scripts/ops/track-only-report.test.ts (the stats aggregate, the report adapter, the operator-attest CLI, the --help anti-drift control and the writer/reader coupling assertion). All run against the in-memory repository and planned SQL rather than PostgREST, and are recorded as static proof, which is what they are",
-        "result": "82/82 and 40/40 pass -- static proof at this head, recorded as such"
+        "label": "what the changed paths ARE evidenced by at this head: the in-process suites -- 50 in scripts/ops/track-only-report.test.ts (including the ten integrated SGO journey tests), 82 in apps/api/src/grading-service.test.ts, 9 in apps/ingestor/src/results-resolver.test.ts and 93 in apps/ingestor/src/ingestor.test.ts. All run against the in-memory repositories and an injected fetchImpl rather than PostgREST, and are recorded as static proof, which is what they are",
+        "result": "50/50, 82/82, 9/9 and 93/93 pass -- static proof at this head, recorded as such"
       }
     ],
     "row_counts": [
       {
-        "label": "TAP assertions executed against staging across both credentialed steps",
+        "label": "TAP assertions executed against staging across both credentialed steps (7 + 119)",
         "count": 126
       },
       {
@@ -419,7 +423,7 @@
         "count": 20
       },
       {
-        "label": "live assertions exercising the moneyline grading branch, the operator provenance pair, the operator-attest planner or the stats aggregate",
+        "label": "live assertions exercising the moneyline outcome branch, the participant attribution, the result market key, the operator provenance pair, the operator-attest planner or the stats aggregate",
         "count": 0
       },
       {
@@ -434,12 +438,13 @@
     "skipped": 0,
     "binding": {
       "pr": 1567,
-      "run_head_sha": "7dd4ccb69872b6934bc552ae01415d2f25d29461",
-      "run_id": 34651506561,
-      "job_id": 103435276859,
+      "run_head_sha": "bdc03146e2b9745b8abe2d61a73d191eac266c03",
+      "run_id": 34690701925,
+      "job_id": 103545339988,
       "run_conclusion": "success",
-      "binding_rule": "WITHDRAWN -- see runtime_proof.binding_rule. This block records the run that was cited before the repair and is retained so the withdrawal is legible rather than silent. It is not evidence for this head."
+      "verify_job_id": 103546566091,
+      "binding_rule": "This run compiled the tree at bdc03146e2b9745b8abe2d61a73d191eac266c03. It CONCLUDED completed/success before this citation was written; no in-flight run is cited."
     },
-    "binding_rule": "REBOUND b22617cae 2026-09-12, on the gap A/B/D repair. The previously cited run (34651506561, head 7dd4ccb69) is NOT VALID for this bundle: it compiled the tree at 2b0a01e02, and two later commits change source on top of it -- f767e81abc77b7952afe88204827e84668f41952 (the journey proof) and b22617cae7e23e485813437173e8df2c35b2abbc (the repair). A receipt for a superseded source tree is not weaker evidence, it is evidence for a different artifact, so it stays withdrawn rather than being carried forward with a caveat.\nThe replacement receipt is cited from a staging run at or after b22617cae7e23e485813437173e8df2c35b2abbc, recorded in `queries` and `row_counts` below once that run has CONCLUDED -- never while in flight. That ordering is not fussiness: the staging DB proof job serialises through a concurrency group, so a new push CANCELS the run in progress, and the act of committing a citation to an in-flight run is what invalidates it. This lane already paid for that lesson once (run 34650795093 went green on its staging job and was then cancelled during `verify` by the very push carrying its citation). The loop terminates only by citing a finished run.\nThe head-independent claim, re-anchored: every commit on this lane after b22617cae7e23e485813437173e8df2c35b2abbc touches only docs/06_status/proof/UTV2-1889/, so every later head compiles a source tree byte-identical to the bound head's. Checkable with `git diff --name-only b22617cae7e23e485813437173e8df2c35b2abbc <head>`.\n`verify` and `Writable DB proof (staging only)` green on the MERGE SHA is asserted separately by closeout check G6, which is where the route B deferral is actually enforced."
+    "binding_rule": "REBOUND and RECEIPTED at bdc03146e2b9745b8abe2d61a73d191eac266c03, 2026-09-12. The previously cited run (34651506561, head 7dd4ccb69) is NOT VALID for this bundle and stays withdrawn: it compiled the tree at 2b0a01e02, and two later commits change source on top of it -- f767e81abc77b7952afe88204827e84668f41952 (the journey proof) and b22617cae7e23e485813437173e8df2c35b2abbc (the gap A/B/D repair). A receipt for a superseded source tree is not weaker evidence, it is evidence for a different artifact.\nThe replacement is run 34690701925 at bdc03146e, cited only after it CONCLUDED. That ordering is not fussiness: the staging DB proof job serialises through a concurrency group, so a new push CANCELS the run in progress, and the act of committing a citation to an in-flight run is what invalidates it. This lane already paid for that lesson once (run 34650795093 went green on its staging job and was then cancelled during `verify` by the very push carrying its citation). The loop terminated by citing a finished run.\nThe head-independent claim: b22617cae7e23e485813437173e8df2c35b2abbc is the last commit on this lane that touches source. Every commit after it touches only docs/06_status/proof/UTV2-1889/, so bdc03146e compiles a source tree byte-identical to b22617cae's, and so will every later head on this lane. Checkable with `git diff --name-only b22617cae7e23e485813437173e8df2c35b2abbc <head>`, which returns only evidence.json and verification.md at bdc03146e.\n`verify` and `Writable DB proof (staging only)` green on the MERGE SHA is asserted separately by closeout check G6, which is where the route B deferral is actually enforced."
   }
 }
