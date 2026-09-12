@@ -7,21 +7,29 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1891-plan-reconcile",
   "branch": "claude/utv2-1891-plan-reconcile",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "ba633ce83a3975a8584398f99387b5162cb1c8ef",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1569",
   "files_changed": [],
   "file_scope_lock": [
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-12T13:45:03.828Z",
-  "heartbeat_at": "2026-09-12T13:47:27.517Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-12T14:03:52.931Z",
+  "closed_at": "2026-09-12T14:03:52.931Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1891-plan-reconcile.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-12T14:03:50.793Z",
+      "verdict": "pass",
+      "merge_sha": "ba633ce83a3975a8584398f99387b5162cb1c8ef",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
