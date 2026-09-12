@@ -1940,14 +1940,14 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
   );
 });
 
-test('the repo-minted P0 admission block cannot be removed without a test failing', () => {
-  // The block that keeps `WORK-###` execution refused until the P0 Actions
-  // consumer actually evaluates a repo-minted identity lives at lane admission,
-  // not in a required check -- a required check predicated on activation would
-  // refuse the very PR that delivers the evaluator. Admission is a complete
-  // chokepoint because `merge-gate.yml` resolves tier from the lane manifest,
-  // which only `ops:lane-start` writes. Nothing else in the suite fails if the
-  // block is deleted, so this asserts its presence directly.
+test('the repo-minted P0 boundary cannot be removed from admission or the merge path without a test failing', () => {
+  // The controls that keep `WORK-###` execution refused until the P0 consumer
+  // on the protected base actually evaluates a repo-minted identity are LOCAL:
+  // preflight PW1 and `ops:lane-start` at admission, and the merge wrapper's
+  // pre-merge authorization for a manifest that already exists on a branch.
+  // None of them is a required check, and none claims to be -- Merge Gate
+  // reads whatever manifest a candidate head carries. Nothing else in the
+  // suite fails if any of them is deleted, so this asserts their presence.
   const laneStart = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
   assert.match(
     laneStart,
@@ -1965,12 +1965,35 @@ test('the repo-minted P0 admission block cannot be removed without a test failin
   const preflight = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
   assert.match(preflight, /runRepoMintedP0Checks\(issueId, addCheck\);/u);
 
-  // The merge gate's tier source is what makes admission sufficient. If it ever
-  // stops reading the lane manifest, the chokepoint argument stops holding and
-  // this assertion is where that is noticed.
+  // The sanctioned merge path holds the same line for a manifest that never
+  // passes admission again: the wrapper's authorization consults the predicate
+  // for a repo-minted head ref and refuses on `covered: false`.
+  const preMerge = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'pre-merge-authorization.ts'), 'utf8');
+  assert.match(
+    preMerge,
+    /if \(issueId && isRepoMintedWorkIdentity\(issueId\)\) \{[\s\S]{0,600}?readRepoMintedP0Coverage\(\)[\s\S]{0,800}?repoMintedBlocked = true/u,
+    'pre-merge authorization must refuse a repo-minted head ref whose trusted-base P0 consumer cannot evaluate it',
+  );
+  assert.match(
+    preMerge,
+    /&& !repoMintedBlocked;/u,
+    'the repo-minted refusal must feed the authorized decision, not only the receipt',
+  );
+
+  // The predicate itself must read the trusted base, never the working tree.
+  const shared = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'shared.ts'), 'utf8');
+  assert.match(shared, /export const P0_TRUSTED_BASE_REF = 'origin\/main';/u);
+  assert.doesNotMatch(
+    shared.slice(shared.indexOf('export function evaluateRepoMintedP0Coverage('), shared.indexOf('export function resolveTrackerRef(')),
+    /fs\.(readFileSync|existsSync)/u,
+    'evaluateRepoMintedP0Coverage must not read the working tree',
+  );
+
+  // Merge Gate still resolves the tier from the lane manifest. The local
+  // controls above are layered on that; they are not a substitute for it.
   assert.match(
     readWorkflow('merge-gate.yml'),
     /docs\/06_status\/lanes/u,
-    'merge-gate must keep resolving tier from the lane manifest that only lane-start writes',
+    'merge-gate must keep resolving tier from the lane manifest',
   );
 });

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import type { CheckResult, PreflightToken } from './shared.js';
 import {
   ROOT,
@@ -745,8 +746,53 @@ test('UTV2-1884: the fast path only skips the local duplicate, never a CI obliga
   assert.match(source, /PB2 skipped via T3 docs-only fast path; CI\/pnpm verify remains required before PR/);
 });
 
-function seedP0CoverageTree(opts: { consumer?: string; evaluator?: boolean }): string {
+const PW1_NARROW_CONSUMER = [
+  'name: P0 Protocol',
+  'on: [pull_request]',
+  'jobs:',
+  '  p0-protocol:',
+  '    name: P0 Protocol',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - uses: actions/github-script@v7',
+  '        with:',
+  '          script: |',
+  '            const pattern = /(?:UTV2|UNI)-\\d+/i;',
+  '',
+].join('\n');
+
+const PW1_ACTIVE_CONSUMER = [
+  'name: P0 Protocol',
+  'on: [pull_request]',
+  'jobs:',
+  '  p0-protocol:',
+  '    name: P0 Protocol',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - name: Classify and enforce P0',
+  '        run: node scripts/ops/tracker-independence/p0-workflow.cjs',
+  '',
+].join('\n');
+
+/**
+ * A throwaway repository whose `origin/main` carries exactly the given files.
+ * PW1 reads the trusted base, so a plain directory is not a fixture for it.
+ */
+function seedP0CoverageTree(opts: { consumer?: string; evaluator?: boolean; workingTree?: Record<string, string> }): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-pw1-'));
+  const hooks = path.join(root, '.nohooks');
+  fs.mkdirSync(hooks);
+  const git = (...args: string[]): void => {
+    execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', `core.hooksPath=${hooks}`, ...args], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'pw1', GIT_AUTHOR_EMAIL: 'pw1@test', GIT_COMMITTER_NAME: 'pw1', GIT_COMMITTER_EMAIL: 'pw1@test',
+      },
+    });
+  };
+  git('init', '-q');
   if (opts.consumer !== undefined) {
     fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
     fs.writeFileSync(path.join(root, '.github', 'workflows', 'p0-protocol.yml'), opts.consumer);
@@ -757,6 +803,13 @@ function seedP0CoverageTree(opts: { consumer?: string; evaluator?: boolean }): s
       path.join(root, 'scripts', 'ops', 'tracker-independence', 'p0-workflow.cjs'),
       'module.exports = {};\n',
     );
+  }
+  git('add', '-A');
+  git('commit', '-q', '--allow-empty', '-m', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  for (const [rel, content] of Object.entries(opts.workingTree ?? {})) {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), content);
   }
   return root;
 }
@@ -772,17 +825,21 @@ function collectPw1(issueId: string, root: string): CheckResult {
   return checks[0] as CheckResult;
 }
 
-test('PW1 refuses a repo-minted identity until the installed P0 consumer delegates', () => {
+test('PW1 refuses a repo-minted identity until the P0 consumer on the trusted base executes the evaluator', () => {
   // The narrow consumer is the one on `main`: it resolves UTV2/UNI only and
   // auto-passes everything else, so a WORK PR clears the required check with no
   // evaluation. PW1 exists to refuse admission while that is true.
-  const narrow = seedP0CoverageTree({
-    consumer: "const pattern = /(?:UTV2|UNI)-\\d+/i;\n",
-    evaluator: true,
-  });
+  const narrow = seedP0CoverageTree({ consumer: PW1_NARROW_CONSUMER, evaluator: true });
   const narrowCheck = collectPw1('WORK-2026091001', narrow);
   assert.equal(narrowCheck.status, 'fail');
-  assert.match(narrowCheck.detail, /does not delegate/u);
+  assert.match(narrowCheck.detail, /does not execute/u);
+
+  // The review's mutation: a comment naming the evaluator is not a delegation.
+  const commented = seedP0CoverageTree({
+    consumer: PW1_NARROW_CONSUMER + '# TODO: scripts/ops/tracker-independence/p0-workflow.cjs\n',
+    evaluator: true,
+  });
+  assert.equal(collectPw1('WORK-2026091001', commented).status, 'fail');
 
   // A consumer that is absent entirely fails closed the same way rather than
   // being read as "nothing to enforce".
@@ -790,20 +847,30 @@ test('PW1 refuses a repo-minted identity until the installed P0 consumer delegat
   assert.equal(absentCheck.status, 'fail');
   assert.match(absentCheck.detail, /missing or unreadable/u);
 
-  // A consumer that names the evaluator while the evaluator is not in the tree
-  // is a declaration without an implementation, and must not release the block.
-  const danglingCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({
-    consumer: 'run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
-  }));
+  // A consumer that executes the evaluator while the evaluator is not on the
+  // base is a declaration without an implementation, and must not release.
+  const danglingCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({ consumer: PW1_ACTIVE_CONSUMER }));
   assert.equal(danglingCheck.status, 'fail');
-  assert.match(danglingCheck.detail, /not present in this tree/u);
+  assert.match(danglingCheck.detail, /not present at origin\/main/u);
 
-  // Real delegation to an evaluator that exists releases it.
+  // Candidate-only activation: the base is narrow and the working tree carries
+  // the activation. PW1 reads the base, so this stays refused.
+  const candidate = seedP0CoverageTree({
+    consumer: PW1_NARROW_CONSUMER,
+    workingTree: {
+      '.github/workflows/p0-protocol.yml': PW1_ACTIVE_CONSUMER,
+      'scripts/ops/tracker-independence/p0-workflow.cjs': 'module.exports = {};\n',
+    },
+  });
+  assert.equal(collectPw1('WORK-2026091001', candidate).status, 'fail');
+
+  // Real delegation installed on the base, with the evaluator there, releases it.
   const activeCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({
-    consumer: 'run: node scripts/ops/tracker-independence/p0-workflow.cjs\n',
+    consumer: PW1_ACTIVE_CONSUMER,
     evaluator: true,
   }));
   assert.equal(activeCheck.status, 'pass');
+  assert.match(activeCheck.detail, /origin\/main/u);
 
   // And the refusal is scoped to repo-minted identity. A tracker key skips even
   // in the worst tree, because the installed consumer already evaluates those.

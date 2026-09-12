@@ -20,23 +20,29 @@ checks out that trusted base, and evaluates the candidate without running its co
 
 ## Integration order
 
-1. Land the scope-authorization bootstrap (UTV2-1887) on protected `main`
-   first, then resync #1556. The nine paths the trusted-base guard reports
-   outside scope are the lane's own manifest and sync file plus the file-scope
-   guard, the comment parser, their tests, the scope workflow and the
-   return-review workflow namespace correction with its existing test file.
-   They are resolved through the supported bootstrap route rather than through a
-   self-authored override: the guard on `main` keys its lane-lifecycle scope
-   grant on `ISSUE_ID_PATTERN = /^UTV2-\d+$/`, so a `WORK-###` lane is granted
-   no lifecycle paths at all, and the change that would fix that is inside the
-   PR being evaluated. UTV2-1887 carries those seven paths byte-identical to
-   this lane's versions; once they are on `main` the resync drops them from this
-   diff and the lifecycle grant admits the remaining two. A `scope-override/v1`
-   comment remains reserved to CODEOWNERS and is not authored here, and a
-   non-required check being red is not treated as authorization. Independently
-   review the corrected exact head of #1556 and satisfy its existing T1 Merge
-   Gate and exact-head scope controls. No approval is asserted here. The original
-   admission scope is retained; no history rewrite grants authority.
+1. Land the foundation through the **established bootstrap route**. An earlier
+   revision of this step named a scope-authorization bootstrap lane, UTV2-1887;
+   no such lane, branch or PR exists, and the step is corrected here rather than
+   carried. #1556 is keyed to `WORK-2026091001`, and `Merge Gate` on it fails
+   with *"No issue ID found in PR branch or title. Cannot resolve authoritative
+   tier."* — the gate resolves only tracker-keyed identifiers, and that surface
+   is reserved. The foundation therefore reaches `main` as a **tracker-keyed
+   lane carrying this reviewed head's diff**, whose tier `Merge Gate` resolves
+   from its own manifest, with its own independent review and required CI; if
+   the concurrency caps refuse that lane, the route is a
+   `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` entry authorized by Griff and
+   read from the base, as `merge-gate.yml` already does. The nine paths the
+   trusted-base scope guard reports outside this lane's scope are the lane's own
+   manifest and sync file plus the file-scope guard, the comment parser, their
+   tests, the scope workflow and the return-review workflow namespace
+   correction with its existing test file; the guard on `main` keys its
+   lifecycle grant on `ISSUE_ID_PATTERN = /^UTV2-\d+$/`, so a `WORK-###` lane is
+   granted no lifecycle paths, and a tracker-keyed replacement lane is granted
+   them ordinarily. A `scope-override/v1` comment remains reserved to CODEOWNERS
+   and is not authored here, and a non-required check being red is not treated
+   as authorization. Independently review the exact head of #1556; no approval
+   is asserted here, no history rewrite grants authority, and no required check
+   or branch-protection setting changes.
 2. Integrate #1556 through the existing serialized merge wrapper after required
    checks pass. Verify its merge is reachable from protected `main` and that
    `scripts/ops/tracker-independence/p0-workflow.cjs` exists at that exact SHA.
@@ -52,21 +58,39 @@ checks out that trusted base, and evaluates the candidate without running its co
    work in fresh and compacted sessions using repository state. Capture real merged
    workflow evidence before claiming tracker independence or closing this lane.
 
-## Repo-minted execution is mechanically blocked between the phases
+## Repo-minted execution is refused by local controls between the phases
 
 Between phase 2 and phase 3 the installed consumer is still the narrow one, and
 it *auto-passes* a `WORK-###` PR: the required `P0 Protocol` check concluded
-`success` on this PR's own head in 10s (run `34599912852`). That window is closed
-in code, not by a condition attached to a verdict:
-`evaluateRepoMintedP0Coverage` (`scripts/ops/shared.ts`) reads the installed
-consumer, preflight check `PW1` fails on it at every tier, and `ops:lane-start`
-refuses a repo-minted identity with `p0_consumer_not_activated` before any lease,
-worktree or manifest exists. The refusal is at admission rather than in a required
-check because an activation-predicated required check would refuse this very PR —
-the foundation whose base lacks the evaluator. Admission is a complete chokepoint:
-`merge-gate.yml` resolves tier from `docs/06_status/lanes/<ID>.json`, and
-`ops:lane-start` is its only writer. The block releases itself when the patch in
-this directory lands, and re-arms if the delegation is removed. See
+`success` on this PR's own head in 10s (run `34599912852`). Three local controls
+refuse repo-minted execution while that is true, and each one reads the
+**installed trusted base**, never the working tree or a branch head:
+
+- `evaluateRepoMintedP0Coverage` (`scripts/ops/shared.ts`) runs
+  `git show origin/main:.github/workflows/p0-protocol.yml` and parses it: coverage
+  is a live, non-ignorable step of the `P0 Protocol` job on a `pull_request`
+  trigger whose comment-stripped body invokes
+  `scripts/ops/tracker-independence/p0-workflow.cjs`, with the evaluator present
+  at the same base commit. The review's mutation — appending a comment naming the
+  evaluator to the narrow consumer — returns `covered: false`, as does the
+  activation applied only on a branch. The receipt records the ref and commit.
+- preflight check `PW1` fails on it at every tier, and `ops:lane-start` refuses a
+  new repo-minted lane with `p0_consumer_not_activated` before any lease,
+  worktree or manifest exists.
+- the merge wrapper's `pre-merge-authorization` refuses a repo-minted head ref
+  whose trusted-base coverage is absent, so a candidate manifest that already
+  exists on a branch — which never passes admission again — is held to the same
+  line on the sanctioned merge path.
+
+These are **not** required-check enforcement, and this packet no longer claims
+that admission is "a complete chokepoint" because `ops:lane-start` is the only
+writer of the lane manifest: `merge-gate.yml` reads whatever manifest the
+candidate head carries, and any committer can write one. The controls guarantee
+that no path through the repository's own tooling admits, opens or merges a
+repo-minted lane while `origin/main` cannot evaluate it. The foundation itself
+reaches `main` through the bootstrap route in step 1 above, and the block
+releases only when the activation is installed on the base — re-arming if a
+later base commit removes the delegation. See
 `docs/05_operations/P0_PROTOCOL_SPEC.md` § "The staged block is mechanical".
 
 The old P0 consumer can still attempt Linear access during phase 1. If its check

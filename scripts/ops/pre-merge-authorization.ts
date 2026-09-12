@@ -54,9 +54,12 @@ import {
 } from './truth-check-lib.js';
 import {
   emitJson,
+  evaluateRepoMintedP0Coverage,
   getFlag,
+  isRepoMintedWorkIdentity,
   parseArgs,
   readConfiguredEnvValue,
+  type RepoMintedP0Coverage,
 } from './shared.js';
 
 const require = createRequire(import.meta.url);
@@ -149,6 +152,13 @@ export interface PreMergeAuthorizationDeps {
   ) => Promise<{ authorizations?: unknown } | null>;
   /** Lists the PR's changed file paths, for the phase-1 diff-scope constraint. */
   fetchChangedFiles?: (input: PreMergeAuthorizationInput) => Promise<string[]>;
+  /**
+   * Reads whether the P0 consumer on the protected base executes the
+   * trusted-base evaluator (`evaluateRepoMintedP0Coverage`). Consulted ONLY for
+   * a repo-minted `WORK-###` head ref. Injected so tests never depend on the
+   * live `origin/main`.
+   */
+  evaluateRepoMintedP0Coverage?: () => RepoMintedP0Coverage;
 }
 
 /**
@@ -545,6 +555,14 @@ export interface PreMergeAuthorizationReceipt {
   pmVerdict: PmVerdictReceipt;
   /** Tier resolution and whether it required a pm-verdict. Diagnostic + auditable. */
   tier: TierReceipt;
+  /**
+   * Present only for a repo-minted `WORK-###` head ref: whether the P0
+   * consumer installed on the protected base executes the trusted-base
+   * evaluator. `covered: false` is merge-blocking. This is a local boundary in
+   * the sanctioned merge path, not required-check enforcement -- see
+   * `evaluateRepoMintedP0Coverage`.
+   */
+  repoMintedP0?: { issueId: string } & RepoMintedP0Coverage;
   authorized: boolean;
   reason?: string;
 }
@@ -651,6 +669,8 @@ export async function evaluatePreMergeAuthorization(
   const fetchBootstrapAuthorizations =
     deps.fetchBootstrapAuthorizations ?? defaultFetchBootstrapAuthorizations;
   const fetchChangedFiles = deps.fetchChangedFiles ?? defaultFetchChangedFiles;
+  const readRepoMintedP0Coverage =
+    deps.evaluateRepoMintedP0Coverage ?? (() => evaluateRepoMintedP0Coverage());
 
   // Fetches that do not depend on the live head SHA go first.
   const requiredChecks = await fetchRequiredCheckContexts(input);
@@ -787,7 +807,38 @@ export async function evaluatePreMergeAuthorization(
     reasons.push(...verdictErrors);
   }
 
-  const authorized = requiredCheckResult.passed && (!verdictRequired || pmVerdict.valid);
+  // Repo-minted `WORK-###` boundary. The required `P0 Protocol` check on
+  // `main` auto-passes a WORK PR without evaluating it until the consumer on
+  // the protected base executes the trusted-base evaluator. Lane admission
+  // (preflight PW1, `ops:lane-start`) refuses a NEW WORK lane while that
+  // holds, but a manifest that already exists on a branch never passes through
+  // admission again, so the sanctioned merge path has to hold the same line:
+  // the merge wrapper does not merge a WORK PR while the installed consumer
+  // cannot evaluate it. The predicate reads `origin/main`, so a candidate-only
+  // activation on this very PR does not release it. This is a local control;
+  // the required checks are unchanged and Merge Gate is not consulted here.
+  let repoMintedP0: PreMergeAuthorizationReceipt['repoMintedP0'];
+  let repoMintedBlocked = false;
+  if (issueId && isRepoMintedWorkIdentity(issueId)) {
+    let coverage: RepoMintedP0Coverage;
+    try {
+      coverage = readRepoMintedP0Coverage();
+    } catch (error) {
+      coverage = {
+        covered: false,
+        reason: `P0 coverage could not be evaluated (${(error as Error).message}); refusing rather than assuming`,
+        source: { ref: 'origin/main', sha: null },
+      };
+    }
+    repoMintedP0 = { issueId, ...coverage };
+    if (!coverage.covered) {
+      repoMintedBlocked = true;
+      reasons.push(`repo-minted identity ${issueId} cannot merge through the wrapper: ${coverage.reason}`);
+    }
+  }
+
+  const authorized =
+    requiredCheckResult.passed && (!verdictRequired || pmVerdict.valid) && !repoMintedBlocked;
 
   return {
     prNumber: input.prNumber,
@@ -795,6 +846,7 @@ export async function evaluatePreMergeAuthorization(
     requiredChecks: receiptChecks,
     pmVerdict,
     tier: tierReceipt,
+    ...(repoMintedP0 ? { repoMintedP0 } : {}),
     authorized,
     ...(reasons.length > 0 ? { reason: reasons.join(' | ') } : {}),
   };

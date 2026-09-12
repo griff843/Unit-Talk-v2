@@ -1028,9 +1028,12 @@ function runRepoChecks(
  * The consumer on `main` matches `/(?:UTV2|UNI)-\d+/i` and auto-passes anything
  * else, so a WORK PR clears a required safety check without any P0 evaluation.
  * This is deliberately NOT waivable at any tier (see WAIVABLE_CHECKS) and it is
- * self-releasing: it reads the installed consumer, so it lifts the moment the
- * activation lands and re-arms if the delegation is removed. Tracker-keyed
- * identities are unaffected -- the existing consumer evaluates those already.
+ * self-releasing: it reads the consumer installed on the protected base
+ * (`origin/main`, never this working tree) and requires an executed delegation
+ * step, so it lifts the moment the activation lands on the base and re-arms if
+ * the delegation is removed. It is a local admission control, not required-check
+ * enforcement. Tracker-keyed identities are unaffected -- the existing consumer
+ * evaluates those already.
  */
 export function runRepoMintedP0Checks(
   issueId: string,

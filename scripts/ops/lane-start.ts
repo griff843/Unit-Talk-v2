@@ -675,19 +675,25 @@ function main(): void {
       process.exit(1);
     }
 
-    // Repo-minted WORK execution stays mechanically blocked until the P0
-    // Actions consumer actually evaluates a `WORK-###` identity. The consumer
-    // currently on `main` resolves `/(?:UTV2|UNI)-\d+/i` and auto-passes
-    // anything else, so a WORK PR clears the required `P0 Protocol` check in
-    // ~10s with no evaluation at all. This refusal is placed at lane admission
-    // rather than in a required check because the activation's own foundation
-    // PR is itself a `WORK-###` PR whose base lacks the evaluator -- a required
-    // check predicated on activation would refuse the change that delivers it.
-    // Admission is nonetheless a complete chokepoint: `merge-gate.yml` resolves
-    // tier from `docs/06_status/lanes/<ID>.json`, which only this command
-    // writes, so no new WORK lane reaches a merge while this holds. The
-    // predicate reads the installed consumer, so the block releases itself the
-    // moment activation lands and re-arms if the delegation is removed.
+    // Repo-minted `WORK-###` identities are refused until the P0 consumer on the
+    // PROTECTED BASE executes the trusted-base evaluator. The consumer on `main`
+    // resolves `/(?:UTV2|UNI)-\d+/i` and auto-passes anything else, so a WORK PR
+    // clears the required `P0 Protocol` check in ~10s with no evaluation at all.
+    //
+    // The predicate reads `origin/main`, never this working tree: a branch that
+    // carries the activation in its own diff is candidate-only activation and
+    // does not release the block, and a comment naming the evaluator does not
+    // either -- coverage is an executed step of the required-check job
+    // (`findExecutedP0Delegation`). It releases itself once the base executes
+    // the evaluator and re-arms if the delegation is removed.
+    //
+    // This is a LOCAL control, alongside preflight PW1 and the merge wrapper's
+    // pre-merge authorization. It is not required-check enforcement and does
+    // not claim to be: a manifest hand-written on a branch is not stopped here,
+    // and Merge Gate reads whatever manifest the candidate head carries. The
+    // required checks on `main` are unchanged by this block; the foundation that
+    // activates the consumer lands through the established bootstrap route (a
+    // tracker-keyed lane whose trusted-base artifacts Merge Gate can resolve).
     if (isRepoMintedWorkIdentity(issueId)) {
       const p0Coverage = evaluateRepoMintedP0Coverage();
       if (!p0Coverage.covered) {
@@ -698,8 +704,9 @@ function main(): void {
             `Repo-minted work identity ${issueId} cannot open a lane: ${p0Coverage.reason}`,
           consumer_path: P0_ACTIONS_CONSUMER_PATH,
           evaluator_path: P0_TRUSTED_EVALUATOR_PATH,
+          trusted_base: p0Coverage.source,
           remediation:
-            'Land the P0 consumer activation (docs/06_status/proof/WORK-2026091001/p0-consumer-activation.patch) through its own reviewed lane. This refusal clears itself once the installed consumer delegates to the trusted-base evaluator. Do not disable the required check to pass.',
+            'Land the evaluator foundation and the P0 consumer activation (docs/06_status/proof/WORK-2026091001/p0-consumer-activation.patch) on the protected base through the established bootstrap route: a tracker-keyed lane with its own review and required CI. This refusal reads origin/main and clears itself once the installed consumer executes the trusted-base evaluator; applying the activation on a branch, referencing the evaluator in a comment, or disabling the required check does not release it.',
         });
         process.exit(1);
       }

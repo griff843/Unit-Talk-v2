@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
@@ -776,62 +777,252 @@ export function isRepoMintedWorkIdentity(issueId: string | null | undefined): bo
 export const P0_ACTIONS_CONSUMER_PATH = '.github/workflows/p0-protocol.yml';
 /** The trusted-base repository P0 evaluator the consumer must delegate to. */
 export const P0_TRUSTED_EVALUATOR_PATH = 'scripts/ops/tracker-independence/p0-workflow.cjs';
+/** The required-check context the consumer has to produce for delegation to be enforced. */
+export const P0_REQUIRED_CHECK_CONTEXT = 'P0 Protocol';
+/**
+ * The only ref activation is ever read from. The protected base is what runs
+ * the required check; a working tree, a branch head or a local `main` that may
+ * be ahead of the remote is candidate content and proves nothing.
+ */
+export const P0_TRUSTED_BASE_REF = 'origin/main';
 
 export interface RepoMintedP0Coverage {
   covered: boolean;
   reason: string;
+  /** The ref the consumer and evaluator were read from, and its commit when it resolved. */
+  source: { ref: string; sha: string | null };
+}
+
+export interface RepoMintedP0CoverageOptions {
+  /**
+   * Test seam only: the ref to treat as the installed base. Production callers
+   * never pass it, so they always read `origin/main`.
+   */
+  trustedRef?: string;
+}
+
+export type P0DelegationFinding =
+  | { executed: true; job: string; step: string }
+  | { executed: false; detail: string };
+
+function isLiteralFalse(value: unknown): boolean {
+  if (value === false || value === 0) return true;
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().replace(/^\$\{\{\s*/, '').replace(/\s*\}\}$/, '').trim().toLowerCase();
+  return normalized === 'false' || normalized === '0' || normalized === "'false'" || normalized === '"false"';
+}
+
+function hasPullRequestTrigger(on: unknown): boolean {
+  if (typeof on === 'string') return on === 'pull_request';
+  if (Array.isArray(on)) return on.some((entry) => entry === 'pull_request');
+  if (on && typeof on === 'object') return Object.prototype.hasOwnProperty.call(on, 'pull_request');
+  return false;
+}
+
+/** Drops `#` comment lines from a shell `run:` block so a commented-out call is not read as one. */
+function stripShellComments(script: string): string {
+  return script
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+}
+
+/** Drops line (`//`) and block comments from a github-script body. */
+function stripJsComments(script: string): string {
+  return script.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Does the installed P0 Actions consumer actually evaluate a repo-minted
+ * True when `script` contains an actual invocation of the evaluator -- a
+ * `require('<path>')` or a `node|tsx <path>` command -- rather than any
+ * mention of the path. Comments have already been stripped by the caller.
+ */
+function invokesEvaluator(script: string): boolean {
+  const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
+  const literal = String.raw`['"](?:\./)?${evaluator}['"]`;
+  // require('./path') inline.
+  const requireLiteral = new RegExp(String.raw`require\(\s*${literal}\s*\)`);
+  // const evaluator = './path'; ... require(evaluator) -- the shape the staged
+  // activation uses. The identifier must be bound to the literal in this body.
+  const binding = new RegExp(String.raw`(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}`, 'g');
+  const requiresBoundIdentifier = [...script.matchAll(binding)].some(([, name]) =>
+    new RegExp(String.raw`require\(\s*${name}\s*\)`).test(script),
+  );
+  // node ./path in a shell step.
+  const commandForm = new RegExp(String.raw`(?:^|[\s;&|(])(?:node|tsx)\s+(?:\./)?${evaluator}(?=$|[\s;&|)])`, 'm');
+  return requireLiteral.test(script) || requiresBoundIdentifier || commandForm.test(script);
+}
+
+/**
+ * Structural read of the P0 consumer. Coverage is an EXECUTED delegation: a
+ * `pull_request`-triggered workflow, a job whose check context is exactly
+ * `P0 Protocol`, and inside it a step that is not disabled, cannot be ignored
+ * on failure, and whose `run:` or github-script body invokes the evaluator
+ * with comments removed. A comment naming the path, a step under `if: false`,
+ * a `continue-on-error: true` step, or a step in some other job is a
+ * reference, not enforcement, and returns `executed: false`.
+ */
+export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFinding {
+  let doc: unknown;
+  try {
+    doc = parseYaml(consumerYaml);
+  } catch (error) {
+    return { executed: false, detail: `consumer is not parseable YAML (${(error as Error).message})` };
+  }
+  if (!doc || typeof doc !== 'object') {
+    return { executed: false, detail: 'consumer is not a workflow document' };
+  }
+  const workflow = doc as Record<string, unknown>;
+  if (!hasPullRequestTrigger(workflow['on'])) {
+    return { executed: false, detail: 'consumer does not run on pull_request, so it cannot produce the required check on a PR' };
+  }
+  const jobs = workflow['jobs'];
+  if (!jobs || typeof jobs !== 'object') {
+    return { executed: false, detail: 'consumer declares no jobs' };
+  }
+  let sawContextJob = false;
+  let mentionedElsewhere = false;
+  for (const [jobKey, jobValue] of Object.entries(jobs as Record<string, unknown>)) {
+    if (!jobValue || typeof jobValue !== 'object') continue;
+    const job = jobValue as Record<string, unknown>;
+    const context = typeof job['name'] === 'string' ? job['name'] : jobKey;
+    const steps = Array.isArray(job['steps']) ? (job['steps'] as unknown[]) : [];
+    if (context !== P0_REQUIRED_CHECK_CONTEXT) {
+      if (JSON.stringify(steps).includes(P0_TRUSTED_EVALUATOR_PATH)) mentionedElsewhere = true;
+      continue;
+    }
+    sawContextJob = true;
+    if (isLiteralFalse(job['if'])) continue;
+    for (const [index, stepValue] of steps.entries()) {
+      if (!stepValue || typeof stepValue !== 'object') continue;
+      const step = stepValue as Record<string, unknown>;
+      if (isLiteralFalse(step['if'])) continue;
+      if (step['continue-on-error'] === true) continue;
+      let body: string | null = null;
+      if (typeof step['run'] === 'string') {
+        body = stripShellComments(step['run']);
+      } else if (
+        typeof step['uses'] === 'string' &&
+        step['uses'].startsWith('actions/github-script') &&
+        step['with'] && typeof step['with'] === 'object' &&
+        typeof (step['with'] as Record<string, unknown>)['script'] === 'string'
+      ) {
+        body = stripJsComments((step['with'] as Record<string, unknown>)['script'] as string);
+      }
+      if (body !== null && invokesEvaluator(body)) {
+        const stepName = typeof step['name'] === 'string' ? step['name'] : `step ${index + 1}`;
+        return { executed: true, job: context, step: stepName };
+      }
+    }
+  }
+  if (!sawContextJob) {
+    return { executed: false, detail: `consumer has no job producing the "${P0_REQUIRED_CHECK_CONTEXT}" check context` };
+  }
+  return {
+    executed: false,
+    detail: mentionedElsewhere
+      ? `the evaluator is named outside the "${P0_REQUIRED_CHECK_CONTEXT}" job, which does not make the required check evaluate a WORK-### PR`
+      : `no live, non-ignorable step of the "${P0_REQUIRED_CHECK_CONTEXT}" job invokes the evaluator (a comment, a disabled step or a continue-on-error step is a reference, not enforcement)`,
+  };
+}
+
+/**
+ * Does the INSTALLED P0 Actions consumer actually evaluate a repo-minted
  * `WORK-###` identity?
  *
  * The consumer on `main` resolves an identifier with `/(?:UTV2|UNI)-\d+/i` and
  * auto-passes anything it cannot match, so a `WORK-###` PR clears the required
  * `P0 Protocol` check without any P0 evaluation ever running. That is a hole in
- * a required safety check, not an administrative gap.
+ * a required safety check, not an administrative gap. Until the consumer on the
+ * protected base executes the trusted-base evaluator, repo-minted WORK
+ * execution is refused by every local control that reads this predicate:
+ * preflight `PW1`, `ops:lane-start` admission and the merge wrapper's
+ * pre-merge authorization.
  *
- * The cutover closes it by delegating the consumer to the trusted-base
- * evaluator, which resolves `WORK-###` and throws on an unresolved
- * classification. Until that activation lands, repo-minted WORK execution is
- * refused at lane admission -- the only chokepoint that does not deadlock the
- * foundation PR the activation itself depends on. `merge-gate.yml` resolves a
- * tier from `docs/06_status/lanes/<ID>.json`, which only `ops:lane-start`
- * creates, so no WORK lane can reach a merge without passing through here.
+ * Two properties are load-bearing and were both missing from the first version
+ * of this function (PR #1556 review, comment 5647259413):
  *
- * The predicate is self-releasing: it reads the installed consumer rather than
- * a flag, so the block lifts by itself the moment the activation is on the
- * branch, and re-arms if the delegation is ever removed. It fails closed on an
- * unreadable or absent consumer -- a missing required-check workflow is the one
- * state in which "assume it is covered" would be worst.
+ * 1. It reads the TRUSTED BASE, never the working tree. Both files are read
+ *    with `git show origin/main:<path>`. A branch that carries the activation
+ *    in its own tree -- candidate-only activation -- is not covered, because the
+ *    required check that runs on a PR is the workflow on the base, not the one
+ *    in the diff. A local `main` is not consulted either; it can be ahead of
+ *    the remote. If the ref cannot be resolved the answer is "not covered".
+ * 2. Coverage means an EXECUTED delegation, found by parsing the workflow
+ *    rather than by substring. Appending `# TODO: <evaluator path>` to the
+ *    narrow consumer used to flip the answer to covered; it now does not.
+ *    See `findExecutedP0Delegation` for exactly what counts.
+ *
+ * What this predicate is NOT: required-check enforcement. Every consumer of it
+ * is a local control, and the required checks on `main` are unchanged by this
+ * module. A hand-written `WORK-###` manifest on a branch is read by Merge Gate
+ * at the candidate head regardless of this function; what keeps such a PR from
+ * merging today is that Merge Gate resolves no tier for a repo-minted branch
+ * name at all (measured on #1556: "No issue ID found in PR branch or title"),
+ * and the local merge wrapper refuses it here. The foundation that activates
+ * the consumer therefore lands through the established bootstrap route -- a
+ * tracker-keyed lane whose trusted-base artifacts Merge Gate can resolve -- not
+ * by treating these local refusals as if they were the required check.
+ *
+ * It fails closed on an unreadable or absent consumer -- a missing
+ * required-check workflow is the one state in which "assume it is covered"
+ * would be worst -- and it is self-releasing: once the base executes the
+ * evaluator the refusal lifts, and it re-arms if the delegation is removed.
  */
-export function evaluateRepoMintedP0Coverage(root: string = ROOT): RepoMintedP0Coverage {
-  const consumerPath = path.join(root, P0_ACTIONS_CONSUMER_PATH);
-  let consumer: string;
-  try {
-    consumer = fs.readFileSync(consumerPath, 'utf8');
-  } catch {
-    return {
-      covered: false,
-      reason: `P0 Actions consumer ${P0_ACTIONS_CONSUMER_PATH} is missing or unreadable; repo-minted WORK execution stays blocked.`,
-    };
-  }
-  if (!consumer.includes(P0_TRUSTED_EVALUATOR_PATH)) {
+export function evaluateRepoMintedP0Coverage(
+  root: string = ROOT,
+  options: RepoMintedP0CoverageOptions = {},
+): RepoMintedP0Coverage {
+  const ref = options.trustedRef ?? P0_TRUSTED_BASE_REF;
+  const resolved = git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], root);
+  if (!resolved.ok || !/^[0-9a-f]{40}$/.test(resolved.stdout)) {
     return {
       covered: false,
       reason:
-        `${P0_ACTIONS_CONSUMER_PATH} does not delegate to ${P0_TRUSTED_EVALUATOR_PATH}, so a WORK-### PR auto-passes the required P0 Protocol check without evaluation.`,
+        `trusted base ${ref} cannot be resolved${resolved.stderr ? ` (${resolved.stderr})` : ''}; ` +
+        'activation is read only from the installed base, never from a working tree, so repo-minted WORK execution stays blocked.',
+      source: { ref, sha: null },
     };
   }
-  if (!fs.existsSync(path.join(root, P0_TRUSTED_EVALUATOR_PATH))) {
+  const source = { ref, sha: resolved.stdout };
+  const consumer = git(['show', `${ref}:${P0_ACTIONS_CONSUMER_PATH}`], root);
+  if (!consumer.ok) {
     return {
       covered: false,
-      reason: `${P0_ACTIONS_CONSUMER_PATH} delegates to ${P0_TRUSTED_EVALUATOR_PATH}, but that evaluator is not present in this tree.`,
+      reason: `P0 Actions consumer ${P0_ACTIONS_CONSUMER_PATH} is missing or unreadable at ${ref} (${source.sha.slice(0, 9)}); repo-minted WORK execution stays blocked.`,
+      source,
+    };
+  }
+  const delegation = findExecutedP0Delegation(consumer.stdout);
+  if (!delegation.executed) {
+    return {
+      covered: false,
+      reason:
+        `${P0_ACTIONS_CONSUMER_PATH} at ${ref} (${source.sha.slice(0, 9)}) does not execute ${P0_TRUSTED_EVALUATOR_PATH}: ` +
+        `${delegation.detail}. A WORK-### PR would auto-pass the required P0 Protocol check without evaluation.`,
+      source,
+    };
+  }
+  const evaluator = git(['cat-file', '-e', `${ref}:${P0_TRUSTED_EVALUATOR_PATH}`], root);
+  if (!evaluator.ok) {
+    return {
+      covered: false,
+      reason:
+        `${P0_ACTIONS_CONSUMER_PATH} at ${ref} executes ${P0_TRUSTED_EVALUATOR_PATH} from "${delegation.job}" / "${delegation.step}", ` +
+        `but that evaluator is not present at ${ref} (${source.sha.slice(0, 9)}); a consumer that requires a file the base lacks is not coverage.`,
+      source,
     };
   }
   return {
     covered: true,
-    reason: `${P0_ACTIONS_CONSUMER_PATH} delegates repo-minted work identities to ${P0_TRUSTED_EVALUATOR_PATH}.`,
+    reason:
+      `${P0_ACTIONS_CONSUMER_PATH} at ${ref} (${source.sha.slice(0, 9)}) delegates repo-minted work identities to ` +
+      `${P0_TRUSTED_EVALUATOR_PATH} from job "${delegation.job}", step "${delegation.step}", and the evaluator is present at that ref.`,
+    source,
   };
 }
 

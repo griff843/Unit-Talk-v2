@@ -163,21 +163,39 @@ The two phases above create a window: the foundation lands while the base consum
 run `34599912852`, conclusion `success` in 10s, log line *"No UTV2-### / UNI-### identifier found in
 PR title, body, or branch — treating as non-P0."*
 
-That window is closed in code rather than by a note here:
+That window is narrowed by three **local** controls. They are stated as local deliberately: none
+of them is a required check, none is enforced by GitHub, and the paragraph after the table says
+what that means for how the foundation reaches `main`.
 
 | Site | Behaviour |
 |---|---|
-| `scripts/ops/shared.ts` — `evaluateRepoMintedP0Coverage` | reads the *installed* consumer and reports whether it delegates to `scripts/ops/tracker-independence/p0-workflow.cjs`. Fails closed when the consumer is missing, still narrow, or names an evaluator that is not in the tree. |
-| `scripts/ops/preflight.ts` — check `PW1` | `fail` for a repo-minted identity while coverage is absent; `skip` for a tracker key, which the existing consumer already evaluates. Not waivable at any tier. |
-| `scripts/ops/lane-start.ts` | refuses admission with `p0_consumer_not_activated` before any lease, worktree or manifest is written. |
+| `scripts/ops/shared.ts` — `evaluateRepoMintedP0Coverage` | reads the consumer **at the installed trusted base `origin/main`** (`git show origin/main:.github/workflows/p0-protocol.yml`), never the working tree or a branch head, and parses it structurally: coverage means a `pull_request`-triggered workflow whose `P0 Protocol` job has a live step — not under a literal-false `if`, not `continue-on-error: true` — whose `run:` or github-script body, with comments removed, invokes `scripts/ops/tracker-independence/p0-workflow.cjs`, and that evaluator exists at the same base commit. A comment naming the path, a disabled step, a step in another job, or an activation that exists only on a branch is a reference, not coverage. Fails closed when `origin/main` cannot be resolved, when the consumer is missing at the base, or when the evaluator is absent there. The receipt records the ref and commit it read. |
+| `scripts/ops/preflight.ts` — check `PW1` | `fail` for a repo-minted identity while coverage is absent at the base; `skip` for a tracker key, which the existing consumer already evaluates. Not waivable at any tier. |
+| `scripts/ops/lane-start.ts` | refuses a **new** repo-minted lane with `p0_consumer_not_activated` before any lease, worktree or manifest is written; the refusal JSON carries the `trusted_base` it read. |
+| `scripts/ops/pre-merge-authorization.ts` (the merge wrapper) | a manifest that already exists on a branch never passes admission again, so the sanctioned merge path holds the same line: a repo-minted head ref is refused with the coverage reason in the receipt, evaluated at the same trusted base, and a predicate that throws is a refusal rather than an assumption. |
 
-**Why admission and not a required check.** A block placed inside `p0-protocol.yml` or
-`merge-gate.yml` and predicated on activation would refuse #1556 itself — a `WORK-###` PR whose base
-does not yet contain the evaluator — deadlocking the foundation the activation depends on. Lane
-admission has no such inversion, and it is a complete chokepoint: `merge-gate.yml` resolves the
-authoritative tier from `docs/06_status/lanes/<ID>.json`, and `ops:lane-start` is the only writer of
-that file, so no new repo-minted lane can reach a merge while the block holds.
+**What these controls are not.** They are not required-check enforcement. `merge-gate.yml` resolves
+the authoritative tier from the lane manifest carried by the candidate head, and an earlier revision
+of this section claimed that made admission "a complete chokepoint" because `ops:lane-start` was the
+only writer of that file. That is a statement about ordinary tooling, not an enforced trust
+guarantee — a manifest can be written by anything that can commit — and the claim is withdrawn.
+What the controls do guarantee is narrower and is what the tests exercise: **no path through the
+repository's own tooling admits, opens, or merges a repo-minted lane while the consumer installed on
+`origin/main` cannot evaluate it**, including candidate-only activation on a branch, a comment-only
+reference, and a candidate manifest that already exists.
 
-**It releases itself.** The predicate reads the installed consumer, so landing the activation patch
-lifts the refusal with no second edit — and removing the delegation re-arms it. Disabling the
-required check to make either phase pass is not an available exit.
+**How the foundation reaches `main`, then.** The evaluator and its activation are landed through
+the **established bootstrap route**, not by widening a required check and not by admitting a
+`WORK-###` PR through the controls above: a tracker-keyed lane whose tier `Merge Gate` resolves from
+its manifest, with its own independent review and required CI — or, where the concurrency caps
+refuse that lane, a `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` entry authorized by Griff and
+read from the base, exactly as `merge-gate.yml` already reads it. `Merge Gate` cannot resolve a tier
+for a `WORK-###` head at all (*"No issue ID found in PR branch or title. Cannot resolve
+authoritative tier."*), which is measured on #1556 and is the reason the route is the tracker-keyed
+one. No branch-protection change and no required-check change is part of this.
+
+**It releases itself, and only from the base.** Because the predicate reads `origin/main`, landing
+the activation there lifts the refusal with no second edit, and a later base commit that removes
+the delegation re-arms it even if a working tree still holds the activated files. Applying the
+activation on a branch, referencing the evaluator in a comment, or disabling the required check does
+not release it.

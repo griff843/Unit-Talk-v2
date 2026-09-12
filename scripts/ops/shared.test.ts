@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   evaluateBranchDiscipline,
   evaluateIssueReferences,
@@ -14,6 +15,7 @@ import {
   P0_ACTIONS_CONSUMER_PATH,
   P0_TRUSTED_EVALUATOR_PATH,
   evaluateRepoMintedP0Coverage,
+  findExecutedP0Delegation,
   isRepoMintedWorkIdentity,
   issueIdScanPattern,
   createManifest,
@@ -2458,61 +2460,318 @@ test('isRepoMintedWorkIdentity separates repo-minted identity from tracker keys'
   assert.equal(isRepoMintedWorkIdentity(null), false);
 });
 
-test('evaluateRepoMintedP0Coverage fails closed and releases only on real delegation', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p0-coverage-'));
-  const consumer = path.join(dir, P0_ACTIONS_CONSUMER_PATH);
-  const evaluator = path.join(dir, P0_TRUSTED_EVALUATOR_PATH);
-  fs.mkdirSync(path.dirname(consumer), { recursive: true });
-  fs.mkdirSync(path.dirname(evaluator), { recursive: true });
+// ---------------------------------------------------------------------------
+// Repo-minted P0 coverage. Two properties are under test, and each one has a
+// recorded failure it must keep closed (PR #1556 review, comment 5647259413):
+//   1. coverage is an EXECUTED delegation found by parsing the workflow --
+//      appending `# TODO: <evaluator path>` to the narrow consumer used to
+//      return covered:true, and must not;
+//   2. activation is read from the INSTALLED trusted base (`origin/main`),
+//      never from the working tree or a branch head -- candidate-only
+//      activation must not release the block.
+// ---------------------------------------------------------------------------
 
-  // 1. No consumer at all. A missing required-check workflow is the single
-  //    state in which assuming coverage would be worst, so it must not pass.
-  const absent = evaluateRepoMintedP0Coverage(dir);
-  assert.equal(absent.covered, false);
-  assert.match(absent.reason, /missing or unreadable/);
+const NARROW_P0_CONSUMER = [
+  'name: P0 Protocol',
+  'on:',
+  '  pull_request:',
+  '    types: [opened, synchronize]',
+  'jobs:',
+  '  p0-protocol:',
+  '    name: P0 Protocol',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - name: Resolve issue id from PR',
+  '        uses: actions/github-script@v7',
+  '        with:',
+  '          script: |',
+  '            const pattern = /(?:UTV2|UNI)-\\d+/i;',
+  '',
+].join('\n');
 
-  // 2. The consumer as it stands on main -- narrow alternation, auto-pass.
-  fs.writeFileSync(
-    consumer,
-    "name: P0 Protocol\njobs:\n  p0:\n    steps:\n      - run: echo /(?:UTV2|UNI)-\\d+/i\n",
+function p0Consumer(opts: {
+  on?: string;
+  jobName?: string;
+  jobIf?: string;
+  stepIf?: string;
+  continueOnError?: boolean;
+  step?: 'script' | 'run' | 'run-commented' | 'script-commented';
+}): string {
+  const stepBody = {
+    script: [
+      '        uses: actions/github-script@v7',
+      '        with:',
+      '          script: |',
+      "            const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+      '            await evaluatePullRequest({ github, repo: context.repo });',
+    ],
+    'script-commented': [
+      '        uses: actions/github-script@v7',
+      '        with:',
+      '          script: |',
+      "            // TODO: require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+      '            core.info("nothing evaluated");',
+    ],
+    run: ['        run: node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'run-commented': [
+      '        run: |',
+      '          # node scripts/ops/tracker-independence/p0-workflow.cjs',
+      '          echo not evaluated',
+    ],
+  }[opts.step ?? 'script'];
+  return [
+    'name: P0 Protocol',
+    `on: ${opts.on ?? '[pull_request]'}`,
+    'jobs:',
+    '  p0-protocol:',
+    `    name: ${opts.jobName ?? 'P0 Protocol'}`,
+    ...(opts.jobIf ? [`    if: ${opts.jobIf}`] : []),
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - name: Classify and enforce P0',
+    ...(opts.stepIf ? [`        if: ${opts.stepIf}`] : []),
+    ...(opts.continueOnError ? ['        continue-on-error: true'] : []),
+    ...stepBody,
+    '',
+  ].join('\n');
+}
+
+/**
+ * A throwaway repository whose `origin/main` is a real commit. Files in
+ * `base` are committed and the ref is pointed at that commit; files in
+ * `workingTree` are written afterwards, uncommitted -- the shape of a branch
+ * carrying its own activation.
+ */
+function seedTrustedBaseRepo(input: {
+  base: Record<string, string>;
+  workingTree?: Record<string, string>;
+  originMain?: boolean;
+}): { root: string; git: (...args: string[]) => string } {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'p0-base-'));
+  const hooks = path.join(root, '.nohooks');
+  fs.mkdirSync(hooks);
+  const git = (...args: string[]): string =>
+    execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', `core.hooksPath=${hooks}`, ...args], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'p0-test', GIT_AUTHOR_EMAIL: 'p0@test', GIT_COMMITTER_NAME: 'p0-test', GIT_COMMITTER_EMAIL: 'p0@test',
+      },
+    }).trim();
+  const write = (files: Record<string, string>): void => {
+    for (const [rel, content] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+      fs.writeFileSync(path.join(root, rel), content);
+    }
+  };
+  git('init', '-q');
+  write(input.base);
+  git('add', '-A');
+  git('commit', '-q', '--allow-empty', '-m', 'base');
+  if (input.originMain !== false) git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  if (input.workingTree) write(input.workingTree);
+  return { root, git };
+}
+
+const ACTIVE_BASE = {
+  [P0_ACTIONS_CONSUMER_PATH]: p0Consumer({ step: 'script' }),
+  [P0_TRUSTED_EVALUATOR_PATH]: 'module.exports = { evaluatePullRequest: async () => "ok" };\n',
+};
+
+test('findExecutedP0Delegation counts only a live, enforced step of the P0 Protocol job that invokes the evaluator', () => {
+  // The narrow consumer as it stands on main.
+  assert.equal(findExecutedP0Delegation(NARROW_P0_CONSUMER).executed, false);
+
+  // The review's exact mutation: a comment naming the evaluator. This used to
+  // return covered:true through `consumer.includes(...)`.
+  const commentOnly = findExecutedP0Delegation(
+    NARROW_P0_CONSUMER + '# TODO: scripts/ops/tracker-independence/p0-workflow.cjs\n',
   );
-  const narrow = evaluateRepoMintedP0Coverage(dir);
-  assert.equal(narrow.covered, false);
-  assert.match(narrow.reason, /does not delegate/);
+  assert.equal(commentOnly.executed, false);
+  assert.match((commentOnly as { detail: string }).detail, /no live, non-ignorable step/u);
 
-  // 3. Delegation declared but the evaluator absent from the tree. A consumer
-  //    that names a file it cannot require is not coverage.
-  fs.writeFileSync(consumer, `steps:\n  - run: require('./${P0_TRUSTED_EVALUATOR_PATH}')\n`);
-  const dangling = evaluateRepoMintedP0Coverage(dir);
-  assert.equal(dangling.covered, false);
-  assert.match(dangling.reason, /not present in this tree/);
+  // A commented-out invocation inside a run block or a script body.
+  assert.equal(findExecutedP0Delegation(p0Consumer({ step: 'run-commented' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ step: 'script-commented' })).executed, false);
 
-  // 4. Both halves present -- and only then does the block release itself.
-  fs.writeFileSync(evaluator, "module.exports = {};\n");
-  const activated = evaluateRepoMintedP0Coverage(dir);
-  assert.equal(activated.covered, true);
-  assert.match(activated.reason, /delegates repo-minted work identities/);
+  // A disabled step, a disabled job, and a step whose failure cannot fail the check.
+  assert.equal(findExecutedP0Delegation(p0Consumer({ stepIf: 'false' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ stepIf: '${{ false }}' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ jobIf: 'false' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ continueOnError: true })).executed, false);
 
-  // 5. Re-arms if the delegation is later removed from the consumer.
-  fs.writeFileSync(consumer, "steps:\n  - run: echo no delegation\n");
-  assert.equal(evaluateRepoMintedP0Coverage(dir).covered, false);
+  // The invocation lives in a job that does not produce the required context.
+  const otherJob = findExecutedP0Delegation(p0Consumer({ jobName: 'P0 Advisory' }));
+  assert.equal(otherJob.executed, false);
+  assert.match((otherJob as { detail: string }).detail, /no job producing the "P0 Protocol" check context/u);
 
-  fs.rmSync(dir, { recursive: true, force: true });
+  // A workflow that never runs on a pull request cannot be the required check.
+  assert.equal(findExecutedP0Delegation(p0Consumer({ on: '[push]' })).executed, false);
+
+  // Unparseable input is a refusal, not an exception.
+  assert.equal(findExecutedP0Delegation('jobs: [\n').executed, false);
+
+  // The path bound to an identifier that is never required is still a reference.
+  const boundNotRequired = p0Consumer({ step: 'script' }).replace(
+    "const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+    "const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';",
+  );
+  assert.equal(findExecutedP0Delegation(boundNotRequired).executed, false);
+
+  // Both real invocation forms count, and the finding names the job and step.
+  for (const step of ['script', 'run'] as const) {
+    const active = findExecutedP0Delegation(p0Consumer({ step }));
+    assert.deepEqual(active, { executed: true, job: 'P0 Protocol', step: 'Classify and enforce P0' });
+  }
+  // A runtime expression is evaluated by Actions, not here; it is not a literal
+  // disable and the step still counts.
+  assert.equal(
+    findExecutedP0Delegation(p0Consumer({ jobIf: "github.event_name != 'issue_comment'" })).executed,
+    true,
+  );
 });
 
-test('the installed P0 consumer and the coverage predicate agree on this tree', () => {
-  const consumerPath = path.join(ROOT, P0_ACTIONS_CONSUMER_PATH);
-  const consumer = fs.readFileSync(consumerPath, 'utf8');
-  const delegates =
-    consumer.includes(P0_TRUSTED_EVALUATOR_PATH) &&
-    fs.existsSync(path.join(ROOT, P0_TRUSTED_EVALUATOR_PATH));
-  assert.equal(evaluateRepoMintedP0Coverage(ROOT).covered, delegates);
-  if (!delegates) {
-    // While the block is armed, the reason it is armed must still be true: the
-    // consumer resolves a tracker-keyed identifier and nothing else. If this
-    // assertion ever fails while `delegates` is false, the consumer changed in
-    // some other way and the block's premise needs re-reading rather than
-    // trusting.
-    assert.match(consumer, /UTV2\|UNI/);
+test('the staged consumer activation patch is an executed delegation by this definition', () => {
+  // The predicate has to be bound to the activation the lane actually
+  // proposes, not to a fixture that happens to satisfy it. The patch replaces
+  // the whole file, so its post-image is every `+` and context line.
+  const patch = fs.readFileSync(
+    path.join(ROOT, 'docs', '06_status', 'proof', 'WORK-2026091001', 'p0-consumer-activation.patch'),
+    'utf8',
+  );
+  const hunkStart = patch.indexOf('\n@@');
+  assert.ok(hunkStart > 0, 'patch must contain a hunk');
+  const postImage = patch
+    .slice(hunkStart + 1)
+    .split('\n')
+    .slice(1)
+    .filter((line) => line.startsWith('+') || line.startsWith(' '))
+    .map((line) => line.slice(1))
+    .join('\n');
+  const finding = findExecutedP0Delegation(postImage);
+  assert.deepEqual(finding, { executed: true, job: 'P0 Protocol', step: 'Classify and enforce P0' });
+});
+
+test('evaluateRepoMintedP0Coverage reads the installed trusted base and fails closed everywhere else', () => {
+  // 1. Not a repository at all: no trusted base can be resolved.
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'p0-plain-'));
+  fs.mkdirSync(path.join(plain, path.dirname(P0_ACTIONS_CONSUMER_PATH)), { recursive: true });
+  fs.writeFileSync(path.join(plain, P0_ACTIONS_CONSUMER_PATH), ACTIVE_BASE[P0_ACTIONS_CONSUMER_PATH]!);
+  const noRepo = evaluateRepoMintedP0Coverage(plain);
+  assert.equal(noRepo.covered, false);
+  assert.match(noRepo.reason, /trusted base origin\/main cannot be resolved/u);
+  assert.deepEqual(noRepo.source, { ref: 'origin/main', sha: null });
+  fs.rmSync(plain, { recursive: true, force: true });
+
+  // 2. A repository whose origin/main does not exist. HEAD carries the
+  //    activation and is deliberately NOT consulted.
+  const noRef = seedTrustedBaseRepo({ base: ACTIVE_BASE, originMain: false });
+  const unresolved = evaluateRepoMintedP0Coverage(noRef.root);
+  assert.equal(unresolved.covered, false);
+  assert.match(unresolved.reason, /trusted base origin\/main cannot be resolved/u);
+  fs.rmSync(noRef.root, { recursive: true, force: true });
+
+  // 3. No consumer on the base. A missing required-check workflow is the one
+  //    state in which assuming coverage would be worst.
+  const absent = seedTrustedBaseRepo({ base: { 'README.md': 'x\n' } });
+  const missing = evaluateRepoMintedP0Coverage(absent.root);
+  assert.equal(missing.covered, false);
+  assert.match(missing.reason, /missing or unreadable at origin\/main/u);
+  fs.rmSync(absent.root, { recursive: true, force: true });
+
+  // 4. The narrow consumer on the base, and the review's comment mutation on
+  //    the base. Neither is an executed delegation.
+  for (const consumer of [
+    NARROW_P0_CONSUMER,
+    NARROW_P0_CONSUMER + '# TODO: scripts/ops/tracker-independence/p0-workflow.cjs\n',
+  ]) {
+    const narrow = seedTrustedBaseRepo({
+      base: { [P0_ACTIONS_CONSUMER_PATH]: consumer, [P0_TRUSTED_EVALUATOR_PATH]: 'module.exports = {};\n' },
+    });
+    const result = evaluateRepoMintedP0Coverage(narrow.root);
+    assert.equal(result.covered, false);
+    assert.match(result.reason, /does not execute scripts\/ops\/tracker-independence\/p0-workflow\.cjs/u);
+    assert.equal(result.source.sha, narrow.git('rev-parse', 'origin/main'));
+    fs.rmSync(narrow.root, { recursive: true, force: true });
   }
+
+  // 5. Delegation on the base but the evaluator absent from the base.
+  const dangling = seedTrustedBaseRepo({ base: { [P0_ACTIONS_CONSUMER_PATH]: p0Consumer({ step: 'run' }) } });
+  const noEvaluator = evaluateRepoMintedP0Coverage(dangling.root);
+  assert.equal(noEvaluator.covered, false);
+  assert.match(noEvaluator.reason, /not present at origin\/main/u);
+  fs.rmSync(dangling.root, { recursive: true, force: true });
+
+  // 6. Candidate-only activation: the base is narrow, the working tree carries
+  //    the activated consumer AND the evaluator. The working tree is candidate
+  //    content and must not release the block.
+  const candidate = seedTrustedBaseRepo({
+    base: { [P0_ACTIONS_CONSUMER_PATH]: NARROW_P0_CONSUMER },
+    workingTree: ACTIVE_BASE,
+  });
+  const candidateOnly = evaluateRepoMintedP0Coverage(candidate.root);
+  assert.equal(candidateOnly.covered, false);
+  assert.match(candidateOnly.reason, /does not execute/u);
+  // ...and committing it on HEAD without it reaching origin/main changes nothing.
+  candidate.git('add', '-A');
+  candidate.git('commit', '-q', '-m', 'activation on a branch');
+  assert.notEqual(candidate.git('rev-parse', 'HEAD'), candidate.git('rev-parse', 'origin/main'));
+  assert.equal(evaluateRepoMintedP0Coverage(candidate.root).covered, false);
+  fs.rmSync(candidate.root, { recursive: true, force: true });
+
+  // 7. The activation installed on the base releases it, and the receipt
+  //    names the ref, the commit, the job and the step.
+  const active = seedTrustedBaseRepo({ base: ACTIVE_BASE });
+  const covered = evaluateRepoMintedP0Coverage(active.root);
+  assert.equal(covered.covered, true);
+  assert.equal(covered.source.sha, active.git('rev-parse', 'origin/main'));
+  assert.match(covered.reason, /job "P0 Protocol", step "Classify and enforce P0"/u);
+
+  // 8. Re-arms when a later base commit removes the delegation, even though
+  //    the working tree still holds the activated files.
+  fs.writeFileSync(path.join(active.root, P0_ACTIONS_CONSUMER_PATH), NARROW_P0_CONSUMER);
+  active.git('add', '-A');
+  active.git('commit', '-q', '-m', 'delegation removed');
+  active.git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  fs.writeFileSync(path.join(active.root, P0_ACTIONS_CONSUMER_PATH), ACTIVE_BASE[P0_ACTIONS_CONSUMER_PATH]!);
+  assert.equal(evaluateRepoMintedP0Coverage(active.root).covered, false);
+  fs.rmSync(active.root, { recursive: true, force: true });
+});
+
+test('the P0 consumer installed on this repository trusted base and the coverage predicate agree', () => {
+  // This reads the real origin/main of the checkout the suite runs in. It is
+  // deliberately not skipped when the ref is unavailable: an unresolvable base
+  // is a refusal, and the test asserts that refusal.
+  const result = evaluateRepoMintedP0Coverage(ROOT);
+  let baseConsumer: string | null = null;
+  try {
+    baseConsumer = execFileSync('git', ['show', `origin/main:${P0_ACTIONS_CONSUMER_PATH}`], {
+      cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    baseConsumer = null;
+  }
+  if (baseConsumer === null) {
+    assert.equal(result.covered, false);
+    assert.match(result.reason, /cannot be resolved|missing or unreadable/u);
+    return;
+  }
+  const delegation = findExecutedP0Delegation(baseConsumer);
+  let evaluatorOnBase = true;
+  try {
+    execFileSync('git', ['cat-file', '-e', `origin/main:${P0_TRUSTED_EVALUATOR_PATH}`], { cwd: ROOT, stdio: 'ignore' });
+  } catch {
+    evaluatorOnBase = false;
+  }
+  assert.equal(result.covered, delegation.executed && evaluatorOnBase);
+  if (!result.covered) {
+    // While the block is armed the reason it is armed must still be true: the
+    // installed consumer resolves a tracker-keyed identifier and nothing else.
+    assert.match(baseConsumer, /UTV2\|UNI/u);
+    assert.doesNotMatch(baseConsumer, /p0-workflow\.cjs/u, 'the base consumer changed; re-read the block premise rather than trusting it');
+  }
+  // And the working tree of this checkout is never what decided it.
+  assert.equal(result.source.ref, 'origin/main');
 });
