@@ -35,4 +35,6 @@ Load current system state before acting. Run at session start and after `/clear`
 
 **Proceed** when milestone is clear, executable issues exist, no stale conflicts.
 
-**Stop** when manifest, worktree or PR state conflicts with repo truth, milestone is unclear, baseline is red, or a T1 issue has no contract.
+**Reconcile the affected task** when manifest, worktree or PR evidence conflicts, the milestone is unclear, or a required baseline/contract is missing. Determine the actual dependent work; do not treat an unrelated historical failure as a mission-wide stop. Required gates remain controlling. Follow intent.md stop conditions for the broader mission.
+
+Report integrated code, deployed version and user-verified behavior separately. Read plan-lessons.md only for relevant diagnoses. Verify a claimed PR blocker against its current GitHub state and lane evidence before repeating it.

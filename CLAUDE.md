@@ -2,7 +2,7 @@
 
 Thin root instruction file for Claude Code working in Unit Talk V2. This file is stable and pointer-based. Detailed rules live in skills and canonical docs.
 
-If this file and a canonical doc disagree, **the canonical doc wins**. Update the doc, not this file.
+If this file and a canonical doc disagree, **the canonical doc wins for its governed domain**. Correct the stale instruction here; changing the canonical policy requires its existing authorization.
 
 ---
 
@@ -76,19 +76,19 @@ Never `sleep`-then-poll for CI/merge status — the harness blocks bare sleep ch
 
 | Rank | Source | Authoritative For |
 |---|---|---|
-| 1 | **GitHub `main`** | shipped code, merge SHAs, CI on merge |
+| 1 | **GitHub `main`** | integrated code, merge SHAs, CI on merge; not deployment or runtime health |
 | 2 | **Proof bundle** (tied to merge SHA) | completion evidence |
 | 3 | **Lane manifest** (`docs/06_status/lanes/*.json`) | active lane state |
 | 4 | **Mission and local work contract** | scope, acceptance criteria, ownership; admitted manifest records risk |
 | 5 | **Chat / memory / agent claims** | context only — never authoritative |
 
-Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH_MODEL.md`.
+Compare sources within the domain they establish: runtime evidence establishes deployed behavior, and Griff’s authorized direction establishes intended work. A merged commit does not prove deployment. Full spec: `docs/05_operations/EXECUTION_TRUTH_MODEL.md`.
 
 ---
 
 ## Core invariants (never violate)
 
-1. `main` is shipped truth. Agent claims are never authoritative.
+1. `main` establishes integrated code. Deployment receipts and runtime observations establish what is running. Agent completion claims require evidence.
 2. No lane without preflight. No Done without `ops:truth-check` pass.
 3. One issue → one lane → one branch → one PR.
 4. Proof must tie to the merge SHA. Stale proof is invalid.
@@ -136,9 +136,11 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 
 | Tier | Verification | Proof | Merge Authority |
 |---|---|---|---|
-| T1 | type-check + test + test:db + runtime proof | Evidence bundle v1, SHA-tied | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
+| T1 | type-check + test + test:db + runtime proof | Evidence bundle using the current schema and proof profile, SHA-tied | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
 | T2 | type-check + test + issue-specific | Diff summary + verification log | GitHub PR review approval **or** `pm-verdict/v1` APPROVED comment |
 | T3 | type-check + test | Green CI on merge SHA | Green CI + valid executor result — no PM verdict |
+
+**Evidence descriptions must name the boundary exercised.** In-memory integration is not live database proof; an API-source submission is not browser/auth/Smart Form entry-path proof; green generic staging suites do not establish coverage of changed behavior. A lane completing does not complete the product milestone.
 
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
 
@@ -160,7 +162,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Sonnet-5-era operating model (Outcome Contracts, PM gates, runtime validation by tier, cutover) | `docs/05_operations/OPERATING_MODEL_SONNET5.md` |
 | Evidence bundle template | `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md` |
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
-| Program status | `docs/06_status/PROGRAM_STATUS.md` |
+| Program status snapshot | `docs/06_status/CURRENT_STATE.md` — verify against live evidence; `PROGRAM_STATUS.md` is superseded history |
 | Codebase guide (architecture reference) | `docs/CODEBASE_GUIDE.md` |
 | Phase 7 ratification + execution plan | `docs/06_status/PHASE7R_RATIFICATION.md`, `docs/06_status/PHASE7E_EXECUTION_PLAN.md` |
 | SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |
@@ -218,13 +220,13 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 
 ## Session discipline
 
-- Before any work, run `git fetch origin && git pull --ff-only origin main` to ensure local main matches remote. Stale local state produces false premises.
-- Run `/clear` at major task boundaries.
+- Fetch current refs before decisions that depend on them. Use the sanctioned merge wrapper for main sync and branch refresh; do not pull main into an active lane as a session-start side effect.
+- Preserve a concise repository checkpoint before context reset. Reset when context quality requires it, not automatically at every task boundary.
 - After `/clear`, re-read this file. The `UserPromptSubmit` hook auto-injects system state — invoke `/system-state-loader` only if the hook data appears stale or missing.
 - Standing guardrails (things no agent may do regardless of a directive) live in `docs/05_operations/STANDING_GUARDRAILS.md` and are auto-injected every prompt by the same hook. PM: edit that file instead of re-pasting guardrails in chat.
 - If context degrades, clear immediately.
 - Never self-certify Done. The done-gate is `ops:truth-check`, not narrative.
-- PM reviews artifacts, not narrative summaries. T1 approval is a GitHub label, not a chat message.
+- PM reviews artifacts, not narrative summaries. T1 requires both its approval label and the valid exact-head PM verdict specified by Merge Gate; a label alone is insufficient.
 - Prefer code over docs for truth. If uncertain, say "check actual implementation" and check.
 - The mission runs continuously. Waiting on CI, finishing a lane or PR, and having a status to report are
   not stop conditions; a reserved gate blocks only the work that depends on it, so surface it and continue

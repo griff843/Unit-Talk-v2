@@ -146,7 +146,7 @@ All services use a **repository abstraction** with two implementations:
 
 Services receive a `RepositoryBundle` (or individual repos) and must work with either implementation. Never call Supabase directly from a service — always go through a repository interface.
 
-When writing tests: use `InMemory*` repos. When writing DB implementations: implement the same interface as the InMemory version.
+Use `InMemory*` repositories for unit and in-process integration tests. Use the actual database implementations in the authorized staging environment when verifying persistence and repository integration. Label the boundary exercised; neither test class substitutes for browser or deployed acceptance. Both implementations must satisfy the same repository interface.
 
 ---
 
@@ -261,12 +261,12 @@ These paths require PM plan approval + PM merge approval (Delegation Policy Tier
 
 ---
 
-## Live Discord Targets
+## Configured Discord Targets
 
 | Target | Channel ID | Status |
 |---|---|---|
-| `discord:canary` | `1296531122234327100` | Live |
-| `discord:best-bets` | `1288613037539852329` | Live |
+| `discord:canary` | `1296531122234327100` | Configured; activation requires current containment authority |
+| `discord:best-bets` | `1288613037539852329` | Configured; activation requires current containment authority |
 | `discord:trader-insights` | `1356613995175481405` | **Blocked** |
 | `discord:exclusive-insights` | `1288613114815840466` | **Blocked** |
 | `discord:game-threads` | — | **Blocked** |
@@ -299,7 +299,7 @@ This runs: env:check + lint + type-check + build + test. All must pass. If any f
 pnpm test:db
 ```
 T1 issues ALWAYS require `pnpm test:db` regardless of whether they explicitly touch the DB layer.
-T2/T3 issues: run `pnpm test:db` only if changed files include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts`. When in doubt, run it — it's non-destructive.
+T2/T3 issues: run `pnpm test:db` only if changed files include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts`. Use the approved staging target and credential path: these suites may write fixtures and must not be described as non-destructive or directed at production.
 
 ---
 

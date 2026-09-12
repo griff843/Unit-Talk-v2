@@ -33,14 +33,14 @@ pnpm github:current
 - the issue or task is clear
 - no stale branch/queue conflict blocks execution
 
-## Stop and reconcile when
+## Reconcile the affected work when
 
-- `ops:brief` fails
-- manifest, lease, worktree or PR state conflicts with repo truth
-- mainline health is unclear
-- you cannot name the next concrete lane
+- a required state read fails or conflicts with current PR, manifest, lease or worktree evidence
+- the proposed task lacks an actionable contract or has an unresolved dependency
+
+Identify whether the failure blocks this task or only unrelated work. Preserve required admission controls and continue independent authorized work. A historical plan or lesson is not evidence that a merged PR still holds an active lock. Distinguish integrated, deployed and user-verified status.
 
 ## Reference
 
 For the full shared team version, read:
-- [`.claude/commands/system-state-loader.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/system-state-loader.md)
+- [`.claude/commands/system-state-loader.md`](../../../../.claude/commands/system-state-loader.md)

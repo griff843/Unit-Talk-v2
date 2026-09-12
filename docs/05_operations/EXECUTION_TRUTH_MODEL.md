@@ -13,18 +13,18 @@ When this document and any other source disagree, **this document wins**. Update
 
 ## 1. Truth Hierarchy
 
-Execution truth is ranked. Higher ranks win unconditionally.
+Execution evidence is ranked within the domain it establishes. This hierarchy does not replace Griff’s authority over intent or runtime evidence of deployed behavior.
 
 | Rank | Source | Authoritative For | Non-Authoritative For |
 |---|---|---|---|
-| 1 | **GitHub `main`** | shipped code, merge SHAs, CI state on merge | what is in progress, intent |
+| 1 | **GitHub `main`** | integrated code, merge SHAs, CI state on merge | deployed version, runtime health, what is in progress, intent |
 | 2 | **Proof bundle** (tied to merge SHA) | completion evidence for T1/T2 | anything beyond the linked SHA |
 | 3 | **Lane manifest** (`docs/06_status/lanes/*.json`) | active lane state, file locks, heartbeats | shipped outcomes |
 | 4 | **Mission and local work contract** | scope, acceptance criteria, ownership; admitted manifest records risk | whether code is actually merged |
-| 5 | **Chat, memory, agent claims, session notes** | context only | **nothing — never authoritative** |
+| 5 | **Agent narrative, memory and session notes** | discovery context | merged, deployed or verified completion; user instructions are not agent claims |
 
 **Laws:**
-- If two sources disagree, the higher-ranked source wins and the lower source is reconciled to it.
+- If two sources disagree about the same domain, use the authoritative evidence for that domain and correct the stale source. Deployment receipts and runtime observations establish deployed behavior; GitHub main alone does not. Griff’s authorized instructions establish intended work; agent narrative does not override them.
 - The agent may **never** escalate its own claim above a lower rank it has read.
 - `ISSUE_QUEUE.md`, `PROGRAM_STATUS.md`, and similar docs are *views*, not truth. They are updated from rank 1–3, never the reverse.
 
