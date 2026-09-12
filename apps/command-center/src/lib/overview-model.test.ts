@@ -190,6 +190,7 @@ const runtimeData: DashboardRuntimeData = {
     backups: { pitrEnabled: true, walGEnabled: false, lastBackupAt: null, lastBackupStatus: null, restorePointCount: 0 },
     storageDomains: [],
     topGrowthSources: [],
+    managementPlane: { available: true, reason: 'Supabase Management API consulted.' },
   },
   baseline: {
     normal: [],

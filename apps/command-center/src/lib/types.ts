@@ -434,6 +434,14 @@ export interface DashboardRuntimeData {
   };
 }
 
+/**
+ * `unavailable` is deliberately part of this union rather than modelled as an
+ * absent field. The management plane can be switched off, and when it is the
+ * surface must say so — a domain reported as `stable` with zeroed byte counts
+ * is indistinguishable, to a viewer, from a domain that is genuinely healthy.
+ */
+export type StorageAlertStatus = 'stable' | 'watch' | 'warning' | 'critical' | 'unavailable';
+
 export interface StorageGrowthSource {
   source: string;
   tableBytes: number;
@@ -450,7 +458,7 @@ export interface StorageDomainHealth {
   estimatedGrowthBytesPerDay: number;
   estimatedGrowthGiBPerDay: number;
   daysToFull: number | null;
-  alertStatus: 'stable' | 'watch' | 'warning' | 'critical';
+  alertStatus: StorageAlertStatus;
   topGrowthSources: StorageGrowthSource[];
 }
 
@@ -465,7 +473,7 @@ export interface DbRuntimeHealth {
     diskType: string;
     observedAt: string;
     projectedDaysToFull: number | null;
-    alertStatus: 'stable' | 'watch' | 'warning' | 'critical';
+    alertStatus: StorageAlertStatus;
   };
   connections: {
     used: number;
@@ -498,4 +506,15 @@ export interface DbRuntimeHealth {
   };
   storageDomains: StorageDomainHealth[];
   topGrowthSources: StorageGrowthSource[];
+  /**
+   * Whether the Supabase Management API was consulted for this reading.
+   *
+   * When `available` is false every numeric field above is a placeholder, not a
+   * measurement, and `reason` says why. Consumers must render the unavailability
+   * rather than the placeholders.
+   */
+  managementPlane: {
+    available: boolean;
+    reason: string;
+  };
 }

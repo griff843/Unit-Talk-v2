@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
+import { defineReadOnlyQueries } from './management-sql';
 import type { DbRuntimeHealth, StorageDomainHealth, StorageGrowthSource } from '../types.js';
 import { assertPrivilegedRequestAuthenticated } from '../request-auth';
 
@@ -127,7 +128,54 @@ function resolveManagementEnv(): ResolvedManagementEnv {
   return { accessToken, projectRef };
 }
 
+/**
+ * The single environment variable that permits any Supabase **Management API**
+ * request from this app.
+ *
+ * The management token is account-scoped: it is not the service-role key, it is
+ * not constrained by RLS, and it can run DDL. `management-sql.ts` narrows *what*
+ * may be sent; this gate decides *whether anything is sent at all*.
+ */
+export const MANAGEMENT_PLANE_GATE_ENV = 'UNIT_TALK_COMMAND_CENTER_MANAGEMENT_API_ENABLED';
+
+export const MANAGEMENT_PLANE_DISABLED_REASON =
+  `Supabase Management API access is disabled: ${MANAGEMENT_PLANE_GATE_ENV} is not set to "true".`;
+
+export class ManagementPlaneDisabledError extends Error {
+  constructor() {
+    super(MANAGEMENT_PLANE_DISABLED_REASON);
+    this.name = 'ManagementPlaneDisabledError';
+  }
+}
+
+/**
+ * Fail-closed by construction: the gate is open only for the exact string
+ * `true` (case-insensitive, trimmed). Absent, empty, `false`, `1`, `yes` and
+ * every other value leave it shut, so a typo or a half-configured environment
+ * cannot switch the capability on by accident.
+ */
+export function isManagementPlaneEnabled(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): boolean {
+  return (env[MANAGEMENT_PLANE_GATE_ENV] ?? '').trim().toLowerCase() === 'true';
+}
+
+/**
+ * Throws before any network call when the gate is shut.
+ *
+ * Asserted inside each request function rather than only at `getStorageHealth`,
+ * so a future caller that reaches the management plane by another route is
+ * refused too. It runs before `resolveManagementEnv`, so a shut gate is
+ * reported as a policy refusal and never as a missing credential.
+ */
+function assertManagementPlaneEnabled(): void {
+  if (!isManagementPlaneEnabled()) {
+    throw new ManagementPlaneDisabledError();
+  }
+}
+
 async function fetchManagementJson<T>(route: string): Promise<T> {
+  assertManagementPlaneEnabled();
   const { accessToken, projectRef } = resolveManagementEnv();
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/${route}`, {
     headers: {
@@ -143,7 +191,92 @@ async function fetchManagementJson<T>(route: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function runSqlQuery<T>(query: string): Promise<T[]> {
+const RELATION_SIZES_SQL = `
+      with table_sizes as (
+        select * from (values
+          ('provider_offers','ingestion'),
+          ('provider_offer_history','ingestion'),
+          ('provider_cycle_status','ingestion'),
+          ('system_runs','ingestion'),
+          ('picks','app'),
+          ('distribution_outbox','app'),
+          ('distribution_receipts','app'),
+          ('settlement_records','app'),
+          ('audit_log','app')
+        ) as t(table_name, domain)
+      )
+      select
+        ts.domain,
+        ts.table_name,
+        coalesce(pg_total_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as total_bytes,
+        coalesce(pg_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as table_bytes,
+        coalesce(pg_indexes_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as index_bytes
+      from table_sizes ts
+      order by total_bytes desc;
+`;
+
+const RELATION_GROWTH_SQL = `
+      select 'provider_offers' as table_name, count(*)::bigint as rows_last_day from provider_offers where created_at >= now() - interval '1 day'
+      union all
+      select 'provider_offer_history', 0::bigint
+      union all
+      select 'provider_cycle_status', count(*)::bigint from provider_cycle_status where updated_at >= now() - interval '1 day'
+      union all
+      select 'system_runs', count(*)::bigint from system_runs where created_at >= now() - interval '1 day'
+      union all
+      select 'picks', count(*)::bigint from picks where created_at >= now() - interval '1 day'
+      union all
+      select 'distribution_outbox', count(*)::bigint from distribution_outbox where created_at >= now() - interval '1 day'
+      union all
+      select 'distribution_receipts', count(*)::bigint from distribution_receipts where recorded_at >= now() - interval '1 day'
+      union all
+      select 'settlement_records', count(*)::bigint from settlement_records where created_at >= now() - interval '1 day'
+      union all
+      select 'audit_log', count(*)::bigint from audit_log where created_at >= now() - interval '1 day';
+`;
+
+const DB_PRESSURE_SQL = `
+      select
+        (select setting::int from pg_settings where name = 'max_connections') as max_connections,
+        (select count(*)::int from pg_stat_activity) as used_connections,
+        (select count(*)::int from pg_stat_activity where wait_event_type = 'Lock') as waiting_connections,
+        (select count(*)::int from pg_locks where not granted) as waiting_locks,
+        (select coalesce(max(extract(epoch from now() - xact_start)), 0)::int from pg_stat_activity where xact_start is not null and state <> 'idle') as max_tx_age_seconds,
+        (select count(*)::int from pg_stat_activity where xact_start is not null and now() - xact_start > interval '5 minutes' and state <> 'idle') as long_tx_count,
+        (select coalesce(max(extract(epoch from now() - query_start)), 0)::int from pg_stat_activity where state = 'active') as max_query_age_seconds,
+        (select count(*)::int from pg_stat_activity where state = 'active' and now() - query_start > interval '30 seconds') as slow_query_count,
+        (select coalesce(sum(size), 0)::bigint from pg_ls_waldir()) as wal_bytes,
+        (select wal_bytes::numeric from pg_stat_wal) as wal_written_bytes,
+        (select stats_reset from pg_stat_wal) as wal_stats_reset,
+        current_setting('archive_mode', true) as archive_mode,
+        current_setting('archive_command', true) as archive_command;
+`;
+
+/**
+ * Every statement this module can send, and the only ones it can send.
+ *
+ * `defineReadOnlyQueries` parses each one at import time and throws on anything
+ * that is not a single read-only statement, so a mutating query added here
+ * fails the build rather than reaching the management API. See
+ * `./management-sql` for why the capability is shaped this way.
+ */
+const MANAGEMENT_QUERIES = defineReadOnlyQueries({
+  relationSizes: RELATION_SIZES_SQL,
+  relationGrowth: RELATION_GROWTH_SQL,
+  dbPressure: DB_PRESSURE_SQL,
+});
+
+type ManagementQueryName = keyof typeof MANAGEMENT_QUERIES;
+
+/**
+ * Runs one registered statement.
+ *
+ * This takes a registry key, never SQL. A caller cannot compose a statement,
+ * so there is no path from a request — or from a future refactor — to
+ * arbitrary SQL under the management token.
+ */
+async function runManagementQuery<T>(name: ManagementQueryName): Promise<T[]> {
+  assertManagementPlaneEnabled();
   const { accessToken, projectRef } = resolveManagementEnv();
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
     method: 'POST',
@@ -151,12 +284,16 @@ async function runSqlQuery<T>(query: string): Promise<T[]> {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    // `read_only` asks the remote to refuse a write as well. It is belt and
+    // braces: this repository cannot verify how the Management API handles the
+    // flag, so the registry above — not this line — is the control being
+    // relied on.
+    body: JSON.stringify({ query: MANAGEMENT_QUERIES[name], read_only: true }),
     cache: 'no-store',
   });
 
   if (!response.ok) {
-    throw new Error(`Supabase SQL request failed: ${response.status}`);
+    throw new Error(`Supabase SQL request failed for ${name}: ${response.status}`);
   }
 
   return (await response.json()) as T[];
@@ -288,9 +425,78 @@ function summarizeDomain(
   };
 }
 
+/**
+ * The reading returned when the management plane is switched off.
+ *
+ * Every numeric field is a placeholder and is labelled as one: each
+ * `alertStatus` is `unavailable`, never `stable`, and `managementPlane.available`
+ * is false with a reason. The storage domains are still present as rows — the
+ * issue this closes explicitly forbids omitting them, because an omitted row
+ * renders as nothing and nothing reads as healthy.
+ */
+export function unavailableStorageHealth(
+  reason: string,
+  observedAt: string = new Date().toISOString(),
+): DbRuntimeHealth {
+  const domain = (name: 'app' | 'ingestion'): StorageDomainHealth => ({
+    name,
+    totalBytes: 0,
+    totalGiB: 0,
+    estimatedGrowthBytesPerDay: 0,
+    estimatedGrowthGiBPerDay: 0,
+    daysToFull: null,
+    alertStatus: 'unavailable',
+    topGrowthSources: [],
+  });
+
+  return {
+    disk: {
+      provisionedGiB: 0,
+      usedGiB: 0,
+      availableGiB: 0,
+      usedPct: 0,
+      iops: 0,
+      throughputMiBps: 0,
+      diskType: 'unavailable',
+      observedAt,
+      projectedDaysToFull: null,
+      alertStatus: 'unavailable',
+    },
+    connections: { used: 0, max: 0, waiting: 0 },
+    locks: { waiting: 0 },
+    longTransactions: { count: 0, maxAgeSeconds: 0 },
+    slowQueries: { count: 0, maxAgeSeconds: 0 },
+    wal: {
+      sizeGiB: 0,
+      estimatedGrowthGiBPerDay: 0,
+      archiveMode: 'unavailable',
+      archiveConfigured: false,
+    },
+    backups: {
+      pitrEnabled: false,
+      walGEnabled: false,
+      lastBackupAt: null,
+      lastBackupStatus: null,
+      restorePointCount: 0,
+    },
+    storageDomains: [domain('ingestion'), domain('app')],
+    topGrowthSources: [],
+    managementPlane: { available: false, reason },
+  };
+}
+
 export async function getStorageHealth(): Promise<DbRuntimeHealth> {
   await assertPrivilegedRequestAuthenticated();
   const now = new Date();
+
+  // Checked after the caller is authenticated and before the Promise.all below,
+  // so a shut gate issues no request at all rather than issuing seven and
+  // discarding the results. Authentication comes first: an unauthenticated
+  // caller must not learn the gate's state.
+  if (!isManagementPlaneEnabled()) {
+    return unavailableStorageHealth(MANAGEMENT_PLANE_DISABLED_REASON, now.toISOString());
+  }
+
   const [
     diskConfig,
     diskUtil,
@@ -304,64 +510,9 @@ export async function getStorageHealth(): Promise<DbRuntimeHealth> {
     fetchManagementJson<DiskUtilResponse>('config/disk/util'),
     fetchManagementJson<BackupsResponse>('database/backups'),
     fetchManagementJson<RestoreResponse>('restore').catch(() => ({ available_versions: [] })),
-    runSqlQuery<RelationSizeRow>(`
-      with table_sizes as (
-        select * from (values
-          ('provider_offers','ingestion'),
-          ('provider_offer_history','ingestion'),
-          ('provider_cycle_status','ingestion'),
-          ('system_runs','ingestion'),
-          ('picks','app'),
-          ('distribution_outbox','app'),
-          ('distribution_receipts','app'),
-          ('settlement_records','app'),
-          ('audit_log','app')
-        ) as t(table_name, domain)
-      )
-      select
-        ts.domain,
-        ts.table_name,
-        coalesce(pg_total_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as total_bytes,
-        coalesce(pg_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as table_bytes,
-        coalesce(pg_indexes_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as index_bytes
-      from table_sizes ts
-      order by total_bytes desc;
-    `),
-    runSqlQuery<RelationGrowthRow>(`
-      select 'provider_offers' as table_name, count(*)::bigint as rows_last_day from provider_offers where created_at >= now() - interval '1 day'
-      union all
-      select 'provider_offer_history', 0::bigint
-      union all
-      select 'provider_cycle_status', count(*)::bigint from provider_cycle_status where updated_at >= now() - interval '1 day'
-      union all
-      select 'system_runs', count(*)::bigint from system_runs where created_at >= now() - interval '1 day'
-      union all
-      select 'picks', count(*)::bigint from picks where created_at >= now() - interval '1 day'
-      union all
-      select 'distribution_outbox', count(*)::bigint from distribution_outbox where created_at >= now() - interval '1 day'
-      union all
-      select 'distribution_receipts', count(*)::bigint from distribution_receipts where recorded_at >= now() - interval '1 day'
-      union all
-      select 'settlement_records', count(*)::bigint from settlement_records where created_at >= now() - interval '1 day'
-      union all
-      select 'audit_log', count(*)::bigint from audit_log where created_at >= now() - interval '1 day';
-    `),
-    runSqlQuery<DbPressureRow>(`
-      select
-        (select setting::int from pg_settings where name = 'max_connections') as max_connections,
-        (select count(*)::int from pg_stat_activity) as used_connections,
-        (select count(*)::int from pg_stat_activity where wait_event_type = 'Lock') as waiting_connections,
-        (select count(*)::int from pg_locks where not granted) as waiting_locks,
-        (select coalesce(max(extract(epoch from now() - xact_start)), 0)::int from pg_stat_activity where xact_start is not null and state <> 'idle') as max_tx_age_seconds,
-        (select count(*)::int from pg_stat_activity where xact_start is not null and now() - xact_start > interval '5 minutes' and state <> 'idle') as long_tx_count,
-        (select coalesce(max(extract(epoch from now() - query_start)), 0)::int from pg_stat_activity where state = 'active') as max_query_age_seconds,
-        (select count(*)::int from pg_stat_activity where state = 'active' and now() - query_start > interval '30 seconds') as slow_query_count,
-        (select coalesce(sum(size), 0)::bigint from pg_ls_waldir()) as wal_bytes,
-        (select wal_bytes::numeric from pg_stat_wal) as wal_written_bytes,
-        (select stats_reset from pg_stat_wal) as wal_stats_reset,
-        current_setting('archive_mode', true) as archive_mode,
-        current_setting('archive_command', true) as archive_command;
-    `),
+    runManagementQuery<RelationSizeRow>('relationSizes'),
+    runManagementQuery<RelationGrowthRow>('relationGrowth'),
+    runManagementQuery<DbPressureRow>('dbPressure'),
   ]);
 
   const pressure = pressureRows[0];
@@ -477,6 +628,7 @@ export async function getStorageHealth(): Promise<DbRuntimeHealth> {
     },
     storageDomains,
     topGrowthSources,
+    managementPlane: { available: true, reason: 'Supabase Management API consulted.' },
   };
 }
 
