@@ -8,15 +8,15 @@
   "branch": "claude/utv2-1894-deploy-packet",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1572",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/DEPLOY_DECISION_PACKET_2026-09-13.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-13T12:52:15.501Z",
-  "heartbeat_at": "2026-09-13T12:52:15.501Z",
+  "heartbeat_at": "2026-09-13T12:53:21.633Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1894-deploy-packet.json",
