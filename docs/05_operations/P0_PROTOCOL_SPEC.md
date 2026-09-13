@@ -169,7 +169,7 @@ what that means for how the foundation reaches `main`.
 
 | Site | Behaviour |
 |---|---|
-| `scripts/ops/shared.ts` — `evaluateRepoMintedP0Coverage` | reads the consumer **at the installed trusted base `origin/main`** (`git show origin/main:.github/workflows/p0-protocol.yml`), never the working tree or a branch head, and parses it structurally: coverage means a `pull_request`-triggered workflow whose `P0 Protocol` job has a live step — not under a literal-false `if`, not `continue-on-error: true` — whose `actions/github-script` body, with comments removed, `require`s `scripts/ops/tracker-independence/p0-workflow.cjs` and calls its `evaluatePullRequest` entry point at statement level, and that evaluator exists at the same base commit. A shell `run:` step is never counted, because the evaluator has no CLI entry point: `node p0-workflow.cjs` exits 0 having evaluated nothing. A comment naming the path, a disabled step, a step in another job, or an activation that exists only on a branch is a reference, not coverage. Fails closed when `origin/main` cannot be resolved, when the consumer is missing at the base, or when the evaluator is absent there. The receipt records the ref and commit it read. |
+| `scripts/ops/shared.ts` — `evaluateRepoMintedP0Coverage` | reads the consumer **at the installed trusted base `origin/main`** (`git show origin/main:.github/workflows/p0-protocol.yml`), never the working tree or a branch head, and parses it structurally: coverage means a `pull_request`-triggered workflow whose `P0 Protocol` job has a live step — not under a literal-false `if`, not `continue-on-error: true` — whose `actions/github-script` body, read literally, `require`s `scripts/ops/tracker-independence/p0-workflow.cjs` and calls its `evaluatePullRequest` entry point at statement level, and that evaluator exists at the same base commit. A shell `run:` step is never counted, because the evaluator has no CLI entry point: `node p0-workflow.cjs` exits 0 having evaluated nothing. A comment naming the path, a disabled step, a step in another job, or an activation that exists only on a branch is a reference, not coverage. Fails closed when `origin/main` cannot be resolved, when the consumer is missing at the base, or when the evaluator is absent there. The receipt records the ref and commit it read. |
 | `scripts/ops/preflight.ts` — check `PW1` | `fail` for a repo-minted identity while coverage is absent at the base; `skip` for a tracker key, which the existing consumer already evaluates. Not waivable at any tier. |
 | `scripts/ops/lane-start.ts` | refuses a **new** repo-minted lane with `p0_consumer_not_activated` before any lease, worktree or manifest is written; the refusal JSON carries the `trusted_base` it read. |
 | `scripts/ops/pre-merge-authorization.ts` (the merge wrapper) | a manifest that already exists on a branch never passes admission again, so the sanctioned merge path holds the same line: a repo-minted head ref is refused with the coverage reason in the receipt, evaluated at the same trusted base, and a predicate that throws is a refusal rather than an assumption. |
@@ -197,11 +197,12 @@ statement-level forms: `require(<evaluator>).evaluatePullRequest(` inlined; `con
 { evaluatePullRequest } = require(<evaluator>)` followed by `evaluatePullRequest(`; or `const <name>
 = require(<evaluator>)` followed by `<name>.evaluatePullRequest(`, where `<evaluator>` is the path
 literal or a `const` binding of it declared once. "Nothing else" means the body refuses on `eval`,
-`Function`, `with`, `import`, `module` or `globalThis`; on a `require` not immediately called or
+`Function`, `with`, `import`, `module` or `globalThis`; on any `require` that is not a bare
+`require(` with the parenthesis adjacent (a property `x.require`, `require (` with whitespace) or
 whose argument is not a string literal or a path binding; on a redefinition of `require` or of the
 entry point; on an assignment to a path binding; and on any other occurrence of the entry-point
 name, of a module binding, of the path literal or of a `require` of it. The tests enumerate the
-shapes independent review probed across six rounds, each refused: a shell `run:` of any form (the
+shapes independent review probed across seven rounds, each refused: a shell `run:` of any form (the
 evaluator has no CLI entry point, so no shell invocation evaluates anything), a comment-only
 reference in shell or JavaScript, a path inside a string (including a backslash-newline
 continuation) or a template literal, a `require` nested inside another expression, a bare `require`
@@ -213,7 +214,7 @@ unbound module reference, a second binding, `Object.assign`, `Object.definePrope
 `Reflect.set`, a getter, a bracket access, `require.cache`, `eval` or `new Function`), a module
 loaded through a computed, concatenated or dynamically imported path, a `//` inside a string ahead
 of a mutation, a Unicode-escaped spelling of `require`, the entry point or a binding, a carriage
-return inside a quote, the entry point passed around by reference, a renamed or widened destructuring, a
+return inside a quote, a property-form `x.require (` with whitespace before the parenthesis, the entry point passed around by reference, a renamed or widened destructuring, a
 longer path that merely ends in the evaluator's, candidate-only activation on a branch, and a
 candidate manifest that already exists.
 

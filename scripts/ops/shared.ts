@@ -922,10 +922,12 @@ function scriptDelegatesToEvaluator(script: string): boolean {
   for (const name of ['eval', 'Function', 'with', 'import', 'module', 'globalThis']) {
     if (word(name).test(script)) return false;
   }
-  // `require` only ever appears as a call: `require.cache`, `require.resolve`,
-  // a parameter named `require` and a shadowing declaration all refuse.
-  for (const match of script.matchAll(/(?<![\w$.])require(?![\w$])/g)) {
-    if (!/^\s*\(/.test(script.slice(match.index! + 'require'.length))) return false;
+  // `require` only ever appears as a bare, immediately-called `require(`:
+  // `require.cache`, `require.resolve`, a property `x.require`, `require (`
+  // with whitespace before the parenthesis (independent review round 7), a
+  // parameter named `require` and a shadowing declaration all refuse.
+  for (const match of script.matchAll(/(?<![\w$])require(?![\w$])/g)) {
+    if (script[match.index! - 1] === '.' || script[match.index! + 'require'.length] !== '(') return false;
   }
   const redefines = new RegExp(
     String.raw`(?:^|[^.\w$])(?:(?:const|let|var|function|async\s+function|class)\s+(?:${entry}|require)\b|${entry}\s*\([^)]*\)\s*\{)`,
@@ -1022,7 +1024,7 @@ function matrixIsEmpty(strategy: unknown): boolean {
  * `pull_request`-triggered workflow, a job whose check context is exactly
  * `P0 Protocol`, and inside it a step that is not disabled, cannot be ignored
  * on failure, and whose `run:` or github-script body invokes the evaluator
- * with comments removed. A comment naming the path, a step under `if: false`,
+ * read literally. A comment naming the path, a step under `if: false`,
  * a `continue-on-error: true` step, or a step in some other job is a
  * reference, not enforcement, and returns `executed: false`.
  */

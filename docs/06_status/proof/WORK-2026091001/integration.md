@@ -97,12 +97,12 @@ template literal is blanked first; a body with any `/`, backslash, control
 or non-ASCII character outside a string (comment, regex literal, division,
 Unicode-escaped identifier), a raw LF or CR inside a quote, a template
 substitution, `eval`,
-`Function`, `with`, `import`, `module`, `globalThis`, a `require` not
-immediately called or with a non-literal argument, a redefinition of `require`
+`Function`, `with`, `import`, `module`, `globalThis`, any `require` that is
+not a bare `require(` with an adjacent parenthesis and a literal argument, a redefinition of `require`
 or of the entry point, a duplicate or assigned path binding, or any other
 occurrence of the entry-point name, a module binding, the path literal or a
 `require` of it is refused. A shell `run:` never counts: the evaluator has no
-CLI entry point. The tests enumerate the shapes six review rounds probed,
+CLI entry point. The tests enumerate the shapes seven review rounds probed,
 each refused: any shell form, comment-only references, strings (including
 backslash-newline continuations) and template literals, nested `require`, a
 bare `require` with no call, a shadowed or redefined entry point or `require`,

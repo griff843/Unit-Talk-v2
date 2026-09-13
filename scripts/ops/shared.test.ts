@@ -2785,6 +2785,9 @@ test('findExecutedP0Delegation rejects a github-script body that only mentions t
     'a raw carriage return inside a quote': ["const s = 'before\rafter';", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
     'a Unicode line separator outside a string': ["const s = 1;\u2028await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
     'a non-ASCII identifier': ["const ápi = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await ápi.evaluatePullRequest({ github });'],
+    // Round 7: a property-form require with whitespace before the parenthesis.
+    'a property-form require with a space before the parenthesis': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", 'const api = require(evaluator);', "process.mainModule.require (evaluator)['evalua' + 'tePullRequest'] = async () => 'fake';", 'await api.evaluatePullRequest({ github });'],
+    'a bare require with a space before the parenthesis': ["const { evaluatePullRequest } = require ('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
     'the path literal used outside a require': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "const api = module.constructor._load('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await api.evaluatePullRequest({ github });'],
   };
   for (const [label, lines] of Object.entries(refused)) {
