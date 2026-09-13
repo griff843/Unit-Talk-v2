@@ -2,7 +2,7 @@
 
 **Linear:** UTV2-948
 **Status:** Ratified 2026-05-12
-**Supersedes:** Tier-based auto-merge for any PR whose Linear issue is in the Runtime Hardening P0 project.
+**Supersedes:** Tier-based auto-merge for any repository work classified P0.
 
 This document is the canonical mechanical enforcement spec for the P0 merge protocol. Memory entries describe intent; this file describes how the gate is enforced.
 
@@ -10,11 +10,13 @@ This document is the canonical mechanical enforcement spec for the P0 merge prot
 
 ## 1. What is "P0"
 
-A Linear issue is "P0" if and only if its `project.id` equals **`46229dc4-c7c1-4ccb-af0d-dedaf8147a97`** (project name: *Runtime Hardening P0 - Runtime Trustworthiness*).
+Repository classification is authoritative. `scripts/ops/tracker-independence/p0-classifier.cjs` is the shared evaluator foundation for CI, `ops:p0-detect` and truth-check. Its reviewed registry is `docs/governance/tracker-independence/p0-classifications.json` (`schema_version: 1`, classifications with `issue_id`, `required` and `evidence`). Legacy UTV2/UNI and new WORK identities use the same rules.
 
-Issues UTV2-914 through UTV2-923 are the initial P0 batch; UTV2-948 (this spec) is also P0. Future issues added to that project automatically inherit the protocol.
+Classification is `p0`, `non_p0` or `unknown`; `is_p0` is respectively true, false or null. Historical positives include UTV2-914 through UTV2-923, UTV2-948, UTV2-949 and UTV2-953. The initial batch is not an exhaustive negative classification of every other item. Trusted-base positive evidence or a candidate positive declaration requires the protocol; a candidate cannot clear that classification by deleting or editing a field or registry entry.
 
-P0 detection is performed by `pnpm ops:p0-detect <UTV2-###>` (single source of truth used by CI, truth-check, and the dispatch-board skill).
+A candidate manifest that explicitly declares `p0_protocol.required: false` is classified non-P0 when that same manifest carries a valid T1, T2 or T3 tier. This applicability decision does not require a second P0-specific human verdict. The protected Merge Gate evaluates the declared tier independently and continues to enforce its ordinary T1 and T2 review and approval requirements, including exact-head approval where the tier policy requires it. Trusted-base negative evidence remains usable after merge. Missing flags, missing or invalid tiers, and unknown classification are blocking conditions, never implicit non-P0 results. Tracker credentials, project reads and outages do not influence classification.
+
+Run `pnpm ops:p0-detect <WORK-ID>` before merge; existing UTV2/UNI identifiers remain compatible.
 
 ## 2. The five required steps
 
@@ -78,7 +80,7 @@ Branch protection requires four checks. The fourth is added by UTV2-948:
 3. `Merge Gate`
 4. **`P0 Protocol`** (new — added by UTV2-948)
 
-The `P0 Protocol` check auto-passes for non-P0 PRs (skip path), so adding it as required does not affect non-P0 work.
+The `P0 Protocol` check skips protocol artifacts only for authoritatively classified non-P0 PRs, so adding it as required does not affect non-P0 work.
 
 ### Apply / inspect via GitHub CLI
 
@@ -101,13 +103,13 @@ gh api -X PUT repos/griff843/Unit-Talk-v2/branches/main/protection/required_stat
 
 | Check | What it verifies |
 |---|---|
-| **H1** | P0 detection is consistent between Linear (`issue.project.id`) and manifest (`p0_protocol.required`). |
+| **H1** | Shared repository classification is known and consistent with the required protocol; preserved positives cannot be cleared by the candidate. |
 | **H2** | `claude_critique` artifact recorded, non-empty, references the merge SHA. |
 | **H3** | `runtime_verification` artifact recorded, has `result: pass`, no FAIL/SKIP items, manifest `result === 'pass'`. |
 | **H4** | PR has `PM_VERDICT: APPROVED` comment from a CODEOWNERS member. |
 | **H5** | `merge_type === 'manual'` (never `auto`). |
 
-Non-P0 lanes skip all H-checks. P0 lanes fail truth-check on any H violation.
+Authoritatively classified non-P0 lanes skip protocol artifact checks; unknown classification fails H1. P0 lanes fail truth-check on any H violation.
 
 ## 7. Orchestrator behavior
 
@@ -146,3 +148,102 @@ After the P0 batch (UTV2-914 through UTV2-923) closes:
 - If all ten lanes shipped under this protocol without a regression, the protocol becomes the default for P1.
 - If any guardrail was skipped and produced a defect, tighten before any P1 work begins.
 - If the protocol blocked a legitimate merge for an artifact-formatting reason rather than a real risk, refine the artifact schema before broadening.
+
+## Tracker cutover bootstrap boundary
+
+PR #1556 carries the evaluator foundation. Until that foundation lands on the protected base, `.github/workflows/p0-protocol.yml` remains the existing base consumer and does not treat candidate-only evaluator code as merge authority. The follow-up workflow patch must be applied only after the foundation lands, and must check out and execute the evaluator from the trusted protected base rather than from candidate implementation.
+
+This specification describes the intended cutover behavior; it is not evidence that bootstrap, independent exact-head review, protected integration or tracker-free closeout has occurred. P0 work still requires its human verdict bound to the exact reviewed head, complete runtime evidence and manual merge. Prepare the existing required approval/bootstrap artifact before requesting the reserved action; do not direct-push main, fabricate checks or execute candidate code as merge authority.
+
+### The staged block is mechanical, not a condition of approval
+
+The two phases above create a window: the foundation lands while the base consumer still resolves
+`/(?:UTV2|UNI)-\d+/i` and **auto-passes anything else**, so a `WORK-###` PR clears the required
+`P0 Protocol` check in seconds with no evaluation at all. Measured on #1556's own required check —
+run `34599912852`, conclusion `success` in 10s, log line *"No UTV2-### / UNI-### identifier found in
+PR title, body, or branch — treating as non-P0."*
+
+That window is narrowed by three **local** controls. They are stated as local deliberately: none
+of them is a required check, none is enforced by GitHub, and the paragraph after the table says
+what that means for how the foundation reaches `main`.
+
+| Site | Behaviour |
+|---|---|
+| `scripts/ops/shared.ts` — `evaluateRepoMintedP0Coverage` | reads the consumer **at the installed trusted base `origin/main`** (`git show origin/main:.github/workflows/p0-protocol.yml`), never the working tree or a branch head, and parses it structurally: coverage means a `pull_request`-triggered workflow whose `P0 Protocol` job has a live step — not under a literal-false `if`, not `continue-on-error: true` — whose `actions/github-script` body, read literally, `require`s `scripts/ops/tracker-independence/p0-workflow.cjs` and calls its `evaluatePullRequest` entry point at statement level, and that evaluator exists at the same base commit. A shell `run:` step is never counted, because the evaluator has no CLI entry point: `node p0-workflow.cjs` exits 0 having evaluated nothing. A comment naming the path, a disabled step, a step in another job, or an activation that exists only on a branch is a reference, not coverage. Fails closed when `origin/main` cannot be resolved, when the consumer is missing at the base, or when the evaluator is absent there. The receipt records the ref and commit it read. |
+| `scripts/ops/preflight.ts` — check `PW1` | `fail` for a repo-minted identity while coverage is absent at the base; `skip` for a tracker key, which the existing consumer already evaluates. Not waivable at any tier. |
+| `scripts/ops/lane-start.ts` | refuses a **new** repo-minted lane with `p0_consumer_not_activated` before any lease, worktree or manifest is written; the refusal JSON carries the `trusted_base` it read. |
+| `scripts/ops/pre-merge-authorization.ts` (the merge wrapper) | a manifest that already exists on a branch never passes admission again, so the sanctioned merge path holds the same line: a repo-minted head ref is refused with the coverage reason in the receipt, evaluated at the same trusted base, and a predicate that throws is a refusal rather than an assumption. |
+
+**What these controls are not.** They are not required-check enforcement. `merge-gate.yml` resolves
+the authoritative tier from the lane manifest carried by the candidate head, and an earlier revision
+of this section claimed that made admission "a complete chokepoint" because `ops:lane-start` was the
+only writer of that file. That is a statement about ordinary tooling, not an enforced trust
+guarantee — a manifest can be written by anything that can commit — and the claim is withdrawn.
+What the controls do guarantee is narrower and is what the tests exercise: **the repository's own
+admission tooling refuses to open or authorize a repo-minted lane unless the consumer installed on
+`origin/main` contains a live `actions/github-script` step, in the `P0 Protocol` job, whose body,
+read literally, calls the evaluator's `evaluatePullRequest` export through a `require` of the
+evaluator path and contains no other ASCII spelling of that module or that export**. "Live" means: the job and step carry no
+literal-false `if:`, no `continue-on-error` other than literal false, the job does not `need` a
+disabled or absent job, its matrix (if any) has no empty axis and no `exclude` at all (matrix
+expansion is not modelled, so any `exclude` is refused), the step's action is exactly
+`actions/github-script` (any ref), and exactly one job reports the `P0 Protocol` context.
+"Read literally" means: every string and template literal is blanked first (only the evaluator
+path literal keeps its content), and a body containing any `/`, backslash, control or non-ASCII
+character outside a string (a comment, a regex literal, a division, a Unicode-escaped identifier),
+a template substitution, a raw LF or CR inside a quote, or an unterminated literal is refused
+rather than parsed. "Calls through a `require`" means one of exactly three
+statement-level forms: `require(<evaluator>).evaluatePullRequest(` inlined; `const
+{ evaluatePullRequest } = require(<evaluator>)` followed by `evaluatePullRequest(`; or `const <name>
+= require(<evaluator>)` followed by `<name>.evaluatePullRequest(`, where `<evaluator>` is the path
+literal or a `const` binding of it declared once. "Nothing else" means the body refuses on `eval`,
+`Function`, `with`, `import`, `module` or `globalThis`; on any `require` that is not a bare
+`require(` with the parenthesis adjacent (a property `x.require`, `require (` with whitespace) or
+whose argument is not a string literal or a path binding; on a redefinition of `require` or of the
+entry point; on an assignment to a path binding; and on any other occurrence of the entry-point
+name, of a module binding, of the path literal or of a `require` of it. The tests enumerate the
+shapes independent review probed across seven rounds, each refused: a shell `run:` of any form (the
+evaluator has no CLI entry point, so no shell invocation evaluates anything), a comment-only
+reference in shell or JavaScript, a path inside a string (including a backslash-newline
+continuation) or a template literal, a `require` nested inside another expression, a bare `require`
+that never calls the entry point, a body that shadows or redefines the entry point or `require`, a
+`let` or `const` binding reassigned, a forked `actions/github-script-*` action, an all-excluded
+matrix, a duplicate `P0 Protocol` job, a fake object property named after the entry point called
+after a bare `require`, the export reassigned or replaced before the call (through a tracked or an
+unbound module reference, a second binding, `Object.assign`, `Object.defineProperty`,
+`Reflect.set`, a getter, a bracket access, `require.cache`, `eval` or `new Function`), a module
+loaded through a computed, concatenated or dynamically imported path, a `//` inside a string ahead
+of a mutation, a Unicode-escaped spelling of `require`, the entry point or a binding, a carriage
+return inside a quote, a property-form `x.require (` with whitespace before the parenthesis, the entry point passed around by reference, a renamed or widened destructuring, a
+longer path that merely ends in the evaluator's, candidate-only activation on a branch, and a
+candidate manifest that already exists.
+
+What the predicate does **not** assess, stated so nobody reads more into it: JavaScript control
+flow (a call inside `if (false)`, a never-invoked function, a `try` whose `catch` swallows the
+failure, or a body that throws before the call is counted if the statements are present; a body
+that throws fails the required check, which is fail-closed for the PR), runtime `if:` expressions
+(evaluated by Actions, not here), `timeout-minutes`, a second *workflow* that reports the same check
+name, and a mutation of the loaded module through a reference obtained without naming `require`,
+`module`, `eval`, `Function` or `import` (for example a helper module already on the base). None of these is
+reachable by a WORK PR author, because the predicate never reads candidate content: introducing
+any of them requires first landing a weakened consumer on `origin/main` through a reviewed
+required-check change, which is exactly the bootstrap route this foundation already requires. The
+predicate is a fail-closed detector of whether the reviewed activation is installed, not a semantic
+verifier of the consumer. These are local controls; they do not replace the required checks, and
+the merge gate is unchanged.
+
+**How the foundation reaches `main`, then.** The evaluator and its activation are landed through
+the **established bootstrap route**, not by widening a required check and not by admitting a
+`WORK-###` PR through the controls above: a tracker-keyed lane whose tier `Merge Gate` resolves from
+its manifest, with its own independent review and required CI — or, where the concurrency caps
+refuse that lane, a `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` entry authorized by Griff and
+read from the base, exactly as `merge-gate.yml` already reads it. `Merge Gate` cannot resolve a tier
+for a `WORK-###` head at all (*"No issue ID found in PR branch or title. Cannot resolve
+authoritative tier."*), which is measured on #1556 and is the reason the route is the tracker-keyed
+one. No branch-protection change and no required-check change is part of this.
+
+**It releases itself, and only from the base.** Because the predicate reads `origin/main`, landing
+the activation there lifts the refusal with no second edit, and a later base commit that removes
+the delegation re-arms it even if a working tree still holds the activated files. Applying the
+activation on a branch, referencing the evaluator in a comment, or disabling the required check does
+not release it.

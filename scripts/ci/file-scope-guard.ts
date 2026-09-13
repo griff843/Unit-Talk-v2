@@ -51,9 +51,9 @@ import path from 'node:path';
 // others, not what field is consulted.
 const SELF_SCOPE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened', 'merged']);
 const LOCK_CONFLICT_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
-const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
+const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])((?:UTV2|UNI|WORK)-\d+)(?:$|[/_-])/i;
 /** A whole issue ID and nothing else -- used to key exact-lane lifecycle paths. */
-const ISSUE_ID_PATTERN = /^UTV2-\d+$/;
+const ISSUE_ID_PATTERN = /^(?:UTV2|UNI|WORK)-\d+$/;
 
 type GuardVerdict = 'PASS' | 'FAIL';
 

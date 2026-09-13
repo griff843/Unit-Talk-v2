@@ -147,7 +147,7 @@ function resolveEvidenceCommit(repoRelPath: string): string {
 
 function resolveManifestBindingContext(evidence: EvidenceRecord): ManifestBindingContext {
   const issueId = typeof evidence.issue_id === 'string' ? evidence.issue_id.toUpperCase() : '';
-  if (!/^(UTV2|UNI)-\d+$/.test(issueId)) {
+  if (!/^(UTV2|UNI|WORK)-\d+$/.test(issueId)) {
     return { laneType: null, modelRouting: null, expectsModelRouting: false };
   }
   const repoRoot = git('git rev-parse --show-toplevel');

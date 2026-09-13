@@ -87,8 +87,8 @@ jobs:
             exit 0
           fi
 
-          # push trigger: extract from commit message then PR branch (handles squash merges).
-          issue_id=$(echo "$COMMIT_MSG" | grep -oP '(?i)UTV2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
+          # Push: prefer associated PR branch identity over optional references in squash text.
+          issue_id=$(echo "$COMMIT_MSG" | grep -oP '(?i)(?:UTV2|UNI|WORK)-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
 
           pr_number=""
           pr_branch=""
@@ -102,8 +102,8 @@ jobs:
           pr_number=$(echo "$api_resp" | jq -r '.[0].number // empty' 2>/dev/null || true)
           pr_branch=$(echo "$api_resp" | jq -r '.[0].head.ref // empty' 2>/dev/null || true)
 
-          if [ -z "$issue_id" ] && [ -n "$pr_branch" ]; then
-            branch_issue=$(echo "$pr_branch" | grep -oiP '(?<![a-zA-Z])utv2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
+          if [ -n "$pr_branch" ]; then
+            branch_issue=$(echo "$pr_branch" | grep -oiP '(?<![a-zA-Z])(?:utv2|uni|work)-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
             if [ -n "$branch_issue" ]; then
               issue_id="$branch_issue"
               echo "::notice title=post-merge-lane-close::Found issue $issue_id from PR branch $pr_branch"
@@ -111,7 +111,7 @@ jobs:
           fi
 
           if [ -z "$issue_id" ]; then
-            echo "::notice title=post-merge-lane-close::No UTV2-### found in commit message or PR branch. Nothing to close."
+            echo "::notice title=post-merge-lane-close::No repository work identity found in commit message or PR branch. Nothing to close."
             echo "issue_id=" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=post-merge-lane-close::Found issue $issue_id"

@@ -5,12 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import micromatch from 'micromatch';
 import { parse as parseYaml } from 'yaml';
+import { resolveAuthorizedScopeOverridePaths } from './truth-check-lib.js';
 import {
   ROOT,
   emitJson,
   getFlag,
   parseArgs,
   readManifest,
+  issueIdFromBranchName,
   requireIssueId,
   type LaneExecutor,
   type LaneManifest,
@@ -150,6 +152,11 @@ interface GitHubStatusCheck {
   workflowName?: string | null;
 }
 
+interface GitHubComment {
+  body?: string;
+  user?: { login?: string; type?: string } | null;
+}
+
 interface PullRequestSnapshot {
   number: number;
   url: string;
@@ -183,6 +190,7 @@ export interface PacketInput {
     base_package_json?: PackageJsonSnapshot | null;
     head_package_json?: PackageJsonSnapshot | null;
     untracked_artifacts?: string[];
+    scope_override_comments?: GitHubComment[] | null;
     generated_at?: string;
   };
 }
@@ -243,11 +251,23 @@ export async function generatePRReviewPacket(input: PacketInput): Promise<PRRevi
   );
   const rLevelCompliance = input.prebuilt?.r_level_compliance ?? readRLevelCompliance(baseRef, headRef);
   const syncMetadata = input.prebuilt?.sync_metadata ?? readSyncMetadata(manifest.issue_id);
+  const scopeOverrideComments = input.prebuilt && 'scope_override_comments' in input.prebuilt
+    ? input.prebuilt.scope_override_comments
+    : readScopeOverrideComments(pullRequest.number);
+  const authorizedScopeOverridePaths = resolveAuthorizedScopeOverridePaths(
+    scopeOverrideComments ?? [],
+    {
+      issueId: manifest.issue_id,
+      prNumber: pullRequest.number,
+      headSha: pullRequest.headRefOid ?? null,
+    },
+  );
   const scopeDiff = buildScopeDiff(
     changedFiles,
     manifest.file_scope_lock,
     manifest.issue_id,
     manifest.expected_proof_paths,
+    authorizedScopeOverridePaths,
   );
   const packageTestDrift = buildPackageTestDrift({
     diffEntries,
@@ -483,11 +503,13 @@ function buildScopeDiff(
   scopeLock: string[],
   issueId: string,
   expectedProofPaths: string[],
+  authorizedScopeOverridePaths: string[],
 ): ScopeDiffResult {
   const allowedFileScope = normalizePaths([
     ...scopeLock,
     ...sameIssueLaneMetadataPaths(issueId),
     ...expectedProofPaths,
+    ...authorizedScopeOverridePaths,
   ]);
   return {
     allowed_file_scope: allowedFileScope,
@@ -705,6 +727,28 @@ function readPullRequest(prNumber: number | undefined, manifest: LaneManifest): 
     },
   );
   return JSON.parse(stdout) as PullRequestSnapshot;
+}
+
+function readScopeOverrideComments(prNumber: number): GitHubComment[] | null {
+  try {
+    const stdout = execFileSync(
+      'gh',
+      ['api', '--paginate', '--slurp', `repos/{owner}/{repo}/issues/${prNumber}/comments`],
+      {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    const pages = JSON.parse(stdout) as unknown;
+    if (!Array.isArray(pages) || pages.some((page) => !Array.isArray(page))) return null;
+    return pages.flat() as GitHubComment[];
+  } catch {
+    // Scope authorization fails closed. An unavailable or malformed comment
+    // response grants no paths; candidate-owned manifest data is never used
+    // as a substitute authorization source.
+    return null;
+  }
 }
 
 function readPrNumberFromManifest(manifest: LaneManifest): number {
@@ -1051,8 +1095,7 @@ function inferIssueFromBranch(): string | null {
       cwd: ROOT,
       encoding: 'utf8',
     }).trim();
-    const match = branch.match(/(?:utv2|uni)-(\d+)/iu);
-    return match ? `UTV2-${match[1]}` : null;
+    return issueIdFromBranchName(branch);
   } catch {
     return null;
   }

@@ -43,7 +43,7 @@ export function parseScopeOverrideComment(body: string): ParsedScopeOverride | n
     i += 1;
   }
 
-  const issueMatch = (fields['Issue'] || '').match(/^UTV2-\d+$/);
+  const issueMatch = (fields['Issue'] || '').match(/^(?:UTV2|UNI|WORK)-\d+$/);
   const prMatch = (fields['PR'] || '').match(/^#(\d+)$/);
   if (!issueMatch || !prMatch || !fields['Head-SHA'] || paths.length === 0) {
     return null;

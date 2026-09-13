@@ -11,7 +11,7 @@
 #
 # Sources (local only — no MCP, no network):
 #   - docs/06_status/lanes/*.json → active lane state
-#   - docs/06_status/PROGRAM_STATUS.md → active milestone
+#   - docs/mission/plan.md + docs/06_status/CURRENT_STATE.md → mission snapshots
 #   - docs/05_operations/STANDING_GUARDRAILS.md → PM-maintained guardrails
 #   - git log / git status      → recent commits and working tree
 #
@@ -70,16 +70,8 @@ else
   TREE_LINE="Clean"
 fi
 
-# Active milestone — extract from PROGRAM_STATUS.md if it exists
-MILESTONE="unknown"
-PROG_FILE="$ROOT/docs/06_status/PROGRAM_STATUS.md"
-if [ -f "$PROG_FILE" ]; then
-  MILESTONE=$(grep -m1 -iE '\|\s*Phase\s*\|' "$PROG_FILE" 2>/dev/null \
-    | sed 's/.*|\s*//' | sed 's/\s*|.*//' | head -c 80 || echo "")
-  [ -z "$MILESTONE" ] && MILESTONE=$(grep -m1 -iE 'Phase [0-9]' "$PROG_FILE" 2>/dev/null \
-    | sed 's/.*\(Phase [0-9A-Za-z ]*\).*/\1/' | head -c 80 || echo "")
-  [ -z "$MILESTONE" ] && MILESTONE="see PROGRAM_STATUS.md"
-fi
+# Do not infer current runtime readiness from a historical phase label.
+MILESTONE="read docs/mission/plan.md and docs/06_status/CURRENT_STATE.md; verify against current evidence"
 
 # Lane state — parse canonical lane manifests with node (always available in this repo)
 LANES_OUT=$(node -e "
@@ -128,7 +120,8 @@ try {
   const configPath = '$ROOT/docs/governance/CONCURRENCY_CONFIG.json';
   const config = fs.existsSync(configPath)
     ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
-    : { executors: { claude: 2, codex: 4 } };
+    : null;
+  if (!config) { process.stdout.write('slots:unknown-config'); process.exit(0); }
   if (!fs.existsSync(dir)) { process.stdout.write('slots:unknown'); process.exit(0); }
   const active = fs.readdirSync(dir)
     .filter(f => f.endsWith('.json') && f !== 'README.md')
@@ -161,19 +154,13 @@ try {
 } catch(e) { process.stdout.write(''); }
 " 2>/dev/null || echo "")
 
-# Dispatch candidates — read from today's cached digest if available (no network)
+# Local work discovery only; cached tracker digests are not execution authority.
 DISPATCH_SUMMARY=$(node -e "
-try {
-  const fs = require('fs');
-  const path = require('path');
-  const today = new Date().toISOString().slice(0,10);
-  const digestPath = path.join('$ROOT', '.out', 'ops', 'digest', today + '.json');
-  if (!fs.existsSync(digestPath)) { process.stdout.write('dispatch:no-digest'); process.exit(0); }
-  const d = JSON.parse(fs.readFileSync(digestPath, 'utf8'));
-  const candidates = (d.dispatch_candidates || []).length;
-  process.stdout.write('dispatch:' + candidates + '-ready');
-} catch(e) { process.stdout.write('dispatch:error'); }
-" 2>/dev/null || echo "dispatch:unavailable")
+const fs = require('fs'), path = require('path');
+const dir = path.join('$ROOT', '.ops', 'work');
+const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter(n => n.endsWith('.md')) : [];
+process.stdout.write('local-work:' + names.join(','));
+" 2>/dev/null || echo "local-work:unavailable")
 
 # Codex health check (fast — 5s timeout)
 CODEX_STATUS=$(node -e "
@@ -191,7 +178,10 @@ cat > "$STATE_FILE" << STATE
 ## Branch
 $BRANCH
 
-## Active Milestone
+## Mission authority
+Read docs/mission/intent.md, spec.md and plan.md.
+
+## Active Milestone (cached view)
 $MILESTONE
 
 ## Active Lanes
@@ -226,7 +216,18 @@ GHOST_PART=""
 [ -n "$GHOST_WARNING" ] && GHOST_PART=" | $GHOST_WARNING"
 GUARDRAIL_PART=""
 [ -n "$GUARDRAILS_OUT" ] && GUARDRAIL_PART=" | guardrails: $(printf '%s' "$GUARDRAILS_OUT" | tr '\n' ';' | head -c 300)"
-MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE$GUARDRAIL_PART | Full state: .out/ops/session-state/SYSTEM_STATE.md"
+MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE$GUARDRAIL_PART | Recover mission intent/spec/plan, .ops/work/<ID>.md, current PRs and runtime evidence; no Linear required. | Full state: .out/ops/session-state/SYSTEM_STATE.md"
+
+# This hook is wired to UserPromptSubmit, but the message below is NOT emitted on
+# every prompt: the staleness check above short-circuits to a guardrails-only
+# message whenever the cached state is younger than MAX_AGE. So this full message
+# is the session-start / state-is-stale path, which is exactly where CLAUDE.md
+# § "Mission — mandatory context" says to establish mission context. The recovery
+# pointer therefore belongs here and must stay — asserted by
+# scripts/ops/tracker-independence/instruction-hooks.test.ts, alongside the same
+# assertion on post-compact-reinjector.sh for the after-context-loss path.
+# Do not "de-duplicate" it against the PostCompact hook: the two fire on
+# different events and neither covers the other's case.
 
 # ── Output systemMessage JSON ─────────────────────────────────────────────────
 python3 -c "

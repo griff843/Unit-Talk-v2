@@ -8,7 +8,7 @@ trigger: Task explicitly depends on reading, updating, closing, or reconciling L
 
 # Linear Execution
 
-Use this only when the task explicitly depends on Linear state.
+Use this only when the user explicitly requests optional Linear inspection or mirroring. Ordinary discovery, admission, execution, review, integration and closeout use repository authority and never require this skill. A token being present is not a request.
 
 ## Default commands
 
@@ -22,7 +22,7 @@ pnpm linear:close -- <issue-id> --comment "<closeout>"
 
 ## Rules
 
-- treat Linear as queue truth, but verify against repo/branch reality
+- treat Linear as an optional mirror; mission, local work contracts, manifests, GitHub and runtime evidence remain authoritative
 - do not update issue state blindly if branch or PR truth disagrees
 - prefer Claude for broad queue orchestration; use this skill for explicit execution support
 

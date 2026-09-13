@@ -1,0 +1,170 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026091001",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "cf256a0478f54200e0d73ec4a246e2ff5bc4b097",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "partial",
+    "local_verification": {
+      "source_sha": "cf256a0478f54200e0d73ec4a246e2ff5bc4b097",
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "tests_reported": 6414,
+      "passed": 6414,
+      "failed": 0,
+      "skipped": 0,
+      "result": "Static/build/test and command stages passed; writable DB target guard refused the containment URL",
+      "limitation": "Not a full verify pass: pnpm verify exits 1 at ci:assert-staging, the documented containment refusal on a workstation, not a regression. Final-head staging CI is required. Smart Form browser E2E is not enabled in this suite and is not claimed here.",
+      "log_sha256": "658c511cc4cde7814e2b18dc7570c54e2499aa69201b223515c1d4c3498ce9e0"
+    },
+    "independent_review": {
+      "source_sha": "cf256a0478f54200e0d73ec4a246e2ff5bc4b097",
+      "reviewer": "Codex CLI (codex exec, read-only sandbox), non-author; the repair commits 7f1635c89, 3123e1deb, 0f873aab2, 8768a4026, e75a4cfeb, d7e2a91fe, 775f79fec, 3fb23c27d, c488c8503 and 1dbd58ef3 were authored by Claude",
+      "scope": "git diff 6c8497178 1dbd58ef3 -- the P0 coverage repair, the merge-wrapper boundary, their tests and the two docs; each round re-executed the previous round's probes and searched for new bypasses",
+      "disposition": "DISPOSITION: defects found",
+      "round_1": {
+        "source_sha": "3123e1deb",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "c251f1917b798071329902c7c2ee310b9ec2d368141c4cb2e4766a95408e7fe7",
+        "defects": "five non-executing shell/YAML shapes accepted as executed delegation (trailing comment, echo argument, heredoc payload, false branch, continue-on-error expression) and two doc overclaims; all repaired in 0f873aab2"
+      },
+      "round_2": {
+        "source_sha": "0f873aab2",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "2898e3b7b9275e3c3c7db20c374b517ba34b2f67d092a7cffc6dc84cbe5f7a3c",
+        "defects": "the evaluator has no CLI entry point, so every shell invocation form evaluated nothing; a bare require without calling evaluatePullRequest; job-level continue-on-error, needs: on a disabled job and an empty matrix; one doc overclaim (argument-to-another-command); all repaired in 8768a4026"
+      },
+      "round_3": {
+        "source_sha": "8768a4026",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "4639e8d0c67636c9c88e227d6f5e609e851333b4a4cf8d6e832df2d8299b54db",
+        "defects": "a require and call inside a multi-line template literal; a shadowing const/function/method named evaluatePullRequest; a let binding reassigned before require; a forked action named actions/github-script-foo; a matrix exclude that excludes everything; two jobs both named P0 Protocol; two doc overclaims; all repaired in e75a4cfeb"
+      },
+      "round_4": {
+        "source_sha": "e75a4cfeb",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "f6503c4b1617de2dea69d77577e137aaec09625fa3309457d84e5415346bc7b3",
+        "defects": "a fake object property named evaluatePullRequest called after a bare require; the export reassigned on the module binding before the call; two doc overclaims; all repaired in d7e2a91fe"
+      },
+      "round_5": {
+        "source_sha": "d7e2a91fe",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "11397f39f9cd3556093f7a8d872c09b51d101b88f563a0c6421f32449ab76a18",
+        "defects": "a shadowed require; a backslash-newline string continuation; a // inside a string erasing a following mutation through the comment stripper; Object.assign, Reflect.set, a getter and require.cache on an unbound require; eval and new Function mutations; a duplicate and a reassigned const path binding; doc overclaims; all repaired in 775f79fec by replacing the stripper with a literal-blanking scanner that refuses comments, regex literals and template substitutions outright"
+      },
+      "round_6": {
+        "source_sha": "775f79fec",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "657c43c4192c1cbc9143c10ca9cf93b6bf2b11c021e8853bc6fb5578e4c59f24",
+        "defects": "Unicode-escaped spellings of require, the entry point and a module binding unseen by the occurrence rule; a raw carriage return inside a quote accepted; a stale comment-stripped phrase in integration.md; all repaired in 3fb23c27d by refusing any backslash, control or non-ASCII character outside a literal and CR inside a quote"
+      },
+      "round_7": {
+        "source_sha": "3fb23c27d",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "1d0324e9cb78980a3f9239d06b7679b521e97fcc7a0f67442d14c0bd9dc067b1",
+        "defects": "a property-form require with whitespace before the parenthesis (holder.require (p), process.mainModule.require (p)) accepted because the space escaped every require( scan while the lookbehind ignored .require; stale with-comments-removed wording in the spec table row and the shared.ts JSDoc; repaired in c488c8503 by requiring every require token to be bare and immediately followed by ("
+      },
+      "report_sha256": "e7bf8cd26feeccb9f1516578406f188123d13a6e02c18530641d89e2d6e420d3",
+      "earlier_review": {
+        "source_sha": "1759314ea7e34addf3cb9f6b57488d6f6e9509a4",
+        "disposition": "No additional defect found; not merge approval",
+        "checks": "528 earlier targeted tests, 67 workflow tests, 26 final packet/recovery tests passed in independent review; runs overlap"
+      }
+    },
+    "r_level": {
+      "verdict": "PASS",
+      "matched_rules": [],
+      "changed_files": 90
+    },
+    "prior_head_ci": {
+      "source_sha": "1759314ea7e34addf3cb9f6b57488d6f6e9509a4",
+      "verify": "success",
+      "staging_db": "success",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34698429055",
+      "applies_to_current_source": false
+    },
+    "recovery": {
+      "fresh_agent": "Recovered mission, lane, PR and next safe action from repository records without network; stale loader findings corrected and rechecked at source SHA",
+      "compacted_session": "Actual post-compaction hook passes with tracker tools blocked; a separate end-to-end compacted-agent experiment remains unproven"
+    },
+    "amendment_integration": {
+      "source": "PR #1556 comment 5646174137, authored by griff843",
+      "applied_at_commit": "02146f9ce07e88ebe223a2df93379a900291e0b3",
+      "files": [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "docs/05_operations/EXECUTION_TRUTH_MODEL.md",
+        ".agents/skills/system-state-loader/SKILL.md",
+        ".claude/commands/system-state-loader.md"
+      ],
+      "applied_verbatim": true,
+      "non_author_review": {
+        "reviewer": "Claude (non-author; the amendment was authored by griff843)",
+        "reserved_surface_touched": false,
+        "reserved_surface_check": "grep for ^.github/, CODEOWNERS, merge-gate, p0-protocol, executor-result, tier-label, RESERVED_RISK, r1-r5 across the five files returned no match",
+        "branch_protection_unchanged": "required contexts remain verify, Executor Result Validation, Merge Gate, P0 Protocol; strict true; enforce_admins false",
+        "contract_validator": "scripts/ops/contract-validator.test.ts 55/55 pass, including the edited system-state-loader skill",
+        "controls_strengthened": [
+          "T1 now requires both the approval label and a valid exact-head PM verdict; a label alone is stated insufficient",
+          "Discord targets demoted from Live to Configured; activation requires current containment authority",
+          "pnpm test:db may no longer be described as non-destructive"
+        ],
+        "control_loosened": "the system-state-loader's blanket stop becomes a scoped reconcile, aligning it with intent.md's already-ratified stop conditions; it adds an explicit 'preserve required admission controls' clause",
+        "structural_note": "griff843 is the sole CODEOWNER and the sole AUTHORIZED_REVIEWERS entry, so independent review of his own amendment cannot mean a second human's pm-verdict/v1 in this repository",
+        "disposition": "No additional defect found. This is not merge approval."
+      }
+    },
+    "file_scope_lock_status": {
+      "check": "File scope lock",
+      "state": "fail",
+      "required": false,
+      "out_of_scope_paths": [
+        ".github/workflows/file-scope-lock-check.yml",
+        ".github/workflows/return-review-packet.yml",
+        ".ops/sync/WORK-2026091001.yml",
+        "docs/06_status/lanes/WORK-2026091001.json",
+        "scripts/ci/file-scope-guard.test.ts",
+        "scripts/ci/file-scope-guard.ts",
+        "scripts/ci/scope-override-comment-parser.test.ts",
+        "scripts/ci/scope-override-comment-parser.ts"
+      ],
+      "why_unrepairable": "CI runs the trusted copy of scope-override-comment-parser.ts from origin/main, whose issue regex is /^UTV2-\\d+$/. A WORK-### override is unparseable by it. This branch is what widens that regex to accept WORK-###, so the PR contains the fix for the check failing it. The check is not one of the four required contexts, so it blocks no merge.",
+      "verified_at": "2026-09-12, run 34698429055 at 6c8497178; the path list is unchanged by the repair commit, which touch only in-scope files"
+    },
+    "p0_coverage_repair": {
+      "review": "PR #1556 comment 5647259413, required changes 1-3",
+      "repair_commits": [
+        "7f1635c89",
+        "3123e1deb",
+        "0f873aab2",
+        "8768a4026",
+        "e75a4cfeb",
+        "d7e2a91fe",
+        "775f79fec",
+        "3fb23c27d",
+        "c488c8503",
+        "1dbd58ef3"
+      ],
+      "predicate": "evaluateRepoMintedP0Coverage reads .github/workflows/p0-protocol.yml at origin/main via git show, parses it, and requires a live non-continue-on-error step of the \"P0 Protocol\" job on a pull_request trigger that is an actions/github-script step whose literal-blanked body (every string and template literal blanked; any `/`, backslash, control or non-ASCII character outside a literal refuses) requires scripts/ops/tracker-independence/p0-workflow.cjs (directly or via a string binding) at statement level and calls evaluatePullRequest( at statement level, or inlines both; a shell run: step never counts because the evaluator exports only evaluatePullRequest and has no CLI entry; job-level continue-on-error, needs: on a disabled or absent job and an empty matrix skip the job; any non-false continue-on-error is ignorable, with the evaluator present at the same base commit",
+      "review_mutation": {
+        "input": "narrow origin/main consumer plus one appended comment line naming scripts/ops/tracker-independence/p0-workflow.cjs (the exact mutation from the review)",
+        "before": "covered:true",
+        "after": "covered:false",
+        "asserted_in": "scripts/ops/shared.test.ts, scripts/ops/preflight.test.ts"
+      },
+      "trusted_base_binding": "working tree and branch HEAD are never read; candidate-only activation (uncommitted and committed on HEAD) stays covered:false; unresolvable origin/main fails closed",
+      "merge_path_boundary": "scripts/ops/pre-merge-authorization.ts refuses a repo-minted head ref whose trusted-base coverage is absent; the refusal feeds authorized, not only the receipt; a throwing predicate is a refusal",
+      "not_required_check_enforcement": true,
+      "foundation_route": "tracker-keyed lane whose tier Merge Gate resolves from its manifest, or a base-read BOOTSTRAP_AUTHORIZATIONS.json entry authorized by Griff; Merge Gate, p0-protocol.yml and branch protection unchanged",
+      "integration_md_correction": "UTV2-1887 (cited as the scope bootstrap lane) does not exist; step 1 corrected"
+    }
+  }
+}

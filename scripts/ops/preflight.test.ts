@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import type { CheckResult, PreflightToken } from './shared.js';
 import {
   ROOT,
@@ -14,6 +16,7 @@ import {
 } from './shared.js';
 import {
   branchContainsExactIssue,
+  isLaneRegistryPath,
   createToken,
   isDocsOnlyFastPathFile,
   validateDocsOnlyFastPath,
@@ -26,6 +29,7 @@ import {
   parseAheadBehind,
   resolveVerdict,
   runLinearChecks,
+  runRepoMintedP0Checks,
   runT1Checks,
 } from './preflight.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
@@ -68,11 +72,15 @@ test('preflight supports a fail-closed T3 docs-only fast path', () => {
   assert.match(source, /PB2 skipped via T3 docs-only fast path/, 'docs-only fast path should skip preflight test baseline');
 });
 
-test('preflight treats lane registry dirt as control-plane safe', () => {
-  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
-  assert.match(source, /isLaneRegistryPath/, 'preflight should classify lane registry paths');
-  assert.match(source, /\.ops\\\/sync\\\/UTV2-\\d\+\\\.yml/, 'sync files should be allowed lane registry dirt');
-  assert.match(source, /docs\\\/06_status\\\/lanes\\\/UTV2-\\d\+\\\.json/, 'lane manifests should be allowed lane registry dirt');
+test('preflight admits only registry records and the current local work contract as preparation dirt', () => {
+  for (const id of ['WORK-123', 'UTV2-123', 'UNI-123']) {
+    assert.equal(isLaneRegistryPath(`.ops/sync/${id}.yml`), true);
+    assert.equal(isLaneRegistryPath(`docs/06_status/lanes/${id}.json`), true);
+    assert.equal(isLaneRegistryPath(`.ops/work/${id}.md`, id), true);
+  }
+  assert.equal(isLaneRegistryPath('.ops/work/WORK-123.md', 'WORK-123'), true);
+  assert.equal(isLaneRegistryPath('.ops/work/WORK-456.md', 'WORK-123'), false);
+  assert.equal(isLaneRegistryPath('scripts/ops/preflight.ts', 'WORK-123'), false);
 });
 
 test('preflight reads GitHub token from repo env files', () => {
@@ -378,7 +386,7 @@ test('UTV2-1837 AC1: with no tracker credential, PL1-PL5 skip instead of infra_e
     if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
   }
 
-  for (const id of ['PL1', 'PL2', 'PL3', 'PL4', 'PL5', 'PL6']) {
+  for (const id of ['PL1', 'PL2', 'PL3', 'PL4']) {
     assert.equal(sink.byId(id)?.status, 'skip', `${id} must skip without a tracker credential`);
   }
   assert.equal(sink.byId('PE2')?.status, 'skip');
@@ -445,26 +453,25 @@ test('UTV2-1837 AC5: a declared tier AT OR ABOVE the floor is accepted', async (
   assert.equal(resolveVerdict(sink.checks), 'PASS');
 });
 
-test('UTV2-1837 AC4 inversion: the skip is conditional on absence, never unconditional', async () => {
-  const sink = collectChecks();
-  // A present-but-invalid credential must NOT take the skip path. If it did,
-  // supplying a token would silently disable every tracker check -- the exact
-  // unconditional-skip failure mode acceptance criterion 4 exists to refuse.
-  await runLinearChecks(
-    'UTV2-1837',
-    'T2',
-    { LINEAR_API_TOKEN: 'lin_api_not_a_real_token' } as never,
-    ['README.md'],
-    false,
-    sink.addCheck,
-  );
-  assert.notEqual(
-    sink.byId('PL1')?.status,
-    'skip',
-    'PL1 must not skip when a credential IS present',
-  );
+test('ordinary admission ignores stale credentials for local and legacy identities without network', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; throw new Error('blocked network'); };
+  try {
+    for (const identity of ['WORK-999931', 'UTV2-999931', 'UNI-999931']) {
+      const sink = collectChecks();
+      await runLinearChecks(identity, 'T2', { LINEAR_API_TOKEN: 'invalid' } as never,
+        ['README.md'], false, sink.addCheck);
+      assert.equal(sink.byId('PL1')?.status, 'skip');
+      assert.equal(resolveVerdict(sink.checks), 'PASS');
+      const unsafe = collectChecks();
+      await runLinearChecks(identity, 'T3', { LINEAR_API_TOKEN: 'invalid' } as never,
+        ['packages/domain/src/scoring.ts'], false, unsafe.addCheck);
+      assert.equal(resolveVerdict(unsafe.checks), 'FAIL');
+    }
+    assert.equal(calls, 0);
+  } finally { globalThis.fetch = originalFetch; }
 });
-
 
 // UTV2-1845: PT1 pinged live Supabase and could only answer `pass` or `infra_error`. Under
 // containment the ping is *designed* to fail -- `local.env` declares itself a containment
@@ -737,4 +744,162 @@ test('UTV2-1884: the fast path only skips the local duplicate, never a CI obliga
   const source = fs.readFileSync(path.join(ROOT, 'scripts/ops/preflight.ts'), 'utf8');
   assert.match(source, /PB1 skipped via T3 docs-only fast path; CI\/pnpm verify remains required before PR/);
   assert.match(source, /PB2 skipped via T3 docs-only fast path; CI\/pnpm verify remains required before PR/);
+});
+
+const PW1_NARROW_CONSUMER = [
+  'name: P0 Protocol',
+  'on: [pull_request]',
+  'jobs:',
+  '  p0-protocol:',
+  '    name: P0 Protocol',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - uses: actions/github-script@v7',
+  '        with:',
+  '          script: |',
+  '            const pattern = /(?:UTV2|UNI)-\\d+/i;',
+  '',
+].join('\n');
+
+const PW1_ACTIVE_CONSUMER = [
+  'name: P0 Protocol',
+  'on: [pull_request]',
+  'jobs:',
+  '  p0-protocol:',
+  '    name: P0 Protocol',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - name: Classify and enforce P0',
+  '        uses: actions/github-script@v7',
+  '        with:',
+  '          script: |',
+  "            const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+  '            await evaluatePullRequest({ github, repo: context.repo });',
+  '',
+].join('\n');
+
+/**
+ * A throwaway repository whose `origin/main` carries exactly the given files.
+ * PW1 reads the trusted base, so a plain directory is not a fixture for it.
+ */
+function seedP0CoverageTree(opts: { consumer?: string; evaluator?: boolean; workingTree?: Record<string, string> }): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-pw1-'));
+  const hooks = path.join(root, '.nohooks');
+  fs.mkdirSync(hooks);
+  const git = (...args: string[]): void => {
+    execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', `core.hooksPath=${hooks}`, ...args], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'pw1', GIT_AUTHOR_EMAIL: 'pw1@test', GIT_COMMITTER_NAME: 'pw1', GIT_COMMITTER_EMAIL: 'pw1@test',
+      },
+    });
+  };
+  git('init', '-q');
+  if (opts.consumer !== undefined) {
+    fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.github', 'workflows', 'p0-protocol.yml'), opts.consumer);
+  }
+  if (opts.evaluator) {
+    fs.mkdirSync(path.join(root, 'scripts', 'ops', 'tracker-independence'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'scripts', 'ops', 'tracker-independence', 'p0-workflow.cjs'),
+      'module.exports = {};\n',
+    );
+  }
+  git('add', '-A');
+  git('commit', '-q', '--allow-empty', '-m', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  for (const [rel, content] of Object.entries(opts.workingTree ?? {})) {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), content);
+  }
+  return root;
+}
+
+function collectPw1(issueId: string, root: string): CheckResult {
+  const checks: CheckResult[] = [];
+  runRepoMintedP0Checks(
+    issueId,
+    (id, status, detail) => { checks.push({ id, status, detail } as CheckResult); },
+    root,
+  );
+  assert.equal(checks.length, 1, 'PW1 must emit exactly one check result');
+  return checks[0] as CheckResult;
+}
+
+test('PW1 refuses a repo-minted identity until the P0 consumer on the trusted base executes the evaluator', () => {
+  // The narrow consumer is the one on `main`: it resolves UTV2/UNI only and
+  // auto-passes everything else, so a WORK PR clears the required check with no
+  // evaluation. PW1 exists to refuse admission while that is true.
+  const narrow = seedP0CoverageTree({ consumer: PW1_NARROW_CONSUMER, evaluator: true });
+  const narrowCheck = collectPw1('WORK-2026091001', narrow);
+  assert.equal(narrowCheck.status, 'fail');
+  assert.match(narrowCheck.detail, /does not execute/u);
+
+  // The review's mutation: a comment naming the evaluator is not a delegation.
+  const commented = seedP0CoverageTree({
+    consumer: PW1_NARROW_CONSUMER + '# TODO: scripts/ops/tracker-independence/p0-workflow.cjs\n',
+    evaluator: true,
+  });
+  assert.equal(collectPw1('WORK-2026091001', commented).status, 'fail');
+
+  // A consumer that is absent entirely fails closed the same way rather than
+  // being read as "nothing to enforce".
+  const absentCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({ evaluator: true }));
+  assert.equal(absentCheck.status, 'fail');
+  assert.match(absentCheck.detail, /missing or unreadable/u);
+
+  // A consumer that executes the evaluator while the evaluator is not on the
+  // base is a declaration without an implementation, and must not release.
+  const danglingCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({ consumer: PW1_ACTIVE_CONSUMER }));
+  assert.equal(danglingCheck.status, 'fail');
+  assert.match(danglingCheck.detail, /not present at origin\/main/u);
+
+  // Candidate-only activation: the base is narrow and the working tree carries
+  // the activation. PW1 reads the base, so this stays refused.
+  const candidate = seedP0CoverageTree({
+    consumer: PW1_NARROW_CONSUMER,
+    workingTree: {
+      '.github/workflows/p0-protocol.yml': PW1_ACTIVE_CONSUMER,
+      'scripts/ops/tracker-independence/p0-workflow.cjs': 'module.exports = {};\n',
+    },
+  });
+  assert.equal(collectPw1('WORK-2026091001', candidate).status, 'fail');
+
+  // Real delegation installed on the base, with the evaluator there, releases it.
+  const activeCheck = collectPw1('WORK-2026091001', seedP0CoverageTree({
+    consumer: PW1_ACTIVE_CONSUMER,
+    evaluator: true,
+  }));
+  assert.equal(activeCheck.status, 'pass');
+  assert.match(activeCheck.detail, /origin\/main/u);
+
+  // And the refusal is scoped to repo-minted identity. A tracker key skips even
+  // in the worst tree, because the installed consumer already evaluates those.
+  const trackerCheck = collectPw1('UTV2-1556', seedP0CoverageTree({}));
+  assert.equal(trackerCheck.status, 'skip');
+  assert.match(trackerCheck.detail, /tracker-keyed identity/u);
+});
+
+test('PW1 is non-waivable at every tier and decides the verdict', () => {
+  // A check that any tier could waive would not be enforcement. Read from the
+  // source rather than from a re-declared copy, so deleting PW1's absence is
+  // what fails -- not a fixture that agrees with itself.
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  const waivableBlock = source.match(/const WAIVABLE_CHECKS[\s\S]*?\n};/);
+  assert.ok(waivableBlock, 'WAIVABLE_CHECKS block should exist');
+  assert.doesNotMatch(waivableBlock[0], /PW1/u, 'PW1 must not be waivable at any tier');
+
+  // The production call site must not pass a root override, or the guard could
+  // be pointed at a tree that is not the one being admitted.
+  assert.match(source, /\n {2}runRepoMintedP0Checks\(issueId, addCheck\);\n/u);
+
+  // And a failing PW1 has to actually decide the verdict.
+  const failing = collectPw1('WORK-2026091001', seedP0CoverageTree({ evaluator: true }));
+  assert.equal(resolveVerdict([
+    { id: 'PB1', status: 'pass', detail: 'ok' } as CheckResult,
+    failing,
+  ]), 'FAIL');
 });

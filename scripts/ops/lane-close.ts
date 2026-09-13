@@ -2057,6 +2057,8 @@ export async function completeSuccessfulLaneClose(
     repoRoot?: string;
     finalizeManifest?: (issue: string, result: TruthCheckResult) => LaneManifest;
     transitionLinear?: (issue: string) => Promise<void>;
+    /** Explicit optional mirror; credentials never opt a caller in. */
+    syncTracker?: boolean;
     /**
      * UTV2-1619 capability 17: explicit declaration that this lane completes the
      * ISSUE, not merely the lane. Absent means the issue stays open.
@@ -2120,7 +2122,7 @@ export async function completeSuccessfulLaneClose(
   let trackerSync: LaneCloseTrackerSync = 'not_eligible';
   if (completionEligibility.eligible) {
     const trackerRef = resolveTrackerRef(manifest);
-    if (!trackerRef) {
+    if (!options.syncTracker || !trackerRef) {
       trackerSync = 'skipped';
     } else {
       try {
@@ -2671,6 +2673,8 @@ async function main(): Promise<void> {
       {
         trustedBindingRepair: Boolean(validatedPr),
         preserveMergeLock: retainMergeLock,
+        completionIntent: bools.has('complete-work'),
+        syncTracker: bools.has('sync-tracker'),
       },
     );
     manifest = completion.manifest;

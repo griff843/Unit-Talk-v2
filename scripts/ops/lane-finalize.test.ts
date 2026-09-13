@@ -74,16 +74,6 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
     '123',
     '--json',
   ]);
-  assert.deepEqual(plan.steps[2]?.args, [
-    'exec',
-    'tsx',
-    'scripts/ops/lane-finalize.ts',
-    '--issue',
-    'UTV2-1073',
-    '--apply-linear-tier-label',
-    'T2',
-    '--json',
-  ]);
   assert.deepEqual(plan.steps[3]?.args, [
     'ops:proof-generate',
     'UTV2-1073',
@@ -261,9 +251,26 @@ test('tier label application failure aborts lane finalize', () => {
   );
 });
 
-test('Linear tier label application failure aborts before proof generation', () => {
+test('default finalize executes repository steps without tracker calls for all work namespaces', () => {
+  for (const issue_id of ['UTV2-1073', 'UNI-1073', 'WORK-2026091001']) {
+    const plan = buildLaneFinalizePlan({manifest: manifest({issue_id}), pr: '456'});
+    const result = runLaneFinalizePlan(plan, {
+      runner: ((_command, args) => {
+        assert.equal(args.includes('--sync-tracker'), false, 'default path must not opt into tracker mirroring');
+        return {status: 0, stdout: '', stderr: ''};
+      }) as LaneFinalizeRunner,
+    });
+    assert.equal(result.ok, true);
+    assert.ok(result.completed_step_ids.includes('close_lane'));
+  }
+  const parsed = parseLaneFinalizeCliArgs(['WORK-2026091001', '--sync-tracker']);
+  assert.equal(parsed.bools.has('sync-tracker'), true);
+  assert.equal(parseLaneFinalizeCliArgs(['WORK-2026091001']).bools.has('sync-tracker'), false);
+});
+
+test('explicit optional Linear tier mirror failure does not interrupt verified repository closeout', () => {
   const result = runLaneFinalizePlan(
-    buildLaneFinalizePlan({ manifest: manifest({ tier: 'T2' }), pr: '456' }),
+    buildLaneFinalizePlan({ manifest: manifest({ tier: 'T2' }), pr: '456', syncTracker: true }),
     {
       runner: ((command, args) => {
         if (command === 'pnpm' && args.includes('--apply-linear-tier-label')) {
@@ -274,14 +281,12 @@ test('Linear tier label application failure aborts before proof generation', () 
     },
   );
 
-  assert.equal(result.ok, false);
-  assert.equal(result.steps.at(-1)?.id, 'apply_linear_tier_label');
-  assert.equal(result.steps.at(-1)?.status, 'failed');
-  assert.match(result.message, /incomplete.*apply_linear_tier_label.*Re-run/s);
-  assert.deepEqual(result.completed_step_ids, [
-    'record_merge',
-    'apply_tier_label',
-  ]);
+  assert.equal(result.ok, true);
+  assert.equal(result.steps.find((step) => step.id === 'apply_linear_tier_label')?.status, 'skipped');
+  assert.equal(result.steps.find((step) => step.id === 'apply_linear_tier_label')?.required, false);
+  assert.equal(result.steps.at(-1)?.id, 'close_lane');
+  assert.ok(result.completed_step_ids.includes('generate_proof'));
+  assert.ok(result.completed_step_ids.includes('close_lane'));
 });
 
 test('Linear tier label writer is idempotent when the authoritative label is already present', async () => {

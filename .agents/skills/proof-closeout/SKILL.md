@@ -18,7 +18,7 @@ pnpm ops:brief
 ```
 2. For focused proof:
 ```bash
-pnpm proof:t1 -- --issue <UTV2-ID> --change "<summary>" --pick <pick-id>
+pnpm proof:t1 -- --issue <WORK-ID> --change "<summary>" --pick <pick-id>
 ```
 3. Drill down only if needed:
 ```bash
@@ -30,6 +30,8 @@ pnpm github:checks -- <pr>
 ## Rules
 
 - prefer compact CLI proof over raw dumps
+- preserve exact-head proof, independent review and tier-specific merge approvals; optional tracker errors cannot block verified repository closeout
+- legacy UTV2/UNI identities remain valid; no tracker migration or administrative restart is required
 - do not claim VERIFIED without running the relevant command
 - separate proof from fixes; prove first, then repair if needed
 
@@ -37,4 +39,6 @@ pnpm github:checks -- <pr>
 
 - [`.claude/commands/t1-proof.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/t1-proof.md)
 - [`.claude/commands/verify-pick.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/verify-pick.md)
-- Closing a lane: `ops:lane-close <UTV2-###>` (wraps `ops:truth-check`); see `.claude/commands/lane-management.md`
+- Closing a lane: `ops:lane-close <WORK-ID>` (wraps `ops:truth-check`); see `.claude/commands/lane-management.md`
+
+Repository closeout records explicit completion intent with `ops:lane-close <ID> --complete-work` after merge/proof verification. Tracker transition is opt-in via `--sync-tracker`; default closeout performs no tracker request, including for legacy identities with configured credentials. Neither flag bypasses proof, required checks, or approval.

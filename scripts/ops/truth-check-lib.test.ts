@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   addUnsupportedRuntimeChecks,
+  requiresRuntimeCloseoutEvidence,
   checkCommitReachableFromMain,
   classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
@@ -3345,4 +3346,12 @@ test('UTV2-1529 binding: a 7-char prefix of the head SHA is NOT accepted', () =>
     ),
     [],
   );
+});
+
+
+test('repository runtime classification retains T2 runtime proof without tracker labels', () => {
+  assert.equal(requiresRuntimeCloseoutEvidence({ tier: 'T2', lane_type: 'runtime', files_changed: [] }), true);
+  assert.equal(requiresRuntimeCloseoutEvidence({ tier: 'T2', lane_type: 'governance', files_changed: ['apps/api/src/example.ts'] }), true);
+  assert.equal(requiresRuntimeCloseoutEvidence({ tier: 'T1', lane_type: 'governance', files_changed: [] }), true);
+  assert.equal(requiresRuntimeCloseoutEvidence({ tier: 'T2', lane_type: 'governance', files_changed: ['docs/example.md'] }), false);
 });

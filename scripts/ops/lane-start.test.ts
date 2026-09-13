@@ -30,6 +30,12 @@ import {
   validateReadmissionTokenRequest,
 } from './lane-start.js';
 
+function seedLocalWork(root: string, issueId: string, title: string): void {
+  const dir = path.join(root, '.ops', 'work');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${issueId}.md`), `# ${title}\n\n## Objective\n${title}\n\n## Scope\n- scripts/ops/fixture.ts\n\n## Acceptance criteria\n- Preserve this legacy lane without a bulk migration.\n\n## Where to look\n- scripts/ops/fixture.ts\n\n## Definition of done\n- Local contract persisted and rendered.\n\n## Verification\n- pnpm verify\n`);
+}
+
 test('lane-start captures Linear truth without exposing its token in process arguments', () => {
   const token = 'token-fixture';
   const source = fetchLinearTaskSource('UTV2-1734', token, ((_command, args, options) => {
@@ -62,7 +68,7 @@ test('a sanctioned executor dispatch captures, persists, and renders a legacy la
   fs.mkdirSync(laneRoot, { recursive: true });
   fs.writeFileSync(path.join(syncDir, 'UTV2-1667.yml'), 'version: 1\nentities:\n  issues:\n    - UTV2-1667\n', 'utf8');
 
-  const description = '## Scope\n- Preserve this legacy lane without a bulk migration.';
+  seedLocalWork(root, 'UTV2-1667', 'Legacy objective');
   const manifest = {
     issue_id: 'UTV2-1667', branch: 'codex/utv2-1667-legacy-lane', tier: 'T2',
     lane_type: 'governance', executor: 'codex-cli', worktree_path: laneRoot,
@@ -71,20 +77,14 @@ test('a sanctioned executor dispatch captures, persists, and renders a legacy la
   const result = generateDispatchExecutionPacketResult(manifest, {}, {
     root,
     linearToken: 'token-fixture',
-    runner: ((_command, _args) => ({
-      status: 0,
-      stdout: JSON.stringify({ data: { issue: {
-        identifier: 'UTV2-1667', title: 'Legacy objective',
-        url: 'https://linear.app/unit-talk-v2/issue/UTV2-1667', description,
-      } } }),
-      stderr: '', error: undefined,
-    })) as typeof import('node:child_process')['spawnSync'],
+    runner: (() => { throw new Error('unexpected tracker call'); }) as typeof import('node:child_process')['spawnSync'],
   });
 
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.packet.task_contract.objective, 'Legacy objective');
-  assert.deepEqual(result.packet.task_contract.acceptance_criteria, [description]);
+  assert.deepEqual(result.packet.task_contract.acceptance_criteria, ['Preserve this legacy lane without a bulk migration.']);
+  assert.equal(result.packet.task_contract.source.kind, 'local-description');
   assert.match(renderTaskContract(result.packet.task_contract), /Preserve this legacy lane/u);
   assert.deepEqual(readTaskContract('UTV2-1667', root), result.packet.task_contract);
   assert.deepEqual(readTaskContract('UTV2-1667', laneRoot), result.packet.task_contract);
@@ -836,7 +836,10 @@ interface LaneFixture {
   branch: string;
 }
 
-function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): LaneFixture {
+function seedLaneFixture(
+  issueId: string,
+  opts: { withWorktree: boolean; localTitle?: string; activateP0Consumer?: boolean },
+): LaneFixture {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-lanestart-'));
   const root = path.join(dir, 'repo');
   const slug = issueId.toLowerCase();
@@ -864,9 +867,27 @@ function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): Lane
   }
   fs.writeFileSync(path.join(root, 'scripts', 'ops', 'fixture.ts'), 'export const fixture = 1;\n');
   fs.writeFileSync(path.join(root, 'README.md'), 'seed\n');
+  if (opts.localTitle) seedLocalWork(root, issueId, opts.localTitle);
   // Fresh admission creates the worktree under .out/ and installs into it;
   // both must be ignored or the clean-control-checkout assertion refuses first.
   fs.writeFileSync(path.join(root, '.gitignore'), '.out/\nnode_modules/\n');
+
+  // The repo-minted P0 refusal reads the *installed* consumer, so an activated
+  // fixture is one whose consumer genuinely delegates to a trusted evaluator
+  // that exists on disk -- never a flag the test sets. Written before `git
+  // init` so the tree stays clean.
+  if (opts.activateP0Consumer) {
+    fs.mkdirSync(path.join(root, '.github', 'workflows'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, '.github', 'workflows', 'p0-protocol.yml'),
+      'name: P0 Protocol\non: [pull_request]\njobs:\n  p0-protocol:\n    name: P0 Protocol\n    runs-on: ubuntu-latest\n    steps:\n      - name: Classify and enforce P0\n        uses: actions/github-script@v7\n        with:\n          script: |\n            const { evaluatePullRequest } = require(\'./scripts/ops/tracker-independence/p0-workflow.cjs\');\n            await evaluatePullRequest({ github, repo: context.repo });\n',
+    );
+    fs.mkdirSync(path.join(root, 'scripts', 'ops', 'tracker-independence'), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'scripts', 'ops', 'tracker-independence', 'p0-workflow.cjs'),
+      'module.exports = { evaluatePullRequest: async () => ({}) };\n',
+    );
+  }
 
   const git = (args: string[], cwd = root): void => {
     const r = spawnSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
@@ -877,6 +898,11 @@ function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): Lane
   git(['config', 'user.name', 'Test']);
   git(['add', '-A']);
   git(['commit', '-qm', 'seed']);
+  // The repo-minted P0 predicate reads the consumer at the installed trusted
+  // base (`origin/main`), never the working tree, so an activated fixture must
+  // carry the activation on that ref. The un-activated fixture deliberately
+  // has no such ref: an unresolvable trusted base is itself a refusal.
+  if (opts.activateP0Consumer) git(['update-ref', 'refs/remotes/origin/main', 'HEAD']);
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
 
   if (opts.withWorktree) {
@@ -1036,7 +1062,7 @@ test('lane-start main() resume capture failure creates no lane state at all', ()
 
   const run = runLaneStart(f);
   assert.equal(run.status, 1, `capture failure must refuse; ${run.stdout}`);
-  assert.match(String(laneJson(run.stdout)['message']), /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u);
+  assert.match(String(laneJson(run.stdout)['message']), /Missing local task contract.*create \.ops\/work\/.*Tracker access is not required/u);
 
   assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'leases')), [],
     'a failed capture must reserve no lease');
@@ -1055,7 +1081,7 @@ test('lane-start main() fresh-lane capture failure refuses before creating any l
 
   const run = runLaneStart(f);
   assert.equal(run.status, 1, `fresh capture failure must refuse; ${run.stdout}`);
-  assert.match(String(laneJson(run.stdout)['message']), /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u,
+  assert.match(String(laneJson(run.stdout)['message']), /Missing local task contract.*create \.ops\/work\/.*Tracker access is not required/u,
     'the fresh path must refuse AT capture, before branch, worktree, lease or manifest creation');
 
   assert.equal(fs.existsSync(path.join(f.root, 'docs', '06_status', 'lanes', `${f.issueId}.json`)), false,
@@ -1377,7 +1403,7 @@ test('G3 (inversion): resolving BEFORE checkout cannot serve that branch and fai
   // readmission that the post-checkout resolution above handles offline.
   assert.throws(
     () => resolveTaskContractAcrossRoots(issueId, [f.control], ''),
-    /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u,
+    /Missing local task contract.*create \.ops\/work\/.*Tracker access is not required/u,
     'pre-checkout resolution must not silently succeed for a readmitted branch',
   );
 
@@ -1454,6 +1480,7 @@ interface ReadmissionFixture {
 function seedReadmissionFixture(
   issueId: string,
   opts: {
+    localTitle?: string;
     controlDescription: string | null;
     /**
      * `null` means the branch carries NO work order. Both roots being empty is
@@ -1493,6 +1520,7 @@ function seedReadmissionFixture(
   }
   fs.writeFileSync(path.join(root, 'scripts', 'ops', 'fixture.ts'), 'export const fixture = 1;\n');
   fs.writeFileSync(path.join(root, 'README.md'), 'seed\n');
+  if (opts.localTitle) seedLocalWork(root, issueId, opts.localTitle);
   // `assertCleanMainControlCheckout` runs with --untracked-files=all, so the
   // lane worktree and the pnpm stub's node_modules must be ignored or
   // readmission refuses before it reaches any contract logic.
@@ -1829,40 +1857,18 @@ test('G21: when both roots agree, readmission runs on -- and reports -- the lane
   assert.equal(out['contract_hash'], branchContractOf(f).contract_hash);
 });
 
-test('G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source', () => {
-  // G20/G21 only ever observe `lane-worktree`/`false`, so hardcoding either
-  // field to that constant survived the round-4 battery (R9, R10). A control
-  // that can only ever see one value of a field does not pin the field.
-  const emptyWorktree = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-capture-'));
+test('G23: a local description reports its lane root and fetched:false even with an invalid token', () => {
+  const emptyWorktree = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-local-'));
   const issueId = 'UTV2-999963';
+  seedLocalWork(emptyWorktree, issueId, 'Local lane');
   let called = 0;
-  const runner = ((_command, _args, options) => {
-    called += 1;
-    assert.match(String(options?.input), /Authorization: capture-token/u,
-      'the configured token must reach the request, not the argv');
-    return {
-      status: 0,
-      stdout: JSON.stringify({ data: { issue: {
-        identifier: issueId,
-        title: 'Captured lane',
-        url: `https://linear.app/unit-talk/issue/${issueId}`,
-        description: '## Objective\nCaptured from Linear.\n\n## Acceptance criteria\n- captured',
-      } } }),
-      stderr: '',
-      error: undefined,
-    };
-  }) as typeof spawnSync;
-
-  const resolved = resolveLaneTaskContract(issueId, emptyWorktree, 'capture-token', runner);
-
-  assert.equal(called, 1, 'a lane with no contract at either root must capture exactly once');
-  assert.equal(resolved.fetched, true,
-    'contract_fetched must be TRUE on a capture -- hardcoding false survives every offline test');
-  assert.equal(resolved.source, 'linear-capture',
-    'contract_source must name the capture -- hardcoding lane-worktree survives every offline test');
+  const runner = (() => { called += 1; throw new Error('unexpected tracker call'); }) as typeof spawnSync;
+  const resolved = resolveLaneTaskContract(issueId, emptyWorktree, 'invalid-token', runner);
+  assert.equal(called, 0);
+  assert.equal(resolved.fetched, false);
+  assert.equal(resolved.source, 'lane-worktree');
   assert.equal(resolved.contract.issue_id, issueId);
-  assert.equal(resolved.contract.source.kind, 'linear-issue-snapshot',
-    'the captured contract must be a Linear snapshot, not a locally reconstructed one');
+  assert.equal(resolved.contract.source.kind, 'local-description');
 });
 
 test('G24: linearTaskToken reads a configured token, and LINEAR_API_TOKEN wins', () => {
@@ -1928,50 +1934,25 @@ test('G25: a worktree carrying NO contract inherits the control copy, and the pe
   );
 });
 
-test('G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue', () => {
-  // The most common production path had no successful end-to-end test at all:
-  // every fresh-lane fixture was driven only to a refusal. Two mutations
-  // survived a 21-mutation battery because of it -- a fresh persist that writes
-  // to NO root (so the lane gets no .ops/sync/<ID>.yml at all), and an
-  // `entities.issues` default of [] (so the record omits its own issue ID).
-  // Housekeeping CI requires both, and this lane deleted the writeSyncFile()/
-  // buildSyncYml() pair that used to produce them, so it owns the gap.
-  //
-  // The lane starts with NO contract at any root, which is what makes the
-  // persist observable: seeding the control record first would leave the record
-  // present whether or not the persist ran, and a first attempt at this test
-  // did exactly that -- the fresh-persist mutation survived it. `curl` is
-  // stubbed on the fixture PATH, so the capture is served locally and no test
-  // ever reaches api.linear.app.
-  const f = seedLaneFixture('UTV2-999805', { withWorktree: false });
+test('G26: a FRESH lane persists its local work order and writes a sync record naming its own issue', () => {
+  // No persisted snapshot exists. Admission must build and persist the local
+  // work order, with tracker access forbidden even when a token is configured.
+  const f = seedLaneFixture('UTV2-999805', { withWorktree: false, localTitle: 'Local lane' });
   assert.equal(
     fs.existsSync(path.join(f.root, '.ops', 'sync', `${f.issueId}.yml`)),
     false,
     'fixture precondition: no contract at any root, or the persist is unobservable',
   );
-  // The payload is written as a FILE and catted: `echo` in /bin/sh expands
-  // backslash escapes, which turns the \n inside the description into a real
-  // newline and produces invalid JSON.
-  const payloadPath = path.join(f.bin, 'linear-response.json');
-  fs.writeFileSync(payloadPath, JSON.stringify({ data: { issue: {
-    identifier: f.issueId,
-    title: 'Captured lane',
-    url: `https://linear.app/unit-talk/issue/${f.issueId}`,
-    description: '## Objective\nCaptured for admission.\n\n## Acceptance criteria\n- captured',
-  } } }));
-  fs.writeFileSync(
-    path.join(f.bin, 'curl'),
-    `#!/bin/sh\ncat >/dev/null\ncat ${payloadPath}\nexit 0\n`,
-    { mode: 0o755 },
-  );
+  const networkMarker = path.join(f.bin, 'tracker-called');
+  fs.writeFileSync(path.join(f.bin, 'curl'), `#!/bin/sh\necho called > ${networkMarker}\nexit 89\n`, { mode: 0o755 });
 
   const run = runLaneStart(f, [], { LINEAR_API_TOKEN: 'capture-token-fixture' });
   assert.equal(run.status, 0, `fresh admission must succeed; stderr: ${run.stderr}\n${run.stdout}`);
   const out = laneJson(run.stdout);
   assert.equal(out['code'], 'lane_started');
-  assert.equal(out['contract_fetched'], true,
-    'a lane with no contract anywhere must capture, and must report that it did');
-  assert.equal(out['contract_source'], 'linear-capture');
+  assert.equal(out['contract_fetched'], false);
+  assert.equal(out['contract_source'], 'control-checkout');
+  assert.equal(fs.existsSync(networkMarker), false);
 
   const syncPath = path.join(f.root, '.ops', 'sync', `${f.issueId}.yml`);
   assert.equal(fs.existsSync(syncPath), true,
@@ -1979,8 +1960,8 @@ test('G26: a FRESH lane CAPTURES its work order and writes a sync record naming 
   const yml = fs.readFileSync(syncPath, 'utf8');
   assert.match(yml, new RegExp(`issues:\\s*\\n\\s*-\\s*${f.issueId}`, 'u'),
     'the sync record must name its own issue -- branch-discipline CI reads exactly this');
-  assert.equal(readTaskContract(f.issueId, f.root).source.title, 'Captured lane',
-    'the persisted contract must be the CAPTURED one');
+  assert.equal(readTaskContract(f.issueId, f.root).source.title, 'Local lane',
+    'the persisted contract must match the local work order');
 });
 
 test('G27: a readmitted branch carrying NO work order inherits control -- and REPORTS control-checkout', () => {
@@ -2026,38 +2007,27 @@ test('G27: a readmitted branch carrying NO work order inherits control -- and RE
   );
 });
 
-test('G28: readmission with NO work order at either root captures, and reports linear-capture', () => {
-  // The only shape in which readmission reaches a capture at all. Untested
-  // until now, which is why `contract_fetched` could be hardcoded false at the
-  // readmission emit site with every test green.
+test('G28: readmission with no snapshot persists its local description without tracker access', () => {
+  // No snapshot exists at either root; the committed local work file is primary.
   const f = seedReadmissionFixture('UTV2-999965', {
+    localTitle: 'Local readmission',
     controlDescription: null,
     branchDescription: null,
   });
-  const payloadPath = path.join(f.bin, 'linear-response.json');
-  fs.writeFileSync(payloadPath, JSON.stringify({ data: { issue: {
-    identifier: f.issueId,
-    title: 'Captured on readmission',
-    url: `https://linear.app/unit-talk/issue/${f.issueId}`,
-    description: '## Objective\nCaptured on readmission.\n\n## Acceptance criteria\n- captured',
-  } } }));
-  fs.writeFileSync(
-    path.join(f.bin, 'curl'),
-    `#!/bin/sh\ncat >/dev/null\ncat ${payloadPath}\nexit 0\n`,
-    { mode: 0o755 },
-  );
+  const networkMarker = path.join(f.bin, 'tracker-called');
+  fs.writeFileSync(path.join(f.bin, 'curl'), `#!/bin/sh\necho called > ${networkMarker}\nexit 89\n`, { mode: 0o755 });
 
   const run = runReadmission(f, { LINEAR_API_TOKEN: 'capture-token-fixture' });
-  assert.equal(run.status, 0, `readmission must capture when no root holds a contract:\n${run.stdout}\n${run.stderr}`);
+  assert.equal(run.status, 0, `readmission must resolve its local work without a snapshot:\n${run.stdout}\n${run.stderr}`);
   const out = laneJson(run.stdout);
   assert.equal(out['code'], 'lane_readmitted_existing_branch');
-  assert.equal(out['contract_fetched'], true,
-    'a readmission that touched the network must report that it did');
-  assert.equal(out['contract_source'], 'linear-capture');
+  assert.equal(out['contract_fetched'], false);
+  assert.equal(out['contract_source'], 'lane-worktree');
+  assert.equal(fs.existsSync(networkMarker), false);
   assert.equal(
     readTaskContract(f.issueId, f.worktree).source.title,
-    'Captured on readmission',
-    'the captured work order must be the one persisted to the branch',
+    'Local readmission',
+    'the local work order must be the one persisted to the branch',
   );
 });
 
@@ -2260,5 +2230,77 @@ test('G50: readmission refuses when the metadata commit fails', () => {
     `${run.stdout}\n${run.stderr}`,
     /failed to commit regenerated readmission metadata/u,
     'the commit-failure guard must be the thing that refuses',
+  );
+});
+
+test('lane-start refuses a repo-minted WORK lane while the P0 consumer cannot evaluate it', () => {
+  // The fixture repo carries no `.github/workflows/p0-protocol.yml` and no
+  // `origin/main` at all, which is the fail-closed half of the predicate: an
+  // unresolvable trusted base or an absent consumer keeps WORK execution
+  // blocked rather than admitting it.
+  const f = seedLaneFixture('WORK-999901', { withWorktree: false });
+  const run = runLaneStart(f);
+
+  assert.notEqual(run.status, 0, `admission must fail closed:\n${run.stdout}\n${run.stderr}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'p0_consumer_not_activated');
+  assert.equal(out['consumer_path'], '.github/workflows/p0-protocol.yml');
+  assert.equal(out['evaluator_path'], 'scripts/ops/tracker-independence/p0-workflow.cjs');
+  assert.match(
+    String(out['message']),
+    /WORK-999901/u,
+    'the refusal must name the identity it refused',
+  );
+  assert.match(
+    String(out['remediation']),
+    /disabling the required check does not release it/u,
+    'the remediation must not offer disabling the required check as an exit',
+  );
+
+  // Refused at admission means refused before any state exists: no manifest,
+  // no lease, no worktree. A refusal that fired after the manifest was written
+  // would leave a lane the merge gate can resolve a tier for.
+  assert.equal(
+    fs.existsSync(path.join(f.root, 'docs', '06_status', 'lanes', `${f.issueId}.json`)),
+    false,
+    'no manifest may be written for a refused repo-minted lane',
+  );
+  assert.equal(
+    fs.existsSync(path.join(f.root, '.ops', 'leases', `${f.issueId}.json`)),
+    false,
+    'no lease may be reserved for a refused repo-minted lane',
+  );
+});
+
+test('the repo-minted refusal releases itself once the consumer delegates, and never fires on a tracker key', () => {
+  // Same identity, same command, one difference: the consumer installed on the
+  // fixture's `origin/main` now executes an evaluator that exists there. The
+  // block must be gone -- otherwise it is not self-releasing and the
+  // activation could never land.
+  const activated = seedLaneFixture('WORK-999902', { withWorktree: false, activateP0Consumer: true });
+  const activatedRun = runLaneStart(activated);
+  // Asserted positively rather than as an absence: the run must reach a
+  // strictly later stage of admission. `doesNotMatch` alone would also pass if
+  // the command had failed before the guard ran, which is the vacuous form.
+  const activatedOut = laneJson(activatedRun.stdout);
+  assert.notEqual(activatedOut['code'], 'p0_consumer_not_activated');
+  assert.equal(
+    activatedOut['code'],
+    'lane_start_failed',
+    'an activated consumer must let admission proceed past the repo-minted gate',
+  );
+  assert.match(String(activatedOut['message']), /Missing local task contract for WORK-999902/u);
+
+  // And the block is scoped to repo-minted identity: a tracker key is already
+  // evaluated by the narrow consumer, so it must pass through untouched even
+  // in a tree with no consumer at all.
+  const tracker = seedLaneFixture('UTV2-999903', { withWorktree: false });
+  const trackerRun = runLaneStart(tracker);
+  const trackerOut = laneJson(trackerRun.stdout);
+  assert.notEqual(trackerOut['code'], 'p0_consumer_not_activated');
+  assert.equal(
+    trackerOut['code'],
+    'lane_start_failed',
+    'a tracker-keyed identity must reach the same later stage with no consumer present',
   );
 });

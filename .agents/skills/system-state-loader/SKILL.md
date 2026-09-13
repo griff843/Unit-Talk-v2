@@ -16,10 +16,10 @@ Use this at the start of a session, after `/clear`, or when repo/queue truth is 
 ```bash
 pnpm ops:brief
 ```
-2. Read the output fully before acting.
+2. Read mission intent/spec/plan and the assigned `.ops/work/<ID>.md` contract, then read the output fully before acting. Tracker access is never required, including when credentials are configured.
 3. If the task is queue or branch related, also inspect:
 ```bash
-pnpm linear:work
+pnpm ops:execution-state
 pnpm github:current
 ```
 4. Confirm three things before proceeding:
@@ -33,14 +33,14 @@ pnpm github:current
 - the issue or task is clear
 - no stale branch/queue conflict blocks execution
 
-## Stop and reconcile when
+## Reconcile the affected work when
 
-- `ops:brief` fails
-- Linear state conflicts with repo truth
-- mainline health is unclear
-- you cannot name the next concrete lane
+- a required state read fails or conflicts with current PR, manifest, lease or worktree evidence
+- the proposed task lacks an actionable contract or has an unresolved dependency
+
+Identify whether the failure blocks this task or only unrelated work. Preserve required admission controls and continue independent authorized work. A historical plan or lesson is not evidence that a merged PR still holds an active lock. Distinguish integrated, deployed and user-verified status.
 
 ## Reference
 
 For the full shared team version, read:
-- [`.claude/commands/system-state-loader.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/system-state-loader.md)
+- [`.claude/commands/system-state-loader.md`](../../../../.claude/commands/system-state-loader.md)

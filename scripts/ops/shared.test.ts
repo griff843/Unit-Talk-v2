@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   evaluateBranchDiscipline,
   evaluateIssueReferences,
@@ -10,6 +11,12 @@ import {
 } from './branch-discipline-guard.js';
 import {
   ISSUE_ID_NAMESPACES,
+  ROOT,
+  P0_ACTIONS_CONSUMER_PATH,
+  P0_TRUSTED_EVALUATOR_PATH,
+  evaluateRepoMintedP0Coverage,
+  findExecutedP0Delegation,
+  isRepoMintedWorkIdentity,
   issueIdScanPattern,
   createManifest,
   requireIssueId,
@@ -2432,4 +2439,522 @@ test('UTV2-1708: an intact directory reports nothing deleted', () => {
   );
 
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// WORK-2026091001: the mechanical P0 block on repo-minted work identities.
+//
+// The P0 Actions consumer currently on `main` resolves `/(?:UTV2|UNI)-\d+/i`
+// and auto-passes anything it cannot match, so a `WORK-###` PR clears the
+// required `P0 Protocol` check with no evaluation at all. Execution of
+// repo-minted work stays blocked at lane admission until the consumer
+// delegates to the trusted-base evaluator. These tests pin the predicate that
+// block reads, in both directions, because a guard that can only be observed
+// failing is a guard whose release condition is untested.
+test('isRepoMintedWorkIdentity separates repo-minted identity from tracker keys', () => {
+  assert.equal(isRepoMintedWorkIdentity('WORK-2026091001'), true);
+  assert.equal(isRepoMintedWorkIdentity('work-902'), true);
+  assert.equal(isRepoMintedWorkIdentity('UTV2-1556'), false);
+  assert.equal(isRepoMintedWorkIdentity('UNI-12'), false);
+  assert.equal(isRepoMintedWorkIdentity('WORKER-1'), false);
+  assert.equal(isRepoMintedWorkIdentity(''), false);
+  assert.equal(isRepoMintedWorkIdentity(null), false);
+});
+
+// ---------------------------------------------------------------------------
+// Repo-minted P0 coverage. Two properties are under test, and each one has a
+// recorded failure it must keep closed (PR #1556 review, comment 5647259413):
+//   1. coverage is an EXECUTED delegation found by parsing the workflow --
+//      appending `# TODO: <evaluator path>` to the narrow consumer used to
+//      return covered:true, and must not;
+//   2. activation is read from the INSTALLED trusted base (`origin/main`),
+//      never from the working tree or a branch head -- candidate-only
+//      activation must not release the block.
+// ---------------------------------------------------------------------------
+
+const NARROW_P0_CONSUMER = [
+  'name: P0 Protocol',
+  'on:',
+  '  pull_request:',
+  '    types: [opened, synchronize]',
+  'jobs:',
+  '  p0-protocol:',
+  '    name: P0 Protocol',
+  '    runs-on: ubuntu-latest',
+  '    steps:',
+  '      - name: Resolve issue id from PR',
+  '        uses: actions/github-script@v7',
+  '        with:',
+  '          script: |',
+  '            const pattern = /(?:UTV2|UNI)-\\d+/i;',
+  '',
+].join('\n');
+
+function p0Consumer(opts: {
+  on?: string;
+  jobName?: string;
+  jobIf?: string;
+  stepIf?: string;
+  continueOnError?: boolean;
+  step?: 'script' | 'run' | 'run-commented' | 'script-commented';
+}): string {
+  const stepBody = {
+    script: [
+      '        uses: actions/github-script@v7',
+      '        with:',
+      '          script: |',
+      "            const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+      '            await evaluatePullRequest({ github, repo: context.repo });',
+    ],
+    'script-commented': [
+      '        uses: actions/github-script@v7',
+      '        with:',
+      '          script: |',
+      "            // TODO: require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+      '            core.info("nothing evaluated");',
+    ],
+    run: ['        run: node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'run-commented': [
+      '        run: |',
+      '          # node scripts/ops/tracker-independence/p0-workflow.cjs',
+      '          echo not evaluated',
+    ],
+  }[opts.step ?? 'script'];
+  return [
+    'name: P0 Protocol',
+    `on: ${opts.on ?? '[pull_request]'}`,
+    'jobs:',
+    '  p0-protocol:',
+    `    name: ${opts.jobName ?? 'P0 Protocol'}`,
+    ...(opts.jobIf ? [`    if: ${opts.jobIf}`] : []),
+    '    runs-on: ubuntu-latest',
+    '    steps:',
+    '      - name: Classify and enforce P0',
+    ...(opts.stepIf ? [`        if: ${opts.stepIf}`] : []),
+    ...(opts.continueOnError ? ['        continue-on-error: true'] : []),
+    ...stepBody,
+    '',
+  ].join('\n');
+}
+
+/**
+ * A throwaway repository whose `origin/main` is a real commit. Files in
+ * `base` are committed and the ref is pointed at that commit; files in
+ * `workingTree` are written afterwards, uncommitted -- the shape of a branch
+ * carrying its own activation.
+ */
+function seedTrustedBaseRepo(input: {
+  base: Record<string, string>;
+  workingTree?: Record<string, string>;
+  originMain?: boolean;
+}): { root: string; git: (...args: string[]) => string } {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'p0-base-'));
+  const hooks = path.join(root, '.nohooks');
+  fs.mkdirSync(hooks);
+  const git = (...args: string[]): string =>
+    execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', `core.hooksPath=${hooks}`, ...args], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'p0-test', GIT_AUTHOR_EMAIL: 'p0@test', GIT_COMMITTER_NAME: 'p0-test', GIT_COMMITTER_EMAIL: 'p0@test',
+      },
+    }).trim();
+  const write = (files: Record<string, string>): void => {
+    for (const [rel, content] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+      fs.writeFileSync(path.join(root, rel), content);
+    }
+  };
+  git('init', '-q');
+  write(input.base);
+  git('add', '-A');
+  git('commit', '-q', '--allow-empty', '-m', 'base');
+  if (input.originMain !== false) git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  if (input.workingTree) write(input.workingTree);
+  return { root, git };
+}
+
+const ACTIVE_BASE = {
+  [P0_ACTIONS_CONSUMER_PATH]: p0Consumer({ step: 'script' }),
+  [P0_TRUSTED_EVALUATOR_PATH]: 'module.exports = { evaluatePullRequest: async () => "ok" };\n',
+};
+
+test('findExecutedP0Delegation counts only a live, enforced step of the P0 Protocol job that invokes the evaluator', () => {
+  // The narrow consumer as it stands on main.
+  assert.equal(findExecutedP0Delegation(NARROW_P0_CONSUMER).executed, false);
+
+  // The review's exact mutation: a comment naming the evaluator. This used to
+  // return covered:true through `consumer.includes(...)`.
+  const commentOnly = findExecutedP0Delegation(
+    NARROW_P0_CONSUMER + '# TODO: scripts/ops/tracker-independence/p0-workflow.cjs\n',
+  );
+  assert.equal(commentOnly.executed, false);
+  assert.match((commentOnly as { detail: string }).detail, /no live, non-ignorable step/u);
+
+  // A commented-out invocation inside a run block or a script body.
+  assert.equal(findExecutedP0Delegation(p0Consumer({ step: 'run-commented' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ step: 'script-commented' })).executed, false);
+
+  // A disabled step, a disabled job, and a step whose failure cannot fail the check.
+  assert.equal(findExecutedP0Delegation(p0Consumer({ stepIf: 'false' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ stepIf: '${{ false }}' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ jobIf: 'false' })).executed, false);
+  assert.equal(findExecutedP0Delegation(p0Consumer({ continueOnError: true })).executed, false);
+
+  // The invocation lives in a job that does not produce the required context.
+  const otherJob = findExecutedP0Delegation(p0Consumer({ jobName: 'P0 Advisory' }));
+  assert.equal(otherJob.executed, false);
+  assert.match((otherJob as { detail: string }).detail, /no job producing the "P0 Protocol" check context/u);
+
+  // A workflow that never runs on a pull request cannot be the required check.
+  assert.equal(findExecutedP0Delegation(p0Consumer({ on: '[push]' })).executed, false);
+
+  // Unparseable input is a refusal, not an exception.
+  assert.equal(findExecutedP0Delegation('jobs: [\n').executed, false);
+
+  // The path bound to an identifier that is never required is still a reference.
+  const boundNotRequired = p0Consumer({ step: 'script' }).replace(
+    "const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');",
+    "const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';",
+  );
+  assert.equal(findExecutedP0Delegation(boundNotRequired).executed, false);
+
+  // The github-script delegation counts, and the finding names the job and step.
+  assert.deepEqual(findExecutedP0Delegation(p0Consumer({ step: 'script' })), {
+    executed: true, job: 'P0 Protocol', step: 'Classify and enforce P0',
+  });
+  // A shell invocation never counts: the evaluator has no CLI entry point.
+  assert.equal(findExecutedP0Delegation(p0Consumer({ step: 'run' })).executed, false);
+  // A runtime expression is evaluated by Actions, not here; it is not a literal
+  // disable and the step still counts.
+  assert.equal(
+    findExecutedP0Delegation(p0Consumer({ jobIf: "github.event_name != 'issue_comment'" })).executed,
+    true,
+  );
+});
+
+test('findExecutedP0Delegation never counts a shell run step, because the evaluator has no CLI entry point', () => {
+  // Independent review (round 2) executed `node scripts/ops/tracker-independence/p0-workflow.cjs`
+  // directly: it exits 0 having evaluated nothing, since the module only
+  // exports evaluatePullRequest. So no shell form is a delegation -- not the
+  // round-1 probes that merely name the command, and not a real invocation.
+  const source = fs.readFileSync(path.join(process.cwd(), P0_TRUSTED_EVALUATOR_PATH), 'utf8');
+  assert.doesNotMatch(source, /require\.main|process\.argv/u, 'the evaluator gained a CLI entry point; revisit the shell rule');
+  assert.match(source, /module\.exports\s*=\s*\{\s*evaluatePullRequest\s*\}/u);
+
+  const withRun = (lines: string[]): string =>
+    p0Consumer({ step: 'run' }).replace(
+      '        run: node scripts/ops/tracker-independence/p0-workflow.cjs',
+      ['        run: |', ...lines.map((line) => `          ${line}`)].join('\n'),
+    );
+  const shells: Record<string, string[]> = {
+    'plain invocation': ['node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'tsx invocation after &&': ['pnpm install && tsx ./scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'trailing comment on an executed line': ['echo ok # node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'the command as an argument to echo': ['echo node scripts/ops/tracker-independence/p0-workflow.cjs'],
+    'the command inside a heredoc payload': ["cat <<'EOF'", 'node scripts/ops/tracker-independence/p0-workflow.cjs', 'EOF'],
+    'the command behind a false branch': ['if false; then node scripts/ops/tracker-independence/p0-workflow.cjs; fi'],
+    'the command with a masked failure': ['node scripts/ops/tracker-independence/p0-workflow.cjs || true'],
+    'the command in an uncalled function': ['probe() { node scripts/ops/tracker-independence/p0-workflow.cjs; }'],
+    'the command in a substitution': ['echo $(node scripts/ops/tracker-independence/p0-workflow.cjs)'],
+  };
+  for (const [label, lines] of Object.entries(shells)) {
+    const finding = findExecutedP0Delegation(withRun(lines));
+    assert.equal(finding.executed, false, label);
+    assert.match((finding as { detail: string }).detail, /no live, non-ignorable step/u, label);
+  }
+});
+
+test('findExecutedP0Delegation skips a job that cannot produce an enforced evaluation', () => {
+  const active = p0Consumer({ step: 'script' });
+  const withJobField = (field: string): string =>
+    active.replace('    runs-on: ubuntu-latest\n', `    runs-on: ubuntu-latest\n${field}\n`);
+
+  // Job-level continue-on-error lets the job fail without failing the run.
+  for (const value of ['true', '${{ true }}', '"true"']) {
+    assert.equal(findExecutedP0Delegation(withJobField(`    continue-on-error: ${value}`)).executed, false, value);
+  }
+  assert.equal(findExecutedP0Delegation(withJobField('    continue-on-error: false')).executed, true);
+
+  // A job that needs a disabled or absent job is itself skipped, and a
+  // skipped required check satisfies branch protection.
+  const disabledPrereq = active.replace('jobs:\n', 'jobs:\n  prerequisite:\n    if: false\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n');
+  assert.equal(findExecutedP0Delegation(withJobField('    needs: prerequisite').replace('jobs:\n', disabledPrereq.slice(disabledPrereq.indexOf('jobs:\n'), disabledPrereq.indexOf('  p0-protocol:')))).executed, false, 'needs a disabled job');
+  assert.equal(findExecutedP0Delegation(withJobField('    needs: [prerequisite]')).executed, false, 'needs an absent job');
+  const livePrereq = withJobField('    needs: prerequisite').replace('jobs:\n', 'jobs:\n  prerequisite:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n');
+  assert.equal(findExecutedP0Delegation(livePrereq).executed, true, 'needs a live job');
+
+  // An empty matrix never instantiates the job.
+  assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        include: []')).executed, false, 'empty include');
+  assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: []')).executed, false, 'empty axis');
+  assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: [20]')).executed, true, 'live axis');
+  // Matrix expansion is not modelled, so any exclude is refused (fail closed).
+  assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: [20]\n        exclude: [{ node: 20 }]')).executed, false, 'exclude-all');
+  assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: [18, 20]\n        exclude: [{ node: 18 }]')).executed, false, 'any exclude');
+
+  // A fork of github-script is not github-script.
+  assert.equal(findExecutedP0Delegation(active.replace('uses: actions/github-script@v7', 'uses: actions/github-script-foo@v7')).executed, false, 'forked action');
+  assert.equal(findExecutedP0Delegation(active.replace('uses: actions/github-script@v7', 'uses: actions/github-script')).executed, true, 'unpinned action');
+
+  // Two jobs reporting the P0 Protocol context are ambiguous; refuse.
+  const duplicate = active.replace('jobs:\n', 'jobs:\n  shadow:\n    name: P0 Protocol\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n');
+  const dup = findExecutedP0Delegation(duplicate);
+  assert.equal(dup.executed, false, 'duplicate context');
+  assert.match((dup as { detail: string }).detail, /2 jobs produce/u);
+});
+
+test('findExecutedP0Delegation treats any non-false continue-on-error as ignorable', () => {
+  // `continue-on-error: ${{ true }}` (and any other expression) lets the step
+  // fail without failing the check, exactly like the literal `true`.
+  const withContinue = (value: string): string =>
+    p0Consumer({ step: 'script' }).replace(
+      '        uses: actions/github-script@v7',
+      `        continue-on-error: ${value}\n        uses: actions/github-script@v7`,
+    );
+  for (const value of ['${{ true }}', '${{ github.event_name == \'pull_request\' }}', '"true"', 'yes']) {
+    assert.equal(findExecutedP0Delegation(withContinue(value)).executed, false, value);
+  }
+  // The literal false forms are not ignorable and the step still counts.
+  for (const value of ['false', '${{ false }}', '"false"']) {
+    assert.equal(findExecutedP0Delegation(withContinue(value)).executed, true, value);
+  }
+});
+
+test('findExecutedP0Delegation rejects a github-script body that only mentions the evaluator', () => {
+  const withScript = (lines: string[]): string =>
+    p0Consumer({ step: 'script' }).replace(
+      "            const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');\n            await evaluatePullRequest({ github, repo: context.repo });",
+      lines.map((line) => `            ${line}`).join('\n'),
+    );
+  const refused: Record<string, string[]> = {
+    'the require inside a string literal': ["core.info(\"require('./scripts/ops/tracker-independence/p0-workflow.cjs')\");"],
+    'the path in a template string that is never required': ['const note = `see ./scripts/ops/tracker-independence/p0-workflow.cjs`;', 'core.info(note);'],
+    'the require nested as an argument to another call': ["core.info(String(require('./scripts/ops/tracker-independence/p0-workflow.cjs')));"],
+    'the require inside a block comment': ["/* require('./scripts/ops/tracker-independence/p0-workflow.cjs') */", 'core.info("no");'],
+    // Loading the module is not evaluating with it (review round 2).
+    'a bare require that never calls the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');"],
+    'a require whose module is never used': ["const mod = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'core.info(typeof mod);'],
+    'the entry point called on something never required': ['await evaluatePullRequest({ github });'],
+    // Round 3: text inside a template literal can sit at a line start.
+    'the require and call inside a multi-line template literal': ['const body = `', "require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });', '`;', 'core.info(body);'],
+    // Round 3: a body that redefines the entry point calls something else.
+    'a shadowing const of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const evaluatePullRequest = () => "fake";', 'await evaluatePullRequest({ github });'],
+    'a shadowing function of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'function evaluatePullRequest() { return "fake"; }', 'await evaluatePullRequest({ github });'],
+    'a method definition of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const fake = { evaluatePullRequest() { return "fake"; } };', 'await fake.evaluatePullRequest({ github });'],
+    'a let binding reassigned before the require': ["let evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "evaluator = 'node:path';", 'const mod = require(evaluator);', 'await mod.evaluatePullRequest({ github });'],
+    // Round 4: the module is loaded but the call reaches a fake property or a
+    // replaced export.
+    'a fake object property named after the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const x = { evaluatePullRequest: () => "fake" };', 'await x.evaluatePullRequest({ github });'],
+    'the export reassigned before the call': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'api.evaluatePullRequest = () => "fake";', 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through a second binding of the same module': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "const again = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'again.evaluatePullRequest = () => "fake";', 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through Object.assign': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'Object.assign(api, { evaluatePullRequest: () => "fake" });', 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through Object.defineProperty with a quoted name': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "Object.defineProperty(api, 'evaluatePullRequest', { value: () => 'fake' });", 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through a bracket access': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "api['evaluate' + 'PullRequest'] = () => 'fake';", 'await api.evaluatePullRequest({ github });'],
+    'the module bound through a computed require argument': ["const api = require(require.resolve('./scripts/ops/tracker-independence/p0-workflow.cjs'));", 'await api.evaluatePullRequest({ github });'],
+    'the module bound through a concatenated require argument': ["const api = require('./scripts/ops/tracker-independence/' + 'p0-workflow.cjs');", 'await api.evaluatePullRequest({ github });'],
+    'the module bound with let and then replaced': ["let api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'api = { evaluatePullRequest: () => "fake" };', 'await api.evaluatePullRequest({ github });'],
+    'the entry point called on a binding that was never required': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const other = { evaluatePullRequest: () => "fake" };', 'await other.evaluatePullRequest({ github });'],
+    'the entry point passed around by reference': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const run = evaluatePullRequest;', 'await run({ github });'],
+    // Round 5: reaching the module without a tracked name, and fooling the
+    // old comment stripper.
+    'a shadowed require in a block': ['{', "  const require = () => ({ ['evalua' + 'tePullRequest']: () => 'fake' });", "  await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });", '}'],
+    'a function named require': ["function require() { return { ['evalua' + 'tePullRequest']: () => 'fake' }; }", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'require as an arrow parameter': ["await ((require) => require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github }))(() => ({}));"],
+    'the call inside a double-quoted string continued across lines': ['const body = "ignored\\', "require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest(", '";', 'core.info(body);'],
+    'the call inside a single-quoted string continued across lines': ["const body = 'ignored\\", "require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest(", "';", 'core.info(body);'],
+    'a mutation after a string containing a line-comment marker': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "core.info(\"x//\"); api['evalua' + 'tePullRequest'] = () => 'fake';", 'await api.evaluatePullRequest({ github });'],
+    'Object.assign on an unbound require': ["Object.assign(require('./scripts/ops/tracker-independence/p0-workflow.cjs'), { ['evalua' + 'tePullRequest']: () => 'fake' });", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'Reflect.set on an unbound require': ["Reflect.set(require('./scripts/ops/tracker-independence/p0-workflow.cjs'), 'evalua' + 'tePullRequest', () => 'fake');", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'a getter defined on an unbound require': ["Object.defineProperty(require('./scripts/ops/tracker-independence/p0-workflow.cjs'), 'evalua' + 'tePullRequest', { get: () => () => 'fake' });", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'the module cache edited': ["require.cache[require.resolve('./scripts/ops/tracker-independence/p0-workflow.cjs')].exports['evalua' + 'tePullRequest'] = () => 'fake';", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'a mutation hidden in eval': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "eval('a' + 'pi' + \"['evalua'+'tePullRequest']=()=>'fake'\");", 'await api.evaluatePullRequest({ github });'],
+    'a mutation hidden in new Function': ["new Function('m', \"m['evalua'+'tePullRequest']=()=>'fake'\")(require('./scripts/ops/tracker-independence/p0-workflow.cjs'));", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'a duplicate const path binding': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", 'const { evaluatePullRequest } = require(evaluator);', 'await evaluatePullRequest({ github });'],
+    'a reassigned const path binding': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "evaluator = 'node:path';", 'const api = require(evaluator);', 'await api.evaluatePullRequest({ github });'],
+    'a line comment anywhere in the body': ['// classify', "const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
+    'a regex literal anywhere in the body': ['const pattern = /x/;', "const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github, pattern });'],
+    'a template substitution anywhere in the body': ['const label = `pr ${context.payload.number}`;', "const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github, label });'],
+    'a destructuring with an extra name': ["const { evaluatePullRequest, other } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
+    'a renamed destructuring': ["const { evaluatePullRequest: run } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await run({ github });'],
+    'the module loaded through a dynamic import': ["const api = await import('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await api.evaluatePullRequest({ github });'],
+    // Round 6: spellings the occurrence rule would not see.
+    'a Unicode-escaped shadow of require': ['{', "  const r\\u0065quire = () => ({ ['evalua' + 'tePullRequest']: async () => {} });", "  await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });", '}'],
+    'a Unicode-escaped shadow of the entry point': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", '{', '  const evaluat\\u0065PullRequest = async () => {};', '  await evaluatePullRequest({ github });', '}'],
+    'a Unicode-escaped spelling of a module binding': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "\\u0061pi['evaluatePullRequest'] = async () => {};", 'await api.evaluatePullRequest({ github });'],
+    'a raw carriage return inside a quote': ["const s = 'before\rafter';", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'a Unicode line separator outside a string': ["const s = 1;\u2028await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'a non-ASCII identifier': ["const ápi = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await ápi.evaluatePullRequest({ github });'],
+    // Round 7: a property-form require with whitespace before the parenthesis.
+    'a property-form require with a space before the parenthesis': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", 'const api = require(evaluator);', "process.mainModule.require (evaluator)['evalua' + 'tePullRequest'] = async () => 'fake';", 'await api.evaluatePullRequest({ github });'],
+    'a bare require with a space before the parenthesis': ["const { evaluatePullRequest } = require ('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
+    'the path literal used outside a require': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "const api = module.constructor._load('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await api.evaluatePullRequest({ github });'],
+  };
+  for (const [label, lines] of Object.entries(refused)) {
+    assert.equal(findExecutedP0Delegation(withScript(lines)).executed, false, label);
+  }
+  const executed: Record<string, string[]> = {
+    'destructured require': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
+    'awaited call on the required module': ["await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'bound identifier that is then required': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", 'const mod = require(evaluator);', 'await mod.evaluatePullRequest({ github });'],
+    'a module binding called more than once': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const first = await api.evaluatePullRequest({ github });', 'core.info(String(first));', 'const second = await api.evaluatePullRequest({ github, repo: context.repo });', 'core.info(String(second));'],
+    'the staged activation shapes: string concatenation and a plain template': ["const expectedRepo = (context.repo.owner + '/' + context.repo.repo).toLowerCase();", 'core.info(`repo ok`);', "const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", 'if (!fs.existsSync(evaluator)) throw new Error(expectedRepo);', 'const { evaluatePullRequest } = require(evaluator);', 'const summary = await evaluatePullRequest({ github, repo: context.repo });', "core.info('P0 Protocol: ' + summary);"],
+    'other modules required alongside the evaluator': ["const fs = require('node:fs');", "const path = require(\"node:path\");", "const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'core.info(String(fs.existsSync(path.resolve("."))));', 'summary = await evaluatePullRequest({ github });'],
+    'the staged activation shape: require and call inside a try block': [
+      'let summary = "";',
+      'try {',
+      "  const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';",
+      '  const { evaluatePullRequest } = require(evaluator);',
+      '  summary = await evaluatePullRequest({ github, repo: context.repo });',
+      '} catch (error) {',
+      '  core.setFailed(error.message);',
+      '}',
+    ],
+  };
+  for (const [label, lines] of Object.entries(executed)) {
+    assert.equal(findExecutedP0Delegation(withScript(lines)).executed, true, label);
+  }
+});
+
+test('the staged consumer activation patch is an executed delegation by this definition', () => {
+  // The predicate has to be bound to the activation the lane actually
+  // proposes, not to a fixture that happens to satisfy it. The patch replaces
+  // the whole file, so its post-image is every `+` and context line.
+  const patch = fs.readFileSync(
+    path.join(ROOT, 'docs', '06_status', 'proof', 'WORK-2026091001', 'p0-consumer-activation.patch'),
+    'utf8',
+  );
+  const hunkStart = patch.indexOf('\n@@');
+  assert.ok(hunkStart > 0, 'patch must contain a hunk');
+  const postImage = patch
+    .slice(hunkStart + 1)
+    .split('\n')
+    .slice(1)
+    .filter((line) => line.startsWith('+') || line.startsWith(' '))
+    .map((line) => line.slice(1))
+    .join('\n');
+  const finding = findExecutedP0Delegation(postImage);
+  assert.deepEqual(finding, { executed: true, job: 'P0 Protocol', step: 'Classify and enforce P0' });
+});
+
+test('evaluateRepoMintedP0Coverage reads the installed trusted base and fails closed everywhere else', () => {
+  // 1. Not a repository at all: no trusted base can be resolved.
+  const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'p0-plain-'));
+  fs.mkdirSync(path.join(plain, path.dirname(P0_ACTIONS_CONSUMER_PATH)), { recursive: true });
+  fs.writeFileSync(path.join(plain, P0_ACTIONS_CONSUMER_PATH), ACTIVE_BASE[P0_ACTIONS_CONSUMER_PATH]!);
+  const noRepo = evaluateRepoMintedP0Coverage(plain);
+  assert.equal(noRepo.covered, false);
+  assert.match(noRepo.reason, /trusted base origin\/main cannot be resolved/u);
+  assert.deepEqual(noRepo.source, { ref: 'origin/main', sha: null });
+  fs.rmSync(plain, { recursive: true, force: true });
+
+  // 2. A repository whose origin/main does not exist. HEAD carries the
+  //    activation and is deliberately NOT consulted.
+  const noRef = seedTrustedBaseRepo({ base: ACTIVE_BASE, originMain: false });
+  const unresolved = evaluateRepoMintedP0Coverage(noRef.root);
+  assert.equal(unresolved.covered, false);
+  assert.match(unresolved.reason, /trusted base origin\/main cannot be resolved/u);
+  fs.rmSync(noRef.root, { recursive: true, force: true });
+
+  // 3. No consumer on the base. A missing required-check workflow is the one
+  //    state in which assuming coverage would be worst.
+  const absent = seedTrustedBaseRepo({ base: { 'README.md': 'x\n' } });
+  const missing = evaluateRepoMintedP0Coverage(absent.root);
+  assert.equal(missing.covered, false);
+  assert.match(missing.reason, /missing or unreadable at origin\/main/u);
+  fs.rmSync(absent.root, { recursive: true, force: true });
+
+  // 4. The narrow consumer on the base, and the review's comment mutation on
+  //    the base. Neither is an executed delegation.
+  for (const consumer of [
+    NARROW_P0_CONSUMER,
+    NARROW_P0_CONSUMER + '# TODO: scripts/ops/tracker-independence/p0-workflow.cjs\n',
+  ]) {
+    const narrow = seedTrustedBaseRepo({
+      base: { [P0_ACTIONS_CONSUMER_PATH]: consumer, [P0_TRUSTED_EVALUATOR_PATH]: 'module.exports = {};\n' },
+    });
+    const result = evaluateRepoMintedP0Coverage(narrow.root);
+    assert.equal(result.covered, false);
+    assert.match(result.reason, /does not execute scripts\/ops\/tracker-independence\/p0-workflow\.cjs/u);
+    assert.equal(result.source.sha, narrow.git('rev-parse', 'origin/main'));
+    fs.rmSync(narrow.root, { recursive: true, force: true });
+  }
+
+  // 5. Delegation on the base but the evaluator absent from the base.
+  const dangling = seedTrustedBaseRepo({ base: { [P0_ACTIONS_CONSUMER_PATH]: p0Consumer({ step: 'script' }) } });
+  const noEvaluator = evaluateRepoMintedP0Coverage(dangling.root);
+  assert.equal(noEvaluator.covered, false);
+  assert.match(noEvaluator.reason, /not present at origin\/main/u);
+  fs.rmSync(dangling.root, { recursive: true, force: true });
+
+  // 6. Candidate-only activation: the base is narrow, the working tree carries
+  //    the activated consumer AND the evaluator. The working tree is candidate
+  //    content and must not release the block.
+  const candidate = seedTrustedBaseRepo({
+    base: { [P0_ACTIONS_CONSUMER_PATH]: NARROW_P0_CONSUMER },
+    workingTree: ACTIVE_BASE,
+  });
+  const candidateOnly = evaluateRepoMintedP0Coverage(candidate.root);
+  assert.equal(candidateOnly.covered, false);
+  assert.match(candidateOnly.reason, /does not execute/u);
+  // ...and committing it on HEAD without it reaching origin/main changes nothing.
+  candidate.git('add', '-A');
+  candidate.git('commit', '-q', '-m', 'activation on a branch');
+  assert.notEqual(candidate.git('rev-parse', 'HEAD'), candidate.git('rev-parse', 'origin/main'));
+  assert.equal(evaluateRepoMintedP0Coverage(candidate.root).covered, false);
+  fs.rmSync(candidate.root, { recursive: true, force: true });
+
+  // 7. The activation installed on the base releases it, and the receipt
+  //    names the ref, the commit, the job and the step.
+  const active = seedTrustedBaseRepo({ base: ACTIVE_BASE });
+  const covered = evaluateRepoMintedP0Coverage(active.root);
+  assert.equal(covered.covered, true);
+  assert.equal(covered.source.sha, active.git('rev-parse', 'origin/main'));
+  assert.match(covered.reason, /job "P0 Protocol", step "Classify and enforce P0"/u);
+
+  // 8. Re-arms when a later base commit removes the delegation, even though
+  //    the working tree still holds the activated files.
+  fs.writeFileSync(path.join(active.root, P0_ACTIONS_CONSUMER_PATH), NARROW_P0_CONSUMER);
+  active.git('add', '-A');
+  active.git('commit', '-q', '-m', 'delegation removed');
+  active.git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  fs.writeFileSync(path.join(active.root, P0_ACTIONS_CONSUMER_PATH), ACTIVE_BASE[P0_ACTIONS_CONSUMER_PATH]!);
+  assert.equal(evaluateRepoMintedP0Coverage(active.root).covered, false);
+  fs.rmSync(active.root, { recursive: true, force: true });
+});
+
+test('the P0 consumer installed on this repository trusted base and the coverage predicate agree', () => {
+  // This reads the real origin/main of the checkout the suite runs in. It is
+  // deliberately not skipped when the ref is unavailable: an unresolvable base
+  // is a refusal, and the test asserts that refusal.
+  const result = evaluateRepoMintedP0Coverage(ROOT);
+  let baseConsumer: string | null = null;
+  try {
+    baseConsumer = execFileSync('git', ['show', `origin/main:${P0_ACTIONS_CONSUMER_PATH}`], {
+      cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    baseConsumer = null;
+  }
+  if (baseConsumer === null) {
+    assert.equal(result.covered, false);
+    assert.match(result.reason, /cannot be resolved|missing or unreadable/u);
+    return;
+  }
+  const delegation = findExecutedP0Delegation(baseConsumer);
+  let evaluatorOnBase = true;
+  try {
+    execFileSync('git', ['cat-file', '-e', `origin/main:${P0_TRUSTED_EVALUATOR_PATH}`], { cwd: ROOT, stdio: 'ignore' });
+  } catch {
+    evaluatorOnBase = false;
+  }
+  assert.equal(result.covered, delegation.executed && evaluatorOnBase);
+  if (!result.covered) {
+    // While the block is armed the reason it is armed must still be true: the
+    // installed consumer resolves a tracker-keyed identifier and nothing else.
+    assert.match(baseConsumer, /UTV2\|UNI/u);
+    assert.doesNotMatch(baseConsumer, /p0-workflow\.cjs/u, 'the base consumer changed; re-read the block premise rather than trusting it');
+  }
+  // And the working tree of this checkout is never what decided it.
+  assert.equal(result.source.ref, 'origin/main');
 });
