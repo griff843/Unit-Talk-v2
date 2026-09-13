@@ -6,13 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1825e86238535665f69a7ffbd59a0b6abcdb1640",
     "verified_source_sha": "6e923aa3455334bb7ddc2e15fbdba3474bf493f1",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "note": "6e923aa3455334bb7ddc2e15fbdba3474bf493f1 is the merge of `main` e0c8f812d into 9e3554df42a99c90d41b0c153adfd018beeeb3d2, performed by the sanctioned wrapper resync (`ops:merge-wrapper git-merge-main`) after the PM verdict in PR 1567 comment 5648336829. `git diff --name-only 9e3554df42a99c90d41b0c153adfd018beeeb3d2 6e923aa3455334bb7ddc2e15fbdba3474bf493f1 -- apps packages scripts supabase .github package.json` is empty, so every static measurement below that names 9e3554df42a99c90d41b0c153adfd018beeeb3d2 was taken on a source tree byte-identical to this anchor and is carried, not re-recorded. The anchor moves because the proof-binding validator diffs anchor..head, and a merge commit brings main's files into that range. The one file changed after this anchor besides the proof directory is docs/06_status/lanes/UTV2-1889.json, whose file_scope_lock now truthfully lists the three apps/ingestor paths and package.json, as the verdict's item 3 instructs; that path is proof-prefix exempt for the validator.\nBefore the resync, 9e3554df42a99c90d41b0c153adfd018beeeb3d2 was the last commit on this lane that changed anything outside docs/06_status/proof/UTV2-1889/. It supersedes c4f22cc3117387dca5edd1e73ae66bb676ab9fa0, which was this field's value while the operator-attestation route was still in the tree. The anchor is moved rather than its claim reworded, on the same standard this note has applied to every previous anchor: an anchor carries the binding claim 'every later commit touches only the proof directory or carries main's files forward', and a commit that changes lane source falsifies it.\nThe lane's source-changing commits are: 4701685541 (the original seven files, including the operator-attestation CLI that is now removed -- the design is preserved there), 2b0a01e02 (the cross-file coupling test, since removed with its subject), f767e81ab (the SGO journey proof), b22617cae (the repair of gaps A, B and D in apps/ingestor/src/results-resolver.ts), 9a2b45786 (the staging journey and the one-line package.json wiring entry), c4f22cc31 (namespacing the fixture's event name), and 9e3554df42a99c90d41b0c153adfd018beeeb3d2 (removing the operator route, taking `operator` out of the trust allow-list, and correcting the failure-6 explanation). The proof commit carrying this file sits on top and changes nothing the assertions are about.",
-    "bound_at": "2026-09-13T03:12:45Z",
+    "bound_at": "2026-09-13T07:37:43.985Z",
     "resync": {
       "previous_anchor": "9e3554df42a99c90d41b0c153adfd018beeeb3d2",
       "anchor": "6e923aa3455334bb7ddc2e15fbdba3474bf493f1",
@@ -259,7 +259,7 @@
           "change": "computeMoneylineOutcomeBySide infers the winner from whichever side was scored when the other is missing, instead of returning null",
           "failing": 1,
           "failing_assertions": [
-            "not ok 7 - UTV2-1889: a half-scored event writes nothing \u2014 the outcome is never inferred from one side"
+            "not ok 7 - UTV2-1889: a half-scored event writes nothing — the outcome is never inferred from one side"
           ]
         },
         {

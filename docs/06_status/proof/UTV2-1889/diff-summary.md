@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1889-operator-attested-results
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1567
 Head SHA: 6e923aa3455334bb7ddc2e15fbdba3474bf493f1
-Merge SHA: N/A
+Merge SHA: 1825e86238535665f69a7ffbd59a0b6abcdb1640
 Diff base: e0c8f812db065035af952ceb5111e2bcd443fbbb (merge-base with origin/main after the resync)
 Diff target: 6e923aa3455334bb7ddc2e15fbdba3474bf493f1
 
@@ -80,4 +80,4 @@ D	scripts/ops/track-only/operator-attest-result.ts   (present at ba24e12 and eve
 
 ## SHA Binding
 Head SHA: 6e923aa3455334bb7ddc2e15fbdba3474bf493f1
-Merge SHA: N/A
+Merge SHA: 1825e86238535665f69a7ffbd59a0b6abcdb1640
