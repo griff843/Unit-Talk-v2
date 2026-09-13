@@ -1,11 +1,70 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-13 (sixth pass, against `main` `abe364761`)
+**Last reconciled against live truth:** 2026-09-13 (seventh pass, against `main` `99a35030b`)
 **Learned archive:** [`plan-lessons.md`](./plan-lessons.md) — read on demand, not at session start.
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
+
+---
+
+## Seventh pass, 2026-09-13 evening — the manual Smart Form shipped and a deploy is in flight
+
+Three things changed since the sixth pass measured `abe364761`, and each falsifies something that page said.
+
+| Change | What it was | The claim it falsified |
+|---|---|---|
+| **UTV2-1893** at `e6eb51c27` and **UTV2-1894** at `15ee3a505` | the sixth-pass reconciliation and the deployment decision packet | — |
+| **UTV2-1895** merged at `82cd1218f` (#1573), lane closed | Smart Form **manual capper intake and mobile bet slip**: manual entry is now the default path, brand header, responsive selection-to-slip flow, explicit Track Only state, entries preserved after a validation error, an in-flight submit lock, and a saved confirmation naming the persisted pick id. Carries 170 Smart Form unit tests, a local NFL persistence/retry/idempotency/zero-outbox browser proof, and four labelled synthetic offline browse-to-slip scenarios. | The boundary table's **browser** column, which read "suite exists, gate defaults off" for authentication and submission. A browser-exercised manual submission against the local isolated API is now proven on `main`. It is still not proven against the deployed system — that is the acceptance below. |
+| **Deploy dispatched** 2026-09-13T19:16Z, run `34777196110`, on `82cd1218f` | Griff took reserved decision 8. Every build job passed; canary deployed; the run then paused twice on environment approvals that only he can give. | Requires-Griff item 1 of the sixth pass. It is taken, not pending. |
+
+**What the deploy does and does not settle.** It ships the six merged live-path grading repairs the sixth pass
+found merged-but-not-running, *and* the manual Smart Form UI. It settles nothing about whether a Track Only
+pick can reach a settlement, because layer 3 — a results supply after 2026-06-30 — is unchanged and still
+reserved on the provider key.
+
+### The acceptance that follows the deploy, and who owns each step
+
+Baseline measured read-only on production immediately before promotion: **1** pick carrying
+`metadata.distributionMode` (`dfcd9486`, 2026-09-09), newest `distribution_outbox` row **2026-07-30**,
+13,791 succeeded `grading.run` rows with the newest at 2026-09-13T18:01Z.
+
+Step 2 below is an operator action and cannot be delegated; the rest are read-only measurements.
+
+1. Deployment integrity — zero container-file drift against the deployed SHA, form and API answering.
+2. **Griff signs in to the deployed form and submits one real manual Track Only pick.** A spread, total or
+   player prop is worth more than another moneyline: condition 2's provenance guarantee is still untested
+   outside moneyline.
+3. Persistence and truthful provenance on the new row.
+4. Internal visibility — the governed cohort `metadata ? 'distributionMode'` moves from 1 to 2.
+5. Non-delivery — zero outbox, mapping, intent and settlement rows for it.
+
+### The SGO server lane is blocked by a concurrency rule, measured
+
+`ops:lane-start UTV2-1896 --lane-type runtime` refuses with `singleton_type_conflict` and
+`forbidden_combination`, both naming **UTV2-1892** — PR #1570, whose open PR makes its lane active. UTV2-1827
+(#1505) is `parked` and holds no type, so #1570 is the sole cause. Exactly two lane types admit
+`apps/api/src/**`: `runtime` and `modeling`, both singleton, and typing offer-provenance work as `modeling`
+to fit a gate is the evasion this plan has already declined once. UTV2-1896's preflight passed 41 checks, so
+the lane opens the moment the slot frees — which merging #1570 does by itself.
+
+### Provider coverage now has a measured record, and it bounds the SGO product
+
+`PROVIDER_KNOWLEDGE_BASE.md` §5 records it: the shipped ingestor supports NBA, NFL, MLB and NHL only, carries
+player-prop patterns for **MLB and NBA only**, and knows nothing about NCAAF or NCAAB. No shipped script loads
+a **live** slate — both backfill entry points hard-code `historical: true` — and `backfill-sgo-history.ts`
+never calls `assertStagingTarget`, so it would write to whatever `SUPABASE_URL` names. College football cannot
+be served by this integration today at all; NFL would be game lines only. Whether an active key changes any of
+that is UNVERIFIED and is not assumed.
+
+### Reference data, measured read-only and unchanged by any of the above
+
+`docs/05_operations/REFERENCE_DATA_AUDIT_2026-09-13.md` carries the full audit. The headline: NFL has 32 team
+participants and **zero** players, NCAAF has nothing at all, and every catalog row predates 2026-07-01. So an
+NFL team pick resolves canonically today while an NFL player prop and every college pick fall to the honest
+coverage-gap path — which the contained pilot permits and which the merged UI records truthfully. The
+production write that would change it is reserved decision 1 and is prepared, not requested.
 
 ---
 
@@ -1669,7 +1728,11 @@ Consolidated from Wave 0, in the order that unblocks the most work. **Items 1 an
 active milestone and neither substitutes for the other**: item 1 lets finished engineering land,
 item 2 makes already-landed engineering run. Every other item blocks only itself.
 
-1. **Dispatch `Deploy`.** Reserved decision 8, and now the first item because it is the only one
+1. ~~**Dispatch `Deploy`.**~~ **Taken 2026-09-13T19:16Z** — run `34777196110` on `82cd1218f`, which also
+   carries the merged manual Smart Form UI. What remains on this line is the acceptance in the seventh-pass
+   section above, whose step 2 is Griff's own browser submission. Original text follows.
+
+   Reserved decision 8, and now the first item because it is the only one
    on the Smart Form critical path. Production is `755e52a6c`; `main` is 75 commits and 10
    container files ahead, **five of them on the live grading path**, which containment does not
    park. Zero migrations, so no DDL prerequisite and no rollback DDL.

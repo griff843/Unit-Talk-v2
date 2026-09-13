@@ -1,0 +1,54 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1897
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1897
+  objective: Reference-data coverage audit, provider coverage record, and mission
+    plan reconciliation
+  acceptance_criteria:
+    - |-
+      Governance/docs lane. Lands three measured records into the repository; authorizes no write and changes no gate.
+
+      1. `docs/05_operations/REFERENCE_DATA_AUDIT_2026-09-13.md` — the read-only production coverage audit measured 2026-09-13: participants by sport (MLB 30 teams/951 players, NBA 30/254, NHL 32/318, NFL 32 teams/0 players, NCAAF 0/0), events max date 2026-07-02 with zero future rows, 840 sgo:player aliases and zero team aliases, no `player_team_assignments`. Records the two routes by which NFL players and NCAAF teams could exist (ingestor entity resolver needing an active SGO key; an authored governed static seed) and the prepared `participants`-only INSERT ... ON CONFLICT DO NOTHING authorization request with its staging two-pass proof. The write itself is reserved decision 1 and is NOT requested by merging this document.
+      2. `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` — one short section recording what the shipped code supports today: leagues NBA/NFL/MLB/NHL only (`ingestor-runner.ts` SUPPORTED_SGO_LEAGUES), player-prop odd-id patterns for MLB and NBA only so NFL and NHL are game-lines only in live cycles, NCAAF/NCAAB not ingestable, and the key available to tooling returning 403 Inactive as of 2026-09-13 so live coverage is UNVERIFIED rather than assumed.
+      3. `docs/mission/plan.md` — reconcile against current `main`: [UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/prepare-and-prove-the-sgo-backed-track-only-result-journey) closed, [UTV2-1893](https://linear.app/unit-talk-v2/issue/UTV2-1893/reconcile-the-mission-plan-against-main-abe364761-1567-merged-the)/1894 merged, [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) merged and closed, the 2026-09-13 Deploy dispatch, and the measured concurrency finding that the SGO server lane ([UTV2-1896](https://linear.app/unit-talk-v2/issue/UTV2-1896/sgo-assisted-smart-form-picks-gamemarket-browse-provenance-offer)) cannot open while [UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue)/#1570 holds the singleton `runtime` type.
+
+      No production write, no SGO request, no containment change, no gate change.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Governance/docs lane. Lands three measured records into the repository; authorizes no write and changes no gate.
+
+      1. `docs/05_operations/REFERENCE_DATA_AUDIT_2026-09-13.md` — the read-only production coverage audit measured 2026-09-13: participants by sport (MLB 30 teams/951 players, NBA 30/254, NHL 32/318, NFL 32 teams/0 players, NCAAF 0/0), events max date 2026-07-02 with zero future rows, 840 sgo:player aliases and zero team aliases, no `player_team_assignments`. Records the two routes by which NFL players and NCAAF teams could exist (ingestor entity resolver needing an active SGO key; an authored governed static seed) and the prepared `participants`-only INSERT ... ON CONFLICT DO NOTHING authorization request with its staging two-pass proof. The write itself is reserved decision 1 and is NOT requested by merging this document.
+      2. `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` — one short section recording what the shipped code supports today: leagues NBA/NFL/MLB/NHL only (`ingestor-runner.ts` SUPPORTED_SGO_LEAGUES), player-prop odd-id patterns for MLB and NBA only so NFL and NHL are game-lines only in live cycles, NCAAF/NCAAB not ingestable, and the key available to tooling returning 403 Inactive as of 2026-09-13 so live coverage is UNVERIFIED rather than assumed.
+      3. `docs/mission/plan.md` — reconcile against current `main`: [UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/prepare-and-prove-the-sgo-backed-track-only-result-journey) closed, [UTV2-1893](https://linear.app/unit-talk-v2/issue/UTV2-1893/reconcile-the-mission-plan-against-main-abe364761-1567-merged-the)/1894 merged, [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) merged and closed, the 2026-09-13 Deploy dispatch, and the measured concurrency finding that the SGO server lane ([UTV2-1896](https://linear.app/unit-talk-v2/issue/UTV2-1896/sgo-assisted-smart-form-picks-gamemarket-browse-provenance-offer)) cannot open while [UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue)/#1570 holds the singleton `runtime` type.
+
+      No production write, no SGO request, no containment change, no gate change.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1897/reference-data-coverage-audit-provider-coverage-record-and-mission
+    title: Reference-data coverage audit, provider coverage record, and mission plan
+      reconciliation
+    description: |-
+      Governance/docs lane. Lands three measured records into the repository; authorizes no write and changes no gate.
+
+      1. `docs/05_operations/REFERENCE_DATA_AUDIT_2026-09-13.md` — the read-only production coverage audit measured 2026-09-13: participants by sport (MLB 30 teams/951 players, NBA 30/254, NHL 32/318, NFL 32 teams/0 players, NCAAF 0/0), events max date 2026-07-02 with zero future rows, 840 sgo:player aliases and zero team aliases, no `player_team_assignments`. Records the two routes by which NFL players and NCAAF teams could exist (ingestor entity resolver needing an active SGO key; an authored governed static seed) and the prepared `participants`-only INSERT ... ON CONFLICT DO NOTHING authorization request with its staging two-pass proof. The write itself is reserved decision 1 and is NOT requested by merging this document.
+      2. `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` — one short section recording what the shipped code supports today: leagues NBA/NFL/MLB/NHL only (`ingestor-runner.ts` SUPPORTED_SGO_LEAGUES), player-prop odd-id patterns for MLB and NBA only so NFL and NHL are game-lines only in live cycles, NCAAF/NCAAB not ingestable, and the key available to tooling returning 403 Inactive as of 2026-09-13 so live coverage is UNVERIFIED rather than assumed.
+      3. `docs/mission/plan.md` — reconcile against current `main`: [UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/prepare-and-prove-the-sgo-backed-track-only-result-journey) closed, [UTV2-1893](https://linear.app/unit-talk-v2/issue/UTV2-1893/reconcile-the-mission-plan-against-main-abe364761-1567-merged-the)/1894 merged, [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) merged and closed, the 2026-09-13 Deploy dispatch, and the measured concurrency finding that the SGO server lane ([UTV2-1896](https://linear.app/unit-talk-v2/issue/UTV2-1896/sgo-assisted-smart-form-picks-gamemarket-browse-provenance-offer)) cannot open while [UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue)/#1570 holds the singleton `runtime` type.
+
+      No production write, no SGO request, no containment change, no gate change.
+    captured_at: 2026-09-13T19:32:36.541Z
+    description_sha256: b234a91264dda3470c321e88d26506ad969277258cde0f3e63398db2e2faaf79
+  contract_hash: 3639408c96de8fd4fe90fdeb7ac21c8c27fef21d18fb89d9c2c53d89f67f8406
