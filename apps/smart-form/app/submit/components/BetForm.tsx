@@ -74,6 +74,8 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { createSessionSubmissionGuard } from '@/lib/submission-guard';
+import { isQaAuthBypassEnabled } from '@/lib/auth-config';
+import { deriveMatchupTeamChoices, isMissingQaIdentity, type MatchupTeamChoice } from '@/lib/team-choice';
 import { Spinner } from '@/components/ui/spinner';
 import { SignedNumberInput } from '@/components/SignedNumberInput';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
@@ -822,6 +824,7 @@ export function BetForm({
     return getStoredCapperClaims();
   });
   const effectiveCapper = authenticatedCapper ?? capperClaims;
+  const missingQaIdentity = isMissingQaIdentity(isQaAuthBypassEnabled(), effectiveCapper?.capperId);
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [referenceAvailability, setReferenceAvailability] = useState<ReferenceDataAvailability | null>(null);
@@ -929,6 +932,13 @@ export function BetForm({
     () => new Set([awayParticipantId, homeParticipantId].filter((id): id is string => Boolean(id))),
     [awayParticipantId, homeParticipantId],
   );
+  const manualMatchupTeamChoices = deriveMatchupTeamChoices({
+    manualIdentity: identityMode === 'manual',
+    awayName: watchedValues.awayParticipantName,
+    homeName: watchedValues.homeParticipantName,
+    awayId: awayParticipantId,
+    homeId: homeParticipantId,
+  });
   const allowedMarketTeamIds = allowedTeamIds ?? (
     identityMode === 'structured-fallback' ? structuredSideIds : null
   );
@@ -1825,10 +1835,24 @@ export function BetForm({
     });
   }
 
+  function clearMatchupDependentSelection() {
+    setSelectedTeamId(null);
+    setSelectedPlayerId(null);
+    setSelectedOfferParticipantId(null);
+    setSelectedOffer(null);
+    form.setValue('team', '');
+    form.setValue('playerName', '');
+    form.setValue('statType', '');
+    form.resetField('direction');
+    form.resetField('line');
+    form.resetField('odds');
+  }
+
   function setDerivedMatchupName(awayName: string, homeName: string) {
     const nextEventName = awayName.trim() && homeName.trim()
       ? `${awayName.trim()} @ ${homeName.trim()}`
       : '';
+    if (form.getValues('eventName') !== nextEventName) clearMatchupDependentSelection();
     form.setValue('eventName', nextEventName, {
       shouldDirty: true,
       shouldTouch: true,
@@ -1837,6 +1861,7 @@ export function BetForm({
   }
 
   function handleStructuredSideChange(role: 'away' | 'home') {
+    clearMatchupDependentSelection();
     if (role === 'away') {
       setAwayParticipantId(null);
     } else {
@@ -1903,10 +1928,13 @@ export function BetForm({
         setHomeSearchResolution('idle');
         form.setValue('homeParticipantName', '', { shouldDirty: true, shouldValidate: true });
       }
-      setDerivedMatchupName('', '');
+      // Reject the matchup without discarding the capper's entered price.
+      form.setValue('eventName', '', { shouldDirty: true, shouldTouch: true });
       return;
     }
 
+    const previousId = role === 'away' ? awayParticipantId : homeParticipantId;
+    if (previousId !== suggestion.participantId) clearMatchupDependentSelection();
     setIdentityMode('structured-fallback');
     if (role === 'away') {
       setAwayParticipantId(suggestion.participantId);
@@ -2000,6 +2028,10 @@ export function BetForm({
   }
 
   async function onSubmit(values: BetFormValues) {
+    if (missingQaIdentity) {
+      toast({ title: 'Test capper required', description: 'This local QA preview has no test capper. Saving is disabled until an explicit test identity is available.', variant: 'destructive' });
+      return;
+    }
     if (!catalog) {
       return;
     }
@@ -2965,6 +2997,52 @@ export function BetForm({
       />
     );
 
+    const matchupTeamField = (label: string) => (
+      <FormField
+        control={form.control}
+        name="team"
+        render={({ field }) => {
+          const selectTeam = (choice: MatchupTeamChoice) => {
+            form.setValue('team', choice.label, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+            setSelectedTeamId(choice.participantId);
+            setSelectedPlayerId(null);
+            setSelectedOfferParticipantId(null);
+            setSelectedOffer(null);
+            form.setValue('playerName', '');
+            // Choosing the other side never infers a price or reverses the entered spread.
+          };
+          const selectedKey = manualMatchupTeamChoices.find((choice) =>
+            choice.label === field.value && choice.participantId === selectedTeamId,
+          )?.key ?? '';
+          return (
+            <FormItem>
+              <FormLabel>{label}</FormLabel>
+              <div role="group" aria-label={label} className="grid grid-cols-2 gap-2" data-testid="manual-matchup-team-choices">
+                {manualMatchupTeamChoices.map((choice, index) => (
+                  <Button key={choice.key} ref={index === 0 ? field.ref : undefined} type="button" variant={selectedKey === choice.key ? 'default' : 'outline'} aria-pressed={selectedKey === choice.key} aria-label={choice.label} className="h-auto min-h-11 whitespace-normal break-words px-3 py-3" onClick={() => selectTeam(choice)}>
+                    {choice.label}
+                  </Button>
+                ))}
+              </div>
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer py-2">Use team dropdown</summary>
+                <FormControl>
+                  <select aria-label={`${label} dropdown`} name={field.name} value={selectedKey} onBlur={field.onBlur} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" onChange={(event) => {
+                    const choice = manualMatchupTeamChoices.find((option) => option.key === event.target.value);
+                    if (choice) selectTeam(choice);
+                  }}>
+                    <option value="" disabled>Choose team</option>
+                    {manualMatchupTeamChoices.map((choice) => <option key={choice.key} value={choice.key}>{choice.label}</option>)}
+                  </select>
+                </FormControl>
+              </details>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
+      />
+    );
+
     if (selectedMarketType === 'player-prop') {
       return (
         <div className="space-y-4">
@@ -3190,7 +3268,7 @@ export function BetForm({
                   </FormItem>
                 )}
               />
-              {isTeamSport && identityMode !== 'manual' ? (
+              {isTeamSport && manualMatchupTeamChoices.length === 2 ? matchupTeamField('Team to Win') : isTeamSport && identityMode !== 'manual' ? (
                 <ParticipantAutocompleteField
                   form={form}
                   name="team"
@@ -3365,7 +3443,7 @@ export function BetForm({
                 )}
               />
               <div className="grid grid-cols-2 gap-3">
-                {identityMode === 'manual' ? manualTeamField('Team') : (
+                {manualMatchupTeamChoices.length === 2 ? matchupTeamField('Team') : identityMode === 'manual' ? manualTeamField('Team') : (
                   <ParticipantAutocompleteField
                     form={form}
                     name="team"
@@ -3815,6 +3893,12 @@ export function BetForm({
         <BrandLogo />
         <span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold">{watchedValues.trackOnly ? 'Track Only · Internal' : 'Delivery eligible'}</span>
       </header>
+      {missingQaIdentity && (
+        <div role="note" data-testid="missing-qa-identity" className="mx-auto mb-6 max-w-7xl rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 text-sm">
+          <p className="font-semibold">Local QA — no test capper selected</p>
+          <p className="mt-1 text-muted-foreground">You can explore the form. Saving is disabled until an explicit test identity is available. This preview does not verify real sign-in.</p>
+        </div>
+      )}
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row lg:items-start">
         <div className="w-full space-y-6 lg:max-w-3xl">
           <div className="space-y-2">
@@ -4233,6 +4317,7 @@ export function BetForm({
 
         <div className="w-full lg:max-w-sm">
           <BetSlipPanel
+            submissionBlocked={missingQaIdentity}
             values={watchedValues}
             isSubmitting={isSubmitting}
             onSubmit={() => void form.handleSubmit(onSubmit)()}

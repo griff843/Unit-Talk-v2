@@ -9,6 +9,7 @@ import { calcPayout, buildSelectionString } from '@/lib/form-utils';
 import { getMarketTypeLabel, type MarketTypeId } from '@/lib/market-types';
 
 interface BetSlipPanelProps {
+  submissionBlocked?: boolean;
   values: Partial<BetFormValues>;
   isSubmitting: boolean;
   onSubmit: () => void;
@@ -24,7 +25,7 @@ function LineItem({ label, value }: { label: string; value?: string | number | n
   );
 }
 
-export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelProps) {
+export function BetSlipPanel({ values, isSubmitting, onSubmit, submissionBlocked = false }: BetSlipPanelProps) {
   const marketLabel = values.marketType ? getMarketTypeLabel(values.marketType as MarketTypeId) : null;
   const selection = values.marketType && values.sport
     ? buildSelectionString(values as BetFormValues)
@@ -105,7 +106,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             data-testid="smart-form-submit-button"
             type="submit"
             onClick={onSubmit}
-            disabled={isSubmitting || !values.sport}
+            disabled={isSubmitting || !values.sport || submissionBlocked}
             className="hidden lg:flex w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-5"
           >
             {isSubmitting ? (
@@ -155,7 +156,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             data-testid="smart-form-submit-button"
             type="submit"
             onClick={onSubmit}
-            disabled={isSubmitting || !values.sport}
+            disabled={isSubmitting || !values.sport || submissionBlocked}
             size="sm"
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shrink-0"
           >

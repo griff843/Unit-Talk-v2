@@ -66,11 +66,12 @@ async function assertTrackOnlyHasNoOutbox(request: APIRequestContext, pickId: st
   });
 }
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
+  const anonymousQa = testInfo.title === 'anonymous QA cannot submit an unattributed pick';
   await page.route('**/api/auth/session', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({
+    body: JSON.stringify(anonymousQa ? null : {
       user: { name: 'Griff Test' },
       capperId: 'griff843',
       expires: new Date(Date.now() + 3_600_000).toISOString(),
@@ -84,6 +85,7 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify({ data: { sportId, teamsAvailable: true, playersAvailable: true } }),
     });
   });
+  if (anonymousQa) return;
   await page.addInitScript(() => {
     const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -333,8 +335,7 @@ test('structured fallback persists canonical side IDs with signed spread values 
   await page.getByRole('button', { name: /Spread/i }).first().click();
   await expect(page.getByLabel('Matchup')).toHaveValue('Celtics @ Knicks');
   await expect(page.getByLabel('Matchup')).toHaveAttribute('readonly', '');
-  await page.getByLabel('Team', { exact: true }).fill('Celtics');
-  await page.getByRole('button', { name: /Celtics\s+team/i }).last().click();
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Celtics', exact: true }).click();
 
   const lineInput = page.locator('input[name="line"]');
   const oddsInput = page.locator('input[name="odds"]');
@@ -398,7 +399,7 @@ test('manual participant override persists honest unresolved provenance without 
   await page.screenshot({ path: '../../.out/smart-form-preview/regression/07-manual-participant-override.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await expect(page.getByLabel('Matchup')).toHaveValue('Temple @ Navy');
-  await page.getByLabel('Team to Win').fill('Navy');
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Navy', exact: true }).click();
   await page.locator('input[name="odds"]').fill('-120');
   await page.getByRole('button', { name: '8', exact: true }).click();
   const submissionResponsePromise = page.waitForResponse((response) =>
@@ -466,7 +467,7 @@ test('mobile manual coverage-gap submission persists signed negative odds and cr
 
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await expect(page.getByLabel('Matchup')).toHaveValue('Temple @ Navy');
-  await page.getByLabel('Team to Win').fill('Navy');
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Navy', exact: true }).click();
 
   // The browser-control half. `inputmode="numeric"` is the defect; anything that admits
   // a sign is the fix, so assert the attribute that governs the mobile keypad rather
@@ -829,8 +830,7 @@ test('mobile NFL retry preserves signed spread and prevents duplicate persistenc
     await page.getByLabel('Home Team').fill('Bills');
     await page.getByRole('button', { name: /Bills\s+team/i }).first().click();
     await page.getByRole('button', { name: /Spread/i }).first().click();
-    await page.getByLabel('Team', { exact: true }).fill('Chiefs');
-    await page.getByRole('button', { name: /Chiefs\s+team/i }).last().click();
+    await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Chiefs', exact: true }).click();
     await page.locator('input[name="line"]').fill('-3.5');
     await page.locator('input[name="odds"]').fill('+105');
     await page.getByRole('button', { name: '8', exact: true }).click();
@@ -922,4 +922,130 @@ test('manual entry is the default and browsing starts only after explicit opt-in
   }
   await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await expect.poll(() => browseRequests.length).toBeGreaterThan(0);
+});
+
+// Follow-up UI regression: reference IDs are read from the isolated local API;
+// the submission below is intercepted and is not durable persistence evidence.
+test('manual NFL matchup offers only its two teams and preserves selected side identity', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const chiefs = await canonicalParticipantId(request, 'teams', 'NFL', 'Chiefs');
+  const bills = await canonicalParticipantId(request, 'teams', 'NFL', 'Bills');
+  const submitted: Array<Record<string, unknown>> = [];
+  await page.route('**/api/submissions', route => {
+    submitted.push(route.request().postDataJSON() as Record<string, unknown>);
+    return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: { pickId: 'FIXTURE-INTERCEPTED-TEAM-CHOICE', submissionId: 'FIXTURE-INTERCEPTED-SUBMISSION', lifecycleState: 'validated' } }) });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NFL', exact: true }).click();
+  await page.getByLabel('Away Team').fill('Chiefs');
+  await page.getByRole('button', { name: /Chiefs\s+team/i }).first().click();
+  await page.getByLabel('Home Team').fill('Bills');
+  await page.getByRole('button', { name: /Bills\s+team/i }).first().click();
+  await page.getByRole('button', { name: /Moneyline/i }).first().click();
+  const choices = page.getByTestId('manual-matchup-team-choices');
+  await expect(choices.getByRole('button')).toHaveText(['Chiefs', 'Bills']);
+  await choices.getByRole('button', { name: 'Chiefs', exact: true }).click();
+  await expect(choices.getByRole('button', { name: 'Chiefs', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /Spread/i }).first().click();
+  await expect(choices.getByRole('button')).toHaveText(['Chiefs', 'Bills']);
+  await choices.getByRole('button', { name: 'Bills', exact: true }).click();
+  await expect(choices.getByRole('button', { name: 'Bills', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('input[name="line"]').fill('+3.5');
+  await page.locator('input[name="odds"]').fill('-110');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.locator('[data-testid="smart-form-submit-button"]:visible').click();
+  await expect(page.getByText('Pick Saved', { exact: true })).toBeVisible();
+  expect(submitted).toHaveLength(1);
+  expect(submitted[0]).toMatchObject({ submittedBy: 'griff843', source: 'smart-form', market: 'spread', selection: 'Bills +3.5', line: 3.5, odds: -110, metadata: {
+    teamId: bills.participantId, distributionMode: 'track-only', selectedOffer: null,
+    participantResolution: { resolution: 'canonical', eventId: null, away: { participantId: chiefs.participantId }, home: { participantId: bills.participantId }, team: { participantId: bills.participantId } },
+  } });
+});
+
+test('anonymous QA cannot submit an unattributed pick', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/api/submissions', route => {
+    attempts += 1;
+    return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Anonymous fixture must never reach submission' } }) });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/submit');
+  await expect(page.getByTestId('missing-qa-identity')).toBeVisible();
+  await page.getByRole('button', { name: 'NFL', exact: true }).click();
+  await expect(page.locator('[data-testid="smart-form-submit-button"]:visible')).toBeDisabled();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.locator('[data-testid="smart-form-submit-button"]:visible')).toBeDisabled();
+  expect(attempts).toBe(0);
+  await expect(page.getByText('Pick Saved', { exact: true })).toHaveCount(0);
+});
+
+async function openFixtureNflSpread(page: Page) {
+  // Never send a submission from state-transition tests, even if a control regresses.
+  await page.route('**/api/submissions', route => route.abort('blockedbyclient'));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/submit');
+  await expect(page.getByText('Local QA preview · test data', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'NFL', exact: true }).click();
+  await page.getByLabel('Away Team').fill('Chiefs');
+  await page.getByRole('button', { name: /Chiefs\s+team/i }).first().click();
+  await page.getByLabel('Home Team').fill('Bills');
+  await page.getByRole('button', { name: /Bills\s+team/i }).first().click();
+  await page.getByRole('button', { name: /Spread/i }).first().click();
+  await page.getByTestId('manual-matchup-team-choices').getByRole('button', { name: 'Chiefs', exact: true }).click();
+  await page.locator('input[name="line"]').fill('-3.5');
+  await page.locator('input[name="odds"]').fill('-110');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+}
+
+test('team-choice dropdown and opposite winner preserve explicit signed price without inversion', async ({ page }) => {
+  await openFixtureNflSpread(page);
+  const choices = page.getByTestId('manual-matchup-team-choices');
+  await choices.getByRole('button', { name: 'Bills', exact: true }).click();
+  await expect(choices.getByRole('button', { name: 'Bills', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('input[name="line"]')).toHaveValue('-3.5');
+  await expect(page.locator('input[name="odds"]')).toHaveValue('-110');
+  await page.getByText('Use team dropdown', { exact: true }).click();
+  const dropdown = page.getByRole('combobox', { name: 'Team dropdown', exact: true });
+  await expect(dropdown.locator('option')).toHaveText(['Choose team', 'Chiefs', 'Bills']);
+  await dropdown.selectOption({ label: 'Chiefs' });
+  await expect(choices.getByRole('button', { name: 'Chiefs', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('input[name="line"]')).toHaveValue('-3.5');
+  await expect(page.locator('input[name="odds"]')).toHaveValue('-110');
+  await page.getByText('Use team dropdown', { exact: true }).click();
+  for (const [device, width] of [['mobile', 390], ['desktop', 1280]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByText('Local QA preview · test data', { exact: true })).toBeVisible();
+    await page.screenshot({ path: `../../.out/smart-form-preview/finishing/team-choice-fixture-${device}.png`, fullPage: true });
+  }
+});
+
+test('changing a valid matchup side clears selected winner and its entered price', async ({ page }) => {
+  await openFixtureNflSpread(page);
+  await page.getByLabel('Home Team').fill('Lions');
+  await page.getByRole('button', { name: /Lions\s+team/i }).first().click();
+  const choices = page.getByTestId('manual-matchup-team-choices');
+  await expect(choices.getByRole('button')).toHaveText(['Chiefs', 'Lions']);
+  await expect(choices.locator('button[aria-pressed="true"]')).toHaveCount(0);
+  await expect(page.locator('input[name="line"]')).toHaveValue('');
+  await expect(page.locator('input[name="odds"]')).toHaveValue('');
+  await expect(page.getByLabel('Matchup')).toHaveValue('Chiefs @ Lions');
+});
+
+test('rejecting same-team matchup selection preserves price entered before the rejected click', async ({ page }) => {
+  await openFixtureNflSpread(page);
+  // Typing intentionally invalidates the old matchup. Enter a new price after
+  // that invalidation to isolate the duplicate-option rejection boundary.
+  await page.getByLabel('Home Team').fill('Chiefs');
+  await page.locator('input[name="line"]').fill('-6.5');
+  await page.locator('input[name="odds"]').fill('+115');
+  // Autocomplete defers blur-close by 120 ms; finish that transition before refocusing.
+  await page.waitForTimeout(150);
+  await page.getByLabel('Home Team').focus();
+  await page.getByRole('button', { name: /Chiefs\s+team/i }).last().click();
+  await expect(page.getByText('Choose a different participant', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Home Team')).toHaveValue('');
+  await expect(page.getByLabel('Matchup')).toHaveValue('');
+  await expect(page.locator('input[name="line"]')).toHaveValue('-6.5');
+  await expect(page.locator('input[name="odds"]')).toHaveValue('+115');
 });
