@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-12 (fifth pass, against `main` `84d74f532`)
+**Last reconciled against live truth:** 2026-09-13 (sixth pass, against `main` `abe364761`)
 **Learned archive:** [`plan-lessons.md`](./plan-lessons.md) — read on demand, not at session start.
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
@@ -79,14 +79,15 @@ earned — and it is recorded here rather than filed, per the ratified filing th
 Verified against `origin/main`, the GitHub API, git ancestry and live production SQL. Not against
 docs or chat history.
 
-- `main` is `84d74f532`. **Twelve PRs merged since the previous pass measured `ecfe3fc99`**, and
-  three of them falsify claims this page was making as current. They are named under "What changed
-  since the last pass" below rather than left for a reader to diff.
+- `main` is `abe364761`. **One product PR merged since the previous pass measured `84d74f532`,
+  and it is the one that page named as the critical path**: #1567 (UTV2-1889) at `1825e8623`,
+  closed out at `abe364761`. The other five commits are the previous plan pass, its closeout and
+  three readiness-ledger refreshes. See "What changed since the last pass" below.
 - **Production is still `755e52a6c`, and the drift is no longer bookkeeping.** This is the single
   largest change on this page. Re-run the command rather than trusting the numbers:
 
   ```
-  git rev-list --count 755e52a6c..origin/main                                    -> 68
+  git rev-list --count 755e52a6c..origin/main                                    -> 75
   git diff --name-only 755e52a6c origin/main -- 'apps/**' 'packages/**' 'deploy/**' \
     | grep -v '\.test\.' | wc -l                                                 -> 10
   git diff --name-only 755e52a6c origin/main -- 'supabase/migrations/'  | wc -l  -> 0
@@ -99,45 +100,70 @@ docs or chat history.
 
   | File | Lane | Reaches production today? |
   |---|---|---|
-  | `apps/api/src/grading-service.ts` | UTV2-1815, UTV2-1861, UTV2-1886 | **Yes** — grading runs in production and is not contained |
+  | `apps/api/src/grading-service.ts` | UTV2-1815, UTV2-1861, UTV2-1886, **UTV2-1889** | **Yes** — grading runs in production and is not contained |
   | `apps/api/src/settlement-service.ts` | UTV2-1815 | **Yes** — same pass |
   | `packages/db/src/repositories.ts` | UTV2-1815 | **Yes** — the interface both of the above call through |
   | `packages/db/src/runtime-repositories.ts` | UTV2-1815, UTV2-1861 | **Yes** |
   | `packages/domain/src/attribution/attribution-engine.ts` | UTV2-1815 | **Yes** |
-  | `apps/ingestor/src/results-resolver.ts` | UTV2-1868 | Only via the ingestor, which containment parks |
+  | `apps/ingestor/src/results-resolver.ts` | UTV2-1868, **UTV2-1889** | Only via the ingestor, which containment parks — and, since #1567, via the operator CLI path, which containment does not |
   | `apps/ingestor/src/sgo-fetcher.ts`, `write-surface.ts`, `dry-run-repositories.ts` | UTV2-1866 | Only via the ingestor |
   | `apps/smart-form/e2e/phase-one.spec.ts` | UTV2-1864 | No — Playwright spec, not shipped in the image |
 
   Five of the ten are on the **live grading path**, which `deploy.yml:540` deliberately leaves
   outside the `SYNDICATE_MACHINE_MODE` case statement and therefore runs under containment. So the
   repairs that admit Track Only picks to grading, that refuse to compute against an unknown stake,
-  and that read settlements once per pass instead of once per pick are all **merged and none of
-  them is running**. `deploy_sha_alignment` is measuring a stale product again, and a `Deploy`
-  dispatch is owed. It is reserved decision 8 and is on the Requires Griff list.
+  that read settlements once per pass instead of once per pick, **and — since 2026-09-13 — that
+  grade a moneyline off an attested win flag** are all **merged and none of them is running**.
+  `deploy_sha_alignment` is measuring a stale product again, and a `Deploy` dispatch is owed. It is
+  reserved decision 8 and is on the Requires Griff list. The previous pass recommended taking it
+  *after* #1567 landed so that one dispatch ships the whole grading path; #1567 has landed, so the
+  condition is met and the recommendation is now simply **dispatch**.
 
   **The generalisable point survives the reversal and is the reason the command is printed rather
   than the answer.** A drift conclusion is a reading taken at an instant. This page carried the
   "bookkeeping only" reading three times, correctly each time, and a reader who trusted the prose
   on 2026-09-12 would have concluded that five live-path repairs were in production when none is.
 - **12 PRs are open**, measured: #1429, #1451, #1484, #1491, #1492, #1495, #1496, #1498, #1505,
-  #1513, #1556, #1567. **#1479 and #1557 have left this list by merging**, which is what releases
-  the grading pass — see below.
+  #1513, #1556, #1570. **#1567 has left this list by merging; #1570 (UTV2-1892) has joined it** —
+  the bounded trusted-base repair Griff directed on #1556, see the cutover section.
   - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six, unchanged
     for eight reconciliations. All were opened with no `UTV2-###` in the branch, so `Merge Gate`
     cannot resolve a tier. Self-inflicted; the remedy is readmission, not a gate change.
-  - **Admissible, awaiting a T1 verdict** (#1484, #1505, #1513, **#1567**) — four. #1567 is the
-    integrated SGO-backed result journey and is the critical path for the active milestone.
+  - **Admissible, awaiting a T1 verdict** (#1484, #1505, #1513, **#1570**) — four. #1570 is
+    UTV2-1892: `WORK-###` identifier extraction in `merge-gate.yml` and acceptance in
+    `merge-gate-verdict.cjs`, bounded at both ends, drift-locked and independently reviewed. It
+    is a change to merge authority (reserved decision 7) and merges only on the T1 pair at its
+    exact head `224e4eae1`. It is **not** on the Smart Form critical path and must not block it.
   - **Admissible, `verify` red** (#1451) — real repair work, production DDL, PM-gated.
-  - **#1556** — the tracker-independence lane, in its own category: `mergeable: CONFLICTING`,
-    `mergeStateStatus: DIRTY`. It needs a `main` resync before anything else can be said about it,
-    and it now also carries Griff's ratified instruction amendment. See the cutover section.
+  - **#1556** — the tracker-independence lane, in its own category. It was resynced and the
+    instruction amendment integrated at `ecb7daeaf`; Griff's review at that head (comment
+    `5651878285`) directed one more bounded repair *through the trusted base first*, which is
+    #1570. #1556 is deliberately **stationary** at `ecb7daeaf` — its six-path `scope-override/v1`
+    (`5651878224`) is head-bound — until UTV2-1892 lands, then resyncs exactly once and returns
+    for the final verdict. See the cutover section.
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
 
 ### What changed since the last pass, and which of this page's claims it falsified
 
-Twelve merges, of which three are load-bearing. Named explicitly because each one was recorded on
+**Sixth pass, 2026-09-13.** One merge, and it is the one the fifth pass built its critical path on:
+
+| Merged | What it changed | The claim it falsified |
+|---|---|---|
+| **#1567 / UTV2-1889** at `1825e8623`, closed at `abe364761` | the integrated SGO-backed result journey — market-key normalization, paired-score outcome, participant attribution, the `game_moneyline` grading family, `track-only/stats.ts`, and the **staging journey suite** `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts` | Three cells of the boundary table that read "only on #1567"; Requires Griff item 1; **and the "Executable once #1567 merges" item 1**, which said the staging suite "cannot be written against `main`" and would be a follow-on lane. It was written *on* #1567 and executed there: its evidence bundle records `runtime_proof.coverage_gap.status: CLOSED`, closed by `Writable DB proof (staging only)` run `34734250949` (6 pass, 0 fail against `xskgrzbteyqdufktjrjx`), re-proven at four heads. The gap this page called "the largest genuine gap" closed inside the PR that this page said could not close it. |
+
+Opened, not merged: **#1570 / UTV2-1892** (T1), the trusted-base half of the #1556 correction.
+Griff's direction on #1556 (comment `5651878285`) required the `WORK-###` extraction in
+`merge-gate.yml` and acceptance in `merge-gate-verdict.cjs` to land together, with regression
+coverage preserving author/PR/head validation, through the existing tracker-keyed route. It did:
+three extractors bounded at both ends (`homework-123` and `work-123abc` no longer resolve), a drift
+lock that reads the workflow and the parser off disk and asserts the same namespace set, and a
+seven-branch boundary test. Codex returned APPROVE on the second pass after requiring the boundaries.
+ERV is VALID at `224e4eae1`; CEP is green locally; the only reds are `Check issue references` (the
+fixture identifiers in the test commit) and `Merge Gate` for want of the T1 pair.
+
+**Fifth pass, 2026-09-12.** Twelve merges, of which three are load-bearing. Named explicitly because each one was recorded on
 this page as *blocked*, and a session resuming from the previous text would have re-derived a
 blocker that no longer exists.
 
@@ -172,23 +198,30 @@ Boundaries, weakest to strongest: **memory** (in-process integration with `InMem
 | Authentication / allow-list | ✅ unit | — | ⚠️ suite exists, **gate defaults off** | ✅ Griff signed in 2026-09-09 |
 | Submission of a supported pick | ✅ | ✅ | ⚠️ same gate | ✅ one pick, moneyline |
 | Persistence with truthful provenance | ✅ | ✅ | — | ✅ `dfcd9486`, honest `eventId: null` |
-| SGO result normalization (market key, outcome, attribution) | ✅ **only on #1567** | ❌ **0 of 56 staging suites reach it** | — | ❌ not merged, not deployed |
+| SGO result normalization (market key, outcome, attribution) | ✅ on `main` (`1825e8623`) | ✅ `sgo-journey-staging.t1-proof.test.ts`, 6/6, run `34734250949` | — | ❌ merged, **not deployed** |
 | Grading admits the pick | ✅ | ✅ | — | ❌ merged `ed336a150`, **not deployed** |
-| Grading produces a settlement for it | ✅ **only on #1567** | ❌ | — | ❌ no result row exists to grade against |
-| Results / stats visible through an interface | ✅ **only on #1567** (`track-only/stats.ts`) | ❌ | ❌ no deployed surface | ❌ |
+| Grading produces a settlement for it | ✅ on `main` | ✅ same suite — real resolver, real submission, real grading pass against real PostgREST | — | ❌ not deployed, and no result row exists to grade against |
+| Results / stats visible through an interface | ✅ on `main` (`track-only/stats.ts`) | ✅ same suite asserts the aggregate | ❌ no deployed surface | ❌ |
+
+**The memory and staging columns are now full for every stage that has a staging boundary at
+all.** The 2026-09-12 text of this table said the staging column was "the largest genuine gap" and
+"cannot be closed before #1567 merges"; it was closed *by* #1567, which wrote the suite it needed
+and ran it under `Writable DB proof (staging only)` at four successive heads. The suite seeds a
+provider payload — not a result row and not a settlement — and asserts what the real resolver, the
+real submission path, the real grading pass and the real stats aggregate do with it, read back from
+the database rather than from return values.
 
 Three things follow, and none of them is an argument for more code:
 
-1. **The critical path is #1567's T1 verdict.** Every ❌ in the "memory" column is a cell that #1567
-   already fills. It is implemented, mutation-proven, and 50/50 on the integrated journey.
-2. **The staging column is the largest genuine gap, and it cannot be closed before #1567 merges**,
-   because the suite that would close it imports code that exists only on that branch. #1567's own
-   evidence bundle declares `runtime_proof.coverage_gap: OPEN` rather than papering over it — 0 of
-   56 live staging suites reach the moneyline branch, grepped at its head. The follow-on lane is
-   named under "Executable once #1567 merges".
-3. **The production column cannot be closed by engineering at all.** Two reserved actions stand in
-   the way, and they are different from each other: a `Deploy` dispatch (the merged grading repairs
-   are not running), and a results supply for the one real pick (see the three layers below).
+1. **The critical path is now the `Deploy` dispatch.** Every ❌ in the production column except
+   the last is a merged repair that is not running. Reserved decision 8, prepared under Requires
+   Griff item 1.
+2. **The last production ❌ is a results supply, and it is still reserved twice over** — the
+   provider key (decision 4) or the deferred operator attestation. See the three layers below.
+3. **The browser column is a lane-admissibility finding, not an engineering gap.** The Playwright
+   suite exists and is wired; the flag that runs it in CI is a one-line `ci.yml` edit that only a
+   `migration` or `runtime` lane may touch, and `migration` is refused by #1484. Recorded under
+   "Executable now that #1567 has merged".
 
 ### The three layers between the real pick and a settlement — re-measured 2026-09-12
 
@@ -201,20 +234,24 @@ events: 789 rows, max(created_at)          -> 2026-06-30
 game_results: 135,249 rows, max(created_at)-> 2026-06-30
 game_results market_key='game_moneyline_win' -> 0
 game_results market_key='points-all-game-ml' -> 280   (score-valued, participant_id NULL)
-system_runs grading.run succeeded            -> 13,772, latest 2026-09-12T13:02:40Z
+system_runs grading.run succeeded            -> 13,785, latest 2026-09-13T08:42:47Z  (re-measured 2026-09-13)
 ```
 
-| Layer | State on 2026-09-12 |
+| Layer | State on 2026-09-13 |
 |---|---|
 | **1. Lifecycle** — a Track Only pick stops at `validated`, which grading never read | **Closed on `main`, not in production.** UTV2-1861 admits `validated AND isTrackOnlyPickMetadata`, deliberately not all of `validated` — which today is 21,364 rows. Merged `ed336a150`; the deployed image predates it. |
-| **2. Market family** — `moneyline` classified `unsupported`, and `:153` skipped anything without a finite line | **Closed on #1567 only.** `classifyMarketFamilyForGrading` gains a `game_moneyline` family with `usesLine: false`, so a moneyline's correct `line = null` no longer reads as missing data, and the outcome is read off an attested win flag rather than computed from a score. Verified that it keys on the string production actually stores: `normalizeMarketKey('moneyline')` returns `'moneyline'`, and #1567's branch matches `'moneyline'` as well as `'game_moneyline'`. |
-| **3. Results supply** — nothing after 2026-06-30 can resolve an event at all | **Open, and it is the binding constraint.** Zero `game_moneyline_win` rows exist. The 280 `points-all-game-ml` rows are scores with no side attached and #1567 refuses them *by name* rather than interpreting them, so no historical row is guessed or silently graded. |
+| **2. Market family** — `moneyline` classified `unsupported`, and `:153` skipped anything without a finite line | **Closed on `main` at `1825e8623`, not in production.** `classifyMarketFamilyForGrading` gains a `game_moneyline` family with `usesLine: false`, so a moneyline's correct `line = null` no longer reads as missing data, and the outcome is read off an attested win flag rather than computed from a score. Verified that it keys on the string production actually stores: `normalizeMarketKey('moneyline')` returns `'moneyline'`, and the merged branch matches `'moneyline'` as well as `'game_moneyline'`. Proven against staging by the journey suite, and the deployed image predates it. |
+| **3. Results supply** — nothing after 2026-06-30 can resolve an event at all | **Open, and it is the binding constraint.** Zero `game_moneyline_win` rows exist. The 280 `points-all-game-ml` rows are scores with no side attached and the merged grading branch refuses them *by name* rather than interpreting them, so no historical row is guessed or silently graded. |
 
 **Layer 3 has exactly two honest exits and both are reserved**, which is why this page requests a
 decision rather than opening a lane: an SGO-sourced backfill (needs an active provider key — the key
 available to tooling returns `403 Inactive API key`, and whether the production secret differs cannot
-be checked without reading it), or an operator attestation (`scripts/ops/track-only/operator-attest-result.ts`
-on #1567 — built, preserved, and deliberately deferred per Griff's 2026-09-11 direction). Running
+be checked without reading it), or an operator attestation — **which no longer exists as code**. Under the
+CHANGES_REQUIRED verdict on #1567 (comment `5647259357`) `operator-attest-result.ts` was *deleted* rather
+than flagged off, `operator` was removed from `TRUSTED_GRADING_EVENT_PROVIDERS` (now `{sgo}` alone), and an
+event carrying `operator` provenance is refused as `event_provenance_untrusted_provider`, mutation-tested.
+The design survives only in history at `4701685541`, with the four review findings recorded as
+preconditions on any return. **So layer 3 has one exit today, not two: the provider key.** Running
 either against production is an operator action under `DB_ENVIRONMENT_OPERATOR_POLICY.md`, never an
 agent one.
 
@@ -456,18 +493,20 @@ In dependency order. None of these needs Griff and none touches a reserved surfa
    not an agent one**, and it is worth doing only after the `Deploy` dispatch below, since the
    deployed image predates the grading repairs.
 
-### Executable once #1567 merges — named now so the sequence is not re-derived
+### Executable now that #1567 has merged — and what the merge itself already took
 
-These are blocked by an artifact, not by a decision, and the artifact is #1567's own merge. Writing
-them down is what stops the next session from re-deriving the dependency:
+#1567 merged at `1825e8623` on 2026-09-13. The list below was written on 2026-09-12 as "executable
+once #1567 merges"; one of its three items turned out to be inside the PR.
 
-1. **A staging-database journey suite.** The single largest evidence gap on this page. #1567's
-   bundle declares `runtime_proof.coverage_gap: OPEN` — 0 of 56 live staging suites reach the
-   moneyline branch. The suite imports `results-resolver.ts` and `grading-service.ts` at their
-   post-#1567 shape, so it cannot be written against `main`. It runs under
-   `Writable DB proof (staging only)` against `xskgrzbteyqdufktjrjx` with isolated fixtures, and it
-   is what moves the "staging DB" column of the boundary table from ❌ to ✅ without touching
-   production or the provider.
+1. ~~**A staging-database journey suite.**~~ **Done, by #1567 itself.** The 2026-09-12 text said the
+   suite "cannot be written against `main`" because it imports post-#1567 code — true, and the
+   conclusion drawn from it was wrong: it was written on the branch instead.
+   `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts` ran under
+   `Writable DB proof (staging only)` against `xskgrzbteyqdufktjrjx` at `c4f22cc31`, `8c57fc3f4`,
+   `9e3554df4` and the resync anchor `6e923aa34` (run `34734250949`, 6 pass / 0 fail), and the
+   bundle's `coverage_gap` block records its own earlier "OPEN" reasoning as refuted by execution.
+   Nothing remains to write here. **The generalisable error**: a dependency on unmerged code is a
+   reason to build on the branch, not a reason to wait for the merge.
 2. **Enable the Smart Form e2e gate.** `apps/smart-form/e2e/phase-one.spec.ts` is wired through
    `apps/smart-form/package.json`'s `verify` script and runs only when `UNIT_TALK_SMART_FORM_E2E`
    is exactly `'1'`. Turning it on is a one-line `ci.yml` edit, which is T1-floored and admitted by
@@ -483,7 +522,8 @@ them down is what stops the next session from re-deriving the dependency:
 
 **Status 2026-09-12: the split held, and the file table below is a snapshot rather than a live
 allocation.** Claude's Smart Form strand has landed UTV2-1859 through UTV2-1891; Codex's tracker
-strand is #1556, which is now `CONFLICTING` and carries Griff's instruction amendment. The
+strand is #1556, which was `CONFLICTING` on 2026-09-12, has since been resynced to `ecb7daeaf`,
+and carries Griff's instruction amendment plus the trusted-base direction in comment `5651878285`. The
 mechanical enforcement described here — `file_scope_lock` pinned at lane-start, preflight `PL6`,
 and `.ops/leases/` — is what actually prevented collision, and it fired correctly rather than
 never being tested: #1479's lock refused four grading lanes until it merged. **Read the table as a
@@ -622,14 +662,15 @@ waiting on Griff" — at any moment most of the board is independent of every op
 
 ### Wave 0 — reserved actions (Griff only)
 
-**Two rows now block the active milestone, and they are different in kind.** Row 1 is an approval
-that releases already-finished engineering. Row 2 is a dispatch that makes five *merged* repairs
-actually run. Neither is new work and neither can be done by an agent.
+**One row now blocks the active milestone.** The 2026-09-12 text had two — an approval that
+released finished engineering, and a dispatch that makes merged repairs run. The approval was
+given and #1567 merged; the dispatch remains, and it now carries six live-path repairs rather than
+five. Row 1 below is a *different* reserved item that blocks only the tracker workstream.
 
 | # | Action | Why reserved | What it actually blocks |
 |---|---|---|---|
-| 1 | **Approve #1567** (UTV2-1889, T1) — the integrated SGO-backed result journey | Merge authority | **The active milestone's primary outcome.** Market-key mapping, score-to-outcome interpretation and participant attribution, together, plus the journey proof and the stats surface. The scope override is already granted; what is outstanding is the T1 pair. Every ❌ in the boundary table's "memory" column is a cell this PR fills, and the staging suite that would fill the next column cannot be written until it merges. |
-| 2 | **Dispatch `Deploy`** | Reserved decision 8 | Production is `755e52a6c`, 68 commits and 10 container files behind. **Five of the ten are on the live grading path** — `grading-service.ts`, `settlement-service.ts`, `repositories.ts`, `runtime-repositories.ts`, `attribution-engine.ts` — and grading is deliberately *not* contained. So the Track Only grading admission, the unknown-stake refusal and the N+1 repair are all merged and none is running. 0 migrations, so no DDL prerequisite. |
+| 1 | **Approve #1570** (UTV2-1892, T1) — `WORK-###` admitted by the trusted-base merge-gate parser | Merge authority (decision 7) | **#1556 only, and therefore the tracker cutover only.** Griff directed this exact bounded repair on #1556; it is prepared, reviewed and ERV-valid at `224e4eae1`. It does not block Smart Form production acceptance and must not be allowed to. |
+| 2 | **Dispatch `Deploy`** | Reserved decision 8 | **The active milestone's production column.** Production is `755e52a6c`, 75 commits and 10 container files behind. Five of the ten are on the live grading path — `grading-service.ts`, `settlement-service.ts`, `repositories.ts`, `runtime-repositories.ts`, `attribution-engine.ts` — and grading is deliberately *not* contained. So the Track Only grading admission, the unknown-stake refusal, the N+1 repair **and the moneyline grading family** are all merged and none is running. 0 migrations, so no DDL prerequisite. The "after #1567" condition the previous pass attached is met. |
 | 3 | Approve **#1513** (UTV2-1802, T1) — Command Center management token can no longer be handed arbitrary SQL | Merge authority | #1513 only. Pre-deployment hardening; the Command Center is in no compose service and behind no Caddy route. Becomes load-bearing if Milestone 2 condition 5 is answered by deploying it. |
 | 4 | Approve **#1484** (`pm-verdict/v1`) — canonical reference bootstrap | Merge authority | **Not #1484 only — it blocks every `migration` lane on the board.** Measured, not reasoned: `ops:lane-start --lane-type migration` returns exactly one violation, `forbidden_combination: "migration" cannot run concurrently with "data-canonical" (active lane: UTV2-1773)`. #1451 fires nothing because it is `parked`. Approving it is the single action that reopens the `migration` lane type, and with it UTV2-1871 and the e2e-gate enablement. |
 | 5 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
@@ -782,7 +823,7 @@ own merits.
 | PR / work | State |
 |---|---|
 | ~~#1479 null-stake computation truth~~ | **Merged `ec9952c28`, 2026-09-10.** It took the approval artifact this table said it needed. Its release of `apps/api/src/grading-service.ts` is what made the Milestone 2 grading work executable. |
-| **#1567 SGO-backed result journey** (UTV2-1889, T1) | **`verify`, `P0 Protocol`, `Executor Result Validation` and `Writable DB proof (staging only)` all green at `e331000bc`; `Merge Gate` fails on the T1 approval pair alone.** The `scope-override/v1` is granted. This plan states no verdict on it. |
+| ~~**#1567 SGO-backed result journey**~~ (UTV2-1889, T1) | **Merged `1825e8623`, 2026-09-13, closed out at `abe364761`.** It took the T1 pair this table said it needed. The moneyline family, the attribution and the staging journey suite are on `main`; none is deployed. |
 | #1451 June offer-history partitions | `verify` red; production DDL; PM-gated |
 | #1484 canonical reference bootstrap | `verify` green; needs a verdict (Wave 0 row 4) |
 | **The one `true_failure` dead-letter row** | **Read 2026-09-06 — done, and it was not a delivery failure.** It is the `proof-pick-blocked` guard refusing a `t1-proof` fixture to `discord:canary`, with its own run recorded `succeeded`. See the readiness section above. The *bucketing* defect it exposed is now closed too — UTV2-1875 (#1552, `6307d8f44`). |
@@ -932,10 +973,16 @@ The amendment is the doctrinal half of the same finding this page's boundary tab
 empirically: the repository's own instructions told agents that `main` was shipped truth, and this
 page then reported merged repairs as though they were running. Both halves are corrected together.
 
-**Integration order, measured 2026-09-12:** #1556 is `mergeable: CONFLICTING`,
-`mergeStateStatus: DIRTY` against `main` `84d74f532`. It must be resynced through
-`pnpm ops:merge-wrapper main-sync` before the amendment is applied, because the patch is pinned to a
-pre-resync tree. The amendment's own closing constraints are binding and unchanged: preserve the
+**Integration order, re-measured 2026-09-13:** the resync and the amendment are done — #1556 sits
+at `ecb7daeaf` with the five-file amendment integrated, and Griff's review at that head (comment
+`5651878285`) issued a six-path `scope-override/v1` (`5651878224`) and one further direction: the
+bounded trusted-base repair — `WORK-###` extraction in `merge-gate.yml` **and** acceptance in
+`merge-gate-verdict.cjs`, together, with regression coverage that preserves author, PR and head
+validation — must land through the existing tracker-keyed route *first*. That is **UTV2-1892 /
+#1570**, open and awaiting its T1 pair. #1556 stays stationary until it lands because every
+artifact on it is head-bound; then it resyncs **once**, rebinds its proof, re-verifies, and returns
+for the final verdict, at which point the override and the T1 artifacts are reissued at the new
+head. The amendment's own closing constraints are binding and unchanged: preserve the
 current required checks, risk floors, protected P0 handling and exact-head authorizations; update
 the lane's evidence after integration rather than carrying old-head completion claims; and resolve
 the staged P0 consumer and the `bootstrap/` scope dependencies before declaring the cutover
@@ -1622,37 +1669,42 @@ Consolidated from Wave 0, in the order that unblocks the most work. **Items 1 an
 active milestone and neither substitutes for the other**: item 1 lets finished engineering land,
 item 2 makes already-landed engineering run. Every other item blocks only itself.
 
-1. **Approve #1567** (UTV2-1889, T1) — the integrated SGO-backed result journey: normalized market
-   keys, paired-score outcome computation, participant attribution, the end-to-end journey proof,
-   the operator-attestation path (built, preserved, deliberately deferred) and the stats surface.
+1. **Dispatch `Deploy`.** Reserved decision 8, and now the first item because it is the only one
+   on the Smart Form critical path. Production is `755e52a6c`; `main` is 75 commits and 10
+   container files ahead, **five of them on the live grading path**, which containment does not
+   park. Zero migrations, so no DDL prerequisite and no rollback DDL.
 
-   **What is outstanding is the T1 approval pair and nothing else.** A `pm-verdict/v1` APPROVED
-   comment from CODEOWNERS **and** the `t1-approved` label, both pinned to the same head. The
-   `scope-override/v1` for the three `apps/ingestor/` paths was granted on 2026-09-12 and its
-   reasoning stands; note that it is head-pinned like everything else, so if the lane is resynced
-   the override is re-issued alongside the verdict rather than assumed to carry.
+   Non-secret success criterion: after the dispatch, `git diff --name-only <deployed> origin/main`
+   over `apps/**`/`packages/**`/`deploy/**` excluding tests returns 0 changed container files, and
+   the next `grading.run` row in `system_runs` is produced by an image that contains `1825e8623`.
+   The previous pass said "dispatch after #1567 merges, so one dispatch ships the whole grading
+   path". #1567 merged on 2026-09-13; **the recommendation is now simply to dispatch.**
+
+   What it does *not* do: no SGO activation, no production write beyond the deploy's own env
+   rewrite, no member delivery, no historical backfill. After it, the one real pick reaches grading,
+   is classified `game_moneyline`, and is skipped for want of a `game_moneyline_win` row — a
+   correct, observable outcome that the next item then unblocks.
+
+2. **Approve #1570** (UTV2-1892, T1) — the bounded trusted-base repair Griff directed on #1556:
+   `WORK-###` admitted by the `merge-gate.yml` issue extraction (both JS literals and the shell
+   `grep`) **and** by `merge-gate-verdict.cjs`, all three bounded at both ends so `homework-123`
+   and `work-123abc` cannot resolve; a drift lock that reads the workflow and the parser off disk
+   and asserts one namespace set; 25 unit tests and a six-mutation battery; Codex APPROVE on the
+   second pass. Reserved decision 7.
+
+   **What is outstanding is the T1 approval pair and nothing else**, both pinned to `224e4eae1`:
+   the `t1-approved` label **and** a `pm-verdict/v1` APPROVED comment from CODEOWNERS. ERV is
+   VALID at that head. `Check issue references` is red on fixture identifiers in the test commit
+   and is not clearable without a history rewrite that would move the anchor.
 
    **Order of operations, because this page has recorded the tax four times:** `strict: true` makes
    a PR `BEHIND` the moment `main` moves, and the readiness bot moves `main` on a schedule.
-   **Resync immediately before the verdict is requested, not after.** Three artifacts then bind one
-   head that will not move again.
+   **Resync immediately before the verdict is requested, not after.** If `main` has moved when
+   Griff turns to this, the lane resyncs through `pnpm ops:merge-wrapper main-sync`, rebinds, and
+   the pair is issued at the head that produces.
 
-   What it does *not* do, stated so the approval is not read as more than it is: no SGO activation,
-   no production write, no deployment, no member delivery, no historical backfill. The 280
-   production `points-all-game-ml` rows carry `participant_id = NULL` and stay uninterpretable —
-   the grading branch refuses every key but `game_moneyline_win`, of which production holds zero.
-
-2. **Dispatch `Deploy`.** Reserved decision 8. Production is `755e52a6c`; `main` is 68 commits and
-   10 container files ahead, **five of them on the live grading path**, which containment does not
-   park. Zero migrations, so no DDL prerequisite and no rollback DDL.
-
-   Non-secret success criterion: after the dispatch, `git rev-list --count <deployed>..origin/main`
-   over `apps/**`/`packages/**`/`deploy/**` excluding tests returns 0 changed container files, and
-   the next `grading.run` row in `system_runs` is produced by an image that contains
-   `ed336a150`. **Whether to dispatch before or after #1567 merges is a real choice and this page
-   recommends after**: deploying now ships the grading admission without the moneyline family, which
-   makes the one real pick reach grading and be skipped by market family — a correct outcome, but
-   one that proves less than a single dispatch taken after #1567 lands.
+   **It blocks the tracker workstream only.** It does not block Smart Form production acceptance,
+   and per Griff's 2026-09-13 direction it must not be allowed to.
 
 3. **Approve #1484** (`pm-verdict/v1`) — canonical reference bootstrap, `verify` green. Measured
    blast radius: it is the single action that reopens the `migration` lane type, and with it
@@ -1671,17 +1723,18 @@ item 2 makes already-landed engineering run. Every other item blocks only itself
    name. No key material is printed and nothing is written.
 
    If it comes back inactive, layer 3 becomes a **paid provider commitment** — reserved decision 3 —
-   and this plan will say so rather than routing around it. The alternative exit is the operator
-   attestation path on #1567, which Griff deferred on 2026-09-11 and which stays deferred until he
-   says otherwise.
+   and this plan will say so rather than routing around it. **There is no longer an alternative
+   exit in code**: the operator-attestation route was deleted from #1567 under its
+   CHANGES_REQUIRED verdict (comment `5647259357`), `operator` provenance is refused by the
+   grading trust allow-list, and the design lives only in history at `4701685541` with four
+   recorded preconditions on any return. Reviving it would be a new reserved decision, not a
+   deferred one.
 
-6. **Review the instruction amendment on #1556** (comment `5646174137`) — Griff authored it, so
-   under existing policy it requires independent review rather than self-approval. It is five files,
-   all inside #1556's existing `file_scope_lock`, and it corrects genuinely stale root instructions:
-   `main` means integrated rather than deployed; evidence descriptions must name the boundary
-   exercised; T1 needs its label **and** its verdict; writable staging suites are not
-   "non-destructive"; configured Discord targets are not "live". #1556 is `CONFLICTING`/`DIRTY` and
-   needs a `main` resync before any of this is reviewable.
+6. **The final verdict on #1556** — *after* #1570 lands and #1556 has resynced once. Griff's
+   2026-09-13 review at `ecb7daeaf` already granted the six-path override and set the sequence;
+   the remaining action is the T1 pair at the post-resync head, with the override reissued
+   alongside it. Nothing on #1556 is reviewable-to-completion before UTV2-1892 is on `main`,
+   which is why it is stationary.
 
 7. **#1491 / #1492 architecture review** — merge authority and agent authority. Those two PRs only.
 
@@ -1696,9 +1749,19 @@ item 2 makes already-landed engineering run. Every other item blocks only itself
     `WORK-###` identifiers — a required check that auto-passes them in ~10s.
 
 11. **A `scope-override/v1` comment** on any future lane that must touch a path outside its own
-    `file_scope_lock`. **None is outstanding** — #1567's was granted.
+    `file_scope_lock`. **None is outstanding** — #1567's was granted and consumed; #1556's
+    six-path override is granted at `ecb7daeaf` and will need reissuing at its post-resync head.
 
-**Three items left this list since the previous pass, and the first is the one that mattered:**
+**One item left this list since the previous pass, and it was item 1:**
+
+- **Approve #1567 (UTV2-1889)** — merged at `1825e8623` on 2026-09-13 with the T1 pair at
+  `de6887598`. The push-triggered closeout failed on `G6`, as it does for every route-B lane
+  (the merge-SHA `Writable DB proof` had not concluded), and the `issue_id`-only replay closed
+  it at `abe364761`. It carried the staging journey suite this page had listed as a follow-on
+  lane, and it **deleted** the operator-attestation route rather than preserving it — see the
+  three layers.
+
+**Three items left the list the pass before, and the first is the one that mattered:**
 
 - **Approve #1479 (UTV2-1815)** — merged at `ec9952c28` on 2026-09-10. It had been item 0 for two
   reconciliations on the strength of its `file_scope_lock` holding `apps/api/src/grading-service.ts`
