@@ -3954,7 +3954,7 @@ export function BetForm({
                           {!isTeamSport
                             ? `Enter the ${selectedSport} event and competitors exactly as shown at your sportsbook.`
                             : identityMode === 'manual'
-                            ? 'Names entered here are saved as manual entries. Check the team names before submitting.'
+                            ? 'Unresolved team identities — saved as manual entries without canonical IDs. Check both names before submitting.'
                             : 'Search and select each team.'}
                         </p>
                       </div>

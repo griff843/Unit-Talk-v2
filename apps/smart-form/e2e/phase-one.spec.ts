@@ -394,7 +394,7 @@ test('manual participant override persists honest unresolved provenance without 
   await expect(page.getByText('No canonical team found for “Navy”.', { exact: true })).toBeVisible();
   await page.getByTestId('coverage-gap-manual-entry').click();
   await expect(page.getByText('Manual team entry', { exact: true })).toBeVisible();
-  await expect(page.getByText('Names entered here are saved as manual entries. Check the team names before submitting.')).toBeVisible();
+  await expect(page.getByText('Unresolved team identities — saved as manual entries without canonical IDs. Check both names before submitting.')).toBeVisible();
   await page.screenshot({ path: '../../.out/smart-form-preview/regression/07-manual-participant-override.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await expect(page.getByLabel('Matchup')).toHaveValue('Temple @ Navy');
