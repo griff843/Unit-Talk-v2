@@ -35,9 +35,10 @@ checks out that trusted base, and evaluates the candidate without running its co
      and refuses only the two T1 approval artifacts — the `t1-approved` label
      and an exact-head `pm-verdict/v1` APPROVED comment from CODEOWNERS
      (measured: run `34734169058`, check `Merge Gate: BLOCKED` naming exactly
-     those two). On `issue_comment` (a `PM_VERDICT:` comment) and
-     `workflow_dispatch` events the evaluator is the copy on `main`, whose rule
-     is `(utv2|uni)-\d+`; it cannot resolve a `WORK-` identifier and writes
+     those two). On `issue_comment` (a `PM_VERDICT:` comment) the evaluator is
+     the copy on the default branch, `main`; on `workflow_dispatch` it is the
+     copy at whatever ref the dispatch names, which was `main` in the measured
+     run. That copy's rule is `(utv2|uni)-\d+`; it cannot resolve a `WORK-` identifier and writes
      `BLOCKED` with *"No issue ID found in PR branch or title. Cannot resolve
      authoritative tier"* and *"No authoritative lane manifest tier found"*
      (measured: `workflow_dispatch` run `34734720298` from `main` against this
@@ -56,11 +57,15 @@ checks out that trusted base, and evaluates the candidate without running its co
      check `BLOCKED`; removing and re-applying the label (or any other
      `pull_request` event on the stationary head) re-evaluates and repairs it.
      Any later `PM_VERDICT:` comment edit or a `workflow_dispatch` re-evaluation
-     flips the check back to `BLOCKED` for the same reason until a
+     dispatched from `main` flips the check back to `BLOCKED` for the same reason until a
      `pull_request` event runs again. This is ordinary GitHub trigger
      semantics, not a bypass: the resolved tier is the strictest one, the
-     verdict validator is the base's, and both artifacts are CODEOWNERS-authored
-     and pinned to the exact head. It is also fragile, which is why it is
+     verdict validator is the base's, and the verdict comment is validated as
+     CODEOWNERS-authored and bound to this exact PR number and head SHA. The
+     `t1-approved` label is checked for presence only — the gate validates
+     neither the actor who applied it nor any head binding for it — so the
+     head-pinning of this route rests on the verdict comment, not on the label.
+     It is also fragile, which is why it is
      written down here and in the PR packet rather than left to be discovered.
    - **The durable repair is one hunk of this PR** — the `work-` identifier in
      `merge-gate.yml` — which is a change to merge authority (reserved

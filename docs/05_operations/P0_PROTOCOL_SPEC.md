@@ -239,8 +239,11 @@ event: on `pull_request` and `pull_request_review` events that is the PR's own c
 extracts `(utv2|uni|work)-\d+` from the branch, resolves the foundation's tier (T1) from the lane
 manifest at its head, validates any verdict with the `merge-gate-verdict.cjs` checked out from the
 base SHA, and refuses only the T1 approval artifacts — the `t1-approved` label and an exact-head
-`pm-verdict/v1` APPROVED comment from CODEOWNERS. On `issue_comment` and `workflow_dispatch`
-events it is the copy on `main`, which cannot resolve a `WORK-` identifier and writes `BLOCKED`.
+`pm-verdict/v1` APPROVED comment from CODEOWNERS. On `issue_comment` events it is the copy on the
+default branch, `main`, and on `workflow_dispatch` it is the copy at the dispatched ref (`main` in
+the measured run); that copy cannot resolve a `WORK-` identifier and writes `BLOCKED`. Of the two
+artifacts, only the verdict comment is validated for author and bound to the exact PR and head; the
+label is checked for presence alone.
 The artifacts are therefore applied verdict first, label second, so the final evaluation is a
 `pull_request` one; the merge is performed by the wrapper installed on the base, which treats
 the tier as unresolved and holds the PR to the strict exact-head verdict rule. This branch's
