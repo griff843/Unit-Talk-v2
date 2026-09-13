@@ -97,6 +97,7 @@ test.beforeEach(async ({ page }) => {
 const catalog = {
   data: {
     sports: [
+      { id: 'NFL', name: 'NFL', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Passing Yards', 'Rushing Yards'], teams: [] },
       { id: 'NBA', name: 'NBA', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Points', 'Assists'], teams: [] },
       { id: 'NCAAF', name: 'NCAAF', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Passing Yards', 'Rushing Yards', 'Receiving Yards'], teams: [] },
       { id: 'MLB', name: 'MLB', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Hits', 'Total Bases', 'Pitching Strikeouts'], teams: [] },
@@ -160,18 +161,19 @@ test('mobile NCAAF moneyline preserves canonical IDs and Track Only', async ({ p
   const submitted: { value: Record<string, unknown> | null } = { value: null };
   await routeNcaaf(page, submitted);
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByLabel('Date').fill('2026-09-01');
   await page.getByRole('button', { name: /TCU @ UNC/i }).click();
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1787/02-authenticated-smart-form-shell.png', fullPage: true });
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1787/03-ncaaf-structured-matchup.png', fullPage: true });
+  await page.screenshot({ path: '../../.out/smart-form-preview/regression/02-authenticated-smart-form-shell.png', fullPage: true });
+  await page.screenshot({ path: '../../.out/smart-form-preview/regression/03-ncaaf-structured-matchup.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await page.getByRole('button', { name: /TCU Fanatics \+125/i }).click();
   await page.getByRole('button', { name: '8', exact: true }).click();
-  await expect(page.getByText('Internal Tracking · Track Only', { exact: true })).toBeVisible();
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1787/04-ncaaf-moneyline-mobile.png', fullPage: true });
+  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+  await page.screenshot({ path: '../../.out/smart-form-preview/regression/04-ncaaf-moneyline-mobile.png', fullPage: true });
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   const metadata = submitted.value?.['metadata'] as Record<string, unknown>;
   expect(metadata['distributionMode']).toBe('track-only');
   expect(metadata['eventId']).toBe('event-ncaaf');
@@ -184,6 +186,7 @@ test('mobile NCAAF player prop submits canonical event, team, and player IDs', a
   const submitted: { value: Record<string, unknown> | null } = { value: null };
   await routeNcaaf(page, submitted);
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByLabel('Date').fill('2026-09-01');
   await page.getByRole('button', { name: /TCU @ UNC/i }).click();
@@ -194,7 +197,7 @@ test('mobile NCAAF player prop submits canonical event, team, and player IDs', a
   await page.getByRole('button', { name: '8', exact: true }).click();
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
 
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   const metadata = submitted.value?.['metadata'] as Record<string, unknown>;
   expect(metadata).toMatchObject({
     distributionMode: 'track-only',
@@ -215,6 +218,7 @@ test('mobile NCAAF team selection filters incompatible players', async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await routeNcaaf(page, { value: null });
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByLabel('Date').fill('2026-09-01');
   await page.getByRole('button', { name: /TCU @ UNC/i }).click();
@@ -228,12 +232,13 @@ test('mobile NCAAF team selection filters incompatible players', async ({ page }
   await expect(page.getByPlaceholder('Type a player name')).toHaveValue('');
   await expect(page.getByRole('button', { name: 'TCU Quarterback' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'UNC Quarterback' })).toBeVisible();
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1787/05-ncaaf-team-player-filter-mobile.png', fullPage: true });
+  await page.screenshot({ path: '../../.out/smart-form-preview/regression/05-ncaaf-team-player-filter-mobile.png', fullPage: true });
 });
 
 test('switching sports clears the selected canonical matchup', async ({ page }) => {
   await routeNcaaf(page, { value: null });
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByLabel('Date').fill('2026-09-01');
   await page.getByRole('button', { name: /TCU @ UNC/i }).click();
@@ -242,7 +247,7 @@ test('switching sports clears the selected canonical matchup', async ({ page }) 
   await page.getByRole('button', { name: 'MLB' }).click();
   await expect(page.getByRole('button', { name: 'Change game' })).toHaveCount(0);
   await expect(page.getByText('TCU @ UNC', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('No canonical matchups are available for 2026-09-01. Continue with Away Team and Home Team search below.')).toBeVisible();
+  await expect(page.getByText('No games are listed here for 2026-09-01. Build your matchup with the team fields below.')).toBeVisible();
 });
 
 test('desktop MLB structured canonical event entry remains available', async ({ page }) => {
@@ -266,18 +271,19 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { submissionId: 'sub-mlb', pickId: 'pick-mlb', lifecycleState: 'validated' } }) });
   });
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await page.getByRole('button', { name: 'MLB' }).click();
   await page.getByLabel('Date').fill('2026-09-01');
   await page.getByRole('button', { name: /Yankees @ Red Sox/i }).click();
   await expect(page.getByText('Yankees @ Red Sox', { exact: true })).toBeVisible();
-  await expect(page.getByText('Internal Tracking · Track Only', { exact: true })).toBeVisible();
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1787/06-mlb-structured-desktop.png', fullPage: true });
+  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+  await page.screenshot({ path: '../../.out/smart-form-preview/regression/06-mlb-structured-desktop.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await page.getByRole('button', { name: /Yankees.*fanatics.*Manual odds/i }).click();
   await page.locator('input[name="odds"]').fill('-110');
   await page.getByRole('button', { name: '8', exact: true }).click();
-  await page.getByTestId('smart-form-submit-button').first().click();
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
 
   const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
   expect(metadata).toMatchObject({
@@ -316,8 +322,8 @@ test('structured fallback persists canonical side IDs with signed spread values 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NBA' }).click();
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
-  await expect(page.getByText('Select a matchup, or build one from away and home teams — the matchup name is generated automatically.')).toBeVisible();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
+  await expect(page.getByLabel('Away Team')).toBeVisible();
   await page.getByLabel('Away Team').fill('Celtics');
   await page.getByRole('button', { name: /Celtics\s+team/i }).click();
   await page.getByLabel('Home Team').fill('Knicks');
@@ -347,7 +353,7 @@ test('structured fallback persists canonical side IDs with signed spread values 
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
 
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
   const persistedPick = await readPersistedPick(request, submission.data.pickId);
@@ -380,16 +386,16 @@ test('manual participant override persists honest unresolved provenance without 
   await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF' }).click();
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
   await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
   await page.getByLabel('Away Team').fill('Temple');
   await expect(page.getByText('No canonical team found for “Temple”.', { exact: true })).toBeVisible();
   await page.getByLabel('Home Team').fill('Navy');
   await expect(page.getByText('No canonical team found for “Navy”.', { exact: true })).toBeVisible();
   await page.getByTestId('coverage-gap-manual-entry').click();
-  await expect(page.getByText('Manual participant override', { exact: true })).toBeVisible();
-  await expect(page.getByText('Manual identities are explicitly tagged unresolved and never stored as canonical IDs.')).toBeVisible();
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1787/07-manual-participant-override.png', fullPage: true });
+  await expect(page.getByText('Manual team entry', { exact: true })).toBeVisible();
+  await expect(page.getByText('Unresolved team identities — saved as manual entries without canonical IDs. Check both names before submitting.')).toBeVisible();
+  await page.screenshot({ path: '../../.out/smart-form-preview/regression/07-manual-participant-override.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await expect(page.getByLabel('Matchup')).toHaveValue('Temple @ Navy');
   await page.getByLabel('Team to Win').fill('Navy');
@@ -397,13 +403,13 @@ test('manual participant override persists honest unresolved provenance without 
   await page.getByRole('button', { name: '8', exact: true }).click();
   const submissionResponsePromise = page.waitForResponse((response) =>
     response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
-  await page.getByTestId('smart-form-submit-button').first().click();
+  await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
   const submissionResponse = await submissionResponsePromise;
   expect(submissionResponse.status(), 'Browser submission must reach the real local API').toBe(201);
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
 
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
   const persistedPick = await readPersistedPick(request, submission.data.pickId);
@@ -451,7 +457,7 @@ test('mobile manual coverage-gap submission persists signed negative odds and cr
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF' }).click();
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
   await page.getByLabel('Away Team').fill('Temple');
   await expect(page.getByText('No canonical team found for \u201cTemple\u201d.', { exact: true })).toBeVisible();
   await page.getByLabel('Home Team').fill('Navy');
@@ -472,7 +478,7 @@ test('mobile manual coverage-gap submission persists signed negative odds and cr
   await expect(oddsInput, 'the control must retain the sign it was given').toHaveValue('-110');
 
   await page.getByRole('button', { name: '8', exact: true }).click();
-  await expect(page.getByText('Internal Tracking \u00b7 Track Only', { exact: true })).toBeVisible();
+  await expect(page.getByText('Track Only \u00b7 Internal', { exact: true })).toBeVisible();
   const submissionResponsePromise = page.waitForResponse((response) =>
     response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
   // The phone viewport renders the mobile submit control, not the desktop one carrying
@@ -484,7 +490,7 @@ test('mobile manual coverage-gap submission persists signed negative odds and cr
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
 
   // The persisted half.
@@ -511,11 +517,11 @@ test('failed participant search is retryable and never offers coverage-gap entry
 
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF' }).click();
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
   await page.getByLabel('Away Team').fill('TCU');
   await expect(page.getByText('Search failed: Canonical participant search is temporarily unavailable. Try again.', { exact: true })).toBeVisible();
   await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
-  await expect(page.getByText('Manual participant override', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Manual team entry', { exact: true })).toHaveCount(0);
 });
 
 test('structured manual entry rejects the same canonical participant on both sides', async ({ page }) => {
@@ -532,14 +538,14 @@ test('structured manual entry rejects the same canonical participant on both sid
 
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF' }).click();
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
   await page.getByLabel('Away Team').fill('TCU');
   await page.getByRole('button', { name: /TCU\s+team/i }).click();
   await page.getByLabel('Home Team').fill('TCU');
   await page.getByRole('button', { name: /TCU\s+team/i }).click();
 
   await expect(page.getByText('Choose a different participant', { exact: true })).toBeVisible();
-  await expect(page.getByText('The same canonical participant cannot occupy both event sides.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Choose different teams for the away and home sides.', { exact: true })).toBeVisible();
   await expect(page.getByText('Derived matchup', { exact: true })).toHaveCount(0);
 });
 
@@ -574,10 +580,11 @@ test('non-team sport without a slate remains reachable through explicit manual p
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await page.getByRole('button', { name: 'MMA', exact: true }).click();
-  await expect(page.getByText('Manual event identity', { exact: true })).toBeVisible();
-  await expect(page.getByText(/does not use canonical home\/away roles/i)).toBeVisible();
-  await expect(page.getByText(/enter explicit manual event and competitor details below/i).first()).toBeVisible();
+  await expect(page.getByText('Event details', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Enter the MMA event and competitors exactly/i)).toBeVisible();
+  await expect(page.getByText(/enter the event and competitors below/i).first()).toBeVisible();
   await expect(page.getByLabel('Away Team')).toHaveCount(0);
   await expect(page.getByLabel('Home Team')).toHaveCount(0);
   await page.getByRole('button', { name: /Moneyline/i }).first().click();
@@ -585,8 +592,8 @@ test('non-team sport without a slate remains reachable through explicit manual p
   await page.getByLabel('Competitor').fill('Fighter A');
   await page.locator('input[name="odds"]').fill('-115');
   await page.getByRole('button', { name: '8', exact: true }).click();
-  await page.getByTestId('smart-form-submit-button').first().click();
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
 
   const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
   expect(metadata['participantResolution']).toMatchObject({
@@ -666,7 +673,7 @@ test('editing a selected team as free text clears the dependent canonical player
 async function openManualNbaMatchup(page: Page) {
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NBA', exact: true }).click();
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
   await page.getByLabel('Away Team').fill('Celtics');
   await page.getByRole('button', { name: /Celtics\s+team/i }).first().click();
   await page.getByLabel('Home Team').fill('Knicks');
@@ -677,7 +684,7 @@ async function openManualNbaMatchup(page: Page) {
 async function submitAndReadPersistedPick(page: Page, request: APIRequestContext) {
   const submissionResponsePromise = page.waitForResponse((response) =>
     response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
-  await page.getByTestId('smart-form-submit-button').first().click();
+  await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
   const submissionResponse = await submissionResponsePromise;
   expect(
     submissionResponse.status(),
@@ -686,7 +693,7 @@ async function submitAndReadPersistedPick(page: Page, request: APIRequestContext
   const submission = await submissionResponse.json() as {
     data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
   };
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
   const persistedPick = await readPersistedPick(request, submission.data.pickId);
   return { pickId: submission.data.pickId, persistedPick };
@@ -803,4 +810,116 @@ test('structured team total persists its line against the selected canonical tea
     },
   });
   await assertTrackOnlyHasNoOutbox(request, pickId);
+});
+
+test('mobile NFL retry preserves signed spread and prevents duplicate persistence', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  const chiefs = await canonicalParticipantId(request, 'teams', 'NFL', 'Chiefs');
+  const bills = await canonicalParticipantId(request, 'teams', 'NFL', 'Bills');
+  await page.route('**/api/reference-data/catalog', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
+  await page.route('**/api/reference-data/matchups?**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/submit');
+  await expect(page.getByText('Local QA preview · test data')).toBeVisible();
+  async function enterSpread() {
+    await page.getByRole('button', { name: 'NFL', exact: true }).click();
+    await page.getByRole('button', { name: 'Manual entry', exact: true }).click();
+    await page.getByLabel('Away Team').fill('Chiefs');
+    await page.getByRole('button', { name: /Chiefs\s+team/i }).first().click();
+    await page.getByLabel('Home Team').fill('Bills');
+    await page.getByRole('button', { name: /Bills\s+team/i }).first().click();
+    await page.getByRole('button', { name: /Spread/i }).first().click();
+    await page.getByLabel('Team', { exact: true }).fill('Chiefs');
+    await page.getByRole('button', { name: /Chiefs\s+team/i }).last().click();
+    await page.locator('input[name="line"]').fill('-3.5');
+    await page.locator('input[name="odds"]').fill('+105');
+    await page.getByRole('button', { name: '8', exact: true }).click();
+  }
+  await enterSpread();
+  const line = page.locator('input[name="line"]');
+  const odds = page.locator('input[name="odds"]');
+  await expect(line).toHaveAttribute('inputmode', 'text');
+  await expect(odds).toHaveAttribute('inputmode', 'text');
+  expect(await page.evaluate(() => ({ width: window.innerWidth, overflowing: Array.from(document.querySelectorAll("*" )).filter(el => el.getBoundingClientRect().right > window.innerWidth).slice(0, 12).map(el => ({ tag: el.tagName, cls: el.className, width: el.getBoundingClientRect().width })) })), "Viewport overflow").toMatchObject({ overflowing: [] });
+  await page.screenshot({ path: '../../.out/smart-form-preview/mobile-nfl-slip.png', fullPage: true });
+  let attempts = 0;
+  let releaseRetry: () => void = () => {};
+  const heldRetry = new Promise<void>(resolve => { releaseRetry = resolve; });
+  await page.route('**/api/submissions', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    attempts += 1;
+    if (attempts === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary local test failure. Retry your pick.' }) });
+    await heldRetry;
+    return route.continue();
+  });
+  const submit = page.locator('[data-testid="smart-form-submit-button"]:visible');
+  const failed = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/submissions'));
+  await submit.click();
+  expect((await failed).status()).toBe(503);
+  await expect(submit).toBeEnabled();
+  await expect(line).toHaveValue('-3.5');
+  await expect(odds).toHaveValue('+105');
+  await expect(page.getByLabel('Matchup')).toHaveValue('Chiefs @ Bills');
+  const success = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/submissions') && response.status() === 201);
+  await submit.click();
+  await expect.poll(() => attempts).toBe(2);
+  await expect(submit).toBeDisabled();
+  // Exercise a second form submit event while the real API attempt is held.
+  await page.locator('form').evaluate((form) => (form as HTMLFormElement).requestSubmit());
+  await expect(submit).toBeDisabled();
+  expect(attempts).toBe(2);
+  releaseRetry();
+  const result = await (await success).json() as { data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean } };
+  expect(result.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await expect(page.getByText('Saving your pick', { exact: true })).not.toBeVisible();
+  await expect(page.getByText('Submission failed', { exact: true })).not.toBeVisible();
+  const pick = await readPersistedPick(request, result.data.pickId);
+  expect(pick).toMatchObject({ source: 'smart-form', capper_id: 'griff843', line: -3.5, odds: 105, stake_units: 1 });
+  expect(pick['metadata']).toMatchObject({ capper: 'griff843', submittedBy: 'griff843', distributionMode: 'track-only', teamId: chiefs.participantId, participantResolution: { resolution: 'canonical', sportId: 'NFL', eventId: null, away: { participantId: chiefs.participantId }, home: { participantId: bills.participantId } } });
+  await assertTrackOnlyHasNoOutbox(request, result.data.pickId);
+  await page.screenshot({ path: '../../.out/smart-form-preview/mobile-nfl-receipt.png', fullPage: true });
+  await page.getByRole('button', { name: 'Submit Another Pick' }).click();
+  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+  await enterSpread();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect(await page.evaluate(() => ({ width: window.innerWidth, overflowing: Array.from(document.querySelectorAll("*" )).filter(el => el.getBoundingClientRect().right > window.innerWidth).slice(0, 12).map(el => ({ tag: el.tagName, cls: el.className, width: el.getBoundingClientRect().width })) })), "Viewport overflow").toMatchObject({ overflowing: [] });
+  await page.screenshot({ path: '../../.out/smart-form-preview/desktop-nfl-slip.png', fullPage: true });
+  const duplicateResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/submissions'));
+  await submit.click();
+  const duplicate = await duplicateResponse;
+  expect([200, 201]).toContain(duplicate.status());
+  expect((await duplicate.json()).data.pickId).toBe(result.data.pickId);
+  await expect(page.getByText('Pick Saved')).toBeVisible();
+  expect(attempts).toBe(3);
+  await assertTrackOnlyHasNoOutbox(request, result.data.pickId);
+});
+
+
+test('manual entry is the default and browsing starts only after explicit opt-in', async ({ page }) => {
+  const browseRequests: string[] = [];
+  page.on('request', request => {
+    if (/\/api\/reference-data\/(matchups|browse|events)/.test(request.url())) browseRequests.push(request.url());
+  });
+  await page.goto('/submit');
+  await expect(page.getByText('Local QA preview · test data')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Manual entry', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: /^(Manual entry|Browse offers)$/ })).toHaveText(['Manual entry', 'Browse offers']);
+  await expect(page.getByTestId('incomplete-slip')).toBeVisible();
+  await expect(page.locator('[data-testid=smart-form-submit-button]:visible')).toBeDisabled();
+  for (const [name, width] of [['desktop', 1280], ['mobile', 390], ['narrow', 320]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: '../../.out/smart-form-preview/finishing/initial-' + name + '.png', fullPage: true });
+  }
+  await page.getByRole('button', { name: 'NFL', exact: true }).click();
+  await expect(page.getByLabel('Away Team')).toBeVisible();
+  expect(browseRequests).toEqual([]);
+  for (const [name, width] of [['desktop', 1280], ['mobile', 390], ['narrow', 320]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `../../.out/smart-form-preview/finishing/manual-default-${name}.png`, fullPage: true });
+  }
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
+  await expect.poll(() => browseRequests.length).toBeGreaterThan(0);
 });

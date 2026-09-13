@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BrandLogo } from './BrandLogo';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type {
@@ -72,6 +73,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { createSessionSubmissionGuard } from '@/lib/submission-guard';
 import { Spinner } from '@/components/ui/spinner';
 import { SignedNumberInput } from '@/components/SignedNumberInput';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
@@ -511,7 +513,7 @@ function ParticipantAutocompleteField({
           </FormControl>
           {!sport ? (
             <p className="text-xs text-muted-foreground">
-              Select a sport before searching canonical participants.
+              Choose a sport before searching teams and players.
             </p>
           ) : null}
           {shouldShowMenu ? (
@@ -711,7 +713,7 @@ function SearchableCapperField({
             </div>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            Search by display name or canonical id. Submissions persist the selected capper id.
+            Search by name or capper ID. The selected capper receives credit for this pick.
           </p>
           <FormMessage />
         </FormItem>
@@ -813,7 +815,7 @@ export function BetForm({
 }: {
   authenticatedCapper?: { capperId: string; displayName: string } | null;
 }) {
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
   // Capper identity from stored JWT (display only — API validates on each submission)
   const [capperClaims] = useState(() => {
     if (typeof window === 'undefined') return null;
@@ -824,7 +826,7 @@ export function BetForm({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [referenceAvailability, setReferenceAvailability] = useState<ReferenceDataAvailability | null>(null);
   const [referenceAvailabilityError, setReferenceAvailabilityError] = useState<string | null>(null);
-  const [browseMode, setBrowseMode] = useState<BrowseMode>('live-offer');
+  const [browseMode, setBrowseMode] = useState<BrowseMode>('manual');
   const [liveEntryMode, setLiveEntryMode] = useState<LiveEntryMode>('browse');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<SubmitPickResult | null>(null);
@@ -837,7 +839,10 @@ export function BetForm({
   const [eventBrowseError, setEventBrowseError] = useState<string | null>(null);
   const [isLoadingEventBrowse, setIsLoadingEventBrowse] = useState(false);
   const [isRefreshingOffers, setIsRefreshingOffers] = useState(false);
-  const [sessionPickKeys, setSessionPickKeys] = useState<Set<string>>(new Set());
+  const submissionGuardRef = useRef<ReturnType<typeof createSessionSubmissionGuard> | null>(null);
+  if (submissionGuardRef.current === null) {
+    submissionGuardRef.current = createSessionSubmissionGuard();
+  }
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [awayParticipantId, setAwayParticipantId] = useState<string | null>(null);
@@ -1147,7 +1152,7 @@ export function BetForm({
       .catch(() => {
         if (active) {
           setReferenceAvailabilityError(
-            `Canonical ${selectedSport} reference-data availability could not be checked.`,
+            `${selectedSport} team and player availability could not be checked. Please retry.`,
           );
         }
       });
@@ -1886,7 +1891,7 @@ export function BetForm({
     if (suggestion.participantId === otherId) {
       toast({
         title: 'Choose a different participant',
-        description: 'The same canonical participant cannot occupy both event sides.',
+        description: 'Choose different teams for the away and home sides.',
         variant: 'destructive',
       });
       if (role === 'away') {
@@ -1994,17 +1999,6 @@ export function BetForm({
     };
   }
 
-  function buildPickKey(values: BetFormValues): string {
-    return [
-      selectedMatchupId ?? values.eventName,
-      values.marketType,
-      values.playerName ?? '',
-      values.statType ?? '',
-      values.team ?? '',
-      String(values.line ?? ''),
-    ].join('|');
-  }
-
   async function onSubmit(values: BetFormValues) {
     if (!catalog) {
       return;
@@ -2012,8 +2006,8 @@ export function BetForm({
 
     if (identityMode === 'structured-fallback' && (!awayParticipantId || !homeParticipantId)) {
       toast({
-        title: 'Select canonical participants',
-        description: 'Choose both event sides from search results. Free text appears only after both searches return no canonical result.',
+        title: 'Select both teams',
+        description: 'Choose both teams from the search results. If neither team is found, you can enter both manually.',
         variant: 'destructive',
       });
       return;
@@ -2023,7 +2017,7 @@ export function BetForm({
       return;
     }
     if (identityMode !== 'manual' && selectedMarketType === 'player-prop' && !selectedPlayerId) {
-      toast({ title: 'Select a canonical player', description: 'Typing a name is not enough; select a search result.', variant: 'destructive' });
+      toast({ title: 'Select a player from the results', description: 'Typing a name is not enough; select a search result.', variant: 'destructive' });
       return;
     }
 
@@ -2049,16 +2043,16 @@ export function BetForm({
       return;
     }
 
-    // Soft warn on duplicate pick within same session
-    const pickKey = buildPickKey(values);
-    if (sessionPickKeys.has(pickKey)) {
+    const submissionGuard = submissionGuardRef.current;
+    if (!submissionGuard) return;
+    const admission = submissionGuard.acquire();
+    if (admission !== 'acquired') {
       toast({
-        title: 'Possible duplicate pick',
-        description: 'This looks like a pick you already submitted this session. Submitting anyway.',
-        variant: 'default',
+        title: 'Saving your pick',
+        description: 'Please wait for the current submission to finish.',
       });
+      return;
     }
-
     setIsSubmitting(true);
     try {
       const submittedSportsbook = values.sportsbook ?? '';
@@ -2073,7 +2067,10 @@ export function BetForm({
         : resolveSportsbookId(catalog, values.sportsbook);
       const resolvedEventId = identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null;
 
-      const payload = buildSubmissionPayload(values, {
+      // Disabled identity controls are omitted by react-hook-form. Preserve the
+      // displayed capper claim; the API still authenticates and pins identity.
+      const submissionValues = { ...values, capper: effectiveCapper?.capperId ?? values.capper };
+      const payload = buildSubmissionPayload(submissionValues, {
         submissionMode: selectedOffer ? 'live-offer' : 'manual',
         eventId: resolvedEventId,
         leagueId: eventBrowse?.leagueId ?? selectedMatchup?.leagueId ?? null,
@@ -2090,8 +2087,8 @@ export function BetForm({
         participantResolution: buildParticipantResolution(values),
       });
       const result = await submitPick(payload);
-      setSessionPickKeys((prev) => { const next = new Set(prev); next.add(buildPickKey(values)); return next; });
-      setSubmittedValues(values);
+      dismiss();
+      setSubmittedValues(submissionValues);
       setSuccessResult(result);
     } catch (err) {
       toast({
@@ -2100,6 +2097,7 @@ export function BetForm({
         variant: 'destructive',
       });
     } finally {
+      submissionGuard.release();
       setIsSubmitting(false);
     }
   }
@@ -2119,7 +2117,12 @@ export function BetForm({
             setSelectedOfferParticipantId(null);
             setSelectedPlayerId(null);
             setSelectedTeamId(null);
-            setBrowseMode('live-offer');
+            setAwayParticipantId(null);
+            setHomeParticipantId(null);
+            setAwaySearchResolution('idle');
+            setHomeSearchResolution('idle');
+            setIdentityMode('canonical');
+            setBrowseMode('manual');
             setLiveEntryMode('browse');
             setBrowseSearchQuery('');
             setBrowseSearchResults([]);
@@ -2129,6 +2132,8 @@ export function BetForm({
             form.reset({
               sport: '',
               eventName: '',
+              awayParticipantName: '',
+              homeParticipantName: '',
               playerName: '',
               statType: '',
               team: '',
@@ -2136,6 +2141,11 @@ export function BetForm({
               capperConviction: undefined,
               gameDate: TODAY,
               units: 1.0,
+              odds: undefined,
+              line: undefined,
+              direction: undefined,
+              capper: effectiveCapper?.capperId,
+              trackOnly: true,
             });
           }}
         />
@@ -2173,8 +2183,8 @@ export function BetForm({
             </h2>
             <p className="text-sm text-muted-foreground">
               {isTeamSport
-                ? 'Choose a canonical game when one is available. Otherwise continue with Away Team and Home Team below.'
-                : 'Choose a canonical event when one is available. Otherwise enter explicit manual event and competitor details below.'}
+                ? 'Choose an available game, or build your matchup with the team fields below.'
+                : 'Choose an available event, or enter the event and competitors below.'}
             </p>
           </div>
           <div
@@ -2223,7 +2233,7 @@ export function BetForm({
                 Search
               </p>
               <p className="text-sm text-muted-foreground">
-                Search canonical players, teams, and matchups for {selectedSport} on {watchedValues.gameDate}.
+                Search players, teams, and matchups for {selectedSport} on {watchedValues.gameDate}.
               </p>
             </div>
             <Input
@@ -2240,7 +2250,7 @@ export function BetForm({
             {browseSearchError ? <p className="text-sm text-destructive">{browseSearchError}</p> : null}
             {!isSearchingBrowse && !browseSearchError && hasSearchedBrowse && browseSearchResults.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
-                No canonical result matched “{browseSearchQuery.trim()}” on the selected date. This differs from an empty reference dataset.
+                No result matched “{browseSearchQuery.trim()}” for this date. Try another name or build your matchup below.
               </div>
             ) : null}
             {browseSearchResults.length > 0 ? (
@@ -2297,8 +2307,8 @@ export function BetForm({
         {liveEntryMode === 'browse' && !isLoadingMatchups && !matchupsError && matchups.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-5 text-sm text-muted-foreground">
             {isTeamSport
-              ? `No canonical matchups are available for ${watchedValues.gameDate}. Continue with Away Team and Home Team search below.`
-              : `No canonical events are available for ${watchedValues.gameDate}. Enter explicit manual event and competitor details below.`}
+              ? `No games are listed here for ${watchedValues.gameDate}. Build your matchup with the team fields below.`
+              : `No events are listed here for ${watchedValues.gameDate}. Enter your event and competitors below.`}
           </div>
         ) : null}
         {liveEntryMode === 'browse' && matchups.length > 0 && !selectedMatchup ? (
@@ -2769,7 +2779,7 @@ export function BetForm({
                         <p>
                           {selectedSportsbookMissingLiveCoverage
                             ? `No live ${watchedValues.sportsbook} offers for this market right now.`
-                            : 'No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.'}
+                            : 'No offers are listed for this market. Your matchup is selected; enter the line and odds below.'}
                         </p>
                         {selectedSportsbookMissingLiveCoverage && alternateLiveSportsbooks.length > 0 ? (
                           <div className="flex flex-wrap items-center gap-2">
@@ -2948,7 +2958,7 @@ export function BetForm({
         render={({ field }) => (
           <FormItem>
             <FormLabel>{label}</FormLabel>
-            <FormControl><Input placeholder="Enter unresolved team" {...field} /></FormControl>
+            <FormControl><Input placeholder="Enter team name" {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )}
@@ -2966,7 +2976,7 @@ export function BetForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Team</FormLabel>
-                    <FormControl><Input placeholder="Enter unresolved team" {...field} /></FormControl>
+                    <FormControl><Input placeholder="Enter team name" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -2977,7 +2987,7 @@ export function BetForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Player</FormLabel>
-                    <FormControl><Input placeholder="Enter unresolved player" {...field} /></FormControl>
+                    <FormControl><Input placeholder="Enter player name" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -3203,7 +3213,7 @@ export function BetForm({
                     <FormItem>
                       <FormLabel>{isTeamSport ? 'Team to Win' : 'Competitor'}</FormLabel>
                       <FormControl>
-                        <Input placeholder="Enter unresolved competitor" {...field} />
+                        <Input placeholder="Enter competitor name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -3800,21 +3810,20 @@ export function BetForm({
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
+    <main className="smart-form-shell min-h-screen px-4 pt-5 pb-36 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
+      <header className="smart-form-brand mx-auto mb-8 flex max-w-7xl items-center justify-between gap-4 pb-4">
+        <BrandLogo />
+        <span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold">{watchedValues.trackOnly ? 'Track Only · Internal' : 'Delivery eligible'}</span>
+      </header>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row lg:items-start">
         <div className="w-full space-y-6 lg:max-w-3xl">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
-              Smart Form V1
+              CAPPER WORKSPACE
             </p>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Canonical pick entry
+              Build your pick
             </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-              {isTeamSport
-                ? 'Choose a sport, then a game when one is available. If the slate is empty, build the matchup with canonical Away Team and Home Team search before choosing the market.'
-                : 'Choose a sport, then an event when one is available. If canonical coverage is empty, enter explicit unresolved event and competitor details before choosing the market.'}
-            </p>
           </div>
 
           <Form {...form}>
@@ -3826,23 +3835,8 @@ export function BetForm({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-foreground">1. Sport and date</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Sport keeps every game, team, player, and market choice in the correct context.
-                    </p>
                   </div>
                   <div className="inline-flex rounded-full border border-border bg-background p-1">
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                        browseMode === 'live-offer'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground hover:text-foreground',
-                      )}
-                      onClick={() => setBrowseMode('live-offer')}
-                    >
-                      Live offer mode
-                    </button>
                     <button
                       type="button"
                       className={cn(
@@ -3852,8 +3846,22 @@ export function BetForm({
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                       onClick={() => setBrowseMode('manual')}
+                      aria-pressed={browseMode === 'manual'}
                     >
-                      Manual fallback
+                      Manual entry
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                        browseMode === 'live-offer'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      onClick={() => setBrowseMode('live-offer')}
+                      aria-pressed={browseMode === 'live-offer'}
+                    >
+                      Browse offers
                     </button>
                   </div>
                 </div>
@@ -3866,7 +3874,7 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>Sport</FormLabel>
                         <FormControl>
-                          <div data-testid="smart-form-sport-select" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div data-testid="smart-form-sport-select" className="grid grid-cols-3 gap-2">
                             {catalog.sports.map((sport: SportDefinition) => {
                               const isSelected = field.value === sport.id;
                               return (
@@ -3887,9 +3895,6 @@ export function BetForm({
                             })}
                           </div>
                         </FormControl>
-                        <p className="text-xs text-muted-foreground">
-                          Pick a sport first so matchups, participants, and market families stay filtered correctly.
-                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -3915,26 +3920,22 @@ export function BetForm({
 
               {renderLiveOfferSection()}
 
-              {shouldRenderPickDetailsSection ? (
+              {selectedSport && shouldRenderPickDetailsSection ? (
                 <section ref={marketSectionRef} className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-foreground">
-                      {selectedMatchup ? '3. Market and selection' : isTeamSport ? '2. Build matchup' : '2. Event and market'}
+                      {selectedMatchup ? '2. Market and selection' : isTeamSport ? '2. Matchup and selection' : '2. Event and selection'}
                     </h2>
                     <span className="text-xs text-muted-foreground">
-                      {shouldShowManualFallback ? 'Manual completion active' : 'Offer-backed fields active'}
+                      {shouldShowManualFallback ? 'Manual entry' : 'Selected offer'}
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Market, player or team, and line details remain editable so the capper can finish the ticket
-                    even when live coverage is incomplete.
-                  </p>
                 </div>
 
                 {selectedMatchup && shouldShowManualFallback ? (
                   <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
-                    The selected matchup is preserved from canonical browse data. You can finish this pick manually if the exact live offer is not present.
+                    Your selected matchup is kept. Enter the line and odds from your sportsbook to complete the pick.
                   </div>
                 ) : null}
 
@@ -3944,22 +3945,22 @@ export function BetForm({
                       <div>
                         <p className="text-sm font-semibold text-foreground">
                           {!isTeamSport
-                            ? 'Manual event identity'
+                            ? 'Event details'
                             : identityMode === 'manual'
-                              ? 'Manual participant override'
+                              ? 'Manual team entry'
                               : 'Build matchup from teams'}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {!isTeamSport
-                            ? `${selectedSport} does not use canonical home/away roles here. Event and participant text is explicitly stored as unresolved manual provenance.`
+                            ? `Enter the ${selectedSport} event and competitors exactly as shown at your sportsbook.`
                             : identityMode === 'manual'
-                            ? 'Manual identities are explicitly tagged unresolved and never stored as canonical IDs.'
-                            : 'Select a matchup, or build one from away and home teams — the matchup name is generated automatically.'}
+                            ? 'Unresolved team identities — saved as manual entries without canonical IDs. Check both names before submitting.'
+                            : 'Search and select each team.'}
                         </p>
                       </div>
                       {isTeamSport && identityMode === 'manual' ? (
                         <Button type="button" variant="outline" onClick={retryStructuredIdentitySearch}>
-                          Retry canonical search
+                          Retry team search
                         </Button>
                       ) : null}
                       {isTeamSport && canUseManualIdentity ? (
@@ -3981,7 +3982,7 @@ export function BetForm({
                     ) : null}
                     {isTeamSport && referenceAvailability?.teamsAvailable === false ? (
                       <div data-testid="canonical-team-data-unavailable" className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-foreground">
-                        Canonical {selectedSport} team data is not available in this environment yet. This is a reference-data dependency, not a search miss.
+                        The {selectedSport} team list is not available here yet. You can enter both teams manually below.
                       </div>
                     ) : null}
 
@@ -4028,7 +4029,7 @@ export function BetForm({
                               <FormLabel>Away Team</FormLabel>
                               <FormControl>
                                 <Input
-                                  placeholder="Enter unresolved away team"
+                                  placeholder="Enter away team name"
                                   {...field}
                                   onChange={(event) => {
                                     field.onChange(event.target.value);
@@ -4048,7 +4049,7 @@ export function BetForm({
                               <FormLabel>Home Team</FormLabel>
                               <FormControl>
                                 <Input
-                                  placeholder="Enter unresolved home team"
+                                  placeholder="Enter home team name"
                                   {...field}
                                   onChange={(event) => {
                                     field.onChange(event.target.value);
@@ -4078,7 +4079,7 @@ export function BetForm({
                 {!hasSelectedBrowseMatchup ? (
                   <div data-testid="smart-form-market-select" className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {isTeamSport && !selectedMatchup ? '3. Market Family' : 'Market Family'}
+                      Market
                     </p>
                     <MarketTypeGrid
                       availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
@@ -4097,17 +4098,8 @@ export function BetForm({
                 </section>
               ) : null}
 
-              <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
-                <h2 className="text-lg font-semibold text-foreground">Book, Odds, and Submission</h2>
-                <div className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3">
-                  <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Internal Tracking · Track Only</p>
-                    <p className="text-xs text-muted-foreground">
-                      This pick will be persisted for internal use. Member delivery is disabled and cannot be enabled from this form.
-                    </p>
-                  </div>
-                </div>
+              {selectedSport && <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <h2 className="text-lg font-semibold text-foreground">3. Odds and review</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -4234,7 +4226,7 @@ export function BetForm({
                     </div>
                   )}
                 </div>
-              </section>
+              </section>}
             </form>
           </Form>
         </div>
