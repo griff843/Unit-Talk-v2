@@ -1,0 +1,72 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1894
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1894
+  objective: Production deploy decision packet — exact release SHA, containment,
+    rollback, browser-to-observation acceptance
+  acceptance_criteria:
+    - |-
+      Griff directed on 2026-09-13: prepare the deployment decision (reserved decision 8) against an exact release SHA — included changes, preserved containment, rollback, and post-deploy acceptance. "The image contains [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)" proves code inclusion, not that the form works. Acceptance must demonstrate browser authentication → Track Only submission → persisted pick → internal visibility → zero member delivery, and must separately state how results and stats are verified while SGO remains off, without calling the browser gap resolved merely because its CI gate can be enabled.
+
+      Deliverable: `docs/05_operations/DEPLOY_DECISION_PACKET_2026-09-13.md`, measured against `origin/main` `fbd7e17d6` and `Deploy` run 34296962788 (`755e52a6c`).
+
+      * release identity: `deploy.yml` tags images with `github.sha` of the dispatched ref; release = `main` HEAD at dispatch; bot commits change only readiness-score.json; verification command prints 0 container-relevant diffs
+      * included changes: 10 container files with lane attribution and whether each runs under containment; 0 migrations; 0 deploy/compose changes; Smart Form byte-identical to the 2026-09-09 pilot image
+      * containment: unchanged by construction; the workflow's own parked-mode derivation, forced autorun/targets, and two container gate confirmations
+      * rollback: `rollback_tag` input, `deploy/rollback.sh --tag <40-char>`, per-tag config snapshots, inflight marker, no automatic rollback, no DDL
+      * acceptance in three tiers: workflow assertions (incl. `/health` `version.gitShaShort`), Griff's browser session + read-only `track-only-report.ts` observation (the e2e suites mock the Auth.js session and never target the deployed host), and the honest limit on grading observability (skip histogram is [UTV2-1605](https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success))
+      * results/stats while SGO is off: memory (sgo-journey-proof), staging (sgo-journey-staging.t1-proof), production read-only (report + stats refuse to count pending); a real production settlement requires a results supply (reserved decisions 3/4)
+      * independence from [griff843/Unit-Talk-v2#1570](https://linear.app/unit-talk-v2/review/utv2-1892-admit-work-identities-in-the-trusted-merge-gate-issue-8241b7947e29)/#1556: no shared files, none of their paths ship in an image
+
+      Scope: the packet file only. No code, no gate, no approval artifact. No deployment is dispatched by this lane.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Griff directed on 2026-09-13: prepare the deployment decision (reserved decision 8) against an exact release SHA — included changes, preserved containment, rollback, and post-deploy acceptance. "The image contains [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)" proves code inclusion, not that the form works. Acceptance must demonstrate browser authentication → Track Only submission → persisted pick → internal visibility → zero member delivery, and must separately state how results and stats are verified while SGO remains off, without calling the browser gap resolved merely because its CI gate can be enabled.
+
+      Deliverable: `docs/05_operations/DEPLOY_DECISION_PACKET_2026-09-13.md`, measured against `origin/main` `fbd7e17d6` and `Deploy` run 34296962788 (`755e52a6c`).
+
+      * release identity: `deploy.yml` tags images with `github.sha` of the dispatched ref; release = `main` HEAD at dispatch; bot commits change only readiness-score.json; verification command prints 0 container-relevant diffs
+      * included changes: 10 container files with lane attribution and whether each runs under containment; 0 migrations; 0 deploy/compose changes; Smart Form byte-identical to the 2026-09-09 pilot image
+      * containment: unchanged by construction; the workflow's own parked-mode derivation, forced autorun/targets, and two container gate confirmations
+      * rollback: `rollback_tag` input, `deploy/rollback.sh --tag <40-char>`, per-tag config snapshots, inflight marker, no automatic rollback, no DDL
+      * acceptance in three tiers: workflow assertions (incl. `/health` `version.gitShaShort`), Griff's browser session + read-only `track-only-report.ts` observation (the e2e suites mock the Auth.js session and never target the deployed host), and the honest limit on grading observability (skip histogram is [UTV2-1605](https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success))
+      * results/stats while SGO is off: memory (sgo-journey-proof), staging (sgo-journey-staging.t1-proof), production read-only (report + stats refuse to count pending); a real production settlement requires a results supply (reserved decisions 3/4)
+      * independence from [griff843/Unit-Talk-v2#1570](https://linear.app/unit-talk-v2/review/utv2-1892-admit-work-identities-in-the-trusted-merge-gate-issue-8241b7947e29)/#1556: no shared files, none of their paths ship in an image
+
+      Scope: the packet file only. No code, no gate, no approval artifact. No deployment is dispatched by this lane.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1894/production-deploy-decision-packet-exact-release-sha-containment
+    title: Production deploy decision packet — exact release SHA, containment,
+      rollback, browser-to-observation acceptance
+    description: |-
+      Griff directed on 2026-09-13: prepare the deployment decision (reserved decision 8) against an exact release SHA — included changes, preserved containment, rollback, and post-deploy acceptance. "The image contains [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)" proves code inclusion, not that the form works. Acceptance must demonstrate browser authentication → Track Only submission → persisted pick → internal visibility → zero member delivery, and must separately state how results and stats are verified while SGO remains off, without calling the browser gap resolved merely because its CI gate can be enabled.
+
+      Deliverable: `docs/05_operations/DEPLOY_DECISION_PACKET_2026-09-13.md`, measured against `origin/main` `fbd7e17d6` and `Deploy` run 34296962788 (`755e52a6c`).
+
+      * release identity: `deploy.yml` tags images with `github.sha` of the dispatched ref; release = `main` HEAD at dispatch; bot commits change only readiness-score.json; verification command prints 0 container-relevant diffs
+      * included changes: 10 container files with lane attribution and whether each runs under containment; 0 migrations; 0 deploy/compose changes; Smart Form byte-identical to the 2026-09-09 pilot image
+      * containment: unchanged by construction; the workflow's own parked-mode derivation, forced autorun/targets, and two container gate confirmations
+      * rollback: `rollback_tag` input, `deploy/rollback.sh --tag <40-char>`, per-tag config snapshots, inflight marker, no automatic rollback, no DDL
+      * acceptance in three tiers: workflow assertions (incl. `/health` `version.gitShaShort`), Griff's browser session + read-only `track-only-report.ts` observation (the e2e suites mock the Auth.js session and never target the deployed host), and the honest limit on grading observability (skip histogram is [UTV2-1605](https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success))
+      * results/stats while SGO is off: memory (sgo-journey-proof), staging (sgo-journey-staging.t1-proof), production read-only (report + stats refuse to count pending); a real production settlement requires a results supply (reserved decisions 3/4)
+      * independence from [griff843/Unit-Talk-v2#1570](https://linear.app/unit-talk-v2/review/utv2-1892-admit-work-identities-in-the-trusted-merge-gate-issue-8241b7947e29)/#1556: no shared files, none of their paths ship in an image
+
+      Scope: the packet file only. No code, no gate, no approval artifact. No deployment is dispatched by this lane.
+    captured_at: 2026-09-13T12:51:51.674Z
+    description_sha256: 1b45ca5d2050ff73c863b8ccac4aed0df82afa881bb0ff658159332b22d55689
+  contract_hash: 3a00dd8ebf49d9a13c2d3c2594beb238ef92cd12ec3b9a9d51abfe898efe8175
