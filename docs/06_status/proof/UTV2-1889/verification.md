@@ -12,7 +12,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1889-operator-attested-results
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1567
-Head SHA: 9e3554df42a99c90d41b0c153adfd018beeeb3d2
+Head SHA: 6e923aa3455334bb7ddc2e15fbdba3474bf493f1
 result: pass
 
 ## ASSERTIONS:
@@ -236,7 +236,7 @@ $ pnpm test
    the authoritative aggregate is the CI `verify` job on PR 1567. The chained package
    scripts are &&-joined, so exit 0 is a statement about every one of them.)
 
-$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 9e3554df42a99c90d41b0c153adfd018beeeb3d2
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 6e923aa3455334bb7ddc2e15fbdba3474bf493f1
   Verdict: PASS
   Changed files: 17
   Rules matched: ingestor-provider
@@ -282,7 +282,7 @@ $ read-only governed production measurement (zfzdnfwdarxucxtaojxm, one SELECT, n
 - [ ] `pnpm verify`: NOT RUN on the workstation by design -- `verify` ends at
       `test:live-db`, where `ci:assert-staging` refuses any target that is not staging
       `xskgrzbteyqdufktjrjx`. The CI `verify` job on PR 1567 is the authoritative run.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 9e3554df42a99c90d41b0c153adfd018beeeb3d2`:
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1889 --base origin/main --head 6e923aa3455334bb7ddc2e15fbdba3474bf493f1`:
       PASS, 17 files, rule `ingestor-provider` matched and satisfied
 
 ## Runtime Verification
@@ -295,22 +295,22 @@ moves where the evidence is obtained and changes nothing about whether it is obt
 
 That evidence exists at the execution anchor of this bundle, and it includes the journey
 itself running against the staging database rather than only in memory. Run
-`34713309743` attempt 1, job `103605894101`, at head
-`9e3554df42a99c90d41b0c153adfd018beeeb3d2` -- run conclusion **success**, with `verify`
-(job `103606950029`) green in the same run. Every number below was read out of that job log,
+`34734250949` attempt 1, job `103662659572`, at head
+`6e923aa3455334bb7ddc2e15fbdba3474bf493f1` -- run conclusion **success**, with `verify`
+(job `103663968924`) green in the same run. Every number below was read out of that job log,
 not written from recollection:
 
 ```
-job "Writable DB proof (staging only)" -- all 17 steps success, 2026-09-12T19:09:07Z -> 2026-09-12T19:16:57Z
+job "Writable DB proof (staging only)" -- all 17 steps success, 2026-09-13T02:56:21Z -> 2026-09-13T03:08:00Z
   [assert-staging] OK: target is the approved staging project   (x3, before any test)
-  seed-staging  [seed-staging] retained by design: settlement_records, picks, submissions ; [seed-staging] reset distribution_receipts: 1 row(s) deleted ; [seed-staging] reset distribution_outbox: 12 row(s) deleted ; [seed-staging] reset system_runs: 4 row(s) deleted ; [seed-staging] sports: 9 synthetic row(s) upserted ; [seed-staging] cappers: 1 synthetic row(s) upserted ; [seed-staging] market_families: 6 synthetic row(s) upserted ; [seed-staging] selection_types: 3 synthetic row(s) upserted ; [seed-staging] market_types: 133 synthetic row(s) upserted
+  seed-staging  [seed-staging] retained by design: settlement_records, picks, submissions ; [seed-staging] reset distribution_receipts: 0 row(s) deleted ; [seed-staging] reset distribution_outbox: 0 row(s) deleted ; [seed-staging] reset system_runs: 0 row(s) deleted ; [seed-staging] sports: 9 synthetic row(s) upserted ; [seed-staging] cappers: 1 synthetic row(s) upserted ; [seed-staging] market_families: 6 synthetic row(s) upserted ; [seed-staging] selection_types: 3 synthetic row(s) upserted ; [seed-staging] market_types: 133 synthetic row(s) upserted
   migration head 20260901150000_utv2_1811_rate_limit_buckets.sql
   pnpm test:db            -> apps/api/src/database-smoke.test.ts  7/7 pass, 0 fail, 0 skipped
   pnpm test:t1-proof:live -> 20 suites, 20 TAP blocks summed    125/125 pass, 0 fail, 0 skipped
   receipt .out/ci-db-proof-receipt.json
-    sha256 43dc5dcdbea7d007ddfd28aabf857b044d38a45eb3844bc63b745b166eb96729
-    artifact utv2-1630-db-proof-receipt-34713309743-1 (id 10304071606, 1459 bytes)
-  CI_FIXTURE_RUN_ID utv2-1630-34713309743-1
+    sha256 25923e63b6e90fe9626a9552c9d80ecba280fb7453d84516fd9d301c851704b0
+    artifact utv2-1630-db-proof-receipt-34734250949-1 (id 10310531991, 1465 bytes)
+  CI_FIXTURE_RUN_ID utv2-1630-34734250949-1
 ```
 
 **The twentieth suite is this lane's**, `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts`,
@@ -325,8 +325,8 @@ wired by the one-line `package.json` entry, and it contributed 6 of the assertio
     ok 6 - an incomplete result is refused rather than guessed, against staging
 # pass 6   # fail 0   # skipped 0
 staging project ref  xskgrzbteyqdufktjrjx
-CI_FIXTURE_RUN_ID    utv2-1630-34713309743-1
-log sha256           8fe2619d3e0a8ff075fb64964727d93e47798dd31f1b547164b45c8ec2a6aaa1
+CI_FIXTURE_RUN_ID    utv2-1630-34734250949-1
+log sha256           f1f705c1cd7e53785ed1bf4444fe9f53439f0eb971580fbe9156718336591520
 ```
 
 **Every run cited by earlier versions of this section is withdrawn as evidence for this
@@ -337,10 +337,12 @@ for a superseded source tree is not weaker evidence for this bundle -- it is evi
 different artifact. The staging journey has now passed on four independent runs across four
 heads with four disjoint fixture namespaces, and only the run above is bound here.
 
+**Resync at the final head.** 6e923aa3455334bb7ddc2e15fbdba3474bf493f1 is the merge of `main` e0c8f812d into 9e3554df42a99c90d41b0c153adfd018beeeb3d2, performed by the sanctioned wrapper resync (`ops:merge-wrapper git-merge-main`) after the PM verdict in PR 1567 comment 5648336829. `git diff --name-only 9e3554df42a99c90d41b0c153adfd018beeeb3d2 6e923aa3455334bb7ddc2e15fbdba3474bf493f1 -- apps packages scripts supabase .github package.json` is empty, so every static measurement below that names 9e3554df42a99c90d41b0c153adfd018beeeb3d2 was taken on a source tree byte-identical to this anchor and is carried, not re-recorded. The anchor moves because the proof-binding validator diffs anchor..head, and a merge commit brings main's files into that range. The one file changed after this anchor besides the proof directory is docs/06_status/lanes/UTV2-1889.json, whose file_scope_lock now truthfully lists the three apps/ingestor paths and package.json, as the verdict's item 3 instructs; that path is proof-prefix exempt for the validator.
+
 The binding claim is stated in its source-tree form and verified at the current head:
 
 ```
-git diff --name-only 9e3554df42a99c90d41b0c153adfd018beeeb3d2 HEAD \
+git diff --name-only 6e923aa3455334bb7ddc2e15fbdba3474bf493f1 HEAD \
   -- 'apps/**' 'packages/**' 'scripts/**' 'supabase/**' '.github/**' 'package.json'  ->  (empty)
 ```
 
@@ -405,4 +407,4 @@ operator write route ships, and the suite writes only namespaced fixture rows to
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1567
 Approved PR head: pending merge
-Execution SHA: 9e3554df42a99c90d41b0c153adfd018beeeb3d2
+Execution SHA: 6e923aa3455334bb7ddc2e15fbdba3474bf493f1
