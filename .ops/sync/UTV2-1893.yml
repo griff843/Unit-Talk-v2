@@ -1,0 +1,60 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1893
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1893
+  objective: "Reconcile the mission plan against main abe364761 — #1567 merged,
+    the staging gap is closed, #1570 carries the trusted-base repair"
+  acceptance_criteria:
+    - |-
+      docs/mission/plan.md was last reconciled against main `84d74f532` on 2026-09-12. Since then, measured against `origin/main` `abe364761` on 2026-09-13:
+
+      * [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) **(**[UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/prepare-and-prove-the-sgo-backed-track-only-result-journey)**) merged at** `1825e8623` and closed out. The plan lists "Approve [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)" as Requires-Griff item 1 and the boundary table marks SGO normalization, settlement and stats as "only on [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)". All of it is on `main` now.
+      * **The staging-DB coverage gap is CLOSED, and it was closed by** [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) **itself**, not by a follow-on lane. Its evidence bundle records `runtime_proof.coverage_gap.status: CLOSED` via `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts` executing under `Writable DB proof (staging only)` against `xskgrzbteyqdufktjrjx` (6 pass / 0 fail, run 34734250949). The plan's "Executable once [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) merges" item 1 and the boundary table's "0 of 56 staging suites reach it" are stale.
+      * [griff843/Unit-Talk-v2#1570](https://linear.app/unit-talk-v2/review/utv2-1892-admit-work-identities-in-the-trusted-merge-gate-issue-8241b7947e29) **(**[UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue)**, T1) is open** — the bounded trusted-base repair Griff directed on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (comment 5651878285): WORK-### identifier extraction in `merge-gate.yml` plus `merge-gate-verdict.cjs` acceptance, both-ends-bounded, with a drift lock and boundary regression. Independently reviewed (Codex APPROVE), ERV VALID at `224e4eae1`, awaiting the T1 pair at that head. Reserved decision 7.
+      * [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) **is stationary at** `ecb7daeaf` with a six-path head-bound `scope-override/v1`; it resyncs once after [UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue) lands and returns for the final verdict.
+      * **Deploy drift**: production `755e52a6c`, `main` 75 commits and the same 10 container files ahead, 0 migrations. The plan recommended dispatching *after* [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) lands; that condition is now met, so the packet's recommendation moves from "after" to "now".
+
+      Scope: `docs/mission/plan.md` only. No code, no gate, no approval artifact.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      docs/mission/plan.md was last reconciled against main `84d74f532` on 2026-09-12. Since then, measured against `origin/main` `abe364761` on 2026-09-13:
+
+      * [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) **(**[UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/prepare-and-prove-the-sgo-backed-track-only-result-journey)**) merged at** `1825e8623` and closed out. The plan lists "Approve [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)" as Requires-Griff item 1 and the boundary table marks SGO normalization, settlement and stats as "only on [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)". All of it is on `main` now.
+      * **The staging-DB coverage gap is CLOSED, and it was closed by** [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) **itself**, not by a follow-on lane. Its evidence bundle records `runtime_proof.coverage_gap.status: CLOSED` via `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts` executing under `Writable DB proof (staging only)` against `xskgrzbteyqdufktjrjx` (6 pass / 0 fail, run 34734250949). The plan's "Executable once [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) merges" item 1 and the boundary table's "0 of 56 staging suites reach it" are stale.
+      * [griff843/Unit-Talk-v2#1570](https://linear.app/unit-talk-v2/review/utv2-1892-admit-work-identities-in-the-trusted-merge-gate-issue-8241b7947e29) **(**[UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue)**, T1) is open** — the bounded trusted-base repair Griff directed on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (comment 5651878285): WORK-### identifier extraction in `merge-gate.yml` plus `merge-gate-verdict.cjs` acceptance, both-ends-bounded, with a drift lock and boundary regression. Independently reviewed (Codex APPROVE), ERV VALID at `224e4eae1`, awaiting the T1 pair at that head. Reserved decision 7.
+      * [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) **is stationary at** `ecb7daeaf` with a six-path head-bound `scope-override/v1`; it resyncs once after [UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue) lands and returns for the final verdict.
+      * **Deploy drift**: production `755e52a6c`, `main` 75 commits and the same 10 container files ahead, 0 migrations. The plan recommended dispatching *after* [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) lands; that condition is now met, so the packet's recommendation moves from "after" to "now".
+
+      Scope: `docs/mission/plan.md` only. No code, no gate, no approval artifact.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1893/reconcile-the-mission-plan-against-main-abe364761-1567-merged-the
+    title: "Reconcile the mission plan against main abe364761 — #1567 merged, the
+      staging gap is closed, #1570 carries the trusted-base repair"
+    description: |-
+      docs/mission/plan.md was last reconciled against main `84d74f532` on 2026-09-12. Since then, measured against `origin/main` `abe364761` on 2026-09-13:
+
+      * [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) **(**[UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/prepare-and-prove-the-sgo-backed-track-only-result-journey)**) merged at** `1825e8623` and closed out. The plan lists "Approve [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)" as Requires-Griff item 1 and the boundary table marks SGO normalization, settlement and stats as "only on [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271)". All of it is on `main` now.
+      * **The staging-DB coverage gap is CLOSED, and it was closed by** [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) **itself**, not by a follow-on lane. Its evidence bundle records `runtime_proof.coverage_gap.status: CLOSED` via `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts` executing under `Writable DB proof (staging only)` against `xskgrzbteyqdufktjrjx` (6 pass / 0 fail, run 34734250949). The plan's "Executable once [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) merges" item 1 and the boundary table's "0 of 56 staging suites reach it" are stale.
+      * [griff843/Unit-Talk-v2#1570](https://linear.app/unit-talk-v2/review/utv2-1892-admit-work-identities-in-the-trusted-merge-gate-issue-8241b7947e29) **(**[UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue)**, T1) is open** — the bounded trusted-base repair Griff directed on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (comment 5651878285): WORK-### identifier extraction in `merge-gate.yml` plus `merge-gate-verdict.cjs` acceptance, both-ends-bounded, with a drift lock and boundary regression. Independently reviewed (Codex APPROVE), ERV VALID at `224e4eae1`, awaiting the T1 pair at that head. Reserved decision 7.
+      * [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) **is stationary at** `ecb7daeaf` with a six-path head-bound `scope-override/v1`; it resyncs once after [UTV2-1892](https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue) lands and returns for the final verdict.
+      * **Deploy drift**: production `755e52a6c`, `main` 75 commits and the same 10 container files ahead, 0 migrations. The plan recommended dispatching *after* [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271) lands; that condition is now met, so the packet's recommendation moves from "after" to "now".
+
+      Scope: `docs/mission/plan.md` only. No code, no gate, no approval artifact.
+    captured_at: 2026-09-13T09:03:46.164Z
+    description_sha256: 0ced0bfd4739c108dd2f707c0d01b97a1aa1599b3546bb959a8a617cc034a5c6
+  contract_hash: dc7a4e8b99b4b0f59ac4a969879bc430b83dfa89653aadb36484bd0f26f958a1
