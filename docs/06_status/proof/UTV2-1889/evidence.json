@@ -375,10 +375,11 @@
           "an incomplete result is refused rather than guessed, against staging"
         ],
         "staging_project_ref": "xskgrzbteyqdufktjrjx",
-        "ci_fixture_run_id": "utv2-1630-34700925304-2",
-        "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34700925304",
-        "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34700925304/job/103572734394",
-        "log_sha256": "01c31aac60d098105c695f7359f005084b7de8691e3000e860d87362552ca52e"
+        "ci_fixture_run_id": "utv2-1630-34734250949-1",
+        "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34734250949",
+        "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34734250949/job/103662659572",
+        "log_sha256": "f1f705c1cd7e53785ed1bf4444fe9f53439f0eb971580fbe9156718336591520",
+        "note": "Values from the run bound at this anchor (run 34734250949 attempt 1, job 103662659572). Earlier versions of this object cited withdrawn run 34700925304 attempt 2 (job 103572734394), the first run in which the journey passed; that run is superseded by the exact-anchor run, not withdrawn as evidence of the first pass, and remains listed in verification.md's run history."
       },
       "what_remains_unproven": [
         "PRODUCTION: nothing in this lane ran against production. No production row was written, and no production claim is made. The only production reads are the governed read-only SELECT recorded under static_proof.production_measurement.",
