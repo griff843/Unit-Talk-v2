@@ -171,9 +171,69 @@
   },
   "runtime_proof": {
     "profile": "hosted_live_db",
-    "status": "PENDING_CI",
-    "target": "staging Supabase project xskgrzbteyqdufktjrjx via the run-scoped credentials ci.yml materializes. Never production.",
-    "note": "Admitted under the route B deferral (manifest t1_live_db_precondition: deferred_to_ci). This lane changes no application or database code; the live-DB obligation is discharged by the CI verify and Writable DB proof (staging only) jobs on this PR, and closeout G6 refuses to close without both green on the merge SHA. This block is filled from concluded runs only, after verify concludes at the anchor.",
-    "ci_runs": []
+    "status": "RECEIPTED",
+    "executed_at": "2026-09-13T08:08:18Z/2026-09-13T08:19:29Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx via the run-scoped credentials ci.yml materializes. Never production. assert-staging-target.ts ran first in each of the three credentialed invocations and printed \"[assert-staging] OK: target is the approved staging project\" before any test executed (the project ref itself is masked by GitHub secret redaction).",
+    "command": "job \"Writable DB proof (staging only)\", run 34746934490 attempt 1, job 103696463715, at head 92f34932f25c6c97fc4ad6e9d5517ee83437b6e6. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 20 t1-proof suites wired in package.json at this head. Run conclusion SUCCESS; `verify` (job 103697711293) is green in the same run. Every value in this block was read out of that job log rather than written from recollection.",
+    "receipt": "CI run 34746934490 attempt 1. Job 103696463715 \"Writable DB proof (staging only)\" succeeded and job 103697711293 \"verify\" succeeded, both at head 92f34932f25c6c97fc4ad6e9d5517ee83437b6e6. pnpm test:db -> database-smoke.test.ts 7/7 pass, 0 fail, 0 skipped. pnpm test:t1-proof:live -> 20 suites, 125/125 pass, 0 fail, 0 skipped summed over the 20 TAP blocks. Receipt artifact utv2-1630-db-proof-receipt-34746934490-1 (id 10313774890), ci-db-proof-receipt.json sha256 481be6689d1c3b80ca183de71e0ebea8020e67e600a660cf814f804cb322e3d4, schema ci-db-proof-receipt/v2, receipt_sha256 79520a632d7d8fe075a2f836232c1a8ff97ef969efe5237e77d75ec0a8f139d4, output_sha256 6937123355ad16c07d3a68f2e0d4d4c53915ee4f14d2594469d02456b208753f. Job log download sha256 b526b2ef508cbba0aeb7725d7382e8901ec2e78e4436c1d03379cacc2762d45d.",
+    "note": "Admitted under the route B deferral (manifest t1_live_db_precondition: deferred_to_ci). This lane changes no application or database code: its runtime is the Merge Gate workflow, whose trusted copy runs from pull_request.base.sha and therefore cannot exercise the repaired parser until this PR merges. The live-DB obligation is the standard staging proof, discharged here from ONE concluded run at head 92f34932f25c6c97fc4ad6e9d5517ee83437b6e6, whose source tree is byte-identical to the anchor 63115cbff33f0196bbe8d9aa182345be33effb0b (`git diff --name-only 63115cbff33f0196bbe8d9aa182345be33effb0b 92f34932f25c6c97fc4ad6e9d5517ee83437b6e6 -- apps packages scripts supabase .github package.json` is empty; the two commits between them touch only docs/06_status/proof/UTV2-1892/). Closeout G6 separately requires verify and Writable DB proof green on the MERGE SHA. The run at 1a64d5f22 (job 103694731624, also success) compiled the pre-boundary test file and is superseded rather than withdrawn.",
+    "queries": [
+      {
+        "label": "[assert-staging] target guard ran before any test in all three credentialed invocations and reported \"OK: target is the approved staging project\"",
+        "result": "ok -- staging confirmed, production never contacted"
+      },
+      {
+        "label": "staging fixtures seeded before either step: [seed-staging] retained by design: settlement_records, picks, submissions ; reset distribution_receipts: 1 row(s) deleted ; reset distribution_outbox: 12 row(s) deleted ; reset system_runs: 4 row(s) deleted ; sports: 9 upserted ; cappers: 1 upserted ; market_families: 6 upserted ; selection_types: 3 upserted ; market_types: 133 upserted",
+        "result": "ok -- mutable tables reset, reference data re-seeded"
+      },
+      {
+        "label": "step `pnpm test:db` -- apps/api/src/database-smoke.test.ts against staging Postgres. This is the receipted step; ci-db-proof-receipt.json covers this step and no other",
+        "result": "7/7 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "step `pnpm test:t1-proof:live` -- the 20 t1-proof suites wired in package.json at this head against staging Postgres, 20 TAP summary blocks in the job log, summed rather than recalled",
+        "result": "125/125 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "the Merge Gate parser itself, exercised at the anchor on the workstation with the reviewer's exact probe (not a database query; recorded here because it is this lane's runtime)",
+        "result": "WORK-2026091001 parsed, UTV2-1889 parsed, BOOTSTRAP-1 null"
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "TAP assertions executed against staging across both credentialed steps",
+        "count": 132
+      },
+      {
+        "label": "TAP assertions failed",
+        "count": 0
+      },
+      {
+        "label": "TAP assertions skipped",
+        "count": 0
+      },
+      {
+        "label": "test files executed against staging (1 database-smoke + 20 t1-proof)",
+        "count": 21
+      },
+      {
+        "label": "staging rows reset by the seed step (distribution_receipts 1 + distribution_outbox 12 + system_runs 4)",
+        "count": 17
+      },
+      {
+        "label": "production database connections opened by this job",
+        "count": 0
+      }
+    ],
+    "skipped": 0,
+    "binding": {
+      "pr": 1570,
+      "run_head_sha": "92f34932f25c6c97fc4ad6e9d5517ee83437b6e6",
+      "run_id": 34746934490,
+      "job_id": 103696463715,
+      "run_conclusion": "success",
+      "verify_job_id": 103697711293,
+      "binding_rule": "This run compiled the tree at 92f34932f25c6c97fc4ad6e9d5517ee83437b6e6, byte-identical in source to the anchor 63115cbff33f0196bbe8d9aa182345be33effb0b. It CONCLUDED completed/success before this citation was written; no in-flight run is cited."
+    }
   }
 }

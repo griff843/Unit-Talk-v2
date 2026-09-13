@@ -114,8 +114,13 @@ workflow itself, which cannot be exercised on a workstation: the trusted copy ru
 The lane is admitted under the route B deferral (`t1_live_db_precondition: deferred_to_ci`),
 so the live-DB obligation is discharged by the CI `verify` and `Writable DB proof (staging
 only)` jobs on the merge SHA, and closeout check G6 refuses to close without both green.
-The runtime proof block in `evidence.json` is filled from those concluded runs and from
-nothing else.
+The runtime proof block in `evidence.json` is filled from one concluded run and from
+nothing else: run `34746934490` attempt 1 at head `92f34932f` (source byte-identical to the
+anchor), job `103696463715` "Writable DB proof (staging only)" success -- `pnpm test:db`
+7/7, `pnpm test:t1-proof:live` 125/125 over 20 suites, 0 fail, 0 skipped, target guard OK
+in all three credentialed invocations -- and job `103697711293` `verify` success in the
+same run. Receipt `ci-db-proof-receipt.json` sha256
+`481be6689d1c3b80ca183de71e0ebea8020e67e600a660cf814f804cb322e3d4`.
 
 The first live exercise of the repaired trusted parser is PR 1556's resync and final
 verdict, which is the next step the reviewer directed after this lands.
