@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BrandLogo } from './BrandLogo';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type {
@@ -72,7 +73,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { buildSessionPickKey, createSessionSubmissionGuard } from '@/lib/submission-guard';
+import { createSessionSubmissionGuard } from '@/lib/submission-guard';
 import { Spinner } from '@/components/ui/spinner';
 import { SignedNumberInput } from '@/components/SignedNumberInput';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
@@ -825,7 +826,7 @@ export function BetForm({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [referenceAvailability, setReferenceAvailability] = useState<ReferenceDataAvailability | null>(null);
   const [referenceAvailabilityError, setReferenceAvailabilityError] = useState<string | null>(null);
-  const [browseMode, setBrowseMode] = useState<BrowseMode>('live-offer');
+  const [browseMode, setBrowseMode] = useState<BrowseMode>('manual');
   const [liveEntryMode, setLiveEntryMode] = useState<LiveEntryMode>('browse');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<SubmitPickResult | null>(null);
@@ -840,7 +841,7 @@ export function BetForm({
   const [isRefreshingOffers, setIsRefreshingOffers] = useState(false);
   const submissionGuardRef = useRef<ReturnType<typeof createSessionSubmissionGuard> | null>(null);
   if (submissionGuardRef.current === null) {
-    submissionGuardRef.current = createSessionSubmissionGuard(() => window.sessionStorage);
+    submissionGuardRef.current = createSessionSubmissionGuard();
   }
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -1998,23 +1999,6 @@ export function BetForm({
     };
   }
 
-  function buildPickKey(values: BetFormValues): string {
-    return buildSessionPickKey({
-      capper: effectiveCapper?.capperId ?? values.capper ?? '',
-      gameDate: values.gameDate,
-      sport: values.sport,
-      event: selectedMatchupId ?? values.eventName,
-      market: values.marketType,
-      player: selectedPlayerId ?? values.playerName,
-      stat: values.statType,
-      team: selectedTeamId ?? values.team,
-      direction: values.direction,
-      line: values.line,
-      odds: values.odds,
-      sportsbook: catalog ? (resolveSportsbookId(catalog, values.sportsbook) ?? values.sportsbook) : values.sportsbook,
-    });
-  }
-
   async function onSubmit(values: BetFormValues) {
     if (!catalog) {
       return;
@@ -2059,16 +2043,13 @@ export function BetForm({
       return;
     }
 
-    const pickKey = buildPickKey(values);
     const submissionGuard = submissionGuardRef.current;
     if (!submissionGuard) return;
-    const admission = submissionGuard.acquire(pickKey);
+    const admission = submissionGuard.acquire();
     if (admission !== 'acquired') {
       toast({
-        title: admission === 'already-saved' ? 'Pick already saved' : 'Saving your pick',
-        description: admission === 'already-saved'
-          ? 'This exact selection and price are already saved for this capper on the selected date. Your entered values are still here.'
-          : 'Please wait for the current submission to finish.',
+        title: 'Saving your pick',
+        description: 'Please wait for the current submission to finish.',
       });
       return;
     }
@@ -2106,7 +2087,6 @@ export function BetForm({
         participantResolution: buildParticipantResolution(values),
       });
       const result = await submitPick(payload);
-      submissionGuard.markSaved(pickKey);
       dismiss();
       setSubmittedValues(submissionValues);
       setSuccessResult(result);
@@ -2117,7 +2097,7 @@ export function BetForm({
         variant: 'destructive',
       });
     } finally {
-      submissionGuard.release(pickKey);
+      submissionGuard.release();
       setIsSubmitting(false);
     }
   }
@@ -2142,7 +2122,7 @@ export function BetForm({
             setAwaySearchResolution('idle');
             setHomeSearchResolution('idle');
             setIdentityMode('canonical');
-            setBrowseMode('live-offer');
+            setBrowseMode('manual');
             setLiveEntryMode('browse');
             setBrowseSearchQuery('');
             setBrowseSearchResults([]);
@@ -3832,7 +3812,7 @@ export function BetForm({
   return (
     <main className="smart-form-shell min-h-screen px-4 pt-5 pb-36 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
       <header className="smart-form-brand mx-auto mb-8 flex max-w-7xl items-center justify-between gap-4 pb-4">
-        <img src="/brand/unit-talk-original-logo-reference.png" alt="Unit Talk" width={112} height={66} />
+        <BrandLogo />
         <span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold">{watchedValues.trackOnly ? 'Track Only · Internal' : 'Delivery eligible'}</span>
       </header>
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row lg:items-start">
@@ -3844,11 +3824,6 @@ export function BetForm({
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
               Build your pick
             </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-              {isTeamSport
-                ? 'Choose your matchup and market, add the line and odds, then review your bet slip.'
-                : 'Choose your event and market, add your selection, then review your bet slip.'}
-            </p>
           </div>
 
           <Form {...form}>
@@ -3860,23 +3835,8 @@ export function BetForm({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-foreground">1. Sport and date</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Sport keeps every game, team, player, and market choice in the correct context.
-                    </p>
                   </div>
                   <div className="inline-flex rounded-full border border-border bg-background p-1">
-                    <button
-                      type="button"
-                      className={cn(
-                        'rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                        browseMode === 'live-offer'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground hover:text-foreground',
-                      )}
-                      onClick={() => setBrowseMode('live-offer')}
-                    >
-                      Live offer mode
-                    </button>
                     <button
                       type="button"
                       className={cn(
@@ -3886,8 +3846,22 @@ export function BetForm({
                           : 'text-muted-foreground hover:text-foreground',
                       )}
                       onClick={() => setBrowseMode('manual')}
+                      aria-pressed={browseMode === 'manual'}
                     >
-                      Manual fallback
+                      Manual entry
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                        browseMode === 'live-offer'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      onClick={() => setBrowseMode('live-offer')}
+                      aria-pressed={browseMode === 'live-offer'}
+                    >
+                      Browse offers
                     </button>
                   </div>
                 </div>
@@ -3900,7 +3874,7 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>Sport</FormLabel>
                         <FormControl>
-                          <div data-testid="smart-form-sport-select" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div data-testid="smart-form-sport-select" className="grid grid-cols-3 gap-2">
                             {catalog.sports.map((sport: SportDefinition) => {
                               const isSelected = field.value === sport.id;
                               return (
@@ -3921,9 +3895,6 @@ export function BetForm({
                             })}
                           </div>
                         </FormControl>
-                        <p className="text-xs text-muted-foreground">
-                          Pick a sport first so matchups, participants, and market families stay filtered correctly.
-                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -3949,7 +3920,7 @@ export function BetForm({
 
               {renderLiveOfferSection()}
 
-              {shouldRenderPickDetailsSection ? (
+              {selectedSport && shouldRenderPickDetailsSection ? (
                 <section ref={marketSectionRef} className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
@@ -3960,9 +3931,6 @@ export function BetForm({
                       {shouldShowManualFallback ? 'Manual entry' : 'Selected offer'}
                     </span>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Choose what you are betting on, then enter the selection and line from your sportsbook.
-                  </p>
                 </div>
 
                 {selectedMatchup && shouldShowManualFallback ? (
@@ -3987,7 +3955,7 @@ export function BetForm({
                             ? `Enter the ${selectedSport} event and competitors exactly as shown at your sportsbook.`
                             : identityMode === 'manual'
                             ? 'Names entered here are saved as manual entries. Check the team names before submitting.'
-                            : 'Select a matchup, or build one from away and home teams — the matchup name is generated automatically.'}
+                            : 'Search and select each team.'}
                         </p>
                       </div>
                       {isTeamSport && identityMode === 'manual' ? (
@@ -4130,17 +4098,8 @@ export function BetForm({
                 </section>
               ) : null}
 
-              <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+              {selectedSport && <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="text-lg font-semibold text-foreground">3. Odds and review</h2>
-                <div className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3">
-                  <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Internal Tracking · Track Only</p>
-                    <p className="text-xs text-muted-foreground">
-                      This pick will be persisted for internal use. Member delivery is disabled and cannot be enabled from this form.
-                    </p>
-                  </div>
-                </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -4267,7 +4226,7 @@ export function BetForm({
                     </div>
                   )}
                 </div>
-              </section>
+              </section>}
             </form>
           </Form>
         </div>

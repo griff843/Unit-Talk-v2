@@ -542,6 +542,7 @@ test('live-offer search flow supports canonical entity selection and successful 
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -637,7 +638,7 @@ test('manual fallback surfaces structured canonical participant selection', asyn
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
 
   await expect(page.getByText('Build matchup from teams', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Away Team')).toBeVisible();
@@ -692,8 +693,9 @@ test('selected matchup constrains player props to matchup teams and valid stat t
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
-  await expect(page.getByText('Select a sport first')).toBeVisible();
+  await expect(page.getByTestId('incomplete-slip')).toBeVisible();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -784,6 +786,7 @@ test('player-prop flow binds matchup and narrows players once a matchup team is 
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -885,6 +888,7 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -917,6 +921,7 @@ test('units and conviction expose operator-safe bounded controls', async ({ page
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'NFL', exact: true }).click();
 
   await expect(page.getByRole('button', { name: '0.5u', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '3u', exact: true })).toBeVisible();
@@ -967,6 +972,7 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -1038,6 +1044,7 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -1096,6 +1103,7 @@ test('spread fallback keeps the selected matchup compact when live offers are mi
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -1144,6 +1152,7 @@ test('total fallback keeps the selected matchup compact when live offers are mis
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -1192,6 +1201,7 @@ test('team total fallback keeps the selected matchup compact when live offers ar
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -1268,6 +1278,7 @@ test('alternate live books surface when selected sportsbook has no coverage for 
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -1333,6 +1344,7 @@ test('nhl moneyline uses the same guided game-market flow as nba', async ({ page
   });
 
   await page.goto('/submit');
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
 
   await page.getByRole('button', { name: 'NHL' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
@@ -1439,7 +1451,7 @@ test('a structured-fallback player prop with no scheduled event submits', async 
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByRole('button', { name: 'Manual entry' }).click();
 
   await page.getByLabel('Away Team').fill('Knicks');
   await page.getByRole('button', { name: /Knicks/i }).first().click();

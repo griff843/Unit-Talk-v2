@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import type { BetFormValues } from '@/lib/form-schema';
+import { betFormSchema, type BetFormValues } from '@/lib/form-schema';
 import { calcPayout, buildSelectionString } from '@/lib/form-utils';
 import { getMarketTypeLabel, type MarketTypeId } from '@/lib/market-types';
 
@@ -34,6 +34,16 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
     : null;
 
   const hasMinimum = !!(values.sport && values.marketType);
+  const validation = betFormSchema.safeParse(values);
+  const labels: Record<string, string> = {
+    sport: 'Sport', marketType: 'Market', eventName: 'Matchup or event',
+    odds: 'Odds', units: 'Units', capperConviction: 'Conviction',
+    team: 'Team', playerName: 'Player', statType: 'Stat', line: 'Line',
+    direction: 'Over or under', gameDate: 'Date', capper: 'Capper',
+  };
+  const remaining = validation.success ? [] : [...new Set(validation.error.issues.map(
+    issue => labels[String(issue.path[0])] ?? 'Selection',
+  ))];
 
   return (
     <>
@@ -80,10 +90,13 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             </>
           )}
 
-          {!hasMinimum && (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              Fill in the form to preview your bet slip
-            </p>
+          {remaining.length > 0 && (
+            <div className="rounded-xl border border-dashed border-border p-4" data-testid="incomplete-slip">
+              <p className="text-sm font-semibold text-foreground">{hasMinimum ? 'Still to complete' : 'Start your pick'}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {values.sport ? `Add or check: ${remaining.join(', ')}.` : 'Choose a sport to see its markets.'}
+              </p>
+            </div>
           )}
 
           <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Track Only — records stay internal. No member delivery.' : 'Delivery eligible — subject to approval and routing checks.'}</p>
@@ -92,7 +105,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             data-testid="smart-form-submit-button"
             type="submit"
             onClick={onSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !values.sport}
             className="hidden lg:flex w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-5"
           >
             {isSubmitting ? (
@@ -132,7 +145,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
                 )}
               </>
             ) : (
-              <p className="text-xs text-muted-foreground">Fill form to submit</p>
+              <p className="text-xs text-muted-foreground">{values.sport ? 'Choose your market' : 'Choose a sport to start'}</p>
             )}
           </div>
           {payout !== null && (
@@ -142,7 +155,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             data-testid="smart-form-submit-button"
             type="submit"
             onClick={onSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !values.sport}
             size="sm"
             className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shrink-0"
           >

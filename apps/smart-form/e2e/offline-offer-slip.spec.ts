@@ -343,6 +343,7 @@ for (const scenario of cases) {
     await page.setViewportSize({ width: 390, height: 844 });
     const { submitted, denied } = await installOfflineFixture(page);
     await page.goto('/submit');
+    await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
     await page.getByRole('button', { name: 'NFL', exact: true }).click();
     await page.getByLabel('Date', { exact: true }).fill('2026-09-13');
     await page.getByRole('button', { name: /Fixture Away Football @ Fixture Home Football/i }).click();
@@ -356,7 +357,7 @@ for (const scenario of cases) {
     const selectionText = ['Fixture Away Football', 'Fixture Away Football -3.5', 'U 47.5', 'Fixture Quarterback Passing Yards O 245.5'][scenario.offerIndex];
     await expect(page.getByText(selectionText, { exact: true }).last()).toBeVisible();
     await page.getByRole('button', { name: '8', exact: true }).click();
-    await expect(page.getByText('Internal Tracking · Track Only', { exact: true })).toBeVisible();
+    await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Submit', exact: true }).click();
     await expect.poll(() => submitted.length).toBe(1);
     await expect(page.getByText('Pick Saved', { exact: true })).toBeVisible();
@@ -374,8 +375,3 @@ for (const scenario of cases) {
     expect(denied, 'No nonlocal request should be attempted').toEqual([]);
   });
 }
-
-
-
-
-

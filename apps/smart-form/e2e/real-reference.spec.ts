@@ -74,7 +74,7 @@ test('real-reference UI reports the connected environment honestly without refer
   if (availability.data?.teamsAvailable === false) {
     await expect(page.getByTestId('canonical-team-data-unavailable')).toBeVisible();
     await expect(page.getByText(
-      'Canonical NBA team data is not available in this environment yet.',
+      'The NBA team list is not available here yet. You can enter both teams manually below.',
       { exact: true },
     )).toBeVisible();
   } else if (lakersRows.length === 0) {
@@ -93,7 +93,7 @@ test('real-reference UI reports the connected environment honestly without refer
   await expect(page.getByText('Manual team entry', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${proofDirectory}/real-07-coverage-gap-gated.png`, fullPage: true });
 
-  await expect(page.getByText('Internal Tracking · Track Only', { exact: true })).toBeVisible();
+  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
   await page.screenshot({ path: `${proofDirectory}/real-08-track-only.png`, fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });

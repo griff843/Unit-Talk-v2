@@ -151,7 +151,6 @@
   .smart-form-shell section { box-shadow: 0 8px 30px rgb(0 0 0 / .08); }
   .smart-form-shell h1, .smart-form-shell h2 { font-family: var(--font-barlow-condensed), sans-serif; }
   .smart-form-brand { border-bottom: 1px solid hsl(var(--border)); }
-  .smart-form-brand img { width: 112px; height: 66px; object-fit: contain; }
   .track-only-pill { border: 1px solid hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
   .mobile-slip-bar { padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
 }
