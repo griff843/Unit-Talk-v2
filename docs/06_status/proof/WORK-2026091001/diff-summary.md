@@ -1,7 +1,7 @@
 # WORK-2026091001 diff summary
 
 MERGE_SHA: pending merge
-Execution SHA: cf256a0478f54200e0d73ec4a246e2ff5bc4b097
+Execution SHA: ffc72f4ce4baf6c730c4eb0012cea8c7b5f2c4de
 
 ## Summary
 
@@ -10,7 +10,7 @@ Existing repository packets and PR metadata replace mandatory tracker access. Sc
 ## Verification
 
 ```text
- .agents/skills/dispatch/SKILL.md                   |   25 +-
+ .agents/skills/dispatch/SKILL.md                   |   33 +-
  .agents/skills/linear-execution/SKILL.md           |    4 +-
  .agents/skills/proof-closeout/SKILL.md             |    8 +-
  .agents/skills/system-state-loader/SKILL.md        |   16 +-
@@ -39,20 +39,20 @@ Existing repository packets and PR metadata replace mandatory tracker access. Sc
  AGENTS.md                                          |   32 +-
  CLAUDE.md                                          |   50 +-
  docs/05_operations/DELEGATION_POLICY.md            |   22 +-
- docs/05_operations/EXECUTION_TRUTH_MODEL.md        |   32 +-
+ docs/05_operations/EXECUTION_TRUTH_MODEL.md        |   42 +-
  docs/05_operations/LANE_MANIFEST_SPEC.md           |   42 +-
- docs/05_operations/P0_PROTOCOL_SPEC.md             |  115 +-
+ docs/05_operations/P0_PROTOCOL_SPEC.md             |  130 +-
  docs/05_operations/TRUTH_CHECK_SPEC.md             |   75 +-
  docs/05_operations/WORKFLOW_SPEC.md                |    6 +-
  .../schemas/lane_manifest_v1.schema.json           |   10 +-
- docs/06_status/lanes/WORK-2026091001.json          |  211 ++++
+ docs/06_status/lanes/WORK-2026091001.json          |  212 ++++
  docs/06_status/proof/WORK-2026091001/.gitkeep      |    0
- .../proof/WORK-2026091001/diff-summary.md          |  102 ++
- docs/06_status/proof/WORK-2026091001/evidence.json |   94 ++
- .../06_status/proof/WORK-2026091001/integration.md |  136 ++
+ .../proof/WORK-2026091001/diff-summary.md          |  103 ++
+ docs/06_status/proof/WORK-2026091001/evidence.json |  170 +++
+ .../06_status/proof/WORK-2026091001/integration.md |  222 ++++
  .../proof/WORK-2026091001/model-routing.json       |   32 +
  .../WORK-2026091001/p0-consumer-activation.patch   |  249 ++++
- .../proof/WORK-2026091001/verification.md          |   78 ++
+ .../proof/WORK-2026091001/verification.md          |   82 ++
  .../tracker-independence/p0-classifications.json   |   18 +
  package.json                                       |    2 +-
  scripts/ci/file-scope-guard.test.ts                |   14 +
@@ -61,7 +61,7 @@ Existing repository packets and PR metadata replace mandatory tracker access. Sc
  scripts/ci/scope-override-comment-parser.test.ts   |   11 +
  scripts/ci/scope-override-comment-parser.ts        |    2 +-
  scripts/codex-dispatch.test.ts                     |   29 +
- scripts/codex-dispatch.ts                          |   45 +-
+ scripts/codex-dispatch.ts                          |   49 +-
  scripts/codex-receive.test.ts                      |   36 +-
  scripts/codex-receive.ts                           |    2 +-
  scripts/ops-brief.ts                               |    4 +-
@@ -70,8 +70,8 @@ Existing repository packets and PR metadata replace mandatory tracker access. Sc
  scripts/ops/executor-result-validate.test.ts       |   65 +
  scripts/ops/lane-close.test.ts                     |   20 +
  scripts/ops/lane-close.ts                          |    6 +-
- scripts/ops/lane-finalize.test.ts                  |   45 +-
- scripts/ops/lane-finalize.ts                       |   23 +-
+ scripts/ops/lane-finalize.test.ts                  |   68 +-
+ scripts/ops/lane-finalize.ts                       |   36 +-
  scripts/ops/lane-start.test.ts                     |  248 ++--
  scripts/ops/lane-start.ts                          |   41 +
  scripts/ops/merge-gate-verdict.cjs                 |    2 +-
@@ -99,5 +99,5 @@ Existing repository packets and PR metadata replace mandatory tracker access. Sc
  scripts/ops/truth-check-lib.test.ts                |    9 +
  scripts/ops/truth-check-lib.ts                     |  183 +--
  scripts/ops/workflow-hardening.test.ts             |   76 ++
- 89 files changed, 6114 insertions(+), 994 deletions(-)
+ 89 files changed, 6345 insertions(+), 1004 deletions(-)
 ```

@@ -7,29 +7,29 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "cf256a0478f54200e0d73ec4a246e2ff5bc4b097",
+    "verified_source_sha": "ffc72f4ce4baf6c730c4eb0012cea8c7b5f2c4de",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "partial",
     "local_verification": {
-      "source_sha": "cf256a0478f54200e0d73ec4a246e2ff5bc4b097",
+      "source_sha": "ffc72f4ce4baf6c730c4eb0012cea8c7b5f2c4de",
       "command": "pnpm verify",
       "exit_code": 1,
-      "tests_reported": 6414,
-      "passed": 6414,
+      "tests_reported": 6415,
+      "passed": 6415,
       "failed": 0,
       "skipped": 0,
       "result": "Static/build/test and command stages passed; writable DB target guard refused the containment URL",
       "limitation": "Not a full verify pass: pnpm verify exits 1 at ci:assert-staging, the documented containment refusal on a workstation, not a regression. Final-head staging CI is required. Smart Form browser E2E is not enabled in this suite and is not claimed here.",
-      "log_sha256": "658c511cc4cde7814e2b18dc7570c54e2499aa69201b223515c1d4c3498ce9e0"
+      "log_sha256": "c0b3eb3a81df97edb5453d6ca69910a06b9d4ee02794ca6ccb959cd7a5a7f6c9"
     },
     "independent_review": {
-      "source_sha": "cf256a0478f54200e0d73ec4a246e2ff5bc4b097",
-      "reviewer": "Codex CLI (codex exec, read-only sandbox), non-author; the repair commits 7f1635c89, 3123e1deb, 0f873aab2, 8768a4026, e75a4cfeb, d7e2a91fe, 775f79fec, 3fb23c27d, c488c8503 and 1dbd58ef3 were authored by Claude",
-      "scope": "git diff 6c8497178 1dbd58ef3 -- the P0 coverage repair, the merge-wrapper boundary, their tests and the two docs; each round re-executed the previous round's probes and searched for new bypasses",
-      "disposition": "DISPOSITION: defects found",
+      "source_sha": "ffc72f4ce4baf6c730c4eb0012cea8c7b5f2c4de",
+      "reviewer": "Codex CLI (codex exec, read-only sandbox), non-author; the repair commits 7f1635c89, 3123e1deb, 0f873aab2, 8768a4026, e75a4cfeb, d7e2a91fe, 775f79fec, 3fb23c27d, c488c8503, 1dbd58ef3, a629d5442, ceb8699a8 and ffc72f4ce were authored by Claude",
+      "scope": "rounds 1-8: git diff 6c8497178 1dbd58ef3 -- the P0 coverage repair, the merge-wrapper boundary, their tests and the two docs; each round re-executed the previous round's probes and searched for new bypasses. round 9: git diff a9cc53035 a629d5442 -- the two workflow-command fixes, the three instruction corrections and the integration-route reconciliation requested in PR comment 5650267046; explicitly not a parser round. round 10: git diff 16b0dc824 ceb8699a8 -- the integration-route correction that answers round 9's P1, checked against origin/main merge-gate.yml, the base wrapper and the two recorded Merge Gate evaluations. round 11: git diff ceb8699a8 ffc72f4ce -- the two round-10 P2 wording corrections, checked against origin/main merge-gate.yml and merge-gate-verdict.cjs",
+      "disposition": "DISPOSITION: no defects found",
       "round_1": {
         "source_sha": "3123e1deb",
         "disposition": "DISPOSITION: defects found",
@@ -72,17 +72,49 @@
         "report_sha256": "1d0324e9cb78980a3f9239d06b7679b521e97fcc7a0f67442d14c0bd9dc067b1",
         "defects": "a property-form require with whitespace before the parenthesis (holder.require (p), process.mainModule.require (p)) accepted because the space escaped every require( scan while the lookbehind ignored .require; stale with-comments-removed wording in the spec table row and the shared.ts JSDoc; repaired in c488c8503 by requiring every require token to be bare and immediately followed by ("
       },
-      "report_sha256": "e7bf8cd26feeccb9f1516578406f188123d13a6e02c18530641d89e2d6e420d3",
+      "report_sha256": "af75882839f58873563b704830f1c0c554f2b5ce61e2e344579ea79d3ccc7617",
       "earlier_review": {
         "source_sha": "1759314ea7e34addf3cb9f6b57488d6f6e9509a4",
         "disposition": "No additional defect found; not merge approval",
         "checks": "528 earlier targeted tests, 67 workflow tests, 26 final packet/recovery tests passed in independent review; runs overlap"
+      },
+      "round_8": {
+        "source_sha": "c488c8503",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "e7bf8cd26feeccb9f1516578406f188123d13a6e02c18530641d89e2d6e420d3",
+        "defects": "every probe from rounds 1-7 refused, no false negative, no new false-positive class beyond the documented untracked-reference family; one wording defect in integration.md (a literal argument vs the unique const path binding), corrected in 1dbd58ef3"
+      },
+      "round_9": {
+        "source_sha": "a629d5442",
+        "checkout": "ffc72f4ce4baf6c730c4eb0012cea8c7b5f2c4de",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "8e47e72ed511afd59c7f57f2109e176482136427db6a0e02b46f7b680412bea8",
+        "p1_p2": "P1_P2: P1 - integration.md and P0_PROTOCOL_SPEC.md assert that base Merge Gate already admits WORK, but the actual origin/main workflow excludes WORK. This leaves PR #1556 without the documented integration route and directly contradicts Item 3.",
+        "scope": "delta review of the PM item 1-3 fixes by execution: codex-dispatch lane-type message and both SKILL.md examples, lane-finalize close_lane flag forwarding across four combinations with tracker-free default, the system-state-loader link, EXECUTION_TRUTH_MODEL invariants 1 and 10 and its enforcement-placement law and T1 approval sentence, the integration route claims checked against origin/main merge-gate.yml and pre-merge-authorization.ts, the six-path override set recomputed, files_changed set-equality against the diff, tsc"
+      },
+      "round_10": {
+        "source_sha": "ceb8699a8",
+        "disposition": "DISPOSITION: defects found",
+        "report_sha256": "40fc4a686dcc5f644c7e54243d439f044ad054dc1096b59640bcb2418d6af98a",
+        "p1_status": "P1_STATUS: resolved - both documents now accurately distinguish the base and PR workflow copies; the round-9 false claim that origin/main already recognizes WORK is withdrawn.",
+        "p1_p2": "P1_P2: P2 - qualify workflow_dispatch ref semantics in both documents. P2 - correct the claim that both approval artifacts are CODEOWNERS-authored and exact-head-bound.",
+        "scope": "the route correction only: identifier rules on both copies of merge-gate.yml, the trigger and checkout pinning, the bootstrap guard, the base wrapper strict-verdict rule, GitHub trigger semantics, and the two recorded evaluations (runs 34734169058 and 34734720298)"
+      },
+      "round_11": {
+        "source_sha": "ffc72f4ce",
+        "disposition": "DISPOSITION: no defects found",
+        "report_sha256": "af75882839f58873563b704830f1c0c554f2b5ce61e2e344579ea79d3ccc7617",
+        "p2a_status": "P2A_STATUS: resolved - integration.md:38-45 distinguishes issue_comment\u2019s default-branch copy from workflow_dispatch\u2019s dispatched-ref copy and identifies main as the measured ref; lines 59-61 consistently limit the later flip claim to dispatches from main. P0_PROTOCOL_SPEC.md:242-244 makes the same distinction and qualification.",
+        "p2b_status": "P2B_STATUS: resolved - integration.md:63-67 and P0_PROTOCOL_SPEC.md:245-246 accurately separate the author/PR/head validation of the verdict comment from the label\u2019s presence-only test. origin/main:.github/workflows/merge-gate.yml:563-567 passes prNumber, headSha, and authorizedReviewers to validateT1Verdicts, while lines 569-573 only test labels.includes('t1-approved'); origin/main:scripts/ops/merge-gate-verdict.cjs:77-78 and 105-119 enforce author, PR, and head validation.",
+        "p1_p2": "P1_P2: none",
+        "scope": "git diff ceb8699a8 ffc72f4ce -- the two round-10 P2 wording corrections: workflow_dispatch runs the copy at the dispatched ref (main in the measured run), and only the pm-verdict/v1 comment is validated for author and bound to the exact PR and head while the t1-approved label is checked for presence alone; verified against origin/main merge-gate.yml and merge-gate-verdict.cjs"
       }
     },
     "r_level": {
       "verdict": "PASS",
       "matched_rules": [],
-      "changed_files": 90
+      "changed_files": 89,
+      "head": "ffc72f4ce4baf6c730c4eb0012cea8c7b5f2c4de"
     },
     "prior_head_ci": {
       "source_sha": "1759314ea7e34addf3cb9f6b57488d6f6e9509a4",
@@ -137,7 +169,21 @@
         "scripts/ci/scope-override-comment-parser.ts"
       ],
       "why_unrepairable": "CI runs the trusted copy of scope-override-comment-parser.ts from origin/main, whose issue regex is /^UTV2-\\d+$/. A WORK-### override is unparseable by it. This branch is what widens that regex to accept WORK-###, so the PR contains the fix for the check failing it. The check is not one of the four required contexts, so it blocks no merge.",
-      "verified_at": "2026-09-12, run 34698429055 at 6c8497178; the path list is unchanged by the repair commit, which touch only in-scope files"
+      "verified_at": "run 34735145956 at ffc72f4ce4baf6c730c4eb0012cea8c7b5f2c4de (pre-proof-commit head; the proof commit touches only docs/06_status/proof/WORK-2026091001/)",
+      "closeout_s1": {
+        "function": "evaluateScopeDiff (scripts/ops/truth-check-lib.ts), the merged parser at closeout",
+        "without_override": "fail on exactly six paths",
+        "with_override": "pass",
+        "override_paths": [
+          ".github/workflows/file-scope-lock-check.yml",
+          ".github/workflows/return-review-packet.yml",
+          "scripts/ci/file-scope-guard.test.ts",
+          "scripts/ci/file-scope-guard.ts",
+          "scripts/ci/scope-override-comment-parser.test.ts",
+          "scripts/ci/scope-override-comment-parser.ts"
+        ],
+        "note": "the CI check above additionally lists .ops/sync/WORK-2026091001.yml and the manifest, which closeout S1 exempts as the lane's own metadata; the reserved ask is one CODEOWNERS scope-override/v1 with Issue WORK-2026091001, PR 1556, the exact final head and these six paths"
+      }
     },
     "p0_coverage_repair": {
       "review": "PR #1556 comment 5647259413, required changes 1-3",
@@ -163,8 +209,25 @@
       "trusted_base_binding": "working tree and branch HEAD are never read; candidate-only activation (uncommitted and committed on HEAD) stays covered:false; unresolvable origin/main fails closed",
       "merge_path_boundary": "scripts/ops/pre-merge-authorization.ts refuses a repo-minted head ref whose trusted-base coverage is absent; the refusal feeds authorized, not only the receipt; a throwing predicate is a refusal",
       "not_required_check_enforcement": true,
-      "foundation_route": "tracker-keyed lane whose tier Merge Gate resolves from its manifest, or a base-read BOOTSTRAP_AUTHORIZATIONS.json entry authorized by Griff; Merge Gate, p0-protocol.yml and branch protection unchanged",
+      "foundation_route": "measured on this PR in both directions: on pull_request and pull_request_review events GitHub runs this PR's copy of merge-gate.yml, whose rule admits work-; it reads docs/06_status/lanes/WORK-2026091001.json at the PR head (tier T1), validates verdicts with the base-pinned merge-gate-verdict.cjs and refuses only the two approval artifacts (run 34734169058); on issue_comment events the default-branch copy runs and on workflow_dispatch the copy at the dispatched ref (main in the measured run), whose rule is (utv2|uni)-, and it writes BLOCKED 'No issue ID found in PR branch or title' (workflow_dispatch run 34734720298 from main against PR 1556). Both write the same exact-head check; the artifacts are applied pm-verdict first, t1-approved label second so the final evaluation is a pull_request one (only the verdict comment is author-validated and bound to the exact PR and head; the label is checked for presence alone); the merge itself is performed by the base-installed wrapper, origin/main:scripts/ops/pre-merge-authorization.ts, which has no repo-minted coverage boundary (0 repoMinted matches) -- this branch's wrapper boundary is installed by the merge, not consulted for it; no BOOTSTRAP_AUTHORIZATIONS.json identity (accepted only when no lane manifest exists) and no replacement lane; Merge Gate, p0-protocol.yml and branch protection unchanged; consumer activation follows as a tracker-keyed lane",
       "integration_md_correction": "UTV2-1887 (cited as the scope bootstrap lane) does not exist; step 1 corrected"
+    },
+    "pm_review_5650267046": {
+      "source": "PR #1556 comment 5650267046 (griff843) at a9cc53035",
+      "applied_at_commit": "a629d5442",
+      "review_round": "round_9",
+      "item_1_threads": {
+        "PRRT_kwDORr3vD86hE0xk": "scripts/codex-dispatch.ts: the missing --lane-type error now describes repository-local work (.ops/work or a captured .ops/sync contract carries no labels); both documented local dispatch examples in .agents/skills/dispatch/SKILL.md carry --lane-type and the requirement is stated",
+        "PRRT_kwDORr3vD86hE0xp": "scripts/ops/lane-finalize.ts: close_lane forwards --complete-work and --sync-tracker to ops:lane-close only when given; default args stay [ops:lane-close, <id>, --acquire-lock]; asserted for all four combinations and the CLI parse in lane-finalize.test.ts"
+      },
+      "item_2_instructions": {
+        ".agents/skills/system-state-loader/SKILL.md": "link corrected to ../../../.claude/commands/system-state-loader.md (resolves)",
+        "EXECUTION_TRUTH_MODEL.md invariant 1": "main proves integration; deployment and runtime evidence prove shipment and operation",
+        "EXECUTION_TRUTH_MODEL.md placement law, What belongs in CI, invariant 10": "mandatory mechanical enforcement limited to ratified safety/correctness/approval invariants; a preference is not a gate because it is automatable; existing required gates preserved unless separately authorized",
+        "EXECUTION_TRUTH_MODEL.md T1 approval signal": "label AND exact-head pm-verdict/v1 APPROVED from CODEOWNERS, matching its table"
+      },
+      "item_3_route": "integration.md steps 1-3 and the P0_PROTOCOL_SPEC.md foundation paragraph rewritten to the measured route (see p0_coverage_repair.foundation_route); receipts from both wrappers recorded in the PR packet. Round 9 found the first rewrite overclaimed that the base Merge Gate copy admits WORK; commit ceb8699a8 corrects it from two recorded evaluations and round 10 re-checked it, raising two P2 wording points (dispatch-ref semantics; the label is presence-only) that ffc72f4ce corrects and round 11 verified with no defects found",
+      "manifest": "files_changed regenerated from git diff --name-only origin/main...HEAD; file_scope_lock, tier and lane_type unchanged"
     }
   }
 }
