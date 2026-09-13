@@ -19,7 +19,7 @@ function LineItem({ label, value }: { label: string; value?: string | number | n
   return (
     <div className="flex items-start justify-between gap-2 text-sm">
       <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="text-foreground text-right font-medium">{value}</span>
+      <span className="text-foreground text-right font-medium break-words min-w-0">{value}</span>
     </div>
   );
 }
@@ -38,12 +38,12 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
   return (
     <>
       {/* Desktop sticky panel */}
-      <div className="hidden lg:flex flex-col sticky top-6 h-fit">
-        <div className="rounded-xl border border-border bg-gradient-to-br from-slate-900 to-slate-800 p-5 space-y-4">
+      <div className="flex flex-col lg:sticky lg:top-6 h-fit">
+        <div className="bet-slip-panel rounded-2xl p-5 space-y-4">
           {/* Header */}
           <div>
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-1">
-              Bet Slip
+              Your bet slip
             </p>
             {values.capper && (
               <p className="text-sm font-semibold text-foreground">{values.capper}</p>
@@ -60,10 +60,10 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
               {values.eventName && <LineItem label="Game" value={values.eventName} />}
               {selection && <LineItem label="Pick" value={selection} />}
               {values.sportsbook && <LineItem label="Book" value={values.sportsbook} />}
-              {values.odds && <LineItem label="Odds" value={values.odds > 0 ? `+${values.odds}` : values.odds} />}
+              {values.odds && <LineItem label="Odds" value={Number(values.odds) > 0 ? `+${Number(values.odds)}` : Number(values.odds)} />}
               {values.units && <LineItem label="Units" value={`${values.units}u`} />}
               {hasMinimum && (
-                <LineItem label="Conviction" value={`${values.capperConviction ?? 6}/10`} />
+                <LineItem label="Conviction" value={values.capperConviction ? `${values.capperConviction}/10` : 'Not selected'} />
               )}
             </div>
           )}
@@ -86,14 +86,14 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             </p>
           )}
 
-          <Separator className="bg-border/50" />
+          <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Track Only — records stay internal. No member delivery.' : 'Delivery eligible — subject to approval and routing checks.'}</p>
 
           <Button
             data-testid="smart-form-submit-button"
             type="submit"
             onClick={onSubmit}
             disabled={isSubmitting}
-            className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-5"
+            className="hidden lg:flex w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-5"
           >
             {isSubmitting ? (
               <>
@@ -111,11 +111,12 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
       <div
         className={cn(
           'lg:hidden fixed bottom-0 left-0 right-0 z-50',
-          'border-t border-border bg-card/95 backdrop-blur-sm px-4 py-3',
+          'mobile-slip-bar border-t border-border bg-card/95 backdrop-blur-sm px-4 py-3',
         )}
       >
         <div className="flex items-center justify-between gap-4 max-w-lg mx-auto">
           <div className="min-w-0">
+            <p className="mb-1 text-[10px] uppercase tracking-widest text-primary">{values.trackOnly ? 'Track Only' : 'Delivery eligible'}</p>
             {hasMinimum ? (
               <>
                 <p className="text-xs font-medium text-foreground truncate">
@@ -126,7 +127,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
                 )}
                 {hasMinimum && (
                   <p className="text-xs text-muted-foreground truncate">
-                    Conviction {values.capperConviction ?? 6}/10
+                    Conviction {values.capperConviction ? `${values.capperConviction}/10` : 'not selected'}
                   </p>
                 )}
               </>
@@ -143,7 +144,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             onClick={onSubmit}
             disabled={isSubmitting}
             size="sm"
-            className="bg-primary hover:bg-primary/90 text-white font-semibold shrink-0"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shrink-0"
           >
             {isSubmitting ? <Spinner className="h-4 w-4" /> : 'Submit'}
           </Button>

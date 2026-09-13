@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000';
-const proofDirectory = '../../docs/06_status/proof/UTV2-1787';
+const proofDirectory = '../../.out/smart-form-preview/regression';
 
 async function installCapperSession(page: Page) {
   await page.addInitScript(() => {
@@ -45,7 +45,7 @@ test.beforeEach(async ({ page }) => {
 
 test('real-reference UI reports the connected environment honestly without reference-data route interception', async ({ page }) => {
   await page.goto('/submit');
-  await expect(page.getByRole('heading', { name: 'Canonical pick entry' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Build your pick' })).toBeVisible();
   await page.screenshot({ path: `${proofDirectory}/real-01-authenticated-shell.png`, fullPage: true });
 
   await page.getByRole('button', { name: 'NBA', exact: true }).click();
@@ -90,7 +90,7 @@ test('real-reference UI reports the connected environment honestly without refer
   await page.screenshot({ path: `${proofDirectory}/real-06-team-player-dependency.png`, fullPage: true });
 
   await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
-  await expect(page.getByText('Manual participant override', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Manual team entry', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${proofDirectory}/real-07-coverage-gap-gated.png`, fullPage: true });
 
   await expect(page.getByText('Internal Tracking · Track Only', { exact: true })).toBeVisible();

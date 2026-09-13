@@ -549,7 +549,7 @@ test('live-offer search flow supports canonical entity selection and successful 
   await expect(page.getByText('griff843', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Search' }).click();
-  await expect(page.getByText('Search canonical players, teams, and matchups for NBA on 2026-04-02.')).toBeVisible();
+  await expect(page.getByText('Search players, teams, and matchups for NBA on 2026-04-02.')).toBeVisible();
 
   await page.getByPlaceholder('Type a player, team, or matchup').fill('Jam');
   await expect(page.getByRole('button', { name: /Jamal Murray/i })).toBeVisible();
@@ -569,7 +569,7 @@ test('live-offer search flow supports canonical entity selection and successful 
 
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   await expect(page.getByText('pick_test_123')).toBeVisible();
   await expect(page.getByText('Conviction')).toBeVisible();
   await expect(page.getByText('8/10')).toBeVisible();
@@ -896,7 +896,7 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
   await page.getByRole('option', { name: 'Points', exact: true }).click();
 
-  await expect(page.getByText('No live offers for this market.')).toBeVisible();
+  await expect(page.getByText('No offers are listed for this market. Your matchup is selected; enter the line and odds below.')).toBeVisible();
   await expect(page.getByText('Pick Details')).toHaveCount(0);
   await expect(page.getByText('Player Prop Ticket')).toBeVisible();
   await expect(page.locator('input[name="eventName"]')).toHaveCount(0);
@@ -989,7 +989,7 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
   await page.getByRole('button', { name: '1u', exact: true }).click();
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   expect(submittedPayload).not.toBeNull();
   expect(submittedPayload?.market).toBe('moneyline');
   expect(submittedPayload?.selection).toContain('Celtics');
@@ -1057,7 +1057,7 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
   await page.getByRole('button', { name: '1u', exact: true }).click();
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   expect(submittedPayload).not.toBeNull();
   expect(submittedPayload?.market).toBe('game_spread');
   expect(submittedPayload?.selection).toContain('Celtics -4.5');
@@ -1102,8 +1102,8 @@ test('spread fallback keeps the selected matchup compact when live offers are mi
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await page.getByRole('button', { name: /Spread/i }).first().click();
 
-  await expect(page.getByText('No live offers for this market.')).toBeVisible();
-  await expect(page.getByText('Market Family')).toHaveCount(1);
+  await expect(page.getByText('No offers are listed for this market. Your matchup is selected; enter the line and odds below.')).toBeVisible();
+  await expect(page.locator('form').getByText('Market Family', { exact: true })).toHaveCount(1);
   await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
   await expect(page.getByRole('button', { name: /Celtics.*Enter line/i })).toBeVisible();
   await expect(page.getByRole('button', { name: /Knicks.*Enter line/i })).toBeVisible();
@@ -1150,8 +1150,8 @@ test('total fallback keeps the selected matchup compact when live offers are mis
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await page.getByRole('button', { name: /Total/i }).first().click();
 
-  await expect(page.getByText('No live offers for this market.')).toBeVisible();
-  await expect(page.getByText('Market Family')).toHaveCount(1);
+  await expect(page.getByText('No offers are listed for this market. Your matchup is selected; enter the line and odds below.')).toBeVisible();
+  await expect(page.locator('form').getByText('Market Family', { exact: true })).toHaveCount(1);
   await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
   await expect(page.getByRole('button', { name: /Over.*Enter total/i })).toBeVisible();
   await expect(page.getByRole('button', { name: /Under.*Enter total/i })).toBeVisible();
@@ -1198,8 +1198,8 @@ test('team total fallback keeps the selected matchup compact when live offers ar
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await page.getByRole('button', { name: /Team Total/i }).first().click();
 
-  await expect(page.getByText('No live offers for this market.')).toBeVisible();
-  await expect(page.getByText('Market Family')).toHaveCount(1);
+  await expect(page.getByText('No offers are listed for this market. Your matchup is selected; enter the line and odds below.')).toBeVisible();
+  await expect(page.locator('form').getByText('Market Family', { exact: true })).toHaveCount(1);
   await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
   await expect(page.getByRole('button', { name: /Celtics.*Pick team/i })).toBeVisible();
   await expect(page.getByRole('button', { name: /Knicks.*Pick team/i })).toBeVisible();
@@ -1349,7 +1349,7 @@ test('nhl moneyline uses the same guided game-market flow as nba', async ({ page
   await page.getByRole('button', { name: '1u', exact: true }).click();
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
-  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  await expect(page.getByText('Pick Saved')).toBeVisible();
   expect(submittedPayload).not.toBeNull();
   expect(submittedPayload?.market).toBe('moneyline');
   expect(submittedPayload?.selection).toContain('Kraken');
