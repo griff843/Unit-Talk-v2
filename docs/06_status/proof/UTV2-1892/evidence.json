@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1892",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "f638dd89f2b9e449062461712f5da5a4e0a40c0a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "f638dd89f2b9e449062461712f5da5a4e0a40c0a is the only commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/ after the lane-start metadata commit fc9be983c. It carries the three source files (.github/workflows/merge-gate.yml, scripts/ops/merge-gate-verdict.cjs, scripts/ops/merge-gate-verdict.test.ts) and removes the lane-start .gitkeep. Every commit above it touches only the proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-13T07:48:15.000Z"
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/merge-gate-verdict.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 24,
+          "pass": 24,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 21,
+          "new": 3
+        },
+        "label": "21 pre-existing parseVerdict/evaluate tests unchanged. New: the loop `repository and legacy identity <id> retain exact-head PM approval checks` for WORK-2026091001, UTV2-1501 and UNI-42 (each approved at the matching PR and head, each refused at a stale head), and the drift lock `UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces`, which reads merge-gate.yml off disk and asserts its three alternations and parseVerdict all admit exactly {UNI, UTV2, WORK} and refuse BOOTSTRAP-."
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 66,
+          "pass": 66,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 66,
+          "new": 0
+        },
+        "label": "The workflow-hardening suite that reads merge-gate.yml; unchanged and still green with the widened alternations."
+      }
+    ],
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "note": "Run to completion in the lane worktree at f638dd89f2b9e449062461712f5da5a4e0a40c0a. The aggregate pass count is not recorded here; the authoritative aggregate is the CI verify job recorded under runtime_proof."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint scripts/ops/merge-gate-verdict.cjs scripts/ops/merge-gate-verdict.test.ts; pnpm lint is exercised by the CI verify job",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: verify ends at test:live-db, where ci:assert-staging refuses any target that is not staging xskgrzbteyqdufktjrjx. The CI verify job on this PR is the authoritative run and is recorded under runtime_proof."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head f638dd89f2b9e449062461712f5da5a4e0a40c0a",
+      "verdict": "PASS",
+      "changed_files": 5,
+      "rules_matched": [],
+      "advisory_missing": [],
+      "note": "No R-level rule matches a merge-gate workflow or ops-script diff."
+    },
+    "reviewer_probe": {
+      "command": "node -e 'require(\"./scripts/ops/merge-gate-verdict.cjs\").parseVerdict(<exact-head APPROVED body for PR 1556 at ecb7daeaff2fc4a346855e73bd5669e7644e3faf>)'",
+      "results": {
+        "WORK-2026091001": {
+          "verdict": "APPROVED",
+          "issueId": "WORK-2026091001",
+          "prNumber": 1556,
+          "headSha": "ecb7daeaff2fc4a346855e73bd5669e7644e3faf"
+        },
+        "UTV2-1889": {
+          "verdict": "APPROVED",
+          "issueId": "UTV2-1889",
+          "prNumber": 1556,
+          "headSha": "ecb7daeaff2fc4a346855e73bd5669e7644e3faf"
+        },
+        "BOOTSTRAP-1": null
+      },
+      "note": "The exact probe from PR 1556 comment 5651878285, executed against this head's module. At the trusted base e0c8f812d the first line was null."
+    },
+    "mutation_battery": {
+      "command": "for each mutation: git apply -R the single hunk, run the named suite, re-apply the hunk, assert the combined sha256 of both files is unchanged afterwards",
+      "baseline": {
+        "merge_gate_verdict": {
+          "tests": 24,
+          "pass": 24,
+          "fail": 0
+        }
+      },
+      "mutations": [
+        {
+          "id": "revert-cjs",
+          "file": "scripts/ops/merge-gate-verdict.cjs",
+          "change": "restore the (?:UTV2|UNI) alternation on the Issue: line",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 21 - repository and legacy identity WORK-2026091001 retain exact-head PM approval checks",
+            "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
+          ]
+        },
+        {
+          "id": "revert-yml",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "restore the (?:utv2|uni) alternations in the workflow's issue extraction",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
+          ]
+        }
+      ],
+      "restored": true
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PENDING_CI",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx via the run-scoped credentials ci.yml materializes. Never production.",
+    "note": "Admitted under the route B deferral (manifest t1_live_db_precondition: deferred_to_ci). This lane changes no application or database code; the live-DB obligation is discharged by the CI verify and Writable DB proof (staging only) jobs on this PR, and closeout G6 refuses to close without both green on the merge SHA. This block is filled from concluded runs only, after verify concludes at the anchor.",
+    "ci_runs": []
+  }
+}
