@@ -127,9 +127,13 @@ verdict, which is the next step the reviewer directed after this lands.
 
 ## Merge SHA Binding
 
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1570
+Execution SHA: 63115cbff33f0196bbe8d9aa182345be33effb0b
+
 Execution anchor: `63115cbff33f0196bbe8d9aa182345be33effb0b` -- the last commit on this lane
 that changes anything outside `docs/06_status/proof/UTV2-1892/`. The source-changing commits
 are `f638dd89f` (the namespace widening) and `63115cbff` (the token boundaries and their tests);
 `1a64d5f22` between them is the lane-pr-binding commit and touches only the lane manifest.
 Every commit above the anchor touches only the proof directory.
-Merge SHA: bound by `post-merge-lane-close.yml` after the merge.
+The merge row above is bound by `post-merge-lane-close.yml` after the merge.
