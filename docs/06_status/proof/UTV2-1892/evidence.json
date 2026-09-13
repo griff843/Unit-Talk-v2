@@ -7,12 +7,12 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "63115cbff33f0196bbe8d9aa182345be33effb0b",
+    "verified_source_sha": "ca666a6e36a3a0d9decfe684fbb55daed8cc3219",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "note": "63115cbff33f0196bbe8d9aa182345be33effb0b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/. The lane's source-changing commits are f638dd89f2b9e449062461712f5da5a4e0a40c0a (the namespace widening in the three scoped files, and the removal of the lane-start .gitkeep) and 63115cbff33f0196bbe8d9aa182345be33effb0b (both-ends token boundaries on the workflow's three extractors plus the boundary test and the reverse-direction drift check, under the independent review's blocking finding). The lane-pr-binding commit 1a64d5f22 between them touches only docs/06_status/lanes/UTV2-1892.json, which is proof-prefix exempt. Every commit above 63115cbff33f0196bbe8d9aa182345be33effb0b touches only the proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
-    "bound_at": "2026-09-13T08:05:20.000Z"
+    "note": "ca666a6e36a3a0d9decfe684fbb55daed8cc3219 is the merge of `main` fbd7e17d6 into 224e4eae1, performed by the sanctioned wrapper resync (`ops:merge-wrapper git-merge-main`) on 2026-09-13 before the T1 approval pair was requested, so that the pair binds a head that is current with `main`. `git diff --name-only 224e4eae1 ca666a6e36a3a0d9decfe684fbb55daed8cc3219 -- apps packages scripts supabase .github package.json` is empty: the merge brings only docs/mission/plan.md, docs/06_status/readiness/readiness-score.json and the UTV2-1893 lane/sync files. Every static and runtime measurement below that names 63115cbff33f0196bbe8d9aa182345be33effb0b or 92f34932f was therefore taken on a source tree byte-identical to this anchor and is carried, not re-recorded. Before the resync the anchor was 63115cbff33f0196bbe8d9aa182345be33effb0b: 63115cbff33f0196bbe8d9aa182345be33effb0b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/. The lane's source-changing commits are f638dd89f2b9e449062461712f5da5a4e0a40c0a (the namespace widening in the three scoped files, and the removal of the lane-start .gitkeep) and 63115cbff33f0196bbe8d9aa182345be33effb0b (both-ends token boundaries on the workflow's three extractors plus the boundary test and the reverse-direction drift check, under the independent review's blocking finding). The lane-pr-binding commit 1a64d5f22 between them touches only docs/06_status/lanes/UTV2-1892.json, which is proof-prefix exempt. Every commit above 63115cbff33f0196bbe8d9aa182345be33effb0b touches only the proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-13T12:32:25Z"
   },
   "static_proof": {
     "unit_tests": [

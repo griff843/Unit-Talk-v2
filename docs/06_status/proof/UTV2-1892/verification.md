@@ -12,7 +12,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1892-merge-gate-work-identity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1570
-Head SHA: 63115cbff33f0196bbe8d9aa182345be33effb0b
+Head SHA: ca666a6e36a3a0d9decfe684fbb55daed8cc3219
 result: pass
 
 ## ASSERTIONS:
@@ -129,9 +129,14 @@ verdict, which is the next step the reviewer directed after this lands.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1570
-Execution SHA: 63115cbff33f0196bbe8d9aa182345be33effb0b
+Execution SHA: ca666a6e36a3a0d9decfe684fbb55daed8cc3219
 
-Execution anchor: `63115cbff33f0196bbe8d9aa182345be33effb0b` -- the last commit on this lane
+Execution anchor: `ca666a6e36a3a0d9decfe684fbb55daed8cc3219` -- the wrapper resync merge of `main` `fbd7e17d6` into
+`224e4eae1`, and therefore the last commit on this lane that changes anything outside
+`docs/06_status/proof/UTV2-1892/`. `git diff --name-only 224e4eae1 ca666a6e36a3a0d9decfe684fbb55daed8cc3219 -- apps packages scripts
+supabase .github package.json` is empty, so every measurement below taken at `63115cbff` or
+`92f34932f` was taken on a source tree byte-identical to this anchor and is carried. Before the
+resync the anchor was `63115cbff33f0196bbe8d9aa182345be33effb0b`, the last lane-authored commit
 that changes anything outside `docs/06_status/proof/UTV2-1892/`. The source-changing commits
 are `f638dd89f` (the namespace widening) and `63115cbff` (the token boundaries and their tests);
 `1a64d5f22` between them is the lane-pr-binding commit and touches only the lane manifest.
