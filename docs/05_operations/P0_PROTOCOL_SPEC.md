@@ -233,17 +233,24 @@ verifier of the consumer. These are local controls; they do not replace the requ
 the merge gate is unchanged.
 
 **How the foundation reaches `main`, then.** Not by widening a required check, and not through
-the controls above, which are not installed until it lands. `Merge Gate` on `main` already extracts
-`(utv2|uni|work)-\d+` from the branch and resolves the foundation's tier (T1) from the lane
-manifest at its head, refusing only the T1 approval artifacts — the `t1-approved` label and an
-exact-head `pm-verdict/v1` APPROVED comment from CODEOWNERS. The merge is performed by the wrapper
-installed on the base, which carries no repo-minted boundary; this branch's wrapper, run against the
-same PR, refuses it because the base consumer is not activated, and that is the intended reading of
-the base, not a route around it. A `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` identity is not a
-route: it is accepted only when no lane manifest exists. The activation follow-up is then a
-**tracker-keyed** lane, because the newly installed wrapper refuses every `WORK-###` head until the
-base consumer delegates — which is what the follow-up installs. The measured sequence, receipts and
-the one reserved scope authorization are recorded in
+the controls above, which are not installed until it lands. The exact-head `Merge Gate` check on
+the foundation PR is written by whichever copy of `merge-gate.yml` GitHub runs for the triggering
+event: on `pull_request` and `pull_request_review` events that is the PR's own copy, which
+extracts `(utv2|uni|work)-\d+` from the branch, resolves the foundation's tier (T1) from the lane
+manifest at its head, validates any verdict with the `merge-gate-verdict.cjs` checked out from the
+base SHA, and refuses only the T1 approval artifacts — the `t1-approved` label and an exact-head
+`pm-verdict/v1` APPROVED comment from CODEOWNERS. On `issue_comment` and `workflow_dispatch`
+events it is the copy on `main`, which cannot resolve a `WORK-` identifier and writes `BLOCKED`.
+The artifacts are therefore applied verdict first, label second, so the final evaluation is a
+`pull_request` one; the merge is performed by the wrapper installed on the base, which treats
+the tier as unresolved and holds the PR to the strict exact-head verdict rule. This branch's
+wrapper, run against the same PR, refuses it because the base consumer is not activated, and that
+is the intended reading of the base, not a route around it. A
+`docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` identity is not a route: the base gate consults
+it only after an identifier resolves. The activation follow-up is then a **tracker-keyed** lane,
+because the newly installed wrapper refuses every `WORK-###` head until the base consumer
+delegates — which is what the follow-up installs. The measured sequence, both evaluations,
+the receipts and the one reserved scope authorization are recorded in
 `docs/06_status/proof/WORK-2026091001/integration.md`. No branch-protection change and no
 required-check change is part of this.
 

@@ -22,38 +22,77 @@ checks out that trusted base, and evaluates the candidate without running its co
 
 1. Land the foundation, #1556, under its own identity `WORK-2026091001` through
    the merge path that is installed on `main` today. Measured at head
-   `a9cc5303567c8fbad48476ad30f19c8f720c9cf6` against base `14124f02a`:
-   - **`Merge Gate` resolves this lane.** `merge-gate.yml` extracts
-     `(utv2|uni|work)-\d+` from the branch, reads
-     `docs/06_status/lanes/WORK-2026091001.json` at the PR head and resolves
-     tier **T1** (the same run's tier-sync step prints `Manifest tier: T1`;
-     the branch wrapper's receipt records `tier.source: lane_manifest`). It
-     refuses **only** the T1 approval artifacts: the `t1-approved` label and a
-     `pm-verdict/v1` APPROVED comment from CODEOWNERS bound to this exact head.
-     An earlier revision of this step said the gate fails with *"No issue ID
-     found in PR branch or title"*; that was measured on an older gate and is
-     withdrawn here.
+   `16b0dc8241ae5a93a594ace670f4afb6ac75e224` against base `e0c8f812d`, in both
+   directions:
+   - **The exact-head `Merge Gate` check is written by two different copies of
+     `merge-gate.yml`, and only one of them can read this lane.** On
+     `pull_request` and `pull_request_review` events GitHub runs the workflow
+     file from the PR's merge commit, so the evaluator is *this PR's copy*,
+     whose identifier rule is `(utv2|uni|work)-\d+`; it reads
+     `docs/06_status/lanes/WORK-2026091001.json` at the PR head, resolves tier
+     **T1**, validates any `pm-verdict/v1` with `merge-gate-verdict.cjs`
+     checked out from the **base** SHA (the PR cannot alter that validator),
+     and refuses only the two T1 approval artifacts — the `t1-approved` label
+     and an exact-head `pm-verdict/v1` APPROVED comment from CODEOWNERS
+     (measured: run `34734169058`, check `Merge Gate: BLOCKED` naming exactly
+     those two). On `issue_comment` (a `PM_VERDICT:` comment) and
+     `workflow_dispatch` events the evaluator is the copy on `main`, whose rule
+     is `(utv2|uni)-\d+`; it cannot resolve a `WORK-` identifier and writes
+     `BLOCKED` with *"No issue ID found in PR branch or title. Cannot resolve
+     authoritative tier"* and *"No authoritative lane manifest tier found"*
+     (measured: `workflow_dispatch` run `34734720298` from `main` against this
+     PR, which rewrote the exact-head check to exactly that). Both copies
+     update the same exact-head check run, and the last evaluation to finish
+     is the one branch protection reads. An earlier revision of this step said
+     `Merge Gate` *on `main`* already extracts `work-`; that was read from this
+     branch's copy of the file and is withdrawn.
+   - **So the two approval artifacts must be applied in an order that ends
+     with a `pull_request`-class evaluation.** Post the exact-head
+     `pm-verdict/v1` APPROVED comment first (its `issue_comment` run, evaluated
+     by the base copy, leaves the check `BLOCKED`), then apply the
+     `t1-approved` label: the `labeled` event re-evaluates with this PR's copy,
+     which sees the label and the valid exact-head verdict and writes
+     `APPROVED`. Applying the label first and the comment second leaves the
+     check `BLOCKED`; removing and re-applying the label (or any other
+     `pull_request` event on the stationary head) re-evaluates and repairs it.
+     Any later `PM_VERDICT:` comment edit or a `workflow_dispatch` re-evaluation
+     flips the check back to `BLOCKED` for the same reason until a
+     `pull_request` event runs again. This is ordinary GitHub trigger
+     semantics, not a bypass: the resolved tier is the strictest one, the
+     verdict validator is the base's, and both artifacts are CODEOWNERS-authored
+     and pinned to the exact head. It is also fragile, which is why it is
+     written down here and in the PR packet rather than left to be discovered.
+   - **The durable repair is one hunk of this PR** — the `work-` identifier in
+     `merge-gate.yml` — which is a change to merge authority (reserved
+     decision 7) and is installed on `main` only by this merge. Landing that
+     hunk first, alone, in a tracker-keyed lane is the alternative that removes
+     the ordering dependence; it is a PM decision and is not taken here.
    - **The wrapper that performs the merge is the one installed on the base**,
      run from the root checkout on `main` after `git pull --ff-only`:
      `pnpm ops:merge-wrapper pr-merge --issue WORK-2026091001 --branch
      codex/work-2026091001-tracker-independence --pr 1556`. Its
-     `pre-merge-authorization` receipt at this head resolves the label tier T1,
-     requires the `pm-verdict/v1`, and refuses on exactly *"required checks
-     missing or failing on head …: Merge Gate | T1 requires a valid
-     pm-verdict/v1 comment"*. The base wrapper carries no repo-minted
-     boundary: `origin/main:scripts/ops/pre-merge-authorization.ts` contains
-     no `repoMintedP0` predicate. Running this branch's own wrapper instead
-     refuses the same PR (`repoMintedP0.covered: false`, base `14124f02a`),
-     because the boundary it installs reads the base consumer, which has not
-     been activated; the foundation is therefore merged with the base wrapper,
-     which is not a bypass of the branch's control — that control is not
-     installed until this merge lands.
-   - **No bootstrap identity and no replacement lane.** A
-     `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` entry is accepted only
-     when no lane manifest exists and this lane has one, so the earlier
-     sentence naming that file as a fallback is withdrawn; a tracker-keyed
-     replacement lane (an earlier revision named UTV2-1887, which never
-     existed) is not created.
+     `pre-merge-authorization` receipt at this head records `tier.source:
+     unresolved` with `labelTier: T1`, which by its own rule *"keeps the strict
+     pm-verdict requirement"*: it refuses on exactly *"required checks missing
+     or failing on head …: Merge Gate | T1 requires a valid pm-verdict/v1
+     comment"*, and authorizes once all four required checks are green on the
+     head and a valid exact-head `pm-verdict/v1` exists. The base wrapper
+     carries no repo-minted boundary: `origin/main:scripts/ops/pre-merge-authorization.ts`
+     contains no `repoMintedP0` predicate. Running this branch's own wrapper
+     instead refuses the same PR (`repoMintedP0.covered: false`), because the
+     boundary it installs reads the base consumer, which has not been
+     activated; the foundation is therefore merged with the base wrapper, which
+     is not a bypass of the branch's control — that control is not installed
+     until this merge lands.
+   - **No bootstrap identity and no replacement lane.** The base copy of
+     `merge-gate.yml` consults `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json`
+     only after an identifier has resolved (`!authoritativeTier && issueId`),
+     and for this branch `issueId` is null on that copy, so a bootstrap entry
+     could not be reached even if one were authorized; the earlier sentence
+     naming that file as a fallback is withdrawn. Placing a `UTV2-` id in the
+     PR title to satisfy the base rule would misattribute the lane and is not a
+     route. A tracker-keyed replacement lane (an earlier revision named
+     UTV2-1887, which never existed) is not created.
    - **The one unresolved scope authorization is a `scope-override/v1` for six
      paths.** The trusted-base scope guard reports eight paths outside this
      lane's `file_scope_lock`. Two are the lane's lifecycle pair
@@ -76,8 +115,10 @@ checks out that trusted base, and evaluates the candidate without running its co
      reserved to CODEOWNERS, is requested in the PR packet with its exact text,
      and is not authored here.
 2. Integrate #1556 through that base-installed serialized merge wrapper after
-   the required checks and both T1 approval artifacts are on the stationary
-   head. Verify its merge is reachable from protected `main` and that
+   the required checks are green and both T1 approval artifacts are on the
+   stationary head in the order above, with the exact-head `Merge Gate` check
+   reading `APPROVED` at the moment the wrapper runs. Verify its merge is
+   reachable from protected `main` and that
    `scripts/ops/tracker-independence/p0-workflow.cjs` exists at that exact SHA.
 3. Land the consumer activation as a **tracker-keyed** follow-up lane, not as a
    `WORK-###` PR. Once the foundation is on `main`, the installed wrapper
