@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1894",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1894-deploy-packet",
+  "branch": "claude/utv2-1894-deploy-packet",
+  "base_branch": "main",
+  "commit_sha": "15ee3a505de88c8c0494ad1430b3b3a997122627",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1572",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/DEPLOY_DECISION_PACKET_2026-09-13.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-09-13T12:52:15.501Z",
+  "heartbeat_at": "2026-09-13T13:40:34.271Z",
+  "closed_at": "2026-09-13T13:40:34.271Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-13T13:40:32.243Z",
+      "verdict": "pass",
+      "merge_sha": "15ee3a505de88c8c0494ad1430b3b3a997122627",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1894-deploy-packet",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
