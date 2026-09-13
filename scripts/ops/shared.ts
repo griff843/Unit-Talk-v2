@@ -861,8 +861,10 @@ export const P0_EVALUATOR_ENTRY = 'evaluatePullRequest';
 function scriptDelegatesToEvaluator(script: string): boolean {
   const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
   const literal = String.raw`['"](?:\./)?${evaluator}['"]`;
+  const entry = P0_EVALUATOR_ENTRY;
+  const ident = String.raw`[A-Za-z_$][\w$]*`;
   // A declaration or a plain assignment (`summary = await ...`) may prefix the statement.
-  const declaration = String.raw`(?:(?:const|let|var)\s+)?(?:\{[^}]*\}|[A-Za-z_$][\w$.]*)\s*=\s*`;
+  const declaration = String.raw`(?:(?:const|let|var)\s+)?(?:\{[^}]*\}|${ident}(?:\.${ident})*)\s*=\s*`;
   const statementStart = String.raw`^\s*(?:${declaration})?(?:await\s+|return\s+)?`;
   // A body that redefines the entry point (`const evaluatePullRequest = …`,
   // `function evaluatePullRequest`, a method `evaluatePullRequest() {`) is
@@ -870,27 +872,61 @@ function scriptDelegatesToEvaluator(script: string): boolean {
   // Destructuring `const { evaluatePullRequest } = require(...)` is the
   // accepted form and does not match this rule.
   const redefinesEntry = new RegExp(
-    String.raw`(?:^|[^.\w$])(?:(?:const|let|var|function|async\s+function)\s+${P0_EVALUATOR_ENTRY}\b|${P0_EVALUATOR_ENTRY}\s*\([^)]*\)\s*\{)`,
+    String.raw`(?:^|[^.\w$])(?:(?:const|let|var|function|async\s+function)\s+${entry}\b|${entry}\s*\([^)]*\)\s*\{)`,
     'm',
   );
   if (redefinesEntry.test(script)) return false;
   // Only a `const` binding of the literal is accepted: `let`/`var` can be
   // reassigned to another module before the require.
   const bindingNames = [...script.matchAll(
-    new RegExp(String.raw`^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}\s*;?\s*$`, 'gm'),
+    new RegExp(String.raw`^\s*const\s+(${ident})\s*=\s*${literal}\s*;?\s*$`, 'gm'),
   )].map(([, name]) => escapeRegExp(name!));
   const moduleRef = [literal, ...bindingNames].join('|');
-  const requireStatement = new RegExp(statementStart + String.raw`require\(\s*(?:${moduleRef})\s*\)`, 'm');
-  const inlineCall = new RegExp(
-    statementStart + String.raw`require\(\s*(?:${moduleRef})\s*\)\.${P0_EVALUATOR_ENTRY}\s*\(`,
-    'm',
+  // Every `require(...)` in the body takes a string literal or one of those
+  // bindings (review round 4): `require(require.resolve(x))`, a concatenation
+  // or a computed path could load the evaluator through a name this predicate
+  // does not track, and then mutate it.
+  for (const [, argument] of script.matchAll(/require\(\s*([^()]*?)\s*\)/g)) {
+    if (!new RegExp(String.raw`^(?:'[^'\\]*'|"[^"\\]*"|${moduleRef})$`).test(argument!)) return false;
+  }
+  // The accepted forms, as spans. Every occurrence of the entry-point name and
+  // of a module binding must fall inside one of them; a fake object property
+  // named after the entry point, an assignment over the export
+  // (`api.evaluatePullRequest = fake`), a bracket access, a quoted name or an
+  // `Object.defineProperty` call are none of these and refuse the body
+  // (review round 4).
+  const spans: Array<[number, number]> = [];
+  const collect = (pattern: RegExp): number => {
+    let count = 0;
+    for (const match of script.matchAll(pattern)) {
+      spans.push([match.index!, match.index! + match[0].length]);
+      count += 1;
+    }
+    return count;
+  };
+  const inlineCalls = collect(
+    new RegExp(statementStart + String.raw`require\(\s*(?:${moduleRef})\s*\)\.${entry}\s*\(`, 'gm'),
   );
-  const directCall = new RegExp(
-    statementStart + String.raw`(?:[A-Za-z_$][\w$]*\.)?${P0_EVALUATOR_ENTRY}\s*\(`,
-    'm',
+  const destructured = collect(
+    new RegExp(String.raw`^\s*const\s*\{\s*${entry}\s*\}\s*=\s*require\(\s*(?:${moduleRef})\s*\)\s*;?\s*$`, 'gm'),
   );
-  if (inlineCall.test(script)) return true;
-  return requireStatement.test(script) && directCall.test(script);
+  const moduleBindings = [...script.matchAll(
+    new RegExp(String.raw`^\s*const\s+(${ident})\s*=\s*require\(\s*(?:${moduleRef})\s*\)\s*;?\s*$`, 'gm'),
+  )];
+  for (const match of moduleBindings) spans.push([match.index!, match.index! + match[0].length]);
+  const moduleNames = moduleBindings.map(([, name]) => escapeRegExp(name!));
+  const directCalls = destructured > 0
+    ? collect(new RegExp(statementStart + String.raw`${entry}\s*\(`, 'gm'))
+    : 0;
+  const boundCalls = moduleNames.length > 0
+    ? collect(new RegExp(statementStart + String.raw`(?:${moduleNames.join('|')})\.${entry}\s*\(`, 'gm'))
+    : 0;
+  const covered = (index: number): boolean => spans.some(([from, to]) => index >= from && index < to);
+  const names = [entry, ...moduleNames].join('|');
+  for (const match of script.matchAll(new RegExp(String.raw`(?<![\w$])(?:${names})(?![\w$])`, 'g'))) {
+    if (!covered(match.index!)) return false;
+  }
+  return inlineCalls > 0 || directCalls > 0 || boundCalls > 0;
 }
 
 /** True when a `strategy.matrix` cannot produce a single job instance. */

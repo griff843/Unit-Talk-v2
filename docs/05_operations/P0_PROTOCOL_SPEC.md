@@ -182,28 +182,40 @@ guarantee — a manifest can be written by anything that can commit — and the 
 What the controls do guarantee is narrower and is what the tests exercise: **the repository's own
 admission tooling refuses to open or authorize a repo-minted lane unless the consumer installed on
 `origin/main` contains a live `actions/github-script` step, in the `P0 Protocol` job, whose body
-loads the evaluator and calls `evaluatePullRequest`**. "Live" means: the job and step carry no
+`require`s the evaluator module and invokes its `evaluatePullRequest` export by name through that
+`require`**. "Live" means: the job and step carry no
 literal-false `if:`, no `continue-on-error` other than literal false, the job does not `need` a
 disabled or absent job, its matrix (if any) has no empty axis and no `exclude` at all (matrix
 expansion is not modelled, so any `exclude` is refused), the step's action is exactly
-`actions/github-script` (any ref), and exactly one job reports the `P0 Protocol` context. "Loads
-and calls" means, with comments and template literals blanked, a statement-level `require` of the
-evaluator path (directly or through a `const` binding of the literal) plus a statement-level
-`evaluatePullRequest(` call, or the two inlined as one expression, in a body that does not itself
-declare a `const`/`let`/`var`/`function`/method named `evaluatePullRequest`. Every other shape is
-refused, and the tests enumerate the ones independent review probed across three rounds: a shell
+`actions/github-script` (any ref), and exactly one job reports the `P0 Protocol` context.
+"Invokes through that `require`" means, with comments and template literals blanked: the body
+either inlines `require(<evaluator>).evaluatePullRequest(` as one statement, destructures
+`const { evaluatePullRequest } = require(<evaluator>)` and then calls `evaluatePullRequest(` at
+statement level, or binds `const <name> = require(<evaluator>)` and then calls
+`<name>.evaluatePullRequest(` at statement level, where `<evaluator>` is the path literal or a
+`const` binding of it; every `require(` in the body takes a string literal or such a binding; every
+other occurrence of the name `evaluatePullRequest` or of a module binding anywhere in the body
+refuses it; and the body declares no `const`/`let`/`var`/`function`/method named
+`evaluatePullRequest`. The tests enumerate the shapes independent review probed across four
+rounds, each refused: a shell
 `run:` of any form (the evaluator has no CLI entry point, so no shell invocation evaluates
 anything), a comment-only reference in shell or JavaScript, a path inside a string or a multi-line
 template literal, a `require` nested inside another expression, a bare `require` that never calls
 the entry point, a body that shadows or redefines the entry point, a `let` binding reassigned before
 the `require`, a forked `actions/github-script-*` action, an all-excluded matrix, a duplicate
-`P0 Protocol` job, a longer path that merely ends in the evaluator's, candidate-only activation on a
-branch, and a candidate manifest that already exists.
+`P0 Protocol` job, a fake object property named after the entry point called after a bare
+`require`, the export reassigned or replaced (directly, through a second binding of the module,
+through `Object.assign`, `Object.defineProperty` or a bracket access) before the call, a module
+loaded through a computed or concatenated `require` argument, a `let`-bound module replaced before
+the call, the entry point passed around by reference, a longer path that merely ends in the
+evaluator's, candidate-only activation on a branch, and a candidate manifest that already exists.
 
 What the predicate does **not** assess, stated so nobody reads more into it: JavaScript control
 flow (a call inside `if (false)`, a never-invoked function, or a `try` whose `catch` swallows the
 failure is counted if the statements are present), runtime `if:` expressions (evaluated by
-Actions, not here), `timeout-minutes`, and a second *workflow* that reports the same check name. None of these is
+Actions, not here), `timeout-minutes`, a second *workflow* that reports the same check name, and any
+replacement of the loaded module's export that names neither `evaluatePullRequest` nor a tracked
+module binding (for example through `require.cache` or a helper module that mutates it). None of these is
 reachable by a WORK PR author, because the predicate never reads candidate content: introducing
 any of them requires first landing a weakened consumer on `origin/main` through a reviewed
 required-check change, which is exactly the bootstrap route this foundation already requires. The

@@ -89,18 +89,27 @@ candidate head carries, and any committer can write one. The controls guarantee
 that the repository's own admission tooling refuses to open or authorize a
 repo-minted lane unless the consumer installed on `origin/main` contains a live
 `actions/github-script` step in the `P0 Protocol` job that `require`s the
-evaluator and calls `evaluatePullRequest` at statement level. A shell `run:`
-never counts: the evaluator has no CLI entry point. Refused shapes the tests
-enumerate (three review rounds): any shell form, comment-only references,
+evaluator module and invokes its `evaluatePullRequest` export by name through
+that `require` at statement level (inlined, destructured, or through a `const`
+module binding), with every other `require` argument a literal and every other
+use of the entry-point name or of a module binding refusing the body. A shell
+`run:` never counts: the evaluator has no CLI entry point. Refused shapes the
+tests enumerate (four review rounds): any shell form, comment-only references,
 strings and multi-line template literals, nested `require`, a bare `require`
 with no call, a shadowed or redefined entry point, a reassigned `let` binding,
-a forked `actions/github-script-*` action, suffix paths, literal-false `if:`,
-non-false `continue-on-error` at step or job level, `needs:` on a disabled or
-absent job, an empty or any-`exclude` matrix, a duplicate `P0 Protocol` job,
-candidate-only activation and existing candidate manifests. Not assessed:
-JavaScript control flow, runtime `if:` expressions, `timeout-minutes`, and the
-same check name reported by another workflow — none introducible by a WORK PR
-author, since the predicate never reads candidate content. The foundation itself
+a forked `actions/github-script-*` action, a fake property named after the
+entry point, the export reassigned or replaced (directly, through a second
+binding, `Object.assign`, `Object.defineProperty` or a bracket access) before
+the call, a computed or concatenated `require` argument, a `let`-bound module
+replaced before the call, the entry point passed by reference, suffix paths,
+literal-false `if:`, non-false `continue-on-error` at step or job level,
+`needs:` on a disabled or absent job, an empty or any-`exclude` matrix, a
+duplicate `P0 Protocol` job, candidate-only activation and existing candidate
+manifests. Not assessed: JavaScript control flow, runtime `if:` expressions,
+`timeout-minutes`, the same check name reported by another workflow, and a
+replacement of the loaded export that names neither the entry point nor a
+tracked binding (`require.cache`, a helper module) — none introducible by a
+WORK PR author, since the predicate never reads candidate content. The foundation itself
 reaches `main` through the bootstrap route in step 1 above, and the block
 releases only when the activation is installed on the base — re-arming if a
 later base commit removes the delegation. See

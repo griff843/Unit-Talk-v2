@@ -2743,6 +2743,19 @@ test('findExecutedP0Delegation rejects a github-script body that only mentions t
     'a shadowing function of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'function evaluatePullRequest() { return "fake"; }', 'await evaluatePullRequest({ github });'],
     'a method definition of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const fake = { evaluatePullRequest() { return "fake"; } };', 'await fake.evaluatePullRequest({ github });'],
     'a let binding reassigned before the require': ["let evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "evaluator = 'node:path';", 'const mod = require(evaluator);', 'await mod.evaluatePullRequest({ github });'],
+    // Round 4: the module is loaded but the call reaches a fake property or a
+    // replaced export.
+    'a fake object property named after the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const x = { evaluatePullRequest: () => "fake" };', 'await x.evaluatePullRequest({ github });'],
+    'the export reassigned before the call': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'api.evaluatePullRequest = () => "fake";', 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through a second binding of the same module': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "const again = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'again.evaluatePullRequest = () => "fake";', 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through Object.assign': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'Object.assign(api, { evaluatePullRequest: () => "fake" });', 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through Object.defineProperty with a quoted name': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "Object.defineProperty(api, 'evaluatePullRequest', { value: () => 'fake' });", 'await api.evaluatePullRequest({ github });'],
+    'the export replaced through a bracket access': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "api['evaluate' + 'PullRequest'] = () => 'fake';", 'await api.evaluatePullRequest({ github });'],
+    'the module bound through a computed require argument': ["const api = require(require.resolve('./scripts/ops/tracker-independence/p0-workflow.cjs'));", 'await api.evaluatePullRequest({ github });'],
+    'the module bound through a concatenated require argument': ["const api = require('./scripts/ops/tracker-independence/' + 'p0-workflow.cjs');", 'await api.evaluatePullRequest({ github });'],
+    'the module bound with let and then replaced': ["let api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'api = { evaluatePullRequest: () => "fake" };', 'await api.evaluatePullRequest({ github });'],
+    'the entry point called on a binding that was never required': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const other = { evaluatePullRequest: () => "fake" };', 'await other.evaluatePullRequest({ github });'],
+    'the entry point passed around by reference': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const run = evaluatePullRequest;', 'await run({ github });'],
   };
   for (const [label, lines] of Object.entries(refused)) {
     assert.equal(findExecutedP0Delegation(withScript(lines)).executed, false, label);
@@ -2751,6 +2764,8 @@ test('findExecutedP0Delegation rejects a github-script body that only mentions t
     'destructured require': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
     'awaited call on the required module': ["await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
     'bound identifier that is then required': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", 'const mod = require(evaluator);', 'await mod.evaluatePullRequest({ github });'],
+    'a module binding called more than once': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const first = await api.evaluatePullRequest({ github });', 'core.info(String(first));', 'const second = await api.evaluatePullRequest({ github, repo: context.repo });', 'core.info(String(second));'],
+    'other modules required alongside the evaluator': ["const fs = require('node:fs');", "const path = require(\"node:path\");", "const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'core.info(String(fs.existsSync(path.resolve("."))));', 'summary = await evaluatePullRequest({ github });'],
     'the staged activation shape: require and call inside a try block': [
       'let summary = "";',
       'try {',
