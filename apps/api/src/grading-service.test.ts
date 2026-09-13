@@ -19,9 +19,12 @@ async function createPostedPickFixture(
     line?: number | null;
     odds?: number;
     eventName?: string;
+    // UTV2-1889: lets two fixtures share one bundle, which is what makes a
+    // population-restriction test possible at all.
+    repositories?: ReturnType<typeof createInMemoryRepositoryBundle>;
   } = {},
 ) {
-  const repositories = createInMemoryRepositoryBundle();
+  const repositories = overrides.repositories ?? createInMemoryRepositoryBundle();
   const eventName = overrides.eventName ?? 'Fixture Event';
   const created = await processSubmission(
     {
@@ -167,6 +170,28 @@ function trustedEventMetadata(input: {
     ...(ingestionCycleRunId === null
       ? {}
       : { ingestionSource: 'ingestor.cycle', ingestionCycleRunId }),
+  };
+}
+
+// Provenance shaped the way the deferred operator-attestation route would have written
+// it. That route is NOT in this release (UTV2-1889 removed it before merge) and
+// `operator` is NOT a trusted provider; this helper exists so the refusal can be
+// asserted on exactly the shape a future writer would emit, and so the crossed
+// combinations (sgo naming operator.attestation, and operator naming ingestor.cycle)
+// stay constructible for the keyed validator's tests.
+function operatorEventMetadata(input: {
+  startsAt: string;
+  providerKey?: string;
+  ingestionSource?: string;
+  ingestionCycleRunId?: string;
+}) {
+  return {
+    starts_at: input.startsAt,
+    source: input.providerKey ?? 'operator',
+    providerKey: input.providerKey ?? 'operator',
+    ingestionSource: input.ingestionSource ?? 'operator.attestation',
+    ingestionCycleRunId:
+      input.ingestionCycleRunId ?? 'run-operator-attestation-fixture',
   };
 }
 
@@ -1840,10 +1865,14 @@ test('runGradingPass grades a legacy totals pick as a game-line market', async (
 });
 
 test('runGradingPass fails closed for unsupported game-line families', async () => {
+  // `spread` carries this assertion now. It used to be carried by `moneyline`, which
+  // is a real, participant-required family as of UTV2-1889 — so
+  // this test moved to a market that is still genuinely unsupported rather than
+  // being deleted along with the rule it was protecting.
   const { repositories, pickId } = await createPostedGameLinePickFixture({
-    market: 'moneyline',
-    selection: 'LAL moneyline',
-    line: 100,
+    market: 'spread',
+    selection: 'LAL -3.5',
+    line: -3.5,
   });
 
   const result = await runGradingPass(repositories);
@@ -1856,6 +1885,29 @@ test('runGradingPass fails closed for unsupported game-line families', async () 
   assert.equal(detail.reason, 'unsupported_market_family');
   assert.equal(detail.marketFamily, 'unsupported');
   assert.equal(detail.participantRequirement, 'forbidden');
+});
+
+test('runGradingPass declares moneyline participant-required and skips without a team', async () => {
+  const { repositories, pickId } = await createPostedGameLinePickFixture({
+    market: 'moneyline',
+    selection: 'Lakers',
+  });
+  // See the note in createMoneylineResultFixture: the shared helper defaults the
+  // line, so a genuine moneyline has to be written after the fact.
+  mutatePick(repositories, pickId, (existing) => ({ ...existing, line: null }));
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  // Not `missing_line`. A moneyline has no line, and the skip that used to fire on
+  // that is now guarded on the family's own `usesLine`. If this assertion ever reads
+  // `missing_line` again, the guard has been removed and no moneyline can ever grade.
+  assert.equal(detail.reason, 'missing_participant_id');
+  assert.equal(detail.marketFamily, 'game_moneyline');
+  assert.equal(detail.participantRequirement, 'required');
 });
 
 test('runGradingPass declares team totals participant-required and skips without a team', async () => {
@@ -2863,5 +2915,501 @@ test('runGradingPass never posts a settlement recap for a Track Only pick, even 
     discordCalls,
     [],
     'no Discord request may be made for a Track Only pick -- a recap is member delivery',
+  );
+});
+
+
+async function createMoneylineResultFixture(
+  options: {
+    actualValue?: number;
+    marketKey?: string;
+    metadata?: Record<string, unknown>;
+    won?: boolean;
+  } = {},
+) {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      market: 'moneyline',
+      selection: 'Lakers',
+    });
+
+  const team = await repositories.participants.upsertByExternalId({
+    externalId: 'TEAM_LAL',
+    displayName: 'Lakers',
+    participantType: 'team',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+
+  const event = await repositories.events.upsertByExternalId({
+    externalId: `sgo:NBA:2026-04-04:${eventName}`,
+    sportId: 'NBA',
+    eventName,
+    eventDate: '2026-04-04',
+    status: 'completed',
+    metadata:
+      options.metadata ??
+      trustedEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
+  });
+
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: team.id,
+    role: 'home',
+  });
+
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    // `createPostedGameLinePickFixture` applies `overrides.line ?? 224.5`, so passing
+    // `line: null` yields 224.5 and the pick is not a real moneyline. Null it here or
+    // the `usesLine` guard is never exercised by anything in this file.
+    line: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'NBA',
+      teamId: team.id,
+      team: 'Lakers',
+      eventName,
+    },
+  }));
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: team.id,
+    marketKey: options.marketKey ?? 'game_moneyline_win',
+    actualValue: options.actualValue ?? (options.won === false ? 0 : 1),
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  return { repositories, pickId, event, team };
+}
+
+test('runGradingPass settles a moneyline from an ingested win flag', async () => {
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    actualValue: 1,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.skipped, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
+test('an ingested loss and push settle as loss and push', async () => {
+  for (const [actualValue, expected] of [
+    [0, 'loss'],
+    [0.5, 'push'],
+  ] as const) {
+    const { repositories, pickId } = await createMoneylineResultFixture({
+      actualValue,
+    });
+    const result = await runGradingPass(repositories);
+    const detail = result.details.find((d) => d.pickId === pickId);
+    assert.ok(detail);
+    assert.equal(detail.outcome, 'graded', `actual_value=${actualValue}`);
+    assert.equal(detail.result, expected);
+  }
+});
+
+test('a score stored under the pick\'s own market key is refused by the guard', async () => {
+  // The load-bearing control, and it must reach the guard to be worth anything. A
+  // result row under `moneyline` IS in the candidate set, so the lookup finds it —
+  // and it carries a raw score, not a win flag. Only the market-key guard stands
+  // between that number and a settled pick. Removing the guard turns this red.
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    marketKey: 'moneyline',
+    actualValue: 7,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(detail.reason ?? '', /moneyline_result_market_key_unsupported/);
+});
+
+test('a score of 1 under the wrong market key is refused, not read as a win', async () => {
+  // The dangerous value specifically: 1 is a legal win flag and also a legal score.
+  // Without the guard this grades as a win nobody attested.
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    marketKey: 'moneyline',
+    actualValue: 1,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(detail.reason ?? '', /moneyline_result_market_key_unsupported/);
+});
+
+test('the 280 production points-all-game-ml rows are unreachable by the lookup', async () => {
+  // The second, independent layer: `points-all-game-ml` is not in the candidate set
+  // for a moneyline at all, so those rows are never even considered. Asserted with
+  // its own exact reason rather than folded into the guard test above — the earlier
+  // draft accepted either reason and therefore proved neither.
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    marketKey: 'points-all-game-ml',
+    actualValue: 1,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(detail.reason ?? '', /game_result_not_found|grade_skipped_final/);
+});
+
+test('an out-of-range result value is skipped by name, not coerced into a verdict', async () => {
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    actualValue: 7,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(detail.reason ?? '', /moneyline_result_value_invalid/);
+});
+
+test('operator provenance is refused: the deferred attestation route has no trust entry', async () => {
+  // The exact shape the deferred operator-attestation writer would have produced,
+  // with its own consistent provider/source pair. It is refused on the PROVIDER,
+  // before the ingestion-source check is reached: `operator` is not in
+  // TRUSTED_GRADING_EVENT_PROVIDERS because nothing in this release writes it.
+  // Re-admitting the provider without its writer would turn this test red, which
+  // is the alarm it exists to be.
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    metadata: operatorEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(detail.reason ?? '', /event_provenance_untrusted_provider/);
+});
+
+test('provenance is keyed by provider: sgo may not borrow another source', async () => {
+  // An sgo event claiming the operator route's source. A flat allow-list of sources
+  // would accept this; the keyed map refuses it, which is the whole reason the map
+  // exists. (The reverse direction -- operator naming ingestor.cycle -- is refused
+  // one step earlier, on the provider, by the test above.)
+  const borrowed = await createMoneylineResultFixture({
+    metadata: operatorEventMetadata({
+      startsAt: '2026-04-04T19:30:00.000Z',
+      providerKey: 'sgo',
+      ingestionSource: 'operator.attestation',
+    }),
+  });
+  const result = await runGradingPass(borrowed.repositories);
+  const detail = result.details.find((d) => d.pickId === borrowed.pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(detail.reason ?? '', /event_provenance_invalid_ingestion_cycle/);
+});
+
+test('an untrusted provider is still refused', async () => {
+  const { repositories, pickId } = await createMoneylineResultFixture({
+    metadata: operatorEventMetadata({
+      startsAt: '2026-04-04T19:30:00.000Z',
+      providerKey: 'the-odds-api',
+    }),
+  });
+
+  const result = await runGradingPass(repositories);
+
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(detail.reason ?? '', /event_provenance_untrusted_provider/);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1889: the composed journey, which no other test in this file exercises.
+//
+// Every moneyline test above builds on `createPostedGameLinePickFixture` -- a
+// `posted` pick. Every Track Only test above uses `points-all-game-ou`, a market
+// that was already gradeable. So each leg is proven and their *composition* is
+// not, and the composition is the only shape that matters: Milestone 1's real pick
+// is `validated` + Track Only + moneyline + no result until an ingested one exists.
+// A suite can be entirely green on the parts while the journey is broken at the
+// joins.
+// ---------------------------------------------------------------------------
+
+async function createTrackOnlyMoneylineFixture() {
+  const repositories = createInMemoryRepositoryBundle();
+  const eventName = 'Dodgers @ Brewers';
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'moneyline',
+      selection: 'Dodgers',
+      // A moneyline has no line. The submission contract spells that `undefined`
+      // while the persisted row spells it `null` -- the `mutatePick` below pins
+      // the persisted shape, which is what Milestone 1's actual row carries and
+      // what made it skip on the `usesLine` guard before A5.
+      line: undefined,
+      odds: -110,
+      stakeUnits: 3,
+      eventName,
+      metadata: { distributionMode: 'track-only' },
+    },
+    repositories,
+  );
+  const pickId = created.pick.id;
+
+  const pick = await repositories.picks.findPickById(pickId);
+  assert.equal(
+    pick?.status,
+    'validated',
+    'fixture precondition: a Track Only smart-form submission stops at validated',
+  );
+
+  const team = await repositories.participants.upsertByExternalId({
+    externalId: 'TEAM_LAD',
+    displayName: 'Dodgers',
+    participantType: 'team',
+    sport: 'MLB',
+    league: 'MLB',
+    metadata: {},
+  });
+
+  const event = await repositories.events.upsertByExternalId({
+    externalId: `sgo:MLB:2026-09-09:${eventName}`,
+    sportId: 'MLB',
+    eventName,
+    eventDate: '2026-09-09',
+    status: 'completed',
+    metadata: trustedEventMetadata({ startsAt: '2026-09-09T23:10:00.000Z' }),
+  });
+
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: team.id,
+    role: 'away',
+  });
+
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    line: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'MLB',
+      teamId: team.id,
+      team: 'Dodgers',
+      eventName,
+    },
+  }));
+
+  return { repositories, pickId, event, team, eventName };
+}
+
+test('the composed journey: a Track Only validated moneyline is UNGRADEABLE until a result exists', async () => {
+  const { repositories, pickId } =
+    await createTrackOnlyMoneylineFixture();
+
+  // Negative control first. Without this the test below could pass because the
+  // pick was gradeable all along rather than because the ingested result supplied
+  // the missing fact -- and that is the difference the journey turns on.
+  const before = await runGradingPass(repositories);
+  assert.equal(before.graded, 0, 'nothing may grade before a result exists');
+  const settlementsBefore = await repositories.settlements.listByPick(pickId);
+  assert.equal(settlementsBefore.length, 0);
+});
+
+test('the composed journey: an ingested result makes Milestone 1\'s exact pick shape settle', async () => {
+  const { repositories, pickId, event, team } =
+    await createTrackOnlyMoneylineFixture();
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: team.id,
+    marketKey: 'game_moneyline_win',
+    actualValue: 1,
+    source: 'sgo',
+    sourcedAt: '2026-09-10T02:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1, 'the Track Only moneyline with a result must grade');
+  assert.equal(result.errors, 0);
+
+  const settlements = await repositories.settlements.listByPick(pickId);
+  assert.equal(settlements.length, 1);
+  assert.equal(settlements[0]!.result, 'win');
+
+  // Containment: grading a Track Only pick must still create no delivery, and
+  // the pick must not be transitioned -- `validated -> settled` is not legal.
+  const afterPick = await repositories.picks.findPickById(pickId);
+  assert.equal(afterPick?.status, 'validated');
+  const outbox = await repositories.outbox.listByPickId(pickId);
+  assert.equal(outbox.length, 0, 'Track Only must create no delivery row');
+});
+
+// --- UTV2-1889: restrictToPickIds ------------------------------------------------
+//
+// The option exists so the staging journey proof can drive the REAL grading pass
+// against the REAL staging database without sweeping and settling that database's
+// entire backlog. Three properties decide whether it is safe, and all three are
+// asserted here rather than argued in the comment on the option:
+//
+//   1. Absent, the pass is byte-for-byte what it was -- no caller in production
+//      passes it, so a change in the default is a change in production behaviour.
+//   2. Present, it can only REMOVE candidates. The restriction is intersected with
+//      the population the pass already read.
+//   3. It cannot ADMIT anything. An id outside the population -- a pick in a
+//      lifecycle state grading does not read, or one that does not exist -- stays
+//      ungraded. Without this, the option would be a second, weaker admission path
+//      into grading, which is precisely what it must not be.
+
+async function seedTwoGradeablePostedPicks(): Promise<{
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>;
+  firstPickId: string;
+  secondPickId: string;
+}> {
+  const first = await createPostedPickFixture();
+  const firstContext = await attachPlayerEventContext(
+    first.repositories,
+    first.pickId,
+    { eventName: first.eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(first.repositories, {
+    eventId: firstContext.event.id,
+    participantId: firstContext.participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  // A second gradeable pick in the SAME bundle. Without a second candidate the
+  // restriction is untestable: every assertion would pass just as well if the
+  // filter did nothing at all.
+  const second = await createPostedPickFixture({
+    repositories: first.repositories,
+    eventName: 'Fixture Event Two',
+  });
+  const secondContext = await attachPlayerEventContext(
+    first.repositories,
+    second.pickId,
+    { eventName: second.eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(first.repositories, {
+    eventId: secondContext.event.id,
+    participantId: secondContext.participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  return {
+    repositories: first.repositories,
+    firstPickId: first.pickId,
+    secondPickId: second.pickId,
+  };
+}
+
+test('runGradingPass without restrictToPickIds grades the whole population', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.attempted, 2);
+  assert.equal(result.graded, 2);
+  assert.deepEqual(
+    result.details.map((detail) => detail.pickId).sort(),
+    [firstPickId, secondPickId].sort(),
+  );
+  // The control: both picks really are settleable, so a restricted pass that
+  // settles only one below is the restriction working rather than the second pick
+  // being ungradeable for some unrelated reason.
+  assert.equal(
+    (await repositories.settlements.listByPick(secondPickId)).length,
+    1,
+  );
+});
+
+test('runGradingPass with restrictToPickIds grades only the named pick and leaves the rest untouched', async () => {
+  const { repositories, firstPickId, secondPickId } =
+    await seedTwoGradeablePostedPicks();
+
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set([firstPickId]),
+  });
+
+  assert.equal(result.attempted, 1);
+  assert.equal(result.graded, 1);
+  assert.equal(result.details.length, 1);
+  assert.equal(result.details[0]?.pickId, firstPickId);
+
+  // The load-bearing half: the unnamed pick was not merely absent from the
+  // counters, it was not WRITTEN to. A filter applied after settlement would
+  // satisfy the counters above and still have mutated the backlog.
+  assert.equal((await repositories.settlements.listByPick(secondPickId)).length, 0);
+  assert.equal(
+    (await repositories.picks.findPickById(secondPickId))?.status,
+    'posted',
+  );
+  assert.equal((await repositories.picks.findPickById(firstPickId))?.status, 'settled');
+});
+
+test('runGradingPass with restrictToPickIds cannot admit a pick the population never returned', async () => {
+  const { repositories, firstPickId } = await seedTwoGradeablePostedPicks();
+
+  // A real pick that the population read does not return: `processSubmission`
+  // leaves it `validated`, and `validated` enters the population only for the
+  // Track Only subset (UTV2-1861), which this one is not. If the restriction were
+  // used AS the population query rather than intersected with it, naming this id
+  // would pull it into grading -- a second, weaker admission path.
+  const outside = await processSubmission(
+    {
+      source: 'api',
+      market: 'points-all-game-ou',
+      selection: 'Over 24.5',
+      line: 24.5,
+      odds: -105,
+      stakeUnits: 1,
+      eventName: 'Fixture Event Three',
+    },
+    repositories,
+  );
+  assert.equal(
+    (await repositories.picks.findPickById(outside.pick.id))?.status,
+    'validated',
+  );
+
+  const result = await runGradingPass(repositories, {
+    restrictToPickIds: new Set([outside.pick.id, firstPickId]),
+  });
+
+  assert.equal(result.attempted, 1);
+  assert.equal(result.details[0]?.pickId, firstPickId);
+  assert.equal(
+    (await repositories.settlements.listByPick(outside.pick.id)).length,
+    0,
+  );
+  assert.equal(
+    (await repositories.picks.findPickById(outside.pick.id))?.status,
+    'validated',
   );
 });

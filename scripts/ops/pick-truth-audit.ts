@@ -30,6 +30,14 @@ export interface SettlementRow {
   payload: unknown;
   settled_at: string;
   corrects_id: string | null;
+  /**
+   * What was actually settled, which is not always what the pick declared: a
+   * correction can restate the stake. `track-only-report.ts` reads this table
+   * with `select: '*'`, so the value has always been on the wire -- it was
+   * simply never declared, and anything computing units from the pick's own
+   * stake would silently price a corrected settlement at the original amount.
+   */
+  stake_units: number | null;
 }
 
 export interface PickRow {

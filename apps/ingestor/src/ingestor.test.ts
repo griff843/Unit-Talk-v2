@@ -3389,28 +3389,33 @@ test('results-resolver canonical alias maps include expanded player props and ga
     assert.equal(SGO_MARKET_KEY_TO_CANONICAL_ID[marketKey], canonicalId);
   }
 
+  // UTV2-1889: the game-line table holds only keys `normalizeSgoProviderMarketKey`
+  // can actually emit — `<statId>-all-<periodId>-<betTypeId>`. The sixteen
+  // `<league>-<bet>-all-game` entries that stood here were unreachable by
+  // construction, and asserting them pinned a table no payload could ever hit.
   const expectedGameLineAliases = {
-    'nba-spread-all-game': 'game_spread_nba',
-    'nfl-spread-all-game': 'game_spread_nfl',
-    'mlb-spread-all-game': 'game_spread_mlb',
-    'nhl-spread-all-game': 'game_spread_nhl',
-    'ncaab-spread-all-game': 'game_spread_ncaab',
-    'ncaaf-spread-all-game': 'game_spread_ncaaf',
-    'nba-ml-all-game': 'game_ml_nba',
-    'nfl-ml-all-game': 'game_ml_nfl',
-    'mlb-ml-all-game': 'game_ml_mlb',
-    'nhl-ml-all-game': 'game_ml_nhl',
-    'ncaab-ml-all-game': 'game_ml_ncaab',
-    'ncaaf-ml-all-game': 'game_ml_ncaaf',
-    'nfl-total-all-game': 'game_total_nfl',
-    'mlb-total-all-game': 'game_total_mlb',
-    'nhl-total-all-game': 'game_total_nhl',
+    'points-all-game-ou': 'game_total_ou',
+    'points-all-game-ml': 'game_moneyline_win',
   };
 
   for (const [marketKey, canonicalId] of Object.entries(
     expectedGameLineAliases,
   )) {
     assert.equal(SGO_GAME_LINE_CANONICAL_ID[marketKey], canonicalId);
+  }
+
+  // The inverse half: a key of the shape the normalizer cannot emit must not be
+  // in the table at all. Without this, re-adding an unreachable alias is silent.
+  for (const unreachableKey of [
+    'nba-spread-all-game',
+    'mlb-ml-all-game',
+    'nhl-total-all-game',
+  ]) {
+    assert.equal(
+      SGO_GAME_LINE_CANONICAL_ID[unreachableKey],
+      undefined,
+      `${unreachableKey} is not a key the SGO normalizer can produce`,
+    );
   }
 });
 
