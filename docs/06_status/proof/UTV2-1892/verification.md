@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-13T07:47:48.000Z
+Generated at: 2026-09-13T08:05:20.000Z
 Issue: UTV2-1892
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1892-merge-gate-work-identity
-PR URL: pending
-Head SHA: f638dd89f2b9e449062461712f5da5a4e0a40c0a
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1570
+Head SHA: 63115cbff33f0196bbe8d9aa182345be33effb0b
 result: pass
 
 ## ASSERTIONS:
@@ -46,6 +46,13 @@ module from that checkout, so the workflow-only hunk on PR 1556 could not close 
       each namespace, and asserts it refuses `BOOTSTRAP-`. Reverting the `.cjs` hunk alone
       fails two tests; reverting the `.yml` hunk alone fails one. The control that gates
       merges is no longer invisible to the suite.
+- [x] **An identifier embedded in a longer token is not an identifier.** Under the independent
+      review's blocking finding, all three workflow extractors are bounded at both ends:
+      `feature/homework-123-fix`, `feature/work-123abc`, `feature/mywork-123` and the title
+      `Fix homework-123` resolve to **nothing**, while `codex/work-2026091001-…`,
+      `claude/utv2-1892-…`, `bootstrap/uni-42-…` and `UTV2-1892: …` still resolve. The test
+      evaluates the two JS literals and the grep pattern as read from the workflow file, so it
+      measures the operative expressions rather than a copy.
 - [x] CODEOWNERS, branch protection, the required-check set, the T1 rule (`t1-approved` label
       **and** exact-head `pm-verdict/v1`), bounce limits and supersession order are unchanged.
       `git diff origin/main..HEAD --stat` is three source files plus the lane manifest and
@@ -57,12 +64,12 @@ module from that checkout, so the workflow-only hunk on PR 1556 could not close 
 
 | Command | Result |
 |---|---|
-| `pnpm exec tsx --test scripts/ops/merge-gate-verdict.test.ts` | 24 tests, 24 pass, 0 fail (21 pre-existing + the 3-identity loop and the drift lock) |
+| `pnpm exec tsx --test scripts/ops/merge-gate-verdict.test.ts` | 25 tests, 25 pass, 0 fail (21 pre-existing + the 3-identity loop, the drift lock and the boundary test) |
 | `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts` | 66 tests, 66 pass, 0 fail |
 | `pnpm exec eslint scripts/ops/merge-gate-verdict.cjs scripts/ops/merge-gate-verdict.test.ts` | exit 0 |
 | `pnpm type-check` | exit 0 |
 | `pnpm test` | exit 0 |
-| `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head f638dd89f2b9e449062461712f5da5a4e0a40c0a` | PASS, 5 changed files, no R-level rule matched |
+| `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head 63115cbff33f0196bbe8d9aa182345be33effb0b` | PASS, 8 changed files, no R-level rule matched |
 
 ### Mutation battery (run alone, source restored and sha256-checked afterwards)
 
@@ -70,6 +77,18 @@ module from that checkout, so the workflow-only hunk on PR 1556 could not close 
 |---|---|---|
 | revert the `.cjs` hunk only | merge-gate-verdict.test.ts | 2: `not ok 21 - repository and legacy identity WORK-2026091001 retain exact-head PM approval checks`, `not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces` |
 | revert the `.yml` hunk only | merge-gate-verdict.test.ts | 1: `not ok 24 - UTV2-1892: …admit the same namespaces` |
+| drop the headRef trailing boundary | merge-gate-verdict.test.ts | 1: `not ok 25 - UTV2-1892: workflow issue extraction is bounded at both ends` |
+| drop the title leading boundary | merge-gate-verdict.test.ts | 1: `not ok 25` |
+| drop the grep lookbehind | merge-gate-verdict.test.ts | 1: `not ok 25` |
+| widen the parser to `BOOTSTRAP` | merge-gate-verdict.test.ts | 1: `not ok 24` (the reverse-direction check) |
+
+### Independent review
+
+`codex exec -s read-only` at `f638dd89f`: **CHANGES_REQUIRED** on one blocking finding (no trailing
+token boundary; `homework-123` resolved as `WORK-123`) and one advisory (the drift lock read only
+the workflow's namespaces). Both are addressed at `63115cbff`. The reviewer confirmed the T1 trust
+boundary unchanged: authorized-reviewer filtering, PR-number and head-SHA equality, CODEOWNERS,
+`AUTHORIZED_REVIEWERS`, required checks, bounce handling and supersession ordering.
 
 ### The reviewer's probe, re-executed at this head
 
@@ -85,7 +104,7 @@ BOOTSTRAP-1     -> null
 - [ ] `pnpm verify`: NOT RUN on the workstation by design -- `verify` ends at
       `test:live-db`, where `ci:assert-staging` refuses any target that is not staging
       `xskgrzbteyqdufktjrjx`. The CI `verify` job on this PR is the authoritative run.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head f638dd89f2b9e449062461712f5da5a4e0a40c0a`: PASS, no rule matched
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head 63115cbff33f0196bbe8d9aa182345be33effb0b`: PASS, no rule matched
 
 ## Runtime Verification
 
@@ -103,7 +122,9 @@ verdict, which is the next step the reviewer directed after this lands.
 
 ## Merge SHA Binding
 
-Execution anchor: `f638dd89f2b9e449062461712f5da5a4e0a40c0a` -- the only commit on this lane
-that changes anything outside `docs/06_status/proof/UTV2-1892/` after the lane-start
-metadata commit `fc9be983c`. Every commit above it touches only the proof directory.
+Execution anchor: `63115cbff33f0196bbe8d9aa182345be33effb0b` -- the last commit on this lane
+that changes anything outside `docs/06_status/proof/UTV2-1892/`. The source-changing commits
+are `f638dd89f` (the namespace widening) and `63115cbff` (the token boundaries and their tests);
+`1a64d5f22` between them is the lane-pr-binding commit and touches only the lane manifest.
+Every commit above the anchor touches only the proof directory.
 Merge SHA: bound by `post-merge-lane-close.yml` after the merge.

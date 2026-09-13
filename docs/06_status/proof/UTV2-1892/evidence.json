@@ -7,12 +7,12 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f638dd89f2b9e449062461712f5da5a4e0a40c0a",
+    "verified_source_sha": "63115cbff33f0196bbe8d9aa182345be33effb0b",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "note": "f638dd89f2b9e449062461712f5da5a4e0a40c0a is the only commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/ after the lane-start metadata commit fc9be983c. It carries the three source files (.github/workflows/merge-gate.yml, scripts/ops/merge-gate-verdict.cjs, scripts/ops/merge-gate-verdict.test.ts) and removes the lane-start .gitkeep. Every commit above it touches only the proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
-    "bound_at": "2026-09-13T07:48:15.000Z"
+    "note": "63115cbff33f0196bbe8d9aa182345be33effb0b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/. The lane's source-changing commits are f638dd89f2b9e449062461712f5da5a4e0a40c0a (the namespace widening in the three scoped files, and the removal of the lane-start .gitkeep) and 63115cbff33f0196bbe8d9aa182345be33effb0b (both-ends token boundaries on the workflow's three extractors plus the boundary test and the reverse-direction drift check, under the independent review's blocking finding). The lane-pr-binding commit 1a64d5f22 between them touches only docs/06_status/lanes/UTV2-1892.json, which is proof-prefix exempt. Every commit above 63115cbff33f0196bbe8d9aa182345be33effb0b touches only the proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-13T08:05:20.000Z"
   },
   "static_proof": {
     "unit_tests": [
@@ -20,14 +20,14 @@
         "command": "pnpm exec tsx --test scripts/ops/merge-gate-verdict.test.ts",
         "exit_code": 0,
         "row_counts": {
-          "tests": 24,
-          "pass": 24,
+          "tests": 25,
+          "pass": 25,
           "fail": 0,
           "skipped": 0,
           "pre_existing": 21,
-          "new": 3
+          "new": 4
         },
-        "label": "21 pre-existing parseVerdict/evaluate tests unchanged. New: the loop `repository and legacy identity <id> retain exact-head PM approval checks` for WORK-2026091001, UTV2-1501 and UNI-42 (each approved at the matching PR and head, each refused at a stale head), and the drift lock `UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces`, which reads merge-gate.yml off disk and asserts its three alternations and parseVerdict all admit exactly {UNI, UTV2, WORK} and refuse BOOTSTRAP-."
+        "label": "21 pre-existing parseVerdict/evaluate tests unchanged. New: the loop `repository and legacy identity <id> retain exact-head PM approval checks` for WORK-2026091001, UTV2-1501 and UNI-42 (each approved at the matching PR and head, each refused at a stale head); the drift lock `UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces`, which reads merge-gate.yml AND merge-gate-verdict.cjs off disk and asserts the workflow's three alternations, parseVerdict's behaviour and the parser's own Issue-line alternation all admit exactly {UNI, UTV2, WORK} and refuse BOOTSTRAP-; and `UTV2-1892: workflow issue extraction is bounded at both ends`, which evaluates the three extractors read from the workflow (the two JS literals directly, the grep pattern through grep -oiP) against seven branch and six title samples including homework-123, work-123abc and mywork-123, which must NOT resolve."
       },
       {
         "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
@@ -46,7 +46,7 @@
     "full_test_suite": {
       "command": "pnpm test",
       "exit_code": 0,
-      "note": "Run to completion in the lane worktree at f638dd89f2b9e449062461712f5da5a4e0a40c0a. The aggregate pass count is not recorded here; the authoritative aggregate is the CI verify job recorded under runtime_proof."
+      "note": "Run to completion in the lane worktree at 63115cbff33f0196bbe8d9aa182345be33effb0b. The aggregate pass count is not recorded here; the authoritative aggregate is the CI verify job recorded under runtime_proof."
     },
     "type_check": {
       "command": "pnpm type-check",
@@ -64,9 +64,9 @@
       "note": "Not runnable on the workstation by design: verify ends at test:live-db, where ci:assert-staging refuses any target that is not staging xskgrzbteyqdufktjrjx. The CI verify job on this PR is the authoritative run and is recorded under runtime_proof."
     },
     "r_level": {
-      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head f638dd89f2b9e449062461712f5da5a4e0a40c0a",
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head 63115cbff33f0196bbe8d9aa182345be33effb0b",
       "verdict": "PASS",
-      "changed_files": 5,
+      "changed_files": 8,
       "rules_matched": [],
       "advisory_missing": [],
       "note": "No R-level rule matches a merge-gate workflow or ops-script diff."
@@ -88,14 +88,14 @@
         },
         "BOOTSTRAP-1": null
       },
-      "note": "The exact probe from PR 1556 comment 5651878285, executed against this head's module. At the trusted base e0c8f812d the first line was null."
+      "note": "The exact probe from PR 1556 comment 5651878285, executed against this head's module at 63115cbff33f0196bbe8d9aa182345be33effb0b. At the trusted base e0c8f812d the first line was null."
     },
     "mutation_battery": {
       "command": "for each mutation: git apply -R the single hunk, run the named suite, re-apply the hunk, assert the combined sha256 of both files is unchanged afterwards",
       "baseline": {
         "merge_gate_verdict": {
-          "tests": 24,
-          "pass": 24,
+          "tests": 25,
+          "pass": 25,
           "fail": 0
         }
       },
@@ -108,7 +108,8 @@
           "failing_assertions": [
             "not ok 21 - repository and legacy identity WORK-2026091001 retain exact-head PM approval checks",
             "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
-          ]
+          ],
+          "note": "measured at f638dd89f2b9e449062461712f5da5a4e0a40c0a; the alternation is unchanged at 63115cbff33f0196bbe8d9aa182345be33effb0b"
         },
         {
           "id": "revert-yml",
@@ -117,10 +118,55 @@
           "failing": 1,
           "failing_assertions": [
             "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
+          ],
+          "note": "measured at f638dd89f2b9e449062461712f5da5a4e0a40c0a; the alternation is unchanged at 63115cbff33f0196bbe8d9aa182345be33effb0b"
+        },
+        {
+          "id": "drop-headref-trailing-boundary",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "remove (?![a-z0-9]) after the headRef alternation",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - UTV2-1892: workflow issue extraction is bounded at both ends"
+          ]
+        },
+        {
+          "id": "drop-title-leading-boundary",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "remove (?:^|[^a-z0-9]) before the title alternation",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - UTV2-1892: workflow issue extraction is bounded at both ends"
+          ]
+        },
+        {
+          "id": "drop-grep-lookbehind",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "remove (?<![a-z0-9]) from the WFR-v2 grep pattern",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - UTV2-1892: workflow issue extraction is bounded at both ends"
+          ]
+        },
+        {
+          "id": "parser-admits-bootstrap",
+          "file": "scripts/ops/merge-gate-verdict.cjs",
+          "change": "widen the Issue: alternation to (?:UTV2|UNI|WORK|BOOTSTRAP)",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
           ]
         }
       ],
       "restored": true
+    },
+    "independent_review": {
+      "reviewer": "codex exec -s read-only (gpt-5 family), prompt in the return packet",
+      "first_pass_at": "f638dd89f2b9e449062461712f5da5a4e0a40c0a",
+      "verdict": "CHANGES_REQUIRED",
+      "blocking": "the widened extractors had no trailing token boundary and the title extractor no leading one: 'Fix homework-123' and 'feature/work-123abc' resolved as WORK-123 while the parser anchors the whole Issue: line",
+      "advisory": "the drift lock read namespaces only from the workflow text, so a parser widening beyond the workflow's set would pass unless it happened to be BOOTSTRAP",
+      "disposition": "both addressed at 63115cbff33f0196bbe8d9aa182345be33effb0b: boundaries on all three extractors with a sample-driven test, and the drift lock now reads the parser's own alternation from source. The reviewer also confirmed the T1 trust boundary unchanged: authorized-reviewer filtering, PR-number and head-SHA equality, CODEOWNERS, AUTHORIZED_REVIEWERS, required checks, bounce handling and supersession ordering."
     }
   },
   "runtime_proof": {
