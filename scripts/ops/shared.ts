@@ -821,7 +821,14 @@ function hasPullRequestTrigger(on: unknown): boolean {
 
 /** Drops line (`//`) and block comments from a github-script body. */
 function stripJsComments(script: string): string {
-  return script.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  // Template literals are blanked too: they may span lines, so text inside
+  // one can otherwise sit at a line start and read as a statement
+  // (independent review, round 3). Quoted strings stay -- the evaluator path
+  // is one.
+  return script
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
+    .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
 }
 
 function escapeRegExp(value: string): string {
@@ -857,8 +864,20 @@ function scriptDelegatesToEvaluator(script: string): boolean {
   // A declaration or a plain assignment (`summary = await ...`) may prefix the statement.
   const declaration = String.raw`(?:(?:const|let|var)\s+)?(?:\{[^}]*\}|[A-Za-z_$][\w$.]*)\s*=\s*`;
   const statementStart = String.raw`^\s*(?:${declaration})?(?:await\s+|return\s+)?`;
+  // A body that redefines the entry point (`const evaluatePullRequest = …`,
+  // `function evaluatePullRequest`, a method `evaluatePullRequest() {`) is
+  // calling something other than the evaluator's export; refuse it outright.
+  // Destructuring `const { evaluatePullRequest } = require(...)` is the
+  // accepted form and does not match this rule.
+  const redefinesEntry = new RegExp(
+    String.raw`(?:^|[^.\w$])(?:(?:const|let|var|function|async\s+function)\s+${P0_EVALUATOR_ENTRY}\b|${P0_EVALUATOR_ENTRY}\s*\([^)]*\)\s*\{)`,
+    'm',
+  );
+  if (redefinesEntry.test(script)) return false;
+  // Only a `const` binding of the literal is accepted: `let`/`var` can be
+  // reassigned to another module before the require.
   const bindingNames = [...script.matchAll(
-    new RegExp(String.raw`^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}\s*;?\s*$`, 'gm'),
+    new RegExp(String.raw`^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*${literal}\s*;?\s*$`, 'gm'),
   )].map(([, name]) => escapeRegExp(name!));
   const moduleRef = [literal, ...bindingNames].join('|');
   const requireStatement = new RegExp(statementStart + String.raw`require\(\s*(?:${moduleRef})\s*\)`, 'm');
@@ -881,6 +900,11 @@ function matrixIsEmpty(strategy: unknown): boolean {
   if (!matrix || typeof matrix !== 'object') return false;
   const entries = Object.entries(matrix as Record<string, unknown>);
   if (entries.length === 0) return true;
+  // Matrix expansion is not modelled: an `exclude` can remove every
+  // instance, so any non-empty `exclude` is treated as possibly empty and
+  // refused (fail closed). The staged activation declares no matrix.
+  const exclude = (matrix as Record<string, unknown>)['exclude'];
+  if (Array.isArray(exclude) && exclude.length > 0) return true;
   return entries.some(([key, value]) => Array.isArray(value) && value.length === 0 && key !== 'exclude');
 }
 
@@ -913,6 +937,19 @@ export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFind
   }
   let sawContextJob = false;
   let mentionedElsewhere = false;
+  const contextJobs = Object.entries(jobs as Record<string, unknown>).filter(([jobKey, jobValue]) => {
+    if (!jobValue || typeof jobValue !== 'object') return false;
+    const name = (jobValue as Record<string, unknown>)['name'];
+    return (typeof name === 'string' ? name : jobKey) === P0_REQUIRED_CHECK_CONTEXT;
+  });
+  if (contextJobs.length > 1) {
+    // Two jobs reporting the same check context make it ambiguous which one
+    // branch protection is satisfied by; refuse rather than pick.
+    return {
+      executed: false,
+      detail: `${contextJobs.length} jobs produce the "${P0_REQUIRED_CHECK_CONTEXT}" check context; the consumer must have exactly one`,
+    };
+  }
   for (const [jobKey, jobValue] of Object.entries(jobs as Record<string, unknown>)) {
     if (!jobValue || typeof jobValue !== 'object') continue;
     const job = jobValue as Record<string, unknown>;
@@ -951,7 +988,7 @@ export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFind
       // shell `run:` step naming the path is a reference, never an execution.
       const invoked =
         typeof step['uses'] === 'string' &&
-        step['uses'].startsWith('actions/github-script') &&
+        /^actions\/github-script(?:@|$)/.test(step['uses']) &&
         step['with'] && typeof step['with'] === 'object' &&
         typeof (step['with'] as Record<string, unknown>)['script'] === 'string' &&
         scriptDelegatesToEvaluator(stripJsComments((step['with'] as Record<string, unknown>)['script'] as string));

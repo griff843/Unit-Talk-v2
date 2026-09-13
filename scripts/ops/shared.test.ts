@@ -2689,6 +2689,19 @@ test('findExecutedP0Delegation skips a job that cannot produce an enforced evalu
   assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        include: []')).executed, false, 'empty include');
   assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: []')).executed, false, 'empty axis');
   assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: [20]')).executed, true, 'live axis');
+  // Matrix expansion is not modelled, so any exclude is refused (fail closed).
+  assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: [20]\n        exclude: [{ node: 20 }]')).executed, false, 'exclude-all');
+  assert.equal(findExecutedP0Delegation(withJobField('    strategy:\n      matrix:\n        node: [18, 20]\n        exclude: [{ node: 18 }]')).executed, false, 'any exclude');
+
+  // A fork of github-script is not github-script.
+  assert.equal(findExecutedP0Delegation(active.replace('uses: actions/github-script@v7', 'uses: actions/github-script-foo@v7')).executed, false, 'forked action');
+  assert.equal(findExecutedP0Delegation(active.replace('uses: actions/github-script@v7', 'uses: actions/github-script')).executed, true, 'unpinned action');
+
+  // Two jobs reporting the P0 Protocol context are ambiguous; refuse.
+  const duplicate = active.replace('jobs:\n', 'jobs:\n  shadow:\n    name: P0 Protocol\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n');
+  const dup = findExecutedP0Delegation(duplicate);
+  assert.equal(dup.executed, false, 'duplicate context');
+  assert.match((dup as { detail: string }).detail, /2 jobs produce/u);
 });
 
 test('findExecutedP0Delegation treats any non-false continue-on-error as ignorable', () => {
@@ -2723,6 +2736,13 @@ test('findExecutedP0Delegation rejects a github-script body that only mentions t
     'a bare require that never calls the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');"],
     'a require whose module is never used': ["const mod = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'core.info(typeof mod);'],
     'the entry point called on something never required': ['await evaluatePullRequest({ github });'],
+    // Round 3: text inside a template literal can sit at a line start.
+    'the require and call inside a multi-line template literal': ['const body = `', "require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });', '`;', 'core.info(body);'],
+    // Round 3: a body that redefines the entry point calls something else.
+    'a shadowing const of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const evaluatePullRequest = () => "fake";', 'await evaluatePullRequest({ github });'],
+    'a shadowing function of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'function evaluatePullRequest() { return "fake"; }', 'await evaluatePullRequest({ github });'],
+    'a method definition of the entry point': ["require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'const fake = { evaluatePullRequest() { return "fake"; } };', 'await fake.evaluatePullRequest({ github });'],
+    'a let binding reassigned before the require': ["let evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "evaluator = 'node:path';", 'const mod = require(evaluator);', 'await mod.evaluatePullRequest({ github });'],
   };
   for (const [label, lines] of Object.entries(refused)) {
     assert.equal(findExecutedP0Delegation(withScript(lines)).executed, false, label);

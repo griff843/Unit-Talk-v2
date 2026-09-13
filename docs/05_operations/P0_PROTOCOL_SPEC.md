@@ -184,20 +184,26 @@ admission tooling refuses to open or authorize a repo-minted lane unless the con
 `origin/main` contains a live `actions/github-script` step, in the `P0 Protocol` job, whose body
 loads the evaluator and calls `evaluatePullRequest`**. "Live" means: the job and step carry no
 literal-false `if:`, no `continue-on-error` other than literal false, the job does not `need` a
-disabled or absent job, and its matrix (if any) is non-empty. "Loads and calls" means a
-statement-level `require` of the evaluator path (directly or through a string binding) plus a
-statement-level `evaluatePullRequest(` call, or the two inlined as one expression. Every other
-shape is refused, and the tests enumerate the ones independent review probed: a shell `run:` of any
-form (the evaluator has no CLI entry point, so no shell invocation evaluates anything), a
-comment-only reference in shell or JavaScript, a path inside a string literal or template, a
-`require` nested inside another expression, a bare `require` that never calls the entry point, a
-longer path that merely ends in the evaluator's, candidate-only activation on a branch, and a
-candidate manifest that already exists.
+disabled or absent job, its matrix (if any) has no empty axis and no `exclude` at all (matrix
+expansion is not modelled, so any `exclude` is refused), the step's action is exactly
+`actions/github-script` (any ref), and exactly one job reports the `P0 Protocol` context. "Loads
+and calls" means, with comments and template literals blanked, a statement-level `require` of the
+evaluator path (directly or through a `const` binding of the literal) plus a statement-level
+`evaluatePullRequest(` call, or the two inlined as one expression, in a body that does not itself
+declare a `const`/`let`/`var`/`function`/method named `evaluatePullRequest`. Every other shape is
+refused, and the tests enumerate the ones independent review probed across three rounds: a shell
+`run:` of any form (the evaluator has no CLI entry point, so no shell invocation evaluates
+anything), a comment-only reference in shell or JavaScript, a path inside a string or a multi-line
+template literal, a `require` nested inside another expression, a bare `require` that never calls
+the entry point, a body that shadows or redefines the entry point, a `let` binding reassigned before
+the `require`, a forked `actions/github-script-*` action, an all-excluded matrix, a duplicate
+`P0 Protocol` job, a longer path that merely ends in the evaluator's, candidate-only activation on a
+branch, and a candidate manifest that already exists.
 
 What the predicate does **not** assess, stated so nobody reads more into it: JavaScript control
 flow (a call inside `if (false)`, a never-invoked function, or a `try` whose `catch` swallows the
 failure is counted if the statements are present), runtime `if:` expressions (evaluated by
-Actions, not here), and a second workflow that reports the same check name. None of these is
+Actions, not here), `timeout-minutes`, and a second *workflow* that reports the same check name. None of these is
 reachable by a WORK PR author, because the predicate never reads candidate content: introducing
 any of them requires first landing a weakened consumer on `origin/main` through a reviewed
 required-check change, which is exactly the bootstrap route this foundation already requires. The

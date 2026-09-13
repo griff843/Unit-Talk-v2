@@ -91,12 +91,15 @@ repo-minted lane unless the consumer installed on `origin/main` contains a live
 `actions/github-script` step in the `P0 Protocol` job that `require`s the
 evaluator and calls `evaluatePullRequest` at statement level. A shell `run:`
 never counts: the evaluator has no CLI entry point. Refused shapes the tests
-enumerate: any shell form, comment-only references, string literals, nested
-`require`, a bare `require` with no call, suffix paths, literal-false `if:`,
+enumerate (three review rounds): any shell form, comment-only references,
+strings and multi-line template literals, nested `require`, a bare `require`
+with no call, a shadowed or redefined entry point, a reassigned `let` binding,
+a forked `actions/github-script-*` action, suffix paths, literal-false `if:`,
 non-false `continue-on-error` at step or job level, `needs:` on a disabled or
-absent job, an empty matrix, candidate-only activation and existing candidate
-manifests. Not assessed: JavaScript control flow, runtime `if:` expressions,
-and duplicate check names in other workflows — none introducible by a WORK PR
+absent job, an empty or any-`exclude` matrix, a duplicate `P0 Protocol` job,
+candidate-only activation and existing candidate manifests. Not assessed:
+JavaScript control flow, runtime `if:` expressions, `timeout-minutes`, and the
+same check name reported by another workflow — none introducible by a WORK PR
 author, since the predicate never reads candidate content. The foundation itself
 reaches `main` through the bootstrap route in step 1 above, and the block
 releases only when the activation is installed on the base — re-arming if a
