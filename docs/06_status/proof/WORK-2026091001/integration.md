@@ -98,7 +98,8 @@ or non-ASCII character outside a string (comment, regex literal, division,
 Unicode-escaped identifier), a raw LF or CR inside a quote, a template
 substitution, `eval`,
 `Function`, `with`, `import`, `module`, `globalThis`, any `require` that is
-not a bare `require(` with an adjacent parenthesis and a literal argument, a redefinition of `require`
+not a bare `require(` with an adjacent parenthesis and a string literal or the
+unique `const` path binding as its argument, a redefinition of `require`
 or of the entry point, a duplicate or assigned path binding, or any other
 occurrence of the entry-point name, a module binding, the path literal or a
 `require` of it is refused. A shell `run:` never counts: the evaluator has no
