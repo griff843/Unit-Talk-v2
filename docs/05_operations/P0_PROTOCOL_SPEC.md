@@ -183,15 +183,16 @@ What the controls do guarantee is narrower and is what the tests exercise: **the
 admission tooling refuses to open or authorize a repo-minted lane unless the consumer installed on
 `origin/main` contains a live `actions/github-script` step, in the `P0 Protocol` job, whose body,
 read literally, calls the evaluator's `evaluatePullRequest` export through a `require` of the
-evaluator path and contains nothing else that names that module or that export**. "Live" means: the job and step carry no
+evaluator path and contains no other ASCII spelling of that module or that export**. "Live" means: the job and step carry no
 literal-false `if:`, no `continue-on-error` other than literal false, the job does not `need` a
 disabled or absent job, its matrix (if any) has no empty axis and no `exclude` at all (matrix
 expansion is not modelled, so any `exclude` is refused), the step's action is exactly
 `actions/github-script` (any ref), and exactly one job reports the `P0 Protocol` context.
 "Read literally" means: every string and template literal is blanked first (only the evaluator
-path literal keeps its content), and a body containing any `/` outside a string (a comment, a regex
-literal or a division), a template substitution, a raw newline inside a quote, or an unterminated
-literal is refused rather than parsed. "Calls through a `require`" means one of exactly three
+path literal keeps its content), and a body containing any `/`, backslash, control or non-ASCII
+character outside a string (a comment, a regex literal, a division, a Unicode-escaped identifier),
+a template substitution, a raw LF or CR inside a quote, or an unterminated literal is refused
+rather than parsed. "Calls through a `require`" means one of exactly three
 statement-level forms: `require(<evaluator>).evaluatePullRequest(` inlined; `const
 { evaluatePullRequest } = require(<evaluator>)` followed by `evaluatePullRequest(`; or `const <name>
 = require(<evaluator>)` followed by `<name>.evaluatePullRequest(`, where `<evaluator>` is the path
@@ -200,7 +201,7 @@ literal or a `const` binding of it declared once. "Nothing else" means the body 
 whose argument is not a string literal or a path binding; on a redefinition of `require` or of the
 entry point; on an assignment to a path binding; and on any other occurrence of the entry-point
 name, of a module binding, of the path literal or of a `require` of it. The tests enumerate the
-shapes independent review probed across five rounds, each refused: a shell `run:` of any form (the
+shapes independent review probed across six rounds, each refused: a shell `run:` of any form (the
 evaluator has no CLI entry point, so no shell invocation evaluates anything), a comment-only
 reference in shell or JavaScript, a path inside a string (including a backslash-newline
 continuation) or a template literal, a `require` nested inside another expression, a bare `require`
@@ -211,7 +212,8 @@ after a bare `require`, the export reassigned or replaced before the call (throu
 unbound module reference, a second binding, `Object.assign`, `Object.defineProperty`,
 `Reflect.set`, a getter, a bracket access, `require.cache`, `eval` or `new Function`), a module
 loaded through a computed, concatenated or dynamically imported path, a `//` inside a string ahead
-of a mutation, the entry point passed around by reference, a renamed or widened destructuring, a
+of a mutation, a Unicode-escaped spelling of `require`, the entry point or a binding, a carriage
+return inside a quote, the entry point passed around by reference, a renamed or widened destructuring, a
 longer path that merely ends in the evaluator's, candidate-only activation on a branch, and a
 candidate manifest that already exists.
 

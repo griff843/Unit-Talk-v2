@@ -69,7 +69,7 @@ refuse repo-minted execution while that is true, and each one reads the
 - `evaluateRepoMintedP0Coverage` (`scripts/ops/shared.ts`) runs
   `git show origin/main:.github/workflows/p0-protocol.yml` and parses it: coverage
   is a live, non-ignorable step of the `P0 Protocol` job on a `pull_request`
-  trigger whose comment-stripped body invokes
+  trigger whose literal-blanked body invokes
   `scripts/ops/tracker-independence/p0-workflow.cjs`, with the evaluator present
   at the same base commit. The review's mutation — appending a comment naming the
   evaluator to the narrow consumer — returns `covered: false`, as does the
@@ -92,15 +92,17 @@ repo-minted lane unless the consumer installed on `origin/main` contains a live
 literally, calls the evaluator's `evaluatePullRequest` export through a
 `require` of the evaluator path in one of three statement-level forms
 (inlined, destructured, or through a `const` module binding), and contains
-nothing else that could reach that module or that name: every string and
-template literal is blanked first; a body with any `/` outside a string
-(comment, regex literal, division), a template substitution, `eval`,
+no other ASCII spelling of that module or that name: every string and
+template literal is blanked first; a body with any `/`, backslash, control
+or non-ASCII character outside a string (comment, regex literal, division,
+Unicode-escaped identifier), a raw LF or CR inside a quote, a template
+substitution, `eval`,
 `Function`, `with`, `import`, `module`, `globalThis`, a `require` not
 immediately called or with a non-literal argument, a redefinition of `require`
 or of the entry point, a duplicate or assigned path binding, or any other
 occurrence of the entry-point name, a module binding, the path literal or a
 `require` of it is refused. A shell `run:` never counts: the evaluator has no
-CLI entry point. The tests enumerate the shapes five review rounds probed,
+CLI entry point. The tests enumerate the shapes six review rounds probed,
 each refused: any shell form, comment-only references, strings (including
 backslash-newline continuations) and template literals, nested `require`, a
 bare `require` with no call, a shadowed or redefined entry point or `require`,

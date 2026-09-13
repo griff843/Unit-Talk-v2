@@ -826,8 +826,10 @@ function hasPullRequestTrigger(on: unknown): boolean {
  * literal or a division -- a comment stripper is exactly what independent
  * review round 5 fooled with `//` inside a quoted string), a template
  * substitution `${` (a nested template can expose text as code), a raw
- * newline inside a quote, or an unterminated literal. Only the evaluator path
- * literal keeps its content; every other string becomes `''`.
+ * newline or carriage return inside a quote, an unterminated literal, or a
+ * backslash, control character or non-ASCII character outside a literal.
+ * Only the evaluator path literal keeps its content; every other string
+ * becomes `''`.
  */
 function blankJsLiterals(script: string): string | null {
   let out = '';
@@ -837,7 +839,7 @@ function blankJsLiterals(script: string): string | null {
       let j = i + 1;
       let content = '';
       while (j < script.length && script[j] !== c) {
-        if (script[j] === '\n') return null;
+        if (script[j] === '\n' || script[j] === '\r') return null;
         if (script[j] === '\\') {
           content += script.slice(j, j + 2);
           j += 2;
@@ -864,6 +866,12 @@ function blankJsLiterals(script: string): string | null {
       continue;
     }
     if (c === '/') return null;
+    // Outside a literal the body is plain ASCII source: a backslash would be a
+    // Unicode escape inside an identifier (`r\u0065quire`, independent review
+    // round 6), and a control or non-ASCII character is nothing the accepted
+    // forms need.
+    const code = c.charCodeAt(0);
+    if (c === '\\' || code > 0x7e || (code < 0x20 && c !== '\n' && c !== '\t')) return null;
     out += c;
     i += 1;
   }

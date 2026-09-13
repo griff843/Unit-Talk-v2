@@ -2778,6 +2778,13 @@ test('findExecutedP0Delegation rejects a github-script body that only mentions t
     'a destructuring with an extra name': ["const { evaluatePullRequest, other } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await evaluatePullRequest({ github });'],
     'a renamed destructuring': ["const { evaluatePullRequest: run } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await run({ github });'],
     'the module loaded through a dynamic import': ["const api = await import('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await api.evaluatePullRequest({ github });'],
+    // Round 6: spellings the occurrence rule would not see.
+    'a Unicode-escaped shadow of require': ['{', "  const r\\u0065quire = () => ({ ['evalua' + 'tePullRequest']: async () => {} });", "  await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });", '}'],
+    'a Unicode-escaped shadow of the entry point': ["const { evaluatePullRequest } = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", '{', '  const evaluat\\u0065PullRequest = async () => {};', '  await evaluatePullRequest({ github });', '}'],
+    'a Unicode-escaped spelling of a module binding': ["const api = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", "\\u0061pi['evaluatePullRequest'] = async () => {};", 'await api.evaluatePullRequest({ github });'],
+    'a raw carriage return inside a quote': ["const s = 'before\rafter';", "await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'a Unicode line separator outside a string': ["const s = 1;\u2028await require('./scripts/ops/tracker-independence/p0-workflow.cjs').evaluatePullRequest({ github });"],
+    'a non-ASCII identifier': ["const ápi = require('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await ápi.evaluatePullRequest({ github });'],
     'the path literal used outside a require': ["const evaluator = './scripts/ops/tracker-independence/p0-workflow.cjs';", "const api = module.constructor._load('./scripts/ops/tracker-independence/p0-workflow.cjs');", 'await api.evaluatePullRequest({ github });'],
   };
   for (const [label, lines] of Object.entries(refused)) {
