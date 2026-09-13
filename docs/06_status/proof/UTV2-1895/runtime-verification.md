@@ -1,5 +1,8 @@
 # UTV2-1895 Smart Form verification
 
+MERGE_SHA: pending merge
+Execution SHA: e8a2048d22b59652c03ea5672e7db028e05aaf8e
+
 ## Summary
 
 Implementation reviewed at `e8a2048d22b59652c03ea5672e7db028e05aaf8e`, relative to base `4ac23bad57aa3435fd099cdb24f4d64b722bcefe`, on 2026-09-13. This proof-only addition changes no runtime behavior. The recovered lane remains owned by Codex; PR #1573 remains a draft. No owner or merge approval is claimed.
