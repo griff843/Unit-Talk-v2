@@ -216,3 +216,42 @@ test('UTV2-1554: bounce limit only counts authorized CHANGES_REQUIRED verdicts',
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
 });
+
+for (const issue of ['WORK-2026091001', 'UTV2-1501', 'UNI-42']) {
+  test(`repository and legacy identity ${issue} retain exact-head PM approval checks`, () => {
+    const verdict = verdictRecord(approvedComment({ issue }));
+    assert.equal(verdict.parsed.issueId, issue);
+    assert.deepEqual(validateT1Verdicts([verdict], { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS }), []);
+    assert.ok(validateT1Verdicts([verdict], { prNumber: PR_NUMBER, headSha: OLD_HEAD_SHA, authorizedReviewers: REVIEWERS }).length > 0);
+  });
+}
+
+// UTV2-1892: the trusted-base parser and the workflow's own issue extraction
+// must admit the same identifier namespaces. The workflow is evaluated from
+// pull_request.base.sha and requires this module from the same checkout, so a
+// namespace admitted by one and refused by the other is a silent gate hole in
+// whichever direction it drifts.
+test('UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const workflow = fs.readFileSync(path.join(process.cwd(), '.github', 'workflows', 'merge-gate.yml'), 'utf8');
+  const { parseVerdict } = await import('./merge-gate-verdict.cjs');
+  const pick = (marker: string) => {
+    const at = workflow.indexOf(marker);
+    assert.ok(at >= 0, `merge-gate.yml must carry ${marker}`);
+    const m = workflow.slice(at, at + 200).match(/\((?:\?:)?([A-Za-z0-9|]+)\)-\\d\+/);
+    assert.ok(m, `no namespace alternation after ${marker}`);
+    return m[1].toUpperCase().split('|').sort();
+  };
+  const namespaces = pick("(headRef || '').match(");
+  const titleNamespaces = pick("(prTitle || '').match(");
+  const wfrNamespaces = pick("grep -oiP '(");
+  assert.deepEqual(titleNamespaces, namespaces);
+  assert.deepEqual(wfrNamespaces, namespaces);
+  assert.deepEqual(namespaces, ['UNI', 'UTV2', 'WORK']);
+  for (const ns of namespaces) {
+    const parsed = parseVerdict(`PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: ${ns}-7\nPR: 1\nHead SHA: ${'a'.repeat(40)}`);
+    assert.ok(parsed && parsed.issueId === `${ns}-7`, `parseVerdict must admit ${ns}`);
+  }
+  assert.equal(parseVerdict(`PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: BOOTSTRAP-7\nPR: 1\nHead SHA: ${'a'.repeat(40)}`), null);
+});

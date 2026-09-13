@@ -240,8 +240,8 @@ jobs:
               ).filter(Boolean);
 
               // ── 4. Resolve authoritative tier from lane manifest ───
-              const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
-                (prTitle || '').match(/((?:UTV2|UNI)-\d+)/i);
+              const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni|work)-\d+)/i) ||
+                (prTitle || '').match(/((?:UTV2|UNI|WORK)-\d+)/i);
               const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
 
               async function readManifest(ref) {
@@ -655,7 +655,7 @@ jobs:
         run: |
           BRANCH="${{ github.head_ref }}"
           # Extract UTV2-#### from branch name
-          ISSUE_ID=$(echo "$BRANCH" | grep -oP 'UTV2-\d+' | head -1 || echo "")
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiP '(utv2|uni|work)-\d+' | head -1 | tr '[:lower:]' '[:upper:]' || echo "")
           echo "issue_id=$ISSUE_ID" >> "$GITHUB_OUTPUT"
           echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
 
