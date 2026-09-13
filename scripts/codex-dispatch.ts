@@ -327,7 +327,9 @@ function inferLaneType(issue: DispatchTask, explicitLaneType: string | undefined
   if (hasLabel(/governance|tooling|hardening/)) return 'governance';
   if (hasLabel(/runtime/)) return 'runtime';
 
-  throw new Error('Missing required --lane-type; unable to infer a canonical lane type from Linear labels');
+  throw new Error(
+    `Missing required --lane-type. Repository-local work (${issue.identifier}) is resolved from .ops/work or a captured .ops/sync contract and carries no labels to infer a lane type from; pass --lane-type <${[...CANONICAL_LANE_TYPES].join('|')}>.`,
+  );
 }
 
 function buildVerificationLines(manifest: LaneManifest): string[] {

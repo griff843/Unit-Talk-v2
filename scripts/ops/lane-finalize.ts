@@ -126,6 +126,7 @@ export function buildLaneFinalizePlan(input: {
   dryRun?: boolean;
   mergeSha?: string | null;
   syncTracker?: boolean;
+  completeWork?: boolean;
 }): LaneFinalizePlan {
   const alreadyClosed = input.manifest.status === 'done';
   const mergeAlreadyRecorded =
@@ -242,7 +243,16 @@ export function buildLaneFinalizePlan(input: {
     steps.push({
       id: 'close_lane',
       command: 'pnpm',
-      args: ['ops:lane-close', issueId, '--acquire-lock'],
+      // Explicit intent is forwarded, never assumed: `--complete-work` records
+      // completion intent and `--sync-tracker` opts into the tracker mirror.
+      // Without either flag close_lane stays repository-only.
+      args: [
+        'ops:lane-close',
+        issueId,
+        '--acquire-lock',
+        ...(input.completeWork ? ['--complete-work'] : []),
+        ...(input.syncTracker ? ['--sync-tracker'] : []),
+      ],
       required: true,
     });
   } else {
@@ -1045,6 +1055,7 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     dryRun: bools.has('dry-run') || bools.has('explain'),
     mergeSha: getFlag(flags, 'merge-sha') ?? null,
     syncTracker: bools.has('sync-tracker'),
+    completeWork: bools.has('complete-work'),
   });
   const execute = (): LaneFinalizeResult => {
     validateLaneFinalizePullRequest(plan);

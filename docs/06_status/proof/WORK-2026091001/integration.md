@@ -20,38 +20,77 @@ checks out that trusted base, and evaluates the candidate without running its co
 
 ## Integration order
 
-1. Land the foundation through the **established bootstrap route**. An earlier
-   revision of this step named a scope-authorization bootstrap lane, UTV2-1887;
-   no such lane, branch or PR exists, and the step is corrected here rather than
-   carried. #1556 is keyed to `WORK-2026091001`, and `Merge Gate` on it fails
-   with *"No issue ID found in PR branch or title. Cannot resolve authoritative
-   tier."* — the gate resolves only tracker-keyed identifiers, and that surface
-   is reserved. The foundation therefore reaches `main` as a **tracker-keyed
-   lane carrying this reviewed head's diff**, whose tier `Merge Gate` resolves
-   from its own manifest, with its own independent review and required CI; if
-   the concurrency caps refuse that lane, the route is a
-   `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` entry authorized by Griff and
-   read from the base, as `merge-gate.yml` already does. The nine paths the
-   trusted-base scope guard reports outside this lane's scope are the lane's own
-   manifest and sync file plus the file-scope guard, the comment parser, their
-   tests, the scope workflow and the return-review workflow namespace
-   correction with its existing test file; the guard on `main` keys its
-   lifecycle grant on `ISSUE_ID_PATTERN = /^UTV2-\d+$/`, so a `WORK-###` lane is
-   granted no lifecycle paths, and a tracker-keyed replacement lane is granted
-   them ordinarily. A `scope-override/v1` comment remains reserved to CODEOWNERS
-   and is not authored here, and a non-required check being red is not treated
-   as authorization. Independently review the exact head of #1556; no approval
-   is asserted here, no history rewrite grants authority, and no required check
-   or branch-protection setting changes.
-2. Integrate #1556 through the existing serialized merge wrapper after required
-   checks pass. Verify its merge is reachable from protected `main` and that
+1. Land the foundation, #1556, under its own identity `WORK-2026091001` through
+   the merge path that is installed on `main` today. Measured at head
+   `a9cc5303567c8fbad48476ad30f19c8f720c9cf6` against base `14124f02a`:
+   - **`Merge Gate` resolves this lane.** `merge-gate.yml` extracts
+     `(utv2|uni|work)-\d+` from the branch, reads
+     `docs/06_status/lanes/WORK-2026091001.json` at the PR head and resolves
+     tier **T1** (the same run's tier-sync step prints `Manifest tier: T1`;
+     the branch wrapper's receipt records `tier.source: lane_manifest`). It
+     refuses **only** the T1 approval artifacts: the `t1-approved` label and a
+     `pm-verdict/v1` APPROVED comment from CODEOWNERS bound to this exact head.
+     An earlier revision of this step said the gate fails with *"No issue ID
+     found in PR branch or title"*; that was measured on an older gate and is
+     withdrawn here.
+   - **The wrapper that performs the merge is the one installed on the base**,
+     run from the root checkout on `main` after `git pull --ff-only`:
+     `pnpm ops:merge-wrapper pr-merge --issue WORK-2026091001 --branch
+     codex/work-2026091001-tracker-independence --pr 1556`. Its
+     `pre-merge-authorization` receipt at this head resolves the label tier T1,
+     requires the `pm-verdict/v1`, and refuses on exactly *"required checks
+     missing or failing on head …: Merge Gate | T1 requires a valid
+     pm-verdict/v1 comment"*. The base wrapper carries no repo-minted
+     boundary: `origin/main:scripts/ops/pre-merge-authorization.ts` contains
+     no `repoMintedP0` predicate. Running this branch's own wrapper instead
+     refuses the same PR (`repoMintedP0.covered: false`, base `14124f02a`),
+     because the boundary it installs reads the base consumer, which has not
+     been activated; the foundation is therefore merged with the base wrapper,
+     which is not a bypass of the branch's control — that control is not
+     installed until this merge lands.
+   - **No bootstrap identity and no replacement lane.** A
+     `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` entry is accepted only
+     when no lane manifest exists and this lane has one, so the earlier
+     sentence naming that file as a fallback is withdrawn; a tracker-keyed
+     replacement lane (an earlier revision named UTV2-1887, which never
+     existed) is not created.
+   - **The one unresolved scope authorization is a `scope-override/v1` for six
+     paths.** The trusted-base scope guard reports eight paths outside this
+     lane's `file_scope_lock`. Two are the lane's lifecycle pair
+     (`docs/06_status/lanes/WORK-2026091001.json`,
+     `.ops/sync/WORK-2026091001.yml`), which the guard on `main` grants only to
+     `UTV2-` ids and the merged guard grants to `WORK-` ids as well. The other
+     six are `.github/workflows/file-scope-lock-check.yml`,
+     `.github/workflows/return-review-packet.yml`,
+     `scripts/ci/file-scope-guard.ts`, `scripts/ci/file-scope-guard.test.ts`,
+     `scripts/ci/scope-override-comment-parser.ts` and
+     `scripts/ci/scope-override-comment-parser.test.ts`. Pre-merge, `File scope
+     lock` and `Return review packet` are non-required and stay red on this
+     head; that red is not treated as authorization. At closeout, `S1`
+     evaluates the manifest's `files_changed` against the lock, the lifecycle
+     grant of the merged guard and any `scope-override/v1` comment authored by
+     CODEOWNERS whose `Issue:` is `WORK-2026091001`, whose `PR:` is 1556 and
+     whose `Head SHA:` equals the PR head byte-for-byte — the merged parser
+     admits the `WORK-` id. Without that comment `S1` fails on exactly those
+     six paths and the lane cannot close; with it, `S1` passes. The comment is
+     reserved to CODEOWNERS, is requested in the PR packet with its exact text,
+     and is not authored here.
+2. Integrate #1556 through that base-installed serialized merge wrapper after
+   the required checks and both T1 approval artifacts are on the stationary
+   head. Verify its merge is reachable from protected `main` and that
    `scripts/ops/tracker-independence/p0-workflow.cjs` exists at that exact SHA.
-3. Resume this same supporting workstream through sanctioned lane tooling for the
-   consumer follow-up. Apply the recorded patch with `git apply --check` followed
-   by `git apply`; review any base drift before applying. Run the classifier and
-   workflow regression tests, `pnpm verify`, and required CI. Obtain the follow-up's
-   existing review and merge authorizations. Do not disable the old required check
-   to make either phase pass.
+3. Land the consumer activation as a **tracker-keyed** follow-up lane, not as a
+   `WORK-###` PR. Once the foundation is on `main`, the installed wrapper
+   refuses every repo-minted head until the base consumer delegates to the
+   evaluator — and that delegation is exactly what the follow-up installs, so a
+   repo-minted follow-up could never merge through the wrapper. The only lane
+   types admitting `.github/workflows/**` are `runtime` and `migration`; the
+   latter is refused by `forbidden_combination` while #1484 is open. Apply the
+   recorded patch with `git apply --check` followed by `git apply`; review any
+   base drift before applying. Run the classifier and workflow regression
+   tests, `pnpm verify`, and required CI. Obtain the follow-up's existing
+   review and merge authorizations. Do not disable the old required check to
+   make either phase pass.
 4. Verify the installed workflow on a new ordinary task and an existing PR with
    stale Linear credentials; verify protected and unresolved classifications still
    refuse progression without the applicable evidence. Recover mission and active
@@ -125,8 +164,9 @@ workflow, and a mutation of the loaded module through a reference obtained
 without naming `require`, `module`, `eval`, `Function` or `import` (for
 example a helper module already on the base) — none introducible by a WORK PR
 author, since the predicate never reads candidate content. The foundation itself
-reaches `main` through the bootstrap route in step 1 above, and the block
-releases only when the activation is installed on the base — re-arming if a
+reaches `main` under its own identity through the base-installed merge path in
+step 1 above, and the block releases only when the activation is installed on
+the base — re-arming if a
 later base commit removes the delegation. See
 `docs/05_operations/P0_PROTOCOL_SPEC.md` § "The staged block is mechanical".
 

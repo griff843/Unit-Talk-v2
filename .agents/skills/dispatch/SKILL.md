@@ -38,16 +38,18 @@ If `pnpm ops:brief` fails, identify the failed source. Unavailable optional trac
 
 For any specific issue, validate before starting a lane:
 ```bash
-pnpm codex:dispatch -- --issue UTV2-### --tier T2 --branch codex/utv2-###-slug --files <path> --dry-run
+pnpm codex:dispatch -- --issue UTV2-### --tier T2 --lane-type <type> --branch codex/utv2-###-slug --files <path> --dry-run
 ```
 
-Use repeatable `--files` flags. Do not use the removed `--allowed` flag.
+Use repeatable `--files` flags. Do not use the removed `--allowed` flag. `--lane-type` is
+required: the task is resolved from the repository (`.ops/work/<ID>.md` or a captured
+`.ops/sync/<ID>.yml` contract), which carries no tracker labels to infer a lane type from.
 
 ## Dispatch
 
 When prerequisites are clear and file scope is explicit:
 ```bash
-pnpm codex:dispatch -- --issue UTV2-### --tier T2 --branch codex/utv2-###-slug --files <path>
+pnpm codex:dispatch -- --issue UTV2-### --tier T2 --lane-type <type> --branch codex/utv2-###-slug --files <path>
 ```
 
 The command:

@@ -43,4 +43,4 @@ Identify whether the failure blocks this task or only unrelated work. Preserve r
 ## Reference
 
 For the full shared team version, read:
-- [`.claude/commands/system-state-loader.md`](../../../../.claude/commands/system-state-loader.md)
+- [`.claude/commands/system-state-loader.md`](../../../.claude/commands/system-state-loader.md)

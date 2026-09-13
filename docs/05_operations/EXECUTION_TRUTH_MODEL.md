@@ -114,7 +114,7 @@ Merge Authority above is defined once, mechanically, by `.github/workflows/merge
 
 ## 5. Enforcement Placement
 
-The placement law: **if a rule can be enforced mechanically, it must not live only in prose.**
+The placement law: **a ratified safety, correctness or approval invariant that can be enforced mechanically must not live only in prose.** Mandatory mechanical enforcement is limited to those invariants. A new blocking check requires a defined risk, bounded scope and review; a preference is not made a gate merely because it is automatable. Every existing required gate is preserved unless its change is separately authorized.
 
 | Concern | Surface |
 |---|---|
@@ -139,7 +139,7 @@ The placement law: **if a rule can be enforced mechanically, it must not live on
 
 **What belongs in canonical docs:** schema facts, contracts, this governance model, tier matrix, provider knowledge.
 
-**What belongs in CI:** anything mechanically checkable on a PR or scheduled cadence.
+**What belongs in CI:** the ratified safety, correctness and approval invariants that are mechanically checkable on a PR or scheduled cadence. Advisory checks may report; only ratified invariants block.
 
 **What belongs in GitHub policy:** branch protection, required checks, CODEOWNERS, required labels, state transitions.
 
@@ -179,7 +179,7 @@ Stranded detection is mechanical. No human scans a dashboard for stuck work.
 PM reviews **artifacts**, not narratives.
 
 - **T1 review input:** `ops:truth-check` machine-readable output + evidence bundle + diff. Nothing else.
-- **T1 approval signal:** GitHub label `t1-approved` on the PR. Chat approval is not binding.
+- **T1 approval signal:** GitHub label `t1-approved` on the PR **and** a `pm-verdict/v1` APPROVED comment from CODEOWNERS bound to the exact head SHA, as the tier table above states. Chat approval is not binding.
 - **Daily digest:** `ops:daily-digest` emits open lanes, stale lanes, truth-check failures, CI health, drift flags. PM reviews the digest, not session transcripts.
 - **Agent self-certification is forbidden.** The agent may declare a lane *ready for truth-check*, never *done*.
 - **No closeout override:** `ops:lane-close` has no override or force-close path. A failing truth-check must be repaired through a normal scoped lane and PR; PM approval does not bypass technical verification.
@@ -198,7 +198,7 @@ PM reviews **artifacts**, not narratives.
 
 ## 10. Invariants (Never Violate)
 
-1. `main` is shipped truth. Nothing above it.
+1. `main` proves integration; deployment and runtime evidence prove shipment and operation. Neither substitutes for the other.
 2. Agent claims are never authoritative.
 3. No lane without preflight. No Done without truth-check.
 4. Proof must tie to the merge SHA.
@@ -207,6 +207,6 @@ PM reviews **artifacts**, not narratives.
 7. Manifest is the only place lane state lives.
 8. Reopens are mechanical, not polite.
 9. PM reviews artifacts, not prose.
-10. If a rule can be a script, it must not be a paragraph.
+10. A ratified safety, correctness or approval invariant that can be a script must not be only a paragraph. Other rules stay prose or advisory; existing required gates are preserved unless separately authorized.
 
 Repository closeout records explicit completion intent with `ops:lane-close <ID> --complete-work` after merge/proof verification. Tracker transition is opt-in via `--sync-tracker`; default closeout performs no tracker request, including for legacy identities with configured credentials. Neither flag bypasses proof, required checks, or approval.

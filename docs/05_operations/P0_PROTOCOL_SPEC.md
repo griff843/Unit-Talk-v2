@@ -232,15 +232,20 @@ predicate is a fail-closed detector of whether the reviewed activation is instal
 verifier of the consumer. These are local controls; they do not replace the required checks, and
 the merge gate is unchanged.
 
-**How the foundation reaches `main`, then.** The evaluator and its activation are landed through
-the **established bootstrap route**, not by widening a required check and not by admitting a
-`WORK-###` PR through the controls above: a tracker-keyed lane whose tier `Merge Gate` resolves from
-its manifest, with its own independent review and required CI — or, where the concurrency caps
-refuse that lane, a `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` entry authorized by Griff and
-read from the base, exactly as `merge-gate.yml` already reads it. `Merge Gate` cannot resolve a tier
-for a `WORK-###` head at all (*"No issue ID found in PR branch or title. Cannot resolve
-authoritative tier."*), which is measured on #1556 and is the reason the route is the tracker-keyed
-one. No branch-protection change and no required-check change is part of this.
+**How the foundation reaches `main`, then.** Not by widening a required check, and not through
+the controls above, which are not installed until it lands. `Merge Gate` on `main` already extracts
+`(utv2|uni|work)-\d+` from the branch and resolves the foundation's tier (T1) from the lane
+manifest at its head, refusing only the T1 approval artifacts — the `t1-approved` label and an
+exact-head `pm-verdict/v1` APPROVED comment from CODEOWNERS. The merge is performed by the wrapper
+installed on the base, which carries no repo-minted boundary; this branch's wrapper, run against the
+same PR, refuses it because the base consumer is not activated, and that is the intended reading of
+the base, not a route around it. A `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json` identity is not a
+route: it is accepted only when no lane manifest exists. The activation follow-up is then a
+**tracker-keyed** lane, because the newly installed wrapper refuses every `WORK-###` head until the
+base consumer delegates — which is what the follow-up installs. The measured sequence, receipts and
+the one reserved scope authorization are recorded in
+`docs/06_status/proof/WORK-2026091001/integration.md`. No branch-protection change and no
+required-check change is part of this.
 
 **It releases itself, and only from the base.** Because the predicate reads `origin/main`, landing
 the activation there lifts the refusal with no second edit, and a later base commit that removes

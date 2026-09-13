@@ -251,12 +251,35 @@ test('tier label application failure aborts lane finalize', () => {
   );
 });
 
+test('explicit --complete-work and --sync-tracker reach close_lane, and only when given', () => {
+  const closeArgs = (plan: ReturnType<typeof buildLaneFinalizePlan>) =>
+    plan.steps.find((step) => step.id === 'close_lane')?.args ?? [];
+  const base = { manifest: manifest({ issue_id: 'WORK-2026091001' }), pr: '456' };
+  assert.deepEqual(closeArgs(buildLaneFinalizePlan(base)), ['ops:lane-close', 'WORK-2026091001', '--acquire-lock']);
+  assert.deepEqual(
+    closeArgs(buildLaneFinalizePlan({ ...base, completeWork: true })),
+    ['ops:lane-close', 'WORK-2026091001', '--acquire-lock', '--complete-work'],
+  );
+  assert.deepEqual(
+    closeArgs(buildLaneFinalizePlan({ ...base, syncTracker: true })),
+    ['ops:lane-close', 'WORK-2026091001', '--acquire-lock', '--sync-tracker'],
+  );
+  assert.deepEqual(
+    closeArgs(buildLaneFinalizePlan({ ...base, completeWork: true, syncTracker: true })),
+    ['ops:lane-close', 'WORK-2026091001', '--acquire-lock', '--complete-work', '--sync-tracker'],
+  );
+  const parsed = parseLaneFinalizeCliArgs(['WORK-2026091001', '--complete-work']);
+  assert.equal(parsed.bools.has('complete-work'), true);
+  assert.equal(parseLaneFinalizeCliArgs(['WORK-2026091001']).bools.has('complete-work'), false);
+});
+
 test('default finalize executes repository steps without tracker calls for all work namespaces', () => {
   for (const issue_id of ['UTV2-1073', 'UNI-1073', 'WORK-2026091001']) {
     const plan = buildLaneFinalizePlan({manifest: manifest({issue_id}), pr: '456'});
     const result = runLaneFinalizePlan(plan, {
       runner: ((_command, args) => {
         assert.equal(args.includes('--sync-tracker'), false, 'default path must not opt into tracker mirroring');
+        assert.equal(args.includes('--complete-work'), false, 'default path must not assert completion intent');
         return {status: 0, stdout: '', stderr: ''};
       }) as LaneFinalizeRunner,
     });
