@@ -56,7 +56,7 @@ index 7458bc361..40d89ffcb 100644
 +          script: |
 +            const number = context.payload.pull_request?.number || context.payload.issue?.number;
 +            const {data: pr} = await github.rest.pulls.get({...context.repo, pull_number: number});
-+            const expectedRepo = `${context.repo.owner}/${context.repo.repo}`.toLowerCase();
++            const expectedRepo = (context.repo.owner + '/' + context.repo.repo).toLowerCase();
 +            if (pr.base.ref !== 'main' || pr.base.repo?.full_name?.toLowerCase() !== expectedRepo) throw new Error('P0 evaluator requires this repository protected main base');
 +            const {data: main} = await github.rest.repos.getBranch({...context.repo, branch: 'main'});
 +            if (pr.base.sha !== main.commit.sha) throw new Error('PR base changed while resolving trusted main; rerun');
@@ -111,7 +111,7 @@ index 7458bc361..40d89ffcb 100644
 +              fs.writeFileSync('/tmp/p0-event/p0-failure-event.json', JSON.stringify({pr: number, head_sha: headSha, block_reason: summary, actor: context.actor, timestamp: new Date().toISOString(), runbook: 'docs/05_operations/P0_PROTOCOL_SPEC.md'}, null, 2));
 +              core.setFailed(summary);
 +            } finally {
-+              await github.rest.checks.update({...context.repo, check_run_id: check.data.id, status: 'completed', conclusion, output: {title: `P0 Protocol: ${conclusion}`, summary}});
++              await github.rest.checks.update({...context.repo, check_run_id: check.data.id, status: 'completed', conclusion, output: {title: 'P0 Protocol: ' + conclusion, summary}});
 +              await core.summary.addHeading('P0 Protocol').addRaw(summary).write();
              }
 -            const issueId = match[0].toUpperCase();

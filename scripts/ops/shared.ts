@@ -819,16 +819,55 @@ function hasPullRequestTrigger(on: unknown): boolean {
   return false;
 }
 
-/** Drops line (`//`) and block comments from a github-script body. */
-function stripJsComments(script: string): string {
-  // Template literals are blanked too: they may span lines, so text inside
-  // one can otherwise sit at a line start and read as a statement
-  // (independent review, round 3). Quoted strings stay -- the evaluator path
-  // is one.
-  return script
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/`(?:[^`\\]|\\.)*`/g, '``')
-    .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+/**
+ * Blanks every string and template literal in a github-script body so that
+ * nothing inside one can read as code, and refuses (returns null) any body the
+ * predicate cannot read literally: a `/` outside a string (a comment, a regex
+ * literal or a division -- a comment stripper is exactly what independent
+ * review round 5 fooled with `//` inside a quoted string), a template
+ * substitution `${` (a nested template can expose text as code), a raw
+ * newline inside a quote, or an unterminated literal. Only the evaluator path
+ * literal keeps its content; every other string becomes `''`.
+ */
+function blankJsLiterals(script: string): string | null {
+  let out = '';
+  for (let i = 0; i < script.length; ) {
+    const c = script[i]!;
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      let content = '';
+      while (j < script.length && script[j] !== c) {
+        if (script[j] === '\n') return null;
+        if (script[j] === '\\') {
+          content += script.slice(j, j + 2);
+          j += 2;
+        } else {
+          content += script[j];
+          j += 1;
+        }
+      }
+      if (j >= script.length) return null;
+      const keep = content === P0_TRUSTED_EVALUATOR_PATH || content === `./${P0_TRUSTED_EVALUATOR_PATH}`;
+      out += c + (keep ? content : '') + c;
+      i = j + 1;
+      continue;
+    }
+    if (c === '`') {
+      let j = i + 1;
+      while (j < script.length && script[j] !== '`') {
+        if (script[j] === '$' && script[j + 1] === '{') return null;
+        j += script[j] === '\\' ? 2 : 1;
+      }
+      if (j >= script.length) return null;
+      out += '``';
+      i = j + 1;
+      continue;
+    }
+    if (c === '/') return null;
+    out += c;
+    i += 1;
+  }
+  return out;
 }
 
 function escapeRegExp(value: string): string {
@@ -845,88 +884,114 @@ function escapeRegExp(value: string): string {
 export const P0_EVALUATOR_ENTRY = 'evaluatePullRequest';
 
 /**
- * Does a github-script body delegate to the evaluator? Two statement-level
- * facts are required, each at the start of a line (optionally as the
- * right-hand side of a declaration, or behind `await`/`return`): a `require`
- * of the evaluator path -- inline, or through an identifier the same body
- * binds to the literal (the staged activation's shape) -- and a call to
- * `evaluatePullRequest(`. `await require(path).evaluatePullRequest(...)`
- * satisfies both at once. A path inside a string, a `require` nested inside
- * another call's arguments, or a `require` that never reaches the entry point
- * is a reference, not a delegation. JavaScript control flow is not analysed:
- * a statement inside a never-called function or a false branch is not
- * distinguished from a live one, and the reviewed bootstrap lane that installs
- * the consumer on the base is where that reading happens.
+ * Does a (literal-blanked) github-script body delegate to the evaluator?
+ * Exactly three call forms are accepted, each at the start of a line
+ * (optionally as the right-hand side of a declaration, or behind
+ * `await`/`return`): `require(<evaluator>).evaluatePullRequest(` inlined; a
+ * destructuring `const { evaluatePullRequest } = require(<evaluator>)` followed
+ * by a statement-level `evaluatePullRequest(`; or `const <name> =
+ * require(<evaluator>)` followed by a statement-level
+ * `<name>.evaluatePullRequest(`. `<evaluator>` is the path literal or a
+ * `const` binding of it declared once in the body. Everything else that could
+ * reach the loaded module or the entry point by name refuses the body: another
+ * occurrence of `evaluatePullRequest`, of a module binding, of the path
+ * literal or of a `require` of it; a `require` not immediately called, or
+ * with an argument that is not a string literal or a path binding; a
+ * redefinition of `require` or the entry point; an assignment to a path
+ * binding; and `eval`, `Function`, `with`, `import`, `module` or `globalThis`.
+ * JavaScript control flow is not analysed: a statement inside a never-called
+ * function or a false branch is not distinguished from a live one, and a body
+ * that throws before the call fails the required check, which is fail-closed
+ * for the PR. The reviewed bootstrap lane that installs the consumer on the
+ * base is where that reading happens.
  */
 function scriptDelegatesToEvaluator(script: string): boolean {
   const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
   const literal = String.raw`['"](?:\./)?${evaluator}['"]`;
   const entry = P0_EVALUATOR_ENTRY;
   const ident = String.raw`[A-Za-z_$][\w$]*`;
-  // A declaration or a plain assignment (`summary = await ...`) may prefix the statement.
-  const declaration = String.raw`(?:(?:const|let|var)\s+)?(?:\{[^}]*\}|${ident}(?:\.${ident})*)\s*=\s*`;
-  const statementStart = String.raw`^\s*(?:${declaration})?(?:await\s+|return\s+)?`;
-  // A body that redefines the entry point (`const evaluatePullRequest = …`,
-  // `function evaluatePullRequest`, a method `evaluatePullRequest() {`) is
-  // calling something other than the evaluator's export; refuse it outright.
-  // Destructuring `const { evaluatePullRequest } = require(...)` is the
-  // accepted form and does not match this rule.
-  const redefinesEntry = new RegExp(
-    String.raw`(?:^|[^.\w$])(?:(?:const|let|var|function|async\s+function)\s+${entry}\b|${entry}\s*\([^)]*\)\s*\{)`,
+  const word = (name: string): RegExp => new RegExp(String.raw`(?<![\w$.])${name}(?![\w$])`);
+  for (const name of ['eval', 'Function', 'with', 'import', 'module', 'globalThis']) {
+    if (word(name).test(script)) return false;
+  }
+  // `require` only ever appears as a call: `require.cache`, `require.resolve`,
+  // a parameter named `require` and a shadowing declaration all refuse.
+  for (const match of script.matchAll(/(?<![\w$.])require(?![\w$])/g)) {
+    if (!/^\s*\(/.test(script.slice(match.index! + 'require'.length))) return false;
+  }
+  const redefines = new RegExp(
+    String.raw`(?:^|[^.\w$])(?:(?:const|let|var|function|async\s+function|class)\s+(?:${entry}|require)\b|${entry}\s*\([^)]*\)\s*\{)`,
     'm',
   );
-  if (redefinesEntry.test(script)) return false;
-  // Only a `const` binding of the literal is accepted: `let`/`var` can be
-  // reassigned to another module before the require.
-  const bindingNames = [...script.matchAll(
+  if (redefines.test(script)) return false;
+  // A declaration or a plain assignment (`summary = await ...`) may prefix a
+  // call statement; the accepted span starts at the call itself, so a tracked
+  // name inside that prefix is still an uncovered occurrence.
+  const declaration = String.raw`(?:(?:const|let|var)\s+)?(?:\{[^}]*\}|${ident}(?:\.${ident})*)\s*=\s*`;
+  const statementStart = String.raw`^\s*(?:${declaration})?(?:await\s+|return\s+)?`;
+  const pathBindings = [...script.matchAll(
     new RegExp(String.raw`^\s*const\s+(${ident})\s*=\s*${literal}\s*;?\s*$`, 'gm'),
-  )].map(([, name]) => escapeRegExp(name!));
-  const moduleRef = [literal, ...bindingNames].join('|');
-  // Every `require(...)` in the body takes a string literal or one of those
-  // bindings (review round 4): `require(require.resolve(x))`, a concatenation
-  // or a computed path could load the evaluator through a name this predicate
-  // does not track, and then mutate it.
-  for (const [, argument] of script.matchAll(/require\(\s*([^()]*?)\s*\)/g)) {
+  )];
+  const pathNames = pathBindings.map(([, name]) => name!);
+  const moduleRef = [literal, ...pathNames.map(escapeRegExp)].join('|');
+  // Every `require(` takes a string literal or a path binding, and every one
+  // of them is seen by that rule (an argument containing parentheses is not).
+  const requireArguments = [...script.matchAll(/require\(\s*([^()]*?)\s*\)/g)];
+  if (requireArguments.length !== (script.match(/require\(/g) ?? []).length) return false;
+  for (const [, argument] of requireArguments) {
     if (!new RegExp(String.raw`^(?:'[^'\\]*'|"[^"\\]*"|${moduleRef})$`).test(argument!)) return false;
   }
-  // The accepted forms, as spans. Every occurrence of the entry-point name and
-  // of a module binding must fall inside one of them; a fake object property
-  // named after the entry point, an assignment over the export
-  // (`api.evaluatePullRequest = fake`), a bracket access, a quoted name or an
-  // `Object.defineProperty` call are none of these and refuse the body
-  // (review round 4).
   const spans: Array<[number, number]> = [];
-  const collect = (pattern: RegExp): number => {
+  for (const match of pathBindings) spans.push([match.index!, match.index! + match[0].length]);
+  const collectCalls = (pattern: RegExp): number => {
     let count = 0;
     for (const match of script.matchAll(pattern)) {
-      spans.push([match.index!, match.index! + match[0].length]);
+      const end = match.index! + match[0].length;
+      spans.push([end - match[1]!.length, end]);
       count += 1;
     }
     return count;
   };
-  const inlineCalls = collect(
-    new RegExp(statementStart + String.raw`require\(\s*(?:${moduleRef})\s*\)\.${entry}\s*\(`, 'gm'),
+  const inlineCalls = collectCalls(
+    new RegExp(statementStart + String.raw`(require\(\s*(?:${moduleRef})\s*\)\.${entry}\s*\()`, 'gm'),
   );
-  const destructured = collect(
+  const destructured = [...script.matchAll(
     new RegExp(String.raw`^\s*const\s*\{\s*${entry}\s*\}\s*=\s*require\(\s*(?:${moduleRef})\s*\)\s*;?\s*$`, 'gm'),
-  );
+  )];
+  for (const match of destructured) spans.push([match.index!, match.index! + match[0].length]);
   const moduleBindings = [...script.matchAll(
     new RegExp(String.raw`^\s*const\s+(${ident})\s*=\s*require\(\s*(?:${moduleRef})\s*\)\s*;?\s*$`, 'gm'),
   )];
   for (const match of moduleBindings) spans.push([match.index!, match.index! + match[0].length]);
-  const moduleNames = moduleBindings.map(([, name]) => escapeRegExp(name!));
-  const directCalls = destructured > 0
-    ? collect(new RegExp(statementStart + String.raw`${entry}\s*\(`, 'gm'))
+  const moduleNames = moduleBindings.map(([, name]) => name!);
+  const bindingNames = [...pathNames, ...moduleNames];
+  if (new Set(bindingNames).size !== bindingNames.length) return false;
+  const directCalls = destructured.length > 0
+    ? collectCalls(new RegExp(statementStart + String.raw`(${entry}\s*\()`, 'gm'))
     : 0;
   const boundCalls = moduleNames.length > 0
-    ? collect(new RegExp(statementStart + String.raw`(?:${moduleNames.join('|')})\.${entry}\s*\(`, 'gm'))
+    ? collectCalls(new RegExp(statementStart + String.raw`((?:${moduleNames.map(escapeRegExp).join('|')})\.${entry}\s*\()`, 'gm'))
     : 0;
   const covered = (index: number): boolean => spans.some(([from, to]) => index >= from && index < to);
-  const names = [entry, ...moduleNames].join('|');
-  for (const match of script.matchAll(new RegExp(String.raw`(?<![\w$])(?:${names})(?![\w$])`, 'g'))) {
+  const tracked = [entry, ...moduleNames.map(escapeRegExp)].join('|');
+  for (const match of script.matchAll(new RegExp(String.raw`(?<![\w$])(?:${tracked})(?![\w$])`, 'g'))) {
     if (!covered(match.index!)) return false;
   }
-  return inlineCalls > 0 || directCalls > 0 || boundCalls > 0;
+  for (const match of script.matchAll(new RegExp(literal, 'g'))) {
+    if (!covered(match.index!)) return false;
+  }
+  for (const match of script.matchAll(new RegExp(String.raw`require\(\s*(?:${moduleRef})\s*\)`, 'g'))) {
+    if (!covered(match.index!)) return false;
+  }
+  // A path binding is a const and may be read anywhere (the staged activation
+  // checks it exists); an assignment to it refuses.
+  if (pathNames.length > 0) {
+    const assigned = new RegExp(String.raw`(?<![\w$.])(?:${pathNames.map(escapeRegExp).join('|')})\s*(?:=(?!=)|\+\+|--|\[)`, 'g');
+    for (const match of script.matchAll(assigned)) {
+      if (!covered(match.index!)) return false;
+    }
+  }
+  return inlineCalls + directCalls + boundCalls > 0;
 }
 
 /** True when a `strategy.matrix` cannot produce a single job instance. */
@@ -1027,7 +1092,7 @@ export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFind
         /^actions\/github-script(?:@|$)/.test(step['uses']) &&
         step['with'] && typeof step['with'] === 'object' &&
         typeof (step['with'] as Record<string, unknown>)['script'] === 'string' &&
-        scriptDelegatesToEvaluator(stripJsComments((step['with'] as Record<string, unknown>)['script'] as string));
+        scriptDelegatesToEvaluator(blankJsLiterals((step['with'] as Record<string, unknown>)['script'] as string) ?? '');
       if (invoked) {
         const stepName = typeof step['name'] === 'string' ? step['name'] : `step ${index + 1}`;
         return { executed: true, job: context, step: stepName };
