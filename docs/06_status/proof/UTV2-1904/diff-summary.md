@@ -7,7 +7,7 @@ Lane type: modeling
 Branch: claude/utv2-1904-operator-evidence-settlement
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1579
 Head SHA: f8d8b38086f20a422b78f21dd04993e3a3e60ed9
-Merge SHA: N/A
+Merge SHA: b14e444127d18a9e7f6091421758f2ebad604b74
 Diff base: 0dc1b918102486d433813dea8d411135c4b07899
 Diff target: f8d8b38086f20a422b78f21dd04993e3a3e60ed9
 
@@ -57,4 +57,4 @@ M	packages/contracts/src/settlement.ts
 
 ## SHA Binding
 Head SHA: f8d8b38086f20a422b78f21dd04993e3a3e60ed9
-Merge SHA: N/A
+Merge SHA: b14e444127d18a9e7f6091421758f2ebad604b74
