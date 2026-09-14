@@ -12,7 +12,7 @@
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "source_sha",
     "note": "5dd5de31d1af1e77559dcab281d7b5df2cef510b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1898/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the anchor does not move when this file lands.",
-    "bound_at": "2026-09-14T01:32:13.797Z",
+    "bound_at": "2026-09-14T01:39:49.634Z",
     "ci_sentinels": {
       "run_id": 34795218113,
       "run_attempt": 1,
@@ -272,6 +272,96 @@
       "provider_offer_current_rows_for_this_lane": 7,
       "distinct_namespaced_events": 4,
       "note": "Read back from the database rather than from the job's exit code, so a skipped suite could not present as a pass."
+    },
+    "queries": [
+      {
+        "label": "sportsbooks FK prerequisite exists after the seed",
+        "sql": "SELECT count(*) FROM sportsbooks",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only, after the job concluded)",
+        "result": 1,
+        "note": "0 before the seed. This is the row whose absence failed the previous run."
+      },
+      {
+        "label": "history rows written by this lane's proof",
+        "sql": "SELECT count(*) FROM provider_offer_history WHERE provider_event_id LIKE 'utv2-1898-evt-%'",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only)",
+        "result": 9
+      },
+      {
+        "label": "current rows reachable by the scoped lookup",
+        "sql": "SELECT count(*) FROM provider_offer_current WHERE provider_event_id LIKE 'utv2-1898-evt-%'",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only)",
+        "result": 7,
+        "note": "7 < 9 is expected and explained under sport_key_is_not_in_identity_key below: the wrong-sport near-miss and the deliberately older snapshot each collapse onto an existing identity_key."
+      },
+      {
+        "label": "participant NULL and participant-attributed are disjoint rows, not one row",
+        "sql": "SELECT count(*) FROM provider_offer_current WHERE provider_event_id LIKE 'utv2-1898-evt-%' AND provider_participant_id IS NULL",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only)",
+        "result": 1,
+        "note": "The paired attributed row on the same event/market is a separate row (6 attributed), which is what makes assumption 3 checkable in SQL rather than in the in-memory '== null' predicate."
+      },
+      {
+        "label": "the four near-miss dimensions are physically present in history",
+        "sql": "SELECT sport_key, provider_event_id, provider_market_key, provider_participant_id, idempotency_key FROM provider_offer_history WHERE provider_event_id LIKE 'utv2-1898-evt-%'",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only)",
+        "result": "9 rows: wrong-sport (NFL), wrong-event (-other), wrong-market (rebounds-all-game-ou), wrong-participant (-other), exact, null-participant, attributed-participant, older, newer"
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "sportsbooks",
+        "table": "sportsbooks",
+        "before": 0,
+        "after": 1
+      },
+      {
+        "label": "provider offer history rows for this lane",
+        "table": "provider_offer_history",
+        "before": 0,
+        "after": 9
+      },
+      {
+        "label": "provider offer current rows for this lane",
+        "table": "provider_offer_current",
+        "before": 0,
+        "after": 7
+      },
+      {
+        "label": "current rows with NULL participant",
+        "table": "provider_offer_current",
+        "before": 0,
+        "after": 1
+      },
+      {
+        "label": "current rows with an attributed participant",
+        "table": "provider_offer_current",
+        "before": 0,
+        "after": 6
+      },
+      {
+        "label": "distinct namespaced events",
+        "table": "provider_offer_current",
+        "before": 0,
+        "after": 4
+      },
+      {
+        "label": "live proof tests",
+        "table": "apps/api/src/t1-proof-utv2-1898-edge-scope.test.ts",
+        "before": 0,
+        "after": 5,
+        "pass": 5,
+        "fail": 0
+      }
+    ],
+    "stated_limit": {
+      "finding": "sport_key is NOT part of the provider_offer_current identity key",
+      "evidence": "buildProviderOfferCurrentIdentityKey (packages/db/src/runtime-repositories.ts:10003-10017) joins providerKey, providerEventId, providerMarketKey, providerParticipantId and bookmakerKey. sport_key is absent. provider_offer_current is upserted onConflict 'identity_key'.",
+      "observed": "The NFL wrong-sport near-miss is present in provider_offer_history and absent from provider_offer_current: it shares an identity_key with the NBA exact-scope row, which was written later and overwrote it. This is why current holds 7 rows where history holds 9.",
+      "what_is_still_proven": "Test 1 seeds only the near-misses and runs BEFORE any exact-scope row exists, so at that moment the NFL row is the live current row and the NBA-scoped lookup refuses it. The sport predicate is therefore demonstrated to discriminate in SQL.",
+      "what_is_NOT_proven": "That a sport_key stored on a provider_offer_current row is durable. Two offers differing only in sport collapse to one row and the last write wins.",
+      "risk_direction": "Fail-closed, not fail-open. An overwritten sport_key can only make a scoped lookup REFUSE an offer it should have matched (edge recorded unavailable, which this lane already handles without manufacturing a value). It cannot manufacture a match unless the provider emits one event id under two sports, which would itself be a provider data defect.",
+      "disposition": "Recorded, not repaired here. Adding sport_key to the identity key changes the write path's collision semantics for every offer in production and is out of this lane's file scope and its stated purpose."
     }
   },
   "scope_and_containment": {

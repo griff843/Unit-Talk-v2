@@ -185,6 +185,33 @@ catalog still holds. Nothing here activates SGO or reads any provider key. The c
 `createPrivilegedClient`, the sole exemption in `scripts/ci/privileged-db-client-guard.ts` rule 3,
 which asserts target identity and therefore refuses production.
 
+### A finding the proof surfaced: `sport_key` is not in the current-table identity key
+
+`buildProviderOfferCurrentIdentityKey` (`packages/db/src/runtime-repositories.ts:10003-10017`)
+joins `providerKey`, `providerEventId`, `providerMarketKey`, `providerParticipantId` and
+`bookmakerKey`. **`sport_key` is absent**, and `provider_offer_current` is upserted
+`onConflict: 'identity_key'`. So two offers differing only in sport collapse to one row and the
+later write wins.
+
+This is visible in the seeded data rather than only in the code: the NFL wrong-sport near-miss is
+in `provider_offer_history` and **not** in `provider_offer_current` — it shares an identity key
+with the NBA exact-scope row written after it. That is the whole of why history holds 9 rows and
+current holds 7.
+
+What this does and does not change:
+
+- **Still proven.** Test 1 seeds only the near-misses and runs *before* any exact-scope row
+  exists, so at that moment the NFL row *is* the live current row and the NBA-scoped lookup
+  refuses it. The sport predicate does discriminate in SQL.
+- **Not proven.** That a `sport_key` stored on a `provider_offer_current` row is durable.
+- **Risk direction is fail-closed.** An overwritten `sport_key` can only make a scoped lookup
+  *refuse* an offer it should have matched — which this lane already handles by recording edge
+  unavailable rather than manufacturing a value. It cannot manufacture a match unless the provider
+  emits one event id under two sports, which would itself be a provider data defect.
+- **Recorded, not repaired here.** Adding `sport_key` to the identity key changes collision
+  semantics for every offer write in production, and is outside this lane's file scope and its
+  stated purpose.
+
 ### The pass was confirmed from the rows, not only from the exit code
 
 Read-only against staging after the job concluded, so that a skipped suite could not present as a
