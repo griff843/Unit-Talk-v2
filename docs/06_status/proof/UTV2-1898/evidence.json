@@ -6,13 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "415ba032d76d786eda01fd7e500d596439cdf233",
     "verified_source_sha": "5dd5de31d1af1e77559dcab281d7b5df2cef510b",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "source_sha",
+    "sha_type": "merge_sha",
     "note": "5dd5de31d1af1e77559dcab281d7b5df2cef510b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1898/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the anchor does not move when this file lands.",
-    "bound_at": "2026-09-14T01:39:49.634Z",
+    "bound_at": "2026-09-14T13:56:48.580Z",
     "ci_sentinels": {
       "run_id": 34795218113,
       "run_attempt": 1,

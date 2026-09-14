@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1898-edge-provenance-scope",
   "branch": "claude/utv2-1898-edge-provenance-scope",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "415ba032d76d786eda01fd7e500d596439cdf233",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1576",
   "files_changed": [],
   "file_scope_lock": [
@@ -28,14 +28,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1898/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-14T00:39:49.661Z",
-  "heartbeat_at": "2026-09-14T00:50:39.860Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-14T13:56:51.899Z",
+  "closed_at": "2026-09-14T13:56:51.899Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1898-edge-provenance-scope.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-14T13:56:48.585Z",
+      "verdict": "pass",
+      "merge_sha": "415ba032d76d786eda01fd7e500d596439cdf233",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

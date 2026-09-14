@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1898-edge-provenance-scope
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1576
 Head SHA: d32092e5860515d87d4a14254307034e0ff6beb2
-Merge SHA: N/A
+Merge SHA: 415ba032d76d786eda01fd7e500d596439cdf233
 Diff base: 8521670603a43377aa93e4a5bf7b2ffb73abf71f
 Diff target: d32092e5860515d87d4a14254307034e0ff6beb2
 
@@ -59,4 +59,4 @@ M	packages/db/src/runtime-repositories.ts
 
 ## SHA Binding
 Head SHA: d32092e5860515d87d4a14254307034e0ff6beb2
-Merge SHA: N/A
+Merge SHA: 415ba032d76d786eda01fd7e500d596439cdf233
