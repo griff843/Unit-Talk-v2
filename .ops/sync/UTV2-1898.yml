@@ -1,0 +1,202 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1898
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1898
+  objective: "Edge provenance: an offer may back a pick only on exact
+    sport/event/market/participant match inside the freshness window"
+  acceptance_criteria:
+    - >-
+      ## Defect (confirmed in production)
+
+
+      Two picks submitted four days apart — different sports, different events,
+      different selections — both carry `marketProbability: 0.478261` to six
+      decimal places, both claiming `realEdgeSource: "sgo"`,
+      `providerCoverageState: "sgo"`, `method: "market-devigged"`, `bookCount:
+      1`.
+
+
+      The cause: `findLatestByMarketKey(key, provider?, participant?)` treated
+      an omitted argument as "no filter" rather than "no match". A September NFL
+      moneyline was therefore priced off a 75-day-old June MLB moneyline offer —
+      the only rows with a matching market key, since production ingestion has
+      been parked since 2026-06-30.
+
+
+      Harm reached beyond display: `kellySizing.recommended_units` of 40 and 50,
+      and a `strongly-contrarian` `contrarySignal` asserting divergence from a
+      market that was never read.
+
+
+      ## Repair
+
+
+      * `ProviderOfferRepository.findLatestByMarketKey` becomes
+      `findLatestScopedOffer(criteria)`, where every discriminating predicate is
+      required and `undefined` is inadmissible rather than unfiltered.
+
+      * A 6-hour provider freshness window (`PROVIDER_OFFER_MAX_AGE_MS`).
+
+      * Participant scope derived from `classifyMarketFamilyForGrading` — the
+      repository's single existing definition of which markets name a
+      participant — rather than a second private string heuristic. An
+      unrecognised market key fails closed.
+
+      * When no valid offer exists the pick is preserved and edge is recorded as
+      unavailable with a specific reason (`no-sport-scope`, `no-event-scope`,
+      `no-fresh-offer`, `offer-participant-unattributed`, `no-provider-offer`).
+      No value is ever manufactured.
+
+
+      ## Acceptance
+
+
+      * No stale, cross-sport, cross-event or cross-participant offer can
+      influence a pick.
+
+      * Regression coverage for each of those dimensions plus the missing-offer
+      case, with a passing control so the suite cannot pass by matching nothing.
+
+      * A mutation battery proving each control fails on the condition it names.
+
+
+      ## Out of scope
+
+
+      The two existing production records carrying fabricated values. Their
+      correction is prepared separately and is owner-authorized; this lane
+      writes no production data.
+  guardrails: []
+  non_goals:
+    - The two existing production records carrying fabricated values. Their
+      correction is prepared separately and is owner-authorized; this lane
+      writes no production data.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Defect (confirmed in production)
+
+      Two picks submitted four days apart — different sports, different events,
+      different selections — both carry `marketProbability: 0.478261` to six
+      decimal places, both claiming `realEdgeSource: "sgo"`,
+      `providerCoverageState: "sgo"`, `method: "market-devigged"`, `bookCount:
+      1`.
+
+
+      The cause: `findLatestByMarketKey(key, provider?, participant?)` treated
+      an omitted argument as "no filter" rather than "no match". A September NFL
+      moneyline was therefore priced off a 75-day-old June MLB moneyline offer —
+      the only rows with a matching market key, since production ingestion has
+      been parked since 2026-06-30.
+
+
+      Harm reached beyond display: `kellySizing.recommended_units` of 40 and 50,
+      and a `strongly-contrarian` `contrarySignal` asserting divergence from a
+      market that was never read.
+    - >-
+      Repair
+
+      * `ProviderOfferRepository.findLatestByMarketKey` becomes
+      `findLatestScopedOffer(criteria)`, where every discriminating predicate is
+      required and `undefined` is inadmissible rather than unfiltered.
+
+      * A 6-hour provider freshness window (`PROVIDER_OFFER_MAX_AGE_MS`).
+
+      * Participant scope derived from `classifyMarketFamilyForGrading` — the
+      repository's single existing definition of which markets name a
+      participant — rather than a second private string heuristic. An
+      unrecognised market key fails closed.
+
+      * When no valid offer exists the pick is preserved and edge is recorded as
+      unavailable with a specific reason (`no-sport-scope`, `no-event-scope`,
+      `no-fresh-offer`, `offer-participant-unattributed`, `no-provider-offer`).
+      No value is ever manufactured.
+    - >-
+      Acceptance
+
+      * No stale, cross-sport, cross-event or cross-participant offer can
+      influence a pick.
+
+      * Regression coverage for each of those dimensions plus the missing-offer
+      case, with a passing control so the suite cannot pass by matching nothing.
+
+      * A mutation battery proving each control fails on the condition it names.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1898/edge-provenance-an-offer-may-back-a-pick-only-on-exact
+    title: "Edge provenance: an offer may back a pick only on exact
+      sport/event/market/participant match inside the freshness window"
+    description: >-
+      ## Defect (confirmed in production)
+
+
+      Two picks submitted four days apart — different sports, different events,
+      different selections — both carry `marketProbability: 0.478261` to six
+      decimal places, both claiming `realEdgeSource: "sgo"`,
+      `providerCoverageState: "sgo"`, `method: "market-devigged"`, `bookCount:
+      1`.
+
+
+      The cause: `findLatestByMarketKey(key, provider?, participant?)` treated
+      an omitted argument as "no filter" rather than "no match". A September NFL
+      moneyline was therefore priced off a 75-day-old June MLB moneyline offer —
+      the only rows with a matching market key, since production ingestion has
+      been parked since 2026-06-30.
+
+
+      Harm reached beyond display: `kellySizing.recommended_units` of 40 and 50,
+      and a `strongly-contrarian` `contrarySignal` asserting divergence from a
+      market that was never read.
+
+
+      ## Repair
+
+
+      * `ProviderOfferRepository.findLatestByMarketKey` becomes
+      `findLatestScopedOffer(criteria)`, where every discriminating predicate is
+      required and `undefined` is inadmissible rather than unfiltered.
+
+      * A 6-hour provider freshness window (`PROVIDER_OFFER_MAX_AGE_MS`).
+
+      * Participant scope derived from `classifyMarketFamilyForGrading` — the
+      repository's single existing definition of which markets name a
+      participant — rather than a second private string heuristic. An
+      unrecognised market key fails closed.
+
+      * When no valid offer exists the pick is preserved and edge is recorded as
+      unavailable with a specific reason (`no-sport-scope`, `no-event-scope`,
+      `no-fresh-offer`, `offer-participant-unattributed`, `no-provider-offer`).
+      No value is ever manufactured.
+
+
+      ## Acceptance
+
+
+      * No stale, cross-sport, cross-event or cross-participant offer can
+      influence a pick.
+
+      * Regression coverage for each of those dimensions plus the missing-offer
+      case, with a passing control so the suite cannot pass by matching nothing.
+
+      * A mutation battery proving each control fails on the condition it names.
+
+
+      ## Out of scope
+
+
+      The two existing production records carrying fabricated values. Their
+      correction is prepared separately and is owner-authorized; this lane
+      writes no production data.
+    captured_at: 2026-09-14T00:39:29.381Z
+    description_sha256: fe734d338804884bc61d933e0d287dc5f7ea91f0486f8c5cd43b904521ef28ed
+  contract_hash: 9d70217c210e1c953fe41d257c78ba90804cb87db0bb47d65c6e0cf6225495c0
