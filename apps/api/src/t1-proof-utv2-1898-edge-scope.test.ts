@@ -45,6 +45,7 @@ import { randomUUID } from 'node:crypto';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
+  createPrivilegedClient,
   createServiceRoleDatabaseConnectionConfig,
   type ProviderOfferUpsertInput,
   type RepositoryBundle,
@@ -71,16 +72,72 @@ const SPORT = 'NBA';
 const EVENT = `utv2-1898-evt-${RUN_ID}`;
 const MARKET = 'points-all-game-ou';
 const PARTICIPANT = `utv2-1898-player-${RUN_ID}`;
+// `provider_key` is a sportsbook id, not a data-provider name:
+// `provider_offer_history_provider_key_fkey` is
+// `FOREIGN KEY (provider_key) REFERENCES sportsbooks(id)` on every daily
+// partition. Production carries `sgo` as a sportsbooks row (display_name
+// "SGO", active false) and all 497,365 of its `provider_offer_current` rows
+// use it, so this is the value the real write path uses.
 const PROVIDER = 'sgo';
 
 let repositories: RepositoryBundle;
 
-before(() => {
+/**
+ * Seed the one reference row the offer FK requires.
+ *
+ * Staging's reference seed is partial: `sports` (9), `market_types` (133) and
+ * `participants` (136) are populated while `sportsbooks` is EMPTY. Because
+ * every `provider_offer_history` partition FKs `provider_key` to
+ * `sportsbooks(id)`, no provider offer can be written to staging at all until
+ * that row exists — which is why no staging suite in this repository has ever
+ * exercised the offer write path. The first run of this proof failed for
+ * exactly that reason, on all five tests, with
+ * `violates foreign key constraint "provider_offer_history_provider_key_fkey"`.
+ *
+ * Seeding it here rather than by hand keeps the proof reproducible: a fresh
+ * staging project runs it green without an out-of-band SQL step.
+ *
+ * The row mirrors production byte for byte, including `active: false`. That is
+ * load-bearing rather than cosmetic — `DatabaseReferenceDataRepository.getCatalog`
+ * filters `.eq('active', true)`, so an inactive row stays invisible to the
+ * Smart Form catalog and `server.test.ts`'s assertion that `sgo` is absent from
+ * it still holds. Nothing here activates SGO or any provider key.
+ *
+ * The client comes from `createPrivilegedClient` — the sole exemption in
+ * `scripts/ci/privileged-db-client-guard.ts` rule 3, which refuses any path
+ * from a `pnpm test` entrypoint to a raw driver constructor. It also asserts
+ * target identity, so this refuses to run against production rather than
+ * silently writing a reference row there.
+ */
+before(async () => {
   if (skipReason) return;
   const env = loadEnvironment();
   repositories = createDatabaseRepositoryBundle(
     createServiceRoleDatabaseConnectionConfig(env),
   );
+
+  const client = createPrivilegedClient(
+    env.SUPABASE_URL as string,
+    env.SUPABASE_SERVICE_ROLE_KEY as string,
+    undefined,
+    'UTV2-1898 live-DB proof: sportsbooks FK prerequisite for provider offers',
+  );
+  const { error } = await client.from('sportsbooks').upsert(
+    [
+      {
+        id: PROVIDER,
+        display_name: 'SGO',
+        sort_order: 12,
+        active: false,
+      },
+    ],
+    { onConflict: 'id', ignoreDuplicates: true },
+  );
+  if (error) {
+    throw new Error(
+      `Failed to seed sportsbooks FK prerequisite '${PROVIDER}': ${error.message}`,
+    );
+  }
 });
 
 function offer(
