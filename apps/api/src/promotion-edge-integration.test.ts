@@ -1027,6 +1027,14 @@ test('computeRealEdge returns provenance with method and providerCoverageState',
     selection: 'Over',
     submittedOdds: -110,
     providerOffers: repos.providerOffers,
+    // UTV2-1898: a fully-resolved scope, so these cases still exercise the
+    // tier they were written for rather than short-circuiting on scope.
+    scope: {
+      sportKey: 'NBA',
+      providerEventId: 'evt-1',
+      providerParticipantId: 'player-1',
+      now: new Date(),
+    },
   });
 
   assert.ok(result.provenance, 'provenance must be present');
@@ -1056,6 +1064,14 @@ test('computeRealEdge: empty marketKey classifies as no-market-key without attem
     selection: 'Over',
     submittedOdds: -110,
     providerOffers: repos.providerOffers,
+    // UTV2-1898: a fully-resolved scope, so these cases still exercise the
+    // tier they were written for rather than short-circuiting on scope.
+    scope: {
+      sportKey: 'NBA',
+      providerEventId: 'evt-1',
+      providerParticipantId: 'player-1',
+      now: new Date(),
+    },
   });
 
   assert.equal(result.marketSource, 'confidence-delta');
@@ -1073,6 +1089,14 @@ test('computeRealEdge: moneyline with empty selection classifies as no-participa
     selection: '   ',
     submittedOdds: -110,
     providerOffers: repos.providerOffers,
+    // UTV2-1898: a fully-resolved scope, so these cases still exercise the
+    // tier they were written for rather than short-circuiting on scope.
+    scope: {
+      sportKey: 'NBA',
+      providerEventId: 'evt-1',
+      providerParticipantId: 'player-1',
+      now: new Date(),
+    },
   });
 
   assert.equal(result.marketSource, 'confidence-delta');
@@ -1085,7 +1109,7 @@ test('computeRealEdge: a thrown exception classifies as computation-error, not a
     resolveProviderMarketKey: async () => {
       throw new Error('simulated DB failure');
     },
-    findLatestByMarketKey: async () => null,
+    findLatestScopedOffer: async () => null,
   } as unknown as import('@unit-talk/db').ProviderOfferRepository;
 
   const result = await computeRealEdge({
@@ -1094,6 +1118,12 @@ test('computeRealEdge: a thrown exception classifies as computation-error, not a
     selection: 'Over',
     submittedOdds: -110,
     providerOffers: throwingProviderOffers,
+    scope: {
+      sportKey: 'NBA',
+      providerEventId: 'evt-1',
+      providerParticipantId: 'player-1',
+      now: new Date(),
+    },
   });
 
   assert.equal(result.marketSource, 'confidence-delta', 'must fail closed to confidence-delta, never crash upward');
@@ -1106,9 +1136,13 @@ test('enrichPickAtPromotionTime: bounded recovery upgrades confidence-only domai
   const now = new Date().toISOString();
   await repos.providerOffers.upsertBatch([{
     providerKey: 'sgo',
-    providerMarketKey: 'player-points-ou',
+    // UTV2-1898: a canonical player-prop key with the participant it prices.
+    // The previous fixture used a provider-native key and a NULL participant,
+    // which is the shape the repair refuses — an offer that prices one player
+    // but names none cannot be attributed to this pick's selection.
+    providerMarketKey: 'points-all-game-ou',
     providerEventId: 'test-event-1379',
-    providerParticipantId: null,
+    providerParticipantId: 'nba-player-1379',
     sportKey: 'NBA',
     line: null,
     overOdds: -110,
@@ -1123,7 +1157,7 @@ test('enrichPickAtPromotionTime: bounded recovery upgrades confidence-only domai
 
   const pick = {
     id: 'pick-recovery',
-    market: 'player-points-ou',
+    market: 'points-all-game-ou',
     selection: 'Over',
     odds: -110,
     confidence: 0.6,
@@ -1131,6 +1165,14 @@ test('enrichPickAtPromotionTime: bounded recovery upgrades confidence-only domai
       // Confidence-only domainAnalysis, exactly the DEBT-019 no-op condition:
       // present but never received market-backed real edge.
       domainAnalysis: { edge: 0.1, confidenceDelta: 0.1 },
+      // UTV2-1898: recovery re-derives under the scope the pick was submitted
+      // with. Without a recorded scope there is nothing to look up against,
+      // and manufacturing one at promotion time is the defect being removed.
+      edgeScope: {
+        sportKey: 'NBA',
+        providerEventId: 'test-event-1379',
+        providerParticipantId: 'nba-player-1379',
+      },
     },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
@@ -1154,6 +1196,13 @@ test('enrichPickAtPromotionTime: recovery fails closed and refreshes fallbackRea
     confidence: 0.6,
     metadata: {
       domainAnalysis: { edge: 0.1, confidenceDelta: 0.1 },
+      // A fully-resolved scope, so this still tests "scope is fine, the market
+      // has no coverage" rather than short-circuiting on a missing dimension.
+      edgeScope: {
+        sportKey: 'NBA',
+        providerEventId: 'test-event-1379',
+        providerParticipantId: null,
+      },
     },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
@@ -1161,6 +1210,42 @@ test('enrichPickAtPromotionTime: recovery fails closed and refreshes fallbackRea
   const domainAnalysis = enriched.metadata['domainAnalysis'] as Record<string, unknown>;
   assert.equal(domainAnalysis['realEdge'], undefined, 'must not fabricate market-backed edge with no provider data');
   assert.equal(domainAnalysis['fallbackReason'], 'no-provider-offer', 'fallback reason must reflect this attempt');
+});
+
+test('UTV2-1898: enrichPickAtPromotionTime refuses to recover edge for a pick carrying no recorded scope', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const now = new Date().toISOString();
+  // An offer that WOULD have matched under the old unscoped lookup.
+  await repos.providerOffers.upsertBatch([{
+    providerKey: 'sgo',
+    providerMarketKey: 'player-points-ou',
+    providerEventId: 'some-other-event',
+    providerParticipantId: null,
+    sportKey: 'NBA',
+    line: null,
+    overOdds: -110,
+    underOdds: -110,
+    devigMode: 'PAIRED' as const,
+    isOpening: false,
+    isClosing: false,
+    snapshotAt: now,
+    idempotencyKey: `sgo:player-points-ou:some-other-event:${now}`,
+    bookmakerKey: null,
+  }]);
+
+  const pick = {
+    id: 'pick-unscoped',
+    market: 'player-points-ou',
+    selection: 'Over',
+    odds: -110,
+    confidence: 0.6,
+    metadata: { domainAnalysis: { edge: 0.1, confidenceDelta: 0.1 } },
+  } as unknown as import('@unit-talk/contracts').CanonicalPick;
+
+  const enriched = await enrichPickAtPromotionTime(pick, repos.providerOffers);
+  const domainAnalysis = enriched.metadata['domainAnalysis'] as Record<string, unknown>;
+  assert.equal(domainAnalysis['realEdge'], undefined, 'an unscoped pick must not acquire market edge');
+  assert.equal(domainAnalysis['fallbackReason'], 'no-sport-scope');
 });
 
 test('enrichPickAtPromotionTime: recovery does not run without a providerOffers repository (bounded, opt-in)', async () => {

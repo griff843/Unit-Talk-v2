@@ -79,6 +79,7 @@ import type {
   ProviderOfferMergeInput,
   ProviderOfferMergeResult,
   ProviderOfferRepository,
+  ScopedProviderOfferLookup,
   ProviderOfferStageInput,
   ProviderOfferStageResult,
   ProviderOfferUpsertInput,
@@ -1717,19 +1718,17 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       );
   }
 
-  async findLatestByMarketKey(
-    marketKey: string,
-    providerKey?: string,
-    providerParticipantId?: string | null,
+  async findLatestScopedOffer(
+    criteria: ScopedProviderOfferLookup,
   ): Promise<ProviderOfferRecord | null> {
     const matches = Array.from(this.currentOffers.values())
       .filter(
         (o) =>
-          o.provider_market_key === marketKey &&
-          (providerKey ? o.provider_key === providerKey : true) &&
-          (providerParticipantId === undefined
-            ? true
-            : (o.provider_participant_id ?? null) === providerParticipantId),
+          o.provider_market_key === criteria.providerMarketKey &&
+          (o.sport_key ?? null) === criteria.sportKey &&
+          o.provider_event_id === criteria.providerEventId &&
+          (o.provider_participant_id ?? null) === criteria.providerParticipantId &&
+          (criteria.providerKey ? o.provider_key === criteria.providerKey : true),
       )
       .sort((left, right) =>
         compareProviderOfferRecordsDescending(left, right),
@@ -5291,23 +5290,27 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     return data ?? [];
   }
 
-  async findLatestByMarketKey(
-    marketKey: string,
-    providerKey?: string,
-    providerParticipantId?: string | null,
+  async findLatestScopedOffer(
+    criteria: ScopedProviderOfferLookup,
   ): Promise<ProviderOfferRecord | null> {
+    // UTV2-1898: every discriminating predicate is unconditional. There is no
+    // branch that can drop one, because a dropped predicate widens the match
+    // set instead of emptying it.
     let query = fromUntyped(this.client, 'provider_offer_current')
       .select('*')
-      .eq('provider_market_key', marketKey)
+      .eq('provider_market_key', criteria.providerMarketKey)
+      .eq('sport_key', criteria.sportKey)
+      .eq('provider_event_id', criteria.providerEventId)
       .order('snapshot_at', { ascending: false })
       .limit(1);
 
-    if (providerKey) {
-      query = query.eq('provider_key', providerKey);
-    }
+    query =
+      criteria.providerParticipantId === null
+        ? query.is('provider_participant_id', null)
+        : query.eq('provider_participant_id', criteria.providerParticipantId);
 
-    if (providerParticipantId !== undefined) {
-      query = query.eq('provider_participant_id', providerParticipantId);
+    if (criteria.providerKey) {
+      query = query.eq('provider_key', criteria.providerKey);
     }
 
     const { data, error } = await (query.maybeSingle() as unknown as Promise<{
@@ -5317,7 +5320,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     if (error) {
       throw new Error(
-        `Failed to find latest offer by market key: ${error.message}`,
+        `Failed to find latest scoped provider offer: ${error.message}`,
       );
     }
 
