@@ -1,11 +1,93 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-14 (eighth pass, against `main` `49651357d`)
+**Last reconciled against live truth:** 2026-09-14 (ninth pass, against `main` `269a336cc`)
 **Learned archive:** [`plan-lessons.md`](./plan-lessons.md) — read on demand, not at session start.
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
+
+---
+
+## Ninth pass, 2026-09-14 — the repaired edge path was deployed, accepted on a fresh pick, and the legacy rows corrected
+
+Three things happened since the eighth pass measured `49651357d`, and they happened in the order PM
+set rather than the order this page had proposed. The ordering is the finding.
+
+| Change | What it was | The claim it falsified |
+|---|---|---|
+| **Deploy dispatched and succeeded** — run `34858627673`, shipping `a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6` | Griff took reserved decision 8 a second time, shipping UTV2-1898's edge-provenance scope repair | The eighth pass's production column for the edge path: the repair was merged and not running. It is running, and the running process says so itself. |
+| **Griff submitted a fresh non-moneyline Track Only pick** — `04174f12`, NFL spread | The acceptance the eighth pass named as step 3, performed on the new release | Two things at once: that the honest-fallback guarantee was untested outside moneyline, and — decisively — one clause of the correction packet this page had staged. |
+| **The three legacy rows were corrected** in one guarded transaction | `dfcd9486`, `b534ba0d`, `29da425a` now carry honest `confidence-delta` provenance | The eighth pass's statement that the three production rows claim `realEdgeSource: 'sgo'` against offers that never scoped to them. They no longer do. |
+
+Full evidence: **`docs/05_operations/PRODUCTION_ACCEPTANCE_2026-09-14.md`**. The measured summary:
+
+| pick | market | score | source | hasRealEdge | books | fallbackReason | contrary | domain keys |
+|---|---|---|---|---|---|---|---|---|
+| `dfcd9486` | moneyline | 42.75 | confidence-delta | false | 0 | no-event-scope | mildly | 8 |
+| `b534ba0d` | moneyline | 48.02 | confidence-delta | false | 0 | no-event-scope | strongly | 8 |
+| `29da425a` | spread | 42.28 | confidence-delta | false | 0 | no-event-scope | **removed** | 8 |
+| `04174f12` | spread | 42.75 | confidence-delta | false | 0 | no-event-scope | mildly | 8 |
+
+The governed cohort `metadata ? 'distributionMode'` is now **4**, and **4 of 4** carry honest
+provenance. Three rows were written; `04174f12` retains its own creation timestamp, which is what
+proves the transaction did not touch it.
+
+### The sequencing PM imposed is what caught a real error, and that is the lesson
+
+This page's eighth pass recorded Griff's original sequencing verbatim — *"deploy repair first,
+correct rows second, verify with a new non-moneyline submission third."* PM's authorization moved
+verification **ahead of** correction: deploy, verify the release, take a fresh pick, run the
+acceptance query, and only then apply the correction.
+
+The staged packet asserted `selectedOffer: present → removed`. The acceptance query measured
+`jsonb_typeof(metadata->'selectedOffer') = 'null'` on the fresh pick *and* on all three targets —
+the key is always present with a JSON-null value, on both the repaired path and the legacy rows.
+Under the original ordering the correction would have deleted a key the repaired code actually
+writes, and the corrected rows would have diverged from live behaviour in a way no later reader
+could distinguish from a code change. The clause was dropped; `selectedOffer` was not touched.
+
+**The generalisable rule**: a correction packet derived offline is a prediction, and the cheapest
+test of it is the live system's own output on an equivalent input. Derive against the repaired code
+if you must, but verify against the running one before writing.
+
+A second, quieter confirmation came from the same pick. Its inputs are identical to row 1's
+*corrected* inputs, and the live repaired system computed `promotion_score = 42.75` — exactly the
+value derived offline. The derivation method was validated by the system rather than by its author.
+
+### What this changes about readiness: the number stays, the honesty arrives
+
+Dimension 2's market-backed edge attribution was **0.00%** in
+`READINESS_MEASUREMENT_2026-09-14.md` and is **0.00%** now. The verdict does not move, and neither
+does any other: Dim 1 FAIL, Dim 2 FAIL, Dim 3 UNKNOWN, Dim 4 UNKNOWN, Dim 5 FAIL, Dim 6 FAIL,
+`overall_pass: false`.
+
+What changed is that the zero is now *honest* rather than accidental. Before the correction, a naive
+reading of those rows said 100% market-backed; the ledger said 0% because it checked the offers
+rather than the claim. Now the rows themselves say what the ledger says. **Nothing here is an
+argument that readiness improved** — it is an argument that the data stopped lying.
+
+### The force-promote finding is now filed, not merely recorded
+
+The eighth pass and the Milestone 1 section both record the `force_promote` /
+`smart-form submissions route directly to best-bets` mechanism as *recorded rather than filed*,
+under the ratified filing threshold. **PM has now explicitly directed that it be staffed**, which
+satisfies threshold rule 1, and two Linear searches (including archived) found no existing canonical
+owner, so rule 2 does not attach it elsewhere.
+
+It is filed as **UTV2-1900**, `tier:T3`, state `Needs PM Decision`:
+*force_promote routes every Smart Form submission to best-bets on the strength of its source.* All
+four cohort picks are `promotion_status = qualified`, `promotion_target = best-bets` at scores
+42.28–48.02 against `best-bets-v2`'s `minimumScore: 70`. Under Track Only this reaches nothing; it
+is a policy question about what happens under `delivery-eligible`, and it is decided there.
+
+### Containment, delivery and SGO — measured unchanged
+
+`syndicate_machine_mode.validated → mode: parked` before and after. Zero `distribution_outbox`,
+`settlement_records` and `execution_intents` rows for any cohort pick; `distribution_outbox` holds
+5,747 rows with the newest at **2026-07-30 20:04:41**, unchanged by any of this. No SGO key was
+read, tested or updated. No DDL, no deletions, no containment change. The three-row correction was
+the only authorized production write and that authorization is now spent.
 
 ---
 
