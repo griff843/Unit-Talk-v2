@@ -1,0 +1,301 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1898",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "5dd5de31d1af1e77559dcab281d7b5df2cef510b",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "source_sha",
+    "note": "5dd5de31d1af1e77559dcab281d7b5df2cef510b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1898/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the anchor does not move when this file lands.",
+    "bound_at": "2026-09-14T01:32:13.797Z",
+    "ci_sentinels": {
+      "run_id": 34795218113,
+      "run_attempt": 1,
+      "head_sha": "5dd5de31d1af1e77559dcab281d7b5df2cef510b",
+      "verify": {
+        "job_id": 103828986897,
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "job_id": 103826857790,
+        "conclusion": "success"
+      },
+      "note": "Both G6 contexts are green on the same run and the same head, which is also the execution anchor: the proof commit that carries this file touches only docs/06_status/proof/UTV2-1898/ and is proof-prefix exempt for the binding validator. Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. At the previous head d32092e58 both of these jobs were RED for one shared cause -- verify ends at test:live-db, so the empty staging sportsbooks table failed them together."
+    }
+  },
+  "what_this_lane_repairs": {
+    "defect": "Two production picks four days apart — different sports, different events, different selections — carried the identical metadata.marketProbability 0.478261 and both claimed realEdgeSource 'sgo'. The September NFL moneyline was priced off a 75-day-old June MLB offer.",
+    "two_independent_causes": [
+      "findLatestByMarketKey(key, provider?, participant?) read an omitted argument as 'no filter' rather than 'no match'. Sport and event were never predicates at all.",
+      "Nothing bounded how old an offer could be. With ingestion parked since 2026-06-30, the June MLB rows are the only rows a market key can reach, so the wrong answer was also the only available one."
+    ],
+    "blast_radius_beyond_display": "metadata.kellySizing.recommended_units of 40 and 50 were computed off the borrowed probability, and metadata.contrarySignal reported strongly-contrarian divergence from a market that was never read.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/real-edge-scope-regression.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 22,
+          "pass": 22,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The scope regression suite: cross-sport, cross-event, cross-participant, stale, boundary-fresh, missing-offer, unattributed, the repository contract asserted directly, and the literal 75-day MLB reproduction asserting marketProbability !== 0.478261. It carries a passing control — a correctly matching offer still supplies market-backed edge — so the suite cannot pass by matching nothing."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 81,
+          "pass": 81,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Promotion scoring against the repaired edge, including that an unavailable edge scores the 0.35-weighted component at zero rather than off another sport."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/submission-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 96,
+          "pass": 96,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The submission path, including that participant scope is taken from classifyMarketFamilyForGrading rather than a private string heuristic."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/golden-regression.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Golden fixtures. nba-trader-insights-win moves qualified/exclusive-insights/94.86 -> suppressed/59.04; that is the repair working, its edge had been market-backed only by an offer that did not match its scope."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/market-universe-materializer.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 21,
+          "pass": 21,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Market universe materialization under the scoped lookup."
+      }
+    ],
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 6250,
+        "pass": 6250,
+        "fail": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "note": "Run to completion in the lane worktree at 5dd5de31d1af1e77559dcab281d7b5df2cef510b."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: verify ends at test:live-db, which ci:assert-staging refuses without staging credentials. Its components — env:check, lint, type-check, build, test — are run individually above, and verify itself is exercised by the CI job of the same name on this head."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1898 --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 17,
+      "rules_matched": [
+        "lifecycle-fsm",
+        "promotion-scoring",
+        "ingestor-provider"
+      ],
+      "advisory_missing": [
+        "r4-fault-report [PM-gated]"
+      ]
+    },
+    "mutation_battery": {
+      "command": "scripted: for each mutation, apply a single-anchor edit, run the named suite, restore the file. Run alone — a concurrent suite would fail with this battery's assertions.",
+      "baseline": {
+        "real_edge_scope_regression": {
+          "tests": 22,
+          "pass": 22,
+          "fail": 0
+        },
+        "golden_regression": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0
+        }
+      },
+      "mutations": [
+        {
+          "id": "scope-1",
+          "file": "packages/db/src/runtime-repositories.ts",
+          "change": "sport predicate dropped from the scoped lookup",
+          "suite": "apps/api/src/real-edge-scope-regression.test.ts",
+          "exit": 1,
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 3 - sport is compared, not merely carried: an NFL scope does not match an MLB row even at the same event id",
+            "not ok 17 - the repository applies every discriminating predicate independently"
+          ]
+        },
+        {
+          "id": "scope-2",
+          "file": "packages/db/src/runtime-repositories.ts",
+          "change": "event predicate dropped from the scoped lookup",
+          "suite": "apps/api/src/real-edge-scope-regression.test.ts",
+          "exit": 1,
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 4 - an offer from a different event in the same sport cannot back the pick",
+            "not ok 17 - the repository applies every discriminating predicate independently"
+          ]
+        },
+        {
+          "id": "scope-3",
+          "file": "apps/api/src/real-edge-service.ts",
+          "change": "an unresolved participant reads as \"no filter\" again",
+          "suite": "apps/api/src/real-edge-scope-regression.test.ts",
+          "exit": 1,
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 12 - an unresolved participant refuses the lookup rather than matching any participant"
+          ]
+        },
+        {
+          "id": "fresh-1",
+          "file": "apps/api/src/real-edge-service.ts",
+          "change": "freshness window removed",
+          "suite": "apps/api/src/real-edge-scope-regression.test.ts",
+          "exit": 1,
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 6 - an in-scope offer outside the freshness window is refused as stale, not used"
+          ]
+        },
+        {
+          "id": "family-1",
+          "file": "apps/api/src/real-edge-service.ts",
+          "change": "participant scope narrowed back to moneyline only",
+          "suite": "apps/api/src/real-edge-scope-regression.test.ts",
+          "exit": 1,
+          "failing": 3,
+          "failing_assertions": [
+            "not ok 18 - a spread offer that names no participant is refused, not attributed to the pick",
+            "not ok 19 - a team_total_ou offer that names no participant is refused, not attributed to the pick",
+            "not ok 20 - a passing-yards-all-game-ou offer that names no participant is refused, not attributed to the pick"
+          ]
+        },
+        {
+          "id": "family-2",
+          "file": "apps/api/src/submission-service.ts",
+          "change": "submission re-derives participant scope from a string heuristic",
+          "suite": "apps/api/src/golden-regression.test.ts",
+          "exit": 1,
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 4 - nfl-suppressed-void stays golden"
+          ]
+        }
+      ],
+      "result": "6/6 turned a named test red",
+      "stated_limit": "Both repository mutations target the IN-MEMORY findLatestScopedOffer, because that is what these tests call. The Supabase implementation had no unit-test boundary at all. That is the hole this lane's new live-DB proof exists to close, and it is why the Proof Coverage Guard was substantively right rather than incidentally red — see runtime_proof."
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed — SELECT only, no write, no containment change",
+      "executed_at": "2026-09-14",
+      "observed": {
+        "dfcd9486_market_probability": 0.478261,
+        "b534ba0d_market_probability": 0.478261,
+        "identical_to_six_decimals": true,
+        "both_real_edge_source": "sgo",
+        "both_edge_provenance_method": "market-devigged",
+        "both_book_count": 1,
+        "newest_provider_offer": "2026-06-30"
+      },
+      "note": "The two picks are four days apart, in different sports, on different events, with different selections. The same market probability to six decimal places is the defect signature. Nothing was written; the correction to these two rows is prepared separately and is a reserved decision awaiting Griff."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PASS",
+    "job": "Writable DB proof (staging only)",
+    "workflow_run_id": 34795218113,
+    "job_id": 103826857790,
+    "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34795218113/job/103826857790",
+    "head_sha": "5dd5de31d1af1e77559dcab281d7b5df2cef510b",
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "started_at": "2026-09-14T01:13:32Z",
+    "conclusion": "success",
+    "suite": "apps/api/src/t1-proof-utv2-1898-edge-scope.test.ts, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "what_it_proves": [
+      "A row written through DatabaseProviderOfferRepository.upsertBatch is reachable through provider_offer_current, which is a real table populated by a second identity_key-keyed upsert rather than a view over history.",
+      "Each of the four discriminating predicates (sport, event, market, participant) discriminates in SQL: four near-miss rows differing in exactly one dimension are each refused, with a control proving those same rows exist and are findable by their own scope.",
+      "PostgREST .is(participant, null) matches SQL NULL and .eq(id) does not match the NULL row -- neither direction is provable by the InMemory '== null' predicate.",
+      "The snapshot_at Postgres returns is Date.parse-able, so PROVIDER_OFFER_MAX_AGE_MS comparison is not silently NaN.",
+      "The current row carries the newest snapshot in the batch (7h-old vs fresh)."
+    ],
+    "first_run_failure_and_cause": {
+      "failed_at_head": "d32092e5860515d87d4a14254307034e0ff6beb2",
+      "run": 34794344026,
+      "error": "insert or update on table \"provider_offer_history_p20260914\" violates foreign key constraint \"provider_offer_history_provider_key_fkey\"",
+      "root_cause": "Staging's reference seed is partial: sportsbooks was EMPTY (0 rows) while sports (9), market_types (133) and participants (136) were populated. Every provider_offer_history partition FKs provider_key to sportsbooks(id), so NO provider offer could be written to staging by any value. 'sgo' was never the wrong constant -- production carries it as a sportsbooks row and all 497,365 production provider_offer_current rows use it.",
+      "fix": "The proof seeds its own FK prerequisite in before(), mirroring the production row including active:false, via createPrivilegedClient (which asserts target identity and refuses production). A fresh staging project now runs it green with no out-of-band SQL step."
+    },
+    "independent_row_confirmation": {
+      "target": "staging xskgrzbteyqdufktjrjx, read-only SELECT after the job concluded",
+      "sportsbooks_rows": 1,
+      "provider_offer_history_rows_for_this_lane": 9,
+      "provider_offer_current_rows_for_this_lane": 7,
+      "distinct_namespaced_events": 4,
+      "note": "Read back from the database rather than from the job's exit code, so a skipped suite could not present as a pass."
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off — no provider key read, tested or activated",
+    "member_delivery": "disabled — unchanged",
+    "note": "This lane changes how an edge is computed. It writes nothing to production and changes no containment setting."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "File scope lock / Return review packet",
+      "cause": "out-of-scope files: apps/api/src/t1-proof-utv2-1898-edge-scope.test.ts, docs/05_operations/db-writer-classification.json",
+      "disposition": "Correct, not defective. file_scope_lock is pinned at lane-start and an agent cannot widen it. Both paths exist because the Proof Coverage Guard required a live-DB proof this lane genuinely owed, and the live-DB guard then refuses an unclassified credentialed DB test by name. Clearing it needs a two-path scope-override/v1 from CODEOWNERS pinned to this head."
+    },
+    {
+      "check": "Shadow Parity Check",
+      "cause": "[assert-unmodified] REFUSED: this pull request modifies code that a production-credentialed job executes. modified: package.json",
+      "disposition": "Not repaired, deliberately. pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on any *.test.ts not reachable from a package script, and the only wiring point for these files is package.json — so wiring a new test necessarily trips this path-triggered gate. The alternative was folding 22 regression tests and a 5-test live proof into already-wired files purely to silence a non-required check, which is restructuring the work to fit a gate. Non-required; recorded rather than worked around."
+    },
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair",
+      "disposition": "Reserved. Requires the t1-approved label AND a pm-verdict/v1 APPROVED comment from CODEOWNERS, both pinned to this head."
+    }
+  ]
+}
