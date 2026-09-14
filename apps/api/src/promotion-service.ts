@@ -197,13 +197,17 @@ async function tryPromotionTimeRealEdgeRecovery(
 
   let realEdgeResult;
   try {
-    const { computeRealEdge } = await import('./real-edge-service.js');
+    const { computeRealEdge, readPersistedRealEdgeScope } = await import('./real-edge-service.js');
     realEdgeResult = await computeRealEdge({
       confidence: pick.confidence,
       marketKey: pick.market,
       selection: pick.selection,
       submittedOdds: pick.odds,
       providerOffers,
+      // UTV2-1898: re-derive under the scope the pick was submitted with. A
+      // pick that carries no recorded scope gets an honest fallbackReason
+      // instead of an unscoped market lookup.
+      scope: readPersistedRealEdgeScope(pick.metadata as Record<string, unknown> | undefined),
     });
   } catch {
     // UTV2-1379: fail closed — do not let an exception escape into a silent

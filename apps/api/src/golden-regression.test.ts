@@ -36,6 +36,11 @@ type GoldenScenario = {
   expectedPersisted: Array<ReturnType<typeof normalizePersistedSettlement>>;
 };
 
+// UTV2-1898: provider offers now expire. A fixture pinned to a literal past
+// date would be refused as stale, which would make this suite assert the
+// freshness window rather than the promotion behaviour it exists to lock.
+const GOLDEN_OFFER_SNAPSHOT_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
 const GOLDEN_SCENARIOS: GoldenScenario[] = [
   {
     id: 'nba-trader-insights-win',
@@ -52,6 +57,11 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       metadata: {
         sport: 'NBA',
         eventName: 'Bulls vs Knicks',
+        // UTV2-1898: the scope the seeded offer must match. Before the scope
+        // repair this scenario matched that offer without declaring anything,
+        // which is the behaviour the repair removes.
+        providerEventId: 'evt-golden-nba-1',
+        providerParticipantId: 'player-golden-nba-1',
         promotionScores: { trust: 90, readiness: 88, uniqueness: 84, boardFit: 89 },
       },
     },
@@ -68,7 +78,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         devigMode: 'PAIRED',
         isOpening: false,
         isClosing: true,
-        snapshotAt: '2026-03-28T12:00:00.000Z',
+        snapshotAt: GOLDEN_OFFER_SNAPSHOT_AT,
         idempotencyKey: 'golden:nba:assists',
         bookmakerKey: null,
       },
@@ -89,7 +99,16 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       metadata: {
         sport: 'NBA',
         eventName: 'Bulls vs Knicks',
+        providerEventId: 'evt-golden-nba-1',
+        providerParticipantId: 'player-golden-nba-1',
         promotionScores: { trust: 90, readiness: 88, uniqueness: 84, boardFit: 89 },
+        // UTV2-1898: the scope the edge was computed under is recorded on the
+        // pick, so promotion-time re-derivation runs under the same scope.
+        edgeScope: {
+          sportKey: 'NBA',
+          providerEventId: 'evt-golden-nba-1',
+          providerParticipantId: 'player-golden-nba-1',
+        },
         domainAnalysis: {
           impliedProbability: 0.4,
           decimalOdds: 2.5,
@@ -236,9 +255,17 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.75,
         hasRealEdge: false,
         realEdgeBookCount: 0,
-        // UTV2-1379: fallbackReason is now the specific, provable cause (no
-        // offer row found in any tier) rather than the old generic literal.
-        edgeProvenance: { method: 'confidence-delta', providerCoverageState: 'none', fallbackReason: 'no-provider-offer' },
+        // UTV2-1379: fallbackReason is the specific, provable cause rather
+        // than a generic literal. UTV2-1898 makes it more specific still: this
+        // scenario names no event, so the lookup is refused for want of an
+        // event scope before any tier is attempted. "No offer exists" and "we
+        // had nothing to look one up by" are different operator signals.
+        edgeProvenance: { method: 'confidence-delta', providerCoverageState: 'none', fallbackReason: 'no-event-scope' },
+        // UTV2-1898: a player prop prices one player, and this scenario names
+        // none — so no participant scope is recorded at all. The key's absence
+        // means "never resolved" and refuses a lookup; a recorded `null` would
+        // mean "genuinely game-level" and would match a participant-NULL row.
+        edgeScope: { sportKey: 'NFL', providerEventId: null },
         band: 'SUPPRESS',
         contrarySignal: {
           contrarianism: 'consensus-fade',

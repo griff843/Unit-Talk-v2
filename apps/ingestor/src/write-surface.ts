@@ -35,7 +35,7 @@ export const INGESTOR_WRITE_SURFACE: Readonly<Record<string, string>> = Object.f
 export const INGESTOR_READ_SURFACE: ReadonlySet<string> = new Set([
   'providerOffers.findClosingLine',
   'providerOffers.findExistingCombinations',
-  'providerOffers.findLatestByMarketKey',
+  'providerOffers.findLatestScopedOffer',
   'providerOffers.findOpeningLine',
   'providerOffers.getCycleStatus',
   'providerOffers.listAliasLookup',
