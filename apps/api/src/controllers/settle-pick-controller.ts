@@ -2,7 +2,7 @@ import type { SettlementRequest } from '@unit-talk/contracts';
 import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { successResponse } from '../http.js';
-import { recordPickSettlement } from '../settlement-service.js';
+import { isEvidencePlanePick, recordPickSettlement } from '../settlement-service.js';
 import { postSettlementRecapIfPossible } from '../grading-service.js';
 import { loadEnvironment } from '@unit-talk/config';
 
@@ -39,7 +39,19 @@ export async function settlePickController(
 
   // Fire immediate per-pick Discord recap in non-production environments only.
   // Production relies on the scheduled batch recap (11 AM EST daily).
-  if (loadEnvironment().UNIT_TALK_APP_ENV !== 'production') {
+  //
+  // The `isEvidencePlanePick` guard mirrors `grading-service.ts`'s, and it is
+  // enforcement rather than optimisation. Today a recap on a Track Only pick is
+  // *structurally* inert — `resolveRecapChannel` requires a `sent`
+  // distribution_outbox row and a Track Only pick has none — but that is the
+  // absence of a delivery record, not a refusal to deliver. Relying on it would
+  // make non-delivery a property of the data, so the first Track Only pick that
+  // ever acquired an outbox row would start publishing. Publishing a recap for
+  // one is member delivery, which Track Only exists to make impossible.
+  if (
+    !isEvidencePlanePick(result.pickRecord) &&
+    loadEnvironment().UNIT_TALK_APP_ENV !== 'production'
+  ) {
     postSettlementRecapIfPossible(result.pickRecord, result.settlementRecord, repositories, {}).catch(
       () => undefined,
     );
