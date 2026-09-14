@@ -18,9 +18,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1892/evidence.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-09-13T07:45:37.360Z",
-  "heartbeat_at": "2026-09-13T07:52:01.160Z",
+  "heartbeat_at": "2026-09-14T00:34:30.617Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1892-merge-gate-work-identity.json",
