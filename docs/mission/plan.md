@@ -1,11 +1,109 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-13 (seventh pass, against `main` `99a35030b`)
+**Last reconciled against live truth:** 2026-09-14 (eighth pass, against `main` `49651357d`)
 **Learned archive:** [`plan-lessons.md`](./plan-lessons.md) — read on demand, not at session start.
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
+
+---
+
+## Eighth pass, 2026-09-14 — the readiness contract was measured for the first time
+
+Two things happened since the seventh pass measured `99a35030b`, and the first is the one that
+changes how this page must be read.
+
+| Change | What it was |
+|---|---|
+| **The six-dimension readiness measurement was actually run** against production at `2026-09-14 13:47:21.158824+00`, read-only. Full record: `docs/05_operations/READINESS_MEASUREMENT_2026-09-14.md` | The contract has existed since 2026-04-30 and its own §4 status table still carried the 2026-04-15/04-30 snapshot with three UNKNOWNs. Nobody had executed §5.3. |
+| **UTV2-1898 / #1576 merged at `415ba032d`, lane closed at `49651357d`** — the edge-provenance scoping repair | 12 commits, 7 container files, 0 migrations. Griff applied the T1 pair and merged. The push-triggered closeout failed on `G6` as it does for every route-B lane; the `issue_id`-only replay (run `34852355246`) closed it once `verify` (`104001241329`) and `Writable DB proof (staging only)` (`103995833948`) were both green on the merge SHA. |
+
+### The readiness contract does not pass, and now that is measured rather than assumed
+
+| Dim | Name | Verdict | Binding metric |
+|---|---|---|---|
+| 1 | Runtime Health | **FAIL** | worker uptime 0% (≥99%); 35 outbox rows stuck 45.8d (threshold 0) |
+| 2 | Score Provenance | **FAIL** | market-backed 0.00% (≥20%) |
+| 3 | Settlement / CLV | **UNKNOWN** | 0 settlements in the 30-day window — no threshold demonstrable |
+| 4 | Routing Trust | **UNKNOWN** | 0 top-tier picks — empty denominator |
+| 5 | Operator Surfaces | **FAIL** | all five surfaces built, none deployed |
+| 6 | Performance Evidence | **FAIL** | 0 settled picks against a ≥100 requirement |
+
+`overall_pass` cannot be true: §5.2 requires all six `threshold_pass` values true, four are false and
+two cannot be asserted. **An UNKNOWN blocks the gate exactly as a FAIL does** — a bundle cannot claim
+a threshold it did not demonstrate.
+
+**Three findings the measurement produced that no prior pass records.**
+
+1. **Dimension 2 would have read a false PASS.** All three picks in the 30-day window carry
+   `metadata.realEdgeSource = 'sgo'`. Read naively that is 100% attributed and 0% unknown — a pass.
+   `SCORE_PROVENANCE_STANDARD.md` line 34 is explicit that market-backed means `real-edge` and
+   `consensus-edge` *only*, so the true figure is **0.00%**. Those three `sgo` attributions are the
+   exact defect #1576 repairs. After deploy and correction they become `confidence-delta`, which is
+   also not market-backed — so the verdict is unchanged either way, and the repair makes the 0%
+   honest rather than accidental.
+2. **Three Dimension 1 metrics have no instrumentation at all.** Across all 61 production tables
+   there is no API-latency table and no circuit-breaker-state table. The two p99 thresholds and the
+   breaker-trip count cannot be evaluated by any query. That is not "not yet measured" — it is a
+   build item the contract requires and nothing on this page had ever named.
+3. **The 35 stuck outbox rows are canary residue, not live failures.** All target UTV2-1497 canaries
+   or `discord:canary`, written 2026-07-30. The metric is written as an absolute snapshot count, so
+   it fails as written. **Clearing them is reserved decision 1 and is not requested.**
+
+**Four of six dimensions are gated by things already reserved, and none by missing code.** Dim 1 and
+Dim 2 on containment — the contract's own minimum-path step 4 reads *"Run 30 days with
+`SYNDICATE_MACHINE_ENABLED=true`"*, so **the contract cannot pass under containment by its own
+construction**. Dim 3 and Dim 6 on the results supply. Dim 5 on deploying the Command Center.
+Dimension 6's ≥100 settled picks over 30 days is a **calendar floor** that §6 forbids satisfying by
+backfill or simulation: the clock cannot start until a results supply exists. No containment change
+is requested by this measurement.
+
+### The edge-repair sequence — three steps, in this order, and the order is load-bearing
+
+Griff's sequencing, recorded verbatim: *deploy repair first, correct rows second, verify with a new
+non-moneyline submission third.*
+
+**Step 1 — deploy the current `main` head.** Reserved decision 8. Packet prepared and re-measured
+at `49651357d`: the UTV2-1898 closeout commit moved `main` one commit and changed **0** container
+files, so the packet below is unchanged in substance and is now 13 commits rather than 12. Pin the
+dispatch to whatever `main` reads at the moment it is taken, not to a SHA written here — the
+readiness bot moves `main` on a schedule and every such commit is docs-only. Deployed is
+`8521670603a…` (run `34790972416`, 2026-09-13T23:53Z). 12 commits, **7 container files, 0
+migrations**: `promotion-service.ts`, `real-edge-service.ts`, `submission-service.ts`,
+`write-surface.ts`, `promotion.ts`, `repositories.ts`, `runtime-repositories.ts` — 533 insertions,
+84 deletions, all tracing to one implementation commit `51a764e68`. Containment surface verified
+untouched by grep rather than by assertion: no `deploy.yml`, compose, `.env`, entrypoint or
+kill-switch path in the diff, and no `SYNDICATE_MACHINE` / `ENABLED_TARGETS` / `AUTORUN` /
+`delivery_kill` / `distribution_outbox` / `SGO_API_KEY` token in any added line. Verified on `main`:
+the unfiltered `findLatestByMarketKey` lookup is gone (surviving only in two explanatory comments),
+`findLatestScopedOffer` appears in 9 files, `PROVIDER_OFFER_MAX_AGE_MS = 6h` at
+`real-edge-service.ts:64`, and all five refusal reasons are present.
+
+**Step 2 — the three-row correction.** Reserved decision 1, prepared as a single
+`BEGIN; … COMMIT;` with `updated_at` guards on every row, re-verified still valid: all three
+`updated_at` values match exactly and all three still carry the defect (`realEdgeSource: sgo`,
+`hasRealEdge: true`, `edgeProvenance.method: 'market-devigged'`, `edgeScope: null`). After-values
+were *derived offline* by running `createInMemoryRepositoryBundle()` + `processSubmission()` rather
+than hand-computed — promotion scores 42.7488 / 48.0192 / 42.2805, all `band: SUPPRESS`,
+`hasRealEdge: false`, `realEdgeSource: 'confidence-delta'`, `kellySizing: null`. **It must follow
+the deploy**, because correcting rows under the old code lets the defect regenerate.
+
+**New finding supporting the repair.** Picks 1 and 2 share `marketProbability = 0.478261` — an MLB
+Dodgers moneyline and an NFL Lions moneyline priced from the same borrowed offer. That is the exact
+literal value the merged proof asserts can no longer be produced.
+
+**Step 3 — a new non-moneyline submission.** Operator action. A spread, total or player prop, because
+the repair's guarantee is untested outside moneyline and the acceptance check that proves the repair
+shipped is that the new row carries `edgeProvenance.method = 'confidence-delta'` and **no**
+`deviggingResult`.
+
+### The force-promote finding now applies to all three picks, not one
+
+The seventh pass recorded `dfcd9486` as force-promoted past `best-bets-v2`'s own `minimumScore: 70`.
+Measured 2026-09-14: **all three** picks in the window are `promotion_status = qualified`,
+`promotion_target = best-bets`. Under Track Only this reaches nothing; it remains a Milestone 2
+question and is recorded rather than filed.
 
 ---
 
@@ -1727,6 +1825,23 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 Consolidated from Wave 0, in the order that unblocks the most work. **Items 1 and 2 both block the
 active milestone and neither substitutes for the other**: item 1 lets finished engineering land,
 item 2 makes already-landed engineering run. Every other item blocks only itself.
+
+**Added 2026-09-14 — the edge-repair sequence, three items that must be taken in this order.**
+They sit ahead of the numbered list below because two of the three are prepared in full and the
+third is a single operator action. The order is the whole point: correcting the rows before the
+repair is running lets the defect regenerate.
+
+| # | Action | Reserved | Prepared |
+|---|---|---|---|
+| A | **Dispatch `Deploy` on the current `main` head** (`49651357d` as measured 2026-09-14) | decision 8 | Packet measured and re-measured after the UTV2-1898 closeout: 13 commits, **7 container files, 0 migrations**, containment surface grep-verified untouched. The seven are `promotion-service.ts`, `real-edge-service.ts`, `submission-service.ts`, `write-surface.ts`, `promotion.ts`, `repositories.ts`, `runtime-repositories.ts` — identical to the set measured at `415ba032d`, because every commit since is docs or lane bookkeeping. Success criterion: after the dispatch, `git diff --name-only <deployed> origin/main` over `apps/**`/`packages/**`/`deploy/**` excluding tests returns 0 container files. |
+| B | **Apply the three-row correction** — only once A is live | decision 1 | One guarded `BEGIN; … COMMIT;`; every `updated_at` guard re-verified valid 2026-09-14; after-values derived offline through `processSubmission()`, never hand-computed. Success criterion: all three rows read `realEdgeSource: 'confidence-delta'`, `hasRealEdge: false`, `band: SUPPRESS`. |
+| C | **Submit one non-moneyline pick through the deployed form** — only once B is applied | operator action, not reserved | Success criterion: the new row carries `edgeProvenance.method = 'confidence-delta'` and **no** `deviggingResult`. |
+
+**And one item that is affirmatively *not* an ask.** The 2026-09-14 readiness measurement found four
+of six dimensions gated by containment or the results supply, and the contract's own minimum path
+requires `SYNDICATE_MACHINE_ENABLED=true`. **No containment change is requested**, and no clearing of
+the 35 canary outbox rows is requested — both are reserved and both would be production writes made
+to improve a number rather than to fix a defect.
 
 1. ~~**Dispatch `Deploy`.**~~ **Taken 2026-09-13T19:16Z** — run `34777196110` on `82cd1218f`, which also
    carries the merged manual Smart Form UI. What remains on this line is the acceptance in the seventh-pass
