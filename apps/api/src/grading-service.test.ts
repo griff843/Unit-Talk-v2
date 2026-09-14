@@ -4,10 +4,12 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
+import { normalizeMarketKey } from '@unit-talk/domain';
 import {
   runGradingPass,
   readEventStartTime,
   postSettlementRecapIfPossible,
+  classifyMarketFamilyForGrading,
   type GradingRetryState,
 } from './grading-service.js';
 import { recordEvidenceSettlement, recordGradedSettlement } from './settlement-service.js';
@@ -1864,14 +1866,194 @@ test('runGradingPass grades a legacy totals pick as a game-line market', async (
   assert.equal(detail.result, 'win');
 });
 
+async function createSpreadResultFixture(
+  options: {
+    actualValue?: number;
+    marketKey?: string;
+    line?: number;
+    attachParticipant?: boolean;
+  } = {},
+) {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      market: 'spread',
+      selection: 'Lakers',
+      line: options.line ?? -3.5,
+    });
+
+  const team = await repositories.participants.upsertByExternalId({
+    externalId: 'TEAM_LAL',
+    displayName: 'Lakers',
+    participantType: 'team',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+
+  const event = await repositories.events.upsertByExternalId({
+    externalId: `sgo:NBA:2026-04-04:${eventName}`,
+    sportId: 'NBA',
+    eventName,
+    eventDate: '2026-04-04',
+    status: 'completed',
+    metadata: trustedEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
+  });
+
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: team.id,
+    role: 'home',
+  });
+
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'NBA',
+      // Omitting teamId is how the participant-required skip is exercised; the
+      // resolver has nothing else to key a team off for a spread.
+      ...(options.attachParticipant === false ? {} : { teamId: team.id }),
+      team: 'Lakers',
+      eventName,
+    },
+  }));
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: team.id,
+    marketKey: options.marketKey ?? 'game_spread_margin',
+    actualValue: options.actualValue ?? 7,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  return { repositories, pickId, event, team };
+}
+
+test('classifyMarketFamilyForGrading declares spread a participant-required, line-using family', () => {
+  for (const key of ['spread', 'game_spread']) {
+    const rule = classifyMarketFamilyForGrading(key);
+    assert.equal(rule.family, 'game_spread');
+    assert.equal(rule.gradeable, true);
+    assert.equal(rule.usesLine, true);
+    assert.equal(rule.participantRequirement, 'required');
+    assert.equal(rule.participantType, 'team');
+  }
+});
+
+test('normalizeMarketKey feeds every spread alias into the spread family', () => {
+  // The aliases are the whole reason this family keys on two strings rather than
+  // one: `game-spread` and `game_spread` both normalize to `spread` upstream, so a
+  // family that matched only the raw submitted value would grade inconsistently.
+  for (const submitted of ['spread', 'game_spread', 'game-spread']) {
+    assert.equal(
+      classifyMarketFamilyForGrading(normalizeMarketKey(submitted)).family,
+      'game_spread',
+    );
+  }
+});
+
+test('runGradingPass settles a covered spread as a win', async () => {
+  // Lakers -3.5, attested margin +7 -> cover margin +3.5.
+  const { repositories, pickId } = await createSpreadResultFixture({
+    actualValue: 7,
+    line: -3.5,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.skipped, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
+test('a spread that fails to cover settles as a loss, and an exact push settles as push', async () => {
+  // The push row is the one that matters: exactly zero must not fall into the win
+  // branch, which is why the implementation is three branches rather than two.
+  for (const [actualValue, line, expected] of [
+    [2, -3.5, 'loss'],
+    [3, -3, 'push'],
+    [-2, 3.5, 'win'],
+    [-5, 3, 'loss'],
+    [-3, 3, 'push'],
+  ] as [number, number, string][]) {
+    const { repositories, pickId } = await createSpreadResultFixture({
+      actualValue,
+      line,
+    });
+    const result = await runGradingPass(repositories);
+    const detail = result.details.find((d) => d.pickId === pickId);
+    assert.ok(detail, `no detail for margin=${actualValue} line=${line}`);
+    assert.equal(
+      detail.outcome,
+      'graded',
+      `margin=${actualValue} line=${line} was not graded`,
+    );
+    assert.equal(
+      detail.result,
+      expected,
+      `margin=${actualValue} line=${line} expected ${expected}`,
+    );
+  }
+});
+
+test('a spread refuses any result market key but the dedicated attested-margin one', async () => {
+  // This is the load-bearing guard, not a defensive one, and the reachable case is
+  // narrower than it first looks. `resolveGradingMarketKeyCandidates` always seeds
+  // the candidate set with the *normalized* key, so a `game_results` row keyed
+  // plain `spread` is found by the lookup. Such a row carries an unattributed raw
+  // score: an actual_value of 7 is one team's points, not a margin, and grading it
+  // would invent a side that was never attested.
+  //
+  // A key outside the candidate set (`points-all-game-sp`) is a weaker test: it
+  // skips as `game_result_not_found` before the guard is ever consulted, so it
+  // would pass whether or not the guard existed.
+  const { repositories, pickId } = await createSpreadResultFixture({
+    marketKey: 'spread',
+    actualValue: 7,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(
+    String(detail.reason),
+    /^spread_result_market_key_unsupported: market_key=spread/,
+  );
+});
+
+test('a spread with no resolvable team skips as missing_participant_id', async () => {
+  const { repositories, pickId } = await createSpreadResultFixture({
+    attachParticipant: false,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.equal(detail.reason, 'missing_participant_id');
+  assert.equal(detail.marketFamily, 'game_spread');
+  assert.equal(detail.participantRequirement, 'required');
+});
+
 test('runGradingPass fails closed for unsupported game-line families', async () => {
-  // `spread` carries this assertion now. It used to be carried by `moneyline`, which
-  // is a real, participant-required family as of UTV2-1889 — so
-  // this test moved to a market that is still genuinely unsupported rather than
-  // being deleted along with the rule it was protecting.
+  // This assertion has now moved twice. It was carried by `moneyline` until
+  // UTV2-1889 made that a real family, then by `spread` until UTV2-1903 made this
+  // one real. Each time it moves to a market that is still genuinely unsupported
+  // rather than being deleted along with the rule it protects.
   const { repositories, pickId } = await createPostedGameLinePickFixture({
-    market: 'spread',
-    selection: 'LAL -3.5',
+    market: 'futures',
+    selection: 'Lakers to win the title',
     line: -3.5,
   });
 

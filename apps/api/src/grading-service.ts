@@ -82,6 +82,12 @@ const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
 // uninterpretable by this path.
 export const MONEYLINE_RESULT_MARKET_KEY = 'game_moneyline_win';
 
+// The attested *signed margin* for the resolved participant, and nothing else.
+// Deliberately distinct from the `-sp` game-line keys: those rows carry an
+// unattributed raw score, so a spread graded off one would invent a side that was
+// never attested. See the guard in the grading loop.
+export const SPREAD_RESULT_MARKET_KEY = 'game_spread_margin';
+
 // The attested win flag, and nothing else. A `Map` rather than a comparison chain so
 // that an unlisted value (a score, a NaN, a 2) has no branch to fall into and is
 // skipped by name instead of being coerced into a verdict.
@@ -116,7 +122,8 @@ export type GradeableMarketFamily =
   | 'player_prop'
   | 'team_total'
   | 'game_total'
-  | 'game_moneyline';
+  | 'game_moneyline'
+  | 'game_spread';
 
 export interface MarketFamilyRule {
   family: GradeableMarketFamily | 'unsupported';
@@ -382,6 +389,34 @@ export async function runGradingPass(
           continue;
         }
         gradedResult = moneylineOutcome;
+      } else if (marketRule.family === 'game_spread') {
+        // A spread is not an over/under. `inferSelectionSide('Chiefs -2.5')` returns
+        // null, so the over/under path below cannot express it; the outcome is read
+        // off an attested *signed margin* for the resolved participant instead.
+        //
+        // The market-key guard is load-bearing rather than defensive, for exactly the
+        // reason the moneyline guard above is: the candidate lookup can reach the
+        // `-sp` game-line keys, whose production rows carry an unattributed raw
+        // score. Grading a spread off one would invent a side that was never
+        // attested. Refusing any key but the dedicated one keeps the number's
+        // meaning unambiguous.
+        if (gameResult.market_key !== SPREAD_RESULT_MARKET_KEY) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: `spread_result_market_key_unsupported: market_key=${gameResult.market_key} for result=${gameResult.id}`,
+          });
+          continue;
+        }
+
+        // `usesLine: true` already guaranteed a finite line above. The line is signed
+        // from the selected participant's perspective (-2.5 favourite, +3.5 dog), so
+        // the cover margin is the attested margin plus the line. Exactly zero is a
+        // push rather than a win, which is why this is three branches and not two.
+        const coverMargin = gameResult.actual_value + (pick.line as number);
+        const spreadOutcome: 'win' | 'loss' | 'push' =
+          coverMargin > 0 ? 'win' : coverMargin < 0 ? 'loss' : 'push';
+        gradedResult = spreadOutcome;
       } else {
         const selectionSide = inferSelectionSide(pick.selection);
         if (!selectionSide) {
@@ -520,6 +555,16 @@ export function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyR
     };
   }
 
+  if (marketKey === 'spread' || marketKey === 'game_spread') {
+    return {
+      family: 'game_spread',
+      participantRequirement: 'required',
+      participantType: 'team',
+      gradeable: true,
+      usesLine: true,
+    };
+  }
+
   if (marketKey === 'game_total_ou') {
     return {
       family: 'game_total',
@@ -621,6 +666,8 @@ async function findFirstGradeResult(
 export const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   moneyline: MONEYLINE_RESULT_MARKET_KEY,
   game_moneyline: MONEYLINE_RESULT_MARKET_KEY,
+  spread: SPREAD_RESULT_MARKET_KEY,
+  game_spread: SPREAD_RESULT_MARKET_KEY,
   'points-all-game-ou': 'player_points_ou',
   player_points_ou: 'points-all-game-ou',
   'rebounds-all-game-ou': 'player_rebounds_ou',
