@@ -6,13 +6,13 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "3ac6a9121db5f11429e6d990985d55e408c04876",
     "verified_source_sha": "696ba732c14b969aead13779a300e1d6b7e23348",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "note": "696ba732c14b969aead13779a300e1d6b7e23348 is the implementation commit and the execution anchor named in verification.md. Every commit after it on this lane touches only docs/06_status/proof/UTV2-1915/ and the lane's own metadata (docs/06_status/lanes/UTV2-1915.json, written by ops:lane-link-pr), so no measurement recorded below was taken on a different tree than the one this SHA names.",
-    "bound_at": "2026-09-15T06:40:00.000Z",
+    "bound_at": "2026-09-15T05:55:30.893Z",
     "ci_sentinels": {
       "head_sha": "dded4b039432a532348470e96d79b7bea6ce02cf",
       "verify": {
@@ -72,7 +72,9 @@
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1915 --head HEAD",
       "verdict": "PASS",
       "changed_files": 12,
-      "rules_matched": ["operator-ui"],
+      "rules_matched": [
+        "operator-ui"
+      ],
       "note": "The operator-ui rule triggered and its required artifacts are present: a diff summary, a verification log and the two screenshots."
     },
     "browser_proof": {
@@ -85,33 +87,51 @@
       ]
     },
     "mutation_battery": {
-      "baseline": { "pass": 18, "fail": 0 },
+      "baseline": {
+        "pass": 18,
+        "fail": 0
+      },
       "method": "Each mutation applied alone to apps/smart-form/lib/bet-slip.ts, the suite run, the file restored from a copy taken before the battery. Baseline re-confirmed after the final revert; git status clean.",
       "mutations": [
         {
           "id": "M1",
           "mutation": "Let moveLeg wrap past the end of the list instead of refusing",
-          "result": { "pass": 17, "fail": 1 }
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
         },
         {
           "id": "M2",
           "mutation": "Let addLeg accept a leg missing a required field",
-          "result": { "pass": 17, "fail": 1 }
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
         },
         {
           "id": "M3",
           "mutation": "Drop the refusal and let a slip of more than one leg report as submittable",
-          "result": { "pass": 16, "fail": 2 }
+          "result": {
+            "pass": 16,
+            "fail": 2
+          }
         },
         {
           "id": "M4",
           "mutation": "Make a refused add mutate the list in place before returning",
-          "result": { "pass": 17, "fail": 1 }
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
         },
         {
           "id": "M5",
           "mutation": "Make removeLeg drop the wrong index",
-          "result": { "pass": 17, "fail": 1 }
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
         }
       ]
     }

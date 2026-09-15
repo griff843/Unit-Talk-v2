@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1915-smart-form-multi-leg-slip",
   "branch": "claude/utv2-1915-smart-form-multi-leg-slip",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "3ac6a9121db5f11429e6d990985d55e408c04876",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1583",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,22 @@
     "docs/06_status/proof/UTV2-1915/diff-summary.md",
     "docs/06_status/proof/UTV2-1915/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-15T05:00:04.656Z",
-  "heartbeat_at": "2026-09-15T05:11:27.019Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-15T05:55:35.982Z",
+  "closed_at": "2026-09-15T05:55:35.982Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1915-smart-form-multi-leg-slip.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-15T05:55:34.110Z",
+      "verdict": "pass",
+      "merge_sha": "3ac6a9121db5f11429e6d990985d55e408c04876",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
