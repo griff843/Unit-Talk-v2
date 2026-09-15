@@ -6,7 +6,7 @@
 ## Merge SHA Binding
 
 MERGE_SHA: pending merge
-PR: https://github.com/griff843/Unit-Talk-v2/pull/PENDING
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1583
 
 ## Verification
 
