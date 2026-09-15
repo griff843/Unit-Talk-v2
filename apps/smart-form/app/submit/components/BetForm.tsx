@@ -76,6 +76,17 @@ import { cn } from '@/lib/utils';
 import { createSessionSubmissionGuard } from '@/lib/submission-guard';
 import { isQaAuthBypassEnabled } from '@/lib/auth-config';
 import { deriveMatchupTeamChoices, isMissingQaIdentity, type MatchupTeamChoice } from '@/lib/team-choice';
+import {
+  addLeg,
+  isMultiLegSlip,
+  legRefusalMessages,
+  moveLeg,
+  multiLegSubmissionRefusal,
+  removeLeg,
+  revalidateSlip,
+  summarizeSlip,
+  type SlipLeg,
+} from '@/lib/bet-slip';
 import { Spinner } from '@/components/ui/spinner';
 import { SignedNumberInput } from '@/components/SignedNumberInput';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
@@ -861,6 +872,11 @@ export function BetForm({
   const [browseSearchError, setBrowseSearchError] = useState<string | null>(null);
   const [isSearchingBrowse, setIsSearchingBrowse] = useState(false);
   const [hasSearchedBrowse, setHasSearchedBrowse] = useState(false);
+  // UTV2-1915 — the multi-leg bet slip. Legs are committed copies of the form's
+  // values, not live references, so editing the form after adding a leg cannot
+  // retroactively change what the operator already put on the slip.
+  const [slipLegs, setSlipLegs] = useState<readonly SlipLeg[]>([]);
+  const [slipRefusal, setSlipRefusal] = useState<string | null>(null);
 
   const marketSectionRef = useRef<HTMLElement>(null);
 
@@ -885,6 +901,42 @@ export function BetForm({
   });
 
   const watchedValues = form.watch();
+
+  const legSummaries = useMemo(() => summarizeSlip(slipLegs), [slipLegs]);
+  // Why a multi-leg slip cannot be submitted today, or null when it can. Held
+  // as a value rather than a thrown error so the panel renders the reason
+  // instead of the absence of a button.
+  const multiLegRefusal = multiLegSubmissionRefusal(slipLegs);
+  // Refusals about legs already on the slip, keyed by leg id. Derived rather
+  // than stored so a removal or a reorder cannot leave a message pointing at a
+  // leg that is no longer in that position — or no longer there at all.
+  const legRefusals = useMemo(
+    () => legRefusalMessages(revalidateSlip(slipLegs)),
+    [slipLegs],
+  );
+
+  function handleAddLeg() {
+    const result = addLeg(slipLegs, form.getValues(), () => crypto.randomUUID());
+    if (!result.ok) {
+      // `result.legs` is the unchanged list: a refusal never discards the legs
+      // the operator has already committed.
+      setSlipLegs(result.legs);
+      setSlipRefusal(result.refusal.message);
+      return;
+    }
+    setSlipLegs(result.legs);
+    setSlipRefusal(null);
+  }
+
+  function handleRemoveLeg(id: string) {
+    setSlipLegs((current) => removeLeg(current, id));
+    setSlipRefusal(null);
+  }
+
+  function handleMoveLeg(id: string, direction: 'up' | 'down') {
+    setSlipLegs((current) => moveLeg(current, id, direction));
+  }
+
   const selectedSport = watchedValues.sport;
   const isTeamSport = TEAM_SPORTS.has(selectedSport);
   const selectedMarketType = watchedValues.marketType;
@@ -2028,6 +2080,14 @@ export function BetForm({
   }
 
   async function onSubmit(values: BetFormValues) {
+    if (isMultiLegSlip(slipLegs)) {
+      toast({
+        title: 'Multi-leg tickets cannot be submitted yet',
+        description: multiLegSubmissionRefusal(slipLegs) ?? '',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (missingQaIdentity) {
       toast({ title: 'Test capper required', description: 'This local QA preview has no test capper. Saving is disabled until an explicit test identity is available.', variant: 'destructive' });
       return;
@@ -4310,6 +4370,20 @@ export function BetForm({
                     </div>
                   )}
                 </div>
+
+                <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    data-testid="add-leg-button"
+                    onClick={handleAddLeg}
+                  >
+                    Add leg to slip
+                  </Button>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Build a multi-leg slip to review it. Ticket submission arrives with the parlay ticket API.
+                  </p>
+                </div>
               </section>}
             </form>
           </Form>
@@ -4321,6 +4395,12 @@ export function BetForm({
             values={watchedValues}
             isSubmitting={isSubmitting}
             onSubmit={() => void form.handleSubmit(onSubmit)()}
+            legs={legSummaries}
+            onRemoveLeg={handleRemoveLeg}
+            onMoveLeg={handleMoveLeg}
+            slipRefusal={slipRefusal}
+            legRefusals={legRefusals}
+            multiLegRefusal={multiLegRefusal}
           />
         </div>
       </div>

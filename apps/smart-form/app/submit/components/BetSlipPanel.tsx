@@ -7,12 +7,35 @@ import { Spinner } from '@/components/ui/spinner';
 import { betFormSchema, type BetFormValues } from '@/lib/form-schema';
 import { calcPayout, buildSelectionString } from '@/lib/form-utils';
 import { getMarketTypeLabel, type MarketTypeId } from '@/lib/market-types';
+import type { LegSummary } from '@/lib/bet-slip';
 
 interface BetSlipPanelProps {
   submissionBlocked?: boolean;
   values: Partial<BetFormValues>;
   isSubmitting: boolean;
   onSubmit: () => void;
+  /**
+   * Legs already committed to the slip, in slip order. Empty means this is the
+   * single-pick path and every behaviour below is inert — a slip with no legs
+   * renders and submits exactly as it did before UTV2-1915.
+   */
+  legs?: readonly LegSummary[];
+  onRemoveLeg?: (id: string) => void;
+  onMoveLeg?: (id: string, direction: 'up' | 'down') => void;
+  /**
+   * Why the last "add leg" attempt was refused, if it was. This region carries
+   * draft- and slip-scoped refusals only — a message about one committed leg
+   * belongs at that leg's row, in `legRefusals`.
+   */
+  slipRefusal?: string | null;
+  /**
+   * Leg id -> the refusal about that leg (UTV2-1916). Keyed by identity rather
+   * than by position, so reordering the slip carries each message with its own
+   * leg instead of leaving it pointing at whatever row moved into that slot.
+   */
+  legRefusals?: Readonly<Record<string, string>>;
+  /** Why a multi-leg slip cannot be submitted today. Null when it can. */
+  multiLegRefusal?: string | null;
 }
 
 function LineItem({ label, value }: { label: string; value?: string | number | null }) {
@@ -25,7 +48,123 @@ function LineItem({ label, value }: { label: string; value?: string | number | n
   );
 }
 
-export function BetSlipPanel({ values, isSubmitting, onSubmit, submissionBlocked = false }: BetSlipPanelProps) {
+function formatOdds(odds: number) {
+  return odds > 0 ? `+${odds}` : String(odds);
+}
+
+/**
+ * The committed legs. Deliberately shows each leg's own price and nothing
+ * combined: a parlay's combined price is defined once, in @unit-talk/contracts
+ * (priceParlay, UTV2-1906). A second copy here is how a displayed price and a
+ * persisted price drift apart.
+ */
+function SlipLegList({
+  legs,
+  onRemoveLeg,
+  onMoveLeg,
+  legRefusals = {},
+}: {
+  legs: readonly LegSummary[];
+  onRemoveLeg?: (id: string) => void;
+  onMoveLeg?: (id: string, direction: 'up' | 'down') => void;
+  legRefusals?: Readonly<Record<string, string>>;
+}) {
+  return (
+    <div className="space-y-2" data-testid="slip-legs">
+      <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        {legs.length === 1 ? '1 leg' : `${legs.length} legs`}
+      </p>
+      <ol className="space-y-2">
+        {legs.map((leg, index) => {
+          const legRefusal = legRefusals[leg.id] ?? null;
+          const refusalId = `slip-leg-refusal-${leg.id}`;
+          return (
+          <li
+            key={leg.id}
+            data-testid="slip-leg"
+            data-leg-id={leg.id}
+            // Programmatic association, not proximity: a screen reader reaches
+            // the refusal from the leg it is about even though the two are
+            // separate elements.
+            aria-describedby={legRefusal ? refusalId : undefined}
+            className={cn(
+              'rounded-xl border p-3 text-sm',
+              legRefusal ? 'border-destructive/60 bg-destructive/5' : 'border-border/70',
+            )}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium text-foreground break-words">{leg.selection}</p>
+                <p className="text-xs text-muted-foreground break-words">
+                  {leg.sport} · {leg.marketLabel} · {leg.eventName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatOdds(leg.odds)} · {leg.units}u{leg.sportsbook ? ` · ${leg.sportsbook}` : ''}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Move leg ${index + 1} up`}
+                  disabled={index === 0}
+                  onClick={() => onMoveLeg?.(leg.id, 'up')}
+                >
+                  ↑
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Move leg ${index + 1} down`}
+                  disabled={index === legs.length - 1}
+                  onClick={() => onMoveLeg?.(leg.id, 'down')}
+                >
+                  ↓
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Remove leg ${index + 1}`}
+                  onClick={() => onRemoveLeg?.(leg.id)}
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+            {legRefusal && (
+              <p
+                id={refusalId}
+                data-testid="slip-leg-refusal"
+                data-leg-id={leg.id}
+                role="alert"
+                className="mt-2 text-xs leading-relaxed text-destructive"
+              >
+                {legRefusal}
+              </p>
+            )}
+          </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+export function BetSlipPanel({
+  values,
+  isSubmitting,
+  onSubmit,
+  submissionBlocked = false,
+  legs = [],
+  onRemoveLeg,
+  onMoveLeg,
+  slipRefusal = null,
+  legRefusals = {},
+  multiLegRefusal = null,
+}: BetSlipPanelProps) {
   const marketLabel = values.marketType ? getMarketTypeLabel(values.marketType as MarketTypeId) : null;
   const selection = values.marketType && values.sport
     ? buildSelectionString(values as BetFormValues)
@@ -60,6 +199,37 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit, submissionBlocked
               <p className="text-sm font-semibold text-foreground">{values.capper}</p>
             )}
           </div>
+
+          {legs.length > 0 && (
+            <>
+              <SlipLegList
+                legs={legs}
+                onRemoveLeg={onRemoveLeg}
+                onMoveLeg={onMoveLeg}
+                legRefusals={legRefusals}
+              />
+              <Separator className="bg-border/50" />
+            </>
+          )}
+
+          {slipRefusal && (
+            <p
+              className="rounded-xl border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs leading-relaxed text-foreground"
+              data-testid="slip-refusal"
+              role="alert"
+            >
+              {slipRefusal}
+            </p>
+          )}
+
+          {multiLegRefusal && (
+            <p
+              className="rounded-xl border border-dashed border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+              data-testid="multi-leg-refusal"
+            >
+              {multiLegRefusal}
+            </p>
+          )}
 
           {hasMinimum && <Separator className="bg-border/50" />}
 
@@ -131,6 +301,11 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit, submissionBlocked
         <div className="flex items-center justify-between gap-4 max-w-lg mx-auto">
           <div className="min-w-0">
             <p className="mb-1 text-[10px] uppercase tracking-widest text-primary">{values.trackOnly ? 'Track Only' : 'Delivery eligible'}</p>
+            {legs.length > 0 && (
+              <p className="text-xs font-medium text-foreground truncate">
+                {legs.length === 1 ? '1 leg on slip' : `${legs.length} legs on slip`}
+              </p>
+            )}
             {hasMinimum ? (
               <>
                 <p className="text-xs font-medium text-foreground truncate">
