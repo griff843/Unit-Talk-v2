@@ -1,0 +1,103 @@
+# PROOF: UTV2-1917
+
+MERGE_SHA: pending merge
+
+> Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
+> the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
+> authority only after GitHub supplies the merged-PR attestation.
+
+Generated at: 2026-09-15T14:20:04.838Z
+Issue: UTV2-1917
+Tier: T2
+Lane type: hygiene
+Branch: claude/utv2-1917-track-only-capper-stats
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1585
+Head SHA: 5859b3e1c12ea866328b8669728c1b495fa00b37
+result: pass
+
+## ASSERTIONS:
+
+- [x] `picks.capper_id` is carried to the statistics layer instead of being read and discarded. `AttributedStatsInputPick` makes the canonical partition key **required** at every partitioning entry point, so it cannot be silently omitted where omitting it would matter.
+- [x] Per-capper figures are produced by the **same** pure function as the whole-cohort aggregate. `computeTrackOnlyStatsByCapper` calls `computeTrackOnlyStats` once per partition, so a capper total that disagrees with the aggregate is arithmetically impossible rather than merely unlikely.
+- [x] A capper partition equals the figure computed over that capper's picks alone (`deepEqual`, not a recomputation).
+- [x] The partitions sum exactly to the whole-cohort aggregate: `cohortSize`, `record.{win,loss,push,decided}`, `pending` and `units.measuredOver` exactly; `units.staked`/`units.net` within `1e-4`, because units are rounded per partition.
+- [x] A pick with `capper_id = null` lands in a **named** partition (`(unattributed)`) and still counts in the aggregate. It is never dropped — dropping it would break the sum invariant above.
+- [x] A second capper's picks cannot contaminate the first capper's cohort.
+- [x] "Latest settlement" is **resolved**, not ordered. `resolveSettlement` wraps the canonical `resolveEffectiveSettlement`, which walks root → tip via `corrects_id`. Asserted against a fixture whose tip has an *earlier* `settled_at` than its root, with rows handed to the resolver in `settled_at.desc` order — the exact order the old code fetched in, so nothing about the input favours the new behaviour.
+- [x] The stake is read off the **same row** the resolver named (`effective_record_id`), not off the newest row.
+- [x] Two competing roots (an `operator` root and a `grading` root, both `corrects_id IS NULL`, which the partial unique index permits to coexist) are refused **by name** as `MULTIPLE_ROOT_RECORDS` and count toward neither `record` nor `pending`. A silent wrong number becomes an explicit exclusion.
+- [x] `buildPickReport` publishes the resolved settlement rather than the newest row.
+- [x] No second mutable stats ledger: nothing is persisted, no table, no view, no materialization. The report client is read-only (GET-only PostgREST) and no production read or write occurs.
+- [x] Every test uses `node:test` `test()` + `node:assert/strict`, per AGENTS.md. No `describe`/`it`.
+- [x] The out-of-scope consumer `scripts/ops/track-only/sgo-journey-proof.ts` compiles **untouched**: `StatsInputPick` is unchanged and `AttributedStatsInputPick extends` it, so no `scope-override/v1` was needed and no guard was weakened to avoid one.
+
+## EVIDENCE:
+
+```
+$ pnpm test:ops
+1..2988
+# tests 3113
+# suites 21
+# pass 3113
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 62025.515697
+
+$ pnpm exec tsx --test scripts/ops/track-only-report.test.ts
+1..42
+# tests 42
+# suites 0
+# pass 42
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 837.243646
+
+$ pnpm type-check
+> @unit-talk/v2@0.1.0 type-check
+> pnpm exec tsc -b tsconfig.json
+(exit 0, no diagnostics)
+
+$ pnpm exec eslint scripts/ops/track-only/stats.ts scripts/ops/track-only-report.ts scripts/ops/track-only-report.test.ts
+(no output, exit 0)
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 6
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+Note on `pnpm type-check` coverage, measured rather than assumed: root `tsconfig.json` is
+`{"files": [], "references": [...]}` naming only `packages/*` and `apps/*`, and
+`eslint.config.mjs` declares no `project`/`projectService`. **`scripts/**` is therefore
+type-checked by no CI gate.** This lane's TypeScript was additionally checked by a deliberate
+standalone `tsc` run carrying the `@unit-talk/*` path mappings, which is what caught the
+`sgo-journey-proof.ts` signature break that `pnpm type-check` reported clean. That run is why
+the type was split rather than made optional.
+
+CI on this head (`5859b3e1c12ea866328b8669728c1b495fa00b37`):
+`P0 Protocol` completed/success; `Writable DB proof (staging only)` completed/success;
+`verify` completed/success.
+
+## Verification
+- [x] `pnpm type-check`: exit 0, no diagnostics
+- [x] `pnpm test`: `pnpm test:ops` 3113 tests / 3113 pass / 0 fail across 21 suites
+- [x] `pnpm verify`: `verify` job completed/success on head `5859b3e1c12ea866328b8669728c1b495fa00b37` (CI is the authoritative site; `pnpm verify` cannot exit 0 locally because `ci:assert-staging-target` refuses a non-staging target)
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS, 6 changed files, no R-level artifacts required
+
+## Runtime Verification
+- No runtime proof is owed by this lane and none is claimed. The change is a pure-function
+  partition plus a resolver substitution inside a read-only operator report; it performs no
+  database write and touches no deployed surface. The staging boundary that does exercise
+  `computeTrackOnlyStats` end to end — `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts`
+  — ran green under `Writable DB proof (staging only)` on this head and is unchanged by this lane.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1585
+Approved PR head: pending merge
+Execution SHA: 5859b3e1c12ea866328b8669728c1b495fa00b37
