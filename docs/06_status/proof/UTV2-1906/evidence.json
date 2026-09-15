@@ -1,0 +1,262 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1906",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "7eee19fc8067333825be65fd68af672adc1ac491",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "7eee19fc8067333825be65fd68af672adc1ac491 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1906/. Every static measurement in this bundle was taken at that tree.",
+    "bound_at": "2026-09-15T04:00:00.000Z",
+    "ci_sentinels": {
+      "run_id": 34926661153,
+      "run_attempt": 1,
+      "head_sha": "7eee19fc8067333825be65fd68af672adc1ac491",
+      "verify": {
+        "job_id": 104248619989,
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "job_id": 104246122824,
+        "conclusion": "success"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha; both shapes are present."
+    }
+  },
+  "what_this_lane_delivers": {
+    "capability": "The canonical contract for a parlay ticket: leg and ticket shape, American/decimal odds conversion, ticket pricing, validation, leg and ticket outcome resolution, settled pricing over surviving legs, order-independent ticket identity, and per-ticket statistics contribution.",
+    "why_the_contract_is_the_right_first_layer": "Every later layer - API validation, persistence, grading, statistics - has to agree on what a parlay is, how it is priced and when it is settled. Landing those rules once, in a package with no I/O, means the API cannot re-derive them differently from the UI, and the statistics layer cannot count a ticket differently from the grader.",
+    "production_writes_by_this_change": 0,
+    "what_it_explicitly_does_not_claim": [
+      "No Smart Form UI for adding, removing, reordering or reviewing legs.",
+      "No API endpoint or request validation for a multi-leg ticket.",
+      "No persistence, no ticket-level attribution in the database, no migration.",
+      "No claim that the pipeline can currently grade or settle a parlay. Production game_results stops at 2026-06-30; the semantics are defined here, the result data does not exist.",
+      "No teasers and no round robins. Tracked as UTV2-1908 and UTV2-1909 with their own acceptance criteria."
+    ]
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test packages/contracts/src/ticket.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 37,
+          "pass": 37,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The lane's whole suite. 25 pre-existing pricing/validation/outcome tests plus 12 added for ticket identity and statistics."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0,
+      "note": "An earlier revision failed no-loss-of-precision on two number literals in the pricing test. The assertion is now computed rather than written out, which is both legal and a stronger control - see mutation_battery.rewritten_control."
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: verify ends at test:live-db, which ci:assert-staging refuses when the host resolves to the containment placeholder (host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx). Every stage before it passed locally - db-client-boundary, sync-check, system-alignment, automation-coverage, executable-wiring, env:check, lint, type-check, build, test. The authoritative receipt is the CI verify job in ci_sentinels."
+    },
+    "executable_wiring": {
+      "verdict": "PASS",
+      "required_roots": "verify",
+      "unwired": 119,
+      "baselined": 119,
+      "new": 0,
+      "note": "This lane added no unwired test. packages/contracts/src/ticket.test.ts is reachable from test:apps-rest and therefore executes under the required verify check rather than being baselined away."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": [],
+      "note": "No R-level rule triggers on a pure packages/contracts diff, so no additional artifacts are required."
+    },
+    "mutation_battery": {
+      "baseline": {
+        "pass": 37,
+        "fail": 0
+      },
+      "method": "Each mutation applied alone to the source, the suite run, the file restored from a copy taken before the battery. Baseline re-confirmed after the final revert. Run with no concurrent suite, because a mutation in packages/contracts is visible to every other suite that imports it.",
+      "mutations": [
+        {
+          "id": "M6",
+          "mutation": "deriveParlayTicketIdentity loses its .sort(), so leg order becomes significant",
+          "result": {
+            "pass": 36,
+            "fail": 1
+          }
+        },
+        {
+          "id": "M7",
+          "mutation": "deriveParlayTicketIdentity drops the stake, so two different stakes collide",
+          "result": {
+            "pass": 36,
+            "fail": 1
+          }
+        },
+        {
+          "id": "M8",
+          "mutation": "deriveParlayTicketIdentity drops each leg's price, so a re-priced leg collides",
+          "result": {
+            "pass": 36,
+            "fail": 1
+          }
+        },
+        {
+          "id": "M9",
+          "mutation": "parlayStatContribution reports records: legCount instead of 1",
+          "result": {
+            "pass": 35,
+            "fail": 2
+          }
+        },
+        {
+          "id": "M10",
+          "mutation": "a pending ticket reports records: 1 instead of contributing nothing",
+          "result": {
+            "pass": 36,
+            "fail": 1
+          }
+        },
+        {
+          "id": "M11",
+          "mutation": "a win prices the full ticket (priceParlay) rather than the survivors (priceSettledParlay)",
+          "result": {
+            "pass": 36,
+            "fail": 1
+          }
+        }
+      ],
+      "why_M9_and_M11_matter_most": "M9 is how a parlay silently inflates a capper's record by its own leg count. M11 is how a parlay that pushed a leg is paid at a price the operator never had. Both are statistics-truth defects that no type check would catch.",
+      "rewritten_control": "The pricing test originally asserted the literal 3.6446280991735537, which no-loss-of-precision correctly refuses. It now computes const exact = (1 + 100/110) ** 2 and compares within 1e-12, plus the exact American conversion +264. +264 rather than +263 is the control: rounding each leg to 1.91 first produces +263, so the assertion fails if the implementation ever rounds per leg."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PASS",
+    "job": "Writable DB proof (staging only)",
+    "workflow_run_id": 34926661153,
+    "job_id": 104246122824,
+    "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34926661153/job/104246122824",
+    "head_sha": "7eee19fc8067333825be65fd68af672adc1ac491",
+    "run_attempt": 1,
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "conclusion": "success",
+    "suite": "the existing t1-proof:live battery, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "what_it_proves": [
+      "The branch does not break the existing live database path: the t1-proof:live battery runs green against a real Postgres at this head.",
+      "The contract is additive and unreferenced - no existing code path changes behaviour, which is why the battery is green unchanged."
+    ],
+    "queries": [
+      {
+        "label": "no multi-leg submission exists anywhere today - the baseline this contract will later change",
+        "target": "staging xskgrzbteyqdufktjrjx",
+        "sql": "SELECT count(*) FROM (SELECT submission_id FROM picks WHERE submission_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1) t",
+        "result": {
+          "multi_leg_submissions": 0
+        },
+        "what_it_establishes": "picks.submission_id is an existing FK that structurally permits 1:N, and it has never been used that way. Every submission maps to exactly one pick. A parlay is therefore genuinely new behaviour rather than an undocumented existing shape, and the persistence lane has a no-DDL route available to it."
+      },
+      {
+        "label": "the same measurement on production, so the finding is not a staging artifact",
+        "target": "production zfzdnfwdarxucxtaojxm, read-only SELECT",
+        "sql": "SELECT count(*) FROM (SELECT submission_id FROM picks WHERE submission_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1) t",
+        "result": {
+          "multi_leg_submissions": 0
+        },
+        "what_it_establishes": "100,102 production submissions, all single-pick. Confirmed on both databases."
+      },
+      {
+        "label": "delivery remains impossible - this lane cannot enqueue anything",
+        "target": "staging xskgrzbteyqdufktjrjx",
+        "sql": "SELECT count(*) FROM distribution_outbox",
+        "result": {
+          "outbox_total": 0
+        },
+        "what_it_establishes": "Zero outbox rows in staging before and after this branch's CI run. A contracts-only change has no enqueue path at all; the count is recorded so the claim is measured rather than asserted."
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "picks",
+        "table": "picks",
+        "before": 78495,
+        "after": 78495,
+        "status": "unchanged",
+        "note": "This lane writes nothing. The staging fixture seeder in the CI job is the only writer, and it is unrelated to this diff."
+      },
+      {
+        "label": "submissions",
+        "table": "submissions",
+        "before": 72704,
+        "after": 72704,
+        "status": "unchanged"
+      },
+      {
+        "label": "multi-leg submissions",
+        "table": "picks grouped by submission_id having count(*) > 1",
+        "before": 0,
+        "after": 0,
+        "status": "unchanged",
+        "note": "The number this lane exists to eventually make non-zero. It is zero now, and this bundle does not claim otherwise."
+      },
+      {
+        "label": "distribution_outbox",
+        "table": "distribution_outbox",
+        "before": 0,
+        "after": 0,
+        "status": "unchanged",
+        "note": "Zero member delivery, measured rather than asserted."
+      },
+      {
+        "label": "settlement_records",
+        "table": "settlement_records",
+        "before": 29841,
+        "after": 29841,
+        "status": "unchanged"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-15T04:00:00.000Z",
+    "row_counts_note": "Read back with read-only SELECTs rather than taken from a job exit code, so a skipped suite could not present as a pass.",
+    "coverage_gap": {
+      "status": "OPEN, and stated rather than papered over",
+      "finding": "There is no runtime path to exercise. This lane adds pure functions to @unit-talk/contracts, a package with no I/O, no DB and no HTTP, and nothing yet calls them.",
+      "why_it_could_not_be_closed_inside_this_lane": [
+        "file_scope_lock is pinned at lane-start and admits exactly four paths - package.json, packages/contracts/src/index.ts, ticket.ts and ticket.test.ts. No apps/api, no apps/smart-form, no packages/db, no supabase/migrations.",
+        "A runtime proof of a parlay requires an API endpoint, a persistence layer and a ticket row. All three are separate lanes by lane type as well as by file scope.",
+        "Production game_results stops at 2026-06-30, so even with persistence there is no result data to settle a parlay against. The only exit is the provider key, which is reserved."
+      ],
+      "why_it_is_not_a_reason_to_hold_the_lane": "The contract is additive and unreferenced: no existing code path changes behaviour, which is why the staging battery is green unchanged. Landing it lets the persistence, API and UI lanes build against one agreed definition instead of three.",
+      "disposition": "Recorded as a dependency on UTV2-1912, which enumerates the persistence, API and UI lanes and the measured blocker on each."
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off - no provider key read, tested or activated",
+    "member_delivery": "disabled - unchanged",
+    "track_only_containment": "enabled - unchanged",
+    "note": "This lane adds pure functions to a package with no I/O. Production was read only through governed read-only SELECTs taken while measuring the follow-on lanes, and nothing was written."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "T1 requires the approval pair - the t1-approved label and a pm-verdict/v1 APPROVED comment from a human CODEOWNERS member, both pinned to this head.",
+      "disposition": "Reserved. Not actionable by the executor."
+    }
+  ]
+}
