@@ -6,13 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "d81c8bc9017a5c59893a65033b73e358597ef2c0",
     "verified_source_sha": "e24fef1907bb3966f4563883117bfba84e989b4f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "note": "e24fef1907bb3966f4563883117bfba84e989b4f is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1903/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the execution anchor does not move when this file lands.",
-    "bound_at": "2026-09-14T22:09:01.000Z",
+    "bound_at": "2026-09-15T01:48:27.119Z",
     "ci_sentinels": {
       "run_id": 34900653897,
       "run_attempt": 1,
@@ -30,8 +30,8 @@
   },
   "what_this_lane_repairs": {
     "defect": "A spread pick could not be graded at all. classifyMarketFamilyForGrading('spread') returned family 'unsupported', so every spread submitted through the Smart Form was skipped by name before any result was consulted.",
-    "why_it_is_not_merely_a_missing_case": "A spread is not an over/under. inferSelectionSide('Chiefs -2.5') returns null, so the generic over/under branch the grading loop falls through to cannot express a spread even if the family were admitted \u2014 it would skip on selection_side_unknown instead. The family needed its own outcome derivation, not an entry in a table.",
-    "production_relevance_measured": "2 of the 4 picks in the governed cohort (metadata ? 'distributionMode') are spreads: 29da425a 'Broncos +3' line +3.00 and 04174f12 'Chiefs -2.5' line -2.50, both status=validated, both capper_id griff843. Their persisted line sign is exactly the convention this repair assumes \u2014 signed from the selected participant's perspective \u2014 so cover margin is actual_value + line and the three-branch win/loss/push split is the correct reading of a zero cover.",
+    "why_it_is_not_merely_a_missing_case": "A spread is not an over/under. inferSelectionSide('Chiefs -2.5') returns null, so the generic over/under branch the grading loop falls through to cannot express a spread even if the family were admitted — it would skip on selection_side_unknown instead. The family needed its own outcome derivation, not an entry in a table.",
+    "production_relevance_measured": "2 of the 4 picks in the governed cohort (metadata ? 'distributionMode') are spreads: 29da425a 'Broncos +3' line +3.00 and 04174f12 'Chiefs -2.5' line -2.50, both status=validated, both capper_id griff843. Their persisted line sign is exactly the convention this repair assumes — signed from the selected participant's perspective — so cover margin is actual_value + line and the three-branch win/loss/push split is the correct reading of a zero cover.",
     "production_writes_by_this_change": 0
   },
   "static_proof": {
@@ -67,7 +67,7 @@
       "note": "No R-level artifacts are required for this diff."
     },
     "production_measurement": {
-      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed \u2014 SELECT only, no write, no containment change",
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed — SELECT only, no write, no containment change",
       "executed_at": "2026-09-14",
       "queries": [
         {
@@ -91,7 +91,7 @@
           "result": 135249
         }
       ],
-      "what_this_establishes": "The market-key guard is load-bearing rather than defensive. There are 1,849 '%-sp' rows in production and every one of them carries participant_id NULL \u2014 an unattributed raw score with no side. The candidate lookup can reach them. Grading a spread off one would invent a side that was never attested. Refusing any key but game_spread_margin by name is what prevents that, and it is why this lane skips rather than interprets.",
+      "what_this_establishes": "The market-key guard is load-bearing rather than defensive. There are 1,849 '%-sp' rows in production and every one of them carries participant_id NULL — an unattributed raw score with no side. The candidate lookup can reach them. Grading a spread off one would invent a side that was never attested. Refusing any key but game_spread_margin by name is what prevents that, and it is why this lane skips rather than interprets.",
       "and_what_it_does_not": "There are zero game_spread_margin rows anywhere, so no production or staging spread can actually settle today. That is the same results-supply constraint (layer 3) that already blocks moneyline, and this lane does not claim to move it."
     }
   },
@@ -107,18 +107,18 @@
     "conclusion": "success",
     "suite": "the existing t1-proof:live battery, reached from pnpm verify via test:live-db -> test:t1-proof:live",
     "what_it_proves": [
-      "The grading path this lane edits still runs green against a real Postgres through the full t1-proof:live battery at this head \u2014 no regression to the moneyline family, the stake-units refusal, the settlement-batch prefetch or the edge-scope proof.",
+      "The grading path this lane edits still runs green against a real Postgres through the full t1-proof:live battery at this head — no regression to the moneyline family, the stake-units refusal, the settlement-batch prefetch or the edge-scope proof.",
       "The route-B live-DB obligation this lane deferred to CI (t1_live_db_precondition: deferred_to_ci) is discharged on this head rather than waived."
     ],
     "coverage_gap": {
       "status": "OPEN, and stated rather than papered over",
       "finding": "No staging test exercises game_spread_margin. This lane's new behaviour is proven statically (92/92) and is not proven against a real database.",
       "why_it_could_not_be_closed_inside_this_lane": [
-        "file_scope_lock is pinned at lane-start and admits exactly two paths \u2014 apps/api/src/grading-service.ts and apps/api/src/grading-service.test.ts. A new *.test.ts proof file is not declarable here, and an agent cannot widen the lock.",
+        "file_scope_lock is pinned at lane-start and admits exactly two paths — apps/api/src/grading-service.ts and apps/api/src/grading-service.test.ts. A new *.test.ts proof file is not declarable here, and an agent cannot widen the lock.",
         "Wiring any new test file into the t1-proof:live battery requires editing root package.json, which is also outside this lock.",
         "There are zero game_spread_margin rows in production and none in staging, so there is no existing row to grade against; a staging proof would have to seed its own, which is exactly the shape of test this lock forbids."
       ],
-      "why_it_is_not_a_reason_to_hold_the_lane": "The refusal side of the change \u2014 the market-key guard \u2014 is the side that can cause harm, and it is the side that fails closed: an unrecognised key skips by name. The acceptance side cannot fire in any environment today because no game_spread_margin row exists. So the staging gap is a gap in proving a path that is currently unreachable, not a gap in proving a path that is running.",
+      "why_it_is_not_a_reason_to_hold_the_lane": "The refusal side of the change — the market-key guard — is the side that can cause harm, and it is the side that fails closed: an unrecognised key skips by name. The acceptance side cannot fire in any environment today because no game_spread_margin row exists. So the staging gap is a gap in proving a path that is currently unreachable, not a gap in proving a path that is running.",
       "disposition": "Recorded as a dependency for the follow-on lane that supplies game_spread_margin results. That lane owns the staging proof, because it is the lane that creates the row the proof needs."
     },
     "run_attempt": 1,
@@ -191,9 +191,9 @@
   "scope_and_containment": {
     "production_writes": 0,
     "containment_changed": false,
-    "sgo": "off \u2014 no provider key read, tested or activated",
-    "member_delivery": "disabled \u2014 unchanged",
-    "track_only_containment": "enabled \u2014 unchanged",
+    "sgo": "off — no provider key read, tested or activated",
+    "member_delivery": "disabled — unchanged",
+    "track_only_containment": "enabled — unchanged",
     "note": "This lane changes how a spread pick is classified and graded. It writes nothing to production, reads production only through governed read-only SELECTs recorded above, and changes no containment setting."
   },
   "known_red_checks_at_this_head": [

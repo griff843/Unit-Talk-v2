@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1903-spread-grading-family
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1580
 Head SHA: e24fef1907bb3966f4563883117bfba84e989b4f
-Merge SHA: N/A
+Merge SHA: d81c8bc9017a5c59893a65033b73e358597ef2c0
 Diff base: 0dc1b918102486d433813dea8d411135c4b07899
 Diff target: e24fef1907bb3966f4563883117bfba84e989b4f
 
@@ -36,4 +36,4 @@ A	docs/06_status/proof/UTV2-1903/.gitkeep
 
 ## SHA Binding
 Head SHA: e24fef1907bb3966f4563883117bfba84e989b4f
-Merge SHA: N/A
+Merge SHA: d81c8bc9017a5c59893a65033b73e358597ef2c0
