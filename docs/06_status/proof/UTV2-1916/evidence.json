@@ -198,6 +198,11 @@
       "check": "QA Experience Regression (Advisory)",
       "cause": "The job fails posting its own PR comment with 403 Resource not accessible by integration.",
       "disposition": "Non-required, and environmental rather than a QA result."
+    },
+    {
+      "check": "Check issue references (Branch Discipline Guard)",
+      "cause": "multiple_issue_references \u2014 \"All PR issue references must match branch issue UTV2-1916; found UTV2-1912, UTV2-1915, UTV2-1916\". The commit bodies name the lane this follows up (UTV2-1915) and the lane that brings the first real producer of a leg-scoped refusal (UTV2-1912), because a reader of the history needs both to understand why the rendering channel ships without a reachable producer.",
+      "disposition": "Non-required, and correct about what it found. Clearing it means rewriting the commit messages, which moves the head and therefore the execution anchor the proof binds to \u2014 a real cost paid for a cosmetic gain on a check that gates nothing. Recorded rather than cleared, consistent with the standing precedent for this check."
     }
   ]
 }

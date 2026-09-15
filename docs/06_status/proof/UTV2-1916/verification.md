@@ -134,6 +134,13 @@ Both were captured from the same offline fixture as the e2e tests, with the same
 temporary block inside `multi-leg-slip.spec.ts` that was removed afterwards — verified removed by
 `grep -c "__capture"` returning 0.
 
+## Known red checks at this head
+
+| Check | Required? | Cause | Disposition |
+|---|---|---|---|
+| `Check issue references` | no | `multiple_issue_references` — the commit bodies name UTV2-1915 (the lane this follows up) and UTV2-1912 (the lane that brings the first real producer of a leg-scoped refusal) | Correct about what it found. Clearing it means rewriting the commit messages, which moves the head and therefore the execution anchor this bundle binds to. Recorded rather than cleared. |
+| `QA Experience Regression (Advisory)` | no | the job fails posting its own PR comment with `403 Resource not accessible by integration` | Environmental, not a QA result. |
+
 ## Containment and production impact
 
 **None.** No production read, no production write, no deployment, no containment change, no SGO
