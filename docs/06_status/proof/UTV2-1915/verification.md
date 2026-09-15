@@ -1,4 +1,4 @@
-# UTV2-1915 — Verification
+# PROOF: UTV2-1915 — Smart Form multi-leg bet slip
 
 **Issue:** UTV2-1915 — Smart Form multi-leg bet slip
 **Tier:** T2 · **Lane type:** delivery-ui · **Executor:** claude
@@ -7,6 +7,43 @@
 
 MERGE_SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1583
+Anchor commit (implementation): 696ba732c14b969aead13779a300e1d6b7e23348
+
+## ASSERTIONS:
+
+1. An operator can add a leg to the slip, remove one, and reorder one, and each operation is proven
+   by a unit test that names the condition it enforces.
+2. A leg that fails validation is **refused by name** and the caller's leg list is returned
+   unchanged, so a refusal can never be mistaken for a mutation.
+3. `moveLeg` refuses to wrap at either end rather than silently cycling.
+4. The slip never displays or computes a combined parlay price — pricing belongs to
+   `@unit-talk/contracts`, and a test fails if `LegSummary` grows a price-shaped field.
+5. A multi-leg slip **cannot reach the submission endpoint**. The guard lives in the submit handler,
+   not in a hidden control, and the browser test asserts the endpoint received nothing.
+6. Track Only containment and member-delivery state are untouched: this lane adds no submission path.
+
+## EVIDENCE:
+
+Repository-wide commands, run in the lane worktree and transcribed from the runs:
+
+```
+$ pnpm type-check
+> pnpm exec tsc -b tsconfig.json
+(exit 0, no diagnostics)
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1915 --head HEAD
+Verdict: PASS
+Changed files: 12
+Rules matched: operator-ui
+```
+
+- [x] `pnpm type-check`: exit 0
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1915 --head HEAD`: PASS, 12 changed
+      files, `operator-ui` matched, no missing required artifacts
+- [ ] `pnpm test`: not run in full on this workstation for this lane. The changed surface is
+      `apps/smart-form/**` only, and that package's own suite was run in full (193 pass / 0 fail, 22
+      suites) alongside the new file in isolation (18 pass / 0 fail). The root `pnpm test` runs in CI
+      on this branch and that run is the binding one.
 
 ## Verification
 
