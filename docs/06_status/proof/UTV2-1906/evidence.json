@@ -6,13 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "c374b42cdc39be8e9e798d492886229152353e6c",
     "verified_source_sha": "7eee19fc8067333825be65fd68af672adc1ac491",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "note": "7eee19fc8067333825be65fd68af672adc1ac491 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1906/. Every static measurement in this bundle was taken at that tree.",
-    "bound_at": "2026-09-15T04:00:00.000Z",
+    "bound_at": "2026-09-15T13:46:18.782Z",
     "ci_sentinels": {
       "run_id": 34926661153,
       "run_attempt": 1,
