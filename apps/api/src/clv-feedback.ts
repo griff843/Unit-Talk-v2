@@ -1,5 +1,6 @@
 import type { PickRepository, SettlementRepository, IMarketFamilyTrustRepository, ClvFeedbackInsert } from '@unit-talk/db';
 import crypto from 'node:crypto';
+import { isUnattributedCapper, resolveCapperIdentity } from './capper-identity.js';
 
 export interface ClvTrustAdjustment {
   adjustment: number; // -10 to +10 added to trust score
@@ -23,9 +24,15 @@ export interface ClvTrustAdjustmentOptions {
 /**
  * Compute a trust-score adjustment based on historical CLV data from settled picks.
  *
- * Queries recent grading settlements for the given capper (matched by pick
- * metadata.capper — the canonical capper identity, NOT pick.source which is
- * the intake channel like 'smart-form' or 'discord-bot').
+ * Queries recent grading settlements for the given capper, matched on the
+ * canonical `picks.capper_id` column via `resolveCapperIdentity`. It is NOT
+ * matched on `pick.source`, which is the intake channel like 'smart-form' or
+ * 'discord-bot', and it is no longer read out of `metadata.capper`.
+ *
+ * UTV2-1907: a pick with no `capper_id` resolves to the unattributed sentinel
+ * and is never matched, and an unattributed caller is refused outright — so an
+ * unattributed population can neither acquire a CLV history of its own nor
+ * contribute one to a real capper.
  *
  * Returns `null` when insufficient data is available (fail-open — trust score unchanged).
  */
@@ -35,6 +42,14 @@ export async function computeClvTrustAdjustment(
   pickRepository: PickRepository,
   options?: ClvTrustAdjustmentOptions,
 ): Promise<ClvTrustAdjustment | null> {
+  // Fail closed on an unattributed caller. Aggregating the sentinel would build
+  // one synthetic capper out of every unattributed settled pick and feed its
+  // CLV back into a trust score, which is exactly the conflation this change
+  // removes. `null` here means "no adjustment", not "neutral adjustment".
+  if (isUnattributedCapper(submittedBy)) {
+    return null;
+  }
+
   const lookbackDays = options?.lookbackDays ?? 30;
   const minSampleSize = options?.minSampleSize ?? 10;
 
@@ -54,9 +69,8 @@ export async function computeClvTrustAdjustment(
     const pick = await pickRepository.findPickById(settlement.pick_id);
     if (!pick) continue;
 
-    const pickMetadata = asRecord(pick.metadata);
-    const pickCapper = typeof pickMetadata['capper'] === 'string' ? pickMetadata['capper'] : pick.source;
-    if (pickCapper !== submittedBy) {
+    const pickCapper = resolveCapperIdentity(pick);
+    if (isUnattributedCapper(pickCapper) || pickCapper !== submittedBy) {
       continue;
     }
 
