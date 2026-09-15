@@ -287,7 +287,11 @@ function readValidatorWorkflow(): string {
 const VALIDATOR_WORKFLOW = readValidatorWorkflow();
 
 test('UTV2-1688: the workflow issue-ID literal is byte-identical to the exported one', () => {
-  const match = VALIDATOR_WORKFLOW.match(/!(\/\^\(UTV2\|UNI\)[^/]*\/i)\.test\(r\.issueId\)/);
+  // UTV2-1882: the locator is deliberately namespace-AGNOSTIC (`[A-Za-z0-9|]+`
+  // rather than a spelled-out alternation). A locator that names the very
+  // namespaces it is checking has to be edited in lockstep with the literal
+  // it guards, and an assertion you must edit to keep green is not a guard.
+  const match = VALIDATOR_WORKFLOW.match(/!(\/\^\([A-Za-z0-9|]+\)-\\d\+\$\/i)\.test\(r\.issueId\)/);
   assert.ok(match, 'could not locate the inline issue-ID regex in executor-result-validator.yml');
   assert.equal(
     match[1],
@@ -304,4 +308,151 @@ test('UTV2-1688: the workflow branch literal is byte-identical to the exported o
     EXECUTOR_RESULT_BRANCH_RE.toString(),
     'the workflow copy has drifted from EXECUTOR_RESULT_BRANCH_RE',
   );
+});
+
+// ── UTV2-1882: the WORK-### namespace ──────────────────────────────────────
+//
+// `WORK-###` is a repository-minted work identity: `shared.ts` BRANCH_PATTERN
+// has accepted `work-\d+` since UTV2-1837 and ISSUE_ID_NAMESPACES since
+// UTV2-1840, but this validator did not, so a WORK lane could never produce the
+// required `Executor Result Validation` context and was unmergeable.
+//
+// These assert the widening in BOTH directions. Admission alone is not the
+// property worth locking -- a regex that admitted everything would pass an
+// admission-only test -- so every malformed case below names the specific
+// condition it violates, and the pair is asserted non-vacuous at the end.
+
+const WORK_COMMENT = `EXECUTOR_RESULT: READY_FOR_REVIEW
+schema: executor-result/v1
+Issue: WORK-2026091001
+Lane: codex
+Branch: codex/work-2026091001-tracker-independence
+PR: #1556
+Head SHA: 3dc57bc84e47b94dc640d00d394e8525f538c1a7
+Proof Artifact: docs/06_status/proof/WORK-2026091001/verification.md
+Checklist:
+- [x] example`;
+
+const WORK_CTX = {
+  prNumber: 1556,
+  headRef: 'codex/work-2026091001-tracker-independence',
+  headSha: '3dc57bc84e47b94dc640d00d394e8525f538c1a7',
+  prLabels: ['tier:T1'],
+};
+
+test('UTV2-1882: a well-formed WORK-### executor result validates end to end', () => {
+  const parsed = parseExecutorResultComment(WORK_COMMENT);
+  assert.ok(parsed, 'the WORK-### comment should parse');
+  assert.deepEqual(validateExecutorResultFields(parsed!, WORK_CTX), []);
+});
+
+test('UTV2-1882: valid WORK identifiers are admitted by both exported regexes', () => {
+  for (const id of ['WORK-2026091001', 'WORK-1', 'work-42']) {
+    assert.ok(EXECUTOR_RESULT_ISSUE_ID_RE.test(id), `expected ${id} to be admitted`);
+  }
+  for (const br of [
+    'codex/work-2026091001-tracker-independence',
+    'claude/work-1-x',
+    'bootstrap/work-7-x',
+  ]) {
+    assert.ok(EXECUTOR_RESULT_BRANCH_RE.test(br), `expected ${br} to be admitted`);
+  }
+});
+
+test('UTV2-1882: the existing namespaces are untouched by the widening', () => {
+  for (const id of ['UTV2-1882', 'UNI-5']) {
+    assert.ok(EXECUTOR_RESULT_ISSUE_ID_RE.test(id), `${id} must still be admitted`);
+  }
+  for (const br of ['claude/utv2-1882-erv', 'codex/uni-3-x', 'bootstrap/utv2-1688-x']) {
+    assert.ok(EXECUTOR_RESULT_BRANCH_RE.test(br), `${br} must still be admitted`);
+  }
+});
+
+test('UTV2-1882: malformed identifiers are still rejected, each on the rule it breaks', () => {
+  const badIds: Array<[string, string]> = [
+    ['WORK', 'no separator and no digits'],
+    ['WORK-', 'separator present but no digits'],
+    ['WORK-abc', 'non-numeric suffix'],
+    ['WORK-12a', 'trailing garbage after the digits ($ anchor)'],
+    ['xWORK-12', 'leading garbage before the namespace (^ anchor)'],
+    ['WORKS-12', 'near-miss namespace must not be admitted by a prefix match'],
+    ['FOO-123', 'wrong namespace entirely'],
+    ['', 'empty'],
+  ];
+  for (const [id, why] of badIds) {
+    assert.equal(EXECUTOR_RESULT_ISSUE_ID_RE.test(id), false, `${JSON.stringify(id)} must be rejected: ${why}`);
+  }
+
+  const badBranches: Array<[string, string]> = [
+    ['codex/work-x', 'no digits after the namespace'],
+    ['codex/work', 'no separator'],
+    ['codex/works-1-x', 'near-miss namespace must not be admitted by a prefix match'],
+    ['foo/work-1-x', 'wrong executor prefix'],
+    ['work-1-x', 'no executor prefix at all'],
+    ['x/codex/work-1', 'leading garbage before the executor prefix (^ anchor)'],
+  ];
+  for (const [br, why] of badBranches) {
+    assert.equal(EXECUTOR_RESULT_BRANCH_RE.test(br), false, `${JSON.stringify(br)} must be rejected: ${why}`);
+  }
+});
+
+test('UTV2-1882: a malformed WORK issue ID still produces a validation error', () => {
+  const parsed = parseExecutorResultComment(WORK_COMMENT.replace('Issue: WORK-2026091001', 'Issue: WORK-abc'));
+  assert.ok(parsed);
+  const errors = validateExecutorResultFields(parsed!, WORK_CTX);
+  assert.ok(
+    errors.some((e) => e.includes('Invalid Issue ID')),
+    `expected an Invalid Issue ID error, got: ${JSON.stringify(errors)}`,
+  );
+});
+
+test('UTV2-1882: an ABSENT issue ID still fails -- the widening admits a namespace, not an omission', () => {
+  const parsed = parseExecutorResultComment(WORK_COMMENT.replace('Issue: WORK-2026091001\n', ''));
+  assert.ok(parsed);
+  const errors = validateExecutorResultFields(parsed!, WORK_CTX);
+  assert.ok(
+    errors.some((e) => e.includes('Invalid Issue ID')),
+    `an executor result with no Issue: row must still fail, got: ${JSON.stringify(errors)}`,
+  );
+});
+
+test('UTV2-1882: the three binding controls still fail on a WORK lane', () => {
+  const parsed = parseExecutorResultComment(WORK_COMMENT)!;
+
+  // Branch must equal the PR head ref.
+  assert.ok(
+    validateExecutorResultFields(parsed, { ...WORK_CTX, headRef: 'codex/work-2026091001-something-else' })
+      .some((e) => e.includes('Branch mismatch')),
+    'a head-ref mismatch must still be reported',
+  );
+
+  // The declared PR must equal the actual PR.
+  assert.ok(
+    validateExecutorResultFields(parsed, { ...WORK_CTX, prNumber: 9999 })
+      .some((e) => e.includes('PR mismatch')),
+    'a PR-number mismatch must still be reported',
+  );
+
+  // The declared head SHA must equal the current head.
+  assert.ok(
+    validateExecutorResultFields(parsed, { ...WORK_CTX, headSha: 'f'.repeat(40) })
+      .some((e) => e.includes('HEAD SHA mismatch')),
+    'a stale head SHA must still be reported',
+  );
+});
+
+test('UTV2-1882: the widening is non-vacuous in both directions', () => {
+  const NARROW_ID = /^(UTV2|UNI)-\d+$/i;
+  const NARROW_BR = /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i;
+
+  // Something is newly admitted -- otherwise the change did nothing.
+  assert.ok(EXECUTOR_RESULT_ISSUE_ID_RE.test('WORK-1') && !NARROW_ID.test('WORK-1'));
+  assert.ok(
+    EXECUTOR_RESULT_BRANCH_RE.test('codex/work-1-x') && !NARROW_BR.test('codex/work-1-x'),
+  );
+
+  // And something is still refused -- otherwise the tests above are satisfied
+  // by a regex that admits everything.
+  assert.equal(EXECUTOR_RESULT_ISSUE_ID_RE.test('FOO-1'), false);
+  assert.equal(EXECUTOR_RESULT_BRANCH_RE.test('foo/work-1-x'), false);
 });

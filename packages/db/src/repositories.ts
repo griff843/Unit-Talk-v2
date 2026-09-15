@@ -512,6 +512,20 @@ export interface SettlementRepository {
   record(input: SettlementCreateInput): Promise<SettlementRecord>;
   settlePickAtomic(input: SettlePickAtomicInput): Promise<SettlePickAtomicResult>;
   findLatestForPick(pickId: string): Promise<SettlementRecord | null>;
+  /**
+   * UTV2-1886: the batch form of `findLatestForPick`. `runGradingPass` asked the
+   * single-pick question once per pick over the whole population — 22,291 picks in
+   * production on 2026-09-11 — which is what put a median 91 minutes between
+   * consecutive grading runs against a 5-minute poll interval.
+   *
+   * Returns an entry only for picks that HAVE a settlement. An absent key therefore
+   * means "no settlement exists", and an implementation that under-reads reports a
+   * settled pick as unsettled, which makes the caller settle it again. Completeness
+   * is the load-bearing property of this method, not speed.
+   */
+  findLatestForPicks(
+    pickIds: readonly string[],
+  ): Promise<Map<string, SettlementRecord>>;
   listByPick(pickId: string): Promise<SettlementRecord[]>;
   listRecent(limit?: number | undefined, since?: string | undefined): Promise<SettlementRecord[]>;
 }
@@ -601,6 +615,27 @@ export interface ClosingLineLookupCriteria {
   bookmakerKey?: string | null;
 }
 
+/**
+ * UTV2-1898: the complete scope a provider offer must match to back a pick.
+ * See {@link ProviderOfferRepository.findLatestScopedOffer}.
+ */
+export interface ScopedProviderOfferLookup {
+  /** Canonical sport of the pick, matched against `provider_offer_current.sport_key`. */
+  sportKey: string;
+  /** Provider-native event id for the pick's event. */
+  providerEventId: string;
+  /** Provider-native market key (already translated from the canonical key). */
+  providerMarketKey: string;
+  /**
+   * Provider-native participant id for the pick's side, or `null` when the
+   * market is genuinely game-level and its offer rows carry no participant.
+   * `undefined` is not admissible.
+   */
+  providerParticipantId: string | null;
+  /** Restrict to one book/provider when set. */
+  providerKey?: string | undefined;
+}
+
 export interface ProviderOfferRepository {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
   stageBatch(offers: ProviderOfferStageInput[]): Promise<ProviderOfferStageResult>;
@@ -615,10 +650,25 @@ export interface ProviderOfferRepository {
    * Opening-line CLV is directionally valid but less precise than closing-line CLV.
    */
   findOpeningLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
-  findLatestByMarketKey(
-    marketKey: string,
-    providerKey?: string,
-    providerParticipantId?: string | null,
+  /**
+   * UTV2-1898: fully-scoped current-offer lookup.
+   *
+   * Replaces `findLatestByMarketKey(marketKey, providerKey?, participantId?)`,
+   * whose positional optionals made an omitted argument mean "apply no filter"
+   * rather than "match nothing". A caller that could not resolve a participant
+   * therefore received the newest row for the market key across every sport,
+   * every event and every age -- which is how a June MLB moneyline supplied
+   * edge to a September NFL pick.
+   *
+   * Every discriminating dimension here is REQUIRED. `providerParticipantId`
+   * accepts `null` to mean "the offer must itself carry a NULL participant",
+   * but never `undefined`: absence of scope is a refusal, not a wildcard.
+   * Freshness is deliberately NOT applied here -- the scope is already narrow
+   * enough to return at most a handful of rows, and the caller applies the
+   * window so it can distinguish a stale offer from a missing one.
+   */
+  findLatestScopedOffer(
+    criteria: ScopedProviderOfferLookup,
   ): Promise<ProviderOfferRecord | null>;
   listAll(): Promise<ProviderOfferRecord[]>;
   listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;

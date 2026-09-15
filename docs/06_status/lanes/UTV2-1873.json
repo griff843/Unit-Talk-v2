@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1873",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1873-hook-classify-before-allocate",
+  "branch": "claude/utv2-1873-hook-classify-before-allocate",
+  "base_branch": "main",
+  "commit_sha": "b60f20f9c3f89541e735c5cd22668bc238a8efa6",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1550",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/hooks/pre-proof-validator.sh",
+    "scripts/ops/proof-check.test.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-09-09T16:19:35.815Z",
+  "heartbeat_at": "2026-09-09T17:18:01.457Z",
+  "closed_at": "2026-09-09T17:18:01.457Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-09T17:17:58.826Z",
+      "verdict": "pass",
+      "merge_sha": "b60f20f9c3f89541e735c5cd22668bc238a8efa6",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1873-hook-classify-before-allocate",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

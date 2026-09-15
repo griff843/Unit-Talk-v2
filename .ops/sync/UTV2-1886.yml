@@ -1,0 +1,286 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1886
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1886
+  objective: Grading pass is an N+1 over the whole backlog — one settlement query
+    per pick, ~91 min cadence against a 5-minute poll
+  acceptance_criteria:
+    - >-
+      ## The defect
+
+
+      `runGradingPass` (`apps/api/src/grading-service.ts:121-123`) opens the
+      per-pick loop with
+
+
+      ```ts
+
+      const existingSettlement = await
+      repositories.settlements.findLatestForPick(pick.id);
+
+      ```
+
+
+      one sequential round trip per pick, over the entire `posted` +
+      `awaiting_approval` + Track Only `validated` population — 22,290 picks
+      measured in production on 2026-09-10.
+
+
+      ## Measured consequence
+
+
+      Each `grading.run` row records `started_at`→`finished_at` of ~240ms while
+      *consecutive* runs are 88–152 minutes apart (median 91.0 min over 109 runs
+      in seven days), against a `pollIntervalMs` default of 5 minutes with no
+      production override. The time is spent inside the pass **before** the run
+      record opens, so the recorded duration measures nothing. The 14,984 stale
+      `awaiting_approval` picks are not merely what keeps
+      `governance.awaiting-approval-drift` red — they are the grading cadence.
+
+
+      This is Milestone 2 condition 3: "grading and settlement run on their
+      intended schedule against real results". The loop is alive; its intended
+      schedule is not currently met.
+
+
+      ## Repair
+
+
+      Add a batch lookup to `SettlementRepository` and prefetch once per pass:
+
+
+      * `findLatestForPicks(pickIds): Promise<Map<string, SettlementRecord>>` on
+      the interface (`packages/db/src/repositories.ts:511`), implemented on
+      `InMemorySettlementRepository` and `DatabaseSettlementRepository`
+      (`packages/db/src/runtime-repositories.ts:1473`, `:4620`).
+
+      * The database implementation chunks `pick_id` into `.in(...)` batches
+      **and paginates each chunk past the Supabase 1000-row default cap**.
+      Under-reading here is the fail-open direction — a missed settlement row
+      reads as "no settlement exists" and would re-settle an already-settled
+      pick — so the read must be provably complete, not merely usually complete.
+
+      * "Latest" is resolved through the existing
+      `compareSettlementRecordsDescending` comparator rather than a second
+      ordering rule, so the definition cannot fork between the single and batch
+      paths.
+
+      * `runGradingPass` resolves from the prefetched map; a prefetch failure
+      fails the pass loudly rather than degrading to "no settlements found".
+
+
+      The single-pick `findLatestForPick` stays — `settlement-service.ts` has
+      four legitimate single-pick callers.
+
+
+      ## Acceptance
+
+
+      1. `runGradingPass` performs O(picks/chunk) settlement queries, not
+      O(picks) — asserted by counting calls against an instrumented repository,
+      not by timing.
+
+      2. The batch result is identical to the per-pick result for the same
+      population, including the correction chain (a corrected settlement must
+      resolve to the correction, not the original).
+
+      3. A chunk read that would exceed the row cap returns every row —
+      mutation-tested by removing the pagination and showing the assertion
+      fails.
+
+      4. A prefetch error does not present as an empty map.
+
+
+      Recorded in `docs/mission/plan.md` → Milestone 2 → "Executable now" item
+      5.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      The defect
+
+      `runGradingPass` (`apps/api/src/grading-service.ts:121-123`) opens the
+      per-pick loop with
+
+
+      ```ts
+
+      const existingSettlement = await
+      repositories.settlements.findLatestForPick(pick.id);
+
+      ```
+
+
+      one sequential round trip per pick, over the entire `posted` +
+      `awaiting_approval` + Track Only `validated` population — 22,290 picks
+      measured in production on 2026-09-10.
+    - >-
+      Measured consequence
+
+      Each `grading.run` row records `started_at`→`finished_at` of ~240ms while
+      *consecutive* runs are 88–152 minutes apart (median 91.0 min over 109 runs
+      in seven days), against a `pollIntervalMs` default of 5 minutes with no
+      production override. The time is spent inside the pass **before** the run
+      record opens, so the recorded duration measures nothing. The 14,984 stale
+      `awaiting_approval` picks are not merely what keeps
+      `governance.awaiting-approval-drift` red — they are the grading cadence.
+
+
+      This is Milestone 2 condition 3: "grading and settlement run on their
+      intended schedule against real results". The loop is alive; its intended
+      schedule is not currently met.
+    - >-
+      Repair
+
+      Add a batch lookup to `SettlementRepository` and prefetch once per pass:
+
+
+      * `findLatestForPicks(pickIds): Promise<Map<string, SettlementRecord>>` on
+      the interface (`packages/db/src/repositories.ts:511`), implemented on
+      `InMemorySettlementRepository` and `DatabaseSettlementRepository`
+      (`packages/db/src/runtime-repositories.ts:1473`, `:4620`).
+
+      * The database implementation chunks `pick_id` into `.in(...)` batches
+      **and paginates each chunk past the Supabase 1000-row default cap**.
+      Under-reading here is the fail-open direction — a missed settlement row
+      reads as "no settlement exists" and would re-settle an already-settled
+      pick — so the read must be provably complete, not merely usually complete.
+
+      * "Latest" is resolved through the existing
+      `compareSettlementRecordsDescending` comparator rather than a second
+      ordering rule, so the definition cannot fork between the single and batch
+      paths.
+
+      * `runGradingPass` resolves from the prefetched map; a prefetch failure
+      fails the pass loudly rather than degrading to "no settlements found".
+
+
+      The single-pick `findLatestForPick` stays — `settlement-service.ts` has
+      four legitimate single-pick callers.
+    - >-
+      Acceptance
+
+      1. `runGradingPass` performs O(picks/chunk) settlement queries, not
+      O(picks) — asserted by counting calls against an instrumented repository,
+      not by timing.
+
+      2. The batch result is identical to the per-pick result for the same
+      population, including the correction chain (a corrected settlement must
+      resolve to the correction, not the original).
+
+      3. A chunk read that would exceed the row cap returns every row —
+      mutation-tested by removing the pagination and showing the assertion
+      fails.
+
+      4. A prefetch error does not present as an empty map.
+
+
+      Recorded in `docs/mission/plan.md` → Milestone 2 → "Executable now" item
+      5.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1886/grading-pass-is-an-n1-over-the-whole-backlog-one-settlement-query-per
+    title: Grading pass is an N+1 over the whole backlog — one settlement query per
+      pick, ~91 min cadence against a 5-minute poll
+    description: >-
+      ## The defect
+
+
+      `runGradingPass` (`apps/api/src/grading-service.ts:121-123`) opens the
+      per-pick loop with
+
+
+      ```ts
+
+      const existingSettlement = await
+      repositories.settlements.findLatestForPick(pick.id);
+
+      ```
+
+
+      one sequential round trip per pick, over the entire `posted` +
+      `awaiting_approval` + Track Only `validated` population — 22,290 picks
+      measured in production on 2026-09-10.
+
+
+      ## Measured consequence
+
+
+      Each `grading.run` row records `started_at`→`finished_at` of ~240ms while
+      *consecutive* runs are 88–152 minutes apart (median 91.0 min over 109 runs
+      in seven days), against a `pollIntervalMs` default of 5 minutes with no
+      production override. The time is spent inside the pass **before** the run
+      record opens, so the recorded duration measures nothing. The 14,984 stale
+      `awaiting_approval` picks are not merely what keeps
+      `governance.awaiting-approval-drift` red — they are the grading cadence.
+
+
+      This is Milestone 2 condition 3: "grading and settlement run on their
+      intended schedule against real results". The loop is alive; its intended
+      schedule is not currently met.
+
+
+      ## Repair
+
+
+      Add a batch lookup to `SettlementRepository` and prefetch once per pass:
+
+
+      * `findLatestForPicks(pickIds): Promise<Map<string, SettlementRecord>>` on
+      the interface (`packages/db/src/repositories.ts:511`), implemented on
+      `InMemorySettlementRepository` and `DatabaseSettlementRepository`
+      (`packages/db/src/runtime-repositories.ts:1473`, `:4620`).
+
+      * The database implementation chunks `pick_id` into `.in(...)` batches
+      **and paginates each chunk past the Supabase 1000-row default cap**.
+      Under-reading here is the fail-open direction — a missed settlement row
+      reads as "no settlement exists" and would re-settle an already-settled
+      pick — so the read must be provably complete, not merely usually complete.
+
+      * "Latest" is resolved through the existing
+      `compareSettlementRecordsDescending` comparator rather than a second
+      ordering rule, so the definition cannot fork between the single and batch
+      paths.
+
+      * `runGradingPass` resolves from the prefetched map; a prefetch failure
+      fails the pass loudly rather than degrading to "no settlements found".
+
+
+      The single-pick `findLatestForPick` stays — `settlement-service.ts` has
+      four legitimate single-pick callers.
+
+
+      ## Acceptance
+
+
+      1. `runGradingPass` performs O(picks/chunk) settlement queries, not
+      O(picks) — asserted by counting calls against an instrumented repository,
+      not by timing.
+
+      2. The batch result is identical to the per-pick result for the same
+      population, including the correction chain (a corrected settlement must
+      resolve to the correction, not the original).
+
+      3. A chunk read that would exceed the row cap returns every row —
+      mutation-tested by removing the pagination and showing the assertion
+      fails.
+
+      4. A prefetch error does not present as an empty map.
+
+
+      Recorded in `docs/mission/plan.md` → Milestone 2 → "Executable now" item
+      5.
+    captured_at: 2026-09-11T12:02:18.346Z
+    description_sha256: 5b3b6bc9e31fa1f9cf15411a630954cd0fb5d646a2c558230952604eb1e306cf
+  contract_hash: e7503eed5961063f65f5f363ec651a210906877c493132a93f597dfa934605cd

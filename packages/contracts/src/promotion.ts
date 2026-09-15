@@ -77,7 +77,19 @@ export type EdgeFallbackReason =
   | 'no-market-key'
   | 'no-participant-scope'
   | 'no-provider-offer'
-  | 'computation-error';
+  | 'computation-error'
+  /**
+   * UTV2-1898: scope reasons. A provider offer may only back a pick when it
+   * matches that pick's sport, event, market, participant side AND falls inside
+   * the provider freshness window. Each dimension that cannot be established
+   * names itself here rather than being silently dropped from the query --
+   * the omitted-argument-means-unfiltered behaviour these replace is what let
+   * an unrelated stale MLB offer supply edge to an NFL pick.
+   */
+  | 'no-sport-scope'
+  | 'no-event-scope'
+  | 'no-fresh-offer'
+  | 'offer-participant-unattributed';
 
 export interface PromotionScoreWeights {
   edge: number;

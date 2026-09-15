@@ -1,0 +1,295 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1868
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1868
+  objective: Game-line results discard the side, so no moneyline or spread can
+    ever be settled
+  acceptance_criteria:
+    - |-
+      Milestone 2 condition 3 requires that every settled pick's outcome be traceable to its score provenance. For moneyline and spread that is currently impossible, and the reason is not containment, not provider access, and not the grading classifier. **The side is discarded at parse time and the surviving row is unattributed.**
+
+      ## Measured, on production `zfzdnfwdarxucxtaojxm`, 2026-09-09
+
+      ```
+      market_key              rows  with_participant  events
+      points-all-game-ml       280                 0     280
+      points-all-game-sp       280                 0     280
+      points-all-game-yn      3944              3761     217
+      ```
+
+      Exactly **one** `points-all-game-ml` row exists per event (`max_rows_for_one_event = 1`), every one with `participant_id = NULL`. Sampling two events, the `-ml`, `-sp` and the participant-less `-yn` row all carry the *same* `actual_value` (9 for one event, 4 for the other) — one number per event, with no side attached and no second team's score anywhere. `game_results` has no home/away score columns, and a schema-wide search for `home_score` / `away_score` finds none in any table.
+
+      So a settled moneyline cannot be computed at all: there is no pair of scores to compare, and the single number that survives is not attributed to either team.
+
+      ## Mechanism
+
+      `apps/ingestor/src/sgo-fetcher.ts:1425-1436`:
+
+      ```ts
+      function normalizeExplicitParticipantId(value: string | undefined) {
+        if (!value || /^(player[-_])?(home|away)$/i.test(value) || value.toLowerCase() === 'all') {
+          return null;
+        }
+        return value;
+      }
+      ```
+
+      The function exists to reject `all` — a genuine placeholder. But for a **game-line** market the provider's entity really is `home` or `away`, and that is the side. Rejecting it as a placeholder throws away the only thing that distinguishes the two rows a moneyline produces.
+
+      `apps/ingestor/src/results-resolver.ts:200-217` then takes the `providerParticipantId === null` branch and inserts with `participantId: null`. Both sides collapse onto the same `(event_id, market_key, participant_id=NULL)` address, which is why one row per event survives.
+
+      `inferSide` at `sgo-fetcher.ts:1372-1382` already maps `-home` -> `over` and `-away` -> `under` for offer construction, so the repository is not missing the concept of a side on a game line — the results path just does not use it.
+
+      ## Consequence, stated precisely
+
+      This is *upstream* of the grading gaps already recorded. Even after grading admits moneyline and spread as gradeable families and stops requiring a finite `line` for moneyline, they still could not settle, because the result to settle against does not exist in a usable form. Any plan that sequences the classifier change first will produce a grading pass that reaches these picks and then skips them for a new reason.
+
+      It also means the 280 `-ml` and 280 `-sp` rows already in production are not merely incomplete — they are **ambiguous**, since nothing records which side's number survived. They should not be interpreted, and a repair must re-derive rather than reinterpret them.
+
+      ## Scope
+
+      `apps/ingestor/src/sgo-fetcher.ts`, `apps/ingestor/src/results-resolver.ts` and their tests. **Blocked on** [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) **(**[griff843/Unit-Talk-v2#1544](https://linear.app/unit-talk-v2/review/utv2-1866-bound-the-results-only-ingestor-write-surface-and-prove-the-79e66d6b831e)) merging, which holds `apps/ingestor/src/**` under its `file_scope_lock`.
+
+      ## The resolution path already exists end to end
+
+      Added after filing, because it changes this from a design question into a wiring one.
+
+      * The side is carried in the odd id itself: the SGO fixture at `apps/ingestor/src/ingestor.test.ts:2983-2998` uses `points-home-game-ml-home` and `points-home-game-ml-away`, and `stripSgoSideSuffix` (`sgo-request-contract.test.ts:83`) already isolates that suffix.
+      * The canonical target already exists: `event_participants.role` holds **771** `home` and **769** `away` rows in production alongside 15,478 `competitor` rows. So `(event_id, role)` resolves a game-line side to a real `participants` row today, with no schema change and no new reference data.
+
+      So the repair is: for a game-line scored market, read the side from the odd-id suffix instead of from the entity field, and resolve it through `event_participants` by role. No new column, no new table, no migration.
+
+      ## Acceptance
+
+      1. A game-line scored market whose provider entity is `home` or `away` resolves to the corresponding canonical team participant, and inserts a `game_results` row carrying that `participant_id` — so a completed event yields **two** `points-all-game-ml` rows, one per side.
+      2. A genuine placeholder (`all`, an empty entity) still resolves to `null` and still inserts an unattributed row. The existing behaviour for player props and game totals is unchanged.
+      3. A test fails if the side is dropped again — the mutation to check is restoring the old `normalizeExplicitParticipantId` behaviour for a game-line market.
+      4. Nothing reinterprets the 280 existing ambiguous rows. If they are to be corrected, that is a separate re-derivation against a real payload, not a relabelling.
+      5. No containment change, no provider activation, no write against production.
+
+      ## Not in scope
+
+      Grading's own classifier and line-requirement rules (moneyline must not require a finite `line`; spread must require a signed one). Those live in `apps/api/src/grading-service.ts`, which is held by [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s lane lock, and they are the *second* half of the same problem.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Milestone 2 condition 3 requires that every settled pick's outcome be
+      traceable to its score provenance. For moneyline and spread that is
+      currently impossible, and the reason is not containment, not provider
+      access, and not the grading classifier. **The side is discarded at parse
+      time and the surviving row is unattributed.**
+    - >-
+      Measured, on production `zfzdnfwdarxucxtaojxm`, 2026-09-09
+
+      ```
+
+      market_key              rows  with_participant  events
+
+      points-all-game-ml       280                 0     280
+
+      points-all-game-sp       280                 0     280
+
+      points-all-game-yn      3944              3761     217
+
+      ```
+
+
+      Exactly **one** `points-all-game-ml` row exists per event
+      (`max_rows_for_one_event = 1`), every one with `participant_id = NULL`.
+      Sampling two events, the `-ml`, `-sp` and the participant-less `-yn` row
+      all carry the *same* `actual_value` (9 for one event, 4 for the other) —
+      one number per event, with no side attached and no second team's score
+      anywhere. `game_results` has no home/away score columns, and a schema-wide
+      search for `home_score` / `away_score` finds none in any table.
+
+
+      So a settled moneyline cannot be computed at all: there is no pair of
+      scores to compare, and the single number that survives is not attributed
+      to either team.
+    - >-
+      Mechanism
+
+      `apps/ingestor/src/sgo-fetcher.ts:1425-1436`:
+
+
+      ```ts
+
+      function normalizeExplicitParticipantId(value: string | undefined) {
+        if (!value || /^(player[-_])?(home|away)$/i.test(value) || value.toLowerCase() === 'all') {
+          return null;
+        }
+        return value;
+      }
+
+      ```
+
+
+      The function exists to reject `all` — a genuine placeholder. But for a
+      **game-line** market the provider's entity really is `home` or `away`, and
+      that is the side. Rejecting it as a placeholder throws away the only thing
+      that distinguishes the two rows a moneyline produces.
+
+
+      `apps/ingestor/src/results-resolver.ts:200-217` then takes the
+      `providerParticipantId === null` branch and inserts with `participantId:
+      null`. Both sides collapse onto the same `(event_id, market_key,
+      participant_id=NULL)` address, which is why one row per event survives.
+
+
+      `inferSide` at `sgo-fetcher.ts:1372-1382` already maps `-home` -> `over`
+      and `-away` -> `under` for offer construction, so the repository is not
+      missing the concept of a side on a game line — the results path just does
+      not use it.
+    - >-
+      Consequence, stated precisely
+
+      This is *upstream* of the grading gaps already recorded. Even after
+      grading admits moneyline and spread as gradeable families and stops
+      requiring a finite `line` for moneyline, they still could not settle,
+      because the result to settle against does not exist in a usable form. Any
+      plan that sequences the classifier change first will produce a grading
+      pass that reaches these picks and then skips them for a new reason.
+
+
+      It also means the 280 `-ml` and 280 `-sp` rows already in production are
+      not merely incomplete — they are **ambiguous**, since nothing records
+      which side's number survived. They should not be interpreted, and a repair
+      must re-derive rather than reinterpret them.
+    - |-
+      Scope
+      `apps/ingestor/src/sgo-fetcher.ts`, `apps/ingestor/src/results-resolver.ts` and their tests. **Blocked on** [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) **(**[griff843/Unit-Talk-v2#1544](https://linear.app/unit-talk-v2/review/utv2-1866-bound-the-results-only-ingestor-write-surface-and-prove-the-79e66d6b831e)) merging, which holds `apps/ingestor/src/**` under its `file_scope_lock`.
+    - >-
+      The resolution path already exists end to end
+
+      Added after filing, because it changes this from a design question into a
+      wiring one.
+
+
+      * The side is carried in the odd id itself: the SGO fixture at
+      `apps/ingestor/src/ingestor.test.ts:2983-2998` uses
+      `points-home-game-ml-home` and `points-home-game-ml-away`, and
+      `stripSgoSideSuffix` (`sgo-request-contract.test.ts:83`) already isolates
+      that suffix.
+
+      * The canonical target already exists: `event_participants.role` holds
+      **771** `home` and **769** `away` rows in production alongside 15,478
+      `competitor` rows. So `(event_id, role)` resolves a game-line side to a
+      real `participants` row today, with no schema change and no new reference
+      data.
+
+
+      So the repair is: for a game-line scored market, read the side from the
+      odd-id suffix instead of from the entity field, and resolve it through
+      `event_participants` by role. No new column, no new table, no migration.
+    - >-
+      Acceptance
+
+      1. A game-line scored market whose provider entity is `home` or `away`
+      resolves to the corresponding canonical team participant, and inserts a
+      `game_results` row carrying that `participant_id` — so a completed event
+      yields **two** `points-all-game-ml` rows, one per side.
+
+      2. A genuine placeholder (`all`, an empty entity) still resolves to `null`
+      and still inserts an unattributed row. The existing behaviour for player
+      props and game totals is unchanged.
+
+      3. A test fails if the side is dropped again — the mutation to check is
+      restoring the old `normalizeExplicitParticipantId` behaviour for a
+      game-line market.
+
+      4. Nothing reinterprets the 280 existing ambiguous rows. If they are to be
+      corrected, that is a separate re-derivation against a real payload, not a
+      relabelling.
+
+      5. No containment change, no provider activation, no write against
+      production.
+    - |-
+      Not in scope
+      Grading's own classifier and line-requirement rules (moneyline must not require a finite `line`; spread must require a signed one). Those live in `apps/api/src/grading-service.ts`, which is held by [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s lane lock, and they are the *second* half of the same problem.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1868/game-line-results-discard-the-side-so-no-moneyline-or-spread-can-ever
+    title: Game-line results discard the side, so no moneyline or spread can ever be
+      settled
+    description: |-
+      Milestone 2 condition 3 requires that every settled pick's outcome be traceable to its score provenance. For moneyline and spread that is currently impossible, and the reason is not containment, not provider access, and not the grading classifier. **The side is discarded at parse time and the surviving row is unattributed.**
+
+      ## Measured, on production `zfzdnfwdarxucxtaojxm`, 2026-09-09
+
+      ```
+      market_key              rows  with_participant  events
+      points-all-game-ml       280                 0     280
+      points-all-game-sp       280                 0     280
+      points-all-game-yn      3944              3761     217
+      ```
+
+      Exactly **one** `points-all-game-ml` row exists per event (`max_rows_for_one_event = 1`), every one with `participant_id = NULL`. Sampling two events, the `-ml`, `-sp` and the participant-less `-yn` row all carry the *same* `actual_value` (9 for one event, 4 for the other) — one number per event, with no side attached and no second team's score anywhere. `game_results` has no home/away score columns, and a schema-wide search for `home_score` / `away_score` finds none in any table.
+
+      So a settled moneyline cannot be computed at all: there is no pair of scores to compare, and the single number that survives is not attributed to either team.
+
+      ## Mechanism
+
+      `apps/ingestor/src/sgo-fetcher.ts:1425-1436`:
+
+      ```ts
+      function normalizeExplicitParticipantId(value: string | undefined) {
+        if (!value || /^(player[-_])?(home|away)$/i.test(value) || value.toLowerCase() === 'all') {
+          return null;
+        }
+        return value;
+      }
+      ```
+
+      The function exists to reject `all` — a genuine placeholder. But for a **game-line** market the provider's entity really is `home` or `away`, and that is the side. Rejecting it as a placeholder throws away the only thing that distinguishes the two rows a moneyline produces.
+
+      `apps/ingestor/src/results-resolver.ts:200-217` then takes the `providerParticipantId === null` branch and inserts with `participantId: null`. Both sides collapse onto the same `(event_id, market_key, participant_id=NULL)` address, which is why one row per event survives.
+
+      `inferSide` at `sgo-fetcher.ts:1372-1382` already maps `-home` -> `over` and `-away` -> `under` for offer construction, so the repository is not missing the concept of a side on a game line — the results path just does not use it.
+
+      ## Consequence, stated precisely
+
+      This is *upstream* of the grading gaps already recorded. Even after grading admits moneyline and spread as gradeable families and stops requiring a finite `line` for moneyline, they still could not settle, because the result to settle against does not exist in a usable form. Any plan that sequences the classifier change first will produce a grading pass that reaches these picks and then skips them for a new reason.
+
+      It also means the 280 `-ml` and 280 `-sp` rows already in production are not merely incomplete — they are **ambiguous**, since nothing records which side's number survived. They should not be interpreted, and a repair must re-derive rather than reinterpret them.
+
+      ## Scope
+
+      `apps/ingestor/src/sgo-fetcher.ts`, `apps/ingestor/src/results-resolver.ts` and their tests. **Blocked on** [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) **(**[griff843/Unit-Talk-v2#1544](https://linear.app/unit-talk-v2/review/utv2-1866-bound-the-results-only-ingestor-write-surface-and-prove-the-79e66d6b831e)) merging, which holds `apps/ingestor/src/**` under its `file_scope_lock`.
+
+      ## The resolution path already exists end to end
+
+      Added after filing, because it changes this from a design question into a wiring one.
+
+      * The side is carried in the odd id itself: the SGO fixture at `apps/ingestor/src/ingestor.test.ts:2983-2998` uses `points-home-game-ml-home` and `points-home-game-ml-away`, and `stripSgoSideSuffix` (`sgo-request-contract.test.ts:83`) already isolates that suffix.
+      * The canonical target already exists: `event_participants.role` holds **771** `home` and **769** `away` rows in production alongside 15,478 `competitor` rows. So `(event_id, role)` resolves a game-line side to a real `participants` row today, with no schema change and no new reference data.
+
+      So the repair is: for a game-line scored market, read the side from the odd-id suffix instead of from the entity field, and resolve it through `event_participants` by role. No new column, no new table, no migration.
+
+      ## Acceptance
+
+      1. A game-line scored market whose provider entity is `home` or `away` resolves to the corresponding canonical team participant, and inserts a `game_results` row carrying that `participant_id` — so a completed event yields **two** `points-all-game-ml` rows, one per side.
+      2. A genuine placeholder (`all`, an empty entity) still resolves to `null` and still inserts an unattributed row. The existing behaviour for player props and game totals is unchanged.
+      3. A test fails if the side is dropped again — the mutation to check is restoring the old `normalizeExplicitParticipantId` behaviour for a game-line market.
+      4. Nothing reinterprets the 280 existing ambiguous rows. If they are to be corrected, that is a separate re-derivation against a real payload, not a relabelling.
+      5. No containment change, no provider activation, no write against production.
+
+      ## Not in scope
+
+      Grading's own classifier and line-requirement rules (moneyline must not require a finite `line`; spread must require a signed one). Those live in `apps/api/src/grading-service.ts`, which is held by [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s lane lock, and they are the *second* half of the same problem.
+    captured_at: 2026-09-09T09:45:29.723Z
+    description_sha256: 60d7acd70cda2b9d947f855fe53712e46e0e658a8a4c642644238d93055aaae2
+  contract_hash: b3419aea680fa89e4495bb361d19037fdf98968f47c14e6cca1011ae2a45bdeb

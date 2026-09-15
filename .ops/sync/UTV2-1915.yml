@@ -1,0 +1,112 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1915
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1915
+  objective: "Lane A1-UI: Smart Form multi-leg bet slip — add, remove, reorder and
+    review legs, cut from main and independently mergeable"
+  acceptance_criteria:
+    - Unit tests cover add, remove, reorder, and the survival of entries across
+      a validation error.
+    - A browser proof exercises building a multi-leg slip end to end against the
+      local isolated API.
+    - An incomplete leg produces a visible, leg-scoped refusal and blocks review
+      completion.
+    - Track Only state is asserted present throughout; zero outbox rows in the
+      browser proof.
+    - No import of parlay pricing or identity logic; a test asserts the UI
+      computes no combined price.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Smart Form UI for building a multi-leg bet slip. This is the first third of [UTV2-1912](https://linear.app/unit-talk-v2/issue/UTV2-1912/parlay-journey-follow-ons-persistence-api-validation-and-smart-form), and the only third with lane capacity today: the other two (ticket persistence/attribution, API validation) both need `apps/api/**`, which only the singleton `runtime` and `modeling` lane types admit, and both are held by open PRs ([griff843/Unit-Talk-v2#1581](https://linear.app/unit-talk-v2/review/utv2-1907-resolve-capper-attribution-from-pickscapper-id-never-from-08ac75d6352d) [UTV2-1907](https://linear.app/unit-talk-v2/issue/UTV2-1907/c1a-pipeline-capper-attribution-must-read-pickscapper-id-not) runtime, [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0) [UTV2-1906](https://linear.app/unit-talk-v2/issue/UTV2-1906/lane-a-parlay-ticket-persistence-validation-and-grading-parlay-only-no) modeling).
+    - |-
+      Scoping decision — cut from `main`, not stacked on [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0)
+      [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0) ([UTV2-1906](https://linear.app/unit-talk-v2/issue/UTV2-1906/lane-a-parlay-ticket-persistence-validation-and-grading-parlay-only-no)) carries the parlay ticket contract in `packages/contracts` — `deriveParlayTicketIdentity`, `priceParlay`, `priceSettledParlay`, `parlayStatContribution`. Stacking this UI lane on that head would let the UI import those functions directly. It is deliberately **not** stacked:
+
+      * This repository's own history records stacked bases producing false diff readings ([griff843/Unit-Talk-v2#1491](https://linear.app/unit-talk-v2/review/governance-risk-scoped-merge-authority-rmav1-needs-a-one-time-repo-a510a1d426fb)/#1492 read as reverting [griff843/Unit-Talk-v2#1491](https://linear.app/unit-talk-v2/review/governance-risk-scoped-merge-authority-rmav1-needs-a-one-time-repo-a510a1d426fb)'s hardening purely because the base was stale) and multi-PR-per-branch breaking closeout.
+      * [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0) is blocked on a reserved approval artifact with no ETA. Stacking converts one blocked PR into two.
+
+      The cost is that this lane cannot import the parlay pricing or identity functions. That cost is paid deliberately by making the UI **surface** contract/server refusals rather than reimplement parlay semantics. The UI never holds a second copy of a pricing or identity rule, so UI/contract drift is structurally impossible rather than merely discouraged.
+    - |-
+      In scope — `apps/smart-form/**` only
+      * Add a leg to the slip; remove a leg; reorder legs.
+      * Review the assembled slip: every leg's participant, market, selection, line and price visible before submit.
+      * Per-leg validation surfaced **at the leg**, not as a single slip-level error.
+      * Explicit refusal for an incomplete or incompatible leg — fail closed, never a silent drop or a silent dedupe.
+      * Existing entries survive a validation error (the behaviour [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) established for the single-pick slip).
+      * Track Only state remains explicit and visible throughout. Member delivery stays disabled.
+    - |-
+      Explicitly NOT in scope
+      * **No combined parlay price is computed or displayed.** Pricing is `packages/contracts` ([griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0)) and is not duplicated here.
+      * **No parlay ticket is submitted.** There is no ticket endpoint until [UTV2-1912](https://linear.app/unit-talk-v2/issue/UTV2-1912/parlay-journey-follow-ons-persistence-api-validation-and-smart-form)'s API third lands. This lane builds and reviews a slip; it does not post one.
+      * **No duplicate-market-identity rule is implemented in the UI.** That refusal belongs to contract/API validation; the UI renders the refusal it receives.
+      * No teasers, no round robins ([UTV2-1908](https://linear.app/unit-talk-v2/issue/UTV2-1908/lane-a2-teaser-tickets-spreadtotal-line-adjustment-pricing-table-and), [UTV2-1909](https://linear.app/unit-talk-v2/issue/UTV2-1909/lane-a3-round-robin-tickets-combination-expansion-into-constituent)).
+      * No `apps/api/**`, no `packages/**`, no root `package.json`.
+    - >-
+      Containment
+
+      SGO off and untouched. Provider key not read, tested or replaced. Track
+      Only containment enabled. Member delivery disabled. Zero production writes
+      — this lane performs no I/O outside the local isolated API used by its own
+      proof.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review
+    title: "Lane A1-UI: Smart Form multi-leg bet slip — add, remove, reorder and
+      review legs, cut from main and independently mergeable"
+    description: |-
+      Smart Form UI for building a multi-leg bet slip. This is the first third of [UTV2-1912](https://linear.app/unit-talk-v2/issue/UTV2-1912/parlay-journey-follow-ons-persistence-api-validation-and-smart-form), and the only third with lane capacity today: the other two (ticket persistence/attribution, API validation) both need `apps/api/**`, which only the singleton `runtime` and `modeling` lane types admit, and both are held by open PRs ([griff843/Unit-Talk-v2#1581](https://linear.app/unit-talk-v2/review/utv2-1907-resolve-capper-attribution-from-pickscapper-id-never-from-08ac75d6352d) [UTV2-1907](https://linear.app/unit-talk-v2/issue/UTV2-1907/c1a-pipeline-capper-attribution-must-read-pickscapper-id-not) runtime, [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0) [UTV2-1906](https://linear.app/unit-talk-v2/issue/UTV2-1906/lane-a-parlay-ticket-persistence-validation-and-grading-parlay-only-no) modeling).
+
+      ## Scoping decision — cut from `main`, not stacked on [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0)
+
+      [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0) ([UTV2-1906](https://linear.app/unit-talk-v2/issue/UTV2-1906/lane-a-parlay-ticket-persistence-validation-and-grading-parlay-only-no)) carries the parlay ticket contract in `packages/contracts` — `deriveParlayTicketIdentity`, `priceParlay`, `priceSettledParlay`, `parlayStatContribution`. Stacking this UI lane on that head would let the UI import those functions directly. It is deliberately **not** stacked:
+
+      * This repository's own history records stacked bases producing false diff readings ([griff843/Unit-Talk-v2#1491](https://linear.app/unit-talk-v2/review/governance-risk-scoped-merge-authority-rmav1-needs-a-one-time-repo-a510a1d426fb)/#1492 read as reverting [griff843/Unit-Talk-v2#1491](https://linear.app/unit-talk-v2/review/governance-risk-scoped-merge-authority-rmav1-needs-a-one-time-repo-a510a1d426fb)'s hardening purely because the base was stale) and multi-PR-per-branch breaking closeout.
+      * [griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0) is blocked on a reserved approval artifact with no ETA. Stacking converts one blocked PR into two.
+
+      The cost is that this lane cannot import the parlay pricing or identity functions. That cost is paid deliberately by making the UI **surface** contract/server refusals rather than reimplement parlay semantics. The UI never holds a second copy of a pricing or identity rule, so UI/contract drift is structurally impossible rather than merely discouraged.
+
+      ## In scope — `apps/smart-form/**` only
+
+      * Add a leg to the slip; remove a leg; reorder legs.
+      * Review the assembled slip: every leg's participant, market, selection, line and price visible before submit.
+      * Per-leg validation surfaced **at the leg**, not as a single slip-level error.
+      * Explicit refusal for an incomplete or incompatible leg — fail closed, never a silent drop or a silent dedupe.
+      * Existing entries survive a validation error (the behaviour [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) established for the single-pick slip).
+      * Track Only state remains explicit and visible throughout. Member delivery stays disabled.
+
+      ## Explicitly NOT in scope
+
+      * **No combined parlay price is computed or displayed.** Pricing is `packages/contracts` ([griff843/Unit-Talk-v2#1582](https://linear.app/unit-talk-v2/review/utv2-1906-parlay-ticket-contract-multi-leg-pricing-validation-outcome-f6675cec02f0)) and is not duplicated here.
+      * **No parlay ticket is submitted.** There is no ticket endpoint until [UTV2-1912](https://linear.app/unit-talk-v2/issue/UTV2-1912/parlay-journey-follow-ons-persistence-api-validation-and-smart-form)'s API third lands. This lane builds and reviews a slip; it does not post one.
+      * **No duplicate-market-identity rule is implemented in the UI.** That refusal belongs to contract/API validation; the UI renders the refusal it receives.
+      * No teasers, no round robins ([UTV2-1908](https://linear.app/unit-talk-v2/issue/UTV2-1908/lane-a2-teaser-tickets-spreadtotal-line-adjustment-pricing-table-and), [UTV2-1909](https://linear.app/unit-talk-v2/issue/UTV2-1909/lane-a3-round-robin-tickets-combination-expansion-into-constituent)).
+      * No `apps/api/**`, no `packages/**`, no root `package.json`.
+
+      ## Acceptance criteria
+
+      1. Unit tests cover add, remove, reorder, and the survival of entries across a validation error.
+      2. A browser proof exercises building a multi-leg slip end to end against the local isolated API.
+      3. An incomplete leg produces a visible, leg-scoped refusal and blocks review completion.
+      4. Track Only state is asserted present throughout; zero outbox rows in the browser proof.
+      5. No import of parlay pricing or identity logic; a test asserts the UI computes no combined price.
+
+      ## Containment
+
+      SGO off and untouched. Provider key not read, tested or replaced. Track Only containment enabled. Member delivery disabled. Zero production writes — this lane performs no I/O outside the local isolated API used by its own proof.
+    captured_at: 2026-09-15T04:59:53.694Z
+    description_sha256: 153a0a0e0d6741db58b552a101f2e47ce1b91490a59b462c7932d691590a1e73
+  contract_hash: b2d1662274dccc826661fcd8a34788f7a94a97cbcce66e6c58bf06d35320f7aa

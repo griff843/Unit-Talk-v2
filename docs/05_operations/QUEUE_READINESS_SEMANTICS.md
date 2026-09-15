@@ -1,9 +1,9 @@
 # Queue Readiness Semantics — Unit Talk V2
 
-**Version:** 1.0  
-**Authority:** PM-ratified (UTV2-1320)  
+**Version:** 1.1  
+**Authority:** PM-ratified (UTV2-1320); Bucket 6 corrected under UTV2-1875  
 **Status:** ACTIVE  
-**Last updated:** 2026-06-25
+**Last updated:** 2026-09-09
 
 ---
 
@@ -77,13 +77,43 @@ Every row in `distribution_outbox` (pending/processing) and `dead_letter` maps t
 
 ### Bucket 6: True Delivery Failure
 
-**Definition:** Row has `attempt_count >= max_attempts` AND `status = 'dead_letter'`. The outbox worker attempted delivery the maximum number of times and all attempts failed. The row was moved to dead-letter queue because of actual delivery failure, not governance holds.
+**Definition:** Row has `status = 'dead_letter'`, was **attempted** (`attempt_count > 0`), and its recorded reason is **not** a recognised governance disposition. Delivery was tried and it failed, and nothing explains the failure as a deliberate hold.
 
-**Readiness impact:** HIGH. True delivery failures are operational failures and should fail the `dead_letter_count` readiness dimension if count > 0.
+**Readiness impact:** HIGH. True delivery failures are operational failures and fail the `dead_letter_count` readiness dimension if count > 0.
 
-**Evidence marker:** `attempt_count >= max_attempts` AND `status = 'dead_letter'`
+**Evidence marker:** `status = 'dead_letter'` AND `attempt_count > 0` AND `classifyDeadLetter(last_error)` is `unrecognised` or `unclassified_null_reason` (`scripts/ops/outbox-triage.ts`, UTV2-1744).
 
-**Current count (2026-06-25 baseline):** 0 — all 946 dead-letter rows are governance holds (Bucket 1)
+**Current count (2026-09-09):** 0 — of 1,954 dead-letter rows, 1,950 carry a recognised governance reason and 4 were never attempted (Bucket 6a).
+
+#### Corrected in v1.1 (UTV2-1875) — why the old definition was unimplementable, and the code diverged from it
+
+v1.0 defined this bucket as `attempt_count >= max_attempts`. **`max_attempts` is not a column on `distribution_outbox`** — the columns are `attempt_count`, `claimed_at`, `claimed_by`, `created_at`, `id`, `idempotency_key`, `last_error`, `next_attempt_at`, `payload`, `pick_id`, `status`, `target`, `updated_at`. The marker could not be evaluated as written, so the readiness probe implemented `attempt_count > 0` instead, and the doc and the gate quietly disagreed.
+
+That divergence had a measured cost. On 2026-09-09 the **blocking** `dead_letter_count` dimension was failing on exactly one row:
+
+```
+attempt_count  target          last_error                                              n
+0              discord:canary  proof-pick-blocked: source 't1-proof' is not a live…  1613
+1              discord:canary  proof-pick-blocked: source 't1-proof' is not a live…     1
+```
+
+The failing row is byte-identical in `target` and `last_error` to 1,613 rows the same probe classified as governance holds. It differed only in having consumed one attempt before the guard refused it. **A guard refusing a delivery is not a delivery failing.**
+
+**Bucketing on the reason alone is wrong in the other direction**, which is why both signals are now load-bearing. Four dead-letter rows carry a NULL `last_error` and an `updated_at` identical to the microsecond — a bulk operator update that recorded no reason. A reason-only rule would newly count those as delivery failures, but their `attempt_count` is 0: nothing ever attempted them.
+
+**The fail-closed direction is preserved.** An attempted row whose reason nothing recognises counts as a true failure. Unexplained is a failure until something classifies it, never the reverse.
+
+---
+
+### Bucket 6a: Unattempted, Unclassified
+
+**Definition:** Row has `status = 'dead_letter'`, `attempt_count = 0`, and no recognised governance reason (including a NULL or empty `last_error`).
+
+**Readiness impact:** LOW for delivery truth, but worth reporting. These rows were never attempted, so they cannot be delivery failures — but the absence of a recorded reason means nothing states *why* they are dead-lettered. They are counted and named separately rather than folded into Bucket 1, so a growing population of them is visible instead of being absorbed into "governance holds".
+
+**Evidence marker:** `status = 'dead_letter'` AND `attempt_count = 0` AND `classifyDeadLetter(last_error)` is `unrecognised` or `unclassified_null_reason`
+
+**Current count (2026-09-09):** 4 — all `discord:best-bets`, all sharing `updated_at = 2026-07-31 04:36:25.063811+00`
 
 ---
 

@@ -26,7 +26,11 @@ export function isLocalAuthFallbackActive(env: NodeJS.ProcessEnv = process.env) 
   );
 }
 
-export function isQaAuthBypassEnabled(env: NodeJS.ProcessEnv = process.env) {
+export function isQaAuthBypassEnabled(env: NodeJS.ProcessEnv = {
+  NODE_ENV: process.env.NODE_ENV,
+  NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS: process.env.NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS,
+  SMART_FORM_QA_AUTH_BYPASS: process.env.SMART_FORM_QA_AUTH_BYPASS,
+}) {
   if (env['NODE_ENV'] === 'production') {
     return false;
   }

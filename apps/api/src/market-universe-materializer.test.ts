@@ -87,7 +87,7 @@ function makeProviderOffersRepo(
     listStagedOffers: async () => [],
     findClosingLine: async () => null,
     findOpeningLine: async () => null,
-    findLatestByMarketKey: async () => null,
+    findLatestScopedOffer: async () => null,
     listAll: async () => [],
     listByProvider: async () => [],
     findExistingCombinations: async () => new Set<string>(),

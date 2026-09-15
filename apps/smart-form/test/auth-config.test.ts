@@ -41,4 +41,6 @@ test('isQaAuthBypassEnabled defaults off and requires an explicit non-production
   assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'test', SMART_FORM_QA_AUTH_BYPASS: 'true' })), true);
   assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'test', SMART_FORM_QA_AUTH_BYPASS: 'false' })), false);
   assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'production', SMART_FORM_QA_AUTH_BYPASS: 'true' })), false);
+  assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'production', NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS: '1' })), false);
+  assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'development', NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS: '1' })), true);
 });

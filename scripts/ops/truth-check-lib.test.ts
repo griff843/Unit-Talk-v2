@@ -2102,6 +2102,74 @@ test('CEP-8: missing required verification sections are caught pre-merge', () =>
   assert.ok(r.blocking.some((f) => f.id === 'CEP-E3'));
 });
 
+test('CEP-13: a T3 lane with no declared proof obligation is eligible, and says why', () => {
+  // The defect this locks: `defaultProofPaths` returns [] for T3 by design and
+  // the close gate's M7 accepts exactly that, but CEP-E1/E3/E4 had no tier
+  // condition -- so CEP-C1 emitted "ops:lane-close would fail after merge on:
+  // CEP-E1, CEP-E3, CEP-E4/P11..." about a lane that closes cleanly. Observed
+  // on four consecutive T3 lanes before it was repaired (UTV2-1876).
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { tier: 'T3', expected_proof_paths: [] }, proof_artifacts: [] }),
+  );
+  assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking));
+  assert.deepStrictEqual(r.blocking, []);
+
+  const byId = new Map(r.findings.map((f) => [f.id, f]));
+  assert.strictEqual(byId.get('CEP-E1')?.status, 'pass');
+  assert.strictEqual(byId.get('CEP-E3')?.status, 'pass');
+  assert.strictEqual(byId.get('CEP-E4')?.status, 'pass');
+  // Each exemption must state the tier as its reason, so a reader can tell the
+  // difference between "checked and satisfied" and "not applicable here".
+  assert.match(byId.get('CEP-E1')?.detail ?? '', /T3/);
+  assert.match(byId.get('CEP-E3')?.detail ?? '', /T3/);
+  assert.match(byId.get('CEP-E4')?.detail ?? '', /T3/);
+  // And the prediction itself must stop naming them.
+  assert.strictEqual(byId.get('CEP-C1')?.status, 'pass');
+});
+
+test('CEP-14: a T2 lane declaring no proof paths still fails CEP-E1', () => {
+  // The fail-open direction. A bucketing rule that is too permissive fails
+  // silently, so the exemption is asserted NOT to reach T2.
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { tier: 'T2', expected_proof_paths: [] }, proof_artifacts: [] }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E1'));
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E3'));
+  assert.ok(r.blocking.some((f) => f.id.startsWith('CEP-E4/')));
+});
+
+test('CEP-15: a T3 lane that DOES declare proof paths is still held to them', () => {
+  // The exemption is keyed on the absence of a declared obligation, never on
+  // the tier alone -- otherwise declaring a bundle at T3 would stop checking it.
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      manifest: { tier: 'T3', expected_proof_paths: ['docs/06_status/proof/UTV2-9000/evidence.json'] },
+      proof_artifacts: [],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E1'));
+  assert.match(
+    r.findings.find((f) => f.id === 'CEP-E1')?.detail ?? '',
+    /missing at the PR head/,
+  );
+});
+
+test('CEP-16: the P11-P14 family runs at exactly the tier ops:lane-close runs it', () => {
+  // Behavioural parity with the close gate, which evaluates
+  // `evaluateT2ProofEvidence` only inside `} else if (tier === 'T2') {`. Asserted
+  // across all three tiers rather than only the one that surfaced the defect.
+  const family = (tier: string): string[] =>
+    evaluateCloseEligibilityPreflight(cepInput({ manifest: { tier } }))
+      .findings.filter((f) => f.id.startsWith('CEP-E4/'))
+      .map((f) => f.id);
+
+  assert.ok(family('T2').length >= 4, 'T2 must still run P11-P14');
+  assert.deepStrictEqual(family('T1'), []);
+  assert.deepStrictEqual(family('T3'), []);
+});
+
 test('CEP-9: an unresolvable tier and unparseable pr_url are caught pre-merge', () => {
   const r = evaluateCloseEligibilityPreflight(cepInput({ manifest: { tier: 'T9', pr_url: null } }));
   assert.strictEqual(r.eligible, false);

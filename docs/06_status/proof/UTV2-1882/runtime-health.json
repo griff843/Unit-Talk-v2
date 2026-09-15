@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1882",
+  "branch": "claude/utv2-1882-erv-work-namespace",
+  "evaluated_at": "2026-09-10T22:21:56.000Z",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "execution_sha": "53eecffab9de8a4185534c26556741e656147423",
+  "verify_result": {
+    "type_check_exit_code": 0,
+    "test_files_green": 100,
+    "test_files_failed": 0,
+    "validator_suite": { "tests": 35, "pass": 35, "fail": 0 },
+    "r_level_verdict": "PASS",
+    "note": "pnpm verify is completed by CI; ci:assert-staging-target cannot pass on a contained workstation. The required verify check on this PR is the authority."
+  },
+  "runtime_surface_change": {
+    "changes_application_runtime": false,
+    "rationale": "This lane changes CI validator identifier rules only. No apps/** or packages/** file is touched, so no deployed service behaviour changes.",
+    "files_changed": [
+      "scripts/ops/executor-result-validate.ts",
+      "scripts/ops/executor-result-validate.test.ts",
+      ".github/workflows/executor-result-validator.yml"
+    ]
+  },
+  "delivery_guards": {
+    "distribution_service_brake": "unchanged",
+    "run_audit_service_brake": "unchanged",
+    "track_only_guards": "unchanged",
+    "syndicate_machine_mode": "parked (unchanged)",
+    "member_delivery": "disabled (unchanged)"
+  },
+  "control_preservation": {
+    "absent_issue_id_still_fails": true,
+    "branch_equals_head_ref_enforced": true,
+    "declared_pr_equals_actual_pr_enforced": true,
+    "declared_head_sha_equals_current_head_enforced": true,
+    "required_check_config_changed": false,
+    "branch_protection_changed": false,
+    "codeowners_changed": false,
+    "merge_gate_changed": false
+  },
+  "mutation_results": [
+    { "mutation": "revert only the workflow inline copy (the copy that gates merges)", "failures": 1 },
+    { "mutation": "revert only the exported script copy", "failures": 4 },
+    { "mutation": "over-widen to /^([A-Z0-9]+)-\\d+$/i so FOO-1 is admitted", "failures": 3 },
+    { "mutation": "delete the Branch == head-ref binding", "failures": 2 },
+    { "mutation": "baseline (unmutated)", "failures": 0 }
+  ]
+}

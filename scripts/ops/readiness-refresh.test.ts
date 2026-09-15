@@ -49,6 +49,7 @@ function dimension(overrides: Partial<ReadinessDimension>): ReadinessDimension {
 function stubDb(handlers: {
   rows?: Record<string, Record<string, unknown> | null>;
   counts?: Record<string, number>;
+  selected?: Record<string, unknown>[];
   throwOn?: string;
 }): ReadOnlyDb {
   const key = (table: string, filters: DbFilter[]) =>
@@ -66,7 +67,16 @@ function stubDb(handlers: {
       const exact = counts[key(table, filters)];
       return exact ?? 0;
     },
+    async selectRows(table, _columns, _filters, limit) {
+      if (handlers.throwOn === table) throw new Error(`${table} exploded`);
+      return (handlers.selected ?? []).slice(0, limit);
+    },
   };
+}
+
+/** One dead-letter row, shaped as `selectRows` returns it. */
+function deadLetterRow(attemptCount: number, lastError: string | null): Record<string, unknown> {
+  return { attempt_count: attemptCount, last_error: lastError };
 }
 
 function stubGithub(overrides: Partial<GithubReader> = {}): GithubReader {
@@ -195,32 +205,95 @@ test('ingestor health passes only when the cycle and merged offers are both curr
   assert.match(stale.evidence, /threshold 30m/);
 });
 
-test('dead-letter classification separates governance holds from true delivery failures', async () => {
-  const db = stubDb({
-    counts: {
-      'distribution_outbox|statuseqdead_letter': 1948,
-      'distribution_outbox|statuseqdead_letter,attempt_counteq0': 1947,
-      'distribution_outbox|statuseqdead_letter,attempt_countgt0': 1,
-    },
-  });
-  const result = await probeDeadLetterCount(context({ db, dbUnavailableReason: null }));
-  assert.equal(result.status, 'fail');
-  assert.equal(result.measured?.['governance_hold_count'], 1947);
-  assert.equal(result.measured?.['true_failure_count'], 1);
-
-  const clean = await probeDeadLetterCount(
+async function deadLetterProbe(rows: Record<string, unknown>[], total = rows.length) {
+  return probeDeadLetterCount(
     context({
       dbUnavailableReason: null,
       db: stubDb({
-        counts: {
-          'distribution_outbox|statuseqdead_letter': 946,
-          'distribution_outbox|statuseqdead_letter,attempt_counteq0': 946,
-          'distribution_outbox|statuseqdead_letter,attempt_countgt0': 0,
-        },
+        counts: { 'distribution_outbox|statuseqdead_letter': total },
+        selected: rows,
       }),
     }),
   );
-  assert.equal(clean.status, 'pass', '946 governance holds alone must not fail readiness');
+}
+
+// UTV2-1875 assertion 1. This is the row that made a BLOCKING readiness
+// dimension fail in production on 2026-09-09: a governance refusal that
+// consumed one attempt, byte-identical in target and last_error to 1,613 rows
+// the same probe called governance holds.
+test('a governance refusal that consumed an attempt is not a true delivery failure', async () => {
+  const result = await deadLetterProbe([
+    deadLetterRow(0, "proof-pick-blocked: source 't1-proof' is not a live source"),
+    deadLetterRow(1, "proof-pick-blocked: source 't1-proof' is not a live source"),
+    deadLetterRow(0, 'stale_pending_operator_review'),
+    deadLetterRow(0, 'operator-disposition-2026-06-10: stale posts voided per PM go'),
+    deadLetterRow(0, 'governance_public_delivery_suppressed_mode1_predeploy'),
+  ]);
+
+  assert.equal(result.status, 'pass');
+  assert.equal(result.measured?.['governance_hold_count'], 5);
+  assert.equal(result.measured?.['true_failure_count'], 0);
+});
+
+// UTV2-1875 assertion 2 -- the fail-open direction, so it is asserted rather
+// than assumed. An attempted row whose reason nothing recognises is a failure
+// until something classifies it.
+test('an attempted dead letter with an unrecognised or absent reason is a true failure', async () => {
+  const unrecognised = await deadLetterProbe([
+    deadLetterRow(3, 'ECONNRESET talking to discord'),
+  ]);
+  assert.equal(unrecognised.status, 'fail');
+  assert.equal(unrecognised.measured?.['true_failure_count'], 1);
+
+  const noReason = await deadLetterProbe([deadLetterRow(2, null)]);
+  assert.equal(noReason.status, 'fail');
+  assert.equal(noReason.measured?.['true_failure_count'], 1);
+});
+
+// UTV2-1875 assertion 3. The four production rows with a NULL last_error and an
+// identical updated_at were never attempted, so whatever they are they are not
+// *delivery* failures -- which is why a reason-only rule would also be wrong.
+test('a dead letter that was never attempted is never a true failure', async () => {
+  const result = await deadLetterProbe([
+    deadLetterRow(0, null),
+    deadLetterRow(0, ''),
+    deadLetterRow(0, 'something nothing recognises'),
+  ]);
+
+  assert.equal(result.status, 'pass');
+  assert.equal(result.measured?.['unattempted_unclassified_count'], 3);
+  assert.equal(result.measured?.['true_failure_count'], 0);
+});
+
+// UTV2-1875 assertion 4. Under-reading shrinks true_failure toward zero -- the
+// reassuring direction -- so a partial read must not produce a verdict at all.
+test('a partial dead-letter read is unreadable, not a pass on the rows that arrived', async () => {
+  const result = await deadLetterProbe([deadLetterRow(0, 'stale_pending_operator_review')], 1954);
+
+  assert.equal(result.status, 'unknown');
+  assert.match(result.unreadable_reason ?? '', /read 1 of 1954/);
+  assert.match(result.unreadable_reason ?? '', /under-count true failures/);
+});
+
+test('the dead-letter evidence names the buckets it actually used', async () => {
+  const result = await deadLetterProbe([
+    deadLetterRow(1, "proof-pick-blocked: source 't1-proof' is not a live source"),
+    deadLetterRow(0, null),
+    deadLetterRow(1, 'unexplained'),
+  ]);
+
+  assert.match(result.evidence, /bucket:governance_hold/);
+  assert.match(result.evidence, /bucket:unattempted_unclassified/);
+  assert.match(result.evidence, /bucket:true_failure/);
+});
+
+// A non-numeric attempt count is not evidence of "never attempted", so it must
+// not buy the row a pass.
+test('a dead letter with an unusable attempt_count is treated as attempted', async () => {
+  const result = await deadLetterProbe([{ last_error: 'unexplained' }]);
+
+  assert.equal(result.status, 'fail');
+  assert.equal(result.measured?.['true_failure_count'], 1);
 });
 
 test('worker/outbox health fails on a stale heartbeat even with an empty queue', async () => {

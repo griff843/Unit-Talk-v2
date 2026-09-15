@@ -18,6 +18,29 @@ except Exception:
 
 [ -z "$command" ] && exit 0
 
+# Classify before allocating. This is a PreToolUse hook on EVERY Bash call, and
+# it used to allocate a temp workspace here -- before anything had looked at
+# whether the command was a commit at all. A full /tmp therefore denied every
+# Bash call in the session, including the `rm` that would have cleared it: a
+# fail-closed control taking out its own recovery path.
+#
+# Every path below that reaches a non-"no" verdict requires the literal token
+# `git` to appear in the command -- the argv tokenizer walks a `git ... commit`
+# chain, and the fail-closed substring fallback greps for `git ... commit` too.
+# So refusing to allocate for a command with no `git` in it is a pure superset
+# of both detection paths, never a bypass.
+#
+# `case`, not `grep`, on purpose: the filter that exists to avoid allocating a
+# resource must not itself spawn a process.
+#
+# The second allocation (selection_file) is deliberately NOT moved. It sits
+# after the commit verdict, so it fires only on a real commit, where failing
+# closed on an allocation failure is the correct behaviour.
+case "$command" in
+  *git*) ;;
+  *) exit 0 ;;
+esac
+
 detection_file=$(mktemp) || {
   echo "PROOF VALIDATOR: commit blocked — cannot allocate detection workspace" >&2
   exit 2

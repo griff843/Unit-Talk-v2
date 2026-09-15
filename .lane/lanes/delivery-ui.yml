@@ -13,6 +13,19 @@ allowed_path_globs:
   # above. Admission correction only -- no taxonomy change, and `max_per_app`
   # still caps concurrency at one lane per app.
   - apps/web/**
+  # UTV2-1867: CLAUDE.md makes a product's intent document required reading
+  # before any change to how that product behaves for its operator, and
+  # docs/03_product/smart-form/intent.md is the first such document. No lane
+  # type admitted both an app surface and docs/03_product/**: delivery-ui had
+  # the app and not the doc, governance had the doc and no app source, and
+  # hygiene had neither -- so a change that added a Smart Form test and
+  # recorded what it proves in the product's own matrix could not be typed at
+  # all. Measured on UTV2-1864 (#1543), where `Lane authority` reported
+  # outside_allowed_paths for exactly that combination and restarting under any
+  # other lane type would not have cleared it. Admission correction only, the
+  # same shape as apps/web/** under UTV2-1715 -- no taxonomy change, no
+  # concurrency change, and governance keeps its own admission of this path.
+  - docs/03_product/**
   - scripts/**
   - .ops/sync/**
   - docs/06_status/lanes/**

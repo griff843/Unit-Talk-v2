@@ -663,9 +663,15 @@ test('recordEvidenceSettlement rejects non-awaiting_approval pick', async () => 
 // is enforced at the DB layer only; InMemory repos do not enforce it.
 // The isDuplicateSettlementError path is covered by production integration tests.
 
-test('recordPickSettlement still requires posted state (delivery path unchanged)', async () => {
+test('recordPickSettlement refuses a context-less settlement on an evidence-plane pick', async () => {
   const { repositories, pick } = await createPickInAwaitingApproval();
 
+  // UTV2-1904 deliberately changed *which* refusal this produces. Before the
+  // operator evidence path existed, an `awaiting_approval` pick fell through to
+  // the generic `posted or settled state` error; it now reaches the evidence
+  // branch and is refused there for the specific reason that applies. The
+  // load-bearing assertion is unchanged and is the one below the rejection: the
+  // request is still refused and the pick is still not settled.
   await assert.rejects(
     () =>
       recordPickSettlement(
@@ -680,12 +686,13 @@ test('recordPickSettlement still requires posted state (delivery path unchanged)
         },
         repositories,
       ),
-    /posted or settled state/,
+    /OPERATOR_GRADING_CONTEXT_REQUIRED|requires operatorGradingContext/,
   );
 
-  // Pick status must remain awaiting_approval
+  // Pick status must remain awaiting_approval, and nothing may be written.
   const afterPick = await repositories.picks.findPickById(pick.id);
   assert.equal(afterPick?.status, 'awaiting_approval');
+  assert.equal(await repositories.settlements.findLatestForPick(pick.id), null);
 });
 
 // UTV2-1262: closing_for_clv snapshot persistence tests
@@ -764,4 +771,294 @@ test('InMemoryPickOfferSnapshotRepository countByKind returns 0 for unknown kind
   const repo = new InMemoryPickOfferSnapshotRepository();
   const count = await repo.countByKind('closing_for_clv');
   assert.equal(count, 0);
+});
+
+// ── UTV2-1815: null-stake computation truth ─────────────────────────────────
+// The NULL case is covered above. NaN is the case the old
+// `stakeUnits ?? 1` guard let through: `??` only fires on null/undefined, so a
+// NaN stake reached the arithmetic and produced NaN, or was coerced. Both
+// fixtures must land on the same refusal.
+
+test('UTV2-1815 recordPickSettlement refuses a NaN stake the same way it refuses NULL', async () => {
+  const { repositories, pick } = await createPostedPick();
+  const stored = await repositories.picks.findPickById(pick.id);
+  assert.ok(stored);
+  stored!.stake_units = Number.NaN;
+
+  const result = await recordPickSettlement(
+    pick.id,
+    {
+      status: 'settled',
+      result: 'win',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'proof://nan-stake',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload['stakeUnitsStatus'], 'historical_unknown');
+  assert.equal(payload['stakeUnitsHistoricalUnknown'], true);
+  assert.equal('profitLossUnits' in payload, false);
+});
+
+test('UTV2-1815 a real stake still produces a real profit/loss (negative control)', async () => {
+  const { repositories, pick } = await createPostedPick();
+  const stored = await repositories.picks.findPickById(pick.id);
+  assert.ok(stored);
+  stored!.stake_units = 2;
+  stored!.odds = 100;
+
+  const result = await recordPickSettlement(
+    pick.id,
+    {
+      status: 'settled',
+      result: 'win',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'proof://canonical-stake',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload['stakeUnitsStatus'], 'canonical');
+  assert.equal(payload['stakeUnitsHistoricalUnknown'], undefined);
+  assert.equal(payload['profitLossUnits'], 2);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1904: operator settlement of an evidence-plane pick
+// ---------------------------------------------------------------------------
+
+const OPERATOR_GRADING_CONTEXT = {
+  outcomeBasis: 'Final box score: Lions 24, Bears 17 — Lions -3.5 covered',
+  resultSourceUrl: 'https://www.nfl.com/games/lions-at-bears-2026',
+  observedAt: '2026-09-14T22:40:00.000Z',
+};
+
+function operatorSettlementRequest(
+  overrides?: Partial<import('@unit-talk/contracts').SettlementRequest>,
+): import('@unit-talk/contracts').SettlementRequest {
+  return {
+    status: 'settled',
+    result: 'win',
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: 'manual:nfl-box-score',
+    settledBy: 'griff843',
+    operatorGradingContext: OPERATOR_GRADING_CONTEXT,
+    ...overrides,
+  };
+}
+
+/**
+ * A Track Only pick, built the way production builds one: through
+ * `processSubmission` with `distributionMode: 'track-only'`, left at
+ * `validated`. That pair — and not the status alone — is what
+ * `isEvidencePlanePick` keys on.
+ */
+async function createTrackOnlyValidatedPick() {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'spread',
+      selection: 'Lions -3.5',
+      stakeUnits: 2,
+      metadata: {
+        distributionMode: 'track-only',
+        capper: 'griff843',
+        submittedBy: 'griff843',
+      },
+    },
+    repositories,
+  );
+  // Read the row back rather than trusting the returned object: the in-memory
+  // sequential fallback returns a pick with no `status` field at all, so
+  // asserting on `result.pick.status` would compare against `undefined` and
+  // prove nothing about the fixture.
+  const persisted = await repositories.picks.findPickById(result.pick.id);
+  assert.equal(
+    persisted?.status,
+    'validated',
+    'fixture precondition: a Track Only submission stops at validated',
+  );
+  return { repositories, pick: result.pick };
+}
+
+test('operator settles a Track Only pick with no lifecycle transition and no delivery', async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  const result = await recordPickSettlement(
+    pick.id,
+    operatorSettlementRequest(),
+    repositories,
+  );
+
+  assert.equal(result.settlementRecord.status, 'settled');
+  assert.equal(result.settlementRecord.result, 'win');
+  assert.equal(
+    result.settlementRecord.source,
+    'operator',
+    "the row must say an operator settled it, not 'grading'",
+  );
+  assert.equal(result.settlementRecord.settled_by, 'griff843');
+
+  // No transition: validated -> settled is not a legal FSM edge.
+  assert.equal(result.lifecycleEvent, null);
+  assert.equal(result.finalLifecycleState, 'validated');
+  const afterPick = await repositories.picks.findPickById(pick.id);
+  assert.equal(afterPick?.status, 'validated');
+
+  // Zero delivery, in every status rather than only 'sent'.
+  const anyOutbox = await repositories.outbox.findLatestByPick(pick.id, [
+    'pending',
+    'claimed',
+    'sent',
+    'failed',
+    'dead_letter',
+  ]);
+  assert.equal(anyOutbox, null, 'a Track Only settlement must enqueue nothing');
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload['evidencePlane'], true);
+  assert.equal(payload['operatorSettled'], true);
+  assert.deepEqual(payload['operatorGradingContext'], OPERATOR_GRADING_CONTEXT);
+  // CLV is absent because there is no event scope, and the row says which.
+  assert.equal(payload['clv'], null);
+  assert.equal(
+    payload['clvUnavailableReason'],
+    'operator_evidence_settlement_has_no_event_scope',
+  );
+
+  const auditActions = result.auditRecords.map((record) => record.action);
+  assert.deepEqual(auditActions, ['settlement.operator_evidence_graded']);
+});
+
+test('operator settlement of an evidence-plane pick refuses without grading context', async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  await assert.rejects(
+    () =>
+      recordPickSettlement(
+        pick.id,
+        operatorSettlementRequest({ operatorGradingContext: undefined }),
+        repositories,
+      ),
+    /OPERATOR_GRADING_CONTEXT_REQUIRED|requires operatorGradingContext/,
+  );
+
+  // Fail closed means nothing was written, not merely that a 400 was returned.
+  const settlement = await repositories.settlements.findLatestForPick(pick.id);
+  assert.equal(settlement, null, 'a refused settlement must write no row');
+});
+
+test('operator settlement refuses a malformed grading context before dispatch', async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  await assert.rejects(
+    () =>
+      recordPickSettlement(
+        pick.id,
+        operatorSettlementRequest({
+          operatorGradingContext: { ...OPERATOR_GRADING_CONTEXT, observedAt: 'yesterday' },
+        }),
+        repositories,
+      ),
+    /observedAt must be an ISO-8601 instant/,
+  );
+
+  const settlement = await repositories.settlements.findLatestForPick(pick.id);
+  assert.equal(settlement, null);
+});
+
+test("feed-sourced settlement is still refused on an evidence-plane pick", async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  // The automated-settlement refusal precedes every dispatch branch, so adding
+  // one must not have created a route around it.
+  await assert.rejects(
+    () =>
+      recordPickSettlement(
+        pick.id,
+        operatorSettlementRequest({ source: 'feed' }),
+        repositories,
+      ),
+    /AUTOMATED_SETTLEMENT_NOT_ALLOWED|Automated settlement input is blocked/,
+  );
+});
+
+test("'grading' source is refused on the operator path", async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  await assert.rejects(
+    () =>
+      recordPickSettlement(
+        pick.id,
+        operatorSettlementRequest({ source: 'grading' }),
+        repositories,
+      ),
+    /OPERATOR_SETTLEMENT_SOURCE_INVALID|reserved for the automatic grading pass/,
+  );
+});
+
+test('manual_review on a Track Only pick is still refused', async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  // This is the control on the dispatch *order*. The evidence-plane branch sits
+  // after the manual_review branch; if it were moved above it, this refusal
+  // would silently become an acceptance.
+  await assert.rejects(
+    () =>
+      recordPickSettlement(
+        pick.id,
+        operatorSettlementRequest({
+          status: 'manual_review',
+          result: undefined,
+          reviewReason: 'score disputed',
+          operatorGradingContext: undefined,
+        }),
+        repositories,
+      ),
+    /posted/,
+  );
+});
+
+test('an awaiting_approval pick also settles through the operator path', async () => {
+  const { repositories, pick } = await createPickInAwaitingApproval();
+
+  const result = await recordPickSettlement(
+    pick.id,
+    operatorSettlementRequest({ result: 'loss' }),
+    repositories,
+  );
+
+  assert.equal(result.settlementRecord.result, 'loss');
+  assert.equal(result.lifecycleEvent, null);
+  const afterPick = await repositories.picks.findPickById(pick.id);
+  assert.equal(
+    afterPick?.status,
+    'awaiting_approval',
+    'the governance brake is not released by an outcome',
+  );
+});
+
+test('a posted pick still settles without any operator grading context', async () => {
+  const { repositories, pick } = await createPostedPick();
+
+  // The new field is optional for a reason: the posted path resolves provenance
+  // from the pick's own delivery history and must be unaffected.
+  const result = await recordPickSettlement(
+    pick.id,
+    operatorSettlementRequest({ operatorGradingContext: undefined }),
+    repositories,
+  );
+
+  assert.equal(result.settlementRecord.status, 'settled');
+  assert.equal(result.finalLifecycleState, 'settled');
+  assert.notEqual(result.lifecycleEvent, null);
 });

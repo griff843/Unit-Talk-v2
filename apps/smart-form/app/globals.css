@@ -3,56 +3,56 @@
 @tailwind utilities;
 
 /*
- * Unit Talk Smart Form — Dark Navy Design System
+ * Unit Talk Smart Form — Charcoal and Gold Design System
  * Aesthetic: Luxury/refined sportsbook. Bloomberg meets DraftKings dark.
  * Typography: Barlow (body) + Barlow Condensed (labels) + DM Mono (data/odds)
  */
 
 :root {
-  /* Deep navy base — near-black with blue undertone */
-  --background: 222 47% 5%;
-  --foreground: 210 40% 96%;
+  /* Unit Talk near-black base */
+  --background: 225 9% 9%;
+  --foreground: 50 23% 95%;
 
-  /* Cards — slightly lifted navy gradient base */
-  --card: 220 40% 8%;
-  --card-foreground: 210 40% 96%;
+  /* Cards — lifted charcoal */
+  --card: 225 7% 12%;
+  --card-foreground: 50 23% 95%;
 
   /* Popovers match cards */
-  --popover: 220 40% 8%;
-  --popover-foreground: 210 40% 96%;
+  --popover: 225 7% 12%;
+  --popover-foreground: 50 23% 95%;
 
-  /* Primary — electric blue for active states, CTAs */
-  --primary: 217 91% 60%;
-  --primary-foreground: 222 47% 8%;
+  /* Primary — warm gold for active states and actions */
+  --primary: 43 53% 54%;
+  --primary-foreground: 225 9% 9%;
 
-  /* Secondary — muted navy for secondary actions */
-  --secondary: 217 33% 15%;
-  --secondary-foreground: 210 40% 96%;
+  /* Secondary — muted charcoal for secondary actions */
+  --secondary: 225 6% 18%;
+  --secondary-foreground: 50 23% 95%;
 
   /* Muted — subdued elements, placeholders */
-  --muted: 217 33% 13%;
-  --muted-foreground: 215 20% 55%;
+  --muted: 225 6% 15%;
+  --muted-foreground: 40 7% 68%;
 
   /* Accent — same as secondary, used for hover states */
-  --accent: 217 33% 15%;
-  --accent-foreground: 210 40% 96%;
+  --accent: 225 6% 18%;
+  --accent-foreground: 50 23% 95%;
 
   /* Destructive — red for errors, invalid fields */
   --destructive: 0 72% 51%;
-  --destructive-foreground: 210 40% 96%;
+  --destructive-foreground: 50 23% 95%;
 
   /* Success — green for confirmed picks, wins */
   --success: 142 71% 45%;
-  --success-foreground: 210 40% 96%;
+  --success-foreground: 50 23% 95%;
 
   /* Warning — amber for pending, in-progress states */
   --warning: 38 92% 50%;
-  --warning-foreground: 222 47% 8%;
+  --warning-foreground: 225 9% 9%;
 
   /* Structural */
-  --border: 217 33% 16%;
-  --input: 217 33% 12%;
-  --ring: 217 91% 60%;
+  --border: 225 5% 24%;
+  --input: 225 6% 14%;
+  --ring: 43 53% 54%;
   --radius: 0.5rem;
 }
 
@@ -85,8 +85,8 @@
     @apply rounded-lg border border-border bg-card p-4;
     background: linear-gradient(
       135deg,
-      hsl(220 45% 9%) 0%,
-      hsl(217 40% 7%) 100%
+      hsl(225 7% 13%) 0%,
+      hsl(225 7% 11%) 100%
     );
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.4),
@@ -115,7 +115,7 @@
     @apply border-primary bg-primary/10;
     box-shadow:
       0 0 0 1px hsl(var(--primary)),
-      0 0 12px rgba(59, 130, 246, 0.15);
+      0 0 12px rgba(199, 163, 75, 0.12);
   }
 
   /* Bet slip panel — sticky right sidebar */
@@ -123,8 +123,8 @@
     @apply slip-card;
     background: linear-gradient(
       160deg,
-      hsl(220 55% 10%) 0%,
-      hsl(215 50% 7%) 100%
+      hsl(225 7% 15%) 0%,
+      hsl(225 7% 11%) 100%
     );
   }
 
@@ -138,3 +138,31 @@
     @apply animate-fade-in;
   }
 }
+
+@layer base {
+  html { color-scheme: dark; }
+  ::selection { background: hsl(var(--primary) / .3); }
+  button, input, select, textarea { touch-action: manipulation; }
+  :focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+}
+
+@layer components {
+  .smart-form-shell { background: radial-gradient(ellipse at 10% 0%, hsl(var(--primary) / .055), transparent 42%), hsl(var(--background)); }
+  .smart-form-shell section { box-shadow: 0 8px 30px rgb(0 0 0 / .08); }
+  .smart-form-shell h1, .smart-form-shell h2 { font-family: var(--font-barlow-condensed), sans-serif; }
+  .smart-form-brand { border-bottom: 1px solid hsl(var(--border)); }
+  .track-only-pill { border: 1px solid hsl(var(--primary) / .4); background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
+  .mobile-slip-bar { padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 639px) {
+  .smart-form-shell input, .smart-form-shell textarea, .smart-form-shell [role="combobox"] { font-size: 16px; min-height: 44px; }
+  .smart-form-shell button { min-height: 44px; }
+  .smart-form-shell section { padding: 1rem; border-radius: .875rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+.smart-form-shell > div > div { min-width: 0; }
+
+.smart-form-shell .sr-only { width: 1px; height: 1px; }

@@ -1,0 +1,286 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1875
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1875
+  objective: readiness dead_letter_count buckets on attempt_count, not on the
+    recorded reason — a blocking dimension fails on a governance refusal
+  acceptance_criteria:
+    - |-
+      ## The defect
+
+      `probeDeadLetterCount` (`scripts/ops/readiness-refresh.ts:508-545`) splits the dead-letter queue into two buckets by attempt count alone:
+
+      ```
+      count ... where status='dead_letter' and attempt_count=0  (bucket:governance_hold)
+      count ... where status='dead_letter' and attempt_count>0  (bucket:true_failure)
+      ```
+
+      `dead_letter_count` is a **blocking** readiness dimension and fails when `true_failure > 0`. It is currently failing, and it is failing on a row that is not a delivery failure.
+
+      ## Measured against production `zfzdnfwdarxucxtaojxm`, 2026-09-09
+
+      ```
+      status       attempt_count  target             last_error                                               n
+      dead_letter  0              discord:canary     proof-pick-blocked: source 't1-proof' is not a live...   1613
+      dead_letter  0              discord:best-bets  stale_pending_operator_review                             199
+      dead_letter  0              discord:best-bets  operator-disposition-2026-06-10: ... not a system fai...   97
+      dead_letter  0              discord:best-bets  governance_public_delivery_suppressed_mode1_predeploy       40
+      dead_letter  0              discord:best-bets  (NULL)                                                       4
+      dead_letter  1              discord:canary     proof-pick-blocked: source 't1-proof' is not a live...       1
+      ```
+
+      The single row that fails readiness is **byte-identical in** `target` **and** `last_error` to the 1,613 rows the same probe classifies as governance holds. The only difference is that this one consumed an attempt before the guard refused it. It is a governance refusal to a canary target — under `QUEUE_READINESS_SEMANTICS.md` it is `canary_scoped` (§ "may have `attempt_count > 0` but is intentionally restricted to the canary target") — and it is not a delivery failure under any reading.
+
+      ## The cited contract does not say what the code does
+
+      `QUEUE_READINESS_SEMANTICS.md` v1.0 defines `true_failure` as `attempt_count >= max_attempts AND status = 'dead_letter'`. The code uses `attempt_count > 0`. And `max_attempts` **is not a column on** `distribution_outbox` (verified against `packages/db/src/database.types.ts`: the columns are `attempt_count`, `claimed_at`, `claimed_by`, `created_at`, `id`, `idempotency_key`, `last_error`, `next_attempt_at`, `payload`, `pick_id`, `status`, `target`, `updated_at`). So the doc's own evidence marker is unimplementable as written, which is presumably why the code diverged from it.
+
+      ## A reason-only rule is also wrong, in the other direction
+
+      The four NULL-reason rows share an `updated_at` to the microsecond (`2026-07-31 04:36:25.063811+00`) — a bulk operator update that moved them to `dead_letter` without recording why. Classifying purely on the reason string would newly count those four as failures. But `attempt_count = 0` proves they were never attempted, so they cannot be *delivery* failures either.
+
+      **Both signals are load-bearing.** A `true_failure` is a row that was attempted **and** whose reason is not a recognised governance disposition:
+
+      * `attempt_count = 0` → never attempted → not a delivery failure, whatever the reason says.
+      * `attempt_count > 0` **and** a recognised governance class → the guard refused it after a claim → not a delivery failure.
+      * `attempt_count > 0` **and** an unrecognised or absent reason → **true failure**, fail closed.
+
+      Under that rule `true_failure = 0` today and the dimension passes on measured evidence — not by loosening a threshold.
+
+      ## Reuse the classifier that already exists
+
+      `scripts/ops/outbox-triage.ts` ([UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe), on `main`) already exports a fail-closed reason classifier — `classifyDeadLetter`, with an `unrecognised` fallback — plus `CANARY_TARGET_PREFIXES` / `isCanaryTarget`, which fail closed on an unknown target. `scripts/runtime-health.ts:147-149` and `scripts/pipeline-health.ts:80-82` each carry their own prefix-matching copy of the same rule, and **none of the three consults** `attempt_count`. `readiness-refresh.ts` is the only one that uses attempt count, and it is the only one that is a blocking gate.
+
+      Import the existing classifier rather than writing a fifth copy. Same shape as [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its)'s lease-reclaim fix and [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)'s duplicated-regex fix: reuse the predicate, do not re-derive it.
+
+      ## Scope
+
+      * `scripts/ops/readiness-refresh.ts` — bucket via `classifyDeadLetter` + `attempt_count`. `ReadOnlyDb` needs a row-returning read; it currently exposes only `latestRow` and `countRows`, and `countRows` filters (`eq/neq/gt/gte/lt`) cannot express prefix matching.
+      * `scripts/ops/readiness-refresh.test.ts`
+      * `docs/05_operations/QUEUE_READINESS_SEMANTICS.md` — correct the `true_failure` definition, which cites a column that does not exist; bump the version the code pins.
+
+      Mechanical tier floor on that file list is **T3** (`classifyMechanicalMinimum` returns no matches).
+
+      ## Acceptance
+
+      1. A dead-letter row with `attempt_count > 0` and a recognised governance reason does **not** count as a true failure.
+      2. A dead-letter row with `attempt_count > 0` and an unrecognised or NULL reason **does** count as a true failure — asserted explicitly, because this is the fail-open direction.
+      3. A dead-letter row with `attempt_count = 0` never counts as a true failure regardless of reason.
+      4. The evidence string names the buckets it actually used, so a future reader can tell which rule produced the verdict.
+      5. Mutation: reverting the classification to `attempt_count > 0` must turn assertion 1 red, and dropping the `unrecognised` branch must turn assertion 2 red. Both directions — a bucketing rule that is too permissive fails silently.
+
+      ## Filing note
+
+      Recorded in `docs/mission/plan.md` since 2026-09-06 as "the bucketing defect … unrepaired and recorded rather than filed". Filed now under the ratified threshold as a **material data-truth exposure**: the readiness ledger is the mission's own definition of done, and it is currently publishing a false failure about production delivery health.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      The defect
+
+      `probeDeadLetterCount` (`scripts/ops/readiness-refresh.ts:508-545`) splits
+      the dead-letter queue into two buckets by attempt count alone:
+
+
+      ```
+
+      count ... where status='dead_letter' and
+      attempt_count=0  (bucket:governance_hold)
+
+      count ... where status='dead_letter' and
+      attempt_count>0  (bucket:true_failure)
+
+      ```
+
+
+      `dead_letter_count` is a **blocking** readiness dimension and fails when
+      `true_failure > 0`. It is currently failing, and it is failing on a row
+      that is not a delivery failure.
+    - |-
+      Measured against production `zfzdnfwdarxucxtaojxm`, 2026-09-09
+      ```
+      status       attempt_count  target             last_error                                               n
+      dead_letter  0              discord:canary     proof-pick-blocked: source 't1-proof' is not a live...   1613
+      dead_letter  0              discord:best-bets  stale_pending_operator_review                             199
+      dead_letter  0              discord:best-bets  operator-disposition-2026-06-10: ... not a system fai...   97
+      dead_letter  0              discord:best-bets  governance_public_delivery_suppressed_mode1_predeploy       40
+      dead_letter  0              discord:best-bets  (NULL)                                                       4
+      dead_letter  1              discord:canary     proof-pick-blocked: source 't1-proof' is not a live...       1
+      ```
+
+      The single row that fails readiness is **byte-identical in** `target` **and** `last_error` to the 1,613 rows the same probe classifies as governance holds. The only difference is that this one consumed an attempt before the guard refused it. It is a governance refusal to a canary target — under `QUEUE_READINESS_SEMANTICS.md` it is `canary_scoped` (§ "may have `attempt_count > 0` but is intentionally restricted to the canary target") — and it is not a delivery failure under any reading.
+    - >-
+      The cited contract does not say what the code does
+
+      `QUEUE_READINESS_SEMANTICS.md` v1.0 defines `true_failure` as
+      `attempt_count >= max_attempts AND status = 'dead_letter'`. The code uses
+      `attempt_count > 0`. And `max_attempts` **is not a column on**
+      `distribution_outbox` (verified against
+      `packages/db/src/database.types.ts`: the columns are `attempt_count`,
+      `claimed_at`, `claimed_by`, `created_at`, `id`, `idempotency_key`,
+      `last_error`, `next_attempt_at`, `payload`, `pick_id`, `status`, `target`,
+      `updated_at`). So the doc's own evidence marker is unimplementable as
+      written, which is presumably why the code diverged from it.
+    - >-
+      A reason-only rule is also wrong, in the other direction
+
+      The four NULL-reason rows share an `updated_at` to the microsecond
+      (`2026-07-31 04:36:25.063811+00`) — a bulk operator update that moved them
+      to `dead_letter` without recording why. Classifying purely on the reason
+      string would newly count those four as failures. But `attempt_count = 0`
+      proves they were never attempted, so they cannot be *delivery* failures
+      either.
+
+
+      **Both signals are load-bearing.** A `true_failure` is a row that was
+      attempted **and** whose reason is not a recognised governance disposition:
+
+
+      * `attempt_count = 0` → never attempted → not a delivery failure, whatever
+      the reason says.
+
+      * `attempt_count > 0` **and** a recognised governance class → the guard
+      refused it after a claim → not a delivery failure.
+
+      * `attempt_count > 0` **and** an unrecognised or absent reason → **true
+      failure**, fail closed.
+
+
+      Under that rule `true_failure = 0` today and the dimension passes on
+      measured evidence — not by loosening a threshold.
+    - |-
+      Reuse the classifier that already exists
+      `scripts/ops/outbox-triage.ts` ([UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe), on `main`) already exports a fail-closed reason classifier — `classifyDeadLetter`, with an `unrecognised` fallback — plus `CANARY_TARGET_PREFIXES` / `isCanaryTarget`, which fail closed on an unknown target. `scripts/runtime-health.ts:147-149` and `scripts/pipeline-health.ts:80-82` each carry their own prefix-matching copy of the same rule, and **none of the three consults** `attempt_count`. `readiness-refresh.ts` is the only one that uses attempt count, and it is the only one that is a blocking gate.
+
+      Import the existing classifier rather than writing a fifth copy. Same shape as [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its)'s lease-reclaim fix and [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)'s duplicated-regex fix: reuse the predicate, do not re-derive it.
+    - >-
+      Scope
+
+      * `scripts/ops/readiness-refresh.ts` — bucket via `classifyDeadLetter` +
+      `attempt_count`. `ReadOnlyDb` needs a row-returning read; it currently
+      exposes only `latestRow` and `countRows`, and `countRows` filters
+      (`eq/neq/gt/gte/lt`) cannot express prefix matching.
+
+      * `scripts/ops/readiness-refresh.test.ts`
+
+      * `docs/05_operations/QUEUE_READINESS_SEMANTICS.md` — correct the
+      `true_failure` definition, which cites a column that does not exist; bump
+      the version the code pins.
+
+
+      Mechanical tier floor on that file list is **T3**
+      (`classifyMechanicalMinimum` returns no matches).
+    - >-
+      Acceptance
+
+      1. A dead-letter row with `attempt_count > 0` and a recognised governance
+      reason does **not** count as a true failure.
+
+      2. A dead-letter row with `attempt_count > 0` and an unrecognised or NULL
+      reason **does** count as a true failure — asserted explicitly, because
+      this is the fail-open direction.
+
+      3. A dead-letter row with `attempt_count = 0` never counts as a true
+      failure regardless of reason.
+
+      4. The evidence string names the buckets it actually used, so a future
+      reader can tell which rule produced the verdict.
+
+      5. Mutation: reverting the classification to `attempt_count > 0` must turn
+      assertion 1 red, and dropping the `unrecognised` branch must turn
+      assertion 2 red. Both directions — a bucketing rule that is too permissive
+      fails silently.
+    - >-
+      Filing note
+
+      Recorded in `docs/mission/plan.md` since 2026-09-06 as "the bucketing
+      defect … unrepaired and recorded rather than filed". Filed now under the
+      ratified threshold as a **material data-truth exposure**: the readiness
+      ledger is the mission's own definition of done, and it is currently
+      publishing a false failure about production delivery health.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1875/readiness-dead-letter-count-buckets-on-attempt-count-not-on-the
+    title: readiness dead_letter_count buckets on attempt_count, not on the recorded
+      reason — a blocking dimension fails on a governance refusal
+    description: |-
+      ## The defect
+
+      `probeDeadLetterCount` (`scripts/ops/readiness-refresh.ts:508-545`) splits the dead-letter queue into two buckets by attempt count alone:
+
+      ```
+      count ... where status='dead_letter' and attempt_count=0  (bucket:governance_hold)
+      count ... where status='dead_letter' and attempt_count>0  (bucket:true_failure)
+      ```
+
+      `dead_letter_count` is a **blocking** readiness dimension and fails when `true_failure > 0`. It is currently failing, and it is failing on a row that is not a delivery failure.
+
+      ## Measured against production `zfzdnfwdarxucxtaojxm`, 2026-09-09
+
+      ```
+      status       attempt_count  target             last_error                                               n
+      dead_letter  0              discord:canary     proof-pick-blocked: source 't1-proof' is not a live...   1613
+      dead_letter  0              discord:best-bets  stale_pending_operator_review                             199
+      dead_letter  0              discord:best-bets  operator-disposition-2026-06-10: ... not a system fai...   97
+      dead_letter  0              discord:best-bets  governance_public_delivery_suppressed_mode1_predeploy       40
+      dead_letter  0              discord:best-bets  (NULL)                                                       4
+      dead_letter  1              discord:canary     proof-pick-blocked: source 't1-proof' is not a live...       1
+      ```
+
+      The single row that fails readiness is **byte-identical in** `target` **and** `last_error` to the 1,613 rows the same probe classifies as governance holds. The only difference is that this one consumed an attempt before the guard refused it. It is a governance refusal to a canary target — under `QUEUE_READINESS_SEMANTICS.md` it is `canary_scoped` (§ "may have `attempt_count > 0` but is intentionally restricted to the canary target") — and it is not a delivery failure under any reading.
+
+      ## The cited contract does not say what the code does
+
+      `QUEUE_READINESS_SEMANTICS.md` v1.0 defines `true_failure` as `attempt_count >= max_attempts AND status = 'dead_letter'`. The code uses `attempt_count > 0`. And `max_attempts` **is not a column on** `distribution_outbox` (verified against `packages/db/src/database.types.ts`: the columns are `attempt_count`, `claimed_at`, `claimed_by`, `created_at`, `id`, `idempotency_key`, `last_error`, `next_attempt_at`, `payload`, `pick_id`, `status`, `target`, `updated_at`). So the doc's own evidence marker is unimplementable as written, which is presumably why the code diverged from it.
+
+      ## A reason-only rule is also wrong, in the other direction
+
+      The four NULL-reason rows share an `updated_at` to the microsecond (`2026-07-31 04:36:25.063811+00`) — a bulk operator update that moved them to `dead_letter` without recording why. Classifying purely on the reason string would newly count those four as failures. But `attempt_count = 0` proves they were never attempted, so they cannot be *delivery* failures either.
+
+      **Both signals are load-bearing.** A `true_failure` is a row that was attempted **and** whose reason is not a recognised governance disposition:
+
+      * `attempt_count = 0` → never attempted → not a delivery failure, whatever the reason says.
+      * `attempt_count > 0` **and** a recognised governance class → the guard refused it after a claim → not a delivery failure.
+      * `attempt_count > 0` **and** an unrecognised or absent reason → **true failure**, fail closed.
+
+      Under that rule `true_failure = 0` today and the dimension passes on measured evidence — not by loosening a threshold.
+
+      ## Reuse the classifier that already exists
+
+      `scripts/ops/outbox-triage.ts` ([UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe), on `main`) already exports a fail-closed reason classifier — `classifyDeadLetter`, with an `unrecognised` fallback — plus `CANARY_TARGET_PREFIXES` / `isCanaryTarget`, which fail closed on an unknown target. `scripts/runtime-health.ts:147-149` and `scripts/pipeline-health.ts:80-82` each carry their own prefix-matching copy of the same rule, and **none of the three consults** `attempt_count`. `readiness-refresh.ts` is the only one that uses attempt count, and it is the only one that is a blocking gate.
+
+      Import the existing classifier rather than writing a fifth copy. Same shape as [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its)'s lease-reclaim fix and [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)'s duplicated-regex fix: reuse the predicate, do not re-derive it.
+
+      ## Scope
+
+      * `scripts/ops/readiness-refresh.ts` — bucket via `classifyDeadLetter` + `attempt_count`. `ReadOnlyDb` needs a row-returning read; it currently exposes only `latestRow` and `countRows`, and `countRows` filters (`eq/neq/gt/gte/lt`) cannot express prefix matching.
+      * `scripts/ops/readiness-refresh.test.ts`
+      * `docs/05_operations/QUEUE_READINESS_SEMANTICS.md` — correct the `true_failure` definition, which cites a column that does not exist; bump the version the code pins.
+
+      Mechanical tier floor on that file list is **T3** (`classifyMechanicalMinimum` returns no matches).
+
+      ## Acceptance
+
+      1. A dead-letter row with `attempt_count > 0` and a recognised governance reason does **not** count as a true failure.
+      2. A dead-letter row with `attempt_count > 0` and an unrecognised or NULL reason **does** count as a true failure — asserted explicitly, because this is the fail-open direction.
+      3. A dead-letter row with `attempt_count = 0` never counts as a true failure regardless of reason.
+      4. The evidence string names the buckets it actually used, so a future reader can tell which rule produced the verdict.
+      5. Mutation: reverting the classification to `attempt_count > 0` must turn assertion 1 red, and dropping the `unrecognised` branch must turn assertion 2 red. Both directions — a bucketing rule that is too permissive fails silently.
+
+      ## Filing note
+
+      Recorded in `docs/mission/plan.md` since 2026-09-06 as "the bucketing defect … unrepaired and recorded rather than filed". Filed now under the ratified threshold as a **material data-truth exposure**: the readiness ledger is the mission's own definition of done, and it is currently publishing a false failure about production delivery health.
+    captured_at: 2026-09-09T17:54:04.080Z
+    description_sha256: 8e596921efe4a17ef61ada862f48e14ef833aa107ad9e15e0af00a0c8d710deb
+  contract_hash: c052b0cf5fb997c8c86bbf97d979005c80dcb0cc235bf366cecba89b236343e5

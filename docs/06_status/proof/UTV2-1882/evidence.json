@@ -1,0 +1,166 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1882",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "257910cdad9f46115a9d994eea55bdf5914107e2",
+    "verified_source_sha": "53eecffab9de8a4185534c26556741e656147423",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-11T02:22:05.389Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "tests": {
+      "command": "pnpm test",
+      "test_files_green": 100,
+      "test_files_failed": 0
+    },
+    "validator_suite": {
+      "command": "pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts",
+      "tests": 35,
+      "pass": 35,
+      "fail": 0
+    },
+    "workflow_hardening": {
+      "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+      "pass": 66,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS"
+    },
+    "verify": {
+      "status": "delegated_to_ci",
+      "reason": "ci:assert-staging-target refuses the containment placeholder locally; the required verify check on PR #1560 is the authority"
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "executed_at": "2026-09-10T22:23:23.568Z/2026-09-10T22:26:01.160Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials materialized by ci.yml. Never production.",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 27395.47ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 26259.55ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 26430.49ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 25640.64ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 157.69ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 25644.70ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 24944.63ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 3,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-10T22:26:01.160Z",
+    "row_counts_note": "Derived mechanically from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 34537126174, job 103071358767) on head 0f729134285eab09f29d0d5c9e092d523b8ece66, by calling ci-db-proof-harvest.ts's own buildRuntimeProofRowCounts. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "note": "UTV2-1882 changes CI validator identifier rules only; it touches no apps/** or packages/** file, so it has no lane-specific live-DB assertion of its own. This block is the live-DB evidence that genuinely ran for this head: the repository-wide staging smoke suite, executed by the required \"Writable DB proof (staging only)\" job. It is authored pre-merge from the PR-head run because CEP-E7 evaluates the app-runtime contract before the merge SHA exists; the post-merge auto-harvest (UTV2-1641) then no-ops on an already-populated runtime_proof rather than overwriting it.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 34537126174,
+      "job_id": 103071358767,
+      "target_head_sha": "0f729134285eab09f29d0d5c9e092d523b8ece66",
+      "identity_source": "pr_head_run",
+      "conclusion": "success",
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34537126174/job/103071358767"
+    }
+  },
+  "mutation_results": [
+    {
+      "mutation": "revert only the workflow inline copy (gates merges)",
+      "failures": 1
+    },
+    {
+      "mutation": "revert only the exported script copy",
+      "failures": 4
+    },
+    {
+      "mutation": "over-widen to admit any namespace",
+      "failures": 3
+    },
+    {
+      "mutation": "delete the Branch == head-ref binding",
+      "failures": 2
+    },
+    {
+      "mutation": "baseline",
+      "failures": 0
+    }
+  ]
+}

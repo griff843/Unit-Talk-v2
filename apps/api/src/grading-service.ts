@@ -2,7 +2,9 @@ import {
   resolveOutcome,
   buildRecapEmbedData,
   normalizeMarketKey,
+  resolveStakeUnits,
 } from '@unit-talk/domain';
+import type { StakeUnitsResolution } from '@unit-talk/domain';
 import type { CanonicalPick } from '@unit-talk/contracts';
 import type {
   EventRow,
@@ -11,7 +13,11 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
-import { recordGradedSettlement, recordEvidenceSettlement } from './settlement-service.js';
+import {
+  isEvidencePlanePick,
+  recordGradedSettlement,
+  recordEvidenceSettlement,
+} from './settlement-service.js';
 
 export interface GradingPickResult {
   pickId: string;
@@ -33,6 +39,19 @@ export interface GradingPassResult {
 export interface RunGradingPassOptions {
   logger?: Pick<Console, 'error' | 'warn'>;
   retryState?: GradingRetryState;
+  /**
+   * Restricts the pass to these pick ids, applied AFTER the normal population
+   * read. Absent -- which is how every production caller invokes this -- the
+   * pass grades its whole population exactly as before.
+   *
+   * This exists for the staging journey proof (UTV2-1889), which drives the real
+   * grading pass against the real staging database. Without it, proving one
+   * fixture pick settles would sweep and settle the entire staging backlog, and
+   * the proof's own counters would be a statement about that backlog rather than
+   * about the fixture. It narrows what is graded; it can never widen it, and it
+   * cannot admit a pick the population read did not already return.
+   */
+  restrictToPickIds?: ReadonlySet<string>;
 }
 
 export type GradingRetryState = Map<
@@ -43,7 +62,43 @@ export type GradingRetryState = Map<
   }
 >;
 
+// Only ingested provider data may settle a pick. The operator-attestation route
+// (UTV2-1889, commit 4701685541) was deferred and then removed from the release
+// before merge, so `operator` is deliberately NOT here: with no shipped writer for
+// that provenance, an allow-list entry for it would be trust with nothing to trust.
+// Re-admitting it is a review decision that arrives with its writer, not before.
 const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
+
+// Keyed by provider rather than a flat allow-list of sources, so a provider can never
+// borrow another's ingestion source. An unknown provider has no entry and fails closed.
+const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
+  sgo: 'ingestor.cycle',
+};
+
+// The dedicated result key for a moneyline outcome. Deliberately NOT
+// `points-all-game-ml`: production holds 280 rows under that key carrying a *score*
+// with `participant_id = NULL`. A score read as a win flag would settle a pick wrongly
+// and silently, so the win flag gets a key of its own and every pre-existing row stays
+// uninterpretable by this path.
+export const MONEYLINE_RESULT_MARKET_KEY = 'game_moneyline_win';
+
+// The attested *signed margin* for the resolved participant, and nothing else.
+// Deliberately distinct from the `-sp` game-line keys: those rows carry an
+// unattributed raw score, so a spread graded off one would invent a side that was
+// never attested. See the guard in the grading loop.
+export const SPREAD_RESULT_MARKET_KEY = 'game_spread_margin';
+
+// The attested win flag, and nothing else. A `Map` rather than a comparison chain so
+// that an unlisted value (a score, a NaN, a 2) has no branch to fall into and is
+// skipped by name instead of being coerced into a verdict.
+const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
+  number,
+  'win' | 'loss' | 'push'
+>([
+  [1, 'win'],
+  [0, 'loss'],
+  [0.5, 'push'],
+]);
 const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
 const GRADING_FETCH_PAGE_SIZE = 500;
 
@@ -62,14 +117,22 @@ export async function fetchAllByLifecycleState(
   return all;
 }
 
-type ParticipantRequirement = 'required' | 'forbidden';
-type GradeableMarketFamily = 'player_prop' | 'team_total' | 'game_total';
+export type ParticipantRequirement = 'required' | 'forbidden';
+export type GradeableMarketFamily =
+  | 'player_prop'
+  | 'team_total'
+  | 'game_total'
+  | 'game_moneyline'
+  | 'game_spread';
 
-interface MarketFamilyRule {
+export interface MarketFamilyRule {
   family: GradeableMarketFamily | 'unsupported';
   participantRequirement: ParticipantRequirement;
   gradeable: boolean;
   participantType?: 'player' | 'team' | undefined;
+  // Whether this family's picks carry a line at all. A moneyline's `line = null` is
+  // correct data, not missing data, so the `missing_line` skip must not fire on it.
+  usesLine: boolean;
 }
 
 export async function runGradingPass(
@@ -93,18 +156,49 @@ export async function runGradingPass(
   // Evidence plane: also process awaiting_approval picks so outcome data
   // accumulates without requiring public delivery approval. Per UTV2-1253.
   // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
-  const [postedPicks, evidencePicks] = await Promise.all([
+  // UTV2-1861: Track Only picks never reach `posted`. They are structurally
+  // unable to be delivered, so `validated` is where they stop, and grading
+  // never saw them. Admit the Track Only subset of `validated` -- and only
+  // that subset: `validated` on its own is the entire pre-delivery backlog
+  // (21,364 rows in production on 2026-09-10, against 1 Track Only pick), so
+  // the filter is what keeps this a targeted admission rather than a sweep.
+  const [postedPicks, evidencePicks, validatedPicks] = await Promise.all([
     fetchAllByLifecycleState(repositories.picks, 'posted'),
     fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
+    fetchAllByLifecycleState(repositories.picks, 'validated'),
   ]);
-  const picks = [...postedPicks, ...evidencePicks];
+  const trackOnlyPicks = validatedPicks.filter((pick) =>
+    isEvidencePlanePick(pick),
+  );
+  const population = [...postedPicks, ...evidencePicks, ...trackOnlyPicks];
+  // Applied after the read, never instead of it: the restriction is an
+  // intersection with what the population already contained, so it can only ever
+  // remove candidates. An id that is not in the population stays ungraded.
+  const restrictToPickIds = options.restrictToPickIds;
+  const picks = restrictToPickIds
+    ? population.filter((pick) => restrictToPickIds.has(pick.id))
+    : population;
+
+  // UTV2-1886: one batched read instead of one query per pick. The loop below used to
+  // open with `findLatestForPick(pick.id)` -- a sequential round trip for every pick in
+  // a 22,291-row population, which is what put a median 91 minutes between consecutive
+  // grading runs (min 88.1, max 152.5 over 108 runs in the seven days to 2026-09-11)
+  // against a `pollIntervalMs` default of five minutes. The run record is opened after
+  // the loop, so that time was never visible in `grading.run`'s own duration.
+  //
+  // A failure here rejects the whole pass rather than degrading to an empty map. That is
+  // deliberate: an empty map is indistinguishable from "nothing is settled", and acting
+  // on it would re-settle every already-settled pick.
+  const existingSettlements = await repositories.settlements.findLatestForPicks(
+    picks.map((pick) => pick.id),
+  );
+
   const details: GradingPickResult[] = [];
   const retryState = options.retryState;
 
   for (const pick of picks) {
     try {
-      const existingSettlement =
-        await repositories.settlements.findLatestForPick(pick.id);
+      const existingSettlement = existingSettlements.get(pick.id) ?? null;
       if (existingSettlement) {
         details.push({
           pickId: pick.id,
@@ -150,7 +244,7 @@ export async function runGradingPass(
         continue;
       }
 
-      if (!Number.isFinite(pick.line ?? null)) {
+      if (marketRule.usesLine && !Number.isFinite(pick.line ?? null)) {
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
@@ -254,16 +348,6 @@ export async function runGradingPass(
 
       retryState?.delete(pick.id);
 
-      const selectionSide = inferSelectionSide(pick.selection);
-      if (!selectionSide) {
-        details.push({
-          pickId: pick.id,
-          outcome: 'skipped',
-          reason: 'selection_side_not_supported',
-        });
-        continue;
-      }
-
       if (!Number.isFinite(gameResult.actual_value)) {
         details.push({
           pickId: pick.id,
@@ -273,13 +357,85 @@ export async function runGradingPass(
         continue;
       }
 
-      const gradedResult = mapOutcomeToSettlementResult(
-        selectionSide === 'over'
-          ? resolveOutcome(gameResult.actual_value, pick.line as number)
-          : invertOutcome(
-              resolveOutcome(gameResult.actual_value, pick.line as number),
-            ),
-      );
+      let gradedResult;
+      if (marketRule.family === 'game_moneyline') {
+        // A moneyline is not an over/under. `inferSelectionSide('Dodgers')` returns
+        // null and `resolveOutcome` needs a line, so both are bypassed and the
+        // outcome is read directly off the attested win flag.
+        //
+        // The market-key guard is load-bearing rather than defensive. The candidate
+        // lookup can reach `points-all-game-ml`, where 280 production rows carry a
+        // raw *score*; under that key an `actual_value` of 7 is neither 1 nor 0 and
+        // a value of 1 would read as a win that was never attested. Refusing any key
+        // but the dedicated one makes the number's meaning unambiguous.
+        if (gameResult.market_key !== MONEYLINE_RESULT_MARKET_KEY) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: `moneyline_result_market_key_unsupported: market_key=${gameResult.market_key} for result=${gameResult.id}`,
+          });
+          continue;
+        }
+
+        const moneylineOutcome = MONEYLINE_OUTCOME_BY_ACTUAL_VALUE.get(
+          gameResult.actual_value,
+        );
+        if (!moneylineOutcome) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: `moneyline_result_value_invalid: actual_value=${gameResult.actual_value} for result=${gameResult.id}`,
+          });
+          continue;
+        }
+        gradedResult = moneylineOutcome;
+      } else if (marketRule.family === 'game_spread') {
+        // A spread is not an over/under. `inferSelectionSide('Chiefs -2.5')` returns
+        // null, so the over/under path below cannot express it; the outcome is read
+        // off an attested *signed margin* for the resolved participant instead.
+        //
+        // The market-key guard is load-bearing rather than defensive, for exactly the
+        // reason the moneyline guard above is: the candidate lookup can reach the
+        // `-sp` game-line keys, whose production rows carry an unattributed raw
+        // score. Grading a spread off one would invent a side that was never
+        // attested. Refusing any key but the dedicated one keeps the number's
+        // meaning unambiguous.
+        if (gameResult.market_key !== SPREAD_RESULT_MARKET_KEY) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: `spread_result_market_key_unsupported: market_key=${gameResult.market_key} for result=${gameResult.id}`,
+          });
+          continue;
+        }
+
+        // `usesLine: true` already guaranteed a finite line above. The line is signed
+        // from the selected participant's perspective (-2.5 favourite, +3.5 dog), so
+        // the cover margin is the attested margin plus the line. Exactly zero is a
+        // push rather than a win, which is why this is three branches and not two.
+        const coverMargin = gameResult.actual_value + (pick.line as number);
+        const spreadOutcome: 'win' | 'loss' | 'push' =
+          coverMargin > 0 ? 'win' : coverMargin < 0 ? 'loss' : 'push';
+        gradedResult = spreadOutcome;
+      } else {
+        const selectionSide = inferSelectionSide(pick.selection);
+        if (!selectionSide) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: 'selection_side_not_supported',
+          });
+          continue;
+        }
+
+        gradedResult = mapOutcomeToSettlementResult(
+          selectionSide === 'over'
+            ? resolveOutcome(gameResult.actual_value, pick.line as number)
+            : invertOutcome(
+                resolveOutcome(gameResult.actual_value, pick.line as number),
+              ),
+        );
+      }
 
       const gradingArgs = {
         actualValue: gameResult.actual_value,
@@ -289,7 +445,7 @@ export async function runGradingPass(
       };
 
       let settlementResult;
-      if (pick.status === 'awaiting_approval') {
+      if (isEvidencePlanePick(pick)) {
         // Evidence plane: record outcome without lifecycle transition.
         // atomicClaimForTransition is skipped — pick.status stays awaiting_approval.
         settlementResult = await recordEvidenceSettlement(
@@ -322,7 +478,9 @@ export async function runGradingPass(
       }
 
       // Evidence-plane picks have no outbox record; skip Discord recap.
-      if (pick.status !== 'awaiting_approval') {
+      // For Track Only this is not merely an optimisation -- publishing a recap
+      // would be member delivery, which Track Only exists to make impossible.
+      if (!isEvidencePlanePick(pick)) {
         await postSettlementRecapIfPossible(
           pick,
           settlementResult.settlementRecord,
@@ -386,12 +544,33 @@ export async function runGradingPass(
   };
 }
 
-function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
+export function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
+  if (marketKey === 'moneyline' || marketKey === 'game_moneyline') {
+    return {
+      family: 'game_moneyline',
+      participantRequirement: 'required',
+      participantType: 'team',
+      gradeable: true,
+      usesLine: false,
+    };
+  }
+
+  if (marketKey === 'spread' || marketKey === 'game_spread') {
+    return {
+      family: 'game_spread',
+      participantRequirement: 'required',
+      participantType: 'team',
+      gradeable: true,
+      usesLine: true,
+    };
+  }
+
   if (marketKey === 'game_total_ou') {
     return {
       family: 'game_total',
       participantRequirement: 'forbidden',
       gradeable: true,
+      usesLine: true,
     };
   }
 
@@ -401,6 +580,7 @@ function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
       participantRequirement: 'required',
       participantType: 'team',
       gradeable: true,
+      usesLine: true,
     };
   }
 
@@ -410,6 +590,7 @@ function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
       participantRequirement: 'required',
       participantType: 'player',
       gradeable: true,
+      usesLine: true,
     };
   }
 
@@ -417,6 +598,7 @@ function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
     family: 'unsupported',
     participantRequirement: 'forbidden',
     gradeable: false,
+    usesLine: false,
   };
 }
 
@@ -481,7 +663,11 @@ async function findFirstGradeResult(
   return null;
 }
 
-const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
+export const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
+  moneyline: MONEYLINE_RESULT_MARKET_KEY,
+  game_moneyline: MONEYLINE_RESULT_MARKET_KEY,
+  spread: SPREAD_RESULT_MARKET_KEY,
+  game_spread: SPREAD_RESULT_MARKET_KEY,
   'points-all-game-ou': 'player_points_ou',
   player_points_ou: 'points-all-game-ou',
   'rebounds-all-game-ou': 'player_rebounds_ou',
@@ -533,8 +719,12 @@ function validateEventProvenanceForGrading(
   if (!ingestionCycleRunId) {
     return { ok: false, reason: 'event_provenance_missing_ingestion_cycle' };
   }
+  const requiredIngestionSource = REQUIRED_INGESTION_SOURCE_BY_PROVIDER[provider];
+  if (!requiredIngestionSource) {
+    return { ok: false, reason: 'event_provenance_untrusted_provider' };
+  }
   const ingestionSource = readNonEmptyString(metadata?.ingestionSource);
-  if (ingestionSource !== 'ingestor.cycle') {
+  if (ingestionSource !== requiredIngestionSource) {
     return { ok: false, reason: 'event_provenance_invalid_ingestion_cycle' };
   }
 
@@ -601,6 +791,27 @@ export async function postSettlementRecapIfPossible(
     return;
   }
 
+  // UTV2-1815: fail closed on an unknown stake. The recap renders a
+  // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
+  // non-nullable number -- so publishing here with an unknown stake is exactly
+  // the "emit a value indistinguishable from an observed one" failure. Refuse
+  // to publish and say why, rather than substituting a stake of 1. Changing how
+  // the embed RENDERS an unknown stake is deliberately not in this scope.
+  const stakeResolution = readStakeUnitsResolution(pick);
+  const profitLossUnits = computeProfitLossUnits(
+    normalizeSettlementResult(settlementRecord.result),
+    stakeResolution.stake_units,
+    pick.odds,
+  );
+  if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
+    options.logger?.warn?.(
+      `Skipping recap for pick ${pick.id}: stake_units is ` +
+        `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
+        'computed against an assumed stake',
+    );
+    return;
+  }
+
   const response = await fetch(
     `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
     {
@@ -615,12 +826,8 @@ export async function postSettlementRecapIfPossible(
             market: pick.market,
             selection: pick.selection,
             result: normalizeSettlementResult(settlementRecord.result),
-            stakeUnits: readStakeUnits(pick),
-            profitLossUnits: computeProfitLossUnits(
-              normalizeSettlementResult(settlementRecord.result),
-              readStakeUnits(pick),
-              pick.odds,
-            ),
+            stakeUnits: stakeResolution.stake_units,
+            profitLossUnits,
             clvPercent: readClvPercent(settlementRecord.payload),
             submittedBy: readSubmittedBy(pick),
           }),
@@ -973,19 +1180,35 @@ function readSubmittedBy(pick: PickRecord) {
   return capper?.trim() || 'Unit Talk';
 }
 
-function readStakeUnits(pick: PickRecord) {
-  return typeof pick.stake_units === 'number' &&
-    Number.isFinite(pick.stake_units)
-    ? pick.stake_units
-    : null;
+/**
+ * Apply the shared stake-units contract (UTV2-1815) to a pick.
+ *
+ * A pick row always carries the column, so a missing stake arrives here as
+ * `null`, never as `undefined` -- which means it resolves to
+ * `historical_unknown` and this path refuses. The flat-bet `assumed_flat` case
+ * belongs to callers that genuinely omit the field; grading is not one of them.
+ */
+function readStakeUnitsResolution(pick: PickRecord): StakeUnitsResolution {
+  return resolveStakeUnits(
+    typeof pick.stake_units === 'number' ? pick.stake_units : null,
+  );
 }
 
+/**
+ * UTV2-1815: this used to be `const stake = stakeUnits ?? 1`, which emitted a
+ * profit/loss figure indistinguishable from one computed against a real stake.
+ * It now returns null when the stake is unknown, and the caller refuses to
+ * publish rather than publishing a fabricated number.
+ */
 function computeProfitLossUnits(
   result: 'win' | 'loss' | 'push',
   stakeUnits: number | null,
   odds: number | null,
-) {
-  const stake = stakeUnits ?? 1;
+): number | null {
+  if (stakeUnits === null) {
+    return null;
+  }
+  const stake = stakeUnits;
 
   if (result === 'push') {
     return 0;

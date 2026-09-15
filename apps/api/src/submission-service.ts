@@ -36,6 +36,9 @@ import {
   enrichMetadataWithDomainAnalysis,
 } from './domain-analysis-service.js';
 import { resolvePickThumbnailUrl } from './pick-asset-resolver.js';
+import { classifyMarketFamilyForGrading } from './grading-service.js';
+import { PROVIDER_OFFER_MAX_AGE_MS } from './real-edge-service.js';
+import type { RealEdgeMarketScope } from './real-edge-service.js';
 import { waivesEventExistenceGate } from './smart-form-validation.js';
 import type { SmartFormValidationOutcome } from './smart-form-validation.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
@@ -251,20 +254,36 @@ export async function processSubmission(
   // Domain analysis enrichment: compute implied probability, edge, and Kelly
   // sizing from odds/confidence and store in pick metadata.
   const domainAnalysis = computeSubmissionDomainAnalysis(materialized.pick);
+
+  const enrichedMetadata = enrichMetadataWithDomainAnalysis(
+    materialized.pick.metadata,
+    domainAnalysis,
+  );
+
+  // UTV2-1898: canonical identity must be resolved BEFORE any provider-offer
+  // lookup, because sport, event and participant are the scope those lookups
+  // run under. Resolving them afterwards is what left the edge query with
+  // nothing to discriminate on.
+  const normalizedIdentity = await resolveNormalizedPickIdentityMetadata(
+    payload,
+    enrichedMetadata,
+    repositories,
+  );
+  const offerScope = await resolveRealEdgeScope(
+    normalizedMarketKey,
+    { ...enrichedMetadata, ...normalizedIdentity },
+    repositories,
+  );
+
   const deviggingResult = await resolveDeviggingResult(
     normalizedMarketKey,
-    materialized.pick.selection,
     repositories.providerOffers,
+    offerScope,
   );
   let kellySizing = resolveKellySizing(
     deviggingResult,
     materialized.pick.odds,
     normalizedMarketKey,
-  );
-
-  const enrichedMetadata = enrichMetadataWithDomainAnalysis(
-    materialized.pick.metadata,
-    domainAnalysis,
   );
 
   // Compute real edge against Pinnacle/consensus market data (Sprint D UTV2-198)
@@ -283,9 +302,20 @@ export async function processSubmission(
         selection: materialized.pick.selection,
         submittedOdds: materialized.pick.odds,
         providerOffers: repositories.providerOffers,
+        scope: offerScope,
       });
 
       realEdgeData = {
+        // UTV2-1898: the scope this edge was computed under, recorded on the
+        // pick so promotion-time re-derivation cannot silently widen it and so
+        // an operator can see which dimension was missing.
+        edgeScope: {
+          sportKey: offerScope.sportKey,
+          providerEventId: offerScope.providerEventId,
+          ...(offerScope.providerParticipantId === undefined
+            ? {}
+            : { providerParticipantId: offerScope.providerParticipantId }),
+        },
         realEdge: realEdgeResult.realEdge,
         realEdgeSource: realEdgeResult.marketSource,
         marketProbability: realEdgeResult.marketProbability,
@@ -380,12 +410,6 @@ export async function processSubmission(
       repositories.participants,
     );
   }
-
-  const normalizedIdentity = await resolveNormalizedPickIdentityMetadata(
-    payload,
-    enrichedMetadata,
-    repositories,
-  );
 
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
@@ -566,16 +590,6 @@ export async function processShadowSubmission(
   const submission = createValidatedSubmission(nextSubmissionId(), shadowPayload);
   const materialized = createCanonicalPickFromSubmission(submission);
   const domainAnalysis = computeSubmissionDomainAnalysis(materialized.pick);
-  const deviggingResult = await resolveDeviggingResult(
-    normalizedMarketKey,
-    materialized.pick.selection,
-    repositories.providerOffers,
-  );
-  const kellySizing = resolveKellySizing(
-    deviggingResult,
-    materialized.pick.odds,
-    normalizedMarketKey,
-  );
 
   const enrichedMetadata = enrichMetadataWithDomainAnalysis(
     materialized.pick.metadata,
@@ -586,6 +600,22 @@ export async function processShadowSubmission(
     payload,
     enrichedMetadata,
     repositories,
+  );
+
+  // UTV2-1898: same ordering requirement as the primary path.
+  const deviggingResult = await resolveDeviggingResult(
+    normalizedMarketKey,
+    repositories.providerOffers,
+    await resolveRealEdgeScope(
+      normalizedMarketKey,
+      { ...enrichedMetadata, ...normalizedIdentity },
+      repositories,
+    ),
+  );
+  const kellySizing = resolveKellySizing(
+    deviggingResult,
+    materialized.pick.odds,
+    normalizedMarketKey,
   );
 
   // Resolve thumbnail URL from enriched participant data (fail-open)
@@ -964,14 +994,14 @@ function readShadowRecordedAt(metadata: unknown) {
 
 async function resolveDeviggingResult(
   normalizedMarketKey: string,
-  selection: string,
   providerOffers: ProviderOfferRepository,
+  scope: RealEdgeMarketScope,
 ) {
   try {
     const matchingOffer = await findLatestMatchingOffer(
       normalizedMarketKey,
-      selection,
       providerOffers,
+      scope,
     );
     if (!matchingOffer) {
       return null;
@@ -1021,13 +1051,118 @@ async function resolveDeviggingResult(
   }
 }
 
+/**
+ * UTV2-1898: resolve the full scope a provider offer must match to back this
+ * pick. Every dimension is stated, including the unresolved ones — an
+ * unresolved dimension must refuse the lookup, never widen it.
+ */
+export async function resolveRealEdgeScope(
+  normalizedMarketKey: string,
+  metadata: Record<string, unknown>,
+  repositories: {
+    participants?: import('@unit-talk/db').ParticipantRepository | undefined;
+    events?: EventRepository | undefined;
+  },
+  now: Date = new Date(),
+): Promise<RealEdgeMarketScope> {
+  const sportKey = readMetadataString(metadata, 'sport');
+
+  let providerEventId = readMetadataString(metadata, 'providerEventId');
+  if (!providerEventId) {
+    const eventId = readMetadataString(metadata, 'eventId');
+    if (eventId && repositories.events) {
+      try {
+        const row = await repositories.events.findById(eventId);
+        providerEventId = row?.external_id ?? null;
+      } catch {
+        providerEventId = null;
+      }
+    }
+  }
+
+  const providerParticipantId = await resolveProviderParticipantId(
+    normalizedMarketKey,
+    metadata,
+    repositories.participants,
+  );
+
+  return {
+    sportKey: sportKey ?? null,
+    providerEventId: providerEventId ?? null,
+    providerParticipantId,
+    now,
+  };
+}
+
+/**
+ * `null` means "this market is genuinely game-level, match offers whose
+ * participant is NULL". `undefined` means "this pick names a side and we could
+ * not resolve its provider identity" — which refuses the lookup.
+ *
+ * UTV2-719 made `participants.external_id` string-equal to the provider's own
+ * participant id, so the external id is the provider key without a translation
+ * table.
+ */
+async function resolveProviderParticipantId(
+  normalizedMarketKey: string,
+  metadata: Record<string, unknown>,
+  participants: import('@unit-talk/db').ParticipantRepository | undefined,
+): Promise<string | null | undefined> {
+  const explicit = readMetadataString(metadata, 'providerParticipantId');
+  if (explicit) return explicit;
+
+  const participantId =
+    readMetadataString(metadata, 'participantId') ?? readMetadataString(metadata, 'playerId');
+
+  if (participantId && participants) {
+    try {
+      const row = await participants.findById(participantId);
+      if (row?.external_id) return row.external_id;
+    } catch {
+      // fall through to the unresolved classification below
+    }
+  }
+
+  // UTV2-1898: do not re-derive which markets name a participant. The previous
+  // string heuristic here (`moneyline`, or metadata that happened to carry a
+  // player) read a spread, a team total and every unresolved player prop as
+  // game-level, which matched a NULL-participant offer and attributed it to
+  // whichever side the devig picked. `classifyMarketFamilyForGrading` is the
+  // repository's single definition of participant scope and grading already
+  // depends on it; reuse it so the two cannot drift.
+  const marketRule = classifyMarketFamilyForGrading(normalizedMarketKey);
+
+  if (marketRule.family === 'unsupported') {
+    // An unrecognised market key is not evidence that the market is game-level.
+    // Refusing costs an edge; guessing game-level fabricates one.
+    return undefined;
+  }
+
+  return marketRule.participantRequirement === 'forbidden' ? null : undefined;
+}
+
 async function findLatestMatchingOffer(
   normalizedMarketKey: string,
-  selection: string,
   providerOffers: ProviderOfferRepository,
+  scope: RealEdgeMarketScope,
 ): Promise<ProviderOfferRecord | null> {
-  const participantKey =
-    normalizedMarketKey === 'moneyline' ? normalizeSelectionParticipantKey(selection) : undefined;
+  // UTV2-1898: refuse rather than widen. Previously this path derived the
+  // participant from the canonical key and so happened to scope correctly,
+  // while real-edge-service derived it from the translated key and scoped not
+  // at all — the same pick got a null devig here and a cross-sport match there.
+  if (
+    scope.sportKey == null ||
+    scope.providerEventId == null ||
+    scope.providerParticipantId === undefined
+  ) {
+    return null;
+  }
+
+  const lookupBase = {
+    sportKey: scope.sportKey,
+    providerEventId: scope.providerEventId,
+    providerParticipantId: scope.providerParticipantId,
+  };
 
   // Translate canonical key to SGO provider-native format (e.g., 'player.points-all-game-ou'
   // → 'player-points-game-ou'). The DB stores provider format; canonical keys miss every row.
@@ -1035,21 +1170,35 @@ async function findLatestMatchingOffer(
   const sgoProviderKey = await providerOffers.resolveProviderMarketKey(normalizedMarketKey, 'sgo');
   const sgoLookupKey = sgoProviderKey ?? normalizedMarketKey;
 
-  const sgoOffer = await providerOffers.findLatestByMarketKey(sgoLookupKey, 'sgo', participantKey);
+  const notBefore = scope.now.getTime() - PROVIDER_OFFER_MAX_AGE_MS;
+  const fresh = (offer: ProviderOfferRecord | null): ProviderOfferRecord | null => {
+    if (!offer) return null;
+    const at = offer.snapshot_at ? Date.parse(offer.snapshot_at) : Number.NaN;
+    return Number.isFinite(at) && at >= notBefore ? offer : null;
+  };
+
+  const sgoOffer = fresh(
+    await providerOffers.findLatestScopedOffer({
+      ...lookupBase, providerMarketKey: sgoLookupKey, providerKey: 'sgo',
+    }),
+  );
   if (sgoOffer) return sgoOffer;
 
   // Fall back to any provider using resolved key, then canonical key.
-  const anyOffer = await providerOffers.findLatestByMarketKey(sgoLookupKey, undefined, participantKey);
+  const anyOffer = fresh(
+    await providerOffers.findLatestScopedOffer({
+      ...lookupBase, providerMarketKey: sgoLookupKey,
+    }),
+  );
   if (anyOffer) return anyOffer;
   if (sgoProviderKey) {
-    return providerOffers.findLatestByMarketKey(normalizedMarketKey, undefined, participantKey);
+    return fresh(
+      await providerOffers.findLatestScopedOffer({
+        ...lookupBase, providerMarketKey: normalizedMarketKey,
+      }),
+    );
   }
   return null;
-}
-
-function normalizeSelectionParticipantKey(selection: string): string | null {
-  const normalized = selection.trim();
-  return normalized.length > 0 ? normalized : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

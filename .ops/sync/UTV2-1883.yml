@@ -1,0 +1,191 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1883
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1883
+  objective: Add Unit Talk brand reference assets to docs/03_product/brand
+  acceptance_criteria:
+    - >-
+      Add the supplied Unit Talk brand references to the repository as design
+      concepts.
+
+
+      ## Scope
+
+
+      Three new files under `docs/03_product/brand/`, filenames and README
+      preserved exactly as supplied:
+
+
+      * `README.md` — what the assets are, intended direction, proposed flat
+      palette, and what must happen before any public rollout.
+
+      * `unit-talk-original-logo-reference.png` — supplied metallic UT monogram
+      reference (203×117, RGBA).
+
+      * `unit-talk-flat-logo-concepts.png` — four-up refinement sheet: primary
+      on black, light background, one-colour, compact circle badge (1536×1024,
+      RGB).
+
+
+      The zip's root `IMPORT.md` is deliberately NOT committed: it is import
+      scaffolding from the environment that produced the archive, not a brand
+      reference, and it sits outside the `docs/03_product/brand/` directory.
+
+
+      ## What this explicitly does NOT do
+
+
+      * No application rollout. Nothing imports these files; no Discord, web or
+      marketing surface changes.
+
+      * No governance change. No gate, tier, lane type, approval artifact or
+      required check is touched.
+
+      * No claim that these are final vector masters, a transparent asset pack,
+      or exactly-extracted colours. The README states the opposite, and that
+      caveat is load-bearing.
+
+
+      ## Acceptance
+
+
+      * The three files exist on `main` at the paths above, byte-identical to
+      what was supplied.
+
+      * `pnpm verify` green; no runtime, package or workflow file in the diff.
+
+      * T3 — `classifyMechanicalMinimum` returns `T3` with no matches for these
+      paths, so merge authority is green CI on the merge SHA plus a valid
+      executor result. No PM verdict is required and none should be requested.
+
+
+      Requested by Griff on 2026-09-11.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Add the supplied Unit Talk brand references to the repository as design
+      concepts.
+    - >-
+      Scope
+
+      Three new files under `docs/03_product/brand/`, filenames and README
+      preserved exactly as supplied:
+
+
+      * `README.md` — what the assets are, intended direction, proposed flat
+      palette, and what must happen before any public rollout.
+
+      * `unit-talk-original-logo-reference.png` — supplied metallic UT monogram
+      reference (203×117, RGBA).
+
+      * `unit-talk-flat-logo-concepts.png` — four-up refinement sheet: primary
+      on black, light background, one-colour, compact circle badge (1536×1024,
+      RGB).
+
+
+      The zip's root `IMPORT.md` is deliberately NOT committed: it is import
+      scaffolding from the environment that produced the archive, not a brand
+      reference, and it sits outside the `docs/03_product/brand/` directory.
+    - >-
+      What this explicitly does NOT do
+
+      * No application rollout. Nothing imports these files; no Discord, web or
+      marketing surface changes.
+
+      * No governance change. No gate, tier, lane type, approval artifact or
+      required check is touched.
+
+      * No claim that these are final vector masters, a transparent asset pack,
+      or exactly-extracted colours. The README states the opposite, and that
+      caveat is load-bearing.
+    - >-
+      Acceptance
+
+      * The three files exist on `main` at the paths above, byte-identical to
+      what was supplied.
+
+      * `pnpm verify` green; no runtime, package or workflow file in the diff.
+
+      * T3 — `classifyMechanicalMinimum` returns `T3` with no matches for these
+      paths, so merge authority is green CI on the merge SHA plus a valid
+      executor result. No PM verdict is required and none should be requested.
+
+
+      Requested by Griff on 2026-09-11.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1883/add-unit-talk-brand-reference-assets-to-docs03-productbrand
+    title: Add Unit Talk brand reference assets to docs/03_product/brand
+    description: >-
+      Add the supplied Unit Talk brand references to the repository as design
+      concepts.
+
+
+      ## Scope
+
+
+      Three new files under `docs/03_product/brand/`, filenames and README
+      preserved exactly as supplied:
+
+
+      * `README.md` — what the assets are, intended direction, proposed flat
+      palette, and what must happen before any public rollout.
+
+      * `unit-talk-original-logo-reference.png` — supplied metallic UT monogram
+      reference (203×117, RGBA).
+
+      * `unit-talk-flat-logo-concepts.png` — four-up refinement sheet: primary
+      on black, light background, one-colour, compact circle badge (1536×1024,
+      RGB).
+
+
+      The zip's root `IMPORT.md` is deliberately NOT committed: it is import
+      scaffolding from the environment that produced the archive, not a brand
+      reference, and it sits outside the `docs/03_product/brand/` directory.
+
+
+      ## What this explicitly does NOT do
+
+
+      * No application rollout. Nothing imports these files; no Discord, web or
+      marketing surface changes.
+
+      * No governance change. No gate, tier, lane type, approval artifact or
+      required check is touched.
+
+      * No claim that these are final vector masters, a transparent asset pack,
+      or exactly-extracted colours. The README states the opposite, and that
+      caveat is load-bearing.
+
+
+      ## Acceptance
+
+
+      * The three files exist on `main` at the paths above, byte-identical to
+      what was supplied.
+
+      * `pnpm verify` green; no runtime, package or workflow file in the diff.
+
+      * T3 — `classifyMechanicalMinimum` returns `T3` with no matches for these
+      paths, so merge authority is green CI on the merge SHA plus a valid
+      executor result. No PM verdict is required and none should be requested.
+
+
+      Requested by Griff on 2026-09-11.
+    captured_at: 2026-09-11T07:01:05.249Z
+    description_sha256: ed3ba3d82a96971fca0a250857e2f47aee34ce34afd3831d2a351609b1927686
+  contract_hash: 33fb2291483e2b175352585970a14854e10eb054574286ebb16aea4c8896bc4a

@@ -602,6 +602,20 @@ test('processSubmission leaves unknown market keys unchanged', async () => {
   assert.equal(result.pickRecord.market, 'exotic market type');
 });
 
+// UTV2-1898: an `*-all-game-ou` market prices one player, so its offers and the
+// pick's recorded scope must both name that player. These fixtures previously
+// carried `providerParticipantId: null` on both sides, which is the shape the
+// repair refuses — an offer that prices one participant but names none cannot
+// be attributed to this pick's selection.
+//
+// UTV2-1898: provider offers are only usable inside a freshness window, so
+// fixtures must be dated relative to the run rather than pinned to a literal
+// past date. The two constants preserve the old fixtures' relative ordering
+// (an older snapshot superseded by a newer one) without pinning either to a
+// date that is now 6+ months stale.
+const OFFER_OLD_AT = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+const OFFER_NEW_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
 test('processSubmission attaches deviggingResult when a matching market offer exists', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await repositories.providerOffers.upsertBatch([
@@ -609,7 +623,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       providerKey: 'sgo',
       providerEventId: 'evt-1',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -105,
@@ -617,7 +631,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T15:00:00.000Z',
+      snapshotAt: OFFER_OLD_AT,
       idempotencyKey: 'offer-old',
       bookmakerKey: null,
     },
@@ -625,7 +639,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       providerKey: 'sgo',
       providerEventId: 'evt-1',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -110,
@@ -633,7 +647,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-new',
       bookmakerKey: null,
     },
@@ -644,6 +658,12 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-1',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -653,7 +673,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
 
   assert.ok(deviggingResult);
   assert.equal(deviggingResult?.providerMarketKey, 'assists-all-game-ou');
-  assert.equal(deviggingResult?.snapshotAt, '2026-03-27T16:00:00.000Z');
+  assert.equal(deviggingResult?.snapshotAt, OFFER_NEW_AT);
   assert.equal(deviggingResult?.overFair, 0.5);
   assert.equal(deviggingResult?.underFair, 0.5);
   assert.equal(deviggingResult?.overround, 1.04762);
@@ -676,7 +696,7 @@ test('processSubmission resolves deviggingResult via SGO alias when canonical ke
       providerKey: 'sgo',
       providerEventId: 'evt-alias-sub',
       providerMarketKey: 'player-assists-game-ou', // SGO provider format
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 6.5,
       overOdds: -110,
@@ -684,7 +704,7 @@ test('processSubmission resolves deviggingResult via SGO alias when canonical ke
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-04-15T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'alias-offer-1',
       bookmakerKey: null,
     },
@@ -697,6 +717,12 @@ test('processSubmission resolves deviggingResult via SGO alias when canonical ke
       selection: 'Player Over 6.5',
       odds: 150, // positive odds → positive Kelly edge so has_edge=true
       confidence: 0.6,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-alias-sub',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -727,7 +753,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-bills',
       bookmakerKey: null,
     },
@@ -743,7 +769,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-chiefs',
       bookmakerKey: null,
     },
@@ -756,6 +782,12 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       selection: 'Bills',
       odds: -120,
       confidence: 0.62,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NFL',
+        providerEventId: 'evt-moneyline',
+        providerParticipantId: 'Bills',
+      },
     },
     repositories,
   );
@@ -780,7 +812,7 @@ test('processSubmission uses single non-SGO book before confidence-delta fallbac
       providerKey: 'odds-api:draftkings',
       providerEventId: 'evt-single-book',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -105,
@@ -788,7 +820,7 @@ test('processSubmission uses single non-SGO book before confidence-delta fallbac
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-dk-single',
       bookmakerKey: null,
     },
@@ -801,6 +833,12 @@ test('processSubmission uses single non-SGO book before confidence-delta fallbac
       selection: 'Player Over 7.5',
       odds: 150,
       confidence: 0.60,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-single-book',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -821,7 +859,7 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
       providerKey: 'sgo',
       providerEventId: 'evt-1',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -110,
@@ -829,7 +867,7 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-new',
       bookmakerKey: null,
     },
@@ -841,6 +879,12 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
       market: 'NBA assists',
       selection: 'Player Over 7.5',
       odds: 150,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-1',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -870,7 +914,7 @@ test('processSubmission stores null kellySizing when odds are missing', async ()
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-new',
       bookmakerKey: null,
     },

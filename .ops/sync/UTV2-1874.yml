@@ -1,0 +1,256 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1874
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1874
+  objective: Return review packet rejects a lane's own proof directory, because
+    the allowed scope names the sync file and manifest by glob but the proof dir
+    only by literal path
+  acceptance_criteria:
+    - |-
+      ## The defect
+
+      `scripts/ops/pr-review-packet.ts:485-491` builds the allowed file scope as:
+
+      ```ts
+      const allowedFileScope = normalizePaths([
+        ...scopeLock,
+        ...sameIssueLaneMetadataPaths(issueId),
+        ...expectedProofPaths,
+      ]);
+      ```
+
+      `sameIssueLaneMetadataPaths` (`:662-668`) returns **exactly two** entries:
+
+      ```ts
+      return [
+        `.ops/sync/${normalizedIssueId}.yml`,
+        `docs/06_status/lanes/${normalizedIssueId}.json`,
+      ];
+      ```
+
+      There is **no proof glob**. So a lane's own `docs/06_status/proof/<ID>/` directory is admitted only by literal `expected_proof_paths` entries, and any other file inside it — including files the tooling itself creates — is reported as scope bleed.
+
+      The check is inconsistent with two other authorities that govern the same directory:
+
+      * `.lane/lanes/governance.yml` lists `docs/06_status/proof/**` as an allowed glob, so `Lane authority` passes the same files this check fails.
+      * `ops:lane-start` **creates and commits** `docs/06_status/proof/<ID>/.gitkeep` itself, and `Executor Result Validation` selects a narrower legacy proof contract unless `docs/06_status/proof/<ID>/evidence.json` exists — so a lane is pushed toward adding files this check then rejects.
+
+      Measured occurrences: `docs/06_status/proof/UTV2-1829/.gitkeep` on [griff843/Unit-Talk-v2#1499](https://linear.app/unit-talk-v2/review/utv2-1829-make-the-mission-standing-context-for-claude-subagents-and-277830ff2e48) and `docs/06_status/proof/UTV2-1835/evidence.json` on [griff843/Unit-Talk-v2#1511](https://linear.app/unit-talk-v2/review/utv2-1835-never-overwrite-or-prune-the-running-releases-config-2ef544b88020). The second ruled out every dot-file explanation and is what located the cause; an earlier micromatch `{ dot: true }` diagnosis was wrong and is recorded as such in `docs/mission/plan.md`.
+
+      `Return review packet` is not one of the four required checks, so this blocks no merge. It emits a `FAIL` verdict on a correctly-constructed bundle, which is the cost: every lane that touches its own proof directory has to have this red read and dismissed by hand.
+
+      ## The repair
+
+      Give the packet the same treatment the sync file and manifest already get — a glob for the lane's **own** proof directory, keyed to its issue id:
+
+      ```ts
+      function sameIssueLaneMetadataPaths(issueId: string): string[] {
+        const normalizedIssueId = issueId.toUpperCase();
+        return [
+          `.ops/sync/${normalizedIssueId}.yml`,
+          `docs/06_status/lanes/${normalizedIssueId}.json`,
+          `docs/06_status/proof/${normalizedIssueId}/**`,
+        ];
+      }
+      ```
+
+      This is deliberately **narrow**: it admits only the directory named after this lane's issue, never another lane's proof directory and never `docs/06_status/proof/**` at large. A lane that modifies a *different* lane's proof bundle must still be reported, and that is the property the test has to pin.
+
+      ## Acceptance
+
+      1. A file under `docs/06_status/proof/<this lane's ID>/` that is not in `expected_proof_paths` — `.gitkeep`, `evidence.json` — no longer appears in `out_of_scope_files`.
+      2. A file under `docs/06_status/proof/<a different ID>/` **still** appears in `out_of_scope_files`. This is the assertion that keeps the widening honest.
+      3. A file outside both the scope lock and the proof directory still appears in `out_of_scope_files`.
+      4. Issue-id casing is handled the way the existing two entries handle it (`toUpperCase`), so a lowercase id resolves to the same directory.
+      5. **Mutation:** removing the new glob must turn assertion 1 red; broadening it to `docs/06_status/proof/**` must turn assertion 2 red. Both directions, because a scope check that is too wide fails silently.
+
+      ## Scope
+
+      `scripts/ops/pr-review-packet.ts` and its existing test file. No Tier C match → T3. `scripts/**` is admitted by the `governance` lane type.
+
+      ## Out of scope
+
+      The complementary CEP-E1 repair (`truth-check-lib.ts:570-577` lacks the `tier === 'T1' || tier === 'T2'` condition that M7 at `:1004` has, so it emits a false prediction that a T3 closeout will fail). That is a genuinely separate defect in a different module — the two are complementary and neither subsumes the other — and `truth-check-lib.ts` is assigned to the Codex session under the ownership split recorded in `docs/mission/plan.md`.
+
+      No change to `ops:lane-start`'s `.gitkeep` creation, which is the other half of the same friction and is tracked on its own.
+  guardrails: []
+  non_goals:
+    - The complementary CEP-E1 repair (`truth-check-lib.ts:570-577` lacks the
+      `tier === 'T1' || tier === 'T2'` condition that M7 at `:1004` has, so it
+      emits a false prediction that a T3 closeout will fail). That is a
+      genuinely separate defect in a different module — the two are
+      complementary and neither subsumes the other — and `truth-check-lib.ts` is
+      assigned to the Codex session under the ownership split recorded in
+      `docs/mission/plan.md`.
+    - No change to `ops:lane-start`'s `.gitkeep` creation, which is the other
+      half of the same friction and is tracked on its own.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      The defect
+      `scripts/ops/pr-review-packet.ts:485-491` builds the allowed file scope as:
+
+      ```ts
+      const allowedFileScope = normalizePaths([
+        ...scopeLock,
+        ...sameIssueLaneMetadataPaths(issueId),
+        ...expectedProofPaths,
+      ]);
+      ```
+
+      `sameIssueLaneMetadataPaths` (`:662-668`) returns **exactly two** entries:
+
+      ```ts
+      return [
+        `.ops/sync/${normalizedIssueId}.yml`,
+        `docs/06_status/lanes/${normalizedIssueId}.json`,
+      ];
+      ```
+
+      There is **no proof glob**. So a lane's own `docs/06_status/proof/<ID>/` directory is admitted only by literal `expected_proof_paths` entries, and any other file inside it — including files the tooling itself creates — is reported as scope bleed.
+
+      The check is inconsistent with two other authorities that govern the same directory:
+
+      * `.lane/lanes/governance.yml` lists `docs/06_status/proof/**` as an allowed glob, so `Lane authority` passes the same files this check fails.
+      * `ops:lane-start` **creates and commits** `docs/06_status/proof/<ID>/.gitkeep` itself, and `Executor Result Validation` selects a narrower legacy proof contract unless `docs/06_status/proof/<ID>/evidence.json` exists — so a lane is pushed toward adding files this check then rejects.
+
+      Measured occurrences: `docs/06_status/proof/UTV2-1829/.gitkeep` on [griff843/Unit-Talk-v2#1499](https://linear.app/unit-talk-v2/review/utv2-1829-make-the-mission-standing-context-for-claude-subagents-and-277830ff2e48) and `docs/06_status/proof/UTV2-1835/evidence.json` on [griff843/Unit-Talk-v2#1511](https://linear.app/unit-talk-v2/review/utv2-1835-never-overwrite-or-prune-the-running-releases-config-2ef544b88020). The second ruled out every dot-file explanation and is what located the cause; an earlier micromatch `{ dot: true }` diagnosis was wrong and is recorded as such in `docs/mission/plan.md`.
+
+      `Return review packet` is not one of the four required checks, so this blocks no merge. It emits a `FAIL` verdict on a correctly-constructed bundle, which is the cost: every lane that touches its own proof directory has to have this red read and dismissed by hand.
+    - >-
+      The repair
+
+      Give the packet the same treatment the sync file and manifest already get
+      — a glob for the lane's **own** proof directory, keyed to its issue id:
+
+
+      ```ts
+
+      function sameIssueLaneMetadataPaths(issueId: string): string[] {
+        const normalizedIssueId = issueId.toUpperCase();
+        return [
+          `.ops/sync/${normalizedIssueId}.yml`,
+          `docs/06_status/lanes/${normalizedIssueId}.json`,
+          `docs/06_status/proof/${normalizedIssueId}/**`,
+        ];
+      }
+
+      ```
+
+
+      This is deliberately **narrow**: it admits only the directory named after
+      this lane's issue, never another lane's proof directory and never
+      `docs/06_status/proof/**` at large. A lane that modifies a *different*
+      lane's proof bundle must still be reported, and that is the property the
+      test has to pin.
+    - >-
+      Acceptance
+
+      1. A file under `docs/06_status/proof/<this lane's ID>/` that is not in
+      `expected_proof_paths` — `.gitkeep`, `evidence.json` — no longer appears
+      in `out_of_scope_files`.
+
+      2. A file under `docs/06_status/proof/<a different ID>/` **still** appears
+      in `out_of_scope_files`. This is the assertion that keeps the widening
+      honest.
+
+      3. A file outside both the scope lock and the proof directory still
+      appears in `out_of_scope_files`.
+
+      4. Issue-id casing is handled the way the existing two entries handle it
+      (`toUpperCase`), so a lowercase id resolves to the same directory.
+
+      5. **Mutation:** removing the new glob must turn assertion 1 red;
+      broadening it to `docs/06_status/proof/**` must turn assertion 2 red. Both
+      directions, because a scope check that is too wide fails silently.
+    - >-
+      Scope
+
+      `scripts/ops/pr-review-packet.ts` and its existing test file. No Tier C
+      match → T3. `scripts/**` is admitted by the `governance` lane type.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1874/return-review-packet-rejects-a-lanes-own-proof-directory-because-the
+    title: Return review packet rejects a lane's own proof directory, because the
+      allowed scope names the sync file and manifest by glob but the proof dir
+      only by literal path
+    description: |-
+      ## The defect
+
+      `scripts/ops/pr-review-packet.ts:485-491` builds the allowed file scope as:
+
+      ```ts
+      const allowedFileScope = normalizePaths([
+        ...scopeLock,
+        ...sameIssueLaneMetadataPaths(issueId),
+        ...expectedProofPaths,
+      ]);
+      ```
+
+      `sameIssueLaneMetadataPaths` (`:662-668`) returns **exactly two** entries:
+
+      ```ts
+      return [
+        `.ops/sync/${normalizedIssueId}.yml`,
+        `docs/06_status/lanes/${normalizedIssueId}.json`,
+      ];
+      ```
+
+      There is **no proof glob**. So a lane's own `docs/06_status/proof/<ID>/` directory is admitted only by literal `expected_proof_paths` entries, and any other file inside it — including files the tooling itself creates — is reported as scope bleed.
+
+      The check is inconsistent with two other authorities that govern the same directory:
+
+      * `.lane/lanes/governance.yml` lists `docs/06_status/proof/**` as an allowed glob, so `Lane authority` passes the same files this check fails.
+      * `ops:lane-start` **creates and commits** `docs/06_status/proof/<ID>/.gitkeep` itself, and `Executor Result Validation` selects a narrower legacy proof contract unless `docs/06_status/proof/<ID>/evidence.json` exists — so a lane is pushed toward adding files this check then rejects.
+
+      Measured occurrences: `docs/06_status/proof/UTV2-1829/.gitkeep` on [griff843/Unit-Talk-v2#1499](https://linear.app/unit-talk-v2/review/utv2-1829-make-the-mission-standing-context-for-claude-subagents-and-277830ff2e48) and `docs/06_status/proof/UTV2-1835/evidence.json` on [griff843/Unit-Talk-v2#1511](https://linear.app/unit-talk-v2/review/utv2-1835-never-overwrite-or-prune-the-running-releases-config-2ef544b88020). The second ruled out every dot-file explanation and is what located the cause; an earlier micromatch `{ dot: true }` diagnosis was wrong and is recorded as such in `docs/mission/plan.md`.
+
+      `Return review packet` is not one of the four required checks, so this blocks no merge. It emits a `FAIL` verdict on a correctly-constructed bundle, which is the cost: every lane that touches its own proof directory has to have this red read and dismissed by hand.
+
+      ## The repair
+
+      Give the packet the same treatment the sync file and manifest already get — a glob for the lane's **own** proof directory, keyed to its issue id:
+
+      ```ts
+      function sameIssueLaneMetadataPaths(issueId: string): string[] {
+        const normalizedIssueId = issueId.toUpperCase();
+        return [
+          `.ops/sync/${normalizedIssueId}.yml`,
+          `docs/06_status/lanes/${normalizedIssueId}.json`,
+          `docs/06_status/proof/${normalizedIssueId}/**`,
+        ];
+      }
+      ```
+
+      This is deliberately **narrow**: it admits only the directory named after this lane's issue, never another lane's proof directory and never `docs/06_status/proof/**` at large. A lane that modifies a *different* lane's proof bundle must still be reported, and that is the property the test has to pin.
+
+      ## Acceptance
+
+      1. A file under `docs/06_status/proof/<this lane's ID>/` that is not in `expected_proof_paths` — `.gitkeep`, `evidence.json` — no longer appears in `out_of_scope_files`.
+      2. A file under `docs/06_status/proof/<a different ID>/` **still** appears in `out_of_scope_files`. This is the assertion that keeps the widening honest.
+      3. A file outside both the scope lock and the proof directory still appears in `out_of_scope_files`.
+      4. Issue-id casing is handled the way the existing two entries handle it (`toUpperCase`), so a lowercase id resolves to the same directory.
+      5. **Mutation:** removing the new glob must turn assertion 1 red; broadening it to `docs/06_status/proof/**` must turn assertion 2 red. Both directions, because a scope check that is too wide fails silently.
+
+      ## Scope
+
+      `scripts/ops/pr-review-packet.ts` and its existing test file. No Tier C match → T3. `scripts/**` is admitted by the `governance` lane type.
+
+      ## Out of scope
+
+      The complementary CEP-E1 repair (`truth-check-lib.ts:570-577` lacks the `tier === 'T1' || tier === 'T2'` condition that M7 at `:1004` has, so it emits a false prediction that a T3 closeout will fail). That is a genuinely separate defect in a different module — the two are complementary and neither subsumes the other — and `truth-check-lib.ts` is assigned to the Codex session under the ownership split recorded in `docs/mission/plan.md`.
+
+      No change to `ops:lane-start`'s `.gitkeep` creation, which is the other half of the same friction and is tracked on its own.
+    captured_at: 2026-09-09T17:24:21.524Z
+    description_sha256: 53fb16c7c70e1f4ddc96d7ff89ca7b87172ed0edb8d2bc7dd2ab7bd2f1e3187c
+  contract_hash: e29548226d448c7f0722169760004724816fb6728c0cfd072f263f30e4410e85

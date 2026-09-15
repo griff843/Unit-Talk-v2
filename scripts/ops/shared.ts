@@ -824,7 +824,7 @@ export function preflightResultPathForBranch(branch: string): string {
 
 export function normalizeRepoRelativePath(
   input: string,
-  options: { requireExistingFile?: boolean } = {},
+  options: { requireExistingParent?: boolean } = {},
 ): string {
   let normalized = input.trim().replaceAll('\\', '/');
   normalized = normalized.replace(/^\.\/+/, '');
@@ -848,24 +848,49 @@ export function normalizeRepoRelativePath(
     throw new Error(`Only a trailing /** directory glob is allowed in file scope: ${input}`);
   }
 
-  if (options.requireExistingFile) {
-    if (hasTrailingDirectoryGlob) {
-      const directory = normalized.slice(0, -3);
-      const absoluteDirectory = path.join(ROOT, directory);
-      if (!fs.existsSync(absoluteDirectory)) {
-        throw new Error(`File scope directory does not exist: ${directory}`);
+  // UTV2-1884: a lane routinely declares a file or a directory it is about to
+  // *create*. Requiring the declared path itself to exist left those lanes only
+  // one legal declaration — the nearest ancestor directory that already exists —
+  // which is how UTV2-1878 (creating a file in docs/03_product/) and UTV2-1883
+  // (creating docs/03_product/brand/) came to hold an identical
+  // `docs/03_product/**` lock and collide at PL6. The parent directory must
+  // exist, so a misspelled path is still refused; the leaf need not.
+  if (options.requireExistingParent) {
+    const declared = pathWithoutTrailingDirectoryGlob;
+    const parent = path.posix.dirname(declared);
+
+    if (parent !== '.') {
+      const absoluteParent = path.join(ROOT, parent);
+      if (!fs.existsSync(absoluteParent)) {
+        throw new Error(`File scope parent directory does not exist: ${parent}`);
       }
-      if (!fs.statSync(absoluteDirectory).isDirectory()) {
+      if (!fs.statSync(absoluteParent).isDirectory()) {
+        throw new Error(`File scope parent must reference a directory: ${parent}`);
+      }
+      // The structural `../` refusal above cannot see a symlink, and the parent
+      // is now allowed to be the last existing component, so containment is
+      // asserted against the resolved path rather than the declared one.
+      const resolvedRoot = fs.realpathSync(ROOT);
+      const resolvedParent = fs.realpathSync(absoluteParent);
+      if (
+        resolvedParent !== resolvedRoot &&
+        !resolvedParent.startsWith(resolvedRoot + path.sep)
+      ) {
+        throw new Error(`File scope parent escapes the repository: ${parent}`);
+      }
+    }
+
+    // Where the declared path already exists, its kind is still enforced: a
+    // trailing glob must name a directory and a bare path must name a file.
+    const absoluteDeclared = path.join(ROOT, declared);
+    if (fs.existsSync(absoluteDeclared)) {
+      const declaredStat = fs.statSync(absoluteDeclared);
+      if (hasTrailingDirectoryGlob && !declaredStat.isDirectory()) {
         throw new Error(`File scope glob must reference a directory: ${normalized}`);
       }
-      return normalized;
-    }
-    const absolute = path.join(ROOT, normalized);
-    if (!fs.existsSync(absolute)) {
-      throw new Error(`File scope path does not exist: ${normalized}`);
-    }
-    if (!fs.statSync(absolute).isFile()) {
-      throw new Error(`File scope must reference a file, not a directory: ${normalized}`);
+      if (!hasTrailingDirectoryGlob && !declaredStat.isFile()) {
+        throw new Error(`File scope must reference a file, not a directory: ${normalized}`);
+      }
     }
   }
 
@@ -876,8 +901,9 @@ const PROOF_PATH_PREFIX = 'docs/06_status/proof/';
 
 /**
  * Normalize a file-scope path. Paths under `docs/06_status/proof/**` are
- * intent declarations — the lane will create them — so the existence check
- * is skipped for those entries. All other paths must already exist on disk.
+ * intent declarations — the lane will create them — so no existence check runs
+ * for those entries at all. Every other path must sit inside a directory that
+ * already exists; the path itself may be one the lane is about to create.
  */
 export function normalizeFileScopePath(input: string): string {
   // Perform structural normalization first (without existence check).
@@ -886,8 +912,8 @@ export function normalizeFileScopePath(input: string): string {
   if (normalized.startsWith(PROOF_PATH_PREFIX)) {
     return normalized;
   }
-  // All other paths must exist on disk.
-  return normalizeRepoRelativePath(input, { requireExistingFile: true });
+  // Every other path must have an existing parent directory.
+  return normalizeRepoRelativePath(input, { requireExistingParent: true });
 }
 
 export function normalizeFileScope(pathsToNormalize: string[]): string[] {
@@ -1176,15 +1202,110 @@ export function readAllManifestPaths(manifestDir = MANIFEST_DIR): string[] {
   return paths.sort((left, right) => left.localeCompare(right));
 }
 
-export function readAllManifestEntries(manifestDir = MANIFEST_DIR): LaneManifestEntry[] {
-  return readAllManifestPaths(manifestDir).map((filePath) => ({
-    path: filePath,
-    manifest: parseJsonFile<LaneManifest>(filePath),
-  }));
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1708: manifest reads must tolerate a readdir/readFile race.
+//
+// `readAllManifestPaths` enumerates the directory and the caller then reads each
+// path individually. `docs/06_status/lanes/` is a LIVE directory: lane lifecycle
+// actions create and delete manifests in it, and several suites in one
+// `pnpm test:ops` run write real fixture manifests there and delete them again
+// (`lane-link-pr.test.ts` uses the `UTV2-991xx` range) while node:test runs test
+// files concurrently. A path present at enumeration can therefore be gone by the
+// time the read reaches it, and the unguarded read threw `ENOENT`, taking down
+// `pnpm test` -> `pnpm verify` -> preflight PB2 on lanes that never touched
+// `scripts/ops/`. Observed twice: 2026-09-07 (UTV2-1851) and 2026-09-09
+// (UTV2-1868, via `reclaimLease`, which UTV2-1863 had just made a *production*
+// reader of this population).
+//
+// The classification is narrow on purpose, because the failure mode this must
+// not create is a partial board presented as complete:
+//
+//   * `ENOENT` where the path is confirmed gone  -> concurrent deletion. The
+//     lane genuinely does not exist at read completion, so omitting it yields a
+//     correct population rather than a truncated one. It is still reported, so a
+//     caller that wants provenance can have it.
+//   * `ENOENT` where the path is present again   -> retried once, then rethrown.
+//     A file that reappears is not a deletion, and guessing is not allowed.
+//   * malformed JSON, EACCES, EISDIR, anything else -> rethrown unchanged.
+//
+// No error path returns a population. Every failure that is not a confirmed
+// concurrent deletion still throws, so an empty or short result can only mean
+// "these are the manifests that exist", never "the read partly failed".
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A manifest population together with the provenance of what was dropped.
+ *
+ * `concurrentlyDeleted` holds paths that `readAllManifestPaths` enumerated and
+ * that were confirmed absent when the read reached them. It is empty on the
+ * overwhelmingly common path.
+ */
+export interface LaneManifestPopulation {
+  entries: LaneManifestEntry[];
+  concurrentlyDeleted: string[];
 }
 
-export function readAllManifests(manifestDir = MANIFEST_DIR): LaneManifest[] {
-  return readAllManifestEntries(manifestDir).map((entry) => entry.manifest);
+/**
+ * Injectable seam, for deterministically simulating the race in tests.
+ *
+ * Production callers never pass this: the race is real but not schedulable, so a
+ * test that waits for it to happen is a test that passes vacuously. `listPaths`
+ * returning a path that has already been removed reproduces exactly the state
+ * the race produces — an enumeration that outlived one of its entries — against
+ * the real filesystem and the real reader.
+ */
+export interface ManifestReadSeam {
+  listPaths?: (manifestDir: string) => string[];
+  readManifestFile?: (filePath: string) => LaneManifest;
+  exists?: (filePath: string) => boolean;
+}
+
+export function readAllManifestPopulation(
+  manifestDir = MANIFEST_DIR,
+  seam: ManifestReadSeam = {},
+): LaneManifestPopulation {
+  const listPaths = seam.listPaths ?? readAllManifestPaths;
+  const readManifestFile =
+    seam.readManifestFile ?? ((filePath: string) => parseJsonFile<LaneManifest>(filePath));
+  const exists = seam.exists ?? ((filePath: string) => fs.existsSync(filePath));
+
+  const entries: LaneManifestEntry[] = [];
+  const concurrentlyDeleted: string[] = [];
+
+  for (const filePath of listPaths(manifestDir)) {
+    let manifest: LaneManifest;
+    try {
+      manifest = readManifestFile(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
+      }
+      if (!exists(filePath)) {
+        concurrentlyDeleted.push(filePath);
+        continue;
+      }
+      // The path is back. That is not a deletion, so it is read again rather
+      // than classified; a second failure is surfaced unchanged.
+      manifest = readManifestFile(filePath);
+    }
+    entries.push({ path: filePath, manifest });
+  }
+
+  return { entries, concurrentlyDeleted };
+}
+
+export function readAllManifestEntries(
+  manifestDir = MANIFEST_DIR,
+  seam: ManifestReadSeam = {},
+): LaneManifestEntry[] {
+  return readAllManifestPopulation(manifestDir, seam).entries;
+}
+
+export function readAllManifests(
+  manifestDir = MANIFEST_DIR,
+  seam: ManifestReadSeam = {},
+): LaneManifest[] {
+  return readAllManifestEntries(manifestDir, seam).map((entry) => entry.manifest);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2319,8 +2440,18 @@ export function assertStatusTransition(
   }
 }
 
+// UTV2-1884: a trailing `/**` covers the directory it names, so it must compare
+// as that directory. Left literal, `scripts/ops/**` matched neither
+// `scripts/ops/shared.ts` nor `scripts/ops/lane-start/**` -- a glob lock only
+// ever collided with a byte-identical glob, which is the sole reason the
+// UTV2-1878 / UTV2-1883 collision was caught at all. Stripping it here is the
+// fail-closed direction: overlap is reported more often, never less.
 function normalizeLockPath(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+  return p
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/\/\*\*$/, '')
+    .replace(/\/+$/, '');
 }
 
 export function pathsOverlap(a: string, b: string): boolean {

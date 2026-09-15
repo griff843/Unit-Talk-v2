@@ -1,0 +1,109 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1880
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1880
+  objective: "Mission plan reconciliation — #1554 merged and released plan.md;
+    three prepared packets await reserved verdicts at exact heads"
+  acceptance_criteria:
+    - |-
+      Reconcile `docs/mission/plan.md` against live truth measured on 2026-09-10, after [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) ([UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)) merged at `6bb0cb204` and truth-closed.
+
+      The merged plan is a third pass against `c37097fee` and predates every event below.
+
+      ## What changed and must be recorded
+
+      1. [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) **(**[UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)**) merged and closed.** Its diagnosis is reusable and is not in the plan: the PR sat `BLOCKED` with four green checks and nothing red, because the required `Executor Result Validation` context had never been created — the `pull_request` trigger creates only the non-required preflight context ([UTV2-1550](https://linear.app/unit-talk-v2/issue/UTV2-1550/prevent-stale-duplicate-required-executor-result-validation-identities)). The required context comes only from an `issue_comment` or `workflow_dispatch`. The plan records this class abstractly under "a PR can sit BLOCKED with everything green"; this is a measured instance with the exact remedy.
+      2. `docs/mission/plan.md` **is released.** [UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)'s manifest reads `done` on `main` and its lease was released by hand — the lease leaked `active` on a provably terminal lane again, with a dead `owner_pid`, despite [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its) landing the reclaim terminality gate. That is a new occurrence after the gate was supposed to close the class and is worth recording against it.
+      3. **Three prepared packets are outstanding, each pinned to a head verified live on 2026-09-10:**
+         * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) ([UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must), T1) at `933abcc47` — still holds `apps/api/src/grading-service.ts` at status `in_review`, so it still gates four of the seven "Executable now" items.
+         * [griff843/Unit-Talk-v2#1557](https://linear.app/unit-talk-v2/review/utv2-1878-ratify-the-canonical-membership-product-contract-22ab24a5aca9) ([UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from), T1) at `12fd9ac11` — membership product contract. Four of five required checks green; `Merge Gate` is the only failing check on the PR at all.
+         * [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (WORK-2026091001) at `0c219025f` — deadlocked awaiting integration, not execution. Three exits; B recommended.
+      4. **The open-PR count is wrong.** The plan says 11; live is 12 after [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) left and [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)/#1557 arrived.
+      5. **The root checkout accumulated stale lane residue that fails preflight** `PG2`**.** Both [UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as) and [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) left lane-start-snapshot copies of their manifest and sync file untracked in the root, colliding with the authoritative versions on `main` and on the lane branch respectively. This blocked `git pull --ff-only`. Worth recording as the mechanical form: the root copy is always the stale snapshot; rank 1 (`main`) or the lane branch wins.
+
+      ## Scope
+
+      `docs/mission/plan.md` only. T3, governance lane type, no proof obligation.
+
+      ## Acceptance
+
+      * The plan states current `main`, the live open-PR set, and the three outstanding packets with their exact pinned heads.
+      * No claim is carried forward that this reconciliation did not re-measure.
+      * Nothing is added to the Requires Griff list that is not genuinely reserved.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Reconcile `docs/mission/plan.md` against live truth measured on 2026-09-10, after [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) ([UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)) merged at `6bb0cb204` and truth-closed.
+
+      The merged plan is a third pass against `c37097fee` and predates every event below.
+    - |-
+      What changed and must be recorded
+      1. [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) **(**[UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)**) merged and closed.** Its diagnosis is reusable and is not in the plan: the PR sat `BLOCKED` with four green checks and nothing red, because the required `Executor Result Validation` context had never been created — the `pull_request` trigger creates only the non-required preflight context ([UTV2-1550](https://linear.app/unit-talk-v2/issue/UTV2-1550/prevent-stale-duplicate-required-executor-result-validation-identities)). The required context comes only from an `issue_comment` or `workflow_dispatch`. The plan records this class abstractly under "a PR can sit BLOCKED with everything green"; this is a measured instance with the exact remedy.
+      2. `docs/mission/plan.md` **is released.** [UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)'s manifest reads `done` on `main` and its lease was released by hand — the lease leaked `active` on a provably terminal lane again, with a dead `owner_pid`, despite [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its) landing the reclaim terminality gate. That is a new occurrence after the gate was supposed to close the class and is worth recording against it.
+      3. **Three prepared packets are outstanding, each pinned to a head verified live on 2026-09-10:**
+         * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) ([UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must), T1) at `933abcc47` — still holds `apps/api/src/grading-service.ts` at status `in_review`, so it still gates four of the seven "Executable now" items.
+         * [griff843/Unit-Talk-v2#1557](https://linear.app/unit-talk-v2/review/utv2-1878-ratify-the-canonical-membership-product-contract-22ab24a5aca9) ([UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from), T1) at `12fd9ac11` — membership product contract. Four of five required checks green; `Merge Gate` is the only failing check on the PR at all.
+         * [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (WORK-2026091001) at `0c219025f` — deadlocked awaiting integration, not execution. Three exits; B recommended.
+      4. **The open-PR count is wrong.** The plan says 11; live is 12 after [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) left and [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)/#1557 arrived.
+      5. **The root checkout accumulated stale lane residue that fails preflight** `PG2`**.** Both [UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as) and [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) left lane-start-snapshot copies of their manifest and sync file untracked in the root, colliding with the authoritative versions on `main` and on the lane branch respectively. This blocked `git pull --ff-only`. Worth recording as the mechanical form: the root copy is always the stale snapshot; rank 1 (`main`) or the lane branch wins.
+    - >-
+      Scope
+
+      `docs/mission/plan.md` only. T3, governance lane type, no proof
+      obligation.
+    - >-
+      Acceptance
+
+      * The plan states current `main`, the live open-PR set, and the three
+      outstanding packets with their exact pinned heads.
+
+      * No claim is carried forward that this reconciliation did not re-measure.
+
+      * Nothing is added to the Requires Griff list that is not genuinely
+      reserved.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1880/mission-plan-reconciliation-1554-merged-and-released-planmd-three
+    title: "Mission plan reconciliation — #1554 merged and released plan.md; three
+      prepared packets await reserved verdicts at exact heads"
+    description: |-
+      Reconcile `docs/mission/plan.md` against live truth measured on 2026-09-10, after [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) ([UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)) merged at `6bb0cb204` and truth-closed.
+
+      The merged plan is a third pass against `c37097fee` and predates every event below.
+
+      ## What changed and must be recorded
+
+      1. [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) **(**[UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)**) merged and closed.** Its diagnosis is reusable and is not in the plan: the PR sat `BLOCKED` with four green checks and nothing red, because the required `Executor Result Validation` context had never been created — the `pull_request` trigger creates only the non-required preflight context ([UTV2-1550](https://linear.app/unit-talk-v2/issue/UTV2-1550/prevent-stale-duplicate-required-executor-result-validation-identities)). The required context comes only from an `issue_comment` or `workflow_dispatch`. The plan records this class abstractly under "a PR can sit BLOCKED with everything green"; this is a measured instance with the exact remedy.
+      2. `docs/mission/plan.md` **is released.** [UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as)'s manifest reads `done` on `main` and its lease was released by hand — the lease leaked `active` on a provably terminal lane again, with a dead `owner_pid`, despite [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its) landing the reclaim terminality gate. That is a new occurrence after the gate was supposed to close the class and is worth recording against it.
+      3. **Three prepared packets are outstanding, each pinned to a head verified live on 2026-09-10:**
+         * [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) ([UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must), T1) at `933abcc47` — still holds `apps/api/src/grading-service.ts` at status `in_review`, so it still gates four of the seven "Executable now" items.
+         * [griff843/Unit-Talk-v2#1557](https://linear.app/unit-talk-v2/review/utv2-1878-ratify-the-canonical-membership-product-contract-22ab24a5aca9) ([UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from), T1) at `12fd9ac11` — membership product contract. Four of five required checks green; `Merge Gate` is the only failing check on the PR at all.
+         * [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (WORK-2026091001) at `0c219025f` — deadlocked awaiting integration, not execution. Three exits; B recommended.
+      4. **The open-PR count is wrong.** The plan says 11; live is 12 after [griff843/Unit-Talk-v2#1554](https://linear.app/unit-talk-v2/review/utv2-1877-reconcile-the-mission-plan-five-recorded-findings-it-lists-7b8f032b3bcc) left and [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309)/#1557 arrived.
+      5. **The root checkout accumulated stale lane residue that fails preflight** `PG2`**.** Both [UTV2-1877](https://linear.app/unit-talk-v2/issue/UTV2-1877/mission-plan-reconciliation-five-recorded-findings-the-plan-lists-as) and [UTV2-1878](https://linear.app/unit-talk-v2/issue/UTV2-1878/ratify-the-canonical-membership-product-contract-and-reference-it-from) left lane-start-snapshot copies of their manifest and sync file untracked in the root, colliding with the authoritative versions on `main` and on the lane branch respectively. This blocked `git pull --ff-only`. Worth recording as the mechanical form: the root copy is always the stale snapshot; rank 1 (`main`) or the lane branch wins.
+
+      ## Scope
+
+      `docs/mission/plan.md` only. T3, governance lane type, no proof obligation.
+
+      ## Acceptance
+
+      * The plan states current `main`, the live open-PR set, and the three outstanding packets with their exact pinned heads.
+      * No claim is carried forward that this reconciliation did not re-measure.
+      * Nothing is added to the Requires Griff list that is not genuinely reserved.
+    captured_at: 2026-09-10T17:30:27.511Z
+    description_sha256: 75db25004f3300b11727264beb4b7c7aca0a36c787487a604d58671397b515b2
+  contract_hash: 4a526fcc4da0fbd56e2a5b31d9c861ef33fa5011adbcc21e9bc8f3bb25b75680

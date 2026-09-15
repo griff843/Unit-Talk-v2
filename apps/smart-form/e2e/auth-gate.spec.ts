@@ -37,7 +37,7 @@ function forgedCapperToken(capperId: string, displayName: string) {
   ].join('.');
 }
 
-test('unauthenticated submit redirects to the Unit Talk Capper Portal', async ({ page }) => {
+test('unauthenticated submit redirects to the Unit Talk Capper Portal', async ({ page }, testInfo) => {
   await page.goto('/submit');
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByText('Unit Talk', { exact: true })).toBeVisible();
@@ -45,10 +45,10 @@ test('unauthenticated submit redirects to the Unit Talk Capper Portal', async ({
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByText('Operator recovery access', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Operator-issued recovery token')).toBeHidden();
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1786/01-capper-portal-login.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('capper-portal-login.png'), fullPage: true });
 });
 
-test('a forged capper token stored in localStorage does not open /submit', async ({ page }) => {
+test('a forged capper token stored in localStorage does not open /submit', async ({ page }, testInfo) => {
   await page.route('**/api/reference-data/catalog', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -66,10 +66,10 @@ test('a forged capper token stored in localStorage does not open /submit', async
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByText('Forged Capper')).toHaveCount(0);
   await expect(page.getByText('forged-capper')).toHaveCount(0);
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1786/02-forged-claim-refused.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('02-forged-claim-refused.png'), fullPage: true });
 });
 
-test('storing a recovery token does not sign the operator in', async ({ page }) => {
+test('storing a recovery token does not sign the operator in', async ({ page }, testInfo) => {
   await page.goto('/login');
   await page.locator('summary', { hasText: 'Operator recovery access' }).click();
   await page.getByLabel('Operator-issued recovery token').fill(
@@ -89,5 +89,5 @@ test('storing a recovery token does not sign the operator in', async ({ page }) 
   // And it still does not open /submit.
   await page.goto('/submit');
   await expect(page).toHaveURL(/\/login$/);
-  await page.screenshot({ path: '../../docs/06_status/proof/UTV2-1786/03-recovery-token-stored-not-signed-in.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('03-recovery-token-stored-not-signed-in.png'), fullPage: true });
 });

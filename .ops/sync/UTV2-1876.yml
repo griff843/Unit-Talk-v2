@@ -1,0 +1,230 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1876
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1876
+  objective: Close eligibility preflight predicts a closeout failure that cannot
+    happen — CEP-E1/E3/E4 have no tier condition
+  acceptance_criteria:
+    - |-
+      ## The defect
+
+      `evaluateCloseEligibilityPreflight` (`scripts/ops/truth-check-lib.ts:655`) fails three checks on a correctly-constructed T3 lane, then emits **CEP-C1: "ops:lane-close would fail after merge on: CEP-E1, CEP-E3, CEP-E4/P11, CEP-E4/P12, CEP-E4/P13, CEP-E4/P14"**.
+
+      That prediction is false. The gate it claims to predict passes those lanes.
+
+      ## The contradiction is inside one file
+
+      `defaultProofPaths` (`shared.ts`) returns `[]` for T3 by design, and the close gate's own M7 (`truth-check-lib.ts:1004`) is explicitly tier-aware:
+
+      ```ts
+      if ((tier === 'T1' || tier === 'T2') && manifest.expected_proof_paths.length === 0) {
+        addCheck('M7', 'fail', 'expected_proof_paths must be non-empty for T1/T2');
+      } else {
+        addCheck('M7', 'pass', 'expected_proof_paths satisfies tier requirement');
+      }
+      ```
+
+      CEP-E1 (`:677-685`) reads the same field and fails on empty with **no tier condition at all**.
+
+      **CEP-E4 is the sharper case, and it is not a judgement call.** CEP runs `evaluateT2ProofEvidence` unconditionally at `:729`. The close gate runs the identical function at `:1618` inside `} else if (tier === 'T2') {`. So P11–P14 are, by the gate's own construction, T2-only rules — and CEP applies them to every tier. The function's name says so.
+
+      CEP-E3 (`:725`) fails with "no verification document found among proof artifacts" on a lane that correctly has no proof bundle.
+
+      ## Confirmed against history, not only by reading
+
+      Seven T3 manifests on `main` carry `expected_proof_paths: []` and all closed: UTV2-953, 975, 977, 983, 991 (`done`); 955, 958 (`closed`). Recent instances observed live on [UTV2-1846](https://linear.app/unit-talk-v2/issue/UTV2-1846/mission-plan-reconcile-planmd-against-the-2026-09-06-production-deploy) ([griff843/Unit-Talk-v2#1524](https://linear.app/unit-talk-v2/review/utv2-1846-reconcile-planmd-against-the-2026-09-06-production-deploy-b23c7801d106)), [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1) ([griff843/Unit-Talk-v2#1527](https://linear.app/unit-talk-v2/review/utv2-1849-reconcile-the-mission-plan-against-measured-truth-3fc05d364b0d)), [UTV2-1874](https://linear.app/unit-talk-v2/issue/UTV2-1874/return-review-packet-rejects-a-lanes-own-proof-directory-because-the) ([griff843/Unit-Talk-v2#1551](https://linear.app/unit-talk-v2/review/utv2-1874-admit-a-lanes-own-proof-directory-to-the-review-packets-a0fc79dcc125)) and [UTV2-1875](https://linear.app/unit-talk-v2/issue/UTV2-1875/readiness-dead-letter-count-buckets-on-attempt-count-not-on-the) ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf)) — the last two still red on `Close eligibility preflight` while their closeouts succeeded.
+
+      ## Why this is worth a lane rather than another recorded finding
+
+      `Close eligibility preflight` is **not** a required check, so it blocks no merge. That is exactly what makes it worse than the other non-required-check defects already recorded: the other three (`Proof Gate`, `Proof Auditor Gate`, `Runtime Verifier Gate`) merely emit a wrong verdict on correct work, and [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1) demonstrated they go green by deleting the `.gitkeep`. CEP reads the **manifest**, never the proof directory, so no lane-side action quiets it — and unlike the others it emits a *specific, named, actionable prediction about a future gate* that an operator is meant to act on. It has now fired on four consecutive T3 lanes and been correct on none.
+
+      ## Scope
+
+      * `scripts/ops/truth-check-lib.ts` — give CEP-E1/E3/E4 the tier conditions the close gate already applies to the same rules.
+      * `scripts/ops/truth-check-lib.test.ts`
+
+      Mechanical tier floor on that file list is **T3** (`classifyMechanicalMinimum` returns no matches for either path).
+
+      **Deliberately out of scope:** `.github/workflows/close-eligibility-preflight.yml`. Introducing a new `not_applicable` status would need its icon map widened, which floors the lane at T1 and — measured 2026-09-09 — no currently-free lane type admits `.github/workflows/**` (`migration` is refused by `forbidden_combination` against [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d); `runtime` would be typing the lane to fit the gate). The repair therefore uses `pass` with a tier-explicit detail, which is the shape M7 already uses: *"expected_proof_paths satisfies tier requirement"* is a pass for a T3 empty list.
+
+      ## Acceptance
+
+      1. A T3 manifest with `expected_proof_paths: []` and no proof artifacts yields `eligible: true` and an empty `blocking` list, with CEP-E1, CEP-E3 and the CEP-E4 family all passing and each detail naming the tier as the reason.
+      2. A **T2** manifest with `expected_proof_paths: []` still fails CEP-E1 — asserted explicitly, because this is the fail-open direction.
+      3. A T2 manifest with a proof bundle missing a verification document still fails CEP-E3, and one missing the P11–P14 command mentions still fails CEP-E4 — the T2 path is untouched.
+      4. A **T3** manifest that *does* declare `expected_proof_paths` is still checked against them: a declared artifact missing at the head still fails CEP-E1. The exemption is keyed on the absence of a declared obligation, never on the tier alone.
+      5. CEP's tier condition for the CEP-E4 family is the same `tier === 'T2'` predicate the close gate uses at `truth-check-lib.ts:1618`, so the two cannot drift apart silently.
+      6. Mutation: removing the tier condition from CEP-E1 turns assertion 1 red; removing the T2 guard on the CEP-E4 loop turns assertion 1 red; and reverting assertion 2's condition (exempting T2 as well as T3) turns assertion 2 red.
+
+      ## Filing note
+
+      Recorded in `docs/mission/plan.md` under "Four non-required gates fail a correctly-constructed T3 lane" since 2026-09-05 as "recorded rather than filed". Filed now under the ratified threshold: it has affected at least two real lanes (four, in fact) and it publishes a false claim about a done-gate.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      The defect
+
+      `evaluateCloseEligibilityPreflight` (`scripts/ops/truth-check-lib.ts:655`)
+      fails three checks on a correctly-constructed T3 lane, then emits
+      **CEP-C1: "ops:lane-close would fail after merge on: CEP-E1, CEP-E3,
+      CEP-E4/P11, CEP-E4/P12, CEP-E4/P13, CEP-E4/P14"**.
+
+
+      That prediction is false. The gate it claims to predict passes those
+      lanes.
+    - >-
+      The contradiction is inside one file
+
+      `defaultProofPaths` (`shared.ts`) returns `[]` for T3 by design, and the
+      close gate's own M7 (`truth-check-lib.ts:1004`) is explicitly tier-aware:
+
+
+      ```ts
+
+      if ((tier === 'T1' || tier === 'T2') &&
+      manifest.expected_proof_paths.length === 0) {
+        addCheck('M7', 'fail', 'expected_proof_paths must be non-empty for T1/T2');
+      } else {
+        addCheck('M7', 'pass', 'expected_proof_paths satisfies tier requirement');
+      }
+
+      ```
+
+
+      CEP-E1 (`:677-685`) reads the same field and fails on empty with **no tier
+      condition at all**.
+
+
+      **CEP-E4 is the sharper case, and it is not a judgement call.** CEP runs
+      `evaluateT2ProofEvidence` unconditionally at `:729`. The close gate runs
+      the identical function at `:1618` inside `} else if (tier === 'T2') {`. So
+      P11–P14 are, by the gate's own construction, T2-only rules — and CEP
+      applies them to every tier. The function's name says so.
+
+
+      CEP-E3 (`:725`) fails with "no verification document found among proof
+      artifacts" on a lane that correctly has no proof bundle.
+    - |-
+      Confirmed against history, not only by reading
+      Seven T3 manifests on `main` carry `expected_proof_paths: []` and all closed: UTV2-953, 975, 977, 983, 991 (`done`); 955, 958 (`closed`). Recent instances observed live on [UTV2-1846](https://linear.app/unit-talk-v2/issue/UTV2-1846/mission-plan-reconcile-planmd-against-the-2026-09-06-production-deploy) ([griff843/Unit-Talk-v2#1524](https://linear.app/unit-talk-v2/review/utv2-1846-reconcile-planmd-against-the-2026-09-06-production-deploy-b23c7801d106)), [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1) ([griff843/Unit-Talk-v2#1527](https://linear.app/unit-talk-v2/review/utv2-1849-reconcile-the-mission-plan-against-measured-truth-3fc05d364b0d)), [UTV2-1874](https://linear.app/unit-talk-v2/issue/UTV2-1874/return-review-packet-rejects-a-lanes-own-proof-directory-because-the) ([griff843/Unit-Talk-v2#1551](https://linear.app/unit-talk-v2/review/utv2-1874-admit-a-lanes-own-proof-directory-to-the-review-packets-a0fc79dcc125)) and [UTV2-1875](https://linear.app/unit-talk-v2/issue/UTV2-1875/readiness-dead-letter-count-buckets-on-attempt-count-not-on-the) ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf)) — the last two still red on `Close eligibility preflight` while their closeouts succeeded.
+    - |-
+      Why this is worth a lane rather than another recorded finding
+      `Close eligibility preflight` is **not** a required check, so it blocks no merge. That is exactly what makes it worse than the other non-required-check defects already recorded: the other three (`Proof Gate`, `Proof Auditor Gate`, `Runtime Verifier Gate`) merely emit a wrong verdict on correct work, and [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1) demonstrated they go green by deleting the `.gitkeep`. CEP reads the **manifest**, never the proof directory, so no lane-side action quiets it — and unlike the others it emits a *specific, named, actionable prediction about a future gate* that an operator is meant to act on. It has now fired on four consecutive T3 lanes and been correct on none.
+    - |-
+      Scope
+      * `scripts/ops/truth-check-lib.ts` — give CEP-E1/E3/E4 the tier conditions the close gate already applies to the same rules.
+      * `scripts/ops/truth-check-lib.test.ts`
+
+      Mechanical tier floor on that file list is **T3** (`classifyMechanicalMinimum` returns no matches for either path).
+
+      **Deliberately out of scope:** `.github/workflows/close-eligibility-preflight.yml`. Introducing a new `not_applicable` status would need its icon map widened, which floors the lane at T1 and — measured 2026-09-09 — no currently-free lane type admits `.github/workflows/**` (`migration` is refused by `forbidden_combination` against [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d); `runtime` would be typing the lane to fit the gate). The repair therefore uses `pass` with a tier-explicit detail, which is the shape M7 already uses: *"expected_proof_paths satisfies tier requirement"* is a pass for a T3 empty list.
+    - >-
+      Acceptance
+
+      1. A T3 manifest with `expected_proof_paths: []` and no proof artifacts
+      yields `eligible: true` and an empty `blocking` list, with CEP-E1, CEP-E3
+      and the CEP-E4 family all passing and each detail naming the tier as the
+      reason.
+
+      2. A **T2** manifest with `expected_proof_paths: []` still fails CEP-E1 —
+      asserted explicitly, because this is the fail-open direction.
+
+      3. A T2 manifest with a proof bundle missing a verification document still
+      fails CEP-E3, and one missing the P11–P14 command mentions still fails
+      CEP-E4 — the T2 path is untouched.
+
+      4. A **T3** manifest that *does* declare `expected_proof_paths` is still
+      checked against them: a declared artifact missing at the head still fails
+      CEP-E1. The exemption is keyed on the absence of a declared obligation,
+      never on the tier alone.
+
+      5. CEP's tier condition for the CEP-E4 family is the same `tier === 'T2'`
+      predicate the close gate uses at `truth-check-lib.ts:1618`, so the two
+      cannot drift apart silently.
+
+      6. Mutation: removing the tier condition from CEP-E1 turns assertion 1
+      red; removing the T2 guard on the CEP-E4 loop turns assertion 1 red; and
+      reverting assertion 2's condition (exempting T2 as well as T3) turns
+      assertion 2 red.
+    - >-
+      Filing note
+
+      Recorded in `docs/mission/plan.md` under "Four non-required gates fail a
+      correctly-constructed T3 lane" since 2026-09-05 as "recorded rather than
+      filed". Filed now under the ratified threshold: it has affected at least
+      two real lanes (four, in fact) and it publishes a false claim about a
+      done-gate.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1876/close-eligibility-preflight-predicts-a-closeout-failure-that-cannot
+    title: Close eligibility preflight predicts a closeout failure that cannot
+      happen — CEP-E1/E3/E4 have no tier condition
+    description: |-
+      ## The defect
+
+      `evaluateCloseEligibilityPreflight` (`scripts/ops/truth-check-lib.ts:655`) fails three checks on a correctly-constructed T3 lane, then emits **CEP-C1: "ops:lane-close would fail after merge on: CEP-E1, CEP-E3, CEP-E4/P11, CEP-E4/P12, CEP-E4/P13, CEP-E4/P14"**.
+
+      That prediction is false. The gate it claims to predict passes those lanes.
+
+      ## The contradiction is inside one file
+
+      `defaultProofPaths` (`shared.ts`) returns `[]` for T3 by design, and the close gate's own M7 (`truth-check-lib.ts:1004`) is explicitly tier-aware:
+
+      ```ts
+      if ((tier === 'T1' || tier === 'T2') && manifest.expected_proof_paths.length === 0) {
+        addCheck('M7', 'fail', 'expected_proof_paths must be non-empty for T1/T2');
+      } else {
+        addCheck('M7', 'pass', 'expected_proof_paths satisfies tier requirement');
+      }
+      ```
+
+      CEP-E1 (`:677-685`) reads the same field and fails on empty with **no tier condition at all**.
+
+      **CEP-E4 is the sharper case, and it is not a judgement call.** CEP runs `evaluateT2ProofEvidence` unconditionally at `:729`. The close gate runs the identical function at `:1618` inside `} else if (tier === 'T2') {`. So P11–P14 are, by the gate's own construction, T2-only rules — and CEP applies them to every tier. The function's name says so.
+
+      CEP-E3 (`:725`) fails with "no verification document found among proof artifacts" on a lane that correctly has no proof bundle.
+
+      ## Confirmed against history, not only by reading
+
+      Seven T3 manifests on `main` carry `expected_proof_paths: []` and all closed: UTV2-953, 975, 977, 983, 991 (`done`); 955, 958 (`closed`). Recent instances observed live on [UTV2-1846](https://linear.app/unit-talk-v2/issue/UTV2-1846/mission-plan-reconcile-planmd-against-the-2026-09-06-production-deploy) ([griff843/Unit-Talk-v2#1524](https://linear.app/unit-talk-v2/review/utv2-1846-reconcile-planmd-against-the-2026-09-06-production-deploy-b23c7801d106)), [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1) ([griff843/Unit-Talk-v2#1527](https://linear.app/unit-talk-v2/review/utv2-1849-reconcile-the-mission-plan-against-measured-truth-3fc05d364b0d)), [UTV2-1874](https://linear.app/unit-talk-v2/issue/UTV2-1874/return-review-packet-rejects-a-lanes-own-proof-directory-because-the) ([griff843/Unit-Talk-v2#1551](https://linear.app/unit-talk-v2/review/utv2-1874-admit-a-lanes-own-proof-directory-to-the-review-packets-a0fc79dcc125)) and [UTV2-1875](https://linear.app/unit-talk-v2/issue/UTV2-1875/readiness-dead-letter-count-buckets-on-attempt-count-not-on-the) ([griff843/Unit-Talk-v2#1552](https://linear.app/unit-talk-v2/review/utv2-1875-bucket-dead-letters-by-recorded-reason-and-attempt-not-by-f4f75a4aeddf)) — the last two still red on `Close eligibility preflight` while their closeouts succeeded.
+
+      ## Why this is worth a lane rather than another recorded finding
+
+      `Close eligibility preflight` is **not** a required check, so it blocks no merge. That is exactly what makes it worse than the other non-required-check defects already recorded: the other three (`Proof Gate`, `Proof Auditor Gate`, `Runtime Verifier Gate`) merely emit a wrong verdict on correct work, and [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1) demonstrated they go green by deleting the `.gitkeep`. CEP reads the **manifest**, never the proof directory, so no lane-side action quiets it — and unlike the others it emits a *specific, named, actionable prediction about a future gate* that an operator is meant to act on. It has now fired on four consecutive T3 lanes and been correct on none.
+
+      ## Scope
+
+      * `scripts/ops/truth-check-lib.ts` — give CEP-E1/E3/E4 the tier conditions the close gate already applies to the same rules.
+      * `scripts/ops/truth-check-lib.test.ts`
+
+      Mechanical tier floor on that file list is **T3** (`classifyMechanicalMinimum` returns no matches for either path).
+
+      **Deliberately out of scope:** `.github/workflows/close-eligibility-preflight.yml`. Introducing a new `not_applicable` status would need its icon map widened, which floors the lane at T1 and — measured 2026-09-09 — no currently-free lane type admits `.github/workflows/**` (`migration` is refused by `forbidden_combination` against [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d); `runtime` would be typing the lane to fit the gate). The repair therefore uses `pass` with a tier-explicit detail, which is the shape M7 already uses: *"expected_proof_paths satisfies tier requirement"* is a pass for a T3 empty list.
+
+      ## Acceptance
+
+      1. A T3 manifest with `expected_proof_paths: []` and no proof artifacts yields `eligible: true` and an empty `blocking` list, with CEP-E1, CEP-E3 and the CEP-E4 family all passing and each detail naming the tier as the reason.
+      2. A **T2** manifest with `expected_proof_paths: []` still fails CEP-E1 — asserted explicitly, because this is the fail-open direction.
+      3. A T2 manifest with a proof bundle missing a verification document still fails CEP-E3, and one missing the P11–P14 command mentions still fails CEP-E4 — the T2 path is untouched.
+      4. A **T3** manifest that *does* declare `expected_proof_paths` is still checked against them: a declared artifact missing at the head still fails CEP-E1. The exemption is keyed on the absence of a declared obligation, never on the tier alone.
+      5. CEP's tier condition for the CEP-E4 family is the same `tier === 'T2'` predicate the close gate uses at `truth-check-lib.ts:1618`, so the two cannot drift apart silently.
+      6. Mutation: removing the tier condition from CEP-E1 turns assertion 1 red; removing the T2 guard on the CEP-E4 loop turns assertion 1 red; and reverting assertion 2's condition (exempting T2 as well as T3) turns assertion 2 red.
+
+      ## Filing note
+
+      Recorded in `docs/mission/plan.md` under "Four non-required gates fail a correctly-constructed T3 lane" since 2026-09-05 as "recorded rather than filed". Filed now under the ratified threshold: it has affected at least two real lanes (four, in fact) and it publishes a false claim about a done-gate.
+    captured_at: 2026-09-09T18:25:32.479Z
+    description_sha256: 631e38ab62692be940339d84b05dc4223e061d866c3df703f8824b6146cd1a23
+  contract_hash: 7c1c00900858c4650eac644eeaa4845f707632b99ebf4132cc6e7f02b501c211

@@ -7,34 +7,113 @@ import type { SGOEventResult } from './results-fetcher.js';
 // Grading uses scoredMarket.score directly in resolveAndInsertResults below.
 
 /**
- * Maps SGO provider market keys to canonical market_type_ids for game-line markets
- * (where providerParticipantId === null).
+ * The normalized SGO market key a game moneyline arrives under.
+ *
+ * UTV2-1889: this is not a guess. `parseSgoOddId` builds
+ * `normalizedMarketKey` as `${statId}-all-${periodId}-${betTypeId}`
+ * (`sgo-request-contract.ts`), with the entity segment hardcoded to `all`
+ * regardless of whether the raw oddID said `home`, `away` or a player id. So
+ * `points-home-game-ml-home` and `points-away-game-ml-away` both normalize to
+ * `points-all-game-ml`, and the side survives only on `SGOMarketScore.providerSide`.
+ * Production agrees: 280 `points-all-game-ml` rows exist and zero `game_ml_*` rows do.
+ */
+export const SGO_MONEYLINE_BASE_MARKET_KEY = 'points-all-game-ml';
+
+/**
+ * The canonical market key a moneyline *result* is stored under.
+ *
+ * This is deliberately a different key from {@link SGO_MONEYLINE_BASE_MARKET_KEY}
+ * because it carries different data: `points-all-game-ml` rows hold a raw team
+ * score, and `game_moneyline_win` rows hold an outcome in `{1, 0, 0.5}`. The
+ * grading service refuses to read a moneyline from any other key for exactly that
+ * reason, so the two key spaces must never be merged.
+ *
+ * The literal is duplicated from `MONEYLINE_RESULT_MARKET_KEY` in
+ * `apps/api/src/grading-service.ts` because an app may not import another app
+ * (core invariant 8). The duplication is *enforced* rather than documented:
+ * `scripts/ops/track-only/sgo-journey-proof.ts` imports both and asserts they are
+ * equal, so a change to either copy alone fails the suite.
+ */
+export const SGO_MONEYLINE_RESULT_MARKET_KEY = 'game_moneyline_win';
+
+/**
+ * Maps normalized SGO game-line market keys to canonical market_type_ids
+ * (the `providerParticipantId === null` path).
  *
  * These must be distinct from player-prop canonical IDs even when the baseMarketKey
  * is the same (e.g. both a player points O/U and a game total normalize to
  * 'points-all-game-ou' - the game-line version maps to 'game_total_ou').
  *
- * Related issue: UTV2-385 (game-line grading schema)
+ * UTV2-1889: this table previously held sixteen entries keyed
+ * `<league>-<bet>-all-game` (`nba-spread-all-game`, `mlb-ml-all-game`, ...). Not one
+ * of them was reachable. `normalizeSgoProviderMarketKey` can only ever emit
+ * `<statId>-all-<periodId>-<betTypeId>`, so no payload can produce a key of that
+ * shape, and production carries zero rows under any of their canonical ids. They are
+ * removed rather than corrected: a league-specific canonical id cannot be derived
+ * from the market key alone, and the deferred-work note they carried (naming UTV2-450,
+ * "verify the exact key format against live payloads") is answered by this change
+ * rather than still outstanding.
+ *
+ * Only markets whose result semantics are actually implemented are listed. A
+ * game-line market that is absent here still writes under its provider key with its
+ * raw score, unchanged — which is correct, because a raw score is what it is.
+ *
+ * Related issues: UTV2-385 (game-line grading schema), UTV2-1889 (this repair)
  */
 export const SGO_GAME_LINE_CANONICAL_ID: Record<string, string> = {
   'points-all-game-ou': 'game_total_ou',
-  // TODO(UTV2-450): verify exact SGO key format for game-line aliases against live payloads.
-  'nba-spread-all-game': 'game_spread_nba',
-  'nfl-spread-all-game': 'game_spread_nfl',
-  'mlb-spread-all-game': 'game_spread_mlb',
-  'nhl-spread-all-game': 'game_spread_nhl',
-  'ncaab-spread-all-game': 'game_spread_ncaab',
-  'ncaaf-spread-all-game': 'game_spread_ncaaf',
-  'nba-ml-all-game': 'game_ml_nba',
-  'nfl-ml-all-game': 'game_ml_nfl',
-  'mlb-ml-all-game': 'game_ml_mlb',
-  'nhl-ml-all-game': 'game_ml_nhl',
-  'ncaab-ml-all-game': 'game_ml_ncaab',
-  'ncaaf-ml-all-game': 'game_ml_ncaaf',
-  'nfl-total-all-game': 'game_total_nfl',
-  'mlb-total-all-game': 'game_total_mlb',
-  'nhl-total-all-game': 'game_total_nhl',
+  [SGO_MONEYLINE_BASE_MARKET_KEY]: SGO_MONEYLINE_RESULT_MARKET_KEY,
 };
+
+/**
+ * Per-side moneyline outcomes for one event, derived by comparing the two sides'
+ * scores against each other.
+ *
+ * UTV2-1889: a moneyline outcome does not exist on either row on its own. SGO emits
+ * one scored market per side, each carrying that side's raw score, and the winner
+ * lives only in the comparison. Writing `actual_value = score` — which is what this
+ * resolver did before — stores 7 under a key grading reads as `1 | 0 | 0.5`, so the
+ * row is either refused or, worse, silently misread.
+ *
+ * Returns `null` — never a guess — when the pair cannot be established:
+ *  - either side is missing from the payload (a half-scored event)
+ *  - a side appears twice with disagreeing scores (a contradictory payload)
+ * The caller skips those rows rather than attributing an outcome nothing attested.
+ */
+export function computeMoneylineOutcomeBySide(
+  scoredMarkets: SGOEventResult['scoredMarkets'],
+): { home: number; away: number } | null {
+  let home: number | null = null;
+  let away: number | null = null;
+
+  for (const scoredMarket of scoredMarkets) {
+    if (scoredMarket.baseMarketKey !== SGO_MONEYLINE_BASE_MARKET_KEY) {
+      continue;
+    }
+    if (!Number.isFinite(scoredMarket.score)) {
+      continue;
+    }
+    if (scoredMarket.providerSide === 'home') {
+      if (home !== null && home !== scoredMarket.score) {
+        return null;
+      }
+      home = scoredMarket.score;
+    } else if (scoredMarket.providerSide === 'away') {
+      if (away !== null && away !== scoredMarket.score) {
+        return null;
+      }
+      away = scoredMarket.score;
+    }
+  }
+
+  if (home === null || away === null) {
+    return null;
+  }
+  if (home === away) {
+    return { home: 0.5, away: 0.5 };
+  }
+  return home > away ? { home: 1, away: 0 } : { home: 0, away: 1 };
+}
 
 /**
  * Maps SGO provider market keys to canonical market_type_ids for player-prop markets.
@@ -111,6 +190,24 @@ export interface ResultsResolutionSummary {
    */
   skippedEventNotFound: number;
   skippedEventNotCompleted: number;
+  /**
+   * UTV2-1868: team-sided game-line markets (SGO stat entity `home`/`away`) whose
+   * side could not be resolved to an `event_participants` row for the event. These
+   * are skipped rather than written participant-less, because a participant-less
+   * game-line row cannot say whose score it is and silently collides with the other
+   * side under `game_results_game_line_unique_idx`. Counted separately from
+   * `skippedResults` so an unresolved side is visible rather than folded into the
+   * aggregate.
+   */
+  skippedTeamSideUnresolved: number;
+  /**
+   * UTV2-1889: moneyline scored markets skipped because no outcome could be derived
+   * for the event — one side absent from the payload, the two sides disagreeing, or
+   * the market arriving with no side at all. A moneyline row is only meaningful as
+   * `1 | 0 | 0.5`, and there is no honest default, so these are skipped rather than
+   * written with a raw score under an outcome key.
+   */
+  skippedMoneylineOutcomeUnresolved: number;
   errors: number;
   /**
    * UTV2-1297 per-step phase timing breakdown (ms) for the results-resolve path.
@@ -132,7 +229,7 @@ export async function resolveAndInsertResults(
   eventResults: SGOEventResult[],
   repositories: Pick<
     IngestorRepositoryBundle,
-    'events' | 'participants' | 'gradeResults'
+    'events' | 'participants' | 'gradeResults' | 'eventParticipants'
   >,
   logger?: Pick<Console, 'warn' | 'info'>,
 ): Promise<ResultsResolutionSummary> {
@@ -153,6 +250,8 @@ export async function resolveAndInsertResults(
     skippedResults: 0,
     skippedEventNotFound: 0,
     skippedEventNotCompleted: 0,
+    skippedTeamSideUnresolved: 0,
+    skippedMoneylineOutcomeUnresolved: 0,
     errors: 0,
     phaseTimings: innerTimings,
   };
@@ -161,6 +260,28 @@ export async function resolveAndInsertResults(
     string,
     Awaited<ReturnType<typeof repositories.participants.findByExternalId>>
   >();
+
+  // UTV2-1868: per-event home/away participant ids, resolved lazily from
+  // event_participants.role and reused across every scored market on that event.
+  const sideParticipantsByEventId = new Map<
+    string,
+    { home: string | null; away: string | null }
+  >();
+  const resolveSideParticipantId = async (
+    eventId: string,
+    side: 'home' | 'away',
+  ): Promise<string | null> => {
+    let sides = sideParticipantsByEventId.get(eventId);
+    if (sides === undefined) {
+      const rows = await repositories.eventParticipants.listByEvent(eventId);
+      sides = {
+        home: rows.find((row) => row.role === 'home')?.participant_id ?? null,
+        away: rows.find((row) => row.role === 'away')?.participant_id ?? null,
+      };
+      sideParticipantsByEventId.set(eventId, sides);
+    }
+    return sides[side];
+  };
 
   const loopStartMs = Date.now();
   for (const eventResult of eventResults) {
@@ -186,6 +307,11 @@ export async function resolveAndInsertResults(
 
       summary.completedEvents += 1;
       const now = new Date().toISOString();
+      // UTV2-1889: derived once per event — the outcome is a property of the pair of
+      // sides, not of either scored market, so it cannot be computed inside the loop.
+      const moneylineOutcomeBySide = computeMoneylineOutcomeBySide(
+        eventResult.scoredMarkets,
+      );
 
       for (const scoredMarket of eventResult.scoredMarkets) {
         if (
@@ -204,12 +330,62 @@ export async function resolveAndInsertResults(
             SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ??
             scoredMarket.baseMarketKey;
 
+          // UTV2-1868: a game-line market whose SGO stat entity is `home` or `away`
+          // is one team's score, not the game's. Writing it with participant_id NULL
+          // makes it indistinguishable from the other side and collides with it under
+          // game_results_game_line_unique_idx — where the duplicate is swallowed and
+          // the second team's score is lost. Resolve the side, or skip: an ambiguous
+          // NULL row is worse than no row, because grading cannot detect it.
+          let participantId: string | null = null;
+          if (scoredMarket.providerSide) {
+            participantId = await resolveSideParticipantId(
+              event.id,
+              scoredMarket.providerSide,
+            );
+            if (!participantId) {
+              logger?.warn?.(
+                `[results-resolver] unresolved ${scoredMarket.providerSide} participant ` +
+                  `for event ${eventResult.providerEventId} market ${scoredMarket.oddId}; ` +
+                  'skipping rather than writing a participant-less game-line row',
+              );
+              summary.skippedTeamSideUnresolved += 1;
+              continue;
+            }
+          }
+
+          // UTV2-1889: a moneyline is stored as an outcome, never as a score. Both
+          // preconditions below are refusals rather than fallbacks — an unattributed
+          // or unresolved moneyline row is exactly the shape grading cannot detect as
+          // wrong, because 1 and 0 are also plausible scores.
+          let actualValue = scoredMarket.score;
+          if (canonicalMarketKey === SGO_MONEYLINE_RESULT_MARKET_KEY) {
+            if (!scoredMarket.providerSide || !participantId) {
+              logger?.warn?.(
+                `[results-resolver] moneyline market ${scoredMarket.oddId} for event ` +
+                  `${eventResult.providerEventId} carries no resolved side; skipping ` +
+                  'rather than storing a raw score under an outcome key',
+              );
+              summary.skippedMoneylineOutcomeUnresolved += 1;
+              continue;
+            }
+            if (!moneylineOutcomeBySide) {
+              logger?.warn?.(
+                `[results-resolver] no moneyline outcome derivable for event ` +
+                  `${eventResult.providerEventId} (both sides' scores are required ` +
+                  `and must agree); skipping ${scoredMarket.oddId}`,
+              );
+              summary.skippedMoneylineOutcomeUnresolved += 1;
+              continue;
+            }
+            actualValue = moneylineOutcomeBySide[scoredMarket.providerSide];
+          }
+
           const insertStartMs = Date.now();
           await repositories.gradeResults.insert({
             eventId: event.id,
-            participantId: null,
+            participantId,
             marketKey: canonicalMarketKey,
-            actualValue: scoredMarket.score,
+            actualValue,
             source: 'sgo',
             sourcedAt: now,
           });
@@ -279,7 +455,10 @@ export async function resolveAndInsertResults(
       `completed=${summary.completedEvents} inserted=${summary.insertedResults} ` +
       `skipped_event_not_found=${summary.skippedEventNotFound} ` +
       `skipped_event_not_completed=${summary.skippedEventNotCompleted} ` +
-      `skipped_markets=${summary.skippedResults} errors=${summary.errors} ` +
+      `skipped_markets=${summary.skippedResults} ` +
+      `skipped_team_side_unresolved=${summary.skippedTeamSideUnresolved} ` +
+      `skipped_moneyline_outcome_unresolved=${summary.skippedMoneylineOutcomeUnresolved} ` +
+      `errors=${summary.errors} ` +
       `phase_timings_ms=${JSON.stringify(innerTimings)}`,
   );
 
@@ -313,6 +492,19 @@ function isValidScoredMarket(
   ) {
     logger?.warn?.(
       `[sgo-results-parser] skipping malformed scored market for event ${providerEventId}: invalid providerParticipantId; payload=${safeExcerpt(scoredMarket)}`,
+    );
+    return false;
+  }
+  // UTV2-1868: an unrecognised or absent side is not treated as "game-scoped".
+  // Defaulting it to null is exactly the discard this repair exists to remove, so
+  // the market is skipped and the malformed payload is named instead.
+  if (
+    scoredMarket.providerSide !== null &&
+    scoredMarket.providerSide !== 'home' &&
+    scoredMarket.providerSide !== 'away'
+  ) {
+    logger?.warn?.(
+      `[sgo-results-parser] skipping malformed scored market for event ${providerEventId}: invalid providerSide; payload=${safeExcerpt(scoredMarket)}`,
     );
     return false;
   }

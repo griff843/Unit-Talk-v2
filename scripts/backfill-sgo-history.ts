@@ -3,6 +3,7 @@ import {
   createDatabaseIngestorRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
 } from '@unit-talk/db';
+import { createDryRunIngestorRepositoryBundle } from '../apps/ingestor/src/dry-run-repositories.js';
 import { ingestLeague } from '../apps/ingestor/src/ingest-league.js';
 import { runHistoricalBackfill } from '../apps/ingestor/src/historical-backfill.js';
 import { parseConfiguredLeagues } from '../apps/ingestor/src/ingestor-runner.js';
@@ -11,7 +12,15 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const env = loadEnvironment();
   const connection = createServiceRoleDatabaseConnectionConfig(env);
-  const repositories = createDatabaseIngestorRepositoryBundle(connection);
+  const live = createDatabaseIngestorRepositoryBundle(connection);
+
+  // UTV2-1866. A backfill against production is a production write, and asking for one
+  // without being able to say what it touches is not a request anybody should approve.
+  // `--dry-run` runs the identical pipeline against the identical window and reports the
+  // rows it would have written, having written none. Reads still hit the real database,
+  // so the report distinguishes rows that would be created from rows that already exist.
+  const dryRun = args.dryRun ? createDryRunIngestorRepositoryBundle(live) : null;
+  const repositories = dryRun?.repositories ?? live;
 
   const summary = args.window
     ? await runWindowBackfill({
@@ -36,13 +45,22 @@ async function main() {
         logger: console,
       });
 
-  console.log(JSON.stringify(summary, null, 2));
+  console.log(
+    JSON.stringify(
+      dryRun
+        ? { mode: 'dry-run', wroteNothing: true, blastRadius: dryRun.report(), summary }
+        : summary,
+      null,
+      2,
+    ),
+  );
 }
 
 function parseArgs(argv: string[]) {
   const map = new Map<string, string>();
   let skipResults = false;
   let resultsOnly = false;
+  let dryRun = false;
 
   for (const arg of argv) {
     if (arg === '--skip-results') {
@@ -51,6 +69,10 @@ function parseArgs(argv: string[]) {
     }
     if (arg === '--results-only') {
       resultsOnly = true;
+      continue;
+    }
+    if (arg === '--dry-run') {
+      dryRun = true;
       continue;
     }
 
@@ -87,7 +109,7 @@ function parseArgs(argv: string[]) {
   const endDate = map.get('end');
   if ((!startDate || !endDate) && !window) {
     throw new Error(
-      'Usage: pnpm backfill:sgo-history --start=YYYY-MM-DD --end=YYYY-MM-DD [--leagues=NBA,NFL] [--skip-results] [--results-only]',
+      'Usage: pnpm backfill:sgo-history --start=YYYY-MM-DD --end=YYYY-MM-DD [--leagues=NBA,NFL] [--skip-results] [--results-only] [--dry-run]',
     );
   }
   if ((startDate || endDate) && window) {
@@ -100,6 +122,7 @@ function parseArgs(argv: string[]) {
     leagues: parseConfiguredLeagues(map.get('leagues')),
     skipResults,
     resultsOnly,
+    dryRun,
     providerEventIds: parseList(map.get('event-id')),
     window,
   };

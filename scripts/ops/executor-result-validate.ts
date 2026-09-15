@@ -119,14 +119,14 @@ export interface ValidationContext {
  * the actual PR, the declared head SHA equals the current head -- is unchanged,
  * so a wider namespace can never stand in for a weaker attestation.
  */
-export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI)-\d+$/i;
-export const EXECUTOR_RESULT_BRANCH_RE = /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i;
+export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI|WORK)-\d+$/i;
+export const EXECUTOR_RESULT_BRANCH_RE = /^(claude|codex|bootstrap)\/(utv2|uni|work)-\d+/i;
 
 export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: ValidationContext): string[] {
   const errors: string[] = [];
 
   if (!r.issueId || !EXECUTOR_RESULT_ISSUE_ID_RE.test(r.issueId)) {
-    errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
+    errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN, UNI-NNN or WORK-NNN.`);
   }
 
   if (!r.lane || !['claude', 'codex'].includes(r.lane.toLowerCase())) {
@@ -135,7 +135,7 @@ export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: Valid
 
   if (!r.branch || !EXECUTOR_RESULT_BRANCH_RE.test(r.branch)) {
     errors.push(
-      `Invalid branch: "${r.branch || '<missing>'}". Must match claude/, codex/ or bootstrap/ followed by utv2-NNN-* or uni-NNN-*.`,
+      `Invalid branch: "${r.branch || '<missing>'}". Must match claude/, codex/ or bootstrap/ followed by utv2-NNN-*, uni-NNN-* or work-NNN-*.`,
     );
   }
   if (r.branch && r.branch !== ctx.headRef) {

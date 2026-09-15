@@ -1,0 +1,238 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1864
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1864
+  objective: "Smart Form acceptance matrix: prove persistence for every supported
+    market family"
+  acceptance_criteria:
+    - >-
+      Milestone 2 condition 2 asks that *every* submitted pick persist with
+      canonical identity and truthful provenance. Milestone 1 proved that for
+      exactly one shape: an MLB moneyline with `line = null`. Nothing licenses
+      generalising from it.
+
+
+      **Measured coverage gap (2026-09-09, on** `main`**).** The Smart Form
+      supports five market families — `player-prop`, `moneyline`, `spread`,
+      `total`, `team-total` — plus 30 period variants that reduce to the
+      moneyline/spread/total families (`apps/smart-form/lib/market-types.ts`).
+      The e2e suite has 27 tests, but only **three** assert an actual persisted
+      pick (the three that call `readPersistedPick` in
+      `apps/smart-form/e2e/phase-one.spec.ts:328,384,466`):
+
+
+      | Family | UI-behaviour tests | Persistence asserted |
+
+      | -- | -- | -- |
+
+      | moneyline | yes | coverage-gap path only (`:351`, `:420`) |
+
+      | spread | yes | canonical structured-fallback only (`:265`) |
+
+      | player-prop | yes (4 tests) | **none** |
+
+      | total | fallback only | **none** |
+
+      | team-total | fallback only | **none** |
+
+
+      `line` is the field this matters most for: moneyline persists `line =
+      null`, and the three families with no persistence coverage are exactly the
+      ones that persist a *real* line (signed for spread, unsigned for
+      total/team-total, stat-typed for player-prop). API-level tests
+      (`apps/api/src/submission-service.test.ts`) exercise `market` as a free
+      string and do not constrain the form's family logic.
+
+
+      ## Scope
+
+
+      * `docs/03_product/smart-form/acceptance-matrix.md` — the matrix as a
+      product artifact: every supported family x resolution path (canonical /
+      coverage-gap), what is proven, at which layer, and by which test.
+
+      * `apps/smart-form/e2e/phase-one.spec.ts` — add the missing persistence
+      cases so each family has at least one browser -> API -> DB assertion
+      covering its line semantics.
+
+
+      ## Acceptance
+
+
+      1. The matrix names every supported family and states, per cell, whether
+      persistence is proven and by what.
+
+      2. A persistence e2e case exists for `player-prop`, `total` and
+      `team-total`, each asserting the persisted `line` and `odds` and zero
+      delivery records.
+
+      3. No test claims coverage it does not have; unproven cells stay marked
+      unproven.
+
+      4. No change to containment, delivery, or provider settings.
+
+
+      ## Out of scope
+
+
+      Enabling `UNIT_TALK_SMART_FORM_E2E=1` in `ci.yml`. That is a change to a
+      required check's behaviour and is T1-floored; it is tracked separately.
+  guardrails: []
+  non_goals:
+    - Enabling `UNIT_TALK_SMART_FORM_E2E=1` in `ci.yml`. That is a change to a
+      required check's behaviour and is T1-floored; it is tracked separately.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Milestone 2 condition 2 asks that *every* submitted pick persist with
+      canonical identity and truthful provenance. Milestone 1 proved that for
+      exactly one shape: an MLB moneyline with `line = null`. Nothing licenses
+      generalising from it.
+
+
+      **Measured coverage gap (2026-09-09, on** `main`**).** The Smart Form
+      supports five market families — `player-prop`, `moneyline`, `spread`,
+      `total`, `team-total` — plus 30 period variants that reduce to the
+      moneyline/spread/total families (`apps/smart-form/lib/market-types.ts`).
+      The e2e suite has 27 tests, but only **three** assert an actual persisted
+      pick (the three that call `readPersistedPick` in
+      `apps/smart-form/e2e/phase-one.spec.ts:328,384,466`):
+
+
+      | Family | UI-behaviour tests | Persistence asserted |
+
+      | -- | -- | -- |
+
+      | moneyline | yes | coverage-gap path only (`:351`, `:420`) |
+
+      | spread | yes | canonical structured-fallback only (`:265`) |
+
+      | player-prop | yes (4 tests) | **none** |
+
+      | total | fallback only | **none** |
+
+      | team-total | fallback only | **none** |
+
+
+      `line` is the field this matters most for: moneyline persists `line =
+      null`, and the three families with no persistence coverage are exactly the
+      ones that persist a *real* line (signed for spread, unsigned for
+      total/team-total, stat-typed for player-prop). API-level tests
+      (`apps/api/src/submission-service.test.ts`) exercise `market` as a free
+      string and do not constrain the form's family logic.
+    - >-
+      Scope
+
+      * `docs/03_product/smart-form/acceptance-matrix.md` — the matrix as a
+      product artifact: every supported family x resolution path (canonical /
+      coverage-gap), what is proven, at which layer, and by which test.
+
+      * `apps/smart-form/e2e/phase-one.spec.ts` — add the missing persistence
+      cases so each family has at least one browser -> API -> DB assertion
+      covering its line semantics.
+    - >-
+      Acceptance
+
+      1. The matrix names every supported family and states, per cell, whether
+      persistence is proven and by what.
+
+      2. A persistence e2e case exists for `player-prop`, `total` and
+      `team-total`, each asserting the persisted `line` and `odds` and zero
+      delivery records.
+
+      3. No test claims coverage it does not have; unproven cells stay marked
+      unproven.
+
+      4. No change to containment, delivery, or provider settings.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1864/smart-form-acceptance-matrix-prove-persistence-for-every-supported
+    title: "Smart Form acceptance matrix: prove persistence for every supported
+      market family"
+    description: >-
+      Milestone 2 condition 2 asks that *every* submitted pick persist with
+      canonical identity and truthful provenance. Milestone 1 proved that for
+      exactly one shape: an MLB moneyline with `line = null`. Nothing licenses
+      generalising from it.
+
+
+      **Measured coverage gap (2026-09-09, on** `main`**).** The Smart Form
+      supports five market families — `player-prop`, `moneyline`, `spread`,
+      `total`, `team-total` — plus 30 period variants that reduce to the
+      moneyline/spread/total families (`apps/smart-form/lib/market-types.ts`).
+      The e2e suite has 27 tests, but only **three** assert an actual persisted
+      pick (the three that call `readPersistedPick` in
+      `apps/smart-form/e2e/phase-one.spec.ts:328,384,466`):
+
+
+      | Family | UI-behaviour tests | Persistence asserted |
+
+      | -- | -- | -- |
+
+      | moneyline | yes | coverage-gap path only (`:351`, `:420`) |
+
+      | spread | yes | canonical structured-fallback only (`:265`) |
+
+      | player-prop | yes (4 tests) | **none** |
+
+      | total | fallback only | **none** |
+
+      | team-total | fallback only | **none** |
+
+
+      `line` is the field this matters most for: moneyline persists `line =
+      null`, and the three families with no persistence coverage are exactly the
+      ones that persist a *real* line (signed for spread, unsigned for
+      total/team-total, stat-typed for player-prop). API-level tests
+      (`apps/api/src/submission-service.test.ts`) exercise `market` as a free
+      string and do not constrain the form's family logic.
+
+
+      ## Scope
+
+
+      * `docs/03_product/smart-form/acceptance-matrix.md` — the matrix as a
+      product artifact: every supported family x resolution path (canonical /
+      coverage-gap), what is proven, at which layer, and by which test.
+
+      * `apps/smart-form/e2e/phase-one.spec.ts` — add the missing persistence
+      cases so each family has at least one browser -> API -> DB assertion
+      covering its line semantics.
+
+
+      ## Acceptance
+
+
+      1. The matrix names every supported family and states, per cell, whether
+      persistence is proven and by what.
+
+      2. A persistence e2e case exists for `player-prop`, `total` and
+      `team-total`, each asserting the persisted `line` and `odds` and zero
+      delivery records.
+
+      3. No test claims coverage it does not have; unproven cells stay marked
+      unproven.
+
+      4. No change to containment, delivery, or provider settings.
+
+
+      ## Out of scope
+
+
+      Enabling `UNIT_TALK_SMART_FORM_E2E=1` in `ci.yml`. That is a change to a
+      required check's behaviour and is T1-floored; it is tracked separately.
+    captured_at: 2026-09-09T08:19:14.364Z
+    description_sha256: 665433b551a34ff546c0014c328eb9db38deea69bdc5d577f5f7a1ed77c1eda9
+  contract_hash: 02a29538c0cd6dda4b53f85eae7a3fe40dca3ddc6fada5f3574b71d304586036

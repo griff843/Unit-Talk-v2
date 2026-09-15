@@ -1,0 +1,230 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1904",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "b14e444127d18a9e7f6091421758f2ebad604b74",
+    "verified_source_sha": "f8d8b38086f20a422b78f21dd04993e3a3e60ed9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "f8d8b38086f20a422b78f21dd04993e3a3e60ed9 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1904/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the execution anchor does not move when this file lands.",
+    "bound_at": "2026-09-14T23:22:56.283Z",
+    "ci_sentinels": {
+      "run_id": 34901451748,
+      "run_attempt": 1,
+      "head_sha": "f8d8b38086f20a422b78f21dd04993e3a3e60ed9",
+      "verify": {
+        "job_id": 104172133767,
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "job_id": 104168552520,
+        "conclusion": "success"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission."
+    }
+  },
+  "what_this_lane_repairs": {
+    "defect": "An evidence-plane pick could not be settled at all. recordPickSettlement refuses anything but a posted pick, and a Track Only pick never becomes posted — by construction, because Track Only means there is no delivery to post. So an operator holding a real, graded result had no way to record it, and the four real production picks in the governed cohort had no path to a settled record.",
+    "why_a_separate_dispatch_rather_than_a_loosened_guard": "The posted-state guard is what stops a settlement being recorded against a pick that was never delivered. Loosening it would have removed the protection for every pick rather than adding a path for the evidence plane. The dispatch is placed deliberately AFTER the manual_review branch: an evidence-plane pick has no delivery to pause, and recordManualReview refuses anything but posted, so moving the dispatch above it would silently convert that refusal into an acceptance. A manual_review request on a Track Only pick must keep failing exactly as it does today, and a dedicated test asserts that it does.",
+    "fail_closed_shape": "recordOperatorEvidenceSettlement throws ApiError(400, OPERATOR_GRADING_CONTEXT_REQUIRED) when request.operatorGradingContext is absent, and ApiError(409, OPERATOR_SETTLEMENT_SOURCE_INVALID) when the caller claims source 'grading'. An operator settling by hand must attest, in their own words, how they determined the outcome, where a reader can independently check it, and when they observed it. A refusal writes no settlement row.",
+    "no_lifecycle_transition_and_no_delivery": "validated -> settled is not a legal FSM edge, so the operator path returns lifecycleEvent: null and finalLifecycleState: pick.status — the pick's status does not move. The recap guard in settle-pick-controller.ts is widened to skip an evidence-plane pick outright. That guard is enforcement rather than optimisation: today a recap on a Track Only pick is structurally inert because resolveRecapChannel requires a sent distribution_outbox row, but that is the absence of a delivery record, not a refusal to deliver.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test packages/contracts/src/settlement.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 18,
+          "suites": 3,
+          "pass": 18,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The operator grading context contract: a fully attested context is accepted; each of outcomeBasis, resultSourceUrl and observedAt is refused when missing and when whitespace-only; an unparseable observedAt is refused as not an ISO-8601 instant; a settlement request WITHOUT the context is still valid (the requirement depends on the pick, which the validator cannot see); and a malformed context fails the whole settlement request."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/settlement-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 35,
+          "pass": 35,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Seven new tests plus the pre-existing delivery-path suite unchanged. The new ones: the happy path (source 'operator', no lifecycle event, status stays 'validated', zero distribution_outbox rows across ALL statuses, payload and audit-action assertions); refusal without a context writes no settlement row; a malformed context is refused; source 'feed' still 409s; source 'grading' is refused on this path; manual_review on a Track Only pick is STILL refused — the dispatch-order control; awaiting_approval also settles through the operator path; and a posted pick still settles without any operator context."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: verify ends at test:live-db, which ci:assert-staging refuses when the host resolves to the containment placeholder. verify is exercised by the CI job of the same name on this head; see sha_binding.ci_sentinels."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 11,
+      "rules_matched": [
+        "settlement-grading"
+      ],
+      "advisory_missing": [
+        "r4-fault-report [PM-gated]"
+      ],
+      "note": "The one missing artifact is advisory and PM-gated, not blocking."
+    },
+    "corrected_pre_existing_test": {
+      "test": "recordPickSettlement still requires posted state (delivery path unchanged)",
+      "what_happened": "It asserted /posted or settled state/ for an awaiting_approval pick. This change routes that pick to the evidence branch, which refuses it with OPERATOR_GRADING_CONTEXT_REQUIRED instead — a different refusal for the same request.",
+      "how_it_was_resolved": "Renamed to 'recordPickSettlement refuses a context-less settlement on an evidence-plane pick', with the change in WHICH refusal is produced documented in the test body. The load-bearing assertions were kept — still refused, pick status unchanged — and one was ADDED: assert.equal(await repositories.settlements.findLatestForPick(pick.id), null). The test is strictly stronger than before, not weakened to fit."
+    },
+    "fixture_correctness_note": "processSubmission's in-memory sequential fallback returns a pick object with NO status field at all. Asserting on result.pick.status would have compared against undefined and proven nothing about the fixture, so createTrackOnlyValidatedPick reads the row back with repositories.picks.findPickById and asserts status === 'validated' as an explicit precondition. This was measured with a scratch probe (status= undefined readback= validated), not assumed."
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PASS",
+    "job": "Writable DB proof (staging only)",
+    "workflow_run_id": 34901451748,
+    "job_id": 104168552520,
+    "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34901451748/job/104168552520",
+    "head_sha": "f8d8b38086f20a422b78f21dd04993e3a3e60ed9",
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "conclusion": "success",
+    "suite": "apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "what_it_proves": [
+      "A real Track Only pick, submitted through submitPickController against real PostgREST, is settled by an operator and produces EXACTLY ONE settlement_records row, read back from the database rather than from a return value: source='operator', settled_by='t1-proof-operator', the operatorGradingContext persisted in the payload, clv null and clvUnavailableReason 'operator_evidence_settlement_has_no_event_scope'.",
+      "picks.status is still 'validated' after the settlement — no lifecycle transition was attempted, and 0 pick_lifecycle rows carry to_state='settled'.",
+      "ZERO distribution_outbox rows exist for the pick, counted across every status rather than only the ones a delivery would use. This is the directive's 'prove zero delivery', measured in the database.",
+      "Without operatorGradingContext the settlement is refused and ZERO settlement_records rows exist, the pick status is unchanged, and there are still zero outbox rows. The fail-closed path is proven by absence in the database, not by an exception type."
+    ],
+    "why_this_suite_and_not_the_in_memory_one": "The in-memory bundle can be satisfied by a repository that never writes. Reading the row back from Postgres is what distinguishes 'the code returned an object' from 'a row exists', and counting outbox rows in SQL is what distinguishes 'no delivery was requested' from 'a delivery was requested and silently dropped'.",
+    "queries": [
+      {
+        "id": "q1",
+        "target": "staging xskgrzbteyqdufktjrjx",
+        "purpose": "The settlement row exists, and exactly one of it, carrying the operator's attested context.",
+        "sql": "SELECT s.id, s.pick_id, s.result, s.source, s.settled_by, s.confidence, s.status, s.evidence_ref, s.payload->'operatorGradingContext'->>'outcomeBasis', s.payload->'operatorGradingContext'->>'resultSourceUrl', s.payload->'operatorGradingContext'->>'observedAt', s.payload->>'clv', s.payload->>'clvUnavailableReason', p.status AS pick_status, p.market, p.source AS pick_source, p.metadata->>'distributionMode' FROM settlement_records s JOIN picks p ON p.id = s.pick_id WHERE s.settled_by = 't1-proof-operator';",
+        "result": "1 row. settlement_id=7f54874f-6fe4-4f1f-993f-b257faf1a67d, pick_id=02af9856-7589-429b-bd25-3b42d2645f17, result=win, source=operator, settled_by=t1-proof-operator, confidence=confirmed, status=settled, evidence_ref=manual:utv2-1904:2f677fbc, outcomeBasis='Final box score, home team covered -2.5', resultSourceUrl='https://example.invalid/box-score/utv2-1904', observedAt='2026-09-14T22:40:00.000Z', clv=null, clvUnavailableReason='operator_evidence_settlement_has_no_event_scope', pick_status=validated, market=nba-spread, pick_source=api, distributionMode=track-only."
+      },
+      {
+        "id": "q2",
+        "target": "staging xskgrzbteyqdufktjrjx",
+        "purpose": "Nothing else moved: the pick did not transition, and no delivery was enqueued. The refusal-path pick produced no settlement row at all.",
+        "sql": "WITH cohort AS (SELECT id, status FROM picks WHERE metadata->>'proof_issue' = 'UTV2-1904') SELECT (SELECT count(*) FROM cohort), (SELECT count(*) FROM cohort WHERE status='validated'), (SELECT count(*) FROM pick_lifecycle l JOIN cohort c ON c.id=l.pick_id), (SELECT count(*) FROM pick_lifecycle l JOIN cohort c ON c.id=l.pick_id WHERE l.to_state='settled'), (SELECT count(*) FROM distribution_outbox o JOIN cohort c ON c.id=o.pick_id), (SELECT count(*) FROM settlement_records s JOIN cohort c ON c.id=s.pick_id);",
+        "result": "cohort_picks=2, cohort_validated=2, lifecycle_rows_total=2, lifecycle_rows_to_settled=0, outbox_rows_any_status=0, settlement_rows_cohort=1."
+      },
+      {
+        "id": "q3",
+        "target": "staging xskgrzbteyqdufktjrjx",
+        "purpose": "The fail-closed control, isolated: the pick from the refusal test carries zero settlement rows. Without this, q1 would pass equally against an implementation that never required the context.",
+        "sql": "SELECT count(*) FROM settlement_records s WHERE s.pick_id IN (SELECT id FROM picks WHERE metadata->>'proof_issue' = 'UTV2-1904' AND id <> '02af9856-7589-429b-bd25-3b42d2645f17');",
+        "result": "0."
+      },
+      {
+        "id": "q4",
+        "target": "staging xskgrzbteyqdufktjrjx",
+        "purpose": "Table-wide delivery counter, not cohort-scoped, so a delivery written under some other pick_id could not hide behind the join.",
+        "sql": "SELECT count(*) FROM distribution_outbox;",
+        "result": "0. Recorded honestly: this counter read 22 when the pre-run baseline was taken and reads 0 now. The decrease is not produced by this lane — nothing in it deletes outbox rows — and staging is a shared CI database that other suites truncate. The load-bearing claim is the cohort-scoped 0 in q2, which is a statement about rows this lane's own picks did or did not produce; q4 is recorded because it was measured, not because the movement is attributed."
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "settlement_records",
+        "predicate": "settled_by = 't1-proof-operator'",
+        "before": 0,
+        "after": 1,
+        "expected": 1,
+        "note": "Pre-run baseline measured 0 on this same staging project before the run; the one row is the one this proof wrote."
+      },
+      {
+        "table": "pick_lifecycle",
+        "predicate": "pick_id IN (UTV2-1904 proof cohort) AND to_state = 'settled'",
+        "before": 0,
+        "after": 0,
+        "expected": 0,
+        "note": "validated -> settled is not a legal FSM edge and the path deliberately writes no lifecycle event."
+      },
+      {
+        "table": "distribution_outbox",
+        "predicate": "pick_id IN (UTV2-1904 proof cohort), counted across every status",
+        "before": 0,
+        "after": 0,
+        "expected": 0,
+        "note": "The zero-delivery claim the directive requires, measured in the database rather than inferred from the recap guard."
+      },
+      {
+        "table": "settlement_records",
+        "predicate": "pick_id = the refusal-path pick (no operatorGradingContext supplied)",
+        "before": 0,
+        "after": 0,
+        "expected": 0,
+        "note": "The discriminating control. The request was refused with OPERATOR_GRADING_CONTEXT_REQUIRED and nothing was written."
+      },
+      {
+        "table": "picks",
+        "predicate": "metadata->>'proof_issue' = 'UTV2-1904' AND status = 'validated'",
+        "before": 0,
+        "after": 2,
+        "expected": 2,
+        "note": "Both proof picks persist, and both are still validated after the run — the success path did not transition its pick either."
+      }
+    ],
+    "row_counts_captured_at": "2026-09-14T22:11:13.553516+00:00",
+    "row_counts_note": "Read back read-only from staging xskgrzbteyqdufktjrjx after the run concluded, through a separate client from the one the test used, so the numbers are not the test's own return values restated. Production zfzdnfwdarxucxtaojxm was not written to by any part of this lane."
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off — no provider key read, tested or activated",
+    "member_delivery": "disabled — unchanged",
+    "track_only_containment": "enabled — unchanged",
+    "note": "This lane adds an operator settlement path for the evidence plane. It writes nothing to production and changes no containment setting. It cannot create a delivery: the recap guard skips evidence-plane picks, and the staging proof counts zero distribution_outbox rows."
+  },
+  "dependency_record": {
+    "command_center_follow_up": {
+      "finding": "apps/command-center/src/app/actions/settle.ts posts { status, result, source: 'operator', confidence, evidenceRef, settledBy } and NO operatorGradingContext. After this lands, a Command Center settlement of a Track Only pick is refused with OPERATOR_GRADING_CONTEXT_REQUIRED.",
+      "is_this_a_regression": "No. Today the same click is refused with SETTLEMENT_NOT_ALLOWED, because the pick is not posted. The refusal changes identity, not existence.",
+      "callers": [
+        "apps/command-center/src/components/SettlementForm.tsx:50",
+        "apps/command-center/src/components/InlineSettleButton.tsx:39",
+        "apps/command-center/src/components/CorrectionForm.tsx:44"
+      ],
+      "why_it_is_not_in_this_lane": "apps/command-center/** is admitted by exactly one lane type, delivery-ui, whose max_per_app for command-center is 1 and is currently held by UTV2-1802 / PR #1513. It is also outside this lane's pinned file_scope_lock. Re-typing a lane to evade a concurrency rule is the evasion this plan has already declined once.",
+      "blocked_on": "Griff's T1 verdict on PR #1513, which frees the delivery-ui command-center slot."
+    },
+    "for_c2_and_ticket_level_statistics": "A settled evidence-plane pick now has a settlement_records row whose payload carries operatorGradingContext, correction:false, evidencePlane:true, operatorSettled:true, the pick provenance payload, the stake-integrity payload, profitLossUnits for win/loss/push, and clv:null with an explicit clvUnavailableReason. Any statistics layer built over this cohort can therefore distinguish an operator-attested settlement from a graded one by payload rather than by inference, and can report CLV as unavailable-by-construction rather than as missing data."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "File scope lock / Return review packet",
+      "cause": "out-of-scope file: docs/05_operations/db-writer-classification.json",
+      "disposition": "Correct, not defective. file_scope_lock is pinned at lane-start and an agent cannot widen it. The path exists because scripts/ci/db-writer-inventory.ts refuses an unclassified credentialed DB test by name, and this lane's staging proof is such a test — the very test the directive requires. Clearing it needs a one-path scope-override/v1 from CODEOWNERS pinned to this head. UTV2-1898 recorded the identical trade for the identical file."
+    },
+    {
+      "check": "Shadow Parity Check",
+      "cause": "[assert-unmodified] REFUSED: this pull request modifies code that a production-credentialed job executes. modified: package.json",
+      "disposition": "Not repaired, deliberately. This check is path-triggered by apps/api/src/**/*settlement* and then refuses root package.json. pnpm verify fails closed with WIRING_TEST_UNWIRED_NEW on any *.test.ts not reachable from a package script, and the only wiring point for a live-DB proof test is test:t1-proof:live in package.json — so wiring the staging proof the directive requires necessarily trips this gate. Non-required on main (branch protection requires exactly verify, Executor Result Validation, Merge Gate, P0 Protocol). UTV2-1898 merged with this same check red for this same reason."
+    },
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair",
+      "disposition": "Reserved. Requires the t1-approved label AND a pm-verdict/v1 APPROVED comment from CODEOWNERS, both pinned to this head. Not actionable by the executor."
+    }
+  ]
+}

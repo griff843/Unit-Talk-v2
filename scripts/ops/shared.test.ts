@@ -19,6 +19,7 @@ import {
   mergeVerifierIdentity,
   normalizeFileScopePath,
   normalizeRepoRelativePath,
+  pathsOverlap,
   requireVerificationTarget,
   validateBranchName,
   validateManifest,
@@ -28,6 +29,9 @@ import {
   ROOT,
   worktreePathForBranch,
   getRepoRoot,
+  readAllManifestPopulation,
+  readAllManifestEntries,
+  readAllManifests,
   type LaneManifest,
 } from './shared.js';
 
@@ -75,6 +79,147 @@ test('normalizeFileScopePath still rejects parent traversal for proof paths', ()
     () => normalizeFileScopePath('../docs/06_status/proof/UTV2-9999/diff-summary.md'),
     /Parent traversal is not allowed/,
   );
+});
+
+// --- UTV2-1884: file scope declares intent, so the parent must exist, not the leaf ---
+
+test('normalizeFileScopePath admits a file the lane will create inside an existing directory', () => {
+  // The whole point: scripts/ops exists, this file does not, and the lane is
+  // about to add it. Before UTV2-1884 this threw and the lane had to widen its
+  // lock to scripts/ops/**.
+  assert.strictEqual(
+    fs.existsSync(path.join(ROOT, 'scripts/ops/utv2-1884-not-a-real-file.ts')),
+    false,
+    'fixture precondition: the declared file must not exist',
+  );
+  assert.strictEqual(
+    normalizeFileScopePath('scripts/ops/utv2-1884-not-a-real-file.ts'),
+    'scripts/ops/utv2-1884-not-a-real-file.ts',
+  );
+});
+
+test('normalizeFileScopePath admits a directory glob the lane will create', () => {
+  // This is the exact UTV2-1883 declaration that was refused, forcing the lane
+  // onto docs/03_product/** and into a collision with UTV2-1878.
+  assert.strictEqual(
+    fs.existsSync(path.join(ROOT, 'docs/03_product/utv2-1884-unborn-directory')),
+    false,
+    'fixture precondition: the declared directory must not exist',
+  );
+  assert.strictEqual(
+    normalizeFileScopePath('docs/03_product/utv2-1884-unborn-directory/**'),
+    'docs/03_product/utv2-1884-unborn-directory/**',
+  );
+});
+
+test('normalizeFileScopePath still refuses a path whose parent directory does not exist', () => {
+  // Typo protection is the reason the old rule existed, and it survives:
+  // "03_prodcut" is not a directory, so the declaration is refused.
+  assert.throws(
+    () => normalizeFileScopePath('docs/03_prodcut/brand/**'),
+    /File scope parent directory does not exist: docs\/03_prodcut/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('scripts/utv2-1884-no-such-dir/thing.ts'),
+    /File scope parent directory does not exist: scripts\/utv2-1884-no-such-dir/,
+  );
+});
+
+test('normalizeFileScopePath refuses a parent that is a file rather than a directory', () => {
+  assert.throws(
+    () => normalizeFileScopePath('scripts/ops/shared.ts/nested.ts'),
+    /File scope parent must reference a directory: scripts\/ops\/shared\.ts/,
+  );
+});
+
+test('normalizeFileScopePath still enforces the kind of a path that does exist', () => {
+  assert.throws(
+    () => normalizeFileScopePath('scripts/ops/shared.ts/**'),
+    /File scope glob must reference a directory/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('scripts/ops'),
+    /File scope must reference a file, not a directory/,
+  );
+});
+
+test('normalizeFileScopePath still refuses traversal and absolute paths', () => {
+  assert.throws(
+    () => normalizeFileScopePath('../etc/passwd'),
+    /Parent traversal is not allowed/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('scripts/../../etc/passwd'),
+    /Parent traversal is not allowed/,
+  );
+  assert.throws(
+    () => normalizeFileScopePath('/etc/passwd'),
+    /Absolute paths are not allowed in file scope/,
+  );
+});
+
+test('normalizeFileScopePath refuses a parent that symlinks outside the repository', (t) => {
+  // The structural `../` refusal cannot see a symlink, and the parent is now
+  // allowed to be the last existing component, so containment is asserted
+  // against the resolved path.
+  const linkDirectory = path.join(ROOT, '.out');
+  fs.mkdirSync(linkDirectory, { recursive: true });
+  const linkPath = path.join(linkDirectory, 'utv2-1884-escape-link');
+  const outsideTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1884-outside-'));
+  fs.rmSync(linkPath, { force: true });
+  fs.symlinkSync(outsideTarget, linkPath, 'dir');
+  t.after(() => {
+    fs.rmSync(linkPath, { force: true });
+    fs.rmSync(outsideTarget, { recursive: true, force: true });
+  });
+
+  // Control: the link really does resolve outside the repository, so the
+  // assertion below is not passing for an unrelated reason.
+  assert.strictEqual(
+    fs.realpathSync(linkPath).startsWith(fs.realpathSync(ROOT) + path.sep),
+    false,
+  );
+
+  assert.throws(
+    () => normalizeFileScopePath('.out/utv2-1884-escape-link/smuggled.ts'),
+    /File scope parent escapes the repository/,
+  );
+});
+
+test('normalizeFileScopePath leaves proof paths exempt from every existence check', () => {
+  // Proof paths never reach the parent check at all, so a proof directory that
+  // does not exist yet is still admitted.
+  assert.strictEqual(
+    normalizeFileScopePath('docs/06_status/proof/UTV2-9999/nested/evidence.json'),
+    'docs/06_status/proof/UTV2-9999/nested/evidence.json',
+  );
+});
+
+test('UTV2-1884: a trailing directory glob overlaps everything inside the directory it names', () => {
+  // Found while testing the parent-existence change, and it is why that change
+  // could not ship alone: a glob lock used to compare as a literal string, so
+  // it collided only with a byte-identical glob.
+  assert.strictEqual(pathsOverlap('scripts/ops/**', 'scripts/ops/shared.ts'), true);
+  assert.strictEqual(pathsOverlap('scripts/ops/shared.ts', 'scripts/ops/**'), true);
+  assert.strictEqual(pathsOverlap('docs/03_product/**', 'docs/03_product/brand/**'), true);
+  assert.strictEqual(pathsOverlap('docs/03_product/**', 'docs/03_product/X.md'), true);
+  assert.strictEqual(pathsOverlap('scripts/**', 'scripts/ops/**'), true);
+  // The directory itself, named with and without the glob, is one scope.
+  assert.strictEqual(pathsOverlap('scripts/ops/**', 'scripts/ops'), true);
+});
+
+test('the narrower declarations UTV2-1884 admits are genuinely disjoint under pathsOverlap', () => {
+  // The payoff. Before this change both lanes could only say docs/03_product/**,
+  // and they collided. Declared precisely, they do not overlap at all.
+  assert.strictEqual(
+    pathsOverlap('docs/03_product/brand/**', 'docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md'),
+    false,
+  );
+  assert.strictEqual(pathsOverlap('docs/03_product/brand/**', 'docs/03_product/pricing/**'), false);
+  assert.strictEqual(pathsOverlap('scripts/ops/shared.ts', 'scripts/ops/preflight.ts'), false);
+  // Isolation is not weakened in the other direction: a sibling whose name is a
+  // string prefix of another is still disjoint.
+  assert.strictEqual(pathsOverlap('docs/03_product/brand/**', 'docs/03_product/branding/**'), false);
 });
 
 test('normalizeRepoRelativePath allows canonical deleted-file style paths', () => {
@@ -2095,4 +2240,196 @@ test('createManifest refuses an unrecognised deferral value rather than dropping
       /cannot create lane manifest for UTV2-1842/,
     );
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1708: readdir/readFile race in the manifest registry reader.
+//
+// The race is real but not schedulable, so a test that waits for it is a test
+// that passes vacuously. These drive it deterministically instead: `listPaths`
+// returns a path that has already been removed, which is exactly the state the
+// race produces — an enumeration that outlived one of its entries — while the
+// read itself stays the real one against the real filesystem.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function utv2_1708_manifestFixtureRoot(label: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `utv2-1708-${label}-`));
+  return dir;
+}
+
+function utv2_1708_writeManifest(dir: string, issueId: string): string {
+  const filePath = path.join(dir, `${issueId}.json`);
+  fs.writeFileSync(
+    filePath,
+    `${JSON.stringify({ schema_version: 1, issue_id: issueId, status: 'started' }, null, 2)}\n`,
+    'utf8',
+  );
+  return filePath;
+}
+
+test('UTV2-1708: a manifest deleted between enumeration and read is classified, not thrown', () => {
+  const dir = utv2_1708_manifestFixtureRoot('vanished');
+  const survivor = utv2_1708_writeManifest(dir, 'UTV2-70801');
+  const vanished = utv2_1708_writeManifest(dir, 'UTV2-70802');
+
+  // Enumerate first, exactly as the reader does, then delete — the file is in
+  // the listing and gone from disk, which is the race.
+  const stalePaths = [survivor, vanished].sort((a, b) => a.localeCompare(b));
+  fs.rmSync(vanished);
+
+  const population = readAllManifestPopulation(dir, { listPaths: () => stalePaths });
+
+  assert.equal(
+    population.entries.length,
+    1,
+    'the surviving manifest must still be returned',
+  );
+  assert.equal(population.entries[0]?.path, survivor);
+  assert.equal(
+    (population.entries[0]?.manifest as unknown as { issue_id: string }).issue_id,
+    'UTV2-70801',
+    'the survivor must be a real parsed manifest, not a placeholder',
+  );
+  assert.deepEqual(
+    population.concurrentlyDeleted,
+    [vanished],
+    'the vanished path must be reported rather than silently dropped',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: the concurrent-deletion case does not crash the wrapper callers', () => {
+  const dir = utv2_1708_manifestFixtureRoot('callers');
+  const survivor = utv2_1708_writeManifest(dir, 'UTV2-70803');
+  const vanished = utv2_1708_writeManifest(dir, 'UTV2-70804');
+  const stalePaths = [survivor, vanished].sort((a, b) => a.localeCompare(b));
+  fs.rmSync(vanished);
+
+  // `readAllManifests` is the reader `reclaimLease` reaches (lease-registry.ts,
+  // via UTV2-1863), and `readAllManifestEntries` is what the reconciliation and
+  // planning paths use. Both must survive.
+  const entries = readAllManifestEntries(dir, { listPaths: () => stalePaths });
+  const manifests = readAllManifests(dir, { listPaths: () => stalePaths });
+
+  assert.equal(entries.length, 1);
+  assert.equal(manifests.length, 1);
+  assert.equal(
+    (manifests[0] as unknown as { issue_id: string }).issue_id,
+    'UTV2-70803',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: malformed JSON is still a failure', () => {
+  const dir = utv2_1708_manifestFixtureRoot('malformed');
+  utv2_1708_writeManifest(dir, 'UTV2-70805');
+  const bad = path.join(dir, 'UTV2-70806.json');
+  fs.writeFileSync(bad, '{ "issue_id": "UTV2-70806",\n', 'utf8');
+
+  assert.throws(
+    () => readAllManifestPopulation(dir),
+    (error: unknown) => error instanceof SyntaxError,
+    'a manifest that exists but does not parse must not be classified as deleted',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: a non-ENOENT read failure is still a failure', () => {
+  const dir = utv2_1708_manifestFixtureRoot('eacces');
+  const filePath = utv2_1708_writeManifest(dir, 'UTV2-70807');
+
+  const denied = Object.assign(new Error('EACCES: permission denied'), {
+    code: 'EACCES',
+  });
+
+  assert.throws(
+    () =>
+      readAllManifestPopulation(dir, {
+        listPaths: () => [filePath],
+        readManifestFile: () => {
+          throw denied;
+        },
+      }),
+    /EACCES/,
+    'permission denied must stay visible rather than shrinking the board',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: a persistent ENOENT on a path that still exists is retried, then thrown', () => {
+  const dir = utv2_1708_manifestFixtureRoot('reappears');
+  const filePath = utv2_1708_writeManifest(dir, 'UTV2-70808');
+
+  let reads = 0;
+  const missing = Object.assign(new Error('ENOENT: no such file or directory'), {
+    code: 'ENOENT',
+  });
+
+  assert.throws(
+    () =>
+      readAllManifestPopulation(dir, {
+        listPaths: () => [filePath],
+        readManifestFile: () => {
+          reads += 1;
+          throw missing;
+        },
+        // The path is present, so this is not a deletion and must not be
+        // classified as one.
+        exists: () => true,
+      }),
+    /ENOENT/,
+  );
+  assert.equal(reads, 2, 'the read must be retried exactly once before rethrowing');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: an ENOENT that resolves on retry yields the manifest, not a deletion', () => {
+  const dir = utv2_1708_manifestFixtureRoot('retry-succeeds');
+  const filePath = utv2_1708_writeManifest(dir, 'UTV2-70809');
+
+  let reads = 0;
+  const population = readAllManifestPopulation(dir, {
+    listPaths: () => [filePath],
+    readManifestFile: (target) => {
+      reads += 1;
+      if (reads === 1) {
+        throw Object.assign(new Error('ENOENT: no such file or directory'), {
+          code: 'ENOENT',
+        });
+      }
+      return JSON.parse(fs.readFileSync(target, 'utf8')) as LaneManifest;
+    },
+    exists: () => true,
+  });
+
+  assert.equal(population.entries.length, 1);
+  assert.deepEqual(
+    population.concurrentlyDeleted,
+    [],
+    'a path that read successfully on retry is not a concurrent deletion',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('UTV2-1708: an intact directory reports nothing deleted', () => {
+  const dir = utv2_1708_manifestFixtureRoot('intact');
+  utv2_1708_writeManifest(dir, 'UTV2-70810');
+  utv2_1708_writeManifest(dir, 'UTV2-70811');
+
+  const population = readAllManifestPopulation(dir);
+
+  assert.equal(population.entries.length, 2);
+  assert.deepEqual(
+    population.concurrentlyDeleted,
+    [],
+    'the classification must not fire on a directory nothing raced',
+  );
+
+  fs.rmSync(dir, { recursive: true, force: true });
 });

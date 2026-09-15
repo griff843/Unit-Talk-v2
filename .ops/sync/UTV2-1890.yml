@@ -1,0 +1,66 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1890
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1890
+  objective: "Mission plan: record the UTV2-1889 direction change to the
+    SGO-backed result journey"
+  acceptance_criteria:
+    - |-
+      Griff changed direction on [UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/operator-attested-results-settle-the-real-track-only-pick-without-sgo) on 2026-09-11: manual result attestation is deferred, and the intended SGO-backed Smart Form workflow is prepared before paid data is activated.
+
+      docs/mission/plan.md still describes the operator-attested route as the delivery path and does not carry the four integration gaps proven on [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271). A future session reading the plan would resume the deferred route.
+
+      This lane reconciles docs/mission/plan.md against that direction and against live truth:
+
+      * record the direction change, and that operator attestation is preserved but deferred
+      * record the four SGO journey gaps (canonical table unreachable, raw score vs outcome, no market-key join, side attribution unproven in data) and which of them own apps/ingestor and therefore need a separate lane
+      * record that SGO activation, production writes, deployment and member delivery remain unapproved
+
+      Scope: docs/mission/plan.md only. No code, no gate, no approval artifact.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Griff changed direction on [UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/operator-attested-results-settle-the-real-track-only-pick-without-sgo) on 2026-09-11: manual result attestation is deferred, and the intended SGO-backed Smart Form workflow is prepared before paid data is activated.
+
+      docs/mission/plan.md still describes the operator-attested route as the delivery path and does not carry the four integration gaps proven on [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271). A future session reading the plan would resume the deferred route.
+
+      This lane reconciles docs/mission/plan.md against that direction and against live truth:
+
+      * record the direction change, and that operator attestation is preserved but deferred
+      * record the four SGO journey gaps (canonical table unreachable, raw score vs outcome, no market-key join, side attribution unproven in data) and which of them own apps/ingestor and therefore need a separate lane
+      * record that SGO activation, production writes, deployment and member delivery remain unapproved
+
+      Scope: docs/mission/plan.md only. No code, no gate, no approval artifact.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1890/mission-plan-record-the-utv2-1889-direction-change-to-the-sgo-backed
+    title: "Mission plan: record the UTV2-1889 direction change to the SGO-backed
+      result journey"
+    description: |-
+      Griff changed direction on [UTV2-1889](https://linear.app/unit-talk-v2/issue/UTV2-1889/operator-attested-results-settle-the-real-track-only-pick-without-sgo) on 2026-09-11: manual result attestation is deferred, and the intended SGO-backed Smart Form workflow is prepared before paid data is activated.
+
+      docs/mission/plan.md still describes the operator-attested route as the delivery path and does not carry the four integration gaps proven on [griff843/Unit-Talk-v2#1567](https://linear.app/unit-talk-v2/review/utv2-1889-prepare-the-sgo-backed-result-journey-prove-it-end-to-end-4b6bf076e271). A future session reading the plan would resume the deferred route.
+
+      This lane reconciles docs/mission/plan.md against that direction and against live truth:
+
+      * record the direction change, and that operator attestation is preserved but deferred
+      * record the four SGO journey gaps (canonical table unreachable, raw score vs outcome, no market-key join, side attribution unproven in data) and which of them own apps/ingestor and therefore need a separate lane
+      * record that SGO activation, production writes, deployment and member delivery remain unapproved
+
+      Scope: docs/mission/plan.md only. No code, no gate, no approval artifact.
+    captured_at: 2026-09-12T11:51:33.702Z
+    description_sha256: e4d40ccc5687b827023f567b25d3524182ddcdaa6f17986a932a0cd013750026
+  contract_hash: 5f379bfabaa7e4109db7fa135e7f5144751a1f0586a7d1bac7c738b4c8238468

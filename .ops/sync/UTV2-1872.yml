@@ -1,0 +1,230 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1872
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1872
+  objective: "Reconcile the mission plan: #1479 blocks four grading items,
+    UTV2-1871 is blocked by #1484, and CI-workflow work is confined to two lane
+    types"
+  acceptance_criteria:
+    - |-
+      ## Scope corrected before starting — the packet already exists
+
+      The first version of this issue asked for two deliverables. **The first is void and is not being written.** `docs/05_operations/RESULTS_BACKFILL_AUTHORIZATION_PACKET.md` (260 lines) is already on `main`, written by [UTV2-1870](https://linear.app/unit-talk-v2/issue/UTV2-1870/write-the-results-backfill-authorization-packet-the-blast-radius-is), and it is more complete than the draft prepared here — it carries a rollback-position section the draft lacked. The plan already records this at its "Executable now" item 4, which is struck through as *"done, twice over."*
+
+      This is the recorded "re-derives diagnoses it has already written down" cost, caught before it merged rather than after. The draft has been discarded. **Scope is now** `docs/mission/plan.md` **alone.**
+
+      ## What is actually missing from the plan
+
+      Three facts, none of which appear anywhere in `docs/mission/plan.md` (verified by grep, not by recollection):
+
+      ### 1. [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s blast radius is four items, not one
+
+      The plan says [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) *"is the only item here that **blocks** Milestone 2's first executable step"*, naming item 1. Measured against [UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)'s `file_scope_lock` at [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s head ref, which holds `apps/api/src/grading-service.ts` at status `in_review`:
+
+      | Plan item | Edits `grading-service.ts`? |
+      | -- | -- |
+      | 1 — admit Track Only picks to the grading population | yes (`:96-100`) |
+      | 2 — make moneyline and spread gradeable | yes (`:118`, `:389`) |
+      | 5 — repair the grading pass's N+1 | yes (`:105`) |
+      | 6 — persist the skip histogram | yes (`:368`) |
+
+      So **four of the seven "Executable now" items are not executable**, and the plan currently presents three of them as available. This is the plan's own recorded error class, in the same section that warns about it: enumerate from the gate's predicate, not from the work that happened to hit it.
+
+      ### 2. [UTV2-1871](https://linear.app/unit-talk-v2/issue/UTV2-1871/repair-the-awaiting-approval-drift-monitors-classification-12634) is blocked by [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d), and not by the PR that looks like the blocker
+
+      `ops:lane-start UTV2-1871 --lane-type migration` refuses with `concurrency_limit_exceeded` — `forbidden_combination: migration + data-canonical (UTV2-1773)`. Exactly one violation fired:
+
+      * [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) **(**[griff843/Unit-Talk-v2#1451](https://linear.app/unit-talk-v2/review/utv2-1736-continuous-provider-offer-history-partition-coverage-read-3bf4def49ac1)) is a `migration` lane and did **not** block it — `parked` is outside the active set, so a parked lane does not hold its singleton type.
+      * [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) **(**[griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d)) is `data-canonical` at `in_review` and does.
+
+      The rule's stated reason (*"Data/Canonical that touches schema must be its own Migration lane anyway"*) does not apply — [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) touches zero files under `supabase/` or `db/` — and §3 refuses it anyway, unconditionally. Recording this matters because it changes what approving [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) buys: it is not only its own merge, it releases every migration lane.
+
+      ### 3. CI-workflow work is structurally confined to two lane types
+
+      Measured across `.lane/lanes/*.yml`: only `migration` (five named workflow files) and `runtime` (the whole glob) admit any `.github/workflows/**` path. Every other lane type admits none. Since `migration` is blocked per item 2 above, **Wave 1 step 3's Smart Form e2e enablement — which the plan calls "executable and not reserved" — is not currently openable either.** That is a correction to a specific availability claim, not a new blocker.
+
+      ### 4. Five merged lanes are absent from the plan, and two of them change its recommendations
+
+      `main` has advanced to `3cab0a2c5`. The plan records [UTV2-1864](https://linear.app/unit-talk-v2/issue/UTV2-1864/smart-form-acceptance-matrix-prove-persistence-for-every-supported), [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) and [UTV2-1870](https://linear.app/unit-talk-v2/issue/UTV2-1870/write-the-results-backfill-authorization-packet-the-blast-radius-is), but not these:
+
+      * [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its) **(**[griff843/Unit-Talk-v2#1542](https://linear.app/unit-talk-v2/review/utv2-1863-reclaim-a-lease-when-its-lane-has-ended-not-only-when-the-3362340fb897)**)** — *"reclaim a lease when its lane has ended, not only when the clock says so."* The plan still names the lease-reclaim terminality gate as **"the strongest available candidate when the governance slot is next spent"**, at five recorded occurrences. It has landed. That recommendation is stale.
+      * [UTV2-1868](https://linear.app/unit-talk-v2/issue/UTV2-1868/game-line-results-discard-the-side-so-no-moneyline-or-spread-can-ever) **(**[griff843/Unit-Talk-v2#1546](https://linear.app/unit-talk-v2/review/utv2-1868-stop-discarding-one-teams-score-on-every-game-line-result-d78cac861212)**)** — *"stop discarding one team's score on every game-line result."* This bears directly on plan item 2 and changes its sequencing (below).
+      * [UTV2-1708](https://linear.app/unit-talk-v2/issue/UTV2-1708/manifest-registry-reads-must-tolerate-readdirreadfile-races-without) **(**[griff843/Unit-Talk-v2#1547](https://linear.app/unit-talk-v2/review/utv2-1708-stop-a-vanished-manifest-from-failing-every-unrelated-lane-f592bf7ecc91)**)**, [UTV2-1867](https://linear.app/unit-talk-v2/issue/UTV2-1867/register-docs03-product-in-the-delivery-ui-lane-so-a-product-surface) **(**[griff843/Unit-Talk-v2#1545](https://linear.app/unit-talk-v2/review/utv2-1867-admit-docs03-product-to-the-delivery-ui-lane-8218c2258f18)**)**, [UTV2-1862](https://linear.app/unit-talk-v2/issue/UTV2-1862/reconcile-the-mission-plan-milestone-2s-results-supply-question-is) **(**[griff843/Unit-Talk-v2#1541](https://linear.app/unit-talk-v2/review/utv2-1862-milestone-2s-results-supply-question-is-answered-and-an-179f402c8017)**)** — the last is present as prose in "Layer 3 is answered" but not by issue number.
+
+      ### 5. The results backfill is now a **prerequisite** for layer 2, not parallel to it
+
+      [UTV2-1868](https://linear.app/unit-talk-v2/issue/UTV2-1868/game-line-results-discard-the-side-so-no-moneyline-or-spread-can-ever) fixes side attribution on **future writes only**. Measured read-only against production 2026-09-09, every game-line result row already stored carries no side at all:
+
+      | market_key | rows | with a side |
+      | -- | -- | -- |
+      | `points-all-game-ml` | 280 | **0** |
+      | `points-all-game-sp` | 280 | **0** |
+      | `points-all-reg-ml3way` | 280 | **0** |
+      | `points-all-1h-sp` | 258 | **0** |
+      | `points-all-1h-ml` | 257 | **0** |
+
+      So layer 2 — making moneyline and spread gradeable — **cannot be verified against any row that exists today**, because none of them says which team the score belongs to. It needs newly-written results, which is what the authorization packet asks for. The plan currently presents these as independent.
+
+      ### 6. [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) is `BEHIND` by 18 commits, so the "binds a mergeable head" claim is stale
+
+      The plan says [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) is green at `d180096cc` with its `EXECUTOR_RESULT` bound to that head, *"so a verdict binds a mergeable head rather than one that would need a resync afterwards."* Measured: `main` is **18 commits** ahead of that head — 16 of them real lanes, not only readiness-bot noise — and `gh pr view` reports `mergeStateStatus: BEHIND`. With `strict: true` it must be resynced before it can merge, which will move the head and invalidate the artifacts pinned to it.
+
+      This does not change the verdict being asked for; it changes the **order**. Per the plan's own recorded lesson, the resync belongs immediately before the human artifact is requested, not after it.
+
+      ## Out of scope
+
+      No code. No new document. No containment change. No resync of another lane's PR. One file: `docs/mission/plan.md`.
+  guardrails: []
+  non_goals:
+    - "No code. No new document. No containment change. No resync of another
+      lane's PR. One file: `docs/mission/plan.md`."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Scope corrected before starting — the packet already exists
+      The first version of this issue asked for two deliverables. **The first is void and is not being written.** `docs/05_operations/RESULTS_BACKFILL_AUTHORIZATION_PACKET.md` (260 lines) is already on `main`, written by [UTV2-1870](https://linear.app/unit-talk-v2/issue/UTV2-1870/write-the-results-backfill-authorization-packet-the-blast-radius-is), and it is more complete than the draft prepared here — it carries a rollback-position section the draft lacked. The plan already records this at its "Executable now" item 4, which is struck through as *"done, twice over."*
+
+      This is the recorded "re-derives diagnoses it has already written down" cost, caught before it merged rather than after. The draft has been discarded. **Scope is now** `docs/mission/plan.md` **alone.**
+    - |-
+      What is actually missing from the plan
+      Three facts, none of which appear anywhere in `docs/mission/plan.md` (verified by grep, not by recollection):
+
+      ### 1. [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s blast radius is four items, not one
+
+      The plan says [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) *"is the only item here that **blocks** Milestone 2's first executable step"*, naming item 1. Measured against [UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)'s `file_scope_lock` at [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s head ref, which holds `apps/api/src/grading-service.ts` at status `in_review`:
+
+      | Plan item | Edits `grading-service.ts`? |
+      | -- | -- |
+      | 1 — admit Track Only picks to the grading population | yes (`:96-100`) |
+      | 2 — make moneyline and spread gradeable | yes (`:118`, `:389`) |
+      | 5 — repair the grading pass's N+1 | yes (`:105`) |
+      | 6 — persist the skip histogram | yes (`:368`) |
+
+      So **four of the seven "Executable now" items are not executable**, and the plan currently presents three of them as available. This is the plan's own recorded error class, in the same section that warns about it: enumerate from the gate's predicate, not from the work that happened to hit it.
+
+      ### 2. [UTV2-1871](https://linear.app/unit-talk-v2/issue/UTV2-1871/repair-the-awaiting-approval-drift-monitors-classification-12634) is blocked by [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d), and not by the PR that looks like the blocker
+
+      `ops:lane-start UTV2-1871 --lane-type migration` refuses with `concurrency_limit_exceeded` — `forbidden_combination: migration + data-canonical (UTV2-1773)`. Exactly one violation fired:
+
+      * [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) **(**[griff843/Unit-Talk-v2#1451](https://linear.app/unit-talk-v2/review/utv2-1736-continuous-provider-offer-history-partition-coverage-read-3bf4def49ac1)) is a `migration` lane and did **not** block it — `parked` is outside the active set, so a parked lane does not hold its singleton type.
+      * [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) **(**[griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d)) is `data-canonical` at `in_review` and does.
+
+      The rule's stated reason (*"Data/Canonical that touches schema must be its own Migration lane anyway"*) does not apply — [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) touches zero files under `supabase/` or `db/` — and §3 refuses it anyway, unconditionally. Recording this matters because it changes what approving [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) buys: it is not only its own merge, it releases every migration lane.
+
+      ### 3. CI-workflow work is structurally confined to two lane types
+
+      Measured across `.lane/lanes/*.yml`: only `migration` (five named workflow files) and `runtime` (the whole glob) admit any `.github/workflows/**` path. Every other lane type admits none. Since `migration` is blocked per item 2 above, **Wave 1 step 3's Smart Form e2e enablement — which the plan calls "executable and not reserved" — is not currently openable either.** That is a correction to a specific availability claim, not a new blocker.
+
+      ### 4. Five merged lanes are absent from the plan, and two of them change its recommendations
+
+      `main` has advanced to `3cab0a2c5`. The plan records [UTV2-1864](https://linear.app/unit-talk-v2/issue/UTV2-1864/smart-form-acceptance-matrix-prove-persistence-for-every-supported), [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) and [UTV2-1870](https://linear.app/unit-talk-v2/issue/UTV2-1870/write-the-results-backfill-authorization-packet-the-blast-radius-is), but not these:
+
+      * [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its) **(**[griff843/Unit-Talk-v2#1542](https://linear.app/unit-talk-v2/review/utv2-1863-reclaim-a-lease-when-its-lane-has-ended-not-only-when-the-3362340fb897)**)** — *"reclaim a lease when its lane has ended, not only when the clock says so."* The plan still names the lease-reclaim terminality gate as **"the strongest available candidate when the governance slot is next spent"**, at five recorded occurrences. It has landed. That recommendation is stale.
+      * [UTV2-1868](https://linear.app/unit-talk-v2/issue/UTV2-1868/game-line-results-discard-the-side-so-no-moneyline-or-spread-can-ever) **(**[griff843/Unit-Talk-v2#1546](https://linear.app/unit-talk-v2/review/utv2-1868-stop-discarding-one-teams-score-on-every-game-line-result-d78cac861212)**)** — *"stop discarding one team's score on every game-line result."* This bears directly on plan item 2 and changes its sequencing (below).
+      * [UTV2-1708](https://linear.app/unit-talk-v2/issue/UTV2-1708/manifest-registry-reads-must-tolerate-readdirreadfile-races-without) **(**[griff843/Unit-Talk-v2#1547](https://linear.app/unit-talk-v2/review/utv2-1708-stop-a-vanished-manifest-from-failing-every-unrelated-lane-f592bf7ecc91)**)**, [UTV2-1867](https://linear.app/unit-talk-v2/issue/UTV2-1867/register-docs03-product-in-the-delivery-ui-lane-so-a-product-surface) **(**[griff843/Unit-Talk-v2#1545](https://linear.app/unit-talk-v2/review/utv2-1867-admit-docs03-product-to-the-delivery-ui-lane-8218c2258f18)**)**, [UTV2-1862](https://linear.app/unit-talk-v2/issue/UTV2-1862/reconcile-the-mission-plan-milestone-2s-results-supply-question-is) **(**[griff843/Unit-Talk-v2#1541](https://linear.app/unit-talk-v2/review/utv2-1862-milestone-2s-results-supply-question-is-answered-and-an-179f402c8017)**)** — the last is present as prose in "Layer 3 is answered" but not by issue number.
+
+      ### 5. The results backfill is now a **prerequisite** for layer 2, not parallel to it
+
+      [UTV2-1868](https://linear.app/unit-talk-v2/issue/UTV2-1868/game-line-results-discard-the-side-so-no-moneyline-or-spread-can-ever) fixes side attribution on **future writes only**. Measured read-only against production 2026-09-09, every game-line result row already stored carries no side at all:
+
+      | market_key | rows | with a side |
+      | -- | -- | -- |
+      | `points-all-game-ml` | 280 | **0** |
+      | `points-all-game-sp` | 280 | **0** |
+      | `points-all-reg-ml3way` | 280 | **0** |
+      | `points-all-1h-sp` | 258 | **0** |
+      | `points-all-1h-ml` | 257 | **0** |
+
+      So layer 2 — making moneyline and spread gradeable — **cannot be verified against any row that exists today**, because none of them says which team the score belongs to. It needs newly-written results, which is what the authorization packet asks for. The plan currently presents these as independent.
+
+      ### 6. [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) is `BEHIND` by 18 commits, so the "binds a mergeable head" claim is stale
+
+      The plan says [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) is green at `d180096cc` with its `EXECUTOR_RESULT` bound to that head, *"so a verdict binds a mergeable head rather than one that would need a resync afterwards."* Measured: `main` is **18 commits** ahead of that head — 16 of them real lanes, not only readiness-bot noise — and `gh pr view` reports `mergeStateStatus: BEHIND`. With `strict: true` it must be resynced before it can merge, which will move the head and invalidate the artifacts pinned to it.
+
+      This does not change the verdict being asked for; it changes the **order**. Per the plan's own recorded lesson, the resync belongs immediately before the human artifact is requested, not after it.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1872/reconcile-the-mission-plan-1479-blocks-four-grading-items-utv2-1871-is
+    title: "Reconcile the mission plan: #1479 blocks four grading items, UTV2-1871
+      is blocked by #1484, and CI-workflow work is confined to two lane types"
+    description: |-
+      ## Scope corrected before starting — the packet already exists
+
+      The first version of this issue asked for two deliverables. **The first is void and is not being written.** `docs/05_operations/RESULTS_BACKFILL_AUTHORIZATION_PACKET.md` (260 lines) is already on `main`, written by [UTV2-1870](https://linear.app/unit-talk-v2/issue/UTV2-1870/write-the-results-backfill-authorization-packet-the-blast-radius-is), and it is more complete than the draft prepared here — it carries a rollback-position section the draft lacked. The plan already records this at its "Executable now" item 4, which is struck through as *"done, twice over."*
+
+      This is the recorded "re-derives diagnoses it has already written down" cost, caught before it merged rather than after. The draft has been discarded. **Scope is now** `docs/mission/plan.md` **alone.**
+
+      ## What is actually missing from the plan
+
+      Three facts, none of which appear anywhere in `docs/mission/plan.md` (verified by grep, not by recollection):
+
+      ### 1. [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s blast radius is four items, not one
+
+      The plan says [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) *"is the only item here that **blocks** Milestone 2's first executable step"*, naming item 1. Measured against [UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)'s `file_scope_lock` at [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)'s head ref, which holds `apps/api/src/grading-service.ts` at status `in_review`:
+
+      | Plan item | Edits `grading-service.ts`? |
+      | -- | -- |
+      | 1 — admit Track Only picks to the grading population | yes (`:96-100`) |
+      | 2 — make moneyline and spread gradeable | yes (`:118`, `:389`) |
+      | 5 — repair the grading pass's N+1 | yes (`:105`) |
+      | 6 — persist the skip histogram | yes (`:368`) |
+
+      So **four of the seven "Executable now" items are not executable**, and the plan currently presents three of them as available. This is the plan's own recorded error class, in the same section that warns about it: enumerate from the gate's predicate, not from the work that happened to hit it.
+
+      ### 2. [UTV2-1871](https://linear.app/unit-talk-v2/issue/UTV2-1871/repair-the-awaiting-approval-drift-monitors-classification-12634) is blocked by [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d), and not by the PR that looks like the blocker
+
+      `ops:lane-start UTV2-1871 --lane-type migration` refuses with `concurrency_limit_exceeded` — `forbidden_combination: migration + data-canonical (UTV2-1773)`. Exactly one violation fired:
+
+      * [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) **(**[griff843/Unit-Talk-v2#1451](https://linear.app/unit-talk-v2/review/utv2-1736-continuous-provider-offer-history-partition-coverage-read-3bf4def49ac1)) is a `migration` lane and did **not** block it — `parked` is outside the active set, so a parked lane does not hold its singleton type.
+      * [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) **(**[griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d)) is `data-canonical` at `in_review` and does.
+
+      The rule's stated reason (*"Data/Canonical that touches schema must be its own Migration lane anyway"*) does not apply — [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) touches zero files under `supabase/` or `db/` — and §3 refuses it anyway, unconditionally. Recording this matters because it changes what approving [griff843/Unit-Talk-v2#1484](https://linear.app/unit-talk-v2/review/featops-utv2-1773-harden-canonical-reference-bootstrap-3b2315859a6d) buys: it is not only its own merge, it releases every migration lane.
+
+      ### 3. CI-workflow work is structurally confined to two lane types
+
+      Measured across `.lane/lanes/*.yml`: only `migration` (five named workflow files) and `runtime` (the whole glob) admit any `.github/workflows/**` path. Every other lane type admits none. Since `migration` is blocked per item 2 above, **Wave 1 step 3's Smart Form e2e enablement — which the plan calls "executable and not reserved" — is not currently openable either.** That is a correction to a specific availability claim, not a new blocker.
+
+      ### 4. Five merged lanes are absent from the plan, and two of them change its recommendations
+
+      `main` has advanced to `3cab0a2c5`. The plan records [UTV2-1864](https://linear.app/unit-talk-v2/issue/UTV2-1864/smart-form-acceptance-matrix-prove-persistence-for-every-supported), [UTV2-1866](https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results) and [UTV2-1870](https://linear.app/unit-talk-v2/issue/UTV2-1870/write-the-results-backfill-authorization-packet-the-blast-radius-is), but not these:
+
+      * [UTV2-1863](https://linear.app/unit-talk-v2/issue/UTV2-1863/lease-reclaim-is-ttl-gated-so-every-merged-lanes-lease-strands-its) **(**[griff843/Unit-Talk-v2#1542](https://linear.app/unit-talk-v2/review/utv2-1863-reclaim-a-lease-when-its-lane-has-ended-not-only-when-the-3362340fb897)**)** — *"reclaim a lease when its lane has ended, not only when the clock says so."* The plan still names the lease-reclaim terminality gate as **"the strongest available candidate when the governance slot is next spent"**, at five recorded occurrences. It has landed. That recommendation is stale.
+      * [UTV2-1868](https://linear.app/unit-talk-v2/issue/UTV2-1868/game-line-results-discard-the-side-so-no-moneyline-or-spread-can-ever) **(**[griff843/Unit-Talk-v2#1546](https://linear.app/unit-talk-v2/review/utv2-1868-stop-discarding-one-teams-score-on-every-game-line-result-d78cac861212)**)** — *"stop discarding one team's score on every game-line result."* This bears directly on plan item 2 and changes its sequencing (below).
+      * [UTV2-1708](https://linear.app/unit-talk-v2/issue/UTV2-1708/manifest-registry-reads-must-tolerate-readdirreadfile-races-without) **(**[griff843/Unit-Talk-v2#1547](https://linear.app/unit-talk-v2/review/utv2-1708-stop-a-vanished-manifest-from-failing-every-unrelated-lane-f592bf7ecc91)**)**, [UTV2-1867](https://linear.app/unit-talk-v2/issue/UTV2-1867/register-docs03-product-in-the-delivery-ui-lane-so-a-product-surface) **(**[griff843/Unit-Talk-v2#1545](https://linear.app/unit-talk-v2/review/utv2-1867-admit-docs03-product-to-the-delivery-ui-lane-8218c2258f18)**)**, [UTV2-1862](https://linear.app/unit-talk-v2/issue/UTV2-1862/reconcile-the-mission-plan-milestone-2s-results-supply-question-is) **(**[griff843/Unit-Talk-v2#1541](https://linear.app/unit-talk-v2/review/utv2-1862-milestone-2s-results-supply-question-is-answered-and-an-179f402c8017)**)** — the last is present as prose in "Layer 3 is answered" but not by issue number.
+
+      ### 5. The results backfill is now a **prerequisite** for layer 2, not parallel to it
+
+      [UTV2-1868](https://linear.app/unit-talk-v2/issue/UTV2-1868/game-line-results-discard-the-side-so-no-moneyline-or-spread-can-ever) fixes side attribution on **future writes only**. Measured read-only against production 2026-09-09, every game-line result row already stored carries no side at all:
+
+      | market_key | rows | with a side |
+      | -- | -- | -- |
+      | `points-all-game-ml` | 280 | **0** |
+      | `points-all-game-sp` | 280 | **0** |
+      | `points-all-reg-ml3way` | 280 | **0** |
+      | `points-all-1h-sp` | 258 | **0** |
+      | `points-all-1h-ml` | 257 | **0** |
+
+      So layer 2 — making moneyline and spread gradeable — **cannot be verified against any row that exists today**, because none of them says which team the score belongs to. It needs newly-written results, which is what the authorization packet asks for. The plan currently presents these as independent.
+
+      ### 6. [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) is `BEHIND` by 18 commits, so the "binds a mergeable head" claim is stale
+
+      The plan says [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051) is green at `d180096cc` with its `EXECUTOR_RESULT` bound to that head, *"so a verdict binds a mergeable head rather than one that would need a resync afterwards."* Measured: `main` is **18 commits** ahead of that head — 16 of them real lanes, not only readiness-bot noise — and `gh pr view` reports `mergeStateStatus: BEHIND`. With `strict: true` it must be resynced before it can merge, which will move the head and invalidate the artifacts pinned to it.
+
+      This does not change the verdict being asked for; it changes the **order**. Per the plan's own recorded lesson, the resync belongs immediately before the human artifact is requested, not after it.
+
+      ## Out of scope
+
+      No code. No new document. No containment change. No resync of another lane's PR. One file: `docs/mission/plan.md`.
+    captured_at: 2026-09-09T16:09:05.781Z
+    description_sha256: 402e20bc5374adc52abeb214d79f3f68424accc5ea1e3e88c08d5762f6bfc151
+  contract_hash: aa5c67635980b97fbeceba651f6ddf07f476928f74558ad6ad1de0ba34f61ba2

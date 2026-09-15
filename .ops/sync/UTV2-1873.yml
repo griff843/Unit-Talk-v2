@@ -1,0 +1,236 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1873
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1873
+  objective: pre-proof-validator allocates a temp file before classifying the
+    command, so a full /tmp denies every Bash call including its own recovery
+  acceptance_criteria:
+    - |-
+      ## The defect
+
+      `.claude/hooks/pre-proof-validator.sh` is a `PreToolUse` hook wired to **every** Bash tool call (`.claude/settings.json`). Measured on `main` `3cab0a2c5`:
+
+      ```bash
+      [ -z "$command" ] && exit 0
+
+      detection_file=$(mktemp) || {
+        echo "PROOF VALIDATOR: commit blocked — cannot allocate detection workspace" >&2
+        exit 2
+      }
+      ```
+
+      `mktemp` runs at line 21, on **every** Bash invocation with a non-empty command, **before** anything has looked at whether the command is a git commit. Exit 2 in `PreToolUse` denies the call.
+
+      So when `/tmp` fills, the hook denies every Bash call in the session — including the `rm` that would clear `/tmp`. A fail-closed control has taken out its own recovery path. This was observed live and cost an entire session segment; it is recorded in `docs/mission/plan.md` § Learned as a repair candidate, and has never been staffed.
+
+      The hook's actual validation only ever runs on staged `docs/06_status/proof/*` paths, so the blast radius of the allocation is enormously wider than the thing it protects.
+
+      ## Why this is the aggregate-conflation class
+
+      An infrastructure failure (ENOSPC) and a policy refusal (bad proof bundle) are reported through the same channel with the same exit code and an indistinguishable message. Same class as [UTV2-1730](https://linear.app/unit-talk-v2/issue/UTV2-1730/terminal-manifest-lanes-whose-linear-transition-never-fired-have-no) / [UTV2-1724](https://linear.app/unit-talk-v2/issue/UTV2-1724/auto-close-intent-grammar-misses-sanctioned-closeout-commits-stranding).
+
+      ## The repair
+
+      **Classify before allocating.** Every path that reaches a non-`no` verdict — the argv tokenizer and the documented fail-closed substring fallback at `:231` alike — requires the literal token `git` to appear in the command. So a pre-filter placed *before* `mktemp` is a provable superset of both detection paths:
+
+      ```bash
+      case "$command" in
+        *git*) ;;
+        *) exit 0 ;;
+      esac
+      ```
+
+      This must be a `case`, not a `grep`, so the filter itself needs no subprocess and no allocation.
+
+      **The second** `mktemp` **at** `:254` **(**`selection_file`**) is correctly placed and must not be touched** — it sits after `[ "$verdict" = yes ] || exit 0`, so it fires only on a real commit, where fail-closed is the right behaviour.
+
+      ## Acceptance
+
+      1. A Bash command containing no `git` token exits 0 without calling `mktemp`.
+      2. A `git commit` command still reaches full validation and still blocks a malformed proof bundle — every existing assertion in `scripts/ops/proof-check.test.ts` stays green.
+      3. The indirect forms the fallback exists for (`bash -c "git commit ..."`, `sh -c`, `eval`) still classify as commits — they contain `git`.
+      4. **Mutation test:** deleting the pre-filter must not change any verdict (it is a pure superset); *narrowing* it — e.g. to `git commit` — must turn an existing indirect-form assertion red.
+      5. A test drives the hook with `TMPDIR` pointed at an unwritable directory and asserts a non-`git` command still exits 0, while a `git commit` command still exits 2 with the allocation message. This is the assertion that actually locks the defect.
+
+      ## Scope
+
+      `.claude/hooks/pre-proof-validator.sh` and `scripts/ops/proof-check.test.ts` — an already-wired test file, so no `package.json` edit and no `WIRING_TEST_UNWIRED_NEW` trap. Both paths are admitted by the `governance` lane type (`.lane/lanes/governance.yml:8`, `scripts/**`). No Tier C match → T3.
+
+      ## Out of scope
+
+      No change to what the validator validates. No change to `.claude/settings.json` wiring. No change to the `selection_file` allocation.
+  guardrails: []
+  non_goals:
+    - No change to what the validator validates. No change to
+      `.claude/settings.json` wiring. No change to the `selection_file`
+      allocation.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      The defect
+
+      `.claude/hooks/pre-proof-validator.sh` is a `PreToolUse` hook wired to
+      **every** Bash tool call (`.claude/settings.json`). Measured on `main`
+      `3cab0a2c5`:
+
+
+      ```bash
+
+      [ -z "$command" ] && exit 0
+
+
+      detection_file=$(mktemp) || {
+        echo "PROOF VALIDATOR: commit blocked — cannot allocate detection workspace" >&2
+        exit 2
+      }
+
+      ```
+
+
+      `mktemp` runs at line 21, on **every** Bash invocation with a non-empty
+      command, **before** anything has looked at whether the command is a git
+      commit. Exit 2 in `PreToolUse` denies the call.
+
+
+      So when `/tmp` fills, the hook denies every Bash call in the session —
+      including the `rm` that would clear `/tmp`. A fail-closed control has
+      taken out its own recovery path. This was observed live and cost an entire
+      session segment; it is recorded in `docs/mission/plan.md` § Learned as a
+      repair candidate, and has never been staffed.
+
+
+      The hook's actual validation only ever runs on staged
+      `docs/06_status/proof/*` paths, so the blast radius of the allocation is
+      enormously wider than the thing it protects.
+    - |-
+      Why this is the aggregate-conflation class
+      An infrastructure failure (ENOSPC) and a policy refusal (bad proof bundle) are reported through the same channel with the same exit code and an indistinguishable message. Same class as [UTV2-1730](https://linear.app/unit-talk-v2/issue/UTV2-1730/terminal-manifest-lanes-whose-linear-transition-never-fired-have-no) / [UTV2-1724](https://linear.app/unit-talk-v2/issue/UTV2-1724/auto-close-intent-grammar-misses-sanctioned-closeout-commits-stranding).
+    - >-
+      The repair
+
+      **Classify before allocating.** Every path that reaches a non-`no` verdict
+      — the argv tokenizer and the documented fail-closed substring fallback at
+      `:231` alike — requires the literal token `git` to appear in the command.
+      So a pre-filter placed *before* `mktemp` is a provable superset of both
+      detection paths:
+
+
+      ```bash
+
+      case "$command" in
+        *git*) ;;
+        *) exit 0 ;;
+      esac
+
+      ```
+
+
+      This must be a `case`, not a `grep`, so the filter itself needs no
+      subprocess and no allocation.
+
+
+      **The second** `mktemp` **at** `:254` **(**`selection_file`**) is
+      correctly placed and must not be touched** — it sits after `[ "$verdict" =
+      yes ] || exit 0`, so it fires only on a real commit, where fail-closed is
+      the right behaviour.
+    - >-
+      Acceptance
+
+      1. A Bash command containing no `git` token exits 0 without calling
+      `mktemp`.
+
+      2. A `git commit` command still reaches full validation and still blocks a
+      malformed proof bundle — every existing assertion in
+      `scripts/ops/proof-check.test.ts` stays green.
+
+      3. The indirect forms the fallback exists for (`bash -c "git commit ..."`,
+      `sh -c`, `eval`) still classify as commits — they contain `git`.
+
+      4. **Mutation test:** deleting the pre-filter must not change any verdict
+      (it is a pure superset); *narrowing* it — e.g. to `git commit` — must turn
+      an existing indirect-form assertion red.
+
+      5. A test drives the hook with `TMPDIR` pointed at an unwritable directory
+      and asserts a non-`git` command still exits 0, while a `git commit`
+      command still exits 2 with the allocation message. This is the assertion
+      that actually locks the defect.
+    - >-
+      Scope
+
+      `.claude/hooks/pre-proof-validator.sh` and
+      `scripts/ops/proof-check.test.ts` — an already-wired test file, so no
+      `package.json` edit and no `WIRING_TEST_UNWIRED_NEW` trap. Both paths are
+      admitted by the `governance` lane type (`.lane/lanes/governance.yml:8`,
+      `scripts/**`). No Tier C match → T3.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1873/pre-proof-validator-allocates-a-temp-file-before-classifying-the
+    title: pre-proof-validator allocates a temp file before classifying the command,
+      so a full /tmp denies every Bash call including its own recovery
+    description: |-
+      ## The defect
+
+      `.claude/hooks/pre-proof-validator.sh` is a `PreToolUse` hook wired to **every** Bash tool call (`.claude/settings.json`). Measured on `main` `3cab0a2c5`:
+
+      ```bash
+      [ -z "$command" ] && exit 0
+
+      detection_file=$(mktemp) || {
+        echo "PROOF VALIDATOR: commit blocked — cannot allocate detection workspace" >&2
+        exit 2
+      }
+      ```
+
+      `mktemp` runs at line 21, on **every** Bash invocation with a non-empty command, **before** anything has looked at whether the command is a git commit. Exit 2 in `PreToolUse` denies the call.
+
+      So when `/tmp` fills, the hook denies every Bash call in the session — including the `rm` that would clear `/tmp`. A fail-closed control has taken out its own recovery path. This was observed live and cost an entire session segment; it is recorded in `docs/mission/plan.md` § Learned as a repair candidate, and has never been staffed.
+
+      The hook's actual validation only ever runs on staged `docs/06_status/proof/*` paths, so the blast radius of the allocation is enormously wider than the thing it protects.
+
+      ## Why this is the aggregate-conflation class
+
+      An infrastructure failure (ENOSPC) and a policy refusal (bad proof bundle) are reported through the same channel with the same exit code and an indistinguishable message. Same class as [UTV2-1730](https://linear.app/unit-talk-v2/issue/UTV2-1730/terminal-manifest-lanes-whose-linear-transition-never-fired-have-no) / [UTV2-1724](https://linear.app/unit-talk-v2/issue/UTV2-1724/auto-close-intent-grammar-misses-sanctioned-closeout-commits-stranding).
+
+      ## The repair
+
+      **Classify before allocating.** Every path that reaches a non-`no` verdict — the argv tokenizer and the documented fail-closed substring fallback at `:231` alike — requires the literal token `git` to appear in the command. So a pre-filter placed *before* `mktemp` is a provable superset of both detection paths:
+
+      ```bash
+      case "$command" in
+        *git*) ;;
+        *) exit 0 ;;
+      esac
+      ```
+
+      This must be a `case`, not a `grep`, so the filter itself needs no subprocess and no allocation.
+
+      **The second** `mktemp` **at** `:254` **(**`selection_file`**) is correctly placed and must not be touched** — it sits after `[ "$verdict" = yes ] || exit 0`, so it fires only on a real commit, where fail-closed is the right behaviour.
+
+      ## Acceptance
+
+      1. A Bash command containing no `git` token exits 0 without calling `mktemp`.
+      2. A `git commit` command still reaches full validation and still blocks a malformed proof bundle — every existing assertion in `scripts/ops/proof-check.test.ts` stays green.
+      3. The indirect forms the fallback exists for (`bash -c "git commit ..."`, `sh -c`, `eval`) still classify as commits — they contain `git`.
+      4. **Mutation test:** deleting the pre-filter must not change any verdict (it is a pure superset); *narrowing* it — e.g. to `git commit` — must turn an existing indirect-form assertion red.
+      5. A test drives the hook with `TMPDIR` pointed at an unwritable directory and asserts a non-`git` command still exits 0, while a `git commit` command still exits 2 with the allocation message. This is the assertion that actually locks the defect.
+
+      ## Scope
+
+      `.claude/hooks/pre-proof-validator.sh` and `scripts/ops/proof-check.test.ts` — an already-wired test file, so no `package.json` edit and no `WIRING_TEST_UNWIRED_NEW` trap. Both paths are admitted by the `governance` lane type (`.lane/lanes/governance.yml:8`, `scripts/**`). No Tier C match → T3.
+
+      ## Out of scope
+
+      No change to what the validator validates. No change to `.claude/settings.json` wiring. No change to the `selection_file` allocation.
+    captured_at: 2026-09-09T16:19:26.770Z
+    description_sha256: d92430b02a766f44d9783b80955d2cddca8696b64d2d7104f728ae6c7bf333ce
+  contract_hash: 9d55bfc844d6afd43ebca747d4e8caa825ccab64ffeb65d26b005fe98b96af5e

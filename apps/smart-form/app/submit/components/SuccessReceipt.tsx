@@ -17,7 +17,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between text-sm gap-4">
       <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="text-foreground font-medium text-right">{value}</span>
+      <span className="text-foreground font-medium text-right break-all">{value}</span>
     </div>
   );
 }
@@ -30,13 +30,13 @@ export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: Suc
   const unitsDisplay = `${v.units}u`;
 
   return (
-    <div className="rounded-xl border border-border bg-gradient-to-br from-slate-900 to-slate-800 p-8 max-w-sm w-full mx-auto space-y-6">
+    <div className="bet-slip-panel rounded-2xl p-6 sm:p-8 max-w-md w-full mx-auto space-y-6">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
-          <h2 className="text-lg font-semibold text-foreground">Pick Submitted</h2>
+          <h2 className="text-lg font-semibold text-foreground">Pick Saved</h2>
         </div>
-        <p className="text-sm text-muted-foreground pl-4">Your pick is in the queue.</p>
+        <p className="text-sm text-muted-foreground pl-4">{v.trackOnly ? 'Saved to your internal record. Track Only — no member delivery.' : 'Your pick is saved. Delivery remains subject to approval and routing checks.'}</p>
       </div>
 
       <Separator className="bg-border/50" />

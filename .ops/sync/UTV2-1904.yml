@@ -1,0 +1,212 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1904
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1904
+  objective: "B1: operator manual settlement of Track Only picks via the
+    evidence-plane model"
+  acceptance_criteria:
+    - >-
+      `recordPickSettlement` (`apps/api/src/settlement-service.ts:62-115`)
+      dispatches only on `posted` or `settled` and otherwise raises `409
+      SETTLEMENT_NOT_ALLOWED`. All four production Track Only picks are
+      `validated`, so the settle endpoint returns 409 on every real pick.
+      Measured, not inferred.
+
+
+      `recordEvidenceSettlement` (`:333-363`) is the correct model — no
+      lifecycle transition, no Discord recap (`grading-service.ts:445-450`
+      suppresses it because "publishing a recap would be member delivery") — but
+      is reachable only from the automatic grading pass and demands
+      `gradingContext {actualValue, marketKey, eventId, gameResultId}`, which a
+      manual settlement does not have (production Track Only picks carry
+      `eventId: null` and no `game_results` row).
+
+
+      ## Design
+
+
+      Add an operator-attested sibling that reuses the evidence-plane model
+      rather than widening the automatic path's types. It must:
+
+
+      * accept only `isEvidencePlanePick` picks (`awaiting_approval`, or
+      `validated` + Track Only metadata)
+
+      * require a structured operator grading context and fail closed without it
+      — no defaulting, no inference
+
+      * record honest provenance (operator attestation, not `sgo`, not
+      `grading`)
+
+      * perform no lifecycle transition and emit no recap
+
+      * keep `source: 'feed'` refused by `AUTOMATED_SETTLEMENT_NOT_ALLOWED`
+      (`settlement-service.ts:62`)
+
+
+      ## Scope
+
+
+      `apps/api/src/settlement-service.ts`,
+      `apps/api/src/handlers/settle-pick.ts`,
+      `packages/contracts/src/settlement.ts`, plus tests. Lane type `modeling` —
+      it is the only type admitting both `apps/api/src/**` and
+      `packages/contracts/src/settlement.ts`.
+
+
+      ## Acceptance
+
+
+      Staging database effects proven, not asserted from return values: exactly
+      1 `settlement_records` row, 0 `distribution_outbox` rows, 0 new
+      `pick_lifecycle` rows. Negative paths: missing operator context refuses;
+      `source: feed` still 409s; a non-evidence-plane pick refuses.
+
+
+      ## Bounds
+
+
+      No SGO activation, no provider credential access, no production write, no
+      containment change, no member delivery.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `recordPickSettlement` (`apps/api/src/settlement-service.ts:62-115`)
+      dispatches only on `posted` or `settled` and otherwise raises `409
+      SETTLEMENT_NOT_ALLOWED`. All four production Track Only picks are
+      `validated`, so the settle endpoint returns 409 on every real pick.
+      Measured, not inferred.
+
+
+      `recordEvidenceSettlement` (`:333-363`) is the correct model — no
+      lifecycle transition, no Discord recap (`grading-service.ts:445-450`
+      suppresses it because "publishing a recap would be member delivery") — but
+      is reachable only from the automatic grading pass and demands
+      `gradingContext {actualValue, marketKey, eventId, gameResultId}`, which a
+      manual settlement does not have (production Track Only picks carry
+      `eventId: null` and no `game_results` row).
+    - >-
+      Design
+
+      Add an operator-attested sibling that reuses the evidence-plane model
+      rather than widening the automatic path's types. It must:
+
+
+      * accept only `isEvidencePlanePick` picks (`awaiting_approval`, or
+      `validated` + Track Only metadata)
+
+      * require a structured operator grading context and fail closed without it
+      — no defaulting, no inference
+
+      * record honest provenance (operator attestation, not `sgo`, not
+      `grading`)
+
+      * perform no lifecycle transition and emit no recap
+
+      * keep `source: 'feed'` refused by `AUTOMATED_SETTLEMENT_NOT_ALLOWED`
+      (`settlement-service.ts:62`)
+    - >-
+      Scope
+
+      `apps/api/src/settlement-service.ts`,
+      `apps/api/src/handlers/settle-pick.ts`,
+      `packages/contracts/src/settlement.ts`, plus tests. Lane type `modeling` —
+      it is the only type admitting both `apps/api/src/**` and
+      `packages/contracts/src/settlement.ts`.
+    - >-
+      Acceptance
+
+      Staging database effects proven, not asserted from return values: exactly
+      1 `settlement_records` row, 0 `distribution_outbox` rows, 0 new
+      `pick_lifecycle` rows. Negative paths: missing operator context refuses;
+      `source: feed` still 409s; a non-evidence-plane pick refuses.
+    - >-
+      Bounds
+
+      No SGO activation, no provider credential access, no production write, no
+      containment change, no member delivery.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1904/b1-operator-manual-settlement-of-track-only-picks-via-the-evidence
+    title: "B1: operator manual settlement of Track Only picks via the
+      evidence-plane model"
+    description: >-
+      `recordPickSettlement` (`apps/api/src/settlement-service.ts:62-115`)
+      dispatches only on `posted` or `settled` and otherwise raises `409
+      SETTLEMENT_NOT_ALLOWED`. All four production Track Only picks are
+      `validated`, so the settle endpoint returns 409 on every real pick.
+      Measured, not inferred.
+
+
+      `recordEvidenceSettlement` (`:333-363`) is the correct model — no
+      lifecycle transition, no Discord recap (`grading-service.ts:445-450`
+      suppresses it because "publishing a recap would be member delivery") — but
+      is reachable only from the automatic grading pass and demands
+      `gradingContext {actualValue, marketKey, eventId, gameResultId}`, which a
+      manual settlement does not have (production Track Only picks carry
+      `eventId: null` and no `game_results` row).
+
+
+      ## Design
+
+
+      Add an operator-attested sibling that reuses the evidence-plane model
+      rather than widening the automatic path's types. It must:
+
+
+      * accept only `isEvidencePlanePick` picks (`awaiting_approval`, or
+      `validated` + Track Only metadata)
+
+      * require a structured operator grading context and fail closed without it
+      — no defaulting, no inference
+
+      * record honest provenance (operator attestation, not `sgo`, not
+      `grading`)
+
+      * perform no lifecycle transition and emit no recap
+
+      * keep `source: 'feed'` refused by `AUTOMATED_SETTLEMENT_NOT_ALLOWED`
+      (`settlement-service.ts:62`)
+
+
+      ## Scope
+
+
+      `apps/api/src/settlement-service.ts`,
+      `apps/api/src/handlers/settle-pick.ts`,
+      `packages/contracts/src/settlement.ts`, plus tests. Lane type `modeling` —
+      it is the only type admitting both `apps/api/src/**` and
+      `packages/contracts/src/settlement.ts`.
+
+
+      ## Acceptance
+
+
+      Staging database effects proven, not asserted from return values: exactly
+      1 `settlement_records` row, 0 `distribution_outbox` rows, 0 new
+      `pick_lifecycle` rows. Negative paths: missing operator context refuses;
+      `source: feed` still 409s; a non-evidence-plane pick refuses.
+
+
+      ## Bounds
+
+
+      No SGO activation, no provider credential access, no production write, no
+      containment change, no member delivery.
+    captured_at: 2026-09-14T21:39:41.832Z
+    description_sha256: e30d59820e94fff065ea226b27ba410d431b8d5f39ece388ba62f445cb258aa6
+  contract_hash: 6947140dffb6e41cd9bab06b042e4f862b593e8dbb30d92c5af1b9f2e44e58c0

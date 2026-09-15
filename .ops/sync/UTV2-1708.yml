@@ -1,0 +1,132 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1708
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1708
+  objective: Manifest registry reads must tolerate readdir/readFile races without
+    hiding state
+  acceptance_criteria:
+    - Deterministically simulate file disappearance between enumeration and read.
+    - The supported concurrent-deletion case does not crash unrelated callers.
+    - Malformed JSON and non-ENOENT read failures remain failures.
+    - No error path returns an unmarked empty/partial manifest population.
+    - Production callers receive explicit completeness/provenance.
+    - "Mutation: removing the race handling makes the deterministic regression
+      fail."
+    - Fixture tests use an isolated temporary manifest root or another bounded
+      test seam rather than the real registry.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Observed defect
+
+      `readAllManifests` enumerates manifest filenames and then reads them
+      individually. If a test or lifecycle action removes a file between
+      `readdir` and `readFile`, the whole operation throws.
+
+
+      The race is currently exercised by CI because 10+ test files write
+      approximately 25 fixture manifest IDs into the real
+      `docs/06_status/lanes/` directory while other processes read the same
+      population.
+
+
+      Approximately 20 production callers depend on this reader, including
+      preflight, substrate guard, merge risk, reconciliation, planning, and
+      capacity paths.
+    - >-
+      Risk
+
+      A transient filesystem race can:
+
+
+      * fail unrelated CI;
+
+      * interrupt planning/capacity reads;
+
+      * produce manual rerun pressure;
+
+      * make an otherwise truthful reader operationally unreliable.
+
+
+      The fix must not convert a read failure into an empty or partial board
+      presented as complete.
+    - >-
+      Required behavior
+
+      * Take a stable snapshot or handle per-entry disappearance explicitly.
+
+      * `ENOENT` caused by a file disappearing after enumeration may be retried
+      or classified as a concurrent deletion.
+
+      * Malformed, permission-denied, and other read errors must remain visible
+      and fail closed.
+
+      * If returning a partial snapshot, it must be marked incomplete and
+      consumers that require authoritative population must refuse it.
+
+      * Tests must stop writing fixtures into the live manifest directory when
+      isolation is practical.
+    - |-
+      Sequencing
+      Track independently from [UTV2-1698](https://linear.app/unit-talk-v2/issue/UTV2-1698/codex-exec-reports-success-for-a-rework-that-skipped-implementation). It blocks the zero-touch test only if it remains reproducible in the chosen lane or prevents authoritative planning/capacity observation. Tier must be mechanically classified before dispatch.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1708/manifest-registry-reads-must-tolerate-readdirreadfile-races-without
+    title: Manifest registry reads must tolerate readdir/readFile races without
+      hiding state
+    description: |-
+      ## Observed defect
+
+      `readAllManifests` enumerates manifest filenames and then reads them individually. If a test or lifecycle action removes a file between `readdir` and `readFile`, the whole operation throws.
+
+      The race is currently exercised by CI because 10+ test files write approximately 25 fixture manifest IDs into the real `docs/06_status/lanes/` directory while other processes read the same population.
+
+      Approximately 20 production callers depend on this reader, including preflight, substrate guard, merge risk, reconciliation, planning, and capacity paths.
+
+      ## Risk
+
+      A transient filesystem race can:
+
+      * fail unrelated CI;
+      * interrupt planning/capacity reads;
+      * produce manual rerun pressure;
+      * make an otherwise truthful reader operationally unreliable.
+
+      The fix must not convert a read failure into an empty or partial board presented as complete.
+
+      ## Required behavior
+
+      * Take a stable snapshot or handle per-entry disappearance explicitly.
+      * `ENOENT` caused by a file disappearing after enumeration may be retried or classified as a concurrent deletion.
+      * Malformed, permission-denied, and other read errors must remain visible and fail closed.
+      * If returning a partial snapshot, it must be marked incomplete and consumers that require authoritative population must refuse it.
+      * Tests must stop writing fixtures into the live manifest directory when isolation is practical.
+
+      ## Acceptance criteria
+
+      1. Deterministically simulate file disappearance between enumeration and read.
+      2. The supported concurrent-deletion case does not crash unrelated callers.
+      3. Malformed JSON and non-ENOENT read failures remain failures.
+      4. No error path returns an unmarked empty/partial manifest population.
+      5. Production callers receive explicit completeness/provenance.
+      6. Mutation: removing the race handling makes the deterministic regression fail.
+      7. Fixture tests use an isolated temporary manifest root or another bounded test seam rather than the real registry.
+
+      ## Sequencing
+
+      Track independently from [UTV2-1698](https://linear.app/unit-talk-v2/issue/UTV2-1698/codex-exec-reports-success-for-a-rework-that-skipped-implementation). It blocks the zero-touch test only if it remains reproducible in the chosen lane or prevents authoritative planning/capacity observation. Tier must be mechanically classified before dispatch.
+    captured_at: 2026-09-09T14:03:45.485Z
+    description_sha256: 0ada793256490c78ea7d24a6c94a990fad7aad748daefd10ef06e84df3f94869
+  contract_hash: 89a698b36ea0355910d466e9a0408dcd3a681a0065acdf698c8042e03d143fa1

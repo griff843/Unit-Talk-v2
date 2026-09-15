@@ -51,6 +51,16 @@ export interface DispatchLease {
   reclaim_history?: LeaseReclaimRecord[];
 }
 
+/**
+ * Why a reclaim was admitted.
+ *
+ * `terminal_lane` is the case the clock cannot see: the lane that owned the
+ * lease already reached a terminal state, so the lease is finished however
+ * much TTL remains. Recording which rule admitted a reclaim is what makes a
+ * later audit able to tell a governed reclaim from a lapsed one.
+ */
+export type LeaseReclaimAdmission = 'terminal_lane' | 'lapsed_ttl' | 'surrendered_status';
+
 export interface LeaseReclaimRecord {
   reclaimed_at: string;
   reclaimed_by: string;
@@ -62,6 +72,9 @@ export interface LeaseReclaimRecord {
   branch: string;
   branch_status: string;
   pr_status: string;
+  /** Optional for backward compatibility: records written before the
+   *  terminality gate landed carry no admission rule. */
+  admitted_by?: LeaseReclaimAdmission;
 }
 
 export interface LeaseReservationInput {
@@ -484,7 +497,13 @@ export function heartbeatLease(
 
 export function reclaimLease(
   input: Partial<LeaseReclaimInput>,
-  options: { registryDir?: string; now?: Date } = {},
+  options: {
+    registryDir?: string;
+    now?: Date;
+    /** Injectable for tests, and defaulted from the lane manifests exactly as
+     *  `buildLeaseStaleReport` does, so both paths read one source. */
+    laneStatusByIssue?: ReadonlyMap<string, LaneManifestStatus>;
+  } = {},
 ): LeaseReserveResult {
   const registryDir = options.registryDir ?? LEASE_REGISTRY_DIR;
   const now = options.now ?? new Date();
@@ -521,11 +540,39 @@ export function reclaimLease(
     };
   }
   const expired = new Date(lease.expires_at).getTime() <= now.getTime();
-  if (lease.status === 'active' && !expired) {
+
+  // Terminality, not the clock, is the primary admission rule. A lane that
+  // reached a terminal state has provably finished with its file scope, and
+  // gating reclaim on TTL alone left such a lease blocking unrelated lanes for
+  // up to 48 hours with `ops:lease release` as the only escape -- recorded on
+  // UTV2-1830, 1835, 1838, 1840, 1849, 1855, 1858 and 1860.
+  //
+  // `findLeasesHeldByTerminalLanes` is reused rather than re-deriving the
+  // predicate here, so its refusal to treat an *unknown* lane state as
+  // terminal is inherited rather than reimplemented. A second copy is exactly
+  // how the two rules would later drift apart.
+  const laneStatusByIssue =
+    options.laneStatusByIssue ??
+    new Map(readAllManifests().map((manifest) => [manifest.issue_id.toUpperCase(), manifest.status]));
+  const heldByTerminalLane = findLeasesHeldByTerminalLanes(laneStatusByIssue, registryDir).some(
+    (finding) => finding.issue_id.toUpperCase() === issueId.toUpperCase(),
+  );
+
+  const admittedBy: LeaseReclaimAdmission | null = heldByTerminalLane
+    ? 'terminal_lane'
+    : expired
+      ? 'lapsed_ttl'
+      : lease.status !== 'active'
+        ? 'surrendered_status'
+        : null;
+
+  if (admittedBy === null) {
     return {
       ok: false,
       code: 'lease_conflict',
-      message: `Lease ${issueId} is not stale and cannot be reclaimed`,
+      message:
+        `Lease ${issueId} is not stale, its lane has not reached a terminal state, ` +
+        'and it cannot be reclaimed',
       conflicting_lease: lease,
     };
   }
@@ -546,6 +593,7 @@ export function reclaimLease(
         branch: lease.branch,
         branch_status: input.branch_status ?? 'unknown',
         pr_status: input.pr_status ?? 'unknown',
+        admitted_by: admittedBy,
       },
     ],
   };

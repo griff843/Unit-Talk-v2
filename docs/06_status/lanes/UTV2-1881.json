@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1881",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1881-staging-proof-concurrency",
+  "branch": "claude/utv2-1881-staging-proof-concurrency",
+  "base_branch": "main",
+  "commit_sha": "c84986c7073a83d82a7d2266b3d4daccb4bee902",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1559",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-09-10T18:08:51.081Z",
+  "heartbeat_at": "2026-09-10T18:49:24.323Z",
+  "closed_at": "2026-09-10T18:49:24.323Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-10T18:49:21.870Z",
+      "verdict": "pass",
+      "merge_sha": "c84986c7073a83d82a7d2266b3d4daccb4bee902",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1881-staging-proof-concurrency",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

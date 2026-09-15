@@ -48,26 +48,9 @@ When reviewing a Codex-returned diff (Phase 5 of `/dispatch`), the critique step
 
 Spawn the Opus critique subagent the same way as the planning subagent — block on result before applying tier label or requesting merge.
 
-### Haiku subagents — cheap reads and summaries
+### Optional assistance for reads and summaries
 
-Spawn `haiku` subagents for work that is purely informational, deterministic, and produces no code or artifacts. These never open PRs, never touch files, and never route to a lane executor.
-
-| Use case | When to spawn | Example |
-|---|---|---|
-| Board snapshots | `ops:brief`, `ops:digest`, pre-dispatch state reads | "Summarize active lanes and Linear queue" |
-| Log summarization | CI log triage, test output parsing, error extraction | "Extract failing tests from this pnpm test output" |
-| Bulk doc/status reads | Scanning many status files, changelog aggregation | "Read all lane manifests and list which are stale" |
-| Verification output parsing | Reading `pnpm verify` or `ops:truth-check` output | "Parse this verify output and list failures only" |
-
-```typescript
-Agent({
-  model: "haiku",
-  description: "Board snapshot / log summary",
-  prompt: "... (read-only, summarize only, no edits) ..."
-})
-```
-
-**Haiku constraints:** read-only tasks only. Never use Haiku for: routing decisions, code generation, proof review, or anything where a wrong answer has downstream consequences. If the task requires judgment, use Sonnet minimum.
+Handle small file reads, log filtering, and status summaries directly. Delegate substantial independent analysis when it saves time or separates necessary review from implementation. Give a helper only relevant context and a bounded deliverable. Use supported model profiles under current policy; do not infer quality from historical model claims.
 
 ---
 
@@ -169,7 +152,7 @@ Route to the Explore subagent when:
 - "Find every place X / scan the whole repo / map all callers of Y / architecture impact"
 - Cross-package impact analysis before a T1 refactor (run recon first, synthesize before presenting)
 - QA Agent requests coverage gap analysis before adding surface tests
-- Answering a question requires correlating more than 3 files
+- A substantial independent investigation benefits from a separate context; file count alone is not a delegation trigger
 
 Invoke silently via the Agent tool with `subagent_type: "Explore"`. Synthesize before presenting. Always demand `file:line` citations — reject flat summaries.
 
@@ -234,7 +217,7 @@ T2 merge is **not** a Rule 9 stop condition: per `merge-gate.yml` (ratified 2026
 [three-brain] escalating to Griff — {reason}. Stopping until PM responds.
 ```
 
-Never route Griff escalations to Codex or the Explore subagent. Never continue implementation while waiting.
+Never route Griff escalations to Codex or the Explore subagent. Pause only work that depends on the unresolved approval. Continue other already-authorized safe work under the mission stop conditions. Reuse valid standing plan authorization; do not confuse it with a required final-head merge artifact.
 
 ---
 

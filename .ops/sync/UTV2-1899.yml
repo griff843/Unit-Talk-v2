@@ -1,0 +1,100 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1899
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1899
+  objective: Eighth plan reconciliation — the T1 readiness contract measured
+    against live evidence
+  acceptance_criteria:
+    - >-
+      Record the first execution of `T1_PRODUCTION_READINESS_CONTRACT.md` §5.3
+      against live production evidence, read-only, and reconcile
+      `docs/mission/plan.md` against it.
+
+
+      Scope (governance lane, docs only):
+
+
+      * `docs/05_operations/READINESS_MEASUREMENT_2026-09-14.md` (new) — all six
+      dimensions measured at `2026-09-14 13:47:21.158824+00` against production
+      `zfzdnfwdarxucxtaojxm`, read-only.
+
+      * `docs/mission/plan.md` — eighth-pass section, header reconciliation
+      stamp, and the edge-repair A/B/C sequence under Requires Griff.
+
+
+      Verdicts: Dim 1 FAIL, Dim 2 FAIL, Dim 3 UNKNOWN, Dim 4 UNKNOWN, Dim 5
+      FAIL, Dim 6 FAIL. `overall_pass` cannot be true.
+
+
+      No production writes, no containment change, no SGO activation, no
+      provider key read, no deploy, no member-delivery change.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Record the first execution of `T1_PRODUCTION_READINESS_CONTRACT.md` §5.3
+      against live production evidence, read-only, and reconcile
+      `docs/mission/plan.md` against it.
+
+
+      Scope (governance lane, docs only):
+
+
+      * `docs/05_operations/READINESS_MEASUREMENT_2026-09-14.md` (new) — all six
+      dimensions measured at `2026-09-14 13:47:21.158824+00` against production
+      `zfzdnfwdarxucxtaojxm`, read-only.
+
+      * `docs/mission/plan.md` — eighth-pass section, header reconciliation
+      stamp, and the edge-repair A/B/C sequence under Requires Griff.
+
+
+      Verdicts: Dim 1 FAIL, Dim 2 FAIL, Dim 3 UNKNOWN, Dim 4 UNKNOWN, Dim 5
+      FAIL, Dim 6 FAIL. `overall_pass` cannot be true.
+
+
+      No production writes, no containment change, no SGO activation, no
+      provider key read, no deploy, no member-delivery change.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1899/eighth-plan-reconciliation-the-t1-readiness-contract-measured-against
+    title: Eighth plan reconciliation — the T1 readiness contract measured against
+      live evidence
+    description: >-
+      Record the first execution of `T1_PRODUCTION_READINESS_CONTRACT.md` §5.3
+      against live production evidence, read-only, and reconcile
+      `docs/mission/plan.md` against it.
+
+
+      Scope (governance lane, docs only):
+
+
+      * `docs/05_operations/READINESS_MEASUREMENT_2026-09-14.md` (new) — all six
+      dimensions measured at `2026-09-14 13:47:21.158824+00` against production
+      `zfzdnfwdarxucxtaojxm`, read-only.
+
+      * `docs/mission/plan.md` — eighth-pass section, header reconciliation
+      stamp, and the edge-repair A/B/C sequence under Requires Griff.
+
+
+      Verdicts: Dim 1 FAIL, Dim 2 FAIL, Dim 3 UNKNOWN, Dim 4 UNKNOWN, Dim 5
+      FAIL, Dim 6 FAIL. `overall_pass` cannot be true.
+
+
+      No production writes, no containment change, no SGO activation, no
+      provider key read, no deploy, no member-delivery change.
+    captured_at: 2026-09-14T14:06:15.823Z
+    description_sha256: 4cec560dbb739b7390efbb6729f9879158ede21b9b743d290e320f4e2c538620
+  contract_hash: 79f6d47084d1319f2923247a276df48573d7db7d94262256efd18b8c3ab75ca0

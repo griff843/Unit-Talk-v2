@@ -4,6 +4,15 @@
 **Status:** ACTIVE
 **Opened:** 2026-09-02
 
+**Canonical membership product:** `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`
+
+The membership product contract is the authoritative destination for customer tiers, entitlements,
+public transparency, website claims, Discord design, and future product capabilities. Mission plans,
+product intents, specifications, audits, and implementation must align with it. The contract defines
+the destination; it does not prove that a capability is currently implemented, deployed, live, or
+production-ready. Current-state claims still require live evidence, and overall readiness remains
+governed exclusively by `docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md`.
+
 ---
 
 ## Mission

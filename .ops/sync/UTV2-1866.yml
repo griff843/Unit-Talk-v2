@@ -1,0 +1,161 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1866
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1866
+  objective: Bound and dry-run the results-only ingestion path so a live-results
+    backfill can be authorized on measured evidence
+  acceptance_criteria:
+    - |-
+      ## Why
+
+      Milestone 2 condition 3 needs a real results supply. `game_results` stops at 2026-06-30 and `events` at 2026-07-02, so nothing after those dates can settle. Provider activation is a later readiness decision and is **not** a prerequisite for this lane — SGO stays intentionally inactive, and nothing here fetches from a live provider or changes containment.
+
+      What is missing before such an authorization could ever be *requested* is a measured, enforced statement of what a results-only run would write, and an operator way to see it before writing.
+
+      ## Measured basis (on `main`, 2026-09-09)
+
+      * `apps/ingestor/src/ingest-league.ts:252` — `if (options.resultsOnly) { fetched = createEmptyFetchResult(snapshotAt) } else { … }`, and the `else` branch spans **lines 254–645**. Under `resultsOnly` none of it runs: no odds fetch, no `odds_snapshots` insert (`:400`), no `provider_offers.upsertBatch` (`:530`), no `markClosingLines` (`:639`), no `resolveSgoEntities(fetched.events)` (`:418`).
+      * What a results-only run therefore writes is exactly: `system_runs` (`:208`, `:790`), the results `raw_payloads` archive (`:705`), `events` + `participants` via `resolveSgoEntities(completedResultEvents)` (`:731`), and `game_results` via `resolveAndInsertResults` (`:768`). On failure it additionally writes one `provider_offer_cycle_status` row (`:844`).
+      * `scripts/backfill-sgo-history.ts` already accepts `--results-only` (`:53`) and threads it through.
+      * `apps/ingestor/src/ingestor.test.ts:2879` asserts `resultsOnly` skips offer ingest, but only via three counters and `providerOffers.listByProvider('sgo').length === 0`. `odds_snapshots`, `market_universe` and closing-line marking are asserted by nothing.
+
+      This corrects the mission plan, which recorded that a results backfill's blast radius could not be bounded because `ingestLeague` "writes offers and events broadly rather than results alone".
+
+      ## Scope
+
+      1. `--dry-run` for the results-only operator path: run the full resolve pipeline against fetched results and report exactly what it *would* write — per-table counts and the event/result identities — without performing any write.
+      2. **A blast-radius test** that enumerates the repository bundle and asserts a `resultsOnly` run touches only the allowed tables, failing if a future change adds a write outside that set. Fixture-driven via `fetchImpl`; no network, no provider key.
+      3. Record the bounded blast radius where an operator request would be written.
+
+      ## Acceptance
+
+      * `resultsOnly` + `dryRun` performs zero writes, asserted by a test that fails if any repository write method is called.
+      * The blast-radius test fails when a write outside the allowed set is introduced (mutation-checked).
+      * No change to containment, no provider activation, no live fetch, no production write.
+
+      ## Do not touch
+
+      `apps/api/src/grading-service.ts` (locked by [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)), any `deploy.yml` containment setting, any secret, `.github/workflows/**`.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Why
+
+      Milestone 2 condition 3 needs a real results supply. `game_results` stops
+      at 2026-06-30 and `events` at 2026-07-02, so nothing after those dates can
+      settle. Provider activation is a later readiness decision and is **not** a
+      prerequisite for this lane — SGO stays intentionally inactive, and nothing
+      here fetches from a live provider or changes containment.
+
+
+      What is missing before such an authorization could ever be *requested* is
+      a measured, enforced statement of what a results-only run would write, and
+      an operator way to see it before writing.
+    - >-
+      Measured basis (on `main`, 2026-09-09)
+
+      * `apps/ingestor/src/ingest-league.ts:252` — `if (options.resultsOnly) {
+      fetched = createEmptyFetchResult(snapshotAt) } else { … }`, and the `else`
+      branch spans **lines 254–645**. Under `resultsOnly` none of it runs: no
+      odds fetch, no `odds_snapshots` insert (`:400`), no
+      `provider_offers.upsertBatch` (`:530`), no `markClosingLines` (`:639`), no
+      `resolveSgoEntities(fetched.events)` (`:418`).
+
+      * What a results-only run therefore writes is exactly: `system_runs`
+      (`:208`, `:790`), the results `raw_payloads` archive (`:705`), `events` +
+      `participants` via `resolveSgoEntities(completedResultEvents)` (`:731`),
+      and `game_results` via `resolveAndInsertResults` (`:768`). On failure it
+      additionally writes one `provider_offer_cycle_status` row (`:844`).
+
+      * `scripts/backfill-sgo-history.ts` already accepts `--results-only`
+      (`:53`) and threads it through.
+
+      * `apps/ingestor/src/ingestor.test.ts:2879` asserts `resultsOnly` skips
+      offer ingest, but only via three counters and
+      `providerOffers.listByProvider('sgo').length === 0`. `odds_snapshots`,
+      `market_universe` and closing-line marking are asserted by nothing.
+
+
+      This corrects the mission plan, which recorded that a results backfill's
+      blast radius could not be bounded because `ingestLeague` "writes offers
+      and events broadly rather than results alone".
+    - >-
+      Scope
+
+      1. `--dry-run` for the results-only operator path: run the full resolve
+      pipeline against fetched results and report exactly what it *would* write
+      — per-table counts and the event/result identities — without performing
+      any write.
+
+      2. **A blast-radius test** that enumerates the repository bundle and
+      asserts a `resultsOnly` run touches only the allowed tables, failing if a
+      future change adds a write outside that set. Fixture-driven via
+      `fetchImpl`; no network, no provider key.
+
+      3. Record the bounded blast radius where an operator request would be
+      written.
+    - >-
+      Acceptance
+
+      * `resultsOnly` + `dryRun` performs zero writes, asserted by a test that
+      fails if any repository write method is called.
+
+      * The blast-radius test fails when a write outside the allowed set is
+      introduced (mutation-checked).
+
+      * No change to containment, no provider activation, no live fetch, no
+      production write.
+    - |-
+      Do not touch
+      `apps/api/src/grading-service.ts` (locked by [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)), any `deploy.yml` containment setting, any secret, `.github/workflows/**`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1866/bound-and-dry-run-the-results-only-ingestion-path-so-a-live-results
+    title: Bound and dry-run the results-only ingestion path so a live-results
+      backfill can be authorized on measured evidence
+    description: |-
+      ## Why
+
+      Milestone 2 condition 3 needs a real results supply. `game_results` stops at 2026-06-30 and `events` at 2026-07-02, so nothing after those dates can settle. Provider activation is a later readiness decision and is **not** a prerequisite for this lane — SGO stays intentionally inactive, and nothing here fetches from a live provider or changes containment.
+
+      What is missing before such an authorization could ever be *requested* is a measured, enforced statement of what a results-only run would write, and an operator way to see it before writing.
+
+      ## Measured basis (on `main`, 2026-09-09)
+
+      * `apps/ingestor/src/ingest-league.ts:252` — `if (options.resultsOnly) { fetched = createEmptyFetchResult(snapshotAt) } else { … }`, and the `else` branch spans **lines 254–645**. Under `resultsOnly` none of it runs: no odds fetch, no `odds_snapshots` insert (`:400`), no `provider_offers.upsertBatch` (`:530`), no `markClosingLines` (`:639`), no `resolveSgoEntities(fetched.events)` (`:418`).
+      * What a results-only run therefore writes is exactly: `system_runs` (`:208`, `:790`), the results `raw_payloads` archive (`:705`), `events` + `participants` via `resolveSgoEntities(completedResultEvents)` (`:731`), and `game_results` via `resolveAndInsertResults` (`:768`). On failure it additionally writes one `provider_offer_cycle_status` row (`:844`).
+      * `scripts/backfill-sgo-history.ts` already accepts `--results-only` (`:53`) and threads it through.
+      * `apps/ingestor/src/ingestor.test.ts:2879` asserts `resultsOnly` skips offer ingest, but only via three counters and `providerOffers.listByProvider('sgo').length === 0`. `odds_snapshots`, `market_universe` and closing-line marking are asserted by nothing.
+
+      This corrects the mission plan, which recorded that a results backfill's blast radius could not be bounded because `ingestLeague` "writes offers and events broadly rather than results alone".
+
+      ## Scope
+
+      1. `--dry-run` for the results-only operator path: run the full resolve pipeline against fetched results and report exactly what it *would* write — per-table counts and the event/result identities — without performing any write.
+      2. **A blast-radius test** that enumerates the repository bundle and asserts a `resultsOnly` run touches only the allowed tables, failing if a future change adds a write outside that set. Fixture-driven via `fetchImpl`; no network, no provider key.
+      3. Record the bounded blast radius where an operator request would be written.
+
+      ## Acceptance
+
+      * `resultsOnly` + `dryRun` performs zero writes, asserted by a test that fails if any repository write method is called.
+      * The blast-radius test fails when a write outside the allowed set is introduced (mutation-checked).
+      * No change to containment, no provider activation, no live fetch, no production write.
+
+      ## Do not touch
+
+      `apps/api/src/grading-service.ts` (locked by [griff843/Unit-Talk-v2#1479](https://linear.app/unit-talk-v2/review/utv2-1815-refuse-to-compute-against-an-unknown-stake-instead-of-46a3e5423051)), any `deploy.yml` containment setting, any secret, `.github/workflows/**`.
+    captured_at: 2026-09-09T08:53:39.026Z
+    description_sha256: 4be54820e81da2eb15176e9e4baa7686d04aab71c064a93b2849cca843ae316e
+  contract_hash: 18b1064cd20a1a908b394a1696d67736ece819921f5f4ef2d4228c8eb2d68512
