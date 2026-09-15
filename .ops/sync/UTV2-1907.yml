@@ -1,0 +1,170 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1907
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1907
+  objective: "C1a: pipeline capper attribution must read picks.capper_id, not
+    metadata.capper"
+  acceptance_criteria:
+    - >-
+      Runtime half of the C1 capper-attribution correction. C1b (`UTV2-1905`)
+      covers the Command Center reads and is queued behind the `delivery-ui`
+      slot; this lane covers the pipeline reads in `apps/api`.
+
+
+      ## Measured reads (2026-09-14)
+
+
+      * `apps/api/src/promotion-service.ts:1327` —
+      `readMetadataString(pick.metadata, 'capper') || pick.source`
+
+      * `apps/api/src/promotion-service.ts:1894`, `:1900`, `:1912` — same
+      pattern, in the operator-picks comparison path
+
+      * `apps/api/src/clv-feedback.ts:58` — `typeof pickMetadata['capper'] ===
+      'string' ? pickMetadata['capper'] : pick.source`
+
+
+      `picks.capper_id` is a real column with a foreign key
+      (`picks_capper_id_fkey`, `packages/db/src/database.types.ts:2200`).
+      Attribution is currently read out of a JSON blob and silently falls back
+      to `pick.source`, which is a *channel*, not a capper — so every
+      non-attributed pick collapses into a pseudo-capper named after its source,
+      and multiple cappers are not reliably separated.
+
+
+      ## Outcome
+
+
+      Every capper-facing read in `apps/api` resolves from `picks.capper_id`,
+      with an explicit `unattributed` sentinel where the column is null. No
+      silent fallback to `source`. Tests include a mutation control proving the
+      fallback removal is actually asserted.
+
+
+      ## Out of scope
+
+
+      The wider `metadata.capper` read surface in other apps —
+      `grading-service.ts:1175`, `recap-service.ts:681`, command-center
+      `picks-workflow.ts:122` / `queues.ts:690,711` / `analytics.ts:250`,
+      discord-bot `live.ts:90` / `my-picks.ts:88`,
+      `apps/worker/src/delivery-adapters.ts:414`,
+      `scripts/utv2-257-runtime-proof.ts:180`. C1 spans four apps and is at
+      least three lanes; this is the `apps/api` runtime one.
+
+
+      Containment unchanged: SGO off, member delivery disabled, Track Only
+      containment enabled, no production writes.
+  guardrails: []
+  non_goals:
+    - The wider `metadata.capper` read surface in other apps —
+      `grading-service.ts:1175`, `recap-service.ts:681`, command-center
+      `picks-workflow.ts:122` / `queues.ts:690,711` / `analytics.ts:250`,
+      discord-bot `live.ts:90` / `my-picks.ts:88`,
+      `apps/worker/src/delivery-adapters.ts:414`,
+      `scripts/utv2-257-runtime-proof.ts:180`. C1 spans four apps and is at
+      least three lanes; this is the `apps/api` runtime one.
+    - "Containment unchanged: SGO off, member delivery disabled, Track Only
+      containment enabled, no production writes."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Runtime half of the C1 capper-attribution correction. C1b (`UTV2-1905`)
+      covers the Command Center reads and is queued behind the `delivery-ui`
+      slot; this lane covers the pipeline reads in `apps/api`.
+    - >-
+      Measured reads (2026-09-14)
+
+      * `apps/api/src/promotion-service.ts:1327` —
+      `readMetadataString(pick.metadata, 'capper') || pick.source`
+
+      * `apps/api/src/promotion-service.ts:1894`, `:1900`, `:1912` — same
+      pattern, in the operator-picks comparison path
+
+      * `apps/api/src/clv-feedback.ts:58` — `typeof pickMetadata['capper'] ===
+      'string' ? pickMetadata['capper'] : pick.source`
+
+
+      `picks.capper_id` is a real column with a foreign key
+      (`picks_capper_id_fkey`, `packages/db/src/database.types.ts:2200`).
+      Attribution is currently read out of a JSON blob and silently falls back
+      to `pick.source`, which is a *channel*, not a capper — so every
+      non-attributed pick collapses into a pseudo-capper named after its source,
+      and multiple cappers are not reliably separated.
+    - >-
+      Outcome
+
+      Every capper-facing read in `apps/api` resolves from `picks.capper_id`,
+      with an explicit `unattributed` sentinel where the column is null. No
+      silent fallback to `source`. Tests include a mutation control proving the
+      fallback removal is actually asserted.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1907/c1a-pipeline-capper-attribution-must-read-pickscapper-id-not
+    title: "C1a: pipeline capper attribution must read picks.capper_id, not
+      metadata.capper"
+    description: >-
+      Runtime half of the C1 capper-attribution correction. C1b (`UTV2-1905`)
+      covers the Command Center reads and is queued behind the `delivery-ui`
+      slot; this lane covers the pipeline reads in `apps/api`.
+
+
+      ## Measured reads (2026-09-14)
+
+
+      * `apps/api/src/promotion-service.ts:1327` —
+      `readMetadataString(pick.metadata, 'capper') || pick.source`
+
+      * `apps/api/src/promotion-service.ts:1894`, `:1900`, `:1912` — same
+      pattern, in the operator-picks comparison path
+
+      * `apps/api/src/clv-feedback.ts:58` — `typeof pickMetadata['capper'] ===
+      'string' ? pickMetadata['capper'] : pick.source`
+
+
+      `picks.capper_id` is a real column with a foreign key
+      (`picks_capper_id_fkey`, `packages/db/src/database.types.ts:2200`).
+      Attribution is currently read out of a JSON blob and silently falls back
+      to `pick.source`, which is a *channel*, not a capper — so every
+      non-attributed pick collapses into a pseudo-capper named after its source,
+      and multiple cappers are not reliably separated.
+
+
+      ## Outcome
+
+
+      Every capper-facing read in `apps/api` resolves from `picks.capper_id`,
+      with an explicit `unattributed` sentinel where the column is null. No
+      silent fallback to `source`. Tests include a mutation control proving the
+      fallback removal is actually asserted.
+
+
+      ## Out of scope
+
+
+      The wider `metadata.capper` read surface in other apps —
+      `grading-service.ts:1175`, `recap-service.ts:681`, command-center
+      `picks-workflow.ts:122` / `queues.ts:690,711` / `analytics.ts:250`,
+      discord-bot `live.ts:90` / `my-picks.ts:88`,
+      `apps/worker/src/delivery-adapters.ts:414`,
+      `scripts/utv2-257-runtime-proof.ts:180`. C1 spans four apps and is at
+      least three lanes; this is the `apps/api` runtime one.
+
+
+      Containment unchanged: SGO off, member delivery disabled, Track Only
+      containment enabled, no production writes.
+    captured_at: 2026-09-15T02:01:04.025Z
+    description_sha256: 8a84af1ea4a4eb1fbfc2f44dcea151492fcaff1f1c2520f4b2b3c93c99d4c68d
+  contract_hash: 960d9b75ddc9ee13fa467d6948bfa287e8b7ecf021928b1c58147972631f520a
