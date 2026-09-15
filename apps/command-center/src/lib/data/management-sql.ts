@@ -163,6 +163,223 @@ function stripNonCode(sql: string): string {
 }
 
 /**
+ * The complete set of functions a management statement may call.
+ *
+ * This is an allowlist, and it is the control that actually decides whether a
+ * SELECT can write. The alternative — a denylist of dangerous functions —
+ * cannot work here, because the set of write-capable functions reachable from
+ * a SELECT is open-ended: `setval`, `nextval`, `set_config`,
+ * `pg_advisory_lock`, `pg_terminate_backend`, `pg_replication_slot_advance`,
+ * any `SECURITY DEFINER` function a future migration adds, and any extension
+ * installed later. A list of the ones someone remembered is a list that a new
+ * one is not on.
+ *
+ * Every entry below is either a pure scalar/aggregate or a stable catalog
+ * read, and every one is needed by a statement this repository actually ships
+ * (`storage-health.ts`). Adding an entry is a deliberate act: it must be
+ * non-volatile and must not write, take a lock, reach the filesystem or reach
+ * the network.
+ *
+ * `pg_ls_waldir` is on the list and `pg_ls_dir` is not, which looks
+ * inconsistent and is not: the former reports WAL segment names and sizes — a
+ * database metric the WAL pressure gauge is built on — while the latter reads
+ * an arbitrary directory.
+ */
+const READ_ONLY_FUNCTION_ALLOWLIST: ReadonlySet<string> = new Set([
+  // Scalars and aggregates.
+  'coalesce',
+  'nullif',
+  'greatest',
+  'least',
+  'count',
+  'sum',
+  'min',
+  'max',
+  'avg',
+  'round',
+  'format',
+  // Time. `now()` is stable within a transaction and writes nothing.
+  'now',
+  'extract',
+  'date_trunc',
+  // Catalog and size introspection.
+  'to_regclass',
+  'pg_total_relation_size',
+  'pg_relation_size',
+  'pg_indexes_size',
+  'pg_ls_waldir',
+  'current_setting',
+]);
+
+/**
+ * Words that may legally be followed by `(` without being a function call.
+ *
+ * Without this the extractor would read `values (...)`, `in (...)` and
+ * `union all (...)` as calls to functions named `values`, `in` and `all`, and
+ * every shipped statement would be refused.
+ *
+ * `set` is deliberately **absent**, so `set_config(...)` — a write dressed as
+ * a function — reaches the allowlist check and is refused there.
+ */
+const NON_CALL_KEYWORDS: ReadonlySet<string> = new Set([
+  'select',
+  'from',
+  'where',
+  'and',
+  'or',
+  'not',
+  'in',
+  'on',
+  'using',
+  'exists',
+  'case',
+  'when',
+  'then',
+  'else',
+  'end',
+  'over',
+  'filter',
+  'partition',
+  'by',
+  'order',
+  'group',
+  'having',
+  'limit',
+  'offset',
+  'fetch',
+  'only',
+  'all',
+  'any',
+  'some',
+  'distinct',
+  'is',
+  'between',
+  'like',
+  'ilike',
+  'similar',
+  'union',
+  'except',
+  'intersect',
+  'values',
+  'array',
+  'row',
+  'cast',
+  'as',
+  'with',
+  'table',
+  'explain',
+  'returning',
+  'lateral',
+  'join',
+  'natural',
+  'inner',
+  'left',
+  'right',
+  'full',
+  'cross',
+  'interval',
+  'at',
+  'time',
+  'zone',
+]);
+
+/** The only schema a qualified call may name. */
+const ALLOWED_FUNCTION_SCHEMA = 'pg_catalog';
+
+type SqlToken = { kind: 'ident' | 'dot' | 'lparen' | 'rparen' | 'other'; value: string };
+
+/**
+ * Splits already-stripped SQL into just enough token kinds to tell a function
+ * call from everything else. Literals and comments are gone by this point, so
+ * the input is code only.
+ */
+function tokenize(code: string): SqlToken[] {
+  const tokens: SqlToken[] = [];
+  let i = 0;
+  while (i < code.length) {
+    const ch = code[i] as string;
+    if (/\s/.test(ch)) {
+      i += 1;
+      continue;
+    }
+    if (/[A-Za-z_]/.test(ch)) {
+      let j = i + 1;
+      while (j < code.length && /[A-Za-z0-9_$]/.test(code[j] as string)) j += 1;
+      tokens.push({ kind: 'ident', value: code.slice(i, j) });
+      i = j;
+      continue;
+    }
+    if (ch === '.') {
+      tokens.push({ kind: 'dot', value: '.' });
+      i += 1;
+      continue;
+    }
+    if (ch === '(') {
+      tokens.push({ kind: 'lparen', value: '(' });
+      i += 1;
+      continue;
+    }
+    if (ch === ')') {
+      tokens.push({ kind: 'rparen', value: ')' });
+      i += 1;
+      continue;
+    }
+    tokens.push({ kind: 'other', value: ch });
+    i += 1;
+  }
+  return tokens;
+}
+
+/**
+ * Rejects the statement unless every function it calls is allowlisted.
+ *
+ * Three shapes look like calls and are not, and each is skipped deliberately
+ * rather than by accident:
+ *
+ *  - a keyword before `(` — `values (...)`, `in (...)`, `interval` — see
+ *    `NON_CALL_KEYWORDS`;
+ *  - an alias column list — `... ) as t(table_name, domain)` and the
+ *    `AS`-less `... ) t(a, b)`. Both are recognised by what precedes the
+ *    alias, so `t(...)` in any other position is still treated as a call;
+ *  - a bare parenthesised expression or subquery, where `(` follows an
+ *    operator, a comma or another `(` rather than a name.
+ */
+function assertOnlyAllowlistedFunctionCalls(code: string, reject: (why: string) => never): void {
+  const tokens = tokenize(code);
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (tokens[i]?.kind !== 'lparen') continue;
+
+    const name = tokens[i - 1];
+    if (!name || name.kind !== 'ident') continue;
+
+    const before = tokens[i - 2];
+
+    // Alias column list: `) as t(...)` or `) t(...)`.
+    if (before && (before.kind === 'rparen' || before.value.toLowerCase() === 'as')) continue;
+
+    const lower = name.value.toLowerCase();
+    if (NON_CALL_KEYWORDS.has(lower)) continue;
+
+    // A qualified call: `schema.fn(...)`. Only `pg_catalog` is permitted, so a
+    // call into an application schema cannot be laundered through a prefix.
+    if (before?.kind === 'dot') {
+      const schema = tokens[i - 3];
+      const schemaName = schema?.kind === 'ident' ? schema.value.toLowerCase() : null;
+      if (schemaName !== ALLOWED_FUNCTION_SCHEMA) {
+        reject(
+          `calls "${schemaName ?? '?'}.${lower}" — only ${ALLOWED_FUNCTION_SCHEMA}-qualified calls are allowed`,
+        );
+      }
+    }
+
+    if (!READ_ONLY_FUNCTION_ALLOWLIST.has(lower)) {
+      reject(`calls "${lower}", which is not on the read-only function allowlist`);
+    }
+  }
+}
+
+/**
  * Throws unless `sql` is a single read-only statement.
  *
  * Fails closed: anything this function cannot confidently classify as a
@@ -203,13 +420,13 @@ export function assertSingleReadOnlyStatement(name: string, sql: string): void {
     reject('contains SELECT ... INTO');
   }
 
-  // `pg_read_file`, `lo_import`/`lo_export` and `dblink` reach outside the
-  // database from inside a SELECT. `pg_ls_waldir` is deliberately absent: it
-  // reports WAL segment names and sizes, which is a database metric, not a
-  // filesystem read, and the WAL pressure gauge is built on it.
-  if (/\b(pg_read_file|pg_read_binary_file|pg_ls_dir|lo_import|lo_export|dblink|pg_sleep)\s*\(/i.test(withoutTrailing)) {
-    reject('calls a filesystem, network or sleep function');
-  }
+  // The load-bearing control on what a SELECT may *do*. A denylist of known
+  // dangerous functions is not one: `select setval('s', 1)` opens with SELECT,
+  // matches no statement keyword (`setval` is not the whole word `set`), and
+  // writes. So every function call is extracted and checked against an
+  // allowlist, and anything not on it is refused whether or not anyone thought
+  // of it in advance.
+  assertOnlyAllowlistedFunctionCalls(withoutTrailing, reject);
 }
 
 /**

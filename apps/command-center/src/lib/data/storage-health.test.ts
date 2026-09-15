@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, it } from 'node:test';
+import test from 'node:test';
 
 import { SRC } from '../test-support/source-walk';
 import {
@@ -43,7 +43,6 @@ interface RecordedCall {
 
 let calls: RecordedCall[] = [];
 let originalFetch: typeof globalThis.fetch | undefined;
-let originalGate: string | undefined;
 
 function installFetchRecorder(): void {
   originalFetch = globalThis.fetch;
@@ -88,25 +87,41 @@ function functionBody(source: string, name: string): string {
   return source.slice(open + 1, cursor - 1);
 }
 
-beforeEach(() => {
-  calls = [];
-  originalGate = process.env[MANAGEMENT_PLANE_GATE_ENV];
-});
+/**
+ * Per-test setup and teardown, written explicitly rather than through
+ * `beforeEach`/`afterEach`.
+ *
+ * AGENTS.md admits `node:test`'s `test()` with `node:assert/strict` and
+ * nothing else — no `describe`, no `it`, and therefore no hook pair that runs
+ * between them. Wrapping each body is not merely the permitted spelling, it is
+ * the safer one here: this file installs a global `fetch` recorder and mutates
+ * a process-wide environment variable, and the `finally` below restores both
+ * even when an assertion throws, which is the property the hooks were there
+ * for.
+ */
+function withGate(body: () => void | Promise<void>): () => Promise<void> {
+  return async () => {
+    calls = [];
+    const originalGate = process.env[MANAGEMENT_PLANE_GATE_ENV];
+    try {
+      await body();
+    } finally {
+      if (originalFetch) {
+        globalThis.fetch = originalFetch;
+        originalFetch = undefined;
+      }
+      if (originalGate === undefined) {
+        delete process.env[MANAGEMENT_PLANE_GATE_ENV];
+      } else {
+        process.env[MANAGEMENT_PLANE_GATE_ENV] = originalGate;
+      }
+    }
+  };
+}
 
-afterEach(() => {
-  if (originalFetch) {
-    globalThis.fetch = originalFetch;
-    originalFetch = undefined;
-  }
-  if (originalGate === undefined) {
-    delete process.env[MANAGEMENT_PLANE_GATE_ENV];
-  } else {
-    process.env[MANAGEMENT_PLANE_GATE_ENV] = originalGate;
-  }
-});
-
-describe('management plane gate', () => {
-  it('is shut for every value that is not exactly "true"', () => {
+test(
+  'management plane gate — is shut for every value that is not exactly "true"',
+  withGate(() => {
     for (const value of ['', ' ', 'false', 'FALSE', '0', '1', 'yes', 'on', 'enabled', 'truthy']) {
       assert.equal(
         isManagementPlaneEnabled({ [MANAGEMENT_PLANE_GATE_ENV]: value }),
@@ -114,13 +129,19 @@ describe('management plane gate', () => {
         `gate must stay shut for ${JSON.stringify(value)}`,
       );
     }
-  });
+  }),
+);
 
-  it('is shut when the variable is absent entirely', () => {
+test(
+  'management plane gate — is shut when the variable is absent entirely',
+  withGate(() => {
     assert.equal(isManagementPlaneEnabled({}), false);
-  });
+  }),
+);
 
-  it('opens only for "true", trimmed and case-insensitive — so it is conditional, not an unconditional refusal', () => {
+test(
+  'management plane gate — opens only for "true", trimmed and case-insensitive, so it is conditional, not an unconditional refusal',
+  withGate(() => {
     for (const value of ['true', 'TRUE', ' true ', 'True']) {
       assert.equal(
         isManagementPlaneEnabled({ [MANAGEMENT_PLANE_GATE_ENV]: value }),
@@ -128,11 +149,12 @@ describe('management plane gate', () => {
         `gate must open for ${JSON.stringify(value)}`,
       );
     }
-  });
-});
+  }),
+);
 
-describe('no management-plane request escapes a shut gate', () => {
-  it('issues zero requests when the variable is absent', async () => {
+test(
+  'no management-plane request escapes a shut gate — issues zero requests when the variable is absent',
+  withGate(async () => {
     delete process.env[MANAGEMENT_PLANE_GATE_ENV];
     installFetchRecorder();
 
@@ -143,9 +165,12 @@ describe('no management-plane request escapes a shut gate', () => {
       [],
       'a shut gate must produce zero management-plane requests',
     );
-  });
+  }),
+);
 
-  it('issues zero requests for any non-"true" value either', async () => {
+test(
+  'no management-plane request escapes a shut gate — issues zero requests for any non-"true" value either',
+  withGate(async () => {
     for (const value of ['false', '1', 'yes', '']) {
       calls = [];
       process.env[MANAGEMENT_PLANE_GATE_ENV] = value;
@@ -159,11 +184,12 @@ describe('no management-plane request escapes a shut gate', () => {
         `gate value ${JSON.stringify(value)} must produce zero management-plane requests`,
       );
     }
-  });
-});
+  }),
+);
 
-describe('every function that can reach the management plane owns its own gate', () => {
-  it('getStorageHealth short-circuits on the gate before it fans out', () => {
+test(
+  'every function that can reach the management plane owns its own gate — getStorageHealth short-circuits on the gate before it fans out',
+  withGate(() => {
     const body = functionBody(SOURCE, 'getStorageHealth');
     assert.match(
       body,
@@ -178,10 +204,13 @@ describe('every function that can reach the management plane owns its own gate',
       body.indexOf('assertPrivilegedRequestAuthenticated') < body.indexOf('isManagementPlaneEnabled'),
       'authentication must come first — an unauthenticated caller must not learn the gate state',
     );
-  });
+  }),
+);
 
-  for (const name of ['fetchManagementJson', 'runManagementQuery']) {
-    it(`${name} refuses before it builds a request`, () => {
+for (const name of ['fetchManagementJson', 'runManagementQuery']) {
+  test(
+    `every function that can reach the management plane owns its own gate — ${name} refuses before it builds a request`,
+    withGate(() => {
       const body = functionBody(SOURCE, name);
       assert.match(
         body,
@@ -196,12 +225,13 @@ describe('every function that can reach the management plane owns its own gate',
         body.indexOf('assertManagementPlaneEnabled') < body.indexOf('resolveManagementEnv'),
         `${name} must report a shut gate as a policy refusal, never as a missing credential`,
       );
-    });
-  }
-});
+    }),
+  );
+}
 
-describe('honest degradation', () => {
-  it('reports the storage source as unavailable rather than omitting or zeroing it', () => {
+test(
+  'honest degradation — reports the storage source as unavailable rather than omitting or zeroing it',
+  withGate(() => {
     const health = unavailableStorageHealth('because the gate is shut');
 
     assert.equal(health.managementPlane.available, false);
@@ -220,10 +250,13 @@ describe('honest degradation', () => {
     for (const domain of health.storageDomains) {
       assert.equal(domain.alertStatus, 'unavailable', `${domain.name} must not read as healthy`);
     }
-  });
+  }),
+);
 
-  it('names the gate variable in its reason, so an operator can act on it', () => {
+test(
+  'honest degradation — names the gate variable in its reason, so an operator can act on it',
+  withGate(() => {
     const source = SOURCE.match(/MANAGEMENT_PLANE_DISABLED_REASON\s*=\s*[\s\S]*?;/)?.[0] ?? '';
     assert.match(source, new RegExp('MANAGEMENT_PLANE_GATE_ENV'));
-  });
-});
+  }),
+);

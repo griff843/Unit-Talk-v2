@@ -176,3 +176,104 @@ test('storage-health cannot send SQL that did not come from its registry', () =>
     'the request body must not interpolate a caller-supplied statement',
   );
 });
+
+/*
+ * Adversarial coverage for the function-call control (UTV2-1802 review).
+ *
+ * The statement-keyword scan above catches a write that *looks* like a write.
+ * What follows is the class it cannot catch: a statement that opens with
+ * SELECT, contains no forbidden keyword, and writes anyway because the work is
+ * done by the function it calls. Each case below passes every other check in
+ * the policy, so each one is a genuine test of the allowlist rather than of
+ * something that would have been refused anyway.
+ */
+
+test('a write-capable function inside a SELECT is rejected — this is the setval class', () => {
+  // `select setval('s', 1)` begins with SELECT, and `setval` is not the whole
+  // word `set`, so the keyword scan passes it. It advances a sequence.
+  const message = rejects("select setval('picks_id_seq', 1)");
+  assert.match(message, /setval/);
+  assert.match(message, /allowlist/);
+
+  rejects("select nextval('picks_id_seq')");
+  rejects("select setval('picks_id_seq', (select max(id) from picks))");
+});
+
+test('session and configuration writers dressed as functions are rejected', () => {
+  // `set_config` is the reason `set` is deliberately absent from the
+  // non-call keyword list: the word must reach the allowlist to be refused.
+  rejects("select set_config('role', 'postgres', false)");
+  rejects('select pg_reload_conf()');
+});
+
+test('lock and backend-control functions are rejected', () => {
+  // None of these writes a row; all of them change server state, and a
+  // "read-only" credential that can terminate backends is not read-only.
+  rejects('select pg_advisory_lock(1)');
+  rejects('select pg_advisory_xact_lock(1)');
+  rejects('select pg_terminate_backend(pid) from pg_stat_activity');
+  rejects('select pg_cancel_backend(1)');
+});
+
+test('an unknown function is rejected even though nobody listed it as dangerous', () => {
+  // The point of an allowlist: a function invented after this file was written
+  // is refused by default. A denylist would have admitted it.
+  const message = rejects('select some_function_nobody_has_heard_of(1)');
+  assert.match(message, /some_function_nobody_has_heard_of/);
+  rejects('select pg_replication_slot_advance(1)');
+});
+
+test('a call qualified into a non-catalog schema is rejected', () => {
+  // A `SECURITY DEFINER` function in the application schema is exactly the
+  // shape a prefix could otherwise launder.
+  const message = rejects('select public.promote_pick(1)');
+  assert.match(message, /pg_catalog/);
+  rejects('select app.dangerous(1)');
+  // The qualification itself is not a bypass in the other direction either:
+  // pg_catalog-qualified still has to be on the list.
+  rejects('select pg_catalog.pg_terminate_backend(1)');
+});
+
+test('a data-modifying CTE calling a writer is rejected', () => {
+  // Belt and braces: the keyword scan already refuses the DELETE, and the
+  // allowlist independently refuses the call.
+  rejects("with gone as (delete from picks returning id) select setval('s', 1)");
+  rejects("with moved as (select setval('s', 1) as v) select v from moved");
+});
+
+test('every function the shipped statements call is allowlisted, and the parser is not fooled by what merely looks like a call', () => {
+  // The three registry statements are validated at import time, so a
+  // false positive here would be a boot failure rather than a test failure —
+  // which is why the individual shapes are asserted directly as well.
+
+  // `values (` is a keyword, not a call.
+  assertSingleReadOnlyStatement('ok', "select * from (values ('a','b')) as t(x, y)");
+  // An alias column list, with and without AS.
+  assertSingleReadOnlyStatement('ok', 'select x from (select 1) as t(x)');
+  assertSingleReadOnlyStatement('ok', 'select x from (select 1) t(x)');
+  // `extract(epoch from ...)` — `epoch` is followed by FROM, not by `(`.
+  assertSingleReadOnlyStatement(
+    'ok',
+    'select coalesce(max(extract(epoch from now() - xact_start)), 0)::int from pg_stat_activity',
+  );
+  // A cast has no parentheses at all.
+  assertSingleReadOnlyStatement('ok', 'select setting::int from pg_settings');
+  assertSingleReadOnlyStatement('ok', 'select wal_bytes::numeric from pg_stat_wal');
+  // The size and catalog readers the storage gauge is built on.
+  assertSingleReadOnlyStatement(
+    'ok',
+    "select coalesce(pg_total_relation_size(to_regclass(format('public.%I', 'picks'))), 0)::bigint",
+  );
+  assertSingleReadOnlyStatement('ok', "select current_setting('archive_mode', true)");
+  assertSingleReadOnlyStatement('ok', 'select coalesce(sum(size), 0)::bigint from pg_ls_waldir()');
+  // A subquery in the select list is a parenthesised expression, not a call.
+  assertSingleReadOnlyStatement('ok', 'select (select count(*)::int from pg_locks where not granted) as n');
+});
+
+test('a function name hidden in a string literal is not a call, and one after a comment still is', () => {
+  // The stripper runs first, so the allowlist sees code only. Both directions
+  // are asserted, because a stripper that is too eager would silently stop
+  // seeing real calls.
+  assertSingleReadOnlyStatement('ok', "select 'setval(1)' as label");
+  rejects('select 1 -- harmless\n , setval(2)');
+});

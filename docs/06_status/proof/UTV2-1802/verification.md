@@ -255,3 +255,81 @@ artifacts of the BEHIND state, not scope violations.
 `pnpm test:db` and `pnpm verify` are deliberately **not** re-claimed locally. Their prior
 receipts were bound to a head that is no longer this PR's, and both are required checks
 that re-run on this head; those runs are the authoritative results.
+
+---
+
+## PM review round — the three CHANGES_REQUIRED findings, and what each repair actually is
+
+PM review at head `3a13d6ac5` returned CHANGES_REQUIRED on three unresolved P1 threads. All three
+repairs land inside this lane's `file_scope_lock` (`apps/command-center/**`); none needed a scope
+override, and the Chiefs settlement feature was deliberately **not** folded in.
+
+### 1. The read-only guarantee was a denylist, and a denylist cannot hold it
+
+**The finding, confirmed against the head rather than accepted on report.** `management-sql.ts`
+ended with a regex refusing seven named functions — `pg_read_file`, `pg_read_binary_file`,
+`pg_ls_dir`, `lo_import`, `lo_export`, `dblink`, `pg_sleep`. `select setval('picks_id_seq', 1)`
+opens with `SELECT`, matches no statement keyword (`setval` is not the whole word `set`), appears
+on no denylist — and writes. The policy accepted it.
+
+**The repair is an allowlist**, because the set of write-capable functions reachable from a SELECT
+is open-ended: `setval`, `nextval`, `set_config`, `pg_advisory_lock`, `pg_terminate_backend`,
+`pg_replication_slot_advance`, any `SECURITY DEFINER` function a later migration adds, any
+extension installed later. Every function call in the statement is extracted and checked against
+`READ_ONLY_FUNCTION_ALLOWLIST`; anything absent is refused whether or not anyone thought of it.
+A qualified call must name `pg_catalog` — an application-schema prefix cannot launder one — and
+`pg_catalog.pg_terminate_backend(...)` is still refused, so qualification is not a bypass in either
+direction.
+
+The extractor distinguishes three shapes that look like calls and are not, each present in the
+three statements this repository actually ships: a keyword before `(` (`values (...)`,
+`in (...)`, `interval`), an alias column list (`) as t(table_name, domain)` and the `AS`-less
+`) t(a, b)`), and a bare parenthesised expression or scalar subquery. `set` is deliberately absent
+from `NON_CALL_KEYWORDS` so that `set_config(...)` reaches the allowlist check and is refused there.
+
+**Measured, not asserted.** An adversarial probe refused each of `setval`, `nextval`, `set_config`,
+`pg_advisory_lock`, `pg_terminate_backend`, `pg_cancel_backend`, `pg_read_file`, `pg_sleep` and
+`dblink` with `calls "<name>", which is not on the read-only function allowlist`, and
+`public.do_bad_thing(1)` with `calls "public.do_bad_thing" — only pg_catalog-qualified calls are
+allowed`. Importing `storage-health` — which validates all three registry statements at module load
+— still succeeds, so the allowlist did not break the shipped queries.
+
+Eight adversarial tests were added to `management-sql.test.ts` covering the `setval` class, session
+and configuration writers, lock and backend-control functions, an unknown function nobody listed as
+dangerous, non-catalog schema qualification, a data-modifying CTE calling a writer, every function
+the shipped statements do call (the positive half — a control that refused everything would prove
+nothing), and a function name hidden in a string literal. Suite: **25 pass, 0 fail**.
+
+### 2. `storage-health.test.ts` used `describe`/`it`
+
+AGENTS.md L74 is explicit — *"NO Jest. NO Vitest. NO describe/it/expect. Use `test()`,
+`assert.strictEqual()`…"*. The file imported `afterEach, beforeEach, describe, it` from `node:test`.
+
+Converted to `test()` throughout. Each `describe`/`it` pair became one flat `test()` name, and the
+`beforeEach`/`afterEach` pair became `withGate()`, an explicit per-test wrapper. That is not merely
+the permitted spelling but the safer one here: the file installs a global `fetch` recorder and
+mutates a process-wide environment variable, and `withGate`'s `finally` restores both even when an
+assertion throws — the property the hooks existed for. Every assertion is preserved byte-for-byte,
+so the mutation proof recorded in this bundle still holds. Test count is unchanged at **10**, and
+the suite is **10 pass, 0 fail**.
+
+### 3. The env-template finding — dispositioned honestly, and the citation it rests on is stale
+
+The review thread cites `AGENTS.md:L154-160` as requiring registration in an environment template.
+Measured: that range is the **"Key Schema Facts"** section and says nothing about env templates.
+`scripts/validate-env.mjs` enforces only a fixed seven-key required list (`NODE_ENV`,
+`UNIT_TALK_APP_ENV`, `UNIT_TALK_ACTIVE_WORKSPACE`, `UNIT_TALK_LEGACY_WORKSPACE`, `LINEAR_TEAM_ID`,
+`LINEAR_TEAM_KEY`, `LINEAR_TEAM_NAME`). **No canonical policy mechanically requires this
+registration.**
+
+PM's instruction was conditional — *"if canonical policy requires it"* — so the honest disposition
+is: no policy compels it, and it is registered anyway, in the app-local template
+`apps/command-center/.env.example`, because that is the appropriate home for a Command Center
+runtime variable and it documents a fail-closed default. The entry is
+`UNIT_TALK_COMMAND_CENTER_MANAGEMENT_API_ENABLED=false` with a comment stating that only the exact
+string `true` opens the gate. **Writing the template does not open the gate**, and the value shipped
+in the template keeps it shut.
+
+(The same thread's companion cites AGENTS.md L54-58 for the test-runner rule; the binding text is at
+**L74**. The finding is correct; the line number is not. Recorded so a later reader does not
+re-derive the rule from a range that does not contain it.)
