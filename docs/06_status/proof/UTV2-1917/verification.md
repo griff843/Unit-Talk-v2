@@ -78,14 +78,36 @@ standalone `tsc` run carrying the `@unit-talk/*` path mappings, which is what ca
 `sgo-journey-proof.ts` signature break that `pnpm type-check` reported clean. That run is why
 the type was split rather than made optional.
 
-CI on this head (`5859b3e1c12ea866328b8669728c1b495fa00b37`):
-`P0 Protocol` completed/success; `Writable DB proof (staging only)` completed/success;
-`verify` completed/success.
+CI, measured on `bebc9f8f7e83d8130655a5599df0a4ff43cacd33` — the head carrying this
+proof bundle, and the head at which the full required set actually concluded:
+
+`verify` completed/success; `P0 Protocol` completed/success;
+`Writable DB proof (staging only)` completed/success; `Executor Result Validator`
+completed/success; `Proof Auditor Gate`, `Runtime Verifier Gate`,
+`Require live-DB proof for runtime changes`, `Close eligibility preflight`,
+`File scope lock`, `Lane authority` and `Return review packet` all completed/success.
+`T1 Proof Gate` completed/skipped, correctly — this is a T2 lane.
+`Merge Gate` is completed/failure and is the only red: it awaits the T2
+merge-authority artifact, which is not an executor-authorable artifact.
+
+**This block previously cited `5859b3e1c12ea866328b8669728c1b495fa00b37` and claimed
+`Writable DB proof (staging only)` and `verify` both succeeded there. That was
+false and is corrected here rather than quietly dropped.** On that head CI run
+`34980875628` was **cancelled** — superseded by the push of the proof commit — so
+`Writable DB proof (staging only)` concluded `cancelled` and `verify`, which is a
+downstream job of the same run rather than an independent check, concluded
+`failure`. A cancelled run is not a passing run, and the earlier text read a
+superseded run as evidence.
+
+`5859b3e1c12ea866328b8669728c1b495fa00b37` remains the Execution SHA below: it is
+the last commit on this branch that changes code. Every commit after it — the PR
+binding, this bundle, and this correction — touches only lane metadata and proof
+narrative, and none of them alters what was verified.
 
 ## Verification
 - [x] `pnpm type-check`: exit 0, no diagnostics
 - [x] `pnpm test`: `pnpm test:ops` 3113 tests / 3113 pass / 0 fail across 21 suites
-- [x] `pnpm verify`: `verify` job completed/success on head `5859b3e1c12ea866328b8669728c1b495fa00b37` (CI is the authoritative site; `pnpm verify` cannot exit 0 locally because `ci:assert-staging-target` refuses a non-staging target)
+- [x] `pnpm verify`: `verify` job completed/success on head `bebc9f8f7e83d8130655a5599df0a4ff43cacd33` (CI is the authoritative site; `pnpm verify` cannot exit 0 locally because `ci:assert-staging-target` refuses a non-staging target). Not `5859b3e1c12ea866328b8669728c1b495fa00b37` — the run on that head was cancelled; see the CI note above.
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS, 6 changed files, no R-level artifacts required
 
 ## Runtime Verification
