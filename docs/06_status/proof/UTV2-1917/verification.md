@@ -117,6 +117,29 @@ narrative, and none of them alters what was verified.
   `computeTrackOnlyStats` end to end — `scripts/ops/track-only/sgo-journey-staging.t1-proof.test.ts`
   — ran green under `Writable DB proof (staging only)` on this head and is unchanged by this lane.
 
+`evidence.json` was added to this bundle after `Executor Result Validation`
+concluded INVALID at `2c33bccf1badf3f134091cc2b9befd91de7b8a54`, with the exact
+reason *"Proof MERGE_SHA is not a valid git SHA: \"pending merge\". This bundle
+declares no schema-v2 sha_binding block, so the legacy contract applies."* The
+legacy contract requires the `MERGE_SHA:` row itself to be a real commit, which
+no bundle can satisfy before its own merge exists; the schema-v2 `sha_binding`
+block is what selects the contract that admits the `pending merge` anchor. The
+file was produced by `buildEvidenceSkeleton` from `scripts/ops/proof-generate.ts`
+rather than hand-authored, and re-checked with the same
+`proof-schema.ts proof-identity --phase pre-merge` CLI the validator invokes
+(`failures: []`, `provenanceAnchorSha` = the Execution SHA below).
+
+Its `static_proof` section is deliberately **absent rather than empty**.
+`autoPopulateStaticProofFromVerifyRun` refuses to overwrite an already-populated
+`static_proof`, and the skeleton's `{"status": "not_run"}` placeholder counts as
+populated — so pre-filling it would permanently block the closeout harvest that
+binds `static_proof` to the `verify` job of the merge SHA's own CI run. Leaving
+it absent is what lets that harvest record a measured result. The consequence is
+stated rather than hidden: `scripts/ci/proof-binding-validator.ts` reports
+`static proof requires a populated static_proof block` on this bundle today. That
+validator is invoked only by `migration-reversibility-gate.yml`, which does not
+run on this lane (no migrations), so no gate on this PR consumes that verdict.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
