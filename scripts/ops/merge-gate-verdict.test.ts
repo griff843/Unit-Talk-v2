@@ -216,3 +216,105 @@ test('UTV2-1554: bounce limit only counts authorized CHANGES_REQUIRED verdicts',
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
 });
+
+for (const issue of ['WORK-2026091001', 'UTV2-1501', 'UNI-42']) {
+  test(`repository and legacy identity ${issue} retain exact-head PM approval checks`, () => {
+    const verdict = verdictRecord(approvedComment({ issue }));
+    assert.equal(verdict.parsed.issueId, issue);
+    assert.deepEqual(validateT1Verdicts([verdict], { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS }), []);
+    assert.ok(validateT1Verdicts([verdict], { prNumber: PR_NUMBER, headSha: OLD_HEAD_SHA, authorizedReviewers: REVIEWERS }).length > 0);
+  });
+}
+
+// UTV2-1892: the trusted-base parser and the workflow's own issue extraction
+// must admit the same identifier namespaces. The workflow is evaluated from
+// pull_request.base.sha and requires this module from the same checkout, so a
+// namespace admitted by one and refused by the other is a silent gate hole in
+// whichever direction it drifts.
+test('UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const workflow = fs.readFileSync(path.join(process.cwd(), '.github', 'workflows', 'merge-gate.yml'), 'utf8');
+  const { parseVerdict } = await import('./merge-gate-verdict.cjs');
+  const pick = (marker: string) => {
+    const at = workflow.indexOf(marker);
+    assert.ok(at >= 0, `merge-gate.yml must carry ${marker}`);
+    const m = workflow.slice(at, at + 200).match(/\((?:\?:)?([A-Za-z0-9|]+)\)-\\d\+/);
+    assert.ok(m, `no namespace alternation after ${marker}`);
+    return m[1].toUpperCase().split('|').sort();
+  };
+  const namespaces = pick("(headRef || '').match(");
+  const titleNamespaces = pick("(prTitle || '').match(");
+  const wfrNamespaces = pick("grep -oiP '(");
+  assert.deepEqual(titleNamespaces, namespaces);
+  assert.deepEqual(wfrNamespaces, namespaces);
+  assert.deepEqual(namespaces, ['UNI', 'UTV2', 'WORK']);
+  for (const ns of namespaces) {
+    const parsed = parseVerdict(`PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: ${ns}-7\nPR: 1\nHead SHA: ${'a'.repeat(40)}`);
+    assert.ok(parsed && parsed.issueId === `${ns}-7`, `parseVerdict must admit ${ns}`);
+  }
+  assert.equal(parseVerdict(`PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: BOOTSTRAP-7\nPR: 1\nHead SHA: ${'a'.repeat(40)}`), null);
+
+  // The reverse direction: the parser's own Issue-line alternation, read from its
+  // source, must not admit a namespace the workflow does not extract.
+  const parserSource = fs.readFileSync(path.join(process.cwd(), 'scripts', 'ops', 'merge-gate-verdict.cjs'), 'utf8');
+  const parserAlt = parserSource.match(/\^Issue:\\s\+\(\(\?:([A-Za-z0-9|]+)\)-\\d\+\)\$/);
+  assert.ok(parserAlt, 'merge-gate-verdict.cjs must carry the anchored Issue: alternation');
+  assert.deepEqual(parserAlt[1].toUpperCase().split('|').sort(), namespaces);
+});
+
+// UTV2-1892: an identifier embedded in a longer token is not an identifier.
+// `homework-123` and `work-123abc` must not resolve as WORK-123 in any of the
+// three workflow extractors, while ordinary lane branches and titles still do.
+test('UTV2-1892: workflow issue extraction is bounded at both ends', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { execFileSync } = await import('node:child_process');
+  const workflow = fs.readFileSync(path.join(process.cwd(), '.github', 'workflows', 'merge-gate.yml'), 'utf8');
+  const literal = (marker: string): RegExp => {
+    const at = workflow.indexOf(marker);
+    assert.ok(at >= 0, `merge-gate.yml must carry ${marker}`);
+    const m = workflow.slice(at + marker.length, at + marker.length + 200).match(/^\/((?:\\.|[^/])+)\/([a-z]*)/);
+    assert.ok(m, `no regex literal after ${marker}`);
+    return new RegExp(m[1], m[2]);
+  };
+  const headRe = literal("(headRef || '').match(");
+  const titleRe = literal("(prTitle || '').match(");
+  const grepAt = workflow.indexOf("grep -oiP '");
+  assert.ok(grepAt >= 0);
+  const grepPattern = workflow.slice(grepAt + "grep -oiP '".length).split("'")[0];
+  const grep = (branch: string): string | null => {
+    try {
+      return execFileSync('grep', ['-oiP', grepPattern], { input: `${branch}\n`, encoding: 'utf8' }).trim().split('\n')[0].toUpperCase() || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const branches: Array<[string, string | null]> = [
+    ['claude/utv2-1892-merge-gate-work-identity', 'UTV2-1892'],
+    ['codex/work-2026091001-tracker-independence', 'WORK-2026091001'],
+    ['bootstrap/uni-42-thing', 'UNI-42'],
+    ['work-123', 'WORK-123'],
+    ['feature/homework-123-fix', null],
+    ['feature/work-123abc', null],
+    ['feature/mywork-123', null],
+  ];
+  for (const [branch, expected] of branches) {
+    const m = branch.match(headRe);
+    assert.equal(m ? m[1].toUpperCase() : null, expected, `headRef extraction for ${branch}`);
+    assert.equal(grep(branch), expected, `WFR-v2 grep extraction for ${branch}`);
+  }
+  const titles: Array<[string, string | null]> = [
+    ['UTV2-1892: admit WORK identities', 'UTV2-1892'],
+    ['WORK-2026091001 tracker independence', 'WORK-2026091001'],
+    ['fix (uni-42) thing', 'UNI-42'],
+    ['Fix homework-123', null],
+    ['work-123abc', null],
+    ['no identifier here', null],
+  ];
+  for (const [title, expected] of titles) {
+    const m = title.match(titleRe);
+    assert.equal(m ? m[1].toUpperCase() : null, expected, `title extraction for ${title}`);
+  }
+});

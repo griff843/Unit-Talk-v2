@@ -240,8 +240,10 @@ jobs:
               ).filter(Boolean);
 
               // ── 4. Resolve authoritative tier from lane manifest ───
-              const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
-                (prTitle || '').match(/((?:UTV2|UNI)-\d+)/i);
+              // Both ends bounded: `homework-123` or `work-123abc` must not resolve
+              // as WORK-123 (UTV2-1892). The parser anchors the whole Issue: line.
+              const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni|work)-\d+)(?![a-z0-9])/i) ||
+                (prTitle || '').match(/(?:^|[^a-z0-9])((?:UTV2|UNI|WORK)-\d+)(?![a-z0-9])/i);
               const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
 
               async function readManifest(ref) {
@@ -654,8 +656,8 @@ jobs:
         id: branch
         run: |
           BRANCH="${{ github.head_ref }}"
-          # Extract UTV2-#### from branch name
-          ISSUE_ID=$(echo "$BRANCH" | grep -oP 'UTV2-\d+' | head -1 || echo "")
+          # Extract the UTV2-/UNI-/WORK- issue id from the branch name, bounded at both ends
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiP '(?<![a-z0-9])(utv2|uni|work)-\d+(?![a-z0-9])' | head -1 | tr '[:lower:]' '[:upper:]' || echo "")
           echo "issue_id=$ISSUE_ID" >> "$GITHUB_OUTPUT"
           echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
 
