@@ -1,0 +1,161 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1906
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1906
+  objective: "Lane A: parlay ticket persistence, validation and grading — parlay
+    only, no teasers or round robins"
+  acceptance_criteria:
+    - |-
+      Backend half of multi-pick ticket support, bounded to **parlays only**. Teasers and round robins are deliberately excluded and follow as separate features.
+
+      ## Measured current truth (read-only audit, 2026-09-14)
+
+      * `packages/contracts/src/reference-data.ts:233-239` already carries the ticket-type catalog with `parlay`, `teaser`, `round-robin` all `enabled: false`, and `getEnabledTicketTypes()` at `:283` filters on that flag.
+      * `apps/smart-form/lib/betting-utils.ts` already carries parlay payout math (`calculateParlayPayout` at `:59`) and round-robin combination payouts at `:92-97`.
+      * `packages/db/src/database.types.ts` has **no** ticket table, **no** leg table and **no** parlay column on `picks` — `grep -n "parlay\|legs\|ticket"` returns nothing.
+
+      **So the gap is persistence, not vocabulary or arithmetic.** A parlay is a ticket identity that owns N ordered legs, with one stake and one combined price, resolving from its legs' outcomes.
+
+      ## Why not metadata
+
+      Persisting leg membership in `picks.metadata` would repeat exactly the defect C1 exists to undo — relational identity in a JSON blob that cannot be joined, constrained or queried. A ticket table and a leg table are the correct model.
+
+      ## Scope
+
+      * `packages/contracts/src/ticket.ts` — ticket contract: parlay payload parse/validate, American-odds combined pricing, and a **fail-closed** `resolveParlayTicketOutcome()` over leg outcomes (win / loss / push-voids-the-leg / unresolved-blocks-the-ticket). No silent fallback to any resolved state.
+      * `supabase/migrations/<ts>_parlay_tickets.sql` — `pick_tickets` and `pick_ticket_legs`.
+      * `apps/api/src/**` — ticket submission path, idempotency, and ticket resolution at grading/settlement time. Legs must be excluded from independent promotion and delivery.
+      * Negative-path and idempotency tests; staging persistence/grading proof.
+
+      ## Explicitly out of scope
+
+      * Teasers and round robins — separate features, not bundled here.
+      * The Smart Form UI half (`apps/smart-form/**`), which needs a `delivery-ui` lane and is behind the slot held by [griff843/Unit-Talk-v2#1513](https://linear.app/unit-talk-v2/review/utv2-1802-make-the-command-center-management-token-unable-to-run-5dc8704a2e42).
+      * Flipping `parlay` to `enabled: true` in the catalog before persistence exists — it stays `false` until the backend can accept a ticket.
+
+      ## Known dependency to surface, not to route around
+
+      Creating a new relation means **production DDL**, which is reserved decision 1. Staging apply and the staging persistence proof do not need that decision; production use does. `Live Schema Parity`'s enforce job skips on feature branches, so it does not block the merge.
+
+      Containment unchanged: SGO off, member delivery disabled, Track Only containment enabled, no production writes.
+  guardrails: []
+  non_goals:
+    - Teasers and round robins — separate features, not bundled here.
+    - The Smart Form UI half (`apps/smart-form/**`), which needs a `delivery-ui`
+      lane and is behind the slot held by
+      [griff843/Unit-Talk-v2#1513](https://linear.app/unit-talk-v2/review/utv2-1802-make-the-command-center-management-token-unable-to-run-5dc8704a2e42).
+    - "Flipping `parlay` to `enabled: true` in the catalog before persistence
+      exists — it stays `false` until the backend can accept a ticket."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Backend half of multi-pick ticket support, bounded to **parlays only**.
+      Teasers and round robins are deliberately excluded and follow as separate
+      features.
+    - >-
+      Measured current truth (read-only audit, 2026-09-14)
+
+      * `packages/contracts/src/reference-data.ts:233-239` already carries the
+      ticket-type catalog with `parlay`, `teaser`, `round-robin` all `enabled:
+      false`, and `getEnabledTicketTypes()` at `:283` filters on that flag.
+
+      * `apps/smart-form/lib/betting-utils.ts` already carries parlay payout
+      math (`calculateParlayPayout` at `:59`) and round-robin combination
+      payouts at `:92-97`.
+
+      * `packages/db/src/database.types.ts` has **no** ticket table, **no** leg
+      table and **no** parlay column on `picks` — `grep -n
+      "parlay\|legs\|ticket"` returns nothing.
+
+
+      **So the gap is persistence, not vocabulary or arithmetic.** A parlay is a
+      ticket identity that owns N ordered legs, with one stake and one combined
+      price, resolving from its legs' outcomes.
+    - >-
+      Why not metadata
+
+      Persisting leg membership in `picks.metadata` would repeat exactly the
+      defect C1 exists to undo — relational identity in a JSON blob that cannot
+      be joined, constrained or queried. A ticket table and a leg table are the
+      correct model.
+    - >-
+      Scope
+
+      * `packages/contracts/src/ticket.ts` — ticket contract: parlay payload
+      parse/validate, American-odds combined pricing, and a **fail-closed**
+      `resolveParlayTicketOutcome()` over leg outcomes (win / loss /
+      push-voids-the-leg / unresolved-blocks-the-ticket). No silent fallback to
+      any resolved state.
+
+      * `supabase/migrations/<ts>_parlay_tickets.sql` — `pick_tickets` and
+      `pick_ticket_legs`.
+
+      * `apps/api/src/**` — ticket submission path, idempotency, and ticket
+      resolution at grading/settlement time. Legs must be excluded from
+      independent promotion and delivery.
+
+      * Negative-path and idempotency tests; staging persistence/grading proof.
+    - >-
+      Known dependency to surface, not to route around
+
+      Creating a new relation means **production DDL**, which is reserved
+      decision 1. Staging apply and the staging persistence proof do not need
+      that decision; production use does. `Live Schema Parity`'s enforce job
+      skips on feature branches, so it does not block the merge.
+
+
+      Containment unchanged: SGO off, member delivery disabled, Track Only
+      containment enabled, no production writes.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1906/lane-a-parlay-ticket-persistence-validation-and-grading-parlay-only-no
+    title: "Lane A: parlay ticket persistence, validation and grading — parlay only,
+      no teasers or round robins"
+    description: |-
+      Backend half of multi-pick ticket support, bounded to **parlays only**. Teasers and round robins are deliberately excluded and follow as separate features.
+
+      ## Measured current truth (read-only audit, 2026-09-14)
+
+      * `packages/contracts/src/reference-data.ts:233-239` already carries the ticket-type catalog with `parlay`, `teaser`, `round-robin` all `enabled: false`, and `getEnabledTicketTypes()` at `:283` filters on that flag.
+      * `apps/smart-form/lib/betting-utils.ts` already carries parlay payout math (`calculateParlayPayout` at `:59`) and round-robin combination payouts at `:92-97`.
+      * `packages/db/src/database.types.ts` has **no** ticket table, **no** leg table and **no** parlay column on `picks` — `grep -n "parlay\|legs\|ticket"` returns nothing.
+
+      **So the gap is persistence, not vocabulary or arithmetic.** A parlay is a ticket identity that owns N ordered legs, with one stake and one combined price, resolving from its legs' outcomes.
+
+      ## Why not metadata
+
+      Persisting leg membership in `picks.metadata` would repeat exactly the defect C1 exists to undo — relational identity in a JSON blob that cannot be joined, constrained or queried. A ticket table and a leg table are the correct model.
+
+      ## Scope
+
+      * `packages/contracts/src/ticket.ts` — ticket contract: parlay payload parse/validate, American-odds combined pricing, and a **fail-closed** `resolveParlayTicketOutcome()` over leg outcomes (win / loss / push-voids-the-leg / unresolved-blocks-the-ticket). No silent fallback to any resolved state.
+      * `supabase/migrations/<ts>_parlay_tickets.sql` — `pick_tickets` and `pick_ticket_legs`.
+      * `apps/api/src/**` — ticket submission path, idempotency, and ticket resolution at grading/settlement time. Legs must be excluded from independent promotion and delivery.
+      * Negative-path and idempotency tests; staging persistence/grading proof.
+
+      ## Explicitly out of scope
+
+      * Teasers and round robins — separate features, not bundled here.
+      * The Smart Form UI half (`apps/smart-form/**`), which needs a `delivery-ui` lane and is behind the slot held by [griff843/Unit-Talk-v2#1513](https://linear.app/unit-talk-v2/review/utv2-1802-make-the-command-center-management-token-unable-to-run-5dc8704a2e42).
+      * Flipping `parlay` to `enabled: true` in the catalog before persistence exists — it stays `false` until the backend can accept a ticket.
+
+      ## Known dependency to surface, not to route around
+
+      Creating a new relation means **production DDL**, which is reserved decision 1. Staging apply and the staging persistence proof do not need that decision; production use does. `Live Schema Parity`'s enforce job skips on feature branches, so it does not block the merge.
+
+      Containment unchanged: SGO off, member delivery disabled, Track Only containment enabled, no production writes.
+    captured_at: 2026-09-15T01:57:16.133Z
+    description_sha256: dd236c9b978941a1a28bbae44efdf3dd652cd9d7977ee727234f3721480c3845
+  contract_hash: 2145a6803dda68db8b78ae80428fac1843de5f5b46f5c86a41505f518008eb5f
