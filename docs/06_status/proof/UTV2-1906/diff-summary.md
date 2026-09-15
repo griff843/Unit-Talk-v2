@@ -7,7 +7,7 @@ Lane type: modeling
 Branch: claude/utv2-1906-parlay-ticket-contract
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1582
 Head SHA: 7eee19fc8067333825be65fd68af672adc1ac491
-Merge SHA: N/A
+Merge SHA: c374b42cdc39be8e9e798d492886229152353e6c
 Diff base: 0e65c1b4cb4e2f26acad4d69a43c9bd7402a63d2
 Diff target: 7eee19fc8067333825be65fd68af672adc1ac491
 
@@ -39,4 +39,4 @@ A	packages/contracts/src/ticket.ts
 
 ## SHA Binding
 Head SHA: 7eee19fc8067333825be65fd68af672adc1ac491
-Merge SHA: N/A
+Merge SHA: c374b42cdc39be8e9e798d492886229152353e6c
