@@ -6,19 +6,20 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "92c25c80d51dbe8a2b57f724d912d89888327b1a",
     "verified_source_sha": "2af7f2fced0b99361c52a76dc35623d972a2a0c4",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "note": "2af7f2fced0b99361c52a76dc35623d972a2a0c4 is the implementation commit and the execution anchor named in verification.md. Every commit after it on this lane touches only docs/06_status/proof/UTV2-1916/ and the lane's own metadata, so no measurement recorded below was taken on a different tree than the one this SHA names. merge_sha is null pre-merge and is bound by ops:proof-generate --merge-sha at closeout.",
     "ci_sentinels": {
-      "head_sha": "pending \u2014 set at the PR head once verify concludes",
+      "head_sha": "pending — set at the PR head once verify concludes",
       "verify": {
         "conclusion": "pending"
       },
       "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission."
-    }
+    },
+    "bound_at": "2026-09-15T06:56:31.303Z"
   },
   "what_this_lane_delivers": {
     "capability": "A slip refusal that is about one leg is rendered at that leg's own row, associated by aria-describedby and keyed by leg id, so reordering the slip carries each message with the leg it names.",
@@ -82,7 +83,7 @@
         "390x844"
       ],
       "note": "The new test builds a three-leg slip at each width, asserts zero slip-leg-refusal elements and no aria-describedby on any row, then triggers a refusal that names no leg and asserts it reaches the slip-level region and no row. It does not run in CI on this branch, because the UNIT_TALK_SMART_FORM_E2E gate defaults off and turning it on is a .github/workflows edit outside this lane's file_scope_lock. Recorded as a dependency rather than as CI-proven coverage.",
-      "defect_found_by_this_run": "Two controls share data-testid=\"smart-form-submit-button\" \u2014 the desktop panel button (hidden lg:flex) and the mobile sticky bar (lg:hidden). .first() selects by DOM order rather than visibility, so at 390px it resolved the hidden desktop control and the click timed out. The test now selects the :visible control. Before the fix: 1 failed, 3 passed.",
+      "defect_found_by_this_run": "Two controls share data-testid=\"smart-form-submit-button\" — the desktop panel button (hidden lg:flex) and the mobile sticky bar (lg:hidden). .first() selects by DOM order rather than visibility, so at 390px it resolved the hidden desktop control and the click timed out. The test now selects the :visible control. Before the fix: 1 failed, 3 passed.",
       "screenshots": [
         "docs/06_status/proof/UTV2-1916/screenshot-desktop.png",
         "docs/06_status/proof/UTV2-1916/screenshot-mobile.png"
@@ -142,7 +143,7 @@
           ]
         }
       ],
-      "note": "M5 is decisive for this lane's stated purpose: position-keying passes every test that only builds the slip in order, and the assertion that kills it is the one that reorders and reads the map back by id. M6 is acceptance criterion 3 \u2014 UTV2-1915's own assertion, unchanged, still failing on exactly the condition it named."
+      "note": "M5 is decisive for this lane's stated purpose: position-keying passes every test that only builds the slip in order, and the assertion that kills it is the one that reorders and reads the map back by id. M6 is acceptance criterion 3 — UTV2-1915's own assertion, unchanged, still failing on exactly the condition it named."
     }
   },
   "acceptance_criteria_coverage": [
@@ -156,11 +157,11 @@
     },
     {
       "criterion": "UTV2-1915's entry-survival assertion still passes unchanged.",
-      "evidence": "M6 \u2014 passes at baseline, turns red when the guard is removed"
+      "evidence": "M6 — passes at baseline, turns red when the guard is removed"
     },
     {
       "criterion": "A browser proof shows the refusal rendered at the offending row in a three-leg slip, on both the desktop and mobile widths already screenshotted in UTV2-1915's bundle.",
-      "evidence": "Partially met and recorded as such: the negative half is asserted in the browser at 1440x1000 and 390x844 with two screenshots; the positive half has no operator-reachable producer in this lane \u2014 see known_gaps."
+      "evidence": "Partially met and recorded as such: the negative half is asserted in the browser at 1440x1000 and 390x844 with two screenshots; the positive half has no operator-reachable producer in this lane — see known_gaps."
     },
     {
       "criterion": "A mutation battery proves each new assertion fails on the condition it names.",
@@ -170,9 +171,9 @@
   "scope_and_containment": {
     "production_writes": 0,
     "containment_changed": false,
-    "sgo": "off \u2014 no provider key read, tested or activated",
-    "member_delivery": "disabled \u2014 unchanged",
-    "track_only_containment": "enabled \u2014 unchanged",
+    "sgo": "off — no provider key read, tested or activated",
+    "member_delivery": "disabled — unchanged",
+    "track_only_containment": "enabled — unchanged",
     "note": "The change is confined to apps/smart-form/**. It adds no API route, no repository call and no migration, and it cannot enqueue anything: the slip still refuses to submit while it holds more than one leg."
   },
   "known_gaps": [
@@ -201,8 +202,102 @@
     },
     {
       "check": "Check issue references (Branch Discipline Guard)",
-      "cause": "multiple_issue_references \u2014 \"All PR issue references must match branch issue UTV2-1916; found UTV2-1912, UTV2-1915, UTV2-1916\". The commit bodies name the lane this follows up (UTV2-1915) and the lane that brings the first real producer of a leg-scoped refusal (UTV2-1912), because a reader of the history needs both to understand why the rendering channel ships without a reachable producer.",
-      "disposition": "Non-required, and correct about what it found. Clearing it means rewriting the commit messages, which moves the head and therefore the execution anchor the proof binds to \u2014 a real cost paid for a cosmetic gain on a check that gates nothing. Recorded rather than cleared, consistent with the standing precedent for this check."
+      "cause": "multiple_issue_references — \"All PR issue references must match branch issue UTV2-1916; found UTV2-1912, UTV2-1915, UTV2-1916\". The commit bodies name the lane this follows up (UTV2-1915) and the lane that brings the first real producer of a leg-scoped refusal (UTV2-1912), because a reader of the history needs both to understand why the rendering channel ships without a reachable producer.",
+      "disposition": "Non-required, and correct about what it found. Clearing it means rewriting the commit messages, which moves the head and therefore the execution anchor the proof binds to — a real cost paid for a cosmetic gain on a check that gates nothing. Recorded rather than cleared, consistent with the standing precedent for this check."
     }
-  ]
+  ],
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 15807.93ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 15352.26ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 15762.32ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 16008.95ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 117.46ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 17848.80ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 17726.92ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 12,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 4,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-15T06:40:49.504Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 34937869165, job 104279642377), which ran immediately before the smoke-test step in the same job, on head 92c25c80d51dbe8a2b57f724d912d89888327b1a. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 34937869165,
+      "run_attempt": 1,
+      "job_id": 104279642377,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34937869165/job/104279642377",
+      "target_head_sha": "92c25c80d51dbe8a2b57f724d912d89888327b1a",
+      "target_merge_sha": "92c25c80d51dbe8a2b57f724d912d89888327b1a",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  }
 }

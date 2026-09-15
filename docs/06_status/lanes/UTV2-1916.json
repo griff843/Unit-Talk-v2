@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1916-leg-scoped-slip-refusal",
   "branch": "claude/utv2-1916-leg-scoped-slip-refusal",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "92c25c80d51dbe8a2b57f724d912d89888327b1a",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1584",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,22 @@
     "docs/06_status/proof/UTV2-1916/diff-summary.md",
     "docs/06_status/proof/UTV2-1916/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-15T06:06:52.397Z",
-  "heartbeat_at": "2026-09-15T06:16:46.473Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-15T06:56:35.191Z",
+  "closed_at": "2026-09-15T06:56:35.191Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1916-leg-scoped-slip-refusal.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-15T06:56:33.321Z",
+      "verdict": "pass",
+      "merge_sha": "92c25c80d51dbe8a2b57f724d912d89888327b1a",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -5,8 +5,8 @@
 
 ## Merge SHA Binding
 
-MERGE_SHA: pending merge
-Merge SHA: pending merge
+MERGE_SHA: 92c25c80d51dbe8a2b57f724d912d89888327b1a
+Merge SHA: 92c25c80d51dbe8a2b57f724d912d89888327b1a
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1584
 Anchor commit (implementation): 2af7f2fced0b99361c52a76dc35623d972a2a0c4
 
