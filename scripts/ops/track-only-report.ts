@@ -27,6 +27,11 @@
 import { pathToFileURL } from 'node:url';
 
 import {
+  resolveEffectiveSettlement,
+  type SettlementInput,
+} from '@unit-talk/domain';
+
+import {
   ReadOnlyPostgrestClient,
   canonicalMarketKey,
   type EventRow,
@@ -36,7 +41,9 @@ import {
 } from './pick-truth-audit.ts';
 import {
   computeTrackOnlyStats,
+  computeTrackOnlyStatsByCapper,
   toStatsInput,
+  type CapperStats,
   type TrackOnlyStats,
 } from './track-only/stats.ts';
 
@@ -117,6 +124,12 @@ export interface TrackOnlyPickReport {
      * settlement and the stake from another would be a silent mismatch.
      */
     stakeUnits: number | null;
+    /** The row `resolveEffectiveSettlement` named, so the choice is auditable. */
+    effectiveRecordId: string | null;
+    /** 0 = original, 1+ = how many corrections deep the effective row sits. */
+    correctionDepth: number | null;
+    /** Non-null when no single effective settlement can be named. */
+    unresolvableReason: string | null;
   };
   delivery: Record<string, number>;
   deliveryClean: boolean;
@@ -134,6 +147,14 @@ export interface TrackOnlyReport {
    * inherits the governed cohort predicate rather than re-deriving one.
    */
   stats: TrackOnlyStats;
+  /**
+   * The same aggregate, partitioned by `picks.capper_id` through the same pure
+   * function. Published ALONGSIDE `stats`, never in place of it: the Unit Talk
+   * aggregate and a capper's own record are two separate acceptance requirements,
+   * and they are only meaningful when both can be read off one report and
+   * reconciled against each other.
+   */
+  statsByCapper: CapperStats[];
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -264,6 +285,90 @@ export interface LoadedPickContext {
   delivery: Record<string, number>;
 }
 
+/**
+ * `resolveEffectiveSettlement` narrows `status` to the two values the domain
+ * models. Production stores it free-form, and the only thing the resolver reads it
+ * for is `is_final`, which this report does not consume -- the chain walk itself is
+ * driven entirely by `id`/`corrects_id`. So the narrowing is recorded here rather
+ * than hidden: anything that is not `manual_review` is passed through as `settled`,
+ * and the row's real status stays available to any caller that wants it.
+ */
+function toSettlementInput(row: SettlementRow): SettlementInput {
+  return {
+    id: row.id,
+    pick_id: row.pick_id,
+    status: row.status === 'manual_review' ? 'manual_review' : 'settled',
+    result: row.result,
+    confidence: 'pending',
+    corrects_id: row.corrects_id,
+    settled_at: row.settled_at,
+  };
+}
+
+/**
+ * The effective settlement, resolved rather than approximated.
+ *
+ * Before UTV2-1917 this was `settlements[0]` off an `order: settled_at.desc` read.
+ * That is a third copy of a rule the repository already owns twice over
+ * (`apps/api/src/settlement-service.ts`, `apps/command-center/src/lib/data/snapshot.ts`),
+ * and it is wrong in a way that cannot be seen from the output: the partial unique
+ * index `settlement_records_pick_source_idx ON (pick_id, source) WHERE corrects_id IS
+ * NULL` permits an `operator` root and a `grading` root to coexist, and ordering
+ * picks between them by timestamp. `resolveEffectiveSettlement` refuses instead,
+ * with `MULTIPLE_ROOT_RECORDS`, so a silently wrong number becomes a named refusal.
+ *
+ * No extra query: the caller already reads `select: '*'`, so `id`, `corrects_id` and
+ * `settled_at` are on the wire.
+ */
+export function resolveSettlement(
+  settlements: readonly SettlementRow[],
+): TrackOnlyPickReport['settlement'] {
+  if (settlements.length === 0) {
+    return {
+      rows: 0,
+      result: null,
+      settledAt: null,
+      stakeUnits: null,
+      effectiveRecordId: null,
+      correctionDepth: null,
+      unresolvableReason: null,
+    };
+  }
+
+  const resolved = resolveEffectiveSettlement(settlements.map(toSettlementInput));
+  if (!resolved.ok) {
+    // Rows exist, so this is NOT pending. Every value that could be read as a
+    // result is withheld, and the reason is carried instead.
+    return {
+      rows: settlements.length,
+      result: null,
+      settledAt: null,
+      stakeUnits: null,
+      effectiveRecordId: null,
+      correctionDepth: null,
+      unresolvableReason: resolved.reason,
+    };
+  }
+
+  // The domain's EffectiveSettlement carries no stake, so the stake is read back off
+  // the SAME row the resolver named -- never off `settlements[0]`, which is the
+  // mismatch this whole change exists to remove.
+  const row =
+    settlements.find(
+      (candidate) => candidate.id === resolved.settlement.effective_record_id,
+    ) ?? null;
+
+  return {
+    rows: settlements.length,
+    result: resolved.settlement.result,
+    settledAt: resolved.settlement.settled_at,
+    stakeUnits: row?.stake_units ?? null,
+    effectiveRecordId: resolved.settlement.effective_record_id,
+    correctionDepth: resolved.settlement.correction_depth,
+    unresolvableReason: null,
+  };
+}
+
 export function buildPickReport(
   context: LoadedPickContext,
 ): TrackOnlyPickReport {
@@ -274,6 +379,8 @@ export function buildPickReport(
   // findResult orders by sourced_at DESC and takes the first row, so the newest
   // attestation is the one grading will read. Everything behind it is history,
   // which is what makes a correction an append rather than an overwrite.
+  const effective = resolveSettlement(settlements);
+
   const ordered = [...results].sort((a, b) =>
     String(b.sourced_at ?? '').localeCompare(String(a.sourced_at ?? '')),
   );
@@ -303,12 +410,7 @@ export function buildPickReport(
         .map((row) => row.source)
         .filter((source): source is string => typeof source === 'string'),
     },
-    settlement: {
-      rows: settlements.length,
-      result: settlements[0]?.result ?? null,
-      settledAt: settlements[0]?.settled_at ?? null,
-      stakeUnits: settlements[0]?.stake_units ?? null,
-    },
+    settlement: effective,
     delivery,
     deliveryClean: Object.values(delivery).every((count) => count === 0),
   };
@@ -448,6 +550,7 @@ export async function runTrackOnlyReport(
     // separately can disagree with the rows printed next to it, and the
     // disagreement is invisible to whoever reads only the total.
     stats: computeTrackOnlyStats(picks.map(toStatsInput)),
+    statsByCapper: computeTrackOnlyStatsByCapper(picks.map(toStatsInput)),
   };
 }
 

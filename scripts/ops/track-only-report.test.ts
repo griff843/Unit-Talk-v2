@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildPickReport,
+  resolveSettlement,
   buildPreconditions,
   classifyResultProvenance,
   firstBlockerOf,
@@ -11,9 +12,13 @@ import {
 } from './track-only-report.ts';
 import {
   computeTrackOnlyStats,
+  computeTrackOnlyStatsByCapper,
+  isUnresolvableSettlement,
+  partitionByCapper,
   profitUnits,
   toStatsInput,
-  type StatsInputPick,
+  UNATTRIBUTED_CAPPER,
+  type AttributedStatsInputPick,
 } from './track-only/stats.ts';
 import {
   assertFixtureIsIdentifiable,
@@ -227,15 +232,34 @@ test('the CLI refuses to run without credentials rather than defaulting', () => 
 // than no test file. Same resolution as UTV2-1840.
 // ===========================================================================
 
-function statsPick(over: Partial<StatsInputPick> = {}): StatsInputPick {
+function statsPick(
+  over: Partial<AttributedStatsInputPick> = {},
+): AttributedStatsInputPick {
   return {
     pickId: over.pickId ?? 'p1',
+    capperId: over.capperId === undefined ? 'griff843' : over.capperId,
     odds: over.odds === undefined ? -110 : over.odds,
     stakeUnits: over.stakeUnits === undefined ? 3 : over.stakeUnits,
     latestSettlement:
       over.latestSettlement === undefined
         ? { result: 'win', stakeUnits: null }
         : over.latestSettlement,
+  };
+}
+
+function settlementRow(over: Record<string, unknown> = {}) {
+  return {
+    id: 's1',
+    pick_id: 'p1',
+    status: 'settled',
+    result: 'win',
+    source: 'grading',
+    evidence_ref: null,
+    payload: null,
+    settled_at: '2026-09-15T00:00:00Z',
+    corrects_id: null,
+    stake_units: null,
+    ...over,
   };
 }
 
@@ -388,9 +412,10 @@ test('odds inside (-100, 100) express no price and are refused', () => {
 test('the adapter reports no settlement row as pending, not as a null result', () => {
   const input = toStatsInput({
     pickId: 'p',
+    capperId: 'griff843',
     odds: -110,
     stakeUnits: 3,
-    settlement: { rows: 0, result: null, stakeUnits: null },
+    settlement: { rows: 0, result: null, stakeUnits: null, unresolvableReason: null },
   });
   assert.equal(input.latestSettlement, null);
   assert.equal(computeTrackOnlyStats([input]).pending, 1);
@@ -399,22 +424,35 @@ test('the adapter reports no settlement row as pending, not as a null result', (
 test('the adapter preserves an in-progress settlement row as a row', () => {
   const input = toStatsInput({
     pickId: 'p',
+    capperId: 'griff843',
     odds: -110,
     stakeUnits: 3,
-    settlement: { rows: 1, result: null, stakeUnits: null },
+    settlement: { rows: 1, result: null, stakeUnits: null, unresolvableReason: null },
   });
   // Distinct from the case above: the row exists and can later be corrected.
   assert.notEqual(input.latestSettlement, null);
-  assert.equal(input.latestSettlement?.result, null);
+  // And distinct from an unresolvable chain: a row with no result yet is still a
+  // resolved settlement, so it must NOT arrive in the third state.
+  assert.equal(
+    input.latestSettlement !== null && isUnresolvableSettlement(input.latestSettlement),
+    false,
+  );
+  assert.equal(
+    input.latestSettlement !== null && !isUnresolvableSettlement(input.latestSettlement)
+      ? input.latestSettlement.result
+      : 'unreachable',
+    null,
+  );
   assert.equal(computeTrackOnlyStats([input]).pending, 1);
 });
 
 test("the adapter carries the settlement's own stake through to the price", () => {
   const input = toStatsInput({
     pickId: 'corrected',
+    capperId: 'griff843',
     odds: -110,
     stakeUnits: 3,
-    settlement: { rows: 2, result: 'loss', stakeUnits: 1 },
+    settlement: { rows: 2, result: 'loss', stakeUnits: 1, unresolvableReason: null },
   });
   // If this field were dropped, the pick's 3 units would be priced instead of the
   // settled 1 and the ROI would be wrong with nothing on the pick row to show it.
@@ -623,4 +661,203 @@ test('the fixture is served without reaching the provider', async () => {
   const report = await runSgoJourneyProof({ pickMarket: 'moneyline' });
   assert.equal(report.parse.events.length, 1);
   assert.ok(report.fixtureEventId.startsWith(STAGING_FIXTURE_PREFIX));
+});
+
+// ===========================================================================
+// UTV2-1917 -- per-capper statistics and resolved (not ordered) settlements.
+//
+// The two defects these cover are both silent by construction: a partition that
+// drops rows still prints a plausible record, and `settlements[0]` under
+// `settled_at.desc` still prints a plausible result. So every assertion below is
+// written so that the PREVIOUS behaviour fails it, not merely so that the new
+// behaviour passes.
+// ===========================================================================
+
+test('a capper partition equals the figure computed over that capper alone', () => {
+  const cohort = [
+    statsPick({ pickId: 'g1', capperId: 'griff843' }),
+    statsPick({
+      pickId: 'g2',
+      capperId: 'griff843',
+      latestSettlement: { result: 'loss', stakeUnits: null },
+    }),
+    statsPick({ pickId: 'o1', capperId: 'other' }),
+  ];
+
+  const byCapper = computeTrackOnlyStatsByCapper(cohort);
+  const griff = byCapper.find((entry) => entry.capperId === 'griff843');
+  assert.ok(griff);
+  assert.deepEqual(
+    griff.stats,
+    computeTrackOnlyStats(cohort.filter((pick) => pick.capperId === 'griff843')),
+  );
+});
+
+test('the partitions sum exactly to the whole-cohort aggregate', () => {
+  const cohort = [
+    statsPick({ pickId: 'g1', capperId: 'griff843' }),
+    statsPick({
+      pickId: 'g2',
+      capperId: 'griff843',
+      latestSettlement: { result: 'loss', stakeUnits: null },
+    }),
+    statsPick({ pickId: 'o1', capperId: 'other', odds: 150, stakeUnits: 2 }),
+    statsPick({ pickId: 'u1', capperId: null }),
+    statsPick({ pickId: 'p1x', capperId: 'other', latestSettlement: null }),
+  ];
+
+  const aggregate = computeTrackOnlyStats(cohort);
+  const parts = computeTrackOnlyStatsByCapper(cohort);
+  const sum = (pick: (s: (typeof parts)[number]['stats']) => number): number =>
+    parts.reduce((total, entry) => total + pick(entry.stats), 0);
+
+  assert.equal(sum((s) => s.cohortSize), aggregate.cohortSize);
+  assert.equal(sum((s) => s.record.win), aggregate.record.win);
+  assert.equal(sum((s) => s.record.loss), aggregate.record.loss);
+  assert.equal(sum((s) => s.record.push), aggregate.record.push);
+  assert.equal(sum((s) => s.record.decided), aggregate.record.decided);
+  assert.equal(sum((s) => s.pending), aggregate.pending);
+  assert.equal(sum((s) => s.units.measuredOver), aggregate.units.measuredOver);
+  // Units are rounded per partition, so compare to the aggregate's own precision
+  // rather than asserting bit equality on a sum of rounded terms.
+  assert.ok(Math.abs(sum((s) => s.units.staked ?? 0) - (aggregate.units.staked ?? 0)) < 1e-4);
+  assert.ok(Math.abs(sum((s) => s.units.net ?? 0) - (aggregate.units.net ?? 0)) < 1e-4);
+});
+
+test('a pick with no capper_id lands in a named partition and still counts in the aggregate', () => {
+  const cohort = [
+    statsPick({ pickId: 'g1', capperId: 'griff843' }),
+    statsPick({ pickId: 'u1', capperId: null }),
+  ];
+
+  const partitions = partitionByCapper(cohort);
+  assert.deepEqual([...partitions.keys()], ['griff843', UNATTRIBUTED_CAPPER]);
+  assert.equal(partitions.get(UNATTRIBUTED_CAPPER)?.length, 1);
+
+  const unattributed = computeTrackOnlyStatsByCapper(cohort).find(
+    (entry) => entry.capperId === null,
+  );
+  assert.ok(unattributed);
+  assert.equal(unattributed.partition, UNATTRIBUTED_CAPPER);
+  assert.equal(computeTrackOnlyStats(cohort).cohortSize, 2);
+});
+
+test("a second capper's picks cannot contaminate the first's cohort", () => {
+  const cohort = [
+    statsPick({ pickId: 'g1', capperId: 'griff843' }),
+    statsPick({ pickId: 'o1', capperId: 'other' }),
+    statsPick({ pickId: 'o2', capperId: 'other' }),
+  ];
+
+  const griff = computeTrackOnlyStatsByCapper(cohort).find(
+    (entry) => entry.capperId === 'griff843',
+  );
+  assert.ok(griff);
+  assert.equal(griff.stats.cohortSize, 1);
+  assert.equal(griff.stats.record.win, 1);
+  assert.equal(griff.stats.units.measuredOver, 1);
+});
+
+test('a correction chain resolves to the tip, not to the newest settled_at', () => {
+  // The tip is DELIBERATELY older than the root by `settled_at`, so the previous
+  // `settlements[0]` behaviour would have read the root's `win`.
+  const rows = [
+    settlementRow({
+      id: 'root',
+      result: 'win',
+      corrects_id: null,
+      settled_at: '2026-09-15T05:00:00Z',
+      stake_units: 3,
+    }),
+    settlementRow({
+      id: 'tip',
+      result: 'loss',
+      corrects_id: 'root',
+      settled_at: '2026-09-15T01:00:00Z',
+      stake_units: 5,
+    }),
+  ];
+
+  // Handed to the resolver in `settled_at.desc` order -- exactly the order the
+  // old code fetched in, so nothing about the input favours the new behaviour.
+  const settlement = resolveSettlement(
+    [...rows].sort((a, b) => b.settled_at.localeCompare(a.settled_at)),
+  );
+
+  assert.equal(settlement.effectiveRecordId, 'tip');
+  assert.equal(settlement.result, 'loss');
+  assert.equal(settlement.correctionDepth, 1);
+  // The stake comes off the SAME row as the result.
+  assert.equal(settlement.stakeUnits, 5);
+  assert.equal(settlement.unresolvableReason, null);
+
+  const stats = computeTrackOnlyStats([
+    toStatsInput({
+      pickId: 'p1',
+      capperId: 'griff843',
+      odds: -110,
+      stakeUnits: 3,
+      settlement,
+    }),
+  ]);
+  assert.equal(stats.record.loss, 1);
+  assert.equal(stats.record.win, 0);
+  assert.equal(stats.units.staked, 5);
+});
+
+test('two competing roots are refused by name, and count as neither record nor pending', () => {
+  const settlement = resolveSettlement([
+    settlementRow({ id: 'op', source: 'operator', result: 'win', corrects_id: null }),
+    settlementRow({
+      id: 'gr',
+      source: 'grading',
+      result: 'loss',
+      corrects_id: null,
+      settled_at: '2026-09-15T02:00:00Z',
+    }),
+  ]);
+
+  assert.equal(settlement.unresolvableReason, 'MULTIPLE_ROOT_RECORDS');
+  assert.equal(settlement.result, null);
+  assert.equal(settlement.effectiveRecordId, null);
+  assert.equal(settlement.rows, 2);
+
+  const stats = computeTrackOnlyStats([
+    toStatsInput({
+      pickId: 'p1',
+      capperId: 'griff843',
+      odds: -110,
+      stakeUnits: 3,
+      settlement,
+    }),
+  ]);
+  assert.equal(stats.pending, 0);
+  assert.equal(stats.record.decided, 0);
+  assert.equal(stats.excluded.length, 1);
+  assert.match(stats.excluded[0]!.reason, /MULTIPLE_ROOT_RECORDS/);
+});
+
+test('buildPickReport publishes the resolved settlement, not the newest row', () => {
+  const report = buildPickReport(
+    context({
+      settlements: [
+        settlementRow({
+          id: 'root',
+          result: 'win',
+          corrects_id: null,
+          settled_at: '2026-09-15T05:00:00Z',
+        }),
+        settlementRow({
+          id: 'tip',
+          result: 'push',
+          corrects_id: 'root',
+          settled_at: '2026-09-15T01:00:00Z',
+        }),
+      ],
+    } as unknown as Partial<LoadedPickContext>),
+  );
+
+  assert.equal(report.settlement.effectiveRecordId, 'tip');
+  assert.equal(report.settlement.result, 'push');
+  assert.equal(report.settlement.rows, 2);
 });
