@@ -6,6 +6,8 @@ import {
   americanToDecimal,
   decimalToAmerican,
   isValidAmericanOdds,
+  deriveParlayTicketIdentity,
+  parlayStatContribution,
   priceParlay,
   priceSettledParlay,
   resolveParlayTicketOutcome,
@@ -321,4 +323,116 @@ test('only a win has a parlay price', () => {
     priceSettledParlay(legs, resolveParlayTicketOutcome(legs, results('win', 'win', 'pending')), 1),
     null,
   );
+});
+
+// ── Ticket identity / idempotency ────────────────────────────────────────────
+
+test('ticket identity is order-independent: reordering legs is the same bet', () => {
+  const a = ticket({ legs: [leg({ id: 'a' }), leg({ id: 'b' }), leg({ id: 'c' })] });
+  const b = ticket({ legs: [leg({ id: 'c' }), leg({ id: 'a' }), leg({ id: 'b' })] });
+  assert.equal(deriveParlayTicketIdentity(a), deriveParlayTicketIdentity(b));
+});
+
+test('ticket identity separates different stakes on the same selections', () => {
+  const small = ticket({ legs: [leg({ id: 'a' }), leg({ id: 'b' })], stakeUnits: 1 });
+  const large = ticket({ legs: [leg({ id: 'a' }), leg({ id: 'b' })], stakeUnits: 5 });
+  assert.notEqual(deriveParlayTicketIdentity(small), deriveParlayTicketIdentity(large));
+});
+
+test('ticket identity separates the same selections taken at different prices', () => {
+  const cheap = ticket({ legs: [leg({ id: 'a' }), leg({ id: 'b', odds: -110 })] });
+  const rich = ticket({ legs: [leg({ id: 'a' }), leg({ id: 'b', odds: 150 })] });
+  assert.notEqual(deriveParlayTicketIdentity(cheap), deriveParlayTicketIdentity(rich));
+});
+
+test('ticket identity separates the same market at different lines', () => {
+  const low = ticket({ legs: [leg({ id: 'a' }), leg({ id: 'b', line: -3.5 })] });
+  const high = ticket({ legs: [leg({ id: 'a' }), leg({ id: 'b', line: -7.5 })] });
+  assert.notEqual(deriveParlayTicketIdentity(low), deriveParlayTicketIdentity(high));
+});
+
+test('ticket identity is insensitive to case and whitespace, as duplicate detection is', () => {
+  const plain = ticket({ legs: [leg({ id: 'a', selection: 'Home -3.5' }), leg({ id: 'b' })] });
+  const messy = ticket({ legs: [leg({ id: 'a', selection: '  home -3.5 ' }), leg({ id: 'b' })] });
+  assert.equal(deriveParlayTicketIdentity(plain), deriveParlayTicketIdentity(messy));
+});
+
+// ── Statistics semantics ─────────────────────────────────────────────────────
+
+const won = (ids: string[]): ParlayLegResult[] => ids.map((id) => ({ legId: id, outcome: 'win' }));
+
+test('a settled parlay is ONE record, never one per leg', () => {
+  const legs = [leg({ id: 'a' }), leg({ id: 'b' }), leg({ id: 'c' }), leg({ id: 'd' })];
+  const resolution = resolveParlayTicketOutcome(legs, won(['a', 'b', 'c', 'd']));
+  const stat = parlayStatContribution(legs, resolution, 1);
+  assert.equal(stat.records, 1);
+  assert.equal(stat.wins, 1);
+  assert.equal(stat.legCount, 4);
+});
+
+test('a pending parlay contributes nothing at all, not a zero record', () => {
+  const legs = [leg({ id: 'a' }), leg({ id: 'b' })];
+  const resolution = resolveParlayTicketOutcome(legs, [
+    { legId: 'a', outcome: 'win' },
+    { legId: 'b', outcome: 'pending' },
+  ]);
+  assert.equal(resolution.outcome, null);
+  const stat = parlayStatContribution(legs, resolution, 3);
+  assert.equal(stat.records, 0);
+  assert.equal(stat.unitsDelta, 0);
+});
+
+test('a losing parlay returns the stake negated, whatever the legs were priced at', () => {
+  const legs = [leg({ id: 'a' }), leg({ id: 'b', odds: 900 })];
+  const resolution = resolveParlayTicketOutcome(legs, [
+    { legId: 'a', outcome: 'loss' },
+    { legId: 'b', outcome: 'win' },
+  ]);
+  const stat = parlayStatContribution(legs, resolution, 2.5);
+  assert.equal(stat.records, 1);
+  assert.equal(stat.losses, 1);
+  assert.equal(stat.unitsDelta, -2.5);
+});
+
+test('an all-push parlay is a record with zero units, not a win and not a skip', () => {
+  const legs = [leg({ id: 'a' }), leg({ id: 'b' })];
+  const resolution = resolveParlayTicketOutcome(legs, [
+    { legId: 'a', outcome: 'push' },
+    { legId: 'b', outcome: 'push' },
+  ]);
+  const stat = parlayStatContribution(legs, resolution, 4);
+  assert.equal(stat.records, 1);
+  assert.equal(stat.pushes, 1);
+  assert.equal(stat.wins, 0);
+  assert.equal(stat.unitsDelta, 0);
+});
+
+test('a win pays the SURVIVING parlay, so a pushed leg does not pay the quoted price', () => {
+  const legs = [leg({ id: 'a' }), leg({ id: 'b' }), leg({ id: 'c' })];
+  const full = resolveParlayTicketOutcome(legs, won(['a', 'b', 'c']));
+  const pushed = resolveParlayTicketOutcome(legs, [
+    { legId: 'a', outcome: 'win' },
+    { legId: 'b', outcome: 'win' },
+    { legId: 'c', outcome: 'push' },
+  ]);
+  const fullStat = parlayStatContribution(legs, full, 1);
+  const pushedStat = parlayStatContribution(legs, pushed, 1);
+  assert.equal(fullStat.wins, 1);
+  assert.equal(pushedStat.wins, 1);
+  assert.ok(
+    pushedStat.unitsDelta < fullStat.unitsDelta,
+    `a two-leg survivor must pay less than the three-leg ticket: ${pushedStat.unitsDelta} vs ${fullStat.unitsDelta}`,
+  );
+  // And it must pay exactly the two-leg price, not some discounted three-leg one.
+  const twoLeg = priceSettledParlay(legs, pushed, 1);
+  assert.equal(pushedStat.unitsDelta, twoLeg?.payoutUnits);
+});
+
+test('units scale with the stake rather than being fixed per ticket', () => {
+  const legs = [leg({ id: 'a' }), leg({ id: 'b' })];
+  const resolution = resolveParlayTicketOutcome(legs, won(['a', 'b']));
+  const one = parlayStatContribution(legs, resolution, 1);
+  const three = parlayStatContribution(legs, resolution, 3);
+  assert.ok(Math.abs(three.unitsDelta - one.unitsDelta * 3) < 1e-12);
+  assert.equal(three.records, 1);
 });

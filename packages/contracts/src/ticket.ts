@@ -332,3 +332,96 @@ export function priceSettledParlay(
   const surviving = legs.filter((leg) => resolution.survivingLegIds.includes(leg.id));
   return priceParlay(surviving, stakeUnits);
 }
+
+// ── Ticket-level identity and duplicate protection ───────────────────────────
+
+/**
+ * A stable identity for a parlay ticket, used as the idempotency key so a
+ * double-submitted ticket persists once.
+ *
+ * Two properties are deliberate and are each pinned by a test.
+ *
+ * It is **order-independent**. A parlay is a set of legs, not a sequence; the
+ * same three legs reordered in the UI is the same bet, and if reordering
+ * produced a new key a user who dragged a leg and resubmitted would create a
+ * second ticket. The leg identities are sorted before hashing.
+ *
+ * It **includes the stake and every leg's price**. Two tickets on the same
+ * selections at different stakes, or taken at different prices, are genuinely
+ * different bets and must not collapse into one. This is the opposite error and
+ * it is the more expensive one: collapsing them silently discards a real bet.
+ *
+ * It deliberately does **not** include the submitting capper. Ticket identity is
+ * a property of the bet; attribution is carried on the row. Two cappers who
+ * submit the identical ticket are two tickets, so callers namespace this key
+ * with the capper identity rather than having it folded in invisibly here.
+ */
+export function deriveParlayTicketIdentity(payload: ParlayTicketPayload): string {
+  const legs = payload.legs
+    .map((leg) => `${legMarketIdentity(leg)}|${leg.line ?? 'no-line'}|${leg.odds}`)
+    .sort();
+  return `parlay:${legs.join('::')}|stake=${payload.stakeUnits}`;
+}
+
+// ── Statistics semantics ─────────────────────────────────────────────────────
+
+/**
+ * What one settled parlay contributes to a capper's record and units.
+ *
+ * `legCount` is reported but is explicitly **not** a unit of record. A four-leg
+ * parlay is one bet that won or lost once; counting its legs individually would
+ * inflate a capper's sample size fourfold and let one ticket look like four
+ * independent results. Every field below is per *ticket*.
+ */
+export interface ParlayStatContribution {
+  /** 1 for a settled ticket, 0 for one still pending. Never the leg count. */
+  records: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  /** Signed units. A win pays the parlay price; a loss returns the stake negated; a push is zero. */
+  unitsDelta: number;
+  /** Reported for display only. Never summed into a record. */
+  legCount: number;
+}
+
+/**
+ * Compute a settled parlay's contribution to capper statistics.
+ *
+ * A pending ticket contributes nothing at all — not a zero-value record, which
+ * would enter the denominator and dilute a win rate with bets that have not
+ * happened yet.
+ */
+export function parlayStatContribution(
+  legs: readonly ParlayLegInput[],
+  resolution: ParlayOutcomeResolution,
+  stakeUnits: number,
+): ParlayStatContribution {
+  const legCount = legs.length;
+  const empty: ParlayStatContribution = {
+    records: 0,
+    wins: 0,
+    losses: 0,
+    pushes: 0,
+    unitsDelta: 0,
+    legCount,
+  };
+
+  if (resolution.outcome === null) {
+    return empty;
+  }
+  if (resolution.outcome === 'push') {
+    return { ...empty, records: 1, pushes: 1 };
+  }
+  if (resolution.outcome === 'loss') {
+    return { ...empty, records: 1, losses: 1, unitsDelta: -stakeUnits };
+  }
+
+  const pricing = priceSettledParlay(legs, resolution, stakeUnits);
+  if (!pricing) {
+    // Unreachable for a win by construction; fail closed rather than credit an
+    // unpriceable win with a payout nobody computed.
+    return { ...empty, records: 1, wins: 1, unitsDelta: 0 };
+  }
+  return { ...empty, records: 1, wins: 1, unitsDelta: pricing.payoutUnits };
+}
