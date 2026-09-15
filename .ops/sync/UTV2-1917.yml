@@ -1,0 +1,206 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1917
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1917
+  objective: "C1c — Track Only statistics: partition on picks.capper_id and
+    resolve the effective settlement instead of ordering by settled_at"
+  acceptance_criteria:
+    - Two cappers' partitions each equal the figure computed over that capper's
+      picks alone.
+    - The partitions' `record`, `units.staked` and `units.net` sum exactly to
+      the whole-cohort aggregate.
+    - "A `capper_id: null` pick lands in an explicit unattributed partition and
+      is still counted in the aggregate."
+    - A correction chain resolves to the **tip**, asserted against a fixture
+      where the tip disagrees with `settled_at.desc`, so the previous behaviour
+      fails the test.
+    - "Two roots (`operator` + `grading`, both `corrects_id: null`) produce an
+      `excluded` entry naming `MULTIPLE_ROOT_RECORDS`, contributing to neither
+      `record` nor `pending`."
+    - A second capper's picks cannot contaminate the first's cohort.
+    - The six 2026-05-29 fixtures are proven excluded by the cohort predicate,
+      not by a filter added here.
+    - "[UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-s\
+      tatistics-and-recap-correctness-finish-the-metadatacapper) AC8 carries
+      over verbatim: the lane must not present a statistic it cannot source.
+      With one capper and zero real settled Track Only picks, an explicitly-zero
+      surface is the correct output."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Third slice of [UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-statistics-and-recap-correctness-finish-the-metadatacapper), and the only one executable today. C1a is blocked on the `runtime` singleton (held by [UTV2-1907](https://linear.app/unit-talk-v2/issue/UTV2-1907/c1a-pipeline-capper-attribution-must-read-pickscapper-id-not) / [griff843/Unit-Talk-v2#1581](https://linear.app/unit-talk-v2/review/utv2-1907-resolve-capper-attribution-from-pickscapper-id-never-from-08ac75d6352d)) and C1b is blocked on the `delivery-ui` slot for `apps/command-center/**` (held by [UTV2-1802](https://linear.app/unit-talk-v2/issue/UTV2-1802/command-center-remove-or-fail-closed-gate-the-management-api-arbitrary) / [griff843/Unit-Talk-v2#1513](https://linear.app/unit-talk-v2/review/utv2-1802-make-the-command-center-management-token-unable-to-run-5dc8704a2e42), `in_review`).
+
+      **Correction to** [UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-statistics-and-recap-correctness-finish-the-metadatacapper)**'s 2026-09-15 note:** it states the `delivery-ui` slot is free because "the only non-terminal lanes on the board are [UTV2-1906](https://linear.app/unit-talk-v2/issue/UTV2-1906/a1-parlay-ticket-contract-pricing-validation-outcome-identity-and) and [UTV2-1907](https://linear.app/unit-talk-v2/issue/UTV2-1907/c1a-pipeline-capper-attribution-must-read-pickscapper-id-not)". Measured 2026-09-15: `docs/06_status/lanes/UTV2-1802.json` reads `status: in_review`, `lane_type: delivery-ui`, `file_scope_lock: ["apps/command-center/**"]`. `in_review` is an active status, and the Delivery/UI cap is one lane per app root. So C1b is blocked until [griff843/Unit-Talk-v2#1513](https://linear.app/unit-talk-v2/review/utv2-1802-make-the-command-center-management-token-unable-to-run-5dc8704a2e42) merges.
+    - |-
+      Scope — three literal paths
+      ```
+      scripts/ops/track-only/stats.ts
+      scripts/ops/track-only-report.ts
+      scripts/ops/track-only-report.test.ts
+      ```
+
+      No `package.json` (the test file is already the last entry of `test:ops`), no `.github/**`, no migration, no `apps/**`, no `packages/**` edit. `packages/domain` is imported, never modified.
+
+      Lane type `hygiene`: admits `scripts/**` at `hygiene.yml:7`, cap 4 with zero active, forbids none of these paths. This is the type the repository already assigned to this file — `scripts/ops/track-only-report.ts` was created by [UTV2-1888](https://linear.app/unit-talk-v2/issue/UTV2-1888/governed-daily-observation-for-track-only-picks-show-why-a-pick-has-or), whose manifest reads `lane_type: hygiene`.
+    - |-
+      The finding that makes this small
+      `scripts/ops/track-only/stats.ts:92` `computeTrackOnlyStats` already emits every figure [UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-statistics-and-recap-correctness-finish-the-metadatacapper) AC4 requires: `record: {win, loss, push, decided}`, `nonDecisions: {void, cancelled}`, `pending`, `units: {staked, net, roi, measuredOver}`, and `excluded: Array<{pickId, reason}>`. This is a partition-and-resolution change inside that function, not a statistics build — which is also how "do not introduce a second mutable stats ledger" is honoured: nothing is persisted, no table, no view.
+
+      AC4's fixture-exclusion requirement is **already satisfied by construction**: `track-only-report.ts:367` filters the cohort on `metadata->>distributionMode = eq.track-only`, so the six 2026-05-29 `capper_id='griff843'` proof fixtures — which carry no `distributionMode` — cannot enter it. The lane proves this rather than assuming it.
+    - >-
+      Gap A — the canonical partition key is read and then discarded
+
+      `track-only-report.ts:284` already reads `capperId: pick.capper_id ??
+      null`. `StatsInputPick` (`stats.ts:16-27`) has no such field, so
+      `toStatsInput` (`stats.ts:202-218`) drops it, and `:450` computes one
+      aggregate over the whole cohort with no capper partition.
+    - >-
+      Gap B — "latest settlement" is approximated by ordering, not resolved
+
+      `track-only-report.ts:404-409` fetches with `order: 'settled_at.desc'` and
+      `:306-311` takes `settlements[0]`. The comment on
+      `StatsInputPick.latestSettlement` calls that "the correction winner". It
+      is not. The canonical resolver is `resolveEffectiveSettlement`
+      (`packages/domain/src/outcomes/settlement-downstream.ts:72`), which walks
+      root → tip via `corrects_id` and is already the consumer in
+      `apps/api/src/settlement-service.ts:1069` and
+      `apps/command-center/src/lib/data/snapshot.ts:83`. The Track Only report
+      is the one consumer that re-derives "latest" by ordering — a third copy of
+      a rule, the exact defect class this file's own header comment refuses.
+
+
+      Why it matters concretely: the partial unique index is
+      `settlement_records_pick_source_idx ON (pick_id, source) WHERE corrects_id
+      IS NULL`, so an `operator` row and a `grading` row can both be roots.
+      Under `settled_at.desc` the report picks between them by timestamp,
+      silently. `resolveEffectiveSettlement` returns `{ok: false, reason:
+      'MULTIPLE_ROOT_RECORDS'}` instead — the repair converts a silent wrong
+      number into a named exclusion.
+
+
+      No extra query is needed: `:404` already fetches `select: '*'`, so `id`,
+      `corrects_id`, `status`, `confidence` and `settled_at` are in hand.
+    - >-
+      Change set
+
+      | \# | File | Change |
+
+      | -- | -- | -- |
+
+      | a | `stats.ts` | add `capperId: string \| null` to `StatsInputPick` and
+      `StatsSourceReport`; carry it through `toStatsInput`.
+      `computeTrackOnlyStats` itself is unchanged — it stays a pure aggregate
+      over whatever cohort it is handed. |
+
+      | b | `stats.ts` | add `computeTrackOnlyStatsByCapper(picks)`, which
+      partitions and applies **the same** `computeTrackOnlyStats` per partition,
+      so a per-capper figure that disagrees with the aggregate is arithmetically
+      impossible rather than merely unlikely. |
+
+      | c | `stats.ts` | `latestSettlement` gains an explicit *unresolvable*
+      state carrying the resolver's reason, routed to `excluded` rather than to
+      `pending`. A broken correction chain is not backlog. |
+
+      | d | `track-only-report.ts` | replace `settlements[0]` with
+      `resolveEffectiveSettlement(settlements)`; map `effective_record_id` back
+      to its row for `stake_units` (the `EffectiveSettlement` shape carries no
+      stake). Keep `rows: settlements.length` — it is the pending test and is
+      still correct. |
+
+      | e | `track-only-report.ts` | pass `capperId` through and add
+      `statsByCapper` alongside the existing `stats`. **Do not remove** `stats`
+      — the aggregate and the per-capper figures must both be readable from one
+      report so they can be reconciled against each other. |
+
+
+      `null` capper is a real partition, not a dropped row: dropping it would
+      make the partitions silently fail to sum to the aggregate, which is the
+      one invariant this design exists to make checkable.
+    - >-
+      Containment
+
+      Read-only by construction — the report uses `ReadOnlyPostgrestClient`, a
+      GET-only transport. No production write, no containment change, SGO off,
+      member delivery disabled.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1917/c1c-track-only-statistics-partition-on-pickscapper-id-and-resolve-the
+    title: "C1c — Track Only statistics: partition on picks.capper_id and resolve
+      the effective settlement instead of ordering by settled_at"
+    description: |-
+      Third slice of [UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-statistics-and-recap-correctness-finish-the-metadatacapper), and the only one executable today. C1a is blocked on the `runtime` singleton (held by [UTV2-1907](https://linear.app/unit-talk-v2/issue/UTV2-1907/c1a-pipeline-capper-attribution-must-read-pickscapper-id-not) / [griff843/Unit-Talk-v2#1581](https://linear.app/unit-talk-v2/review/utv2-1907-resolve-capper-attribution-from-pickscapper-id-never-from-08ac75d6352d)) and C1b is blocked on the `delivery-ui` slot for `apps/command-center/**` (held by [UTV2-1802](https://linear.app/unit-talk-v2/issue/UTV2-1802/command-center-remove-or-fail-closed-gate-the-management-api-arbitrary) / [griff843/Unit-Talk-v2#1513](https://linear.app/unit-talk-v2/review/utv2-1802-make-the-command-center-management-token-unable-to-run-5dc8704a2e42), `in_review`).
+
+      **Correction to** [UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-statistics-and-recap-correctness-finish-the-metadatacapper)**'s 2026-09-15 note:** it states the `delivery-ui` slot is free because "the only non-terminal lanes on the board are [UTV2-1906](https://linear.app/unit-talk-v2/issue/UTV2-1906/a1-parlay-ticket-contract-pricing-validation-outcome-identity-and) and [UTV2-1907](https://linear.app/unit-talk-v2/issue/UTV2-1907/c1a-pipeline-capper-attribution-must-read-pickscapper-id-not)". Measured 2026-09-15: `docs/06_status/lanes/UTV2-1802.json` reads `status: in_review`, `lane_type: delivery-ui`, `file_scope_lock: ["apps/command-center/**"]`. `in_review` is an active status, and the Delivery/UI cap is one lane per app root. So C1b is blocked until [griff843/Unit-Talk-v2#1513](https://linear.app/unit-talk-v2/review/utv2-1802-make-the-command-center-management-token-unable-to-run-5dc8704a2e42) merges.
+
+      ## Scope — three literal paths
+
+      ```
+      scripts/ops/track-only/stats.ts
+      scripts/ops/track-only-report.ts
+      scripts/ops/track-only-report.test.ts
+      ```
+
+      No `package.json` (the test file is already the last entry of `test:ops`), no `.github/**`, no migration, no `apps/**`, no `packages/**` edit. `packages/domain` is imported, never modified.
+
+      Lane type `hygiene`: admits `scripts/**` at `hygiene.yml:7`, cap 4 with zero active, forbids none of these paths. This is the type the repository already assigned to this file — `scripts/ops/track-only-report.ts` was created by [UTV2-1888](https://linear.app/unit-talk-v2/issue/UTV2-1888/governed-daily-observation-for-track-only-picks-show-why-a-pick-has-or), whose manifest reads `lane_type: hygiene`.
+
+      ## The finding that makes this small
+
+      `scripts/ops/track-only/stats.ts:92` `computeTrackOnlyStats` already emits every figure [UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-statistics-and-recap-correctness-finish-the-metadatacapper) AC4 requires: `record: {win, loss, push, decided}`, `nonDecisions: {void, cancelled}`, `pending`, `units: {staked, net, roi, measuredOver}`, and `excluded: Array<{pickId, reason}>`. This is a partition-and-resolution change inside that function, not a statistics build — which is also how "do not introduce a second mutable stats ledger" is honoured: nothing is persisted, no table, no view.
+
+      AC4's fixture-exclusion requirement is **already satisfied by construction**: `track-only-report.ts:367` filters the cohort on `metadata->>distributionMode = eq.track-only`, so the six 2026-05-29 `capper_id='griff843'` proof fixtures — which carry no `distributionMode` — cannot enter it. The lane proves this rather than assuming it.
+
+      ## Gap A — the canonical partition key is read and then discarded
+
+      `track-only-report.ts:284` already reads `capperId: pick.capper_id ?? null`. `StatsInputPick` (`stats.ts:16-27`) has no such field, so `toStatsInput` (`stats.ts:202-218`) drops it, and `:450` computes one aggregate over the whole cohort with no capper partition.
+
+      ## Gap B — "latest settlement" is approximated by ordering, not resolved
+
+      `track-only-report.ts:404-409` fetches with `order: 'settled_at.desc'` and `:306-311` takes `settlements[0]`. The comment on `StatsInputPick.latestSettlement` calls that "the correction winner". It is not. The canonical resolver is `resolveEffectiveSettlement` (`packages/domain/src/outcomes/settlement-downstream.ts:72`), which walks root → tip via `corrects_id` and is already the consumer in `apps/api/src/settlement-service.ts:1069` and `apps/command-center/src/lib/data/snapshot.ts:83`. The Track Only report is the one consumer that re-derives "latest" by ordering — a third copy of a rule, the exact defect class this file's own header comment refuses.
+
+      Why it matters concretely: the partial unique index is `settlement_records_pick_source_idx ON (pick_id, source) WHERE corrects_id IS NULL`, so an `operator` row and a `grading` row can both be roots. Under `settled_at.desc` the report picks between them by timestamp, silently. `resolveEffectiveSettlement` returns `{ok: false, reason: 'MULTIPLE_ROOT_RECORDS'}` instead — the repair converts a silent wrong number into a named exclusion.
+
+      No extra query is needed: `:404` already fetches `select: '*'`, so `id`, `corrects_id`, `status`, `confidence` and `settled_at` are in hand.
+
+      ## Change set
+
+      | \# | File | Change |
+      | -- | -- | -- |
+      | a | `stats.ts` | add `capperId: string \| null` to `StatsInputPick` and `StatsSourceReport`; carry it through `toStatsInput`. `computeTrackOnlyStats` itself is unchanged — it stays a pure aggregate over whatever cohort it is handed. |
+      | b | `stats.ts` | add `computeTrackOnlyStatsByCapper(picks)`, which partitions and applies **the same** `computeTrackOnlyStats` per partition, so a per-capper figure that disagrees with the aggregate is arithmetically impossible rather than merely unlikely. |
+      | c | `stats.ts` | `latestSettlement` gains an explicit *unresolvable* state carrying the resolver's reason, routed to `excluded` rather than to `pending`. A broken correction chain is not backlog. |
+      | d | `track-only-report.ts` | replace `settlements[0]` with `resolveEffectiveSettlement(settlements)`; map `effective_record_id` back to its row for `stake_units` (the `EffectiveSettlement` shape carries no stake). Keep `rows: settlements.length` — it is the pending test and is still correct. |
+      | e | `track-only-report.ts` | pass `capperId` through and add `statsByCapper` alongside the existing `stats`. **Do not remove** `stats` — the aggregate and the per-capper figures must both be readable from one report so they can be reconciled against each other. |
+
+      `null` capper is a real partition, not a dropped row: dropping it would make the partitions silently fail to sum to the aggregate, which is the one invariant this design exists to make checkable.
+
+      ## Acceptance criteria
+
+      1. Two cappers' partitions each equal the figure computed over that capper's picks alone.
+      2. The partitions' `record`, `units.staked` and `units.net` sum exactly to the whole-cohort aggregate.
+      3. A `capper_id: null` pick lands in an explicit unattributed partition and is still counted in the aggregate.
+      4. A correction chain resolves to the **tip**, asserted against a fixture where the tip disagrees with `settled_at.desc`, so the previous behaviour fails the test.
+      5. Two roots (`operator` + `grading`, both `corrects_id: null`) produce an `excluded` entry naming `MULTIPLE_ROOT_RECORDS`, contributing to neither `record` nor `pending`.
+      6. A second capper's picks cannot contaminate the first's cohort.
+      7. The six 2026-05-29 fixtures are proven excluded by the cohort predicate, not by a filter added here.
+      8. [UTV2-1911](https://linear.app/unit-talk-v2/issue/UTV2-1911/per-capper-statistics-and-recap-correctness-finish-the-metadatacapper) AC8 carries over verbatim: the lane must not present a statistic it cannot source. With one capper and zero real settled Track Only picks, an explicitly-zero surface is the correct output.
+
+      ## Containment
+
+      Read-only by construction — the report uses `ReadOnlyPostgrestClient`, a GET-only transport. No production write, no containment change, SGO off, member delivery disabled.
+    captured_at: 2026-09-15T14:12:18.017Z
+    description_sha256: bab11a5a4ac8c583f3a4300cd691d4de88a713b1b3f6af69d9f876b3957cea2e
+  contract_hash: 047a61491292c769cab34f8e9fc55975d6f2f6b55f2889b1b1bb080e6e9805d5
