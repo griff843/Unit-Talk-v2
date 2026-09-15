@@ -7,7 +7,7 @@ Lane type: hygiene
 Branch: claude/utv2-1917-track-only-capper-stats
 PR URL: 1585
 Head SHA: 5859b3e1c12ea866328b8669728c1b495fa00b37
-Merge SHA: N/A
+Merge SHA: f7cc5193117a5404036c2c15a8a27a4dec43a929
 Diff base: 6db27e2cabff60faa7838ff9027e1d0ad5364a01
 Diff target: 5859b3e1c12ea866328b8669728c1b495fa00b37
 
@@ -37,4 +37,4 @@ M	scripts/ops/track-only/stats.ts
 
 ## SHA Binding
 Head SHA: 5859b3e1c12ea866328b8669728c1b495fa00b37
-Merge SHA: N/A
+Merge SHA: f7cc5193117a5404036c2c15a8a27a4dec43a929
