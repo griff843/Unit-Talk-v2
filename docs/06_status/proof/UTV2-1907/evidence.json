@@ -1,0 +1,246 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1907",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "84c356190224d9aa83e82583e4b93b39b2774e5b",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "84c356190224d9aa83e82583e4b93b39b2774e5b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1907/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the execution anchor does not move when this file lands.",
+    "bound_at": "2026-09-15T02:30:00.000Z",
+    "ci_sentinels": {
+      "run_id": 34920346722,
+      "run_attempt": 1,
+      "head_sha": "84c356190224d9aa83e82583e4b93b39b2774e5b",
+      "verify": {
+        "job_id": 104227625074,
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "job_id": 104226935949,
+        "conclusion": "success"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. Both G6 contexts are green on the same run and the same head, which is also the execution anchor."
+    }
+  },
+  "what_this_lane_repairs": {
+    "defect": "Capper identity was derived as metadata.capper ?? metadata.submittedBy ?? pick.source. When no capper was recorded, an intake channel became a capper: CLV history, trust feedback and promotion scoring all aggregated under a string like 'smart-form'.",
+    "why_it_is_not_merely_a_missing_null_check": "picks.capper_id is a real, existence-checked column. resolvePickForeignKeys (packages/db/src/runtime-repositories.ts:390) derives a candidate, then queries cappers.id and returns capperId: data?.id ?? null. So a NULL means 'this capper is not recognised by the cappers table', not 'nobody told us'. Falling back to source therefore overrides a deliberate refusal with a guess, and it does so in two independent wrong ways: it invents a capper out of a channel, and it merges every capper sharing a channel into one population.",
+    "production_relevance_measured": "Production zfzdnfwdarxucxtaojxm holds 107,862 picks. Exactly 16 carry a non-null capper_id, all of them griff843 via smart-form (10 validated, 6 settled). The other 107,846 are unattributed, and 18,280 of those are settled. Grouping those settled rows by the OLD expression COALESCE(metadata->>'capper', metadata->>'submittedBy', source) yields 7 synthetic identities, none of which is a capper: smart-form 8,360 settled, codex 7,763, t1-proof 2,145, utv2-803-final-proof 5, system:candidate-pick-scanner 4, canary-proof 2, api 1. The largest synthetic 'capper' in the system was the intake channel itself, and the second was an executor.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 89,
+          "pass": 89,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The whole promotion/edge integration suite at this head, including the 8 tests this lane adds: that resolveCapperIdentity reads the column and refuses to invent an identity; that two cappers sharing one intake channel keep separate CLV populations; that an intake channel cannot acquire a CLV history of its own; that unattributed picks never contribute to a real capper; that the unattributed sentinel is refused before any read rather than aggregated; that a persisted submission carries its capper identity on the column; that promotion reads the CLV history of the pick's capper rather than of its channel; and that a pick whose capper FK did not resolve gets no CLV adjustment. The 81 pre-existing tests are unchanged and still pass, so the suite cannot go green by relaxing promotion behaviour."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: verify ends at test:live-db, which ci:assert-staging refuses when the host resolves to the containment placeholder. verify itself is exercised by the CI job of the same name on this head; see sha_binding.ci_sentinels."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 7,
+      "rules_matched": ["promotion-scoring"],
+      "note": "The promotion-scoring rule triggered and its required artifacts are present; CI's own r_level check reported PASS on this head inside the review packet."
+    },
+    "mutation_battery": {
+      "baseline": { "pass": 89, "fail": 0 },
+      "method": "Each mutation applied alone to the source, the suite run, the file restored from a copy taken before the battery. Baseline re-confirmed after the final revert; git status clean.",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "Restore metadata.capper ?? pick.source as the CLV match key in computeClvTrustAdjustment",
+          "result": { "pass": 86, "fail": 3 }
+        },
+        {
+          "id": "M2",
+          "mutation": "Delete the unattributed-caller early return in computeClvTrustAdjustment",
+          "result": { "pass": 88, "fail": 1 },
+          "note": "This control was initially vacuous: the per-pick sentinel skip inside the loop also yields null, so deleting the early return changed no observable output. The test was rewritten to assert listRecent was called ZERO times, with a real-capper control proving the counter can move. Only then did the mutation go red."
+        },
+        {
+          "id": "M3",
+          "mutation": "Make resolveCapperIdentity fall back to record.source",
+          "result": { "pass": 88, "fail": 1 }
+        },
+        {
+          "id": "M4",
+          "mutation": "Restore readMetadataString(metadata,'capper') || source at both promotion call sites",
+          "result": { "pass": 88, "fail": 1 },
+          "note": "This control was also initially vacuous, and the reason is a real property of the write path rather than a test defect: the submission path writes BOTH metadata.capper and metadata.submittedBy, so on a normally-submitted pick the old expression produces the identical string. The test now uses a Proxy over the pick repository that nulls capper_id on findPickById for one target — simulating the database's FK existence check failing while metadata.capper still names a capper — and the mutation goes red."
+        }
+      ]
+    },
+    "production_measurement": {
+      "target": "production zfzdnfwdarxucxtaojxm, read-only, governed — SELECT only, no write, no containment change",
+      "executed_at": "2026-09-15",
+      "queries": [
+        {
+          "sql": "SELECT count(*), count(*) FILTER (WHERE capper_id IS NOT NULL), count(DISTINCT capper_id), count(*) FILTER (WHERE capper_id IS NULL AND metadata ? 'capper') FROM picks",
+          "result": { "total_picks": 107862, "with_capper_id": 16, "distinct_cappers": 1, "null_fk_but_metadata_capper": 7800 }
+        },
+        {
+          "sql": "SELECT capper_id, source, status, count(*) FROM picks WHERE capper_id IS NOT NULL GROUP BY 1,2,3",
+          "result": [
+            { "capper_id": "griff843", "source": "smart-form", "status": "validated", "n": 10 },
+            { "capper_id": "griff843", "source": "smart-form", "status": "settled", "n": 6 }
+          ]
+        },
+        {
+          "sql": "SELECT COALESCE(metadata->>'capper', metadata->>'submittedBy', source) AS old_fallback_identity, count(*) FROM picks WHERE capper_id IS NULL AND status = 'settled' GROUP BY 1 ORDER BY 2 DESC",
+          "result": [
+            { "old_fallback_identity": "smart-form", "settled_picks": 8360 },
+            { "old_fallback_identity": "codex", "settled_picks": 7763 },
+            { "old_fallback_identity": "t1-proof", "settled_picks": 2145 },
+            { "old_fallback_identity": "utv2-803-final-proof", "settled_picks": 5 },
+            { "old_fallback_identity": "system:candidate-pick-scanner", "settled_picks": 4 },
+            { "old_fallback_identity": "canary-proof", "settled_picks": 2 },
+            { "old_fallback_identity": "api", "settled_picks": 1 }
+          ]
+        }
+      ],
+      "what_this_establishes": "The fallback this lane removes is not a theoretical hazard. On production data it would mint 7 synthetic cappers out of 18,280 settled picks, the largest being a 'capper' named smart-form with 8,360 settled picks and the second an executor named codex with 7,763. Feeding either aggregate's CLV back into a trust score is the conflation the change removes, and the trust score it would have adjusted belongs to the only real capper in the table.",
+      "and_what_it_does_not": "It does not establish that any capper statistic is correct today. Exactly one capper is attributed in production and only 6 of its picks are settled, all of them 2026-05-29 proof fixtures. Grouped capper statistics remain a later lane; this lane makes the grouping key honest, not the population real."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PASS",
+    "job": "Writable DB proof (staging only)",
+    "workflow_run_id": 34920346722,
+    "job_id": 104226935949,
+    "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34920346722/job/104226935949",
+    "head_sha": "84c356190224d9aa83e82583e4b93b39b2774e5b",
+    "run_attempt": 1,
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "conclusion": "success",
+    "suite": "the existing t1-proof:live battery, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "what_it_proves": [
+      "The promotion and CLV path this lane edits still runs green against a real Postgres through the full t1-proof:live battery at this head — no regression to promotion scoring, edge provenance or settlement persistence.",
+      "The route-B live-DB obligation this lane deferred to CI (t1_live_db_precondition: deferred_to_ci) is discharged on this head rather than waived."
+    ],
+    "queries": [
+      {
+        "label": "no pick in staging is attributed to a capper at all",
+        "sql": "SELECT count(*), count(*) FILTER (WHERE capper_id IS NOT NULL), count(*) FILTER (WHERE capper_id IS NULL AND metadata ? 'capper') FROM picks",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only, after the job concluded)",
+        "result": { "total_picks": 78315, "with_capper_id": 0, "null_fk_but_metadata_capper": 10693 },
+        "note": "Zero of 78,315 staging picks carry a resolved capper_id, while 10,693 carry metadata.capper. That gap is precisely the population the removed fallback was reading, and it is the measurement that makes the sentinel the correct value rather than a defensive default."
+      },
+      {
+        "label": "the synthetic cappers the old expression would mint in staging",
+        "sql": "SELECT COALESCE(metadata->>'capper', metadata->>'submittedBy', source) AS old_fallback_identity, count(*) FROM picks WHERE capper_id IS NULL AND status = 'settled' GROUP BY 1 ORDER BY 2 DESC",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only)",
+        "result": [
+          { "old_fallback_identity": "codex", "settled_picks": 7136 },
+          { "old_fallback_identity": "smart-form", "settled_picks": 5039 },
+          { "old_fallback_identity": "t1-proof", "settled_picks": 1349 }
+        ],
+        "note": "Three synthetic identities over 13,524 settled staging picks — an executor, an intake channel and a proof fixture namespace. None is a capper. After this change all three resolve to the unattributed sentinel and are refused rather than aggregated."
+      },
+      {
+        "label": "settled population and settlement records available to the CLV path",
+        "sql": "SELECT (SELECT count(*) FROM picks WHERE status = 'settled'), (SELECT count(*) FROM picks WHERE status = 'settled' AND capper_id IS NOT NULL), (SELECT count(*) FROM settlement_records)",
+        "target": "staging xskgrzbteyqdufktjrjx (read-only)",
+        "result": { "settled_picks": 13524, "settled_attributed": 0, "settlement_records": 29750 },
+        "note": "computeClvTrustAdjustment reads settlements and then the pick behind each one. With settled_attributed at zero, every one of those reads now resolves to the sentinel and is skipped, so no CLV adjustment can be manufactured from this population. Before the change the same 13,524 rows would have been partitioned into the three synthetic cappers above."
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "picks attributed to a capper",
+        "table": "picks (capper_id IS NOT NULL)",
+        "before": 0,
+        "after": 0,
+        "status": "unchanged",
+        "note": "This lane writes nothing. The zero is the finding that makes the fail-closed sentinel load-bearing, not a failure."
+      },
+      {
+        "label": "settled picks reachable by the CLV aggregation",
+        "table": "picks (status = 'settled')",
+        "before": 13524,
+        "after": 13524,
+        "status": "unchanged",
+        "note": "Unchanged in count; what changes is that all 13,524 now resolve to the unattributed sentinel and are refused, where before they formed three synthetic capper populations."
+      },
+      {
+        "label": "settlement records",
+        "table": "settlement_records",
+        "before": 29750,
+        "after": 29750,
+        "status": "unchanged"
+      },
+      {
+        "label": "t1-proof:live battery at this head",
+        "table": "apps/api + apps/ingestor + apps/worker t1-proof suites",
+        "before": 0,
+        "after": 0,
+        "status": "pass",
+        "pass": 1,
+        "fail": 0,
+        "note": "The battery ran green inside Writable DB proof (staging only) job 104226935949 on this head; verify job 104227625074 then consumed its same-run receipt and also passed. No suite in the battery exercises capper attribution directly, which is the stated gap below."
+      }
+    ],
+    "row_counts_captured_at": "2026-09-15T02:30:00.000Z",
+    "row_counts_note": "Read back from staging with read-only SELECTs after the job concluded, rather than taken from the job exit code, so a skipped suite could not present as a pass.",
+    "coverage_gap": {
+      "status": "OPEN, and stated rather than papered over",
+      "finding": "No staging test exercises capper attribution end to end. This lane's new behaviour is proven statically (89/89, four mutations caught) and is not proven against a real database.",
+      "why_it_could_not_be_closed_inside_this_lane": [
+        "file_scope_lock is pinned at lane-start and admits exactly four paths — apps/api/src/capper-identity.ts, clv-feedback.ts, promotion-edge-integration.test.ts and promotion-service.ts. A new apps/api/src/t1-proof-*.test.ts file is not declarable here, and an agent cannot widen the lock.",
+        "Wiring any new test file into the t1-proof:live battery requires editing root package.json, which is also outside this lock.",
+        "Shadow Parity is path-triggered on apps/api/src/**/*promotion* and its assert-unmodified-vs-base pin list includes package.json, so a PR that both touches promotion-service.ts and edits package.json is refused. The two requirements are mutually exclusive inside one lane by construction, not by oversight."
+      ],
+      "why_it_is_not_a_reason_to_hold_the_lane": "The change is a refusal, not an acceptance: every path it alters either returns the real column value or returns null/sentinel. There is no branch that newly admits something. Against the staging population every pick resolves to the sentinel, so the only behaviour reachable there is the refusal, and the refusal is what the four mutations pin.",
+      "disposition": "Recorded as a dependency for a follow-up lane owning apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts plus the root package.json wiring. That lane touches no *promotion* path and therefore does not trigger Shadow Parity, which is why the coverage can exist there and cannot exist here."
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off — no provider key read, tested or activated",
+    "member_delivery": "disabled — unchanged",
+    "track_only_containment": "enabled — unchanged",
+    "note": "This lane changes how a capper identity is resolved for CLV feedback and promotion scoring. It writes nothing to production, reads production only through the governed read-only SELECTs recorded under static_proof.production_measurement, and changes no containment setting."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Require live-DB proof for runtime changes",
+      "cause": "The PR touches sensitive runtime files and adds no file matching apps/[^/]+/src/t1-proof-.*\\.test\\.ts$ or a scripts path.",
+      "disposition": "Non-required, and unsatisfiable inside this lane's pinned file_scope_lock — see runtime_proof.coverage_gap. The skip-proof-coverage label asserts the change is genuinely infrastructure-only, which is false here, so it is deliberately NOT applied. Owed to the named follow-up lane."
+    },
+    {
+      "check": "Shadow Parity Check",
+      "cause": "The job fails closed before performing any comparison: 'No mechanically read-only production credential is provisioned.'",
+      "disposition": "Non-required, and environmental rather than a property of this diff. Provisioning that credential is a reserved secrets decision and is not requested by this lane."
+    },
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair",
+      "disposition": "Reserved. Requires the t1-approved label AND a pm-verdict/v1 APPROVED comment from CODEOWNERS, both pinned to this head. Not actionable by the executor."
+    }
+  ]
+}
