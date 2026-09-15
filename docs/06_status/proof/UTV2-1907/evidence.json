@@ -7,25 +7,25 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "84c356190224d9aa83e82583e4b93b39b2774e5b",
+    "verified_source_sha": "a2b70987642533486136ec3e8966b61374932bc5",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "84c356190224d9aa83e82583e4b93b39b2774e5b is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1907/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the execution anchor does not move when this file lands.",
-    "bound_at": "2026-09-15T02:30:00.000Z",
+    "note": "a2b70987642533486136ec3e8966b61374932bc5 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1907/. It adds docs/05_operations/db-writer-classification.json; its parent 66cc39a99 adds the behaviour-level staging proof and its root package.json wiring. The earlier anchor 84c356190224d9aa83e82583e4b93b39b2774e5b is where the STATIC measurements in static_proof were taken, and it is named there rather than here so the two are not conflated: this field binds the execution anchor, not the measurement tree. The proof bundle commit that follows touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the anchor does not move when this file lands.",
+    "bound_at": "2026-09-15T17:45:00.000Z",
     "ci_sentinels": {
-      "run_id": 34920346722,
+      "run_id": 34987107993,
       "run_attempt": 1,
-      "head_sha": "84c356190224d9aa83e82583e4b93b39b2774e5b",
+      "head_sha": "a2b70987642533486136ec3e8966b61374932bc5",
       "verify": {
-        "job_id": 104227625074,
+        "job_id": 104443814902,
         "conclusion": "success"
       },
       "writable_db_proof_staging_only": {
-        "job_id": 104226935949,
+        "job_id": 104441931921,
         "conclusion": "success"
       },
-      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. Both G6 contexts are green on the same run and the same head, which is also the execution anchor."
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. Both G6 contexts are green on run 34987107993 at head a2b70987642533486136ec3e8966b61374932bc5, which is also the execution anchor."
     }
   },
   "what_this_lane_repairs": {
@@ -63,33 +63,50 @@
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
       "changed_files": 7,
-      "rules_matched": ["promotion-scoring"],
+      "rules_matched": [
+        "promotion-scoring"
+      ],
       "note": "The promotion-scoring rule triggered and its required artifacts are present; CI's own r_level check reported PASS on this head inside the review packet."
     },
     "mutation_battery": {
-      "baseline": { "pass": 89, "fail": 0 },
+      "baseline": {
+        "pass": 89,
+        "fail": 0
+      },
       "method": "Each mutation applied alone to the source, the suite run, the file restored from a copy taken before the battery. Baseline re-confirmed after the final revert; git status clean.",
       "mutations": [
         {
           "id": "M1",
           "mutation": "Restore metadata.capper ?? pick.source as the CLV match key in computeClvTrustAdjustment",
-          "result": { "pass": 86, "fail": 3 }
+          "result": {
+            "pass": 86,
+            "fail": 3
+          }
         },
         {
           "id": "M2",
           "mutation": "Delete the unattributed-caller early return in computeClvTrustAdjustment",
-          "result": { "pass": 88, "fail": 1 },
+          "result": {
+            "pass": 88,
+            "fail": 1
+          },
           "note": "This control was initially vacuous: the per-pick sentinel skip inside the loop also yields null, so deleting the early return changed no observable output. The test was rewritten to assert listRecent was called ZERO times, with a real-capper control proving the counter can move. Only then did the mutation go red."
         },
         {
           "id": "M3",
           "mutation": "Make resolveCapperIdentity fall back to record.source",
-          "result": { "pass": 88, "fail": 1 }
+          "result": {
+            "pass": 88,
+            "fail": 1
+          }
         },
         {
           "id": "M4",
           "mutation": "Restore readMetadataString(metadata,'capper') || source at both promotion call sites",
-          "result": { "pass": 88, "fail": 1 },
+          "result": {
+            "pass": 88,
+            "fail": 1
+          },
           "note": "This control was also initially vacuous, and the reason is a real property of the write path rather than a test defect: the submission path writes BOTH metadata.capper and metadata.submittedBy, so on a normally-submitted pick the old expression produces the identical string. The test now uses a Proxy over the pick repository that nulls capper_id on findPickById for one target — simulating the database's FK existence check failing while metadata.capper still names a capper — and the mutation goes red."
         }
       ]
@@ -100,25 +117,61 @@
       "queries": [
         {
           "sql": "SELECT count(*), count(*) FILTER (WHERE capper_id IS NOT NULL), count(DISTINCT capper_id), count(*) FILTER (WHERE capper_id IS NULL AND metadata ? 'capper') FROM picks",
-          "result": { "total_picks": 107862, "with_capper_id": 16, "distinct_cappers": 1, "null_fk_but_metadata_capper": 7800 }
+          "result": {
+            "total_picks": 107862,
+            "with_capper_id": 16,
+            "distinct_cappers": 1,
+            "null_fk_but_metadata_capper": 7800
+          }
         },
         {
           "sql": "SELECT capper_id, source, status, count(*) FROM picks WHERE capper_id IS NOT NULL GROUP BY 1,2,3",
           "result": [
-            { "capper_id": "griff843", "source": "smart-form", "status": "validated", "n": 10 },
-            { "capper_id": "griff843", "source": "smart-form", "status": "settled", "n": 6 }
+            {
+              "capper_id": "griff843",
+              "source": "smart-form",
+              "status": "validated",
+              "n": 10
+            },
+            {
+              "capper_id": "griff843",
+              "source": "smart-form",
+              "status": "settled",
+              "n": 6
+            }
           ]
         },
         {
           "sql": "SELECT COALESCE(metadata->>'capper', metadata->>'submittedBy', source) AS old_fallback_identity, count(*) FROM picks WHERE capper_id IS NULL AND status = 'settled' GROUP BY 1 ORDER BY 2 DESC",
           "result": [
-            { "old_fallback_identity": "smart-form", "settled_picks": 8360 },
-            { "old_fallback_identity": "codex", "settled_picks": 7763 },
-            { "old_fallback_identity": "t1-proof", "settled_picks": 2145 },
-            { "old_fallback_identity": "utv2-803-final-proof", "settled_picks": 5 },
-            { "old_fallback_identity": "system:candidate-pick-scanner", "settled_picks": 4 },
-            { "old_fallback_identity": "canary-proof", "settled_picks": 2 },
-            { "old_fallback_identity": "api", "settled_picks": 1 }
+            {
+              "old_fallback_identity": "smart-form",
+              "settled_picks": 8360
+            },
+            {
+              "old_fallback_identity": "codex",
+              "settled_picks": 7763
+            },
+            {
+              "old_fallback_identity": "t1-proof",
+              "settled_picks": 2145
+            },
+            {
+              "old_fallback_identity": "utv2-803-final-proof",
+              "settled_picks": 5
+            },
+            {
+              "old_fallback_identity": "system:candidate-pick-scanner",
+              "settled_picks": 4
+            },
+            {
+              "old_fallback_identity": "canary-proof",
+              "settled_picks": 2
+            },
+            {
+              "old_fallback_identity": "api",
+              "settled_picks": 1
+            }
           ]
         }
       ],
@@ -130,24 +183,29 @@
     "profile": "hosted_live_db",
     "status": "PASS",
     "job": "Writable DB proof (staging only)",
-    "workflow_run_id": 34920346722,
-    "job_id": 104226935949,
-    "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34920346722/job/104226935949",
-    "head_sha": "84c356190224d9aa83e82583e4b93b39b2774e5b",
+    "workflow_run_id": 34987107993,
+    "job_id": 104441931921,
+    "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34987107993/job/104441931921",
+    "head_sha": "a2b70987642533486136ec3e8966b61374932bc5",
     "run_attempt": 1,
     "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
     "conclusion": "success",
-    "suite": "the existing t1-proof:live battery, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "suite": "the t1-proof:live battery, now including apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts, which this head wires into the root test:t1-proof:live chain that ci.yml:143 executes",
     "what_it_proves": [
       "The promotion and CLV path this lane edits still runs green against a real Postgres through the full t1-proof:live battery at this head — no regression to promotion scoring, edge provenance or settlement persistence.",
-      "The route-B live-DB obligation this lane deferred to CI (t1_live_db_precondition: deferred_to_ci) is discharged on this head rather than waived."
+      "The route-B live-DB obligation this lane deferred to CI (t1_live_db_precondition: deferred_to_ci) is discharged on this head rather than waived.",
+      "The five behaviours the PM verdict enumerated are demonstrated end to end against live staging repositories, not asserted: 4 tests, 4 pass, 0 fail, 0 SKIPPED, 82.68s. The zero-skip count is the load-bearing figure, because the suite carries a hasSupabaseEnv() gate and a green job alone is consistent with a skipped suite."
     ],
     "queries": [
       {
         "label": "no pick in staging is attributed to a capper at all",
         "sql": "SELECT count(*), count(*) FILTER (WHERE capper_id IS NOT NULL), count(*) FILTER (WHERE capper_id IS NULL AND metadata ? 'capper') FROM picks",
         "target": "staging xskgrzbteyqdufktjrjx (read-only, after the job concluded)",
-        "result": { "total_picks": 78315, "with_capper_id": 0, "null_fk_but_metadata_capper": 10693 },
+        "result": {
+          "total_picks": 78315,
+          "with_capper_id": 0,
+          "null_fk_but_metadata_capper": 10693
+        },
         "note": "Zero of 78,315 staging picks carry a resolved capper_id, while 10,693 carry metadata.capper. That gap is precisely the population the removed fallback was reading, and it is the measurement that makes the sentinel the correct value rather than a defensive default."
       },
       {
@@ -155,9 +213,18 @@
         "sql": "SELECT COALESCE(metadata->>'capper', metadata->>'submittedBy', source) AS old_fallback_identity, count(*) FROM picks WHERE capper_id IS NULL AND status = 'settled' GROUP BY 1 ORDER BY 2 DESC",
         "target": "staging xskgrzbteyqdufktjrjx (read-only)",
         "result": [
-          { "old_fallback_identity": "codex", "settled_picks": 7136 },
-          { "old_fallback_identity": "smart-form", "settled_picks": 5039 },
-          { "old_fallback_identity": "t1-proof", "settled_picks": 1349 }
+          {
+            "old_fallback_identity": "codex",
+            "settled_picks": 7136
+          },
+          {
+            "old_fallback_identity": "smart-form",
+            "settled_picks": 5039
+          },
+          {
+            "old_fallback_identity": "t1-proof",
+            "settled_picks": 1349
+          }
         ],
         "note": "Three synthetic identities over 13,524 settled staging picks — an executor, an intake channel and a proof fixture namespace. None is a capper. After this change all three resolve to the unattributed sentinel and are refused rather than aggregated."
       },
@@ -165,7 +232,11 @@
         "label": "settled population and settlement records available to the CLV path",
         "sql": "SELECT (SELECT count(*) FROM picks WHERE status = 'settled'), (SELECT count(*) FROM picks WHERE status = 'settled' AND capper_id IS NOT NULL), (SELECT count(*) FROM settlement_records)",
         "target": "staging xskgrzbteyqdufktjrjx (read-only)",
-        "result": { "settled_picks": 13524, "settled_attributed": 0, "settlement_records": 29750 },
+        "result": {
+          "settled_picks": 13524,
+          "settled_attributed": 0,
+          "settlement_records": 29750
+        },
         "note": "computeClvTrustAdjustment reads settlements and then the pick behind each one. With settled_attributed at zero, every one of those reads now resolves to the sentinel and is skipped, so no CLV adjustment can be manufactured from this population. Before the change the same 13,524 rows would have been partitioned into the three synthetic cappers above."
       }
     ],
@@ -216,6 +287,21 @@
       ],
       "why_it_is_not_a_reason_to_hold_the_lane": "The change is a refusal, not an acceptance: every path it alters either returns the real column value or returns null/sentinel. There is no branch that newly admits something. Against the staging population every pick resolves to the sentinel, so the only behaviour reachable there is the refusal, and the refusal is what the four mutations pin.",
       "disposition": "Recorded as a dependency for a follow-up lane owning apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts plus the root package.json wiring. That lane touches no *promotion* path and therefore does not trigger Shadow Parity, which is why the coverage can exist there and cannot exist here."
+    },
+    "behaviour_proof": {
+      "file": "apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 82680.955264,
+      "subtests": [
+        "UTV2-1907 behaviour 1: a persisted pick with a recognized capper resolves through picks.capper_id",
+        "UTV2-1907 behaviour 2: an unresolved capper_id remains explicitly unattributed",
+        "UTV2-1907 behaviour 3: metadata.capper and pick.source cannot resurrect attribution",
+        "UTV2-1907 behaviours 4 and 5: CLV reads key on the persisted capper, and a second capper cannot contaminate the cohort"
+      ],
+      "note": "Behaviours 4 and 5 share one subtest because contamination is only observable against a second capper's cohort, so the control and the assertion are the same fixture."
     }
   },
   "scope_and_containment": {
@@ -226,21 +312,28 @@
     "track_only_containment": "enabled — unchanged",
     "note": "This lane changes how a capper identity is resolved for CLV feedback and promotion scoring. It writes nothing to production, reads production only through the governed read-only SELECTs recorded under static_proof.production_measurement, and changes no containment setting."
   },
-  "known_red_checks_at_this_head": [
-    {
-      "check": "Require live-DB proof for runtime changes",
-      "cause": "The PR touches sensitive runtime files and adds no file matching apps/[^/]+/src/t1-proof-.*\\.test\\.ts$ or a scripts path.",
-      "disposition": "Non-required, and unsatisfiable inside this lane's pinned file_scope_lock — see runtime_proof.coverage_gap. The skip-proof-coverage label asserts the change is genuinely infrastructure-only, which is false here, so it is deliberately NOT applied. Owed to the named follow-up lane."
+  "known_red_checks_at_this_head": {
+    "file_scope_lock": {
+      "state": "red",
+      "paths_reported": [
+        "apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts",
+        "package.json",
+        "docs/05_operations/db-writer-classification.json"
+      ],
+      "authorization": "A scope-override/v1 APPROVED comment (2026-09-15T13:47:20Z) covers the first two. It does NOT cover docs/05_operations/db-writer-classification.json, which was added afterwards, and it is head-pinned to 933b45d572e23544ebae1a5090cfa34824cf14a4 while the head is now a2b70987642533486136ec3e8966b61374932bc5. The override therefore needs reissuing at the current head and widening by one path. CODEOWNERS action; recorded rather than worked around.",
+      "required": false
     },
-    {
-      "check": "Shadow Parity Check",
-      "cause": "The job fails closed before performing any comparison: 'No mechanically read-only production credential is provisioned.'",
-      "disposition": "Non-required, and environmental rather than a property of this diff. Provisioning that credential is a reserved secrets decision and is not requested by this lane."
+    "shadow_parity_check": {
+      "state": "red",
+      "reason": "Its first step pins root package.json against the base via assert-unmodified-vs-base, and the workflow triggers on apps/api/src/**/*promotion*, which this lane necessarily changes. Wiring a T1 live-DB proof requires root package.json, because ci.yml:143 runs the root test:t1-proof:live script and that script is a fixed && chain of explicitly named files, not a glob.",
+      "assessment": "The PM verdict required the behaviour proof; the guard refuses its wiring. Both are correct as written and they are mutually exclusive on a single PR. Non-required check. No skip-proof-coverage label is applied, because asserting this change is infrastructure-only would be false.",
+      "required": false
     },
-    {
-      "check": "Merge Gate",
-      "cause": "awaiting the reserved T1 approval pair",
-      "disposition": "Reserved. Requires the t1-approved label AND a pm-verdict/v1 APPROVED comment from CODEOWNERS, both pinned to this head. Not actionable by the executor."
+    "merge_gate": {
+      "state": "red",
+      "reason": "T1 requires the t1-approved label AND a pm-verdict/v1 APPROVED comment from CODEOWNERS, both pinned to this head.",
+      "assessment": "Reserved decision. Not actionable by the executor.",
+      "required": true
     }
-  ]
+  }
 }
