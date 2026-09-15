@@ -1,0 +1,171 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1903
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1903
+  objective: "B0: admit game spreads to grading as a dedicated, fail-closed market family"
+  acceptance_criteria:
+    - >-
+      `normalizeMarketKey` already canonicalizes `spread`, `game_spread` and
+      `game-spread` to `spread` (`packages/domain/src/market-key.ts:3-5`). The
+      defect is entirely in `classifyMarketFamilyForGrading`
+      (`apps/api/src/grading-service.ts:512-558`), which has no spread family
+      and returns `family: 'unsupported', gradeable: false`.
+
+
+      Proven by `apps/api/src/grading-service.test.ts:1867-1888`, which asserts
+      `market: 'spread'` yields `skipped: 1`, `reason:
+      'unsupported_market_family'`.
+
+
+      **Two of the four production Track Only picks are spreads**, including the
+      newest acceptance pick `04174f12` (NFL, Chiefs -2.5). They are
+      structurally ungradeable today.
+
+
+      ## Scope
+
+
+      `apps/api/src/grading-service.ts` and
+      `apps/api/src/grading-service.test.ts` only. No change to
+      `packages/domain/src/market-key.ts` — its mapping is already correct, and
+      touching it would force the lane into `modeling` and block B1.
+
+
+      ## Design — mirror the moneyline precedent exactly
+
+
+      Add a `game_spread` family (`participantRequirement: required`,
+      `participantType: team`, `gradeable: true`, `usesLine: true`) and a
+      dedicated outcome branch that refuses any `game_results.market_key` but a
+      dedicated spread result key, exactly as the moneyline branch refuses
+      anything but `MONEYLINE_RESULT_MARKET_KEY` (`grading-service.ts:364`).
+
+
+      That guard is load-bearing, not defensive: existing `-sp` game-line rows
+      carry an unattributed raw score, so grading a spread off them would invent
+      a side. Spread picks become classified gradeable and then skip by name
+      until a properly attributed result row exists — honest and observable,
+      which is what the moneyline change did.
+
+
+      ## Bounds
+
+
+      No SGO activation, no provider credential access, no production write, no
+      containment change, no member delivery.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `normalizeMarketKey` already canonicalizes `spread`, `game_spread` and
+      `game-spread` to `spread` (`packages/domain/src/market-key.ts:3-5`). The
+      defect is entirely in `classifyMarketFamilyForGrading`
+      (`apps/api/src/grading-service.ts:512-558`), which has no spread family
+      and returns `family: 'unsupported', gradeable: false`.
+
+
+      Proven by `apps/api/src/grading-service.test.ts:1867-1888`, which asserts
+      `market: 'spread'` yields `skipped: 1`, `reason:
+      'unsupported_market_family'`.
+
+
+      **Two of the four production Track Only picks are spreads**, including the
+      newest acceptance pick `04174f12` (NFL, Chiefs -2.5). They are
+      structurally ungradeable today.
+    - >-
+      Scope
+
+      `apps/api/src/grading-service.ts` and
+      `apps/api/src/grading-service.test.ts` only. No change to
+      `packages/domain/src/market-key.ts` — its mapping is already correct, and
+      touching it would force the lane into `modeling` and block B1.
+    - >-
+      Design — mirror the moneyline precedent exactly
+
+      Add a `game_spread` family (`participantRequirement: required`,
+      `participantType: team`, `gradeable: true`, `usesLine: true`) and a
+      dedicated outcome branch that refuses any `game_results.market_key` but a
+      dedicated spread result key, exactly as the moneyline branch refuses
+      anything but `MONEYLINE_RESULT_MARKET_KEY` (`grading-service.ts:364`).
+
+
+      That guard is load-bearing, not defensive: existing `-sp` game-line rows
+      carry an unattributed raw score, so grading a spread off them would invent
+      a side. Spread picks become classified gradeable and then skip by name
+      until a properly attributed result row exists — honest and observable,
+      which is what the moneyline change did.
+    - >-
+      Bounds
+
+      No SGO activation, no provider credential access, no production write, no
+      containment change, no member delivery.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1903/b0-admit-game-spreads-to-grading-as-a-dedicated-fail-closed-market
+    title: "B0: admit game spreads to grading as a dedicated, fail-closed market
+      family"
+    description: >-
+      `normalizeMarketKey` already canonicalizes `spread`, `game_spread` and
+      `game-spread` to `spread` (`packages/domain/src/market-key.ts:3-5`). The
+      defect is entirely in `classifyMarketFamilyForGrading`
+      (`apps/api/src/grading-service.ts:512-558`), which has no spread family
+      and returns `family: 'unsupported', gradeable: false`.
+
+
+      Proven by `apps/api/src/grading-service.test.ts:1867-1888`, which asserts
+      `market: 'spread'` yields `skipped: 1`, `reason:
+      'unsupported_market_family'`.
+
+
+      **Two of the four production Track Only picks are spreads**, including the
+      newest acceptance pick `04174f12` (NFL, Chiefs -2.5). They are
+      structurally ungradeable today.
+
+
+      ## Scope
+
+
+      `apps/api/src/grading-service.ts` and
+      `apps/api/src/grading-service.test.ts` only. No change to
+      `packages/domain/src/market-key.ts` — its mapping is already correct, and
+      touching it would force the lane into `modeling` and block B1.
+
+
+      ## Design — mirror the moneyline precedent exactly
+
+
+      Add a `game_spread` family (`participantRequirement: required`,
+      `participantType: team`, `gradeable: true`, `usesLine: true`) and a
+      dedicated outcome branch that refuses any `game_results.market_key` but a
+      dedicated spread result key, exactly as the moneyline branch refuses
+      anything but `MONEYLINE_RESULT_MARKET_KEY` (`grading-service.ts:364`).
+
+
+      That guard is load-bearing, not defensive: existing `-sp` game-line rows
+      carry an unattributed raw score, so grading a spread off them would invent
+      a side. Spread picks become classified gradeable and then skip by name
+      until a properly attributed result row exists — honest and observable,
+      which is what the moneyline change did.
+
+
+      ## Bounds
+
+
+      No SGO activation, no provider credential access, no production write, no
+      containment change, no member delivery.
+    captured_at: 2026-09-14T21:28:51.748Z
+    description_sha256: f6ce397451fd32bae76b803802cdc84811e227204a4baea6e48d1ed1a8d85616
+  contract_hash: 66ea9bc120d7b6b0bef682c03ba8fd66abd7cd7b7a70481bba84e2b5bc8b8da0
