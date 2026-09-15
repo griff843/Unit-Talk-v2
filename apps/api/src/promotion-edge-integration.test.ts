@@ -8,10 +8,18 @@ import {
   readDomainAnalysisReadinessSignal,
   readKellyGradientReadiness,
   evaluateAndPersistBestBetsPromotion,
+  evaluateAllPoliciesEagerAndPersist,
   enrichPickAtPromotionTime,
 } from './promotion-service.js';
 import { processSubmission } from './submission-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
+import { computeClvTrustAdjustment } from './clv-feedback.js';
+import {
+  UNATTRIBUTED_CAPPER,
+  isUnattributedCapper,
+  resolveCapperIdentity,
+} from './capper-identity.js';
+import type { PickRepository, SettlementRepository } from '@unit-talk/db';
 
 // ── Unit tests for edge-to-score conversion ──────────────────────────────────
 
@@ -1704,4 +1712,372 @@ test('UTV2-1327: promotion pipeline produces model-driven readiness when domainA
   // Explicit edge and trust must be preserved
   assert.equal(scoreInputs.edge, 88, 'explicit edge score must be preserved');
   assert.equal(scoreInputs.trust, 85, 'explicit trust score must be preserved');
+});
+
+// ── UTV2-1907 (C1a): capper attribution reads picks.capper_id, never pick.source ──
+//
+// The removed code was `metadata.capper ?? pick.source`. `source` is an intake
+// channel — 'smart-form', 'discord-bot', 'api' — so that fallback collapsed
+// every unattributed pick into a pseudo-capper named after its channel, and
+// collapsed two genuinely different cappers who shared a channel into one
+// population. The tests below fail if either half of that fallback returns.
+
+interface StubSettlement {
+  pick_id: string;
+  source: string;
+  settled_at: string;
+  payload: Record<string, unknown>;
+}
+
+function stubClvRepositories(
+  picks: readonly { id: string; capper_id: string | null; source: string }[],
+  settlements: readonly StubSettlement[],
+): { settlements: SettlementRepository; picks: PickRepository } {
+  const byId = new Map(picks.map((p) => [p.id, p]));
+  return {
+    settlements: {
+      listRecent: async () => settlements,
+    } as unknown as SettlementRepository,
+    picks: {
+      findPickById: async (pickId: string) => byId.get(pickId) ?? null,
+    } as unknown as PickRepository,
+  };
+}
+
+function clvSettlement(pickId: string, clvPercent: number): StubSettlement {
+  return {
+    pick_id: pickId,
+    source: 'grading',
+    settled_at: new Date().toISOString(),
+    payload: { clvPercent },
+  };
+}
+
+test('UTV2-1907: resolveCapperIdentity reads the column and refuses to invent an identity', () => {
+  assert.equal(resolveCapperIdentity({ capper_id: 'griff843' }), 'griff843');
+  assert.equal(resolveCapperIdentity({ capper_id: '  griff843  ' }), 'griff843');
+  assert.equal(resolveCapperIdentity({ capper_id: null }), UNATTRIBUTED_CAPPER);
+  assert.equal(resolveCapperIdentity({ capper_id: '' }), UNATTRIBUTED_CAPPER);
+  assert.equal(resolveCapperIdentity({ capper_id: '   ' }), UNATTRIBUTED_CAPPER);
+  assert.equal(resolveCapperIdentity({}), UNATTRIBUTED_CAPPER);
+  assert.equal(isUnattributedCapper(UNATTRIBUTED_CAPPER), true);
+  assert.equal(isUnattributedCapper('griff843'), false);
+});
+
+test('UTV2-1907: two cappers sharing one intake channel keep separate CLV populations', async () => {
+  // Both cappers submit through 'smart-form' and neither pick carries
+  // metadata.capper. Under `metadata.capper ?? pick.source` every one of these
+  // twelve picks resolved to the single pseudo-capper 'smart-form'.
+  const picks = [
+    ...Array.from({ length: 6 }, (_, i) => ({
+      id: `a-${i}`,
+      capper_id: 'capper-a',
+      source: 'smart-form',
+    })),
+    ...Array.from({ length: 6 }, (_, i) => ({
+      id: `b-${i}`,
+      capper_id: 'capper-b',
+      source: 'smart-form',
+    })),
+  ];
+  // capper-a is strongly positive (+6%), capper-b strongly negative (-6%).
+  // Pooled they average 0 — a neutral adjustment that belongs to neither.
+  const settlements = [
+    ...picks.slice(0, 6).map((p) => clvSettlement(p.id, 6)),
+    ...picks.slice(6).map((p) => clvSettlement(p.id, -6)),
+  ];
+  const repos = stubClvRepositories(picks, settlements);
+
+  const a = await computeClvTrustAdjustment('capper-a', repos.settlements, repos.picks, {
+    minSampleSize: 5,
+  });
+  const b = await computeClvTrustAdjustment('capper-b', repos.settlements, repos.picks, {
+    minSampleSize: 5,
+  });
+
+  assert.ok(a, 'capper-a must get an adjustment from its own six settlements');
+  assert.equal(a.sampleSize, 6, 'capper-a must not absorb capper-b\'s settlements');
+  assert.equal(a.avgClvPercent, 6);
+  assert.equal(a.adjustment, 10);
+
+  assert.ok(b, 'capper-b must get an adjustment from its own six settlements');
+  assert.equal(b.sampleSize, 6, 'capper-b must not absorb capper-a\'s settlements');
+  assert.equal(b.avgClvPercent, -6);
+  assert.equal(b.adjustment, -10);
+});
+
+test('UTV2-1907: an intake channel cannot acquire a CLV history of its own', async () => {
+  // Twelve settled, unattributed smart-form picks. The old fallback made these
+  // the CLV record of a capper literally named 'smart-form'.
+  const picks = Array.from({ length: 12 }, (_, i) => ({
+    id: `u-${i}`,
+    capper_id: null,
+    source: 'smart-form',
+  }));
+  const settlements = picks.map((p) => clvSettlement(p.id, 8));
+  const repos = stubClvRepositories(picks, settlements);
+
+  assert.equal(
+    await computeClvTrustAdjustment('smart-form', repos.settlements, repos.picks, {
+      minSampleSize: 5,
+    }),
+    null,
+    'a source string must never match a pick',
+  );
+});
+
+test('UTV2-1907: unattributed picks never contribute to a real capper', async () => {
+  const picks = [
+    ...Array.from({ length: 5 }, (_, i) => ({
+      id: `r-${i}`,
+      capper_id: 'capper-a',
+      source: 'smart-form',
+    })),
+    ...Array.from({ length: 20 }, (_, i) => ({
+      id: `n-${i}`,
+      capper_id: null,
+      source: 'smart-form',
+    })),
+  ];
+  const settlements = [
+    ...picks.slice(0, 5).map((p) => clvSettlement(p.id, 4)),
+    ...picks.slice(5).map((p) => clvSettlement(p.id, -9)),
+  ];
+  const repos = stubClvRepositories(picks, settlements);
+
+  const result = await computeClvTrustAdjustment('capper-a', repos.settlements, repos.picks, {
+    minSampleSize: 5,
+  });
+  assert.ok(result);
+  assert.equal(result.sampleSize, 5);
+  assert.equal(result.avgClvPercent, 4);
+});
+
+test('UTV2-1907: the unattributed sentinel is refused before any read, not aggregated', async () => {
+  // Asserted by call count rather than by the null return, because the
+  // per-pick sentinel skip inside the matching loop would also produce null.
+  // The early return is a separate control and this is what isolates it: an
+  // unattributed caller must not reach the settlement repository at all.
+  let reads = 0;
+  const settlementRepository = {
+    listRecent: async () => {
+      reads += 1;
+      return [];
+    },
+  } as unknown as SettlementRepository;
+  const pickRepository = {
+    findPickById: async () => null,
+  } as unknown as PickRepository;
+
+  assert.equal(
+    await computeClvTrustAdjustment(
+      UNATTRIBUTED_CAPPER,
+      settlementRepository,
+      pickRepository,
+      { minSampleSize: 5 },
+    ),
+    null,
+    'the sentinel must not become a capper with a trust adjustment',
+  );
+  assert.equal(reads, 0, 'an unattributed caller must be refused before any settlement read');
+
+  // Control: a real capper does reach the repository, so the count above is
+  // measuring the guard rather than a repository that is never called.
+  await computeClvTrustAdjustment('capper-a', settlementRepository, pickRepository, {
+    minSampleSize: 5,
+  });
+  assert.equal(reads, 1);
+});
+
+test('UTV2-1907: a persisted submission carries its capper identity on the column', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const attributed = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'NBA points',
+      selection: 'Player Over 20.5',
+      odds: -110,
+      confidence: 0.6,
+      submittedBy: 'capper-a',
+      metadata: { sport: 'NBA', eventName: 'UTV2-1907 attributed' },
+    },
+    repositories,
+  );
+
+  const attributedRecord = await repositories.picks.findPickById(attributed.pick.id);
+  assert.ok(attributedRecord);
+  assert.equal(attributedRecord.capper_id, 'capper-a');
+  assert.equal(resolveCapperIdentity(attributedRecord), 'capper-a');
+  assert.equal(
+    attributedRecord.source,
+    'smart-form',
+    'the channel is recorded separately from the capper, and is not the capper',
+  );
+});
+
+test('UTV2-1907: promotion reads the CLV history of the pick\'s capper, not of its channel', async () => {
+  // The promotion path holds the persisted row, so it is the layer that can
+  // resolve `picks.capper_id`. This asserts the identity actually threaded into
+  // readPromotionScoreInputs is that column: the history below belongs to
+  // 'capper-a', and every pick in it shares the intake channel 'api'.
+  const repositories = createInMemoryRepositoryBundle();
+
+  const submit = async (label: string, submittedBy: string) => {
+    const result = await processSubmission(
+      {
+        source: 'api',
+        market: 'NBA points',
+        selection: `Player Over ${label}`,
+        odds: -110,
+        confidence: 0.6,
+        submittedBy,
+        metadata: {
+          sport: 'NBA',
+          eventName: `UTV2-1907 clv ${label}`,
+          promotionScores: { edge: 60, trust: 50, readiness: 60, uniqueness: 60, boardFit: 60 },
+        },
+      },
+      repositories,
+    );
+    return result.pick.id;
+  };
+
+  const historyPickIds: string[] = [];
+  for (let i = 0; i < 10; i += 1) {
+    historyPickIds.push(await submit(`h${i}.5`, 'capper-a'));
+  }
+  const baselineTarget = await submit('t0.5', 'capper-a');
+  const attributedTarget = await submit('t1.5', 'capper-a');
+  const otherCapperTarget = await submit('t2.5', 'capper-b');
+
+  const settlementRepository = {
+    listRecent: async () =>
+      historyPickIds.map((id) => ({
+        pick_id: id,
+        source: 'grading',
+        settled_at: new Date().toISOString(),
+        payload: { clvPercent: 6 },
+      })),
+  } as unknown as SettlementRepository;
+
+  const trustOf = async (pickId: string, withSettlements: boolean) => {
+    const result = await evaluateAllPoliciesEagerAndPersist(
+      pickId,
+      'utv2-1907-test',
+      repositories.picks,
+      repositories.audit,
+      withSettlements ? settlementRepository : undefined,
+    );
+    return result.bestBetsDecision.breakdown.trust;
+  };
+
+  // Three targets, identical configured inputs, evaluated once each so no run
+  // observes another's persisted decision.
+  const baseline = await trustOf(baselineTarget, false);
+  const adjusted = await trustOf(attributedTarget, true);
+  const unrelated = await trustOf(otherCapperTarget, true);
+
+  // breakdown.trust is the weighted contribution, so the +10 adjustment on a
+  // configured trust of 50 shows up as a 60/50 ratio rather than as +10.
+  assert.ok(
+    baseline > 0 && Math.abs(adjusted / baseline - 60 / 50) < 1e-9,
+    `capper-a's own +6% CLV history must raise its trust by the full +10 ` +
+      `(baseline ${baseline}, adjusted ${adjusted})`,
+  );
+
+  // capper-b shares the channel and has no history of its own. If attribution
+  // fell back to `pick.source` both targets would read the same 'api' history
+  // and capper-b would inherit capper-a's adjustment.
+  assert.ok(
+    Math.abs(unrelated - baseline) < 1e-9,
+    `a capper with no history must not inherit one from a channel peer ` +
+      `(baseline ${baseline}, unrelated ${unrelated})`,
+  );
+});
+
+test('UTV2-1907: a pick whose capper FK did not resolve gets no CLV adjustment', async () => {
+  // The production write path existence-checks the capper against `cappers`
+  // and writes NULL on a miss (resolvePickForeignKeys in runtime-repositories),
+  // while `metadata.capper` keeps whatever string the submitting surface sent.
+  // So an unregistered capper is exactly the case where the column and the
+  // metadata disagree, and it is the case the old `metadata.capper` read got
+  // wrong: it credited a CLV history to a capper the database refused to
+  // recognise. The in-memory repository does no FK check, so the miss is
+  // simulated here by nulling the column on read, which is what the database
+  // returns for that row.
+  const repositories = createInMemoryRepositoryBundle();
+
+  const submit = async (label: string) => {
+    const result = await processSubmission(
+      {
+        source: 'api',
+        market: 'NBA points',
+        selection: `Player Over ${label}`,
+        odds: -110,
+        confidence: 0.6,
+        submittedBy: 'capper-a',
+        metadata: {
+          sport: 'NBA',
+          eventName: `UTV2-1907 fk ${label}`,
+          promotionScores: { edge: 60, trust: 50, readiness: 60, uniqueness: 60, boardFit: 60 },
+        },
+      },
+      repositories,
+    );
+    return result.pick.id;
+  };
+
+  const historyPickIds: string[] = [];
+  for (let i = 0; i < 10; i += 1) {
+    historyPickIds.push(await submit(`f${i}.5`));
+  }
+  const baselineTarget = await submit('g0.5');
+  const unresolvedTarget = await submit('g1.5');
+
+  const settlementRepository = {
+    listRecent: async () =>
+      historyPickIds.map((id) => ({
+        pick_id: id,
+        source: 'grading',
+        settled_at: new Date().toISOString(),
+        payload: { clvPercent: 6 },
+      })),
+  } as unknown as SettlementRepository;
+
+  // Every read of the target pick returns capper_id = null, as the database
+  // would for a capper that is not in `cappers`. metadata.capper still says
+  // 'capper-a'.
+  const pickRepository = new Proxy(repositories.picks, {
+    get(target, prop, receiver) {
+      if (prop !== 'findPickById') {
+        return Reflect.get(target, prop, receiver);
+      }
+      return async (pickId: string) => {
+        const record = await target.findPickById(pickId);
+        return record && pickId === unresolvedTarget ? { ...record, capper_id: null } : record;
+      };
+    },
+  });
+
+  const trustOf = async (pickId: string) => {
+    const result = await evaluateAllPoliciesEagerAndPersist(
+      pickId,
+      'utv2-1907-test',
+      pickRepository,
+      repositories.audit,
+      settlementRepository,
+    );
+    return result.bestBetsDecision.breakdown.trust;
+  };
+
+  // baselineTarget keeps its column, so it does receive the +10.
+  const baseline = await trustOf(baselineTarget);
+  const unresolved = await trustOf(unresolvedTarget);
+
+  assert.ok(baseline > 0);
+  assert.ok(
+    Math.abs(unresolved / baseline - 50 / 60) < 1e-9,
+    `an unresolved capper FK must fail closed to no adjustment ` +
+      `(attributed ${baseline}, unresolved ${unresolved})`,
+  );
 });
