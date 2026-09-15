@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { classifyRepositoryP0 } from './tracker-independence/p0-classifier.cjs';
 
 import { parseScopeOverrideComment } from '../ci/scope-override-comment-parser.ts';
 
@@ -73,7 +74,6 @@ import {
   parseJsonFile,
   readConfiguredEnvValue,
   readManifest,
-  resolveTrackerRef,
   relativeToRoot,
   validateManifest,
   validateTruthResultSchemaDependencies,
@@ -124,18 +124,6 @@ interface RunTruthCheckOptions {
    */
   dryRun?: boolean;
 }
-
-interface LinearIssueRecord {
-  id: string;
-  identifier: string;
-  title: string;
-  state?: { name: string; type?: string | null } | null;
-  labels?: { nodes: Array<{ name: string }> } | null;
-  attachments?: { nodes: Array<{ title?: string | null; url?: string | null }> } | null;
-  project?: { id: string; name: string } | null;
-}
-
-const P0_PROJECT_ID = '46229dc4-c7c1-4ccb-af0d-dedaf8147a97';
 
 export interface EvidenceBundleV1 {
   schema_version: number;
@@ -1110,11 +1098,18 @@ function hasRLevelCheckMention(content: string): boolean {
 
 type Verdict = TruthCheckResult['verdict'];
 
+/** Runtime proof follows repository scope; optional tracker labels cannot lower it. */
+export function requiresRuntimeCloseoutEvidence(manifest: Pick<LaneManifest, 'tier' | 'lane_type' | 'files_changed'>): boolean {
+  return manifest.tier === 'T1' ||
+    ['runtime', 'migration', 'modeling', 'data-canonical'].includes(manifest.lane_type) ||
+    manifest.files_changed.some((file) => /^(?:apps\/|packages\/|supabase\/migrations\/)/.test(file));
+}
+
 export async function runTruthCheck(
   options: RunTruthCheckOptions,
 ): Promise<TruthCheckResult> {
   validateTruthResultSchemaDependencies();
-  const env = loadEnvironment();
+  loadEnvironment();
   const issueId = options.issueId.toUpperCase();
   const checkedAt = new Date().toISOString();
   const manifestPath = issueToManifestPath(issueId);
@@ -1245,74 +1240,12 @@ export async function runTruthCheck(
     const terminalLease = evaluateTerminalLeaseInvariant(manifest, readAllLeases());
     addCheck(terminalLease.id, terminalLease.status, terminalLease.detail);
 
-    const linearToken =
-      env.LINEAR_API_TOKEN?.trim() ||
-      process.env.LINEAR_API_KEY?.trim() ||
-      readConfiguredEnvValue('LINEAR_API_TOKEN') ||
-      readConfiguredEnvValue('LINEAR_API_KEY');
-    // Tracker independence (ratified 2026-09-05). A lane resolves to a tracker
-    // key only when it declares one (or is an older manifest whose `issue_id`
-    // is itself a tracker key -- see resolveTrackerRef). A lane with
-    // `tracker_ref: null`, or any lane run without a credential, proceeds
-    // through EVERY non-tracker check instead of exiting 3 at L1.
-    //
-    // The previous early return is what made closeout hard-depend on Linear:
-    // one missing credential produced verdict `infra_error` before a single
-    // repo, proof, merge or GitHub check had run, so the tracker gated
-    // evidence it has nothing to do with.
-    const trackerRef = resolveTrackerRef(manifest);
-    const trackerAvailable = Boolean(trackerRef) && Boolean(linearToken);
-    let linearIssue: Awaited<ReturnType<typeof fetchLinearIssue>> | null = null;
-    let linearLabels: string[] = [];
-    let stateName = '';
-
-    if (!trackerAvailable) {
-      const why = !trackerRef
-        ? 'lane declares no tracker reference'
-        : 'no LINEAR_API_TOKEN or LINEAR_API_KEY is present';
-      addCheck('L1', 'skip', `L1 skipped: ${why}`);
-      addCheck('L2', 'skip', `L2 skipped: ${why}; manifest tier ${tier} stands`);
-      addCheck('L3', 'skip', `L3 skipped: ${why}`);
-      addCheck('L4', 'skip', `L4 skipped: ${why}`);
-    } else {
-      linearIssue = await fetchLinearIssue(trackerRef as string, linearToken as string);
-      addCheck('L1', 'pass', `Linear issue ${linearIssue.identifier} exists`);
-      linearLabels = (linearIssue.labels?.nodes ?? [])
-        .map((label) => label.name.toLowerCase());
-      const tierLabels = linearLabels
-        .map((label) => label.replace(/^tier:/, ''))
-        .filter((label) => label === 't1' || label === 't2' || label === 't3');
-      const uniqueTierLabels = [...new Set(tierLabels)];
-      if (uniqueTierLabels.length !== 1) {
-        addCheck('L2', 'fail', `expected exactly one tier label, found ${uniqueTierLabels.length}`);
-      } else {
-        if (!options.tierOverride) {
-          tier = uniqueTierLabels[0].toUpperCase() as LaneTier;
-        }
-        addCheck('L2', 'pass', `Linear tier label is ${uniqueTierLabels[0]}`);
-      }
-
-      stateName = linearIssue.state?.name ?? '';
-      const stateType = linearIssue.state?.type ?? '';
-      if (!isLinearStatePermittedForL3(stateName, stateType)) {
-        addCheck(
-          'L3',
-          'fail',
-          `Linear state ${stateName || 'Unknown'} (type ${stateType || 'unknown'}) is not an active or closeout state; ` +
-            'a lane may only close against an issue that is in flight or already complete',
-        );
-      } else {
-        addCheck('L3', 'pass', `Linear state ${stateName} (type ${stateType || 'unknown'}) is permitted`);
-      }
-
-      const attachmentUrls = (linearIssue.attachments?.nodes ?? [])
-        .map((attachment) => attachment.url?.trim())
-        .filter((entry): entry is string => Boolean(entry));
-      if (!prUrl || !attachmentUrls.includes(prUrl)) {
-        addCheck('L4', 'fail', 'Linear attachments do not include manifest.pr_url');
-      } else {
-        addCheck('L4', 'pass', 'Linear attachments include manifest.pr_url');
-      }
+    // Tracker state is optional external metadata, never closeout authority.
+    // Do not inspect credentials: a stale token must not change this path.
+    const trackerAvailable = false;
+    const stateName = '';
+    for (const id of ['L1', 'L2', 'L3', 'L4']) {
+      addCheck(id, 'skip', `optional tracker check omitted; repository tier ${tier} stands`);
     }
 
     const githubToken = process.env.GITHUB_TOKEN?.trim() || readConfiguredEnvValue('GITHUB_TOKEN');
@@ -1559,9 +1492,7 @@ export async function runTruthCheck(
         mtime_ms: fs.existsSync(proofPath) ? fs.statSync(proofPath).mtime.getTime() : undefined,
       })),
       merge_timestamp_ms: mergeTimestamp ? Date.parse(mergeTimestamp) : null,
-      runtime_proof_required: tier === 'T1' ||
-        linearLabels.includes('runtime-truth') ||
-        linearLabels.includes('kind:runtime'),
+      runtime_proof_required: requiresRuntimeCloseoutEvidence({ ...manifest, tier }),
       transition_age_ms: 0,
     });
     for (const check of closeoutGateChecks) {
@@ -1725,32 +1656,23 @@ export async function runTruthCheck(
       addCheck('G5', 'pass', 'no finalized implementation files_changed entries to inspect');
     }
 
-    const linearProjectIsP0 = linearIssue?.project?.id === P0_PROJECT_ID;
     const manifestP0 = manifest.p0_protocol;
-    const manifestSaysP0 = manifestP0?.required === true;
-
-    if (!linearProjectIsP0 && !manifestSaysP0) {
-      addCheck('H1', 'skip', 'lane is not P0 — protocol checks not applicable');
-      addCheck('H2', 'skip', 'lane is not P0 — protocol checks not applicable');
-      addCheck('H3', 'skip', 'lane is not P0 — protocol checks not applicable');
-      addCheck('H4', 'skip', 'lane is not P0 — protocol checks not applicable');
-      addCheck('H5', 'skip', 'lane is not P0 — protocol checks not applicable');
-    } else {
-      if (linearProjectIsP0 && !manifestSaysP0) {
-        addCheck(
-          'H1',
-          'fail',
-          `Linear places ${issueId} in P0 project but manifest.p0_protocol.required is not true`,
-        );
-      } else if (!linearProjectIsP0 && manifestSaysP0) {
-        addCheck(
-          'H1',
-          'fail',
-          `manifest declares P0 but Linear project (${linearIssue?.project?.name ?? 'none'}) is not the P0 project`,
-        );
-      } else {
-        addCheck('H1', 'pass', 'P0 detection is consistent between Linear and manifest');
+    const p0 = classifyRepositoryP0({
+      root: ROOT, issueId, baseRef: pullRequest.base?.sha ?? 'origin/main',
+      headRef: pullRequest.head?.sha ?? undefined,
+    });
+    if (p0.classification === 'non_p0') {
+      for (const id of ['H1', 'H2', 'H3', 'H4', 'H5']) {
+        addCheck(id, 'skip', 'repository classification is non-P0; required merge and tier checks remain applicable');
       }
+    } else if (p0.classification === 'unknown') {
+      addCheck('H1', 'fail', `P0 classification unresolved: ${p0.reason}`);
+      for (const id of ['H2', 'H3', 'H4', 'H5']) {
+        addCheck(id, 'skip', 'P0 classification must be resolved before applicability can be determined');
+      }
+    } else {
+      addCheck('H1', manifestP0?.required === true ? 'pass' : 'fail',
+        manifestP0?.required === true ? p0.reason : 'repository P0 obligation requires manifest.p0_protocol.required=true');
 
       const critique = manifestP0?.claude_critique;
       if (!critique?.recorded || !critique.artifact_path) {
@@ -2241,44 +2163,6 @@ export function finalizeWithManifest(input: {
   return result;
 }
 
-async function fetchLinearIssue(issueId: string, token: string): Promise<LinearIssueRecord> {
-  const payload = await fetchJson<{
-    data?: { issue: LinearIssueRecord | null };
-    errors?: Array<{ message?: string }>;
-  }>('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: {
-      Authorization: token,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: `
-        query IssueForTruthCheck($id: String!) {
-          issue(id: $id) {
-            id
-            identifier
-            title
-            state { name type }
-            labels(first: 20) { nodes { name } }
-            attachments(first: 20) { nodes { title url } }
-            project { id name }
-          }
-        }
-      `,
-      variables: { id: issueId },
-    }),
-  });
-
-  if (payload.errors?.length) {
-    throw new Error(payload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
-  }
-  if (!payload.data?.issue) {
-    throw new Error(`Linear issue not found: ${issueId}`);
-  }
-
-  return payload.data.issue;
-}
-
 export function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
   const url = new URL(prUrl);
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
@@ -2302,6 +2186,7 @@ export async function fetchGitHubPullRequest(
   merged: boolean;
   merge_commit_sha: string | null;
   head?: { sha?: string | null } | null;
+  base?: { sha?: string | null } | null;
   labels: Array<{ name?: string }>;
   user?: { login?: string; type?: string } | null;
   auto_merge?: { merge_method?: string } | null;
@@ -2362,7 +2247,7 @@ function findLatestPmVerdict(
     );
     if (!verdict) continue;
     if (lines[1] !== 'schema: pm-verdict/v1') continue;
-    const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+)$/i);
+    const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI|WORK)-\d+)$/i);
     if (!issueMatch) continue;
     if (issueMatch[1].toUpperCase() !== issueId.toUpperCase()) continue;
     if (comment.user?.type === 'Bot') continue;
@@ -2897,7 +2782,7 @@ export function findPostMergeTouches(input: {
     if (!overlaps) {
       continue;
     }
-    const referencedIssues = subject.match(/(?:UTV2|UNI)-\d+/gi) ?? [];
+    const referencedIssues = subject.match(/(?:UTV2|UNI|WORK)-\d+/gi) ?? [];
     if (
       input.allowSameIssueCommits &&
       referencedIssues.some((candidate) => candidate.toUpperCase() === input.issueId)

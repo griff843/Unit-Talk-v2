@@ -1649,12 +1649,12 @@ async function main(): Promise<void> {
   // The issue ID becomes a PATH SEGMENT. Unvalidated, "../../.." walks the
   // rebind out of docs/06_status/proof entirely and points it at arbitrary repo
   // files — a tool that rewrites bytes must never accept an unconstrained path.
-  if (!/^(UTV2|UNI)-\d+$/.test(issueId)) {
+  if (!/^(UTV2|UNI|WORK)-\d+$/.test(issueId)) {
     emitJson({
       ok: false,
       code: 'proof_rebind_refused',
       issue_id: issueId,
-      errors: [`--issue "${issueId}" is not a valid issue ID (UTV2-NNN or UNI-NNN) — refusing`],
+      errors: [`--issue "${issueId}" is not a valid issue ID (UTV2-NNN, UNI-NNN or WORK-NNN) — refusing`],
     });
     process.exitCode = 1;
     return;

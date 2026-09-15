@@ -21,7 +21,7 @@ Ready → Started → In Progress → In Review → Merged → Done
 |---|---|
 | `ops:preflight` | verify env/git/deps, emit preflight token |
 | `ops:lane-start <UTV2-###>` | create manifest, worktree, branch, file locks |
-| `ops:lane-close <UTV2-###>` | run truth-check, transition Linear, close manifest |
+| `ops:lane-close <UTV2-###>` | run truth-check, close manifest; optional tracker mirroring |
 | `ops:truth-check <UTV2-###>` | the done-gate |
 | `ops:lane:resume <UTV2-###>` | re-preflight and resume stranded/blocked lane |
 | `ops:lane:block <UTV2-###>` | mark blocked with reason |
@@ -46,7 +46,7 @@ pnpm ops:lane-start UTV2-### --tier T3 --branch <branch> --docs-only-fast-path -
 - [ ] `expected_proof_paths[]` set (non-empty for T1/T2)
 - [ ] No prior manifest for this issue (unless `done`)
 
-For the T3 docs-only fast path, replace this checklist with the two script validations above plus normal PR CI, branch discipline, lane authority, merge gate, tier label, and Linear auto-close. Do not create a manifest or sync file for a validated fast-path lane.
+For the T3 docs-only fast path, replace this checklist with the two script validations above plus normal PR CI, branch discipline, lane authority, merge gate, tier label, and governed repository closeout. Do not create a manifest or sync file for a validated fast-path lane.
 
 ## Lane close checklist
 
@@ -95,3 +95,5 @@ Resume stranded lanes with `ops:lane:resume`.
 | "Preflight passed last time" | Preflight tokens are session-scoped. New session = new preflight. |
 | "I can close without truth-check, it's obvious" | No close without truth-check. Obvious is not verified. |
 | "Two lanes won't really overlap" | Overlap check is hard. If scopes touch, the second lane is refused. No exceptions. |
+
+Repository closeout records explicit completion intent with `ops:lane-close <ID> --complete-work` after merge/proof verification. Tracker transition is opt-in via `--sync-tracker`; default closeout performs no tracker request, including for legacy identities with configured credentials. Neither flag bypasses proof, required checks, or approval.

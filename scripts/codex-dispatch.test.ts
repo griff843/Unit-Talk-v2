@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './ops/shared.js';
@@ -223,4 +224,32 @@ test('dispatch skill documents the Codex lane workflow', () => {
   assert.match(skill, /pnpm ops:lane-finalize -- --issue UTV2-###/);
   assert.match(skill, /main checkout is control and merge only/i);
   assert.match(skill, /Do not use the removed `--allowed` flag/);
+});
+
+
+test('WORK dispatch reads local contract with missing or unavailable optional tracker and never fetches it', async () => {
+  const { resolveDispatchTask } = await import('./codex-dispatch.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-dispatch-'));
+  try {
+    fs.mkdirSync(path.join(root, '.ops', 'work'), { recursive: true });
+    const description = '# Honest provider health\n\n## Objective\nReject invalid timestamps.\n\n## Acceptance Criteria\n- Invalid timestamps are stale.\n\n## Where to Look\n- apps/ingestor/src/staleness.ts\n\n## Guardrails\n- Keep containment.\n\n## Non-Goals\n- Provider activation.\n\n## Required Evidence\n- Regression test.\n\n## Exit Criteria\n- pnpm verify passes.';
+    for (const identity of ['WORK-903', 'UTV2-903', 'UNI-903']) {
+      fs.writeFileSync(path.join(root, '.ops/work', `${identity}.md`), description);
+      for (const token of [undefined, 'invalid', 'timeout', 'deleted', 'issue-cap-reached']) {
+        const task = await resolveDispatchTask(identity, token, root, async () => { throw new Error('must never call Linear'); });
+        assert.equal(task.identifier, identity);
+        assert.equal(task.description, description);
+      }
+    }
+    const { buildTaskContract, buildSyncYmlWithTaskContract } = await import('./ops/execution-packet.js');
+    const contract = buildTaskContract({ identifier: 'WORK-903', title: 'Honest provider health',
+      url: 'file:.ops/work/WORK-903.md', description }, undefined, 'local-description');
+    fs.mkdirSync(path.join(root, '.ops/sync'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.ops/sync/WORK-903.yml'), buildSyncYmlWithTaskContract('WORK-903', contract));
+    fs.unlinkSync(path.join(root, '.ops/work/WORK-903.md'));
+    const recovered = await resolveDispatchTask('WORK-903', undefined, root,
+      async () => { throw new Error('recovery must not call Linear'); });
+    assert.equal(recovered.description, description, 'fresh session recovers the captured contract');
+    await assert.rejects(resolveDispatchTask('WORK-904', undefined, root), /requires .ops\/work/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

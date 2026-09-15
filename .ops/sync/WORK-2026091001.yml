@@ -1,0 +1,1335 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026091001
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026091001
+  objective: Finish Unit Talk tracker independence
+  acceptance_criteria:
+    - Complete the attached execution packet, including real tracker-free
+      lifecycle evidence and preservation of independent exact-head review, tier
+      floors, P0 controls, scope isolation and required CI. No completion claim
+      before all five mission cutover exit conditions hold.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Finish Unit Talk tracker independence
+
+      Repository identity: WORK-2026091001
+
+      Owner: Codex, explicitly assigned by Griff on 2026-09-10.
+
+      Tier: T1. Lane: governance. Tracker: none.
+
+
+      ## Files to read and allowed file scope
+
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - package.json
+
+      - scripts/ops/preflight.ts
+
+      - scripts/ops/preflight.test.ts
+
+      - scripts/ops/shared.ts
+
+      - scripts/ops/shared.test.ts
+
+      - scripts/ops/execution-packet.ts
+
+      - scripts/ops/execution-packet.test.ts
+
+      - scripts/ops/truth-check-lib.ts
+
+      - scripts/ops/lane-close.ts
+
+      - scripts/ops/lane-close.test.ts
+
+      - scripts/ops/lane-finalize.ts
+
+      - scripts/ops/lane-finalize.test.ts
+
+      - scripts/ops/p0-detect.ts
+
+      - scripts/ops/p0-detect.test.ts
+
+      - scripts/ops/p0-classification.ts
+
+      - scripts/ops/p0-classification.test.ts
+
+      - scripts/ops/tracker-independence.test.ts
+
+      - scripts/ops/executor-result-validate.ts
+
+      - scripts/ops/executor-result-validate.test.ts
+
+      - scripts/ops-brief.ts
+
+      - scripts/ops/lane-start.ts
+
+      - scripts/ops/lane-start.test.ts
+
+      - .github/workflows/merge-gate.yml
+
+      - .github/workflows/executor-result-validator.yml
+
+      - .github/workflows/p0-protocol.yml
+
+      - .github/workflows/post-merge-lane-close.yml
+
+      - .claude/settings.json
+
+      - .claude/hooks/commit-msg-linear-check.sh
+
+      - .claude/hooks/linear-sync-reminder.sh
+
+      - .claude/hooks/artifact-drift-check.sh
+
+      - .claude/hooks/session-start.sh
+
+      - .claude/hooks/post-compact-reinjector.sh
+
+      - .claude/commands/dispatch.md
+
+      - .claude/commands/dispatch-board.md
+
+      - .claude/commands/loop-dispatch.md
+
+      - .claude/commands/system-state-loader.md
+
+      - .claude/commands/lane-management.md
+
+      - .claude/commands/execution-truth.md
+
+      - .agents/skills/system-state-loader/SKILL.md
+
+      - .agents/skills/dispatch/SKILL.md
+
+      - docs/05_operations/EXECUTION_TRUTH_MODEL.md
+
+      - docs/05_operations/TRUTH_CHECK_SPEC.md
+
+      - docs/05_operations/LANE_MANIFEST_SPEC.md
+
+      - docs/05_operations/P0_PROTOCOL_SPEC.md
+
+      - docs/05_operations/WORKFLOW_SPEC.md
+
+      - docs/05_operations/DELEGATION_POLICY.md
+
+      - docs/governance/P0_CLASSIFICATIONS.json
+
+      - .ops/work/WORK-2026091001.md
+
+      - docs/06_status/proof/WORK-2026091001/**
+
+      - scripts/ops/truth-check-lib.test.ts
+
+      - scripts/ops/branch-discipline-guard.ts
+
+      - scripts/ops/branch-discipline-guard.test.ts
+
+      - scripts/ops/workflow-hardening.test.ts
+
+      - scripts/ops/p0-classification.cjs
+
+      - scripts/ops/p0-classification.d.cts
+
+      - docs/05_operations/schemas/lane_manifest_v1.schema.json
+
+      - .agents/skills/proof-closeout/SKILL.md
+
+      - .agents/skills/linear-execution/SKILL.md
+
+
+      ## Authorized execution packet (verbatim)
+
+
+      Finish Unit Talk tracker independence
+
+
+      Prepared 2026-09-10. Execution packet, not completion evidence or merge
+      approval.
+
+
+      Objective and authorization
+
+
+      Griff directed: "lets finish this now so that once claude is back online
+      we can move forward without linear being an issue". Complete the
+      tracker-independence correction already ratified in
+      docs/mission/intent.md. Codex owns this bounded implementation while
+      Claude is unavailable. Do not ask Griff to ratify removal again. Preserve
+      independent review and exact-head approval requirements; this directive is
+      not a GitHub merge verdict.
+
+
+      An ordinary task must complete from discovery through delegation,
+      verification, PR, integration and closeout with no Linear access or Linear
+      issue ID. Repository-owned identity is permitted where needed. No new
+      tracker, backlog migration, governance framework, or unrelated autonomy
+      redesign.
+
+
+      Starting evidence — revalidate before editing
+
+
+      Repository: griff843/Unit-Talk-v2. Inspected main:
+      6564d559d8ee4be1a13f6fbb9c39c7efbb1ec177.
+
+
+      Read AGENTS.md, CLAUDE.md, docs/mission/{intent,spec,plan}.md and their
+      indexed contracts. Current lane isolation, risk floors, meaningful
+      verification, protected branch checks and approvals remain in force until
+      reviewed replacements land.
+
+
+      Membership PR #1555, inspected head
+      a08ab6838a0093f3075f6f78731bb1e014d4d210, already contains
+      docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md and its mission-intent
+      reference. Do not create a duplicate contract. Its merge gate reports no
+      work identity and no authoritative manifest tier. Resolve admission on its
+      existing branch if supported; do not invent a prior lane or fabricate
+      proof.
+
+
+      The automated review objects to Codex editing mission intent. Griff
+      explicitly requested the contract reference. Record that authorization in
+      the review disposition; retain the required independent review.
+
+
+      Existing PRs #1491 and #1492 contain reusable work, but also replace merge
+      authority and other controls. They are not blanket-approved by tracker
+      removal. Extract only compatible, bounded changes against current main.
+
+
+      Verified implementation gaps
+
+
+      Surface
+
+
+      Finding
+
+
+      Required outcome
+
+
+      scripts/ops/shared.ts
+
+
+      WORK namespace already exists alongside legacy IDs
+
+
+      Reuse repository identity; preserve legacy PR compatibility
+
+
+      scripts/ops/execution-packet.ts
+
+
+      Local descriptions and .ops/work/<ID>.md already supported
+
+
+      Local work contracts are primary; missing local scope produces an
+      actionable local error, never a mandatory Linear request
+
+
+      scripts/ops/preflight.ts
+
+
+      runLinearChecks skips only when token is absent; a stale token restores
+      tracker authority
+
+
+      Ordinary preflight uses repository scope/risk regardless of stored Linear
+      credentials; preserve mechanical floor and overlap checks
+
+
+      scripts/ops/truth-check-lib.ts
+
+
+      tracker availability inferred from reference plus credential, then fetch
+      can fail the operation
+
+
+      Optional tracker failures cannot block verified repository closeout
+
+
+      scripts/ops/truth-check-lib.ts
+
+
+      H1 fails when manifest declares P0 but no Linear project was read
+
+
+      Repository P0 classification must drive protocol consistently without
+      Linear
+
+
+      scripts/ops/lane-close.ts
+
+
+      Optional tracker transition already catches errors
+
+
+      Retain this behavior and test it through real closeout entry path
+
+
+      scripts/ops/lane-finalize.ts
+
+
+      Optional tracker tier mirroring already present
+
+
+      Verify all callers preserve optional semantics
+
+
+      .github/workflows/merge-gate.yml
+
+
+      Identity regex recognizes UTV2/UNI, not WORK
+
+
+      Resolve repository work and its authoritative risk without reducing
+      approvals or accepting arbitrary labels as authority
+
+
+      .github/workflows/executor-result-validator.yml
+
+
+      Issue validation recognizes UTV2/UNI, not WORK
+
+
+      Accept repository identity while preserving exact-head proof and executor
+      validation
+
+
+      .github/workflows/p0-protocol.yml
+
+
+      Live Linear API required for project classification
+
+
+      Use a reviewed repository classification source; preserve required
+      artifacts, human approval and no-automerge semantics
+
+
+      scripts/ops/p0-detect.ts
+
+
+      CLI calls Linear directly
+
+
+      Share repository classification with CI and truth-check
+
+
+      AGENTS.md / CLAUDE.md
+
+
+      Mandatory tracker instructions remain
+
+
+      Work comes from mission, local work contracts, current PRs and runtime
+      evidence
+
+
+      .claude/commands/dispatch.md
+
+
+      Mandatory Linear context pull, selection, status writes and T1 plan
+      posting
+
+
+      Route local work without tracker requests; put review artifacts on the
+      governed repository/PR path
+
+
+      .claude/commands/dispatch-board.md
+
+
+      Selects entire Linear board
+
+
+      Select only mission-relevant repository work and existing active PRs
+
+
+      .claude/commands/loop-dispatch.md
+
+
+      Requires --check-linear and Linear In-* for execution truth
+
+
+      Determine active execution from manifests, leases, worktrees, branches and
+      heartbeat
+
+
+      Implementation approach
+
+
+      Reconcile live branches/manifests/locks; reserve one supporting governance
+      lane with the sanctioned preflight/lane-start path. Use repository-owned
+      work identity. WORK-2026091001 was only a proposed identity in this
+      investigation, not an admitted or reserved lane; check for collisions
+      before using it.
+
+
+      Declare the complete bounded file scope before editing. Include affected
+      tests, active command/hook instructions, canonical execution/P0 docs and
+      any necessary schema/registry files. Coordinate with existing PRs; do not
+      overwrite their work.
+
+
+      Reuse current local-contract support. Remove tracker-conditioned
+      administrative refusal from default execution while retaining scope,
+      ownership, dependencies, tier floors and real protection checks.
+
+
+      Establish repository-owned P0 classification before removing the network
+      lookup. Seed from authoritative evidence and preserve existing positive P0
+      classifications. The spec names initial UTV2-914 through UTV2-923 and
+      UTV2-948, but that is not proof of the complete current set. Inspect base
+      manifests and historical classification evidence; unknown classification
+      must not silently become non-P0. A candidate must not clear its own base
+      P0 classification by editing a field or registry. Apply one classifier
+      consistently across CI, CLI and closeout.
+
+
+      Extend required workflow identity resolution narrowly. Keep trusted
+      evaluator source, exact-head binding, tier semantics, human approvals and
+      required contexts intact. Do not simply return success for missing IDs or
+      manifests.
+
+
+      Reconcile root instructions, selected commands, hook wiring and canonical
+      execution/P0 authority in the same cutover. Historical Linear citations
+      can remain. Active instructions must not require tracker interaction, even
+      when a token happens to be configured.
+
+
+      Verify, review and integrate through the existing protected PR path. If
+      bootstrap admission is required, use the existing governed mechanism and
+      report its precise required artifact; never direct-push main or fabricate
+      a lane. Prepare any reserved review packet fully before asking for the
+      final binding approval.
+
+
+      Finish the existing membership PR under the resulting workflow, rechecking
+      its current head and outstanding review findings. Pricing, trial
+      boundaries and future Black Label commitment must match actual owner
+      decisions; a PR body alone is not proof of those decisions.
+
+
+      Disable or remove obsolete optional tracker integrations only after
+      end-to-end proof, through reviewed changes. Do not delete history, revoke
+      secrets, change production configuration or close unrelated work as
+      cleanup.
+
+
+      Required verification
+
+
+      Exercise executable entry points, not only helpers or string-match
+      assertions. Use repository node conventions and wire any new tests into
+      the existing verify path.
+
+
+      New local task with no Linear token: admission, packet, implementation
+      verification, PR identity, required checks, integration and closeout
+      succeed.
+
+
+      Token present but invalid; API timeout; tracker issue deleted; tracker
+      issue cap reached: all remain non-blocking for ordinary local work. Inject
+      blocked network and assert no unexpected tracker call in the default path.
+
+
+      Underclassified tier, overlapping scope, missing proof, stale head,
+      missing approval and malformed work identity still refuse for their
+      intended reasons.
+
+
+      P0 legacy and new work still require critique, runtime evidence, human
+      approval and manual merge. Candidate attempts to remove P0 classification
+      fail. Unknown P0 classification cannot auto-pass.
+
+
+      Existing UTV2/UNI PRs continue without new Linear tickets or
+      administrative restarts.
+
+
+      Fresh and compacted sessions recover mission, local work and active PR
+      state without loading Linear.
+
+
+      Full required verification on the final head; actual GitHub required
+      checks and independent review. Local simulation alone is not a successful
+      cutover.
+
+
+      Constraints
+
+
+      No SGO subscription/ingestion activation, system-pick unpark, member
+      delivery, production deployment, production DDL/data mutation, secret
+      changes, branch-protection weakening, new issue tracker or general backlog
+      cleanup. Keep the existing product delivery order. Do not merge the
+      broader #1491/#1492 operating-model replacement under this narrower
+      authorization.
+
+
+      Return packet and exit
+
+
+      Return exact branch/PR/HEAD and merge SHA where applicable; files changed;
+      verification commands and results; independent review disposition;
+      observed tracker-free lifecycle evidence; migration path for existing PRs;
+      membership PR status; any precisely bounded remaining reserved action.
+      Close the supporting cutover when all five exit conditions in mission
+      intent hold and return capacity to product work.
+
+
+      This session's execution limitation
+
+
+      No implementation changes, lane, PR or merge were produced here. The
+      cloned checkout is clean after restoring an incidental package-manager
+      edit. The sanctioned T1 preflight was invoked through Node/tsx after
+      resolving local import setup. It returned INFRA: PE1 found no
+      local.env/.env; PT1 lacked configured
+      SUPABASE_SERVICE_ROLE_KEY/SUPABASE_URL; package-manager setup prevented
+      baseline commands. No valid admission token was issued. The scratch
+      runtime uses pnpm 11.19.0 whereas the repository pins pnpm 10.29.3. Run
+      this packet in the already-configured Unit Talk Codex terminal; do not
+      paste secrets into chat or manufacture placeholder credentials to satisfy
+      admission.
+
+
+      ## Final declared pre-admission scope
+
+
+      - .agents/skills/dispatch/SKILL.md
+
+      - .agents/skills/linear-execution/SKILL.md
+
+      - .agents/skills/proof-closeout/SKILL.md
+
+      - .agents/skills/system-state-loader/SKILL.md
+
+      - .claude/commands/dispatch-board.md
+
+      - .claude/commands/dispatch.md
+
+      - .claude/commands/execution-truth.md
+
+      - .claude/commands/lane-management.md
+
+      - .claude/commands/lane-recovery.md
+
+      - .claude/commands/loop-dispatch.md
+
+      - .claude/commands/system-state-loader.md
+
+      - .claude/hooks/artifact-drift-check.sh
+
+      - .claude/hooks/commit-msg-linear-check.sh
+
+      - .claude/hooks/linear-sync-reminder.sh
+
+      - .claude/hooks/post-compact-reinjector.sh
+
+      - .claude/hooks/session-start.sh
+
+      - .claude/settings.json
+
+      - .github/workflows/close-eligibility-preflight.yml
+
+      - .github/workflows/executor-result-validator.yml
+
+      - .github/workflows/merge-gate.yml
+
+      - .github/workflows/p0-protocol.yml
+
+      - .github/workflows/post-merge-lane-close.yml
+
+      - .github/workflows/proof-gate.yml
+
+      - .github/workflows/tier-label-apply.yml
+
+      - .github/workflows/tier-label-check.yml
+
+      - .ops/work/WORK-2026091001.md
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - docs/05_operations/DELEGATION_POLICY.md
+
+      - docs/05_operations/EXECUTION_TRUTH_MODEL.md
+
+      - docs/05_operations/LANE_MANIFEST_SPEC.md
+
+      - docs/05_operations/P0_PROTOCOL_SPEC.md
+
+      - docs/05_operations/schemas/lane_manifest_v1.schema.json
+
+      - docs/05_operations/TRUTH_CHECK_SPEC.md
+
+      - docs/05_operations/WORKFLOW_SPEC.md
+
+      - docs/06_status/proof/WORK-2026091001/**
+
+      - docs/governance/tracker-independence/**
+
+      - package.json
+
+      - scripts/ci/proof-binding-validator.ts
+
+      - scripts/codex-dispatch.test.ts
+
+      - scripts/codex-dispatch.ts
+
+      - scripts/codex-receive.test.ts
+
+      - scripts/codex-receive.ts
+
+      - scripts/ops-brief.ts
+
+      - scripts/ops/branch-discipline-guard.ts
+
+      - scripts/ops/execution-packet.test.ts
+
+      - scripts/ops/execution-packet.ts
+
+      - scripts/ops/executor-result-validate.test.ts
+
+      - scripts/ops/executor-result-validate.ts
+
+      - scripts/ops/lane-close.test.ts
+
+      - scripts/ops/lane-close.ts
+
+      - scripts/ops/lane-finalize.test.ts
+
+      - scripts/ops/lane-finalize.ts
+
+      - scripts/ops/lane-start.test.ts
+
+      - scripts/ops/lane-start.ts
+
+      - scripts/ops/merge-gate-verdict.cjs
+
+      - scripts/ops/merge-gate-verdict.test.ts
+
+      - scripts/ops/orchestration-reconciler.test.ts
+
+      - scripts/ops/orchestration-reconciler.ts
+
+      - scripts/ops/p0-detect.test.ts
+
+      - scripts/ops/p0-detect.ts
+
+      - scripts/ops/pr-review-packet.ts
+
+      - scripts/ops/pre-merge-authorization.test.ts
+
+      - scripts/ops/pre-merge-authorization.ts
+
+      - scripts/ops/preflight.test.ts
+
+      - scripts/ops/preflight.ts
+
+      - scripts/ops/proof-rebind.ts
+
+      - scripts/ops/proof-schema.test.ts
+
+      - scripts/ops/proof-schema.ts
+
+      - scripts/ops/shared.test.ts
+
+      - scripts/ops/shared.ts
+
+      - scripts/ops/tracker-independence/**
+
+      - scripts/ops/truth-check-lib.test.ts
+
+      - scripts/ops/truth-check-lib.ts
+
+      - scripts/ops/workflow-hardening.test.ts
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026091001.md
+    title: Finish Unit Talk tracker independence
+    description: >-
+      # Finish Unit Talk tracker independence
+
+
+      Repository identity: WORK-2026091001
+
+      Owner: Codex, explicitly assigned by Griff on 2026-09-10.
+
+      Tier: T1. Lane: governance. Tracker: none.
+
+
+      ## Acceptance criteria
+
+
+      Complete the attached execution packet, including real tracker-free
+      lifecycle evidence and preservation of independent exact-head review, tier
+      floors, P0 controls, scope isolation and required CI. No completion claim
+      before all five mission cutover exit conditions hold.
+
+
+      ## Files to read and allowed file scope
+
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - package.json
+
+      - scripts/ops/preflight.ts
+
+      - scripts/ops/preflight.test.ts
+
+      - scripts/ops/shared.ts
+
+      - scripts/ops/shared.test.ts
+
+      - scripts/ops/execution-packet.ts
+
+      - scripts/ops/execution-packet.test.ts
+
+      - scripts/ops/truth-check-lib.ts
+
+      - scripts/ops/lane-close.ts
+
+      - scripts/ops/lane-close.test.ts
+
+      - scripts/ops/lane-finalize.ts
+
+      - scripts/ops/lane-finalize.test.ts
+
+      - scripts/ops/p0-detect.ts
+
+      - scripts/ops/p0-detect.test.ts
+
+      - scripts/ops/p0-classification.ts
+
+      - scripts/ops/p0-classification.test.ts
+
+      - scripts/ops/tracker-independence.test.ts
+
+      - scripts/ops/executor-result-validate.ts
+
+      - scripts/ops/executor-result-validate.test.ts
+
+      - scripts/ops-brief.ts
+
+      - scripts/ops/lane-start.ts
+
+      - scripts/ops/lane-start.test.ts
+
+      - .github/workflows/merge-gate.yml
+
+      - .github/workflows/executor-result-validator.yml
+
+      - .github/workflows/p0-protocol.yml
+
+      - .github/workflows/post-merge-lane-close.yml
+
+      - .claude/settings.json
+
+      - .claude/hooks/commit-msg-linear-check.sh
+
+      - .claude/hooks/linear-sync-reminder.sh
+
+      - .claude/hooks/artifact-drift-check.sh
+
+      - .claude/hooks/session-start.sh
+
+      - .claude/hooks/post-compact-reinjector.sh
+
+      - .claude/commands/dispatch.md
+
+      - .claude/commands/dispatch-board.md
+
+      - .claude/commands/loop-dispatch.md
+
+      - .claude/commands/system-state-loader.md
+
+      - .claude/commands/lane-management.md
+
+      - .claude/commands/execution-truth.md
+
+      - .agents/skills/system-state-loader/SKILL.md
+
+      - .agents/skills/dispatch/SKILL.md
+
+      - docs/05_operations/EXECUTION_TRUTH_MODEL.md
+
+      - docs/05_operations/TRUTH_CHECK_SPEC.md
+
+      - docs/05_operations/LANE_MANIFEST_SPEC.md
+
+      - docs/05_operations/P0_PROTOCOL_SPEC.md
+
+      - docs/05_operations/WORKFLOW_SPEC.md
+
+      - docs/05_operations/DELEGATION_POLICY.md
+
+      - docs/governance/P0_CLASSIFICATIONS.json
+
+      - .ops/work/WORK-2026091001.md
+
+      - docs/06_status/proof/WORK-2026091001/**
+
+      - scripts/ops/truth-check-lib.test.ts
+
+      - scripts/ops/branch-discipline-guard.ts
+
+      - scripts/ops/branch-discipline-guard.test.ts
+
+      - scripts/ops/workflow-hardening.test.ts
+
+      - scripts/ops/p0-classification.cjs
+
+      - scripts/ops/p0-classification.d.cts
+
+      - docs/05_operations/schemas/lane_manifest_v1.schema.json
+
+      - .agents/skills/proof-closeout/SKILL.md
+
+      - .agents/skills/linear-execution/SKILL.md
+
+
+      ## Authorized execution packet (verbatim)
+
+
+      Finish Unit Talk tracker independence
+
+
+      Prepared 2026-09-10. Execution packet, not completion evidence or merge
+      approval.
+
+
+      Objective and authorization
+
+
+      Griff directed: "lets finish this now so that once claude is back online
+      we can move forward without linear being an issue". Complete the
+      tracker-independence correction already ratified in
+      docs/mission/intent.md. Codex owns this bounded implementation while
+      Claude is unavailable. Do not ask Griff to ratify removal again. Preserve
+      independent review and exact-head approval requirements; this directive is
+      not a GitHub merge verdict.
+
+
+      An ordinary task must complete from discovery through delegation,
+      verification, PR, integration and closeout with no Linear access or Linear
+      issue ID. Repository-owned identity is permitted where needed. No new
+      tracker, backlog migration, governance framework, or unrelated autonomy
+      redesign.
+
+
+      Starting evidence — revalidate before editing
+
+
+      Repository: griff843/Unit-Talk-v2. Inspected main:
+      6564d559d8ee4be1a13f6fbb9c39c7efbb1ec177.
+
+
+      Read AGENTS.md, CLAUDE.md, docs/mission/{intent,spec,plan}.md and their
+      indexed contracts. Current lane isolation, risk floors, meaningful
+      verification, protected branch checks and approvals remain in force until
+      reviewed replacements land.
+
+
+      Membership PR #1555, inspected head
+      a08ab6838a0093f3075f6f78731bb1e014d4d210, already contains
+      docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md and its mission-intent
+      reference. Do not create a duplicate contract. Its merge gate reports no
+      work identity and no authoritative manifest tier. Resolve admission on its
+      existing branch if supported; do not invent a prior lane or fabricate
+      proof.
+
+
+      The automated review objects to Codex editing mission intent. Griff
+      explicitly requested the contract reference. Record that authorization in
+      the review disposition; retain the required independent review.
+
+
+      Existing PRs #1491 and #1492 contain reusable work, but also replace merge
+      authority and other controls. They are not blanket-approved by tracker
+      removal. Extract only compatible, bounded changes against current main.
+
+
+      Verified implementation gaps
+
+
+      Surface
+
+
+      Finding
+
+
+      Required outcome
+
+
+      scripts/ops/shared.ts
+
+
+      WORK namespace already exists alongside legacy IDs
+
+
+      Reuse repository identity; preserve legacy PR compatibility
+
+
+      scripts/ops/execution-packet.ts
+
+
+      Local descriptions and .ops/work/<ID>.md already supported
+
+
+      Local work contracts are primary; missing local scope produces an
+      actionable local error, never a mandatory Linear request
+
+
+      scripts/ops/preflight.ts
+
+
+      runLinearChecks skips only when token is absent; a stale token restores
+      tracker authority
+
+
+      Ordinary preflight uses repository scope/risk regardless of stored Linear
+      credentials; preserve mechanical floor and overlap checks
+
+
+      scripts/ops/truth-check-lib.ts
+
+
+      tracker availability inferred from reference plus credential, then fetch
+      can fail the operation
+
+
+      Optional tracker failures cannot block verified repository closeout
+
+
+      scripts/ops/truth-check-lib.ts
+
+
+      H1 fails when manifest declares P0 but no Linear project was read
+
+
+      Repository P0 classification must drive protocol consistently without
+      Linear
+
+
+      scripts/ops/lane-close.ts
+
+
+      Optional tracker transition already catches errors
+
+
+      Retain this behavior and test it through real closeout entry path
+
+
+      scripts/ops/lane-finalize.ts
+
+
+      Optional tracker tier mirroring already present
+
+
+      Verify all callers preserve optional semantics
+
+
+      .github/workflows/merge-gate.yml
+
+
+      Identity regex recognizes UTV2/UNI, not WORK
+
+
+      Resolve repository work and its authoritative risk without reducing
+      approvals or accepting arbitrary labels as authority
+
+
+      .github/workflows/executor-result-validator.yml
+
+
+      Issue validation recognizes UTV2/UNI, not WORK
+
+
+      Accept repository identity while preserving exact-head proof and executor
+      validation
+
+
+      .github/workflows/p0-protocol.yml
+
+
+      Live Linear API required for project classification
+
+
+      Use a reviewed repository classification source; preserve required
+      artifacts, human approval and no-automerge semantics
+
+
+      scripts/ops/p0-detect.ts
+
+
+      CLI calls Linear directly
+
+
+      Share repository classification with CI and truth-check
+
+
+      AGENTS.md / CLAUDE.md
+
+
+      Mandatory tracker instructions remain
+
+
+      Work comes from mission, local work contracts, current PRs and runtime
+      evidence
+
+
+      .claude/commands/dispatch.md
+
+
+      Mandatory Linear context pull, selection, status writes and T1 plan
+      posting
+
+
+      Route local work without tracker requests; put review artifacts on the
+      governed repository/PR path
+
+
+      .claude/commands/dispatch-board.md
+
+
+      Selects entire Linear board
+
+
+      Select only mission-relevant repository work and existing active PRs
+
+
+      .claude/commands/loop-dispatch.md
+
+
+      Requires --check-linear and Linear In-* for execution truth
+
+
+      Determine active execution from manifests, leases, worktrees, branches and
+      heartbeat
+
+
+      Implementation approach
+
+
+      Reconcile live branches/manifests/locks; reserve one supporting governance
+      lane with the sanctioned preflight/lane-start path. Use repository-owned
+      work identity. WORK-2026091001 was only a proposed identity in this
+      investigation, not an admitted or reserved lane; check for collisions
+      before using it.
+
+
+      Declare the complete bounded file scope before editing. Include affected
+      tests, active command/hook instructions, canonical execution/P0 docs and
+      any necessary schema/registry files. Coordinate with existing PRs; do not
+      overwrite their work.
+
+
+      Reuse current local-contract support. Remove tracker-conditioned
+      administrative refusal from default execution while retaining scope,
+      ownership, dependencies, tier floors and real protection checks.
+
+
+      Establish repository-owned P0 classification before removing the network
+      lookup. Seed from authoritative evidence and preserve existing positive P0
+      classifications. The spec names initial UTV2-914 through UTV2-923 and
+      UTV2-948, but that is not proof of the complete current set. Inspect base
+      manifests and historical classification evidence; unknown classification
+      must not silently become non-P0. A candidate must not clear its own base
+      P0 classification by editing a field or registry. Apply one classifier
+      consistently across CI, CLI and closeout.
+
+
+      Extend required workflow identity resolution narrowly. Keep trusted
+      evaluator source, exact-head binding, tier semantics, human approvals and
+      required contexts intact. Do not simply return success for missing IDs or
+      manifests.
+
+
+      Reconcile root instructions, selected commands, hook wiring and canonical
+      execution/P0 authority in the same cutover. Historical Linear citations
+      can remain. Active instructions must not require tracker interaction, even
+      when a token happens to be configured.
+
+
+      Verify, review and integrate through the existing protected PR path. If
+      bootstrap admission is required, use the existing governed mechanism and
+      report its precise required artifact; never direct-push main or fabricate
+      a lane. Prepare any reserved review packet fully before asking for the
+      final binding approval.
+
+
+      Finish the existing membership PR under the resulting workflow, rechecking
+      its current head and outstanding review findings. Pricing, trial
+      boundaries and future Black Label commitment must match actual owner
+      decisions; a PR body alone is not proof of those decisions.
+
+
+      Disable or remove obsolete optional tracker integrations only after
+      end-to-end proof, through reviewed changes. Do not delete history, revoke
+      secrets, change production configuration or close unrelated work as
+      cleanup.
+
+
+      Required verification
+
+
+      Exercise executable entry points, not only helpers or string-match
+      assertions. Use repository node conventions and wire any new tests into
+      the existing verify path.
+
+
+      New local task with no Linear token: admission, packet, implementation
+      verification, PR identity, required checks, integration and closeout
+      succeed.
+
+
+      Token present but invalid; API timeout; tracker issue deleted; tracker
+      issue cap reached: all remain non-blocking for ordinary local work. Inject
+      blocked network and assert no unexpected tracker call in the default path.
+
+
+      Underclassified tier, overlapping scope, missing proof, stale head,
+      missing approval and malformed work identity still refuse for their
+      intended reasons.
+
+
+      P0 legacy and new work still require critique, runtime evidence, human
+      approval and manual merge. Candidate attempts to remove P0 classification
+      fail. Unknown P0 classification cannot auto-pass.
+
+
+      Existing UTV2/UNI PRs continue without new Linear tickets or
+      administrative restarts.
+
+
+      Fresh and compacted sessions recover mission, local work and active PR
+      state without loading Linear.
+
+
+      Full required verification on the final head; actual GitHub required
+      checks and independent review. Local simulation alone is not a successful
+      cutover.
+
+
+      Constraints
+
+
+      No SGO subscription/ingestion activation, system-pick unpark, member
+      delivery, production deployment, production DDL/data mutation, secret
+      changes, branch-protection weakening, new issue tracker or general backlog
+      cleanup. Keep the existing product delivery order. Do not merge the
+      broader #1491/#1492 operating-model replacement under this narrower
+      authorization.
+
+
+      Return packet and exit
+
+
+      Return exact branch/PR/HEAD and merge SHA where applicable; files changed;
+      verification commands and results; independent review disposition;
+      observed tracker-free lifecycle evidence; migration path for existing PRs;
+      membership PR status; any precisely bounded remaining reserved action.
+      Close the supporting cutover when all five exit conditions in mission
+      intent hold and return capacity to product work.
+
+
+      This session's execution limitation
+
+
+      No implementation changes, lane, PR or merge were produced here. The
+      cloned checkout is clean after restoring an incidental package-manager
+      edit. The sanctioned T1 preflight was invoked through Node/tsx after
+      resolving local import setup. It returned INFRA: PE1 found no
+      local.env/.env; PT1 lacked configured
+      SUPABASE_SERVICE_ROLE_KEY/SUPABASE_URL; package-manager setup prevented
+      baseline commands. No valid admission token was issued. The scratch
+      runtime uses pnpm 11.19.0 whereas the repository pins pnpm 10.29.3. Run
+      this packet in the already-configured Unit Talk Codex terminal; do not
+      paste secrets into chat or manufacture placeholder credentials to satisfy
+      admission.
+
+
+      ## Final declared pre-admission scope
+
+
+      - .agents/skills/dispatch/SKILL.md
+
+      - .agents/skills/linear-execution/SKILL.md
+
+      - .agents/skills/proof-closeout/SKILL.md
+
+      - .agents/skills/system-state-loader/SKILL.md
+
+      - .claude/commands/dispatch-board.md
+
+      - .claude/commands/dispatch.md
+
+      - .claude/commands/execution-truth.md
+
+      - .claude/commands/lane-management.md
+
+      - .claude/commands/lane-recovery.md
+
+      - .claude/commands/loop-dispatch.md
+
+      - .claude/commands/system-state-loader.md
+
+      - .claude/hooks/artifact-drift-check.sh
+
+      - .claude/hooks/commit-msg-linear-check.sh
+
+      - .claude/hooks/linear-sync-reminder.sh
+
+      - .claude/hooks/post-compact-reinjector.sh
+
+      - .claude/hooks/session-start.sh
+
+      - .claude/settings.json
+
+      - .github/workflows/close-eligibility-preflight.yml
+
+      - .github/workflows/executor-result-validator.yml
+
+      - .github/workflows/merge-gate.yml
+
+      - .github/workflows/p0-protocol.yml
+
+      - .github/workflows/post-merge-lane-close.yml
+
+      - .github/workflows/proof-gate.yml
+
+      - .github/workflows/tier-label-apply.yml
+
+      - .github/workflows/tier-label-check.yml
+
+      - .ops/work/WORK-2026091001.md
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - docs/05_operations/DELEGATION_POLICY.md
+
+      - docs/05_operations/EXECUTION_TRUTH_MODEL.md
+
+      - docs/05_operations/LANE_MANIFEST_SPEC.md
+
+      - docs/05_operations/P0_PROTOCOL_SPEC.md
+
+      - docs/05_operations/schemas/lane_manifest_v1.schema.json
+
+      - docs/05_operations/TRUTH_CHECK_SPEC.md
+
+      - docs/05_operations/WORKFLOW_SPEC.md
+
+      - docs/06_status/proof/WORK-2026091001/**
+
+      - docs/governance/tracker-independence/**
+
+      - package.json
+
+      - scripts/ci/proof-binding-validator.ts
+
+      - scripts/codex-dispatch.test.ts
+
+      - scripts/codex-dispatch.ts
+
+      - scripts/codex-receive.test.ts
+
+      - scripts/codex-receive.ts
+
+      - scripts/ops-brief.ts
+
+      - scripts/ops/branch-discipline-guard.ts
+
+      - scripts/ops/execution-packet.test.ts
+
+      - scripts/ops/execution-packet.ts
+
+      - scripts/ops/executor-result-validate.test.ts
+
+      - scripts/ops/executor-result-validate.ts
+
+      - scripts/ops/lane-close.test.ts
+
+      - scripts/ops/lane-close.ts
+
+      - scripts/ops/lane-finalize.test.ts
+
+      - scripts/ops/lane-finalize.ts
+
+      - scripts/ops/lane-start.test.ts
+
+      - scripts/ops/lane-start.ts
+
+      - scripts/ops/merge-gate-verdict.cjs
+
+      - scripts/ops/merge-gate-verdict.test.ts
+
+      - scripts/ops/orchestration-reconciler.test.ts
+
+      - scripts/ops/orchestration-reconciler.ts
+
+      - scripts/ops/p0-detect.test.ts
+
+      - scripts/ops/p0-detect.ts
+
+      - scripts/ops/pr-review-packet.ts
+
+      - scripts/ops/pre-merge-authorization.test.ts
+
+      - scripts/ops/pre-merge-authorization.ts
+
+      - scripts/ops/preflight.test.ts
+
+      - scripts/ops/preflight.ts
+
+      - scripts/ops/proof-rebind.ts
+
+      - scripts/ops/proof-schema.test.ts
+
+      - scripts/ops/proof-schema.ts
+
+      - scripts/ops/shared.test.ts
+
+      - scripts/ops/shared.ts
+
+      - scripts/ops/tracker-independence/**
+
+      - scripts/ops/truth-check-lib.test.ts
+
+      - scripts/ops/truth-check-lib.ts
+
+      - scripts/ops/workflow-hardening.test.ts
+    captured_at: 2026-09-10T12:05:07.716Z
+    description_sha256: 6cdc57836042bf1b4136fbc3cf9dea19130ceec78dfa4b811355b6568c92c999
+  contract_hash: 0b90a34f63548e69e4003a3923b96ff18a8bfc2fa39f260a4fb16a1dd2923c71

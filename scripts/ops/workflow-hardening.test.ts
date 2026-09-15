@@ -16,6 +16,24 @@ import { ROOT } from './shared.js';
 
 type WorkflowDocument = Record<string, unknown>;
 
+test('return review workflow resolves repository and legacy identities through environment data', () => {
+  const workflow = readWorkflow('return-review-packet.yml');
+  const line = workflow.split('\n').find((value) => value.trim().startsWith('ISSUE='));
+  assert.ok(line);
+  assert.ok(!line.includes('${{'), 'branch content must not be interpolated into shell code');
+  for (const [branch, expected] of [
+    ['codex/work-999-ordinary', 'WORK-999'], ['codex/uni-42-review', 'UNI-42'],
+    ['codex/utv2-123-review', 'UTV2-123'], ['codex/unclassified', ''],
+    ['codex/work-999x', ''],
+  ]) {
+    const result = spawnSync('bash', ['-c', `${line}\nprintf '%s' "$ISSUE"`], {
+      encoding: 'utf8', env: { ...process.env, HEAD_REF: branch },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, expected);
+  }
+});
+
 function readWorkflow(name: string): string {
   return fs.readFileSync(path.join(ROOT, '.github', 'workflows', name), 'utf8');
 }
@@ -1919,5 +1937,63 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
     String(linear.group),
     /\$\{\{\s*github\.sha\s*\}\}/u,
     'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
+  );
+});
+
+test('the repo-minted P0 boundary cannot be removed from admission or the merge path without a test failing', () => {
+  // The controls that keep `WORK-###` execution refused until the P0 consumer
+  // on the protected base actually evaluates a repo-minted identity are LOCAL:
+  // preflight PW1 and `ops:lane-start` at admission, and the merge wrapper's
+  // pre-merge authorization for a manifest that already exists on a branch.
+  // None of them is a required check, and none claims to be -- Merge Gate
+  // reads whatever manifest a candidate head carries. Nothing else in the
+  // suite fails if any of them is deleted, so this asserts their presence.
+  const laneStart = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    laneStart,
+    /if \(isRepoMintedWorkIdentity\(issueId\)\) \{[\s\S]{0,400}?evaluateRepoMintedP0Coverage\(\)[\s\S]{0,600}?code: 'p0_consumer_not_activated'/u,
+    'lane-start must refuse a repo-minted identity whose P0 consumer cannot evaluate it',
+  );
+  assert.match(
+    laneStart.slice(laneStart.indexOf("code: 'p0_consumer_not_activated'")),
+    /process\.exit\(1\)/u,
+    'the refusal must exit non-zero rather than warn and continue',
+  );
+
+  // The same predicate is the preflight check PW1, so the refusal is reported
+  // before an operator ever reaches lane-start.
+  const preflight = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  assert.match(preflight, /runRepoMintedP0Checks\(issueId, addCheck\);/u);
+
+  // The sanctioned merge path holds the same line for a manifest that never
+  // passes admission again: the wrapper's authorization consults the predicate
+  // for a repo-minted head ref and refuses on `covered: false`.
+  const preMerge = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'pre-merge-authorization.ts'), 'utf8');
+  assert.match(
+    preMerge,
+    /if \(issueId && isRepoMintedWorkIdentity\(issueId\)\) \{[\s\S]{0,600}?readRepoMintedP0Coverage\(\)[\s\S]{0,800}?repoMintedBlocked = true/u,
+    'pre-merge authorization must refuse a repo-minted head ref whose trusted-base P0 consumer cannot evaluate it',
+  );
+  assert.match(
+    preMerge,
+    /&& !repoMintedBlocked;/u,
+    'the repo-minted refusal must feed the authorized decision, not only the receipt',
+  );
+
+  // The predicate itself must read the trusted base, never the working tree.
+  const shared = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'shared.ts'), 'utf8');
+  assert.match(shared, /export const P0_TRUSTED_BASE_REF = 'origin\/main';/u);
+  assert.doesNotMatch(
+    shared.slice(shared.indexOf('export function evaluateRepoMintedP0Coverage('), shared.indexOf('export function resolveTrackerRef(')),
+    /fs\.(readFileSync|existsSync)/u,
+    'evaluateRepoMintedP0Coverage must not read the working tree',
+  );
+
+  // Merge Gate still resolves the tier from the lane manifest. The local
+  // controls above are layered on that; they are not a substitute for it.
+  assert.match(
+    readWorkflow('merge-gate.yml'),
+    /docs\/06_status\/lanes/u,
+    'merge-gate must keep resolving tier from the lane manifest',
   );
 });

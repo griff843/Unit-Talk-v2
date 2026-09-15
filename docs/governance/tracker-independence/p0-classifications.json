@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "classifications": [
+    { "issue_id": "UTV2-914", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-915", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-916", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-917", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-918", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-919", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-920", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-921", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-922", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-923", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-948", "required": true, "evidence": "docs/05_operations/P0_PROTOCOL_SPEC.md section 1" },
+    { "issue_id": "UTV2-949", "required": true, "evidence": "7ea460cfb:docs/06_status/lanes/UTV2-949.json p0_protocol.required=true" },
+    { "issue_id": "UTV2-953", "required": true, "evidence": "a99cdfcc4:docs/06_status/lanes/UTV2-953.json p0_protocol.required=true; original manifest omission is not negative evidence" }
+  ]
+}

@@ -2486,3 +2486,26 @@ describe('UTV2-1826 post-merge migration merge authority', () => {
     }
   });
 });
+
+
+test('WORK proof binding resolves manifest obligations and refuses path traversal', async () => {
+  const { transpileModule, ScriptTarget } = await import('typescript');
+  const source = fs.readFileSync(path.join(process.cwd(), 'scripts/ci/proof-binding-validator.ts'), 'utf8');
+  const start = source.indexOf('function resolveManifestBindingContext(');
+  const end = source.indexOf('export function validateBindingEvidenceContract', start);
+  assert.ok(start > 0 && end > start);
+  const code = transpileModule(source.slice(start, end), { compilerOptions: { target: ScriptTarget.ES2022 } }).outputText;
+  const run = new Function('evidence', 'git', 'join', 'existsSync', 'readFileSync',
+    `${code} return resolveManifestBindingContext(evidence);`);
+  const paths: string[] = [];
+  const resolve = (id: string) => run({ issue_id: id }, () => '/repo', path.join,
+    (p: string) => { paths.push(p); return true; }, () => JSON.stringify({ lane_type: 'migration',
+      expected_proof_paths: ['docs/06_status/proof/WORK-903/model-routing.json'], model_routing: { profile: 'test' } }));
+  assert.equal(resolve('WORK-903').expectsModelRouting, true);
+  assert.match(paths[0], /WORK-903\.json$/);
+  paths.length = 0;
+  for (const id of ['../WORK-903', 'WORK-903/../../other', 'WORK-903x']) {
+    assert.equal(resolve(id).expectsModelRouting, false);
+  }
+  assert.equal(paths.length, 0, 'unsafe identifiers never reach filesystem reads');
+});

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import {
   ROOT,
@@ -11,6 +12,17 @@ import {
 function branchFor(issueId: string): string {
   return `codex/${issueId.toLowerCase()}-receive`;
 }
+
+test('WORK receive selects the tracker-free path even when optional tracker credentials are connected', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts/codex-receive.ts'), 'utf8');
+  const statement = source.match(/const noLinear = ([^;]+);/);
+  assert.ok(statement);
+  const resolve = new Function('bools', 'issueId', `return ${statement[1]};`);
+  assert.equal(resolve(new Set(), 'WORK-903'), true);
+  assert.equal(resolve(new Set(), 'UTV2-903'), true);
+  assert.equal(resolve(new Set(['no-linear']), 'UTV2-903'), true);
+  assert.equal(resolve(new Set(['sync-tracker']), 'UTV2-903'), false);
+});
 
 function createBranch(branch: string): void {
   const result = spawnSync('git', ['branch', branch, 'HEAD'], {
@@ -30,15 +42,20 @@ function deleteBranch(branch: string): void {
 }
 
 function runCodexReceive(args: string[]) {
-  return spawnSync(
-    process.execPath,
-    [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/codex-receive.ts', ...args],
-    {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: 'pipe',
-    },
-  );
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'tracker-free-receive-'));
+  const marker = path.join(temp, 'network-call');
+  const preload = path.join(temp, 'block-network.cjs');
+  fs.writeFileSync(preload, `const fs = require('node:fs'); globalThis.fetch = async () => { fs.writeFileSync(${JSON.stringify(marker)}, 'unexpected fetch'); throw new Error('network blocked'); };`);
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ['--require', preload, path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/codex-receive.ts', ...args],
+      { cwd: ROOT, encoding: 'utf8', stdio: 'pipe',
+        env: { ...process.env, LINEAR_API_TOKEN: 'invalid-stored-token' } },
+    );
+    assert.equal(fs.existsSync(marker), false, 'ordinary receipt must not call tracker');
+    return result;
+  } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 }
 
 function withManifest(
@@ -147,7 +164,6 @@ test('codex-receive is idempotent when already in_review with the same PR URL', 
       branch,
       '--pr',
       'https://github.com/example/unit-talk/pull/201',
-      '--no-linear',
       '--json',
     ]);
     assert.strictEqual(result.status, 0);

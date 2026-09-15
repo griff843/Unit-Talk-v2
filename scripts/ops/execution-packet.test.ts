@@ -769,8 +769,9 @@ test('the standalone packet CLI produces a packet for a newly admitted pre-contr
     url: `https://linear.app/unit-talk/issue/${issueId}`,
     description: `## Objective\n${objective}\n\n## Acceptance criteria\n- the CLI emits a packet\n\n## Where to look\n- scripts/ops/fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- the CLI emits a packet`,
   } } });
-  fs.writeFileSync(path.join(bin, 'curl'),
-    `#!/bin/sh\ncat >/dev/null 2>&1\ncat <<'JSON'\n${payload}\nJSON\nexit 0\n`, { mode: 0o755 });
+  fs.mkdirSync(path.join(root, '.ops', 'work'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.ops', 'work', `${issueId}.md`), JSON.parse(payload).data.issue.description);
+  fs.writeFileSync(path.join(bin, 'curl'), '#!/bin/sh\nexit 97\n', { mode: 0o755 });
 
   const run = spawnSync(
     path.join(ROOT, 'node_modules', '.bin', 'tsx'),
@@ -1017,16 +1018,9 @@ test('F2: an empty configured LINEAR_API_TOKEN does not mask LINEAR_API_KEY', ()
     { root, runner },
   );
 
-  assert.equal(
-    result.ok,
-    true,
-    `capture must fall through to LINEAR_API_KEY; got ${result.ok === false ? result.message : ''}`,
-  );
-  assert.match(
-    String(sawToken ?? ''),
-    /real-key/u,
-    'the configured key must actually reach the fetch, not just avoid the refusal',
-  );
+  assert.equal(result.ok, false, 'credentials do not replace a missing local contract');
+  assert.match(result.ok === false ? result.message : '', /Missing local task contract/);
+  assert.equal(sawToken, null, 'default recovery never invokes the tracker runner');
 });
 
 test('F3: a repeated normalized heading keeps both occurrences as distinct sections', () => {
@@ -1154,16 +1148,9 @@ test('F6: a whitespace-only LINEAR_API_TOKEN does not mask LINEAR_API_KEY', () =
     { root, runner },
   );
 
-  assert.equal(
-    result.ok,
-    true,
-    `a whitespace-only token must fall through to LINEAR_API_KEY; got ${result.ok === false ? result.message : ''}`,
-  );
-  assert.match(
-    String(sawToken ?? ''),
-    /real-key/u,
-    'the configured key must actually reach the fetch, not merely avoid the refusal',
-  );
+  assert.equal(result.ok, false, 'credentials do not replace a missing local contract');
+  assert.match(result.ok === false ? result.message : '', /Missing local task contract/);
+  assert.equal(sawToken, null, 'default recovery never invokes the tracker runner');
 });
 
 test('F7: a repeated recognized heading aggregates instead of yielding only the first', () => {
@@ -2975,7 +2962,7 @@ test('UTV2-1837: captureOrReadTaskContract needs neither a credential nor the ne
   }
 });
 
-test('UTV2-1837 AC4 inversion: with no local work order the tracker is still consulted', () => {
+test('missing local work order refuses locally even when credentials are present', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-fall-'));
   try {
     let contacted = false;
@@ -2983,8 +2970,8 @@ test('UTV2-1837 AC4 inversion: with no local work order the tracker is still con
       contacted = true;
       throw new Error('contacted');
     }) as never;
-    assert.throws(() => captureOrReadTaskContract('UTV2-1837', 'tok', root, runner));
-    assert.equal(contacted, true, 'the local source must not silently replace the tracker');
+    assert.throws(() => captureOrReadTaskContract('UTV2-1837', 'tok', root, runner), /Missing local task contract.*create .ops\/work/);
+    assert.equal(contacted, false, 'missing scope must never trigger a tracker request');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

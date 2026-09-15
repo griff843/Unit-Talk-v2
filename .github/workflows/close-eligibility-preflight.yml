@@ -60,7 +60,7 @@ jobs:
           # Resolve the lane from the branch name. A PR with no resolvable issue
           # id is not a lane PR and is skipped -- this gate governs lane merges,
           # not every change to the repository.
-          issue_id="$(printf '%s' "$HEAD_REF" | grep -oiE '(utv2|uni)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+          issue_id="$(printf '%s' "$HEAD_REF" | grep -oiE '(utv2|uni|work)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
           if [ -z "$issue_id" ]; then
             echo "::notice title=Close eligibility::branch \"$HEAD_REF\" resolves to no lane issue id; not a lane PR, skipping."
             exit 0

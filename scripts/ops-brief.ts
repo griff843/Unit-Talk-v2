@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   const sections: SectionResult[] = [
     buildOverviewSection(repo, issueId, pickIds),
     buildCodexLanesSection(),
-    buildLinearSection(issueId),
+    ...(args.includes('--check-linear') ? [buildLinearSection(issueId)] : []),
     buildGitHubSection(),
     buildPipelineSection(),
     buildProductTruthSection(),
@@ -367,7 +367,7 @@ function buildCloseoutSection(
       `${issueId}: ready to run pnpm proof:t1 -- --issue ${issueId} --change "<summary>" ${currentPickIds.map((pickId) => `--pick ${pickId}`).join(' ')}`,
     );
     lines.push(
-      `${issueId}: if proof passes, close with pnpm linear:close -- ${issueId} --comment "<closeout note>"`,
+      `${issueId}: if proof passes, close with pnpm ops:lane-close -- ${issueId} after the protected merge`,
     );
   }
 
