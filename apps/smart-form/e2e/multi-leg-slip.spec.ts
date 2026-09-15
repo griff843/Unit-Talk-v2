@@ -203,3 +203,79 @@ test('the slip never displays a combined parlay price', async ({ page }) => {
   await expect(slip).not.toContainText(/total payout/i);
   expect(denied).toEqual([]);
 });
+
+// UTV2-1916 — a refusal is rendered where it belongs, in a slip big enough for
+// "where" to matter.
+//
+// UTV2-1915 rendered every refusal into one region above the leg list. With one
+// leg that is unambiguous; with three it is not, and nothing in the value said
+// which row a message meant. The refusal now carries a scope — draft, leg, or
+// slip — and the panel renders a leg-scoped one inside its own <li>, associated
+// by `aria-describedby` rather than by proximity.
+//
+// What this test can and cannot reach, stated plainly rather than worked
+// around: the *negative* half is operator-reachable today and is asserted here
+// at both widths — a refusal that names no leg must not appear at any row. The
+// *positive* half has no operator-reachable producer yet, because `addLeg`
+// refuses to admit a leg that fails validation, so no committed leg can be
+// incomplete. Weakening that guard to manufacture one would delete the
+// guarantee UTV2-1915 exists for. The producer arrives with the parlay ticket
+// API (UTV2-1912's API third), which returns per-leg refusals the server
+// derived; `legRefusalMessages` is the channel it renders through, and the unit
+// suite proves the keying. That gap is recorded in the proof bundle, not hidden.
+for (const viewport of [
+  { name: 'desktop', width: 1440, height: 1000 },
+  { name: 'mobile', width: 390, height: 844 },
+] as const) {
+  test(`a refusal that names no leg is not attributed to a row (${viewport.name})`, async ({ page }) => {
+    const { submitted, denied } = await installOfflineFixture(page);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await openManualMoneyline(page);
+
+    const addLeg = page.getByTestId('add-leg-button');
+    const legs = page.getByTestId('slip-leg');
+
+    await fillLeg(page, 'Fixture Away Football', '-110');
+    await addLeg.click();
+    await fillLeg(page, 'Fixture Home Football', '+135');
+    await addLeg.click();
+    await fillLeg(page, 'Fixture Away Football', '-125');
+    await addLeg.click();
+    await expect(legs).toHaveCount(3);
+
+    // Every committed leg validated on entry, so no row carries a refusal.
+    await expect(page.getByTestId('slip-leg-refusal')).toHaveCount(0);
+    for (let i = 0; i < 3; i += 1) {
+      await expect(legs.nth(i)).not.toHaveAttribute('aria-describedby', /.+/);
+    }
+
+    // Now refuse the *candidate* leg. It is draft-scoped: it never entered the
+    // slip, so there is no row that holds it. Before UTV2-1916 this message and
+    // a leg-scoped one were indistinguishable to the operator.
+    await page.getByLabel('Odds', { exact: true }).fill('');
+    await addLeg.click();
+    await expect(page.getByTestId('slip-refusal')).toContainText('Odds');
+    await expect(legs).toHaveCount(3);
+    await expect(
+      page.getByTestId('slip-leg-refusal'),
+      'a refusal that names no leg must not be rendered at a row',
+    ).toHaveCount(0);
+    for (let i = 0; i < 3; i += 1) {
+      await expect(legs.nth(i)).not.toHaveAttribute('aria-describedby', /.+/);
+    }
+
+    // The three-leg slip still refuses submission and still reaches nothing.
+    await expect(page.getByTestId('multi-leg-refusal')).toContainText('cannot be submitted yet');
+    // Two submit controls carry this id — the desktop panel button (`hidden
+    // lg:flex`) and the mobile sticky bar (`lg:hidden`) — and exactly one is
+    // visible at a given width. `.first()` picks by DOM order, not by what the
+    // operator can actually reach, so at 390px it selects the hidden desktop
+    // one and the click never happens. Select the visible control instead, so
+    // this assertion exercises the button the operator would press at each
+    // width rather than whichever happens to come first in the markup.
+    await page.locator('[data-testid="smart-form-submit-button"]:visible').click();
+    expect(submitted, 'a multi-leg slip must not reach the submission endpoint').toEqual([]);
+
+    expect(denied, 'No nonlocal request should be attempted').toEqual([]);
+  });
+}

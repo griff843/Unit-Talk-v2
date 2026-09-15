@@ -1,0 +1,208 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1916",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "2af7f2fced0b99361c52a76dc35623d972a2a0c4",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "2af7f2fced0b99361c52a76dc35623d972a2a0c4 is the implementation commit and the execution anchor named in verification.md. Every commit after it on this lane touches only docs/06_status/proof/UTV2-1916/ and the lane's own metadata, so no measurement recorded below was taken on a different tree than the one this SHA names. merge_sha is null pre-merge and is bound by ops:proof-generate --merge-sha at closeout.",
+    "ci_sentinels": {
+      "head_sha": "pending \u2014 set at the PR head once verify concludes",
+      "verify": {
+        "conclusion": "pending"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission."
+    }
+  },
+  "what_this_lane_delivers": {
+    "capability": "A slip refusal that is about one leg is rendered at that leg's own row, associated by aria-describedby and keyed by leg id, so reordering the slip carries each message with the leg it names.",
+    "what_it_deliberately_does_not_do": "It adds no producer of a leg-scoped refusal that an operator can reach today. addLeg refuses to admit a leg that fails validation, so no committed leg can be incomplete through the UI. The rendering channel is built and proven; its first real producer is the per-leg refusals the parlay ticket API returns.",
+    "why_that_split": "Weakening addLeg to manufacture a reachable positive case would delete the entry-survival guarantee UTV2-1915 exists for, and a test-only hook would make the assertion about the hook rather than the product. The honest split is: prove the keying at the unit boundary, prove the negative half in the browser at both widths, and record the rest as owed.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm --filter @unit-talk/smart-form test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 198,
+          "pass": 198,
+          "fail": 0,
+          "skipped": 0,
+          "suites": 23
+        },
+        "label": "The whole Smart Form package suite at the execution anchor, including the five new refusal-scope tests in apps/smart-form/test/bet-slip.test.ts."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/smart-form/test/bet-slip.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 23,
+          "pass": 23,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The slip-model suite in isolation, 18 -> 23, so its result is not carried by the rest of the package."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0,
+      "note": "Repository-wide `tsc -b tsconfig.json` in the lane worktree at this anchor; no diagnostics. The changed package's own `pnpm --filter @unit-talk/smart-form type-check` (tsc --noEmit) is also clean."
+    },
+    "full_repository_test": {
+      "command": "pnpm test",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not run in full on this workstation for this lane, and recorded as not run rather than claimed. The changed surface is apps/smart-form/** only and that package's own suite was run in full. The binding repository-wide run is the verify job of the CI workflow on this branch."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1916 --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": [
+        "operator-ui"
+      ],
+      "note": "The operator-ui rule triggered and its required artifacts are present: a diff summary, a verification log and the two screenshots."
+    },
+    "browser_proof": {
+      "spec": "apps/smart-form/e2e/multi-leg-slip.spec.ts",
+      "status": "AUTHORED_AND_RUN_LOCALLY",
+      "result": "4 passed (18.0s)",
+      "viewports": [
+        "1440x1000",
+        "390x844"
+      ],
+      "note": "The new test builds a three-leg slip at each width, asserts zero slip-leg-refusal elements and no aria-describedby on any row, then triggers a refusal that names no leg and asserts it reaches the slip-level region and no row. It does not run in CI on this branch, because the UNIT_TALK_SMART_FORM_E2E gate defaults off and turning it on is a .github/workflows edit outside this lane's file_scope_lock. Recorded as a dependency rather than as CI-proven coverage.",
+      "defect_found_by_this_run": "Two controls share data-testid=\"smart-form-submit-button\" \u2014 the desktop panel button (hidden lg:flex) and the mobile sticky bar (lg:hidden). .first() selects by DOM order rather than visibility, so at 390px it resolved the hidden desktop control and the click timed out. The test now selects the :visible control. Before the fix: 1 failed, 3 passed.",
+      "screenshots": [
+        "docs/06_status/proof/UTV2-1916/screenshot-desktop.png",
+        "docs/06_status/proof/UTV2-1916/screenshot-mobile.png"
+      ]
+    },
+    "mutation_battery": {
+      "baseline": {
+        "pass": 23,
+        "fail": 0
+      },
+      "method": "Run alone with no concurrent suite. Each mutation applied in isolation to apps/smart-form/lib/bet-slip.ts, the suite run, the file restored from a copy taken before the battery. Baseline re-confirmed after the final revert: exit 0, 23 pass / 0 fail.",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "revalidateSlip drops the leg identity from the refusal it emits",
+          "killed_by": [
+            "a refusal about a committed leg carries that leg's identity",
+            "legRefusalMessages keys every leg-scoped refusal by its own leg"
+          ]
+        },
+        {
+          "id": "M2",
+          "mutation": "refusalLegId attributes a slip-scoped refusal to a leg",
+          "killed_by": [
+            "a slip-scoped refusal is not attributed to any leg",
+            "a refusal for the candidate leg is draft-scoped, because no row holds it"
+          ]
+        },
+        {
+          "id": "M3",
+          "mutation": "addLeg marks the candidate refusal leg-scoped instead of draft-scoped",
+          "killed_by": [
+            "a refusal for the candidate leg is draft-scoped, because no row holds it"
+          ]
+        },
+        {
+          "id": "M4",
+          "mutation": "revalidateSlip refuses a leg that validates",
+          "killed_by": [
+            "a refusal about a committed leg carries that leg's identity",
+            "a slip whose legs all validate carries no leg-scoped refusal"
+          ]
+        },
+        {
+          "id": "M5",
+          "mutation": "legRefusalMessages keys by position instead of by leg id",
+          "killed_by": [
+            "legRefusalMessages keys every leg-scoped refusal by its own leg"
+          ]
+        },
+        {
+          "id": "M6",
+          "mutation": "addLeg discards the committed legs when it refuses",
+          "killed_by": [
+            "leaves the existing legs untouched when it refuses",
+            "a refusal for the candidate leg is draft-scoped, because no row holds it"
+          ]
+        }
+      ],
+      "note": "M5 is decisive for this lane's stated purpose: position-keying passes every test that only builds the slip in order, and the assertion that kills it is the one that reorders and reads the map back by id. M6 is acceptance criterion 3 \u2014 UTV2-1915's own assertion, unchanged, still failing on exactly the condition it named."
+    }
+  },
+  "acceptance_criteria_coverage": [
+    {
+      "criterion": "A unit test asserts a refusal carries the identity of the leg it refers to, and fails when the refusal is emitted without it.",
+      "evidence": "M1"
+    },
+    {
+      "criterion": "A unit test asserts a slip-scoped refusal is not attributed to a leg.",
+      "evidence": "M2"
+    },
+    {
+      "criterion": "UTV2-1915's entry-survival assertion still passes unchanged.",
+      "evidence": "M6 \u2014 passes at baseline, turns red when the guard is removed"
+    },
+    {
+      "criterion": "A browser proof shows the refusal rendered at the offending row in a three-leg slip, on both the desktop and mobile widths already screenshotted in UTV2-1915's bundle.",
+      "evidence": "Partially met and recorded as such: the negative half is asserted in the browser at 1440x1000 and 390x844 with two screenshots; the positive half has no operator-reachable producer in this lane \u2014 see known_gaps."
+    },
+    {
+      "criterion": "A mutation battery proves each new assertion fails on the condition it names.",
+      "evidence": "Six mutations, every one killed, baseline restored"
+    }
+  ],
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off \u2014 no provider key read, tested or activated",
+    "member_delivery": "disabled \u2014 unchanged",
+    "track_only_containment": "enabled \u2014 unchanged",
+    "note": "The change is confined to apps/smart-form/**. It adds no API route, no repository call and no migration, and it cannot enqueue anything: the slip still refuses to submit while it holds more than one leg."
+  },
+  "known_gaps": [
+    {
+      "gap": "The positive half of acceptance criterion 4 is not shown in the browser: no operator-reachable path produces a leg-scoped refusal today.",
+      "disposition": "addLeg refuses to admit a leg that fails validation, so a committed leg cannot become incomplete through the UI. Weakening that guard would delete UTV2-1915's entry-survival guarantee, and a test-only hook would make the assertion about the hook. The keying is proven at the unit boundary instead, and the real producer is the per-leg refusals the parlay ticket API returns (UTV2-1912's API third), for which legRefusalMessages is the rendering channel. Recorded rather than claimed."
+    },
+    {
+      "gap": "The e2e spec is not executed by CI on this branch.",
+      "disposition": "The UNIT_TALK_SMART_FORM_E2E gate defaults off and enabling it is a .github/workflows edit, admitted by only the migration and runtime lane types. Outside this lane's pinned file_scope_lock."
+    },
+    {
+      "gap": "Two controls still share data-testid=\"smart-form-submit-button\".",
+      "disposition": "The duplication is in UTV2-1915's shipped markup and giving each control its own id is a change to BetSlipPanel's public test surface that other specs read. The test now selects the visible control, which is the one the operator reaches; the duplication is recorded for the lane that next owns that component."
+    },
+    {
+      "gap": "Teasers and round robins are untouched.",
+      "disposition": "Explicitly not folded into this lane. They remain separate follow-up scope with their own acceptance criteria."
+    }
+  ],
+  "known_red_checks_at_this_head": [
+    {
+      "check": "QA Experience Regression (Advisory)",
+      "cause": "The job fails posting its own PR comment with 403 Resource not accessible by integration.",
+      "disposition": "Non-required, and environmental rather than a QA result."
+    },
+    {
+      "check": "Check issue references (Branch Discipline Guard)",
+      "cause": "multiple_issue_references \u2014 \"All PR issue references must match branch issue UTV2-1916; found UTV2-1912, UTV2-1915, UTV2-1916\". The commit bodies name the lane this follows up (UTV2-1915) and the lane that brings the first real producer of a leg-scoped refusal (UTV2-1912), because a reader of the history needs both to understand why the rendering channel ships without a reachable producer.",
+      "disposition": "Non-required, and correct about what it found. Clearing it means rewriting the commit messages, which moves the head and therefore the execution anchor the proof binds to \u2014 a real cost paid for a cosmetic gain on a check that gates nothing. Recorded rather than cleared, consistent with the standing precedent for this check."
+    }
+  ]
+}

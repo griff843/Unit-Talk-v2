@@ -47,9 +47,44 @@ export interface LegSummary {
   readonly sportsbook: string | null;
 }
 
+/**
+ * Which thing a refusal is about (UTV2-1916).
+ *
+ * UTV2-1915 shipped a single refusal region above the leg list, so every
+ * refusal — including one that named a specific leg — was rendered in the same
+ * place. In a three-leg slip that leaves the operator to work out which row the
+ * message means, and nothing in the value said. The scope carries that, so the
+ * renderer attaches a message to a row by *identity* rather than by position:
+ *
+ *  - `draft` — the candidate leg being composed in the form. It is not on the
+ *    slip, so there is no row to attach it to and it must not be attributed to
+ *    one.
+ *  - `leg` — a leg that is already on the slip, named by its own id.
+ *  - `slip` — the ticket as a whole. Attaching this to a leg would blame an
+ *    arbitrary row for a condition none of them caused.
+ */
+export type RefusalScope =
+  | { readonly kind: 'draft' }
+  | { readonly kind: 'leg'; readonly legId: string }
+  | { readonly kind: 'slip' };
+
 export type SlipRefusal =
-  | { readonly code: 'leg_incomplete'; readonly fields: readonly string[]; readonly message: string }
-  | { readonly code: 'slip_full'; readonly message: string };
+  | {
+      readonly code: 'leg_incomplete';
+      readonly scope: RefusalScope;
+      readonly fields: readonly string[];
+      readonly message: string;
+    }
+  | { readonly code: 'slip_full'; readonly scope: RefusalScope; readonly message: string };
+
+/**
+ * The id of the leg a refusal is about, or `null` when it is about no single
+ * leg. Reading the scope through this helper rather than by hand is what keeps
+ * a draft- or slip-scoped refusal from being rendered at a row.
+ */
+export function refusalLegId(refusal: SlipRefusal): string | null {
+  return refusal.scope.kind === 'leg' ? refusal.scope.legId : null;
+}
 
 export type AddLegResult =
   | { readonly ok: true; readonly legs: readonly SlipLeg[]; readonly added: SlipLeg }
@@ -106,6 +141,9 @@ export function addLeg(
       legs,
       refusal: {
         code: 'slip_full',
+        // Slip-scoped: the ceiling is a property of the ticket, not of any leg
+        // on it. No existing leg caused it and none is at fault for it.
+        scope: { kind: 'slip' },
         message: `A slip holds at most ${MAX_SLIP_LEGS} legs. Remove a leg before adding another.`,
       },
     };
@@ -119,6 +157,10 @@ export function addLeg(
       legs,
       refusal: {
         code: 'leg_incomplete',
+        // Draft-scoped, never leg-scoped: this candidate never entered the
+        // slip, so there is no row that carries it. Attributing it to the last
+        // committed leg would mark a leg the operator completed correctly.
+        scope: { kind: 'draft' },
         fields,
         message: `This leg is not complete. Add or check: ${fields.join(', ')}.`,
       },
@@ -206,4 +248,53 @@ export function findCombinedPriceKeys(summaries: readonly LegSummary[]): readonl
     }
   }
   return [...keys];
+}
+
+/**
+ * Re-validate every leg already on the slip and return one leg-scoped refusal
+ * per leg that no longer satisfies the schema.
+ *
+ * A leg is validated on entry, so this is empty on a slip built by the current
+ * schema — which is the point: it is the mechanism by which a leg committed
+ * under one set of rules cannot sit silently on a slip once the rules tighten.
+ * Every refusal it returns names the leg it is about, so the renderer can put
+ * it at that row rather than in a shared region above the list.
+ */
+export function revalidateSlip(legs: readonly SlipLeg[]): readonly SlipRefusal[] {
+  const refusals: SlipRefusal[] = [];
+  for (const leg of legs) {
+    const fields = describeIncompleteLeg(leg.values);
+    if (fields.length === 0) continue;
+    refusals.push({
+      code: 'leg_incomplete',
+      scope: { kind: 'leg', legId: leg.id },
+      fields,
+      message: `This leg is no longer complete. Add or check: ${fields.join(', ')}.`,
+    });
+  }
+  return refusals;
+}
+
+/** The refusal attached to one leg, or null. Matches on id, never on position. */
+export function refusalForLeg(
+  refusals: readonly SlipRefusal[],
+  legId: string,
+): SlipRefusal | null {
+  return refusals.find((refusal) => refusalLegId(refusal) === legId) ?? null;
+}
+
+/**
+ * Leg id -> message, for the renderer. A refusal that names no leg is absent
+ * from this map by construction, so it structurally cannot reach a row.
+ */
+export function legRefusalMessages(
+  refusals: readonly SlipRefusal[],
+): Readonly<Record<string, string>> {
+  const byLeg: Record<string, string> = {};
+  for (const refusal of refusals) {
+    const legId = refusalLegId(refusal);
+    if (legId === null) continue;
+    if (byLeg[legId] === undefined) byLeg[legId] = refusal.message;
+  }
+  return byLeg;
 }

@@ -22,8 +22,18 @@ interface BetSlipPanelProps {
   legs?: readonly LegSummary[];
   onRemoveLeg?: (id: string) => void;
   onMoveLeg?: (id: string, direction: 'up' | 'down') => void;
-  /** Why the last "add leg" attempt was refused, if it was. */
+  /**
+   * Why the last "add leg" attempt was refused, if it was. This region carries
+   * draft- and slip-scoped refusals only — a message about one committed leg
+   * belongs at that leg's row, in `legRefusals`.
+   */
   slipRefusal?: string | null;
+  /**
+   * Leg id -> the refusal about that leg (UTV2-1916). Keyed by identity rather
+   * than by position, so reordering the slip carries each message with its own
+   * leg instead of leaving it pointing at whatever row moved into that slot.
+   */
+  legRefusals?: Readonly<Record<string, string>>;
   /** Why a multi-leg slip cannot be submitted today. Null when it can. */
   multiLegRefusal?: string | null;
 }
@@ -52,10 +62,12 @@ function SlipLegList({
   legs,
   onRemoveLeg,
   onMoveLeg,
+  legRefusals = {},
 }: {
   legs: readonly LegSummary[];
   onRemoveLeg?: (id: string) => void;
   onMoveLeg?: (id: string, direction: 'up' | 'down') => void;
+  legRefusals?: Readonly<Record<string, string>>;
 }) {
   return (
     <div className="space-y-2" data-testid="slip-legs">
@@ -63,11 +75,22 @@ function SlipLegList({
         {legs.length === 1 ? '1 leg' : `${legs.length} legs`}
       </p>
       <ol className="space-y-2">
-        {legs.map((leg, index) => (
+        {legs.map((leg, index) => {
+          const legRefusal = legRefusals[leg.id] ?? null;
+          const refusalId = `slip-leg-refusal-${leg.id}`;
+          return (
           <li
             key={leg.id}
             data-testid="slip-leg"
-            className="rounded-xl border border-border/70 p-3 text-sm"
+            data-leg-id={leg.id}
+            // Programmatic association, not proximity: a screen reader reaches
+            // the refusal from the leg it is about even though the two are
+            // separate elements.
+            aria-describedby={legRefusal ? refusalId : undefined}
+            className={cn(
+              'rounded-xl border p-3 text-sm',
+              legRefusal ? 'border-destructive/60 bg-destructive/5' : 'border-border/70',
+            )}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -111,8 +134,20 @@ function SlipLegList({
                 </Button>
               </div>
             </div>
+            {legRefusal && (
+              <p
+                id={refusalId}
+                data-testid="slip-leg-refusal"
+                data-leg-id={leg.id}
+                role="alert"
+                className="mt-2 text-xs leading-relaxed text-destructive"
+              >
+                {legRefusal}
+              </p>
+            )}
           </li>
-        ))}
+          );
+        })}
       </ol>
     </div>
   );
@@ -127,6 +162,7 @@ export function BetSlipPanel({
   onRemoveLeg,
   onMoveLeg,
   slipRefusal = null,
+  legRefusals = {},
   multiLegRefusal = null,
 }: BetSlipPanelProps) {
   const marketLabel = values.marketType ? getMarketTypeLabel(values.marketType as MarketTypeId) : null;
@@ -166,7 +202,12 @@ export function BetSlipPanel({
 
           {legs.length > 0 && (
             <>
-              <SlipLegList legs={legs} onRemoveLeg={onRemoveLeg} onMoveLeg={onMoveLeg} />
+              <SlipLegList
+                legs={legs}
+                onRemoveLeg={onRemoveLeg}
+                onMoveLeg={onMoveLeg}
+                legRefusals={legRefusals}
+              />
               <Separator className="bg-border/50" />
             </>
           )}

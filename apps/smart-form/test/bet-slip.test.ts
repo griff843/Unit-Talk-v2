@@ -7,9 +7,13 @@ import {
   describeIncompleteLeg,
   findCombinedPriceKeys,
   isMultiLegSlip,
+  legRefusalMessages,
   moveLeg,
   multiLegSubmissionRefusal,
+  refusalForLeg,
+  refusalLegId,
   removeLeg,
+  revalidateSlip,
   summarizeSlip,
   type SlipLeg,
 } from '../lib/bet-slip';
@@ -203,5 +207,103 @@ describe('multi-leg submission', () => {
     const refusal = multiLegSubmissionRefusal(legs);
     assert.ok(refusal);
     assert.match(refusal, /cannot be submitted yet/);
+  });
+});
+
+// UTV2-1916 — a refusal must say which thing it is about. UTV2-1915 rendered
+// every refusal in one region above the leg list, so in a three-leg slip the
+// operator could not tell which row a message meant. These assertions are about
+// the *identity* carried on the value, not about where it happens to render.
+describe('refusal scope', () => {
+  it('a refusal about a committed leg carries that leg\u2019s identity', () => {
+    const legs = seed(3);
+    // A leg that no longer satisfies the schema. Constructed directly rather
+    // than through addLeg, because addLeg is exactly what refuses to admit one
+    // — which is the guarantee this test must not weaken to reach its subject.
+    const broken: readonly SlipLeg[] = [
+      legs[0],
+      { id: legs[1].id, values: { ...legs[1].values, odds: undefined as unknown as number } },
+      legs[2],
+    ];
+
+    const refusals = revalidateSlip(broken);
+    assert.equal(refusals.length, 1, 'exactly the broken leg is refused');
+
+    const [refusal] = refusals;
+    // The assertion that fails when a refusal is emitted without the identity
+    // of the leg it refers to: scope.kind would not be 'leg', so refusalLegId
+    // returns null and this is the line that goes red.
+    assert.equal(
+      refusalLegId(refusal),
+      broken[1].id,
+      'a leg-scoped refusal must name the leg it is about',
+    );
+    assert.notEqual(refusalLegId(refusal), broken[0].id);
+    assert.notEqual(refusalLegId(refusal), broken[2].id);
+    assert.equal(refusal.code, 'leg_incomplete');
+    if (refusal.code !== 'leg_incomplete') return;
+    assert.deepEqual(refusal.fields, ['Odds']);
+
+    // Identity, not position: the refusal follows its leg through a reorder.
+    const reordered = moveLeg(broken, broken[1].id, 'up');
+    assert.equal(reordered[0].id, broken[1].id);
+    assert.equal(refusalForLeg(revalidateSlip(reordered), broken[1].id)?.code, 'leg_incomplete');
+    assert.equal(refusalForLeg(revalidateSlip(reordered), broken[0].id), null);
+  });
+
+  it('a slip-scoped refusal is not attributed to any leg', () => {
+    const legs = seed(MAX_SLIP_LEGS);
+    const result = addLeg(legs, moneylineLeg({ team: 'One too many' }), nextId);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.refusal.code, 'slip_full');
+
+    // The ceiling is a property of the ticket. Naming a leg here would mark a
+    // leg the operator added correctly as the cause of a condition it did not
+    // cause — so this is the line that fails if slip_full is ever leg-scoped.
+    assert.equal(result.refusal.scope.kind, 'slip');
+    assert.equal(
+      refusalLegId(result.refusal),
+      null,
+      'a slip-scoped refusal must not name a leg',
+    );
+
+    // And it structurally cannot reach a row: the renderer reads this map.
+    assert.deepEqual(legRefusalMessages([result.refusal]), {});
+    for (const leg of legs) {
+      assert.equal(refusalForLeg([result.refusal], leg.id), null);
+    }
+  });
+
+  it('a refusal for the candidate leg is draft-scoped, because no row holds it', () => {
+    const legs = seed(2);
+    const result = addLeg(legs, moneylineLeg({ odds: undefined }), nextId);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.refusal.scope.kind, 'draft');
+    assert.equal(refusalLegId(result.refusal), null);
+    assert.deepEqual(legRefusalMessages([result.refusal]), {});
+    // UTV2-1915's entry-survival guarantee, restated here so a scope change
+    // cannot quietly discard committed legs: the list is returned unchanged.
+    assert.deepEqual(result.legs, legs);
+  });
+
+  it('a slip whose legs all validate carries no leg-scoped refusal', () => {
+    const legs = seed(3);
+    assert.deepEqual(revalidateSlip(legs), []);
+    assert.deepEqual(legRefusalMessages(revalidateSlip(legs)), {});
+  });
+
+  it('legRefusalMessages keys every leg-scoped refusal by its own leg', () => {
+    const legs = seed(2);
+    const broken: readonly SlipLeg[] = legs.map((leg) => ({
+      id: leg.id,
+      values: { ...leg.values, odds: undefined as unknown as number },
+    }));
+    const messages = legRefusalMessages(revalidateSlip(broken));
+    assert.deepEqual(Object.keys(messages).sort(), [legs[0].id, legs[1].id].sort());
+    for (const leg of legs) {
+      assert.match(messages[leg.id], /no longer complete/);
+    }
   });
 });

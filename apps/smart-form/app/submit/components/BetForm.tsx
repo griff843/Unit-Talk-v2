@@ -79,9 +79,11 @@ import { deriveMatchupTeamChoices, isMissingQaIdentity, type MatchupTeamChoice }
 import {
   addLeg,
   isMultiLegSlip,
+  legRefusalMessages,
   moveLeg,
   multiLegSubmissionRefusal,
   removeLeg,
+  revalidateSlip,
   summarizeSlip,
   type SlipLeg,
 } from '@/lib/bet-slip';
@@ -905,6 +907,13 @@ export function BetForm({
   // as a value rather than a thrown error so the panel renders the reason
   // instead of the absence of a button.
   const multiLegRefusal = multiLegSubmissionRefusal(slipLegs);
+  // Refusals about legs already on the slip, keyed by leg id. Derived rather
+  // than stored so a removal or a reorder cannot leave a message pointing at a
+  // leg that is no longer in that position — or no longer there at all.
+  const legRefusals = useMemo(
+    () => legRefusalMessages(revalidateSlip(slipLegs)),
+    [slipLegs],
+  );
 
   function handleAddLeg() {
     const result = addLeg(slipLegs, form.getValues(), () => crypto.randomUUID());
@@ -4390,6 +4399,7 @@ export function BetForm({
             onRemoveLeg={handleRemoveLeg}
             onMoveLeg={handleMoveLeg}
             slipRefusal={slipRefusal}
+            legRefusals={legRefusals}
             multiLegRefusal={multiLegRefusal}
           />
         </div>
