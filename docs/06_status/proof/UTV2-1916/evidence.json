@@ -13,7 +13,7 @@
     "sha_type": "verified_source_sha",
     "note": "2af7f2fced0b99361c52a76dc35623d972a2a0c4 is the implementation commit and the execution anchor named in verification.md. Every commit after it on this lane touches only docs/06_status/proof/UTV2-1916/ and the lane's own metadata, so no measurement recorded below was taken on a different tree than the one this SHA names. merge_sha is null pre-merge and is bound by ops:proof-generate --merge-sha at closeout.",
     "ci_sentinels": {
-      "head_sha": "pending — set at the PR head once verify concludes",
+      "head_sha": "pending \u2014 set at the PR head once verify concludes",
       "verify": {
         "conclusion": "pending"
       },
@@ -53,9 +53,9 @@
       }
     ],
     "type_check": {
-      "command": "pnpm --filter @unit-talk/smart-form type-check",
+      "command": "pnpm type-check",
       "exit_code": 0,
-      "note": "tsc --noEmit over the changed package at this anchor; no diagnostics."
+      "note": "Repository-wide `tsc -b tsconfig.json` in the lane worktree at this anchor; no diagnostics. The changed package's own `pnpm --filter @unit-talk/smart-form type-check` (tsc --noEmit) is also clean."
     },
     "full_repository_test": {
       "command": "pnpm test",
@@ -82,7 +82,7 @@
         "390x844"
       ],
       "note": "The new test builds a three-leg slip at each width, asserts zero slip-leg-refusal elements and no aria-describedby on any row, then triggers a refusal that names no leg and asserts it reaches the slip-level region and no row. It does not run in CI on this branch, because the UNIT_TALK_SMART_FORM_E2E gate defaults off and turning it on is a .github/workflows edit outside this lane's file_scope_lock. Recorded as a dependency rather than as CI-proven coverage.",
-      "defect_found_by_this_run": "Two controls share data-testid=\"smart-form-submit-button\" — the desktop panel button (hidden lg:flex) and the mobile sticky bar (lg:hidden). .first() selects by DOM order rather than visibility, so at 390px it resolved the hidden desktop control and the click timed out. The test now selects the :visible control. Before the fix: 1 failed, 3 passed.",
+      "defect_found_by_this_run": "Two controls share data-testid=\"smart-form-submit-button\" \u2014 the desktop panel button (hidden lg:flex) and the mobile sticky bar (lg:hidden). .first() selects by DOM order rather than visibility, so at 390px it resolved the hidden desktop control and the click timed out. The test now selects the :visible control. Before the fix: 1 failed, 3 passed.",
       "screenshots": [
         "docs/06_status/proof/UTV2-1916/screenshot-desktop.png",
         "docs/06_status/proof/UTV2-1916/screenshot-mobile.png"
@@ -142,7 +142,7 @@
           ]
         }
       ],
-      "note": "M5 is decisive for this lane's stated purpose: position-keying passes every test that only builds the slip in order, and the assertion that kills it is the one that reorders and reads the map back by id. M6 is acceptance criterion 3 — UTV2-1915's own assertion, unchanged, still failing on exactly the condition it named."
+      "note": "M5 is decisive for this lane's stated purpose: position-keying passes every test that only builds the slip in order, and the assertion that kills it is the one that reorders and reads the map back by id. M6 is acceptance criterion 3 \u2014 UTV2-1915's own assertion, unchanged, still failing on exactly the condition it named."
     }
   },
   "acceptance_criteria_coverage": [
@@ -156,11 +156,11 @@
     },
     {
       "criterion": "UTV2-1915's entry-survival assertion still passes unchanged.",
-      "evidence": "M6 — passes at baseline, turns red when the guard is removed"
+      "evidence": "M6 \u2014 passes at baseline, turns red when the guard is removed"
     },
     {
       "criterion": "A browser proof shows the refusal rendered at the offending row in a three-leg slip, on both the desktop and mobile widths already screenshotted in UTV2-1915's bundle.",
-      "evidence": "Partially met and recorded as such: the negative half is asserted in the browser at 1440x1000 and 390x844 with two screenshots; the positive half has no operator-reachable producer in this lane — see known_gaps."
+      "evidence": "Partially met and recorded as such: the negative half is asserted in the browser at 1440x1000 and 390x844 with two screenshots; the positive half has no operator-reachable producer in this lane \u2014 see known_gaps."
     },
     {
       "criterion": "A mutation battery proves each new assertion fails on the condition it names.",
@@ -170,9 +170,9 @@
   "scope_and_containment": {
     "production_writes": 0,
     "containment_changed": false,
-    "sgo": "off — no provider key read, tested or activated",
-    "member_delivery": "disabled — unchanged",
-    "track_only_containment": "enabled — unchanged",
+    "sgo": "off \u2014 no provider key read, tested or activated",
+    "member_delivery": "disabled \u2014 unchanged",
+    "track_only_containment": "enabled \u2014 unchanged",
     "note": "The change is confined to apps/smart-form/**. It adds no API route, no repository call and no migration, and it cannot enqueue anything: the slip still refuses to submit while it holds more than one leg."
   },
   "known_gaps": [

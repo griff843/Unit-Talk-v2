@@ -29,6 +29,10 @@ Commands run in the lane worktree `.out/worktrees/claude__utv2-1916-leg-scoped-s
 transcribed from the runs, not recalled:
 
 ```
+$ pnpm type-check
+> pnpm exec tsc -b tsconfig.json
+(exit 0, no diagnostics)
+
 $ pnpm --filter @unit-talk/smart-form type-check
 > tsc --noEmit
 (exit 0, no diagnostics)
@@ -39,6 +43,7 @@ Changed files: 8
 Rules matched: operator-ui
 ```
 
+- [x] `pnpm type-check`: exit 0, repository-wide, run at this anchor
 - [x] `pnpm --filter @unit-talk/smart-form type-check`: exit 0
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1916 --head HEAD`: PASS, `operator-ui`
       matched, no missing required artifacts
@@ -50,6 +55,7 @@ Rules matched: operator-ui
 
 | Command | Result |
 |---|---|
+| `pnpm type-check` | repository-wide `tsc -b`, exit 0, no diagnostics |
 | `pnpm --filter @unit-talk/smart-form type-check` | clean, exit 0 |
 | `pnpm --filter @unit-talk/smart-form test` | **198 pass / 0 fail**, 23 suites, 1624ms |
 | `pnpm exec tsx --test apps/smart-form/test/bet-slip.test.ts` | **23 pass / 0 fail** |
