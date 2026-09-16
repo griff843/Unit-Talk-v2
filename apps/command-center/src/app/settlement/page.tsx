@@ -25,6 +25,7 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
           <Th>Settled by</Th>
           <Th>Settled at</Th>
           <Th>Age</Th>
+          <Th>Action</Th>
         </TableHead>
         <TableBody>
           {rows.map((row) => (
@@ -49,6 +50,18 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
               <Td>{row.settledBy ?? '—'}</Td>
               <Td><span className="font-mono">{row.settledAt}</span></Td>
               <Td>{formatRelativeAge(row.settledAt, nowMs) ?? '—'}</Td>
+              <Td>
+                {row.status === 'manual_review' ? (
+                  <Link
+                    href={`/settlement?pickId=${row.pickId}`}
+                    className="text-xs text-blue-400 hover:underline"
+                  >
+                    Settle
+                  </Link>
+                ) : (
+                  '—'
+                )}
+              </Td>
             </tr>
           ))}
         </TableBody>
