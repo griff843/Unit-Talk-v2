@@ -6,29 +6,51 @@ import {
   resolveCommandCenterApiHeaders,
 } from '@/lib/server-api';
 import { resolveActorOrRefusal } from '@/lib/require-actor';
+import {
+  resolveOperatorGradingContext,
+  type OperatorGradingContextInput,
+} from '@/lib/operator-grading-context';
 
 export type SettleResult =
   | { ok: true; settlementRecordId: string }
   | { ok: false; error: string };
 
 /**
- * Settle or void a pick via the Unit Talk API.
+ * Settle or correct a pick via the Unit Talk API.
  *
  * The settlement contract requires:
  *  - status: 'settled' for win / loss / push / void (void is a result, not a status)
  *  - result: the concrete outcome (win | loss | push | void)
  *  - confidence: one of 'confirmed' | 'estimated' | 'pending'
- *  - evidenceRef: non-empty string (operator manual settlement marker)
+ *  - evidenceRef: non-empty string
  *  - source: 'operator'
  *
- * When called on an already-settled pick the API automatically creates a
- * correction record (corrects_id pointing to the prior settlement), so
- * the same action covers both initial settlement and corrections.
+ * The `attestation` is **required**, and that is the repair this action
+ * carries. Every Smart Form Track Only pick is on the evidence plane —
+ * `apps/api/src/settlement-service.ts` treats `awaiting_approval`, and
+ * `validated` under Track Only, as evidence-plane states — and settling one
+ * without `operatorGradingContext` is refused there with
+ * `OPERATOR_GRADING_CONTEXT_REQUIRED`. This action previously sent six fields
+ * and never that one, so manual settlement of a Track Only pick could not
+ * succeed at all. An omitted attestation is refused here, before the request is
+ * sent, naming the missing field — the API would refuse it too, but with a bare
+ * 400 the operator cannot act on.
+ *
+ * When called on an already-settled pick the API creates a correction record
+ * (`corrects_id` pointing at the prior settlement). The correction carries its
+ * own attestation and its own derived `evidenceRef`, so a reader can tell what
+ * the correction was based on — under the previous constant `'operator-manual'`
+ * they could not.
  */
 export async function settlePick(
   pickId: string,
   result: 'win' | 'loss' | 'push' | 'void',
+  attestation: OperatorGradingContextInput,
 ): Promise<SettleResult> {
+  // Authentication is resolved before the attestation is even looked at, so an
+  // unauthenticated caller is refused as unauthenticated rather than as
+  // malformed input. `server-action-guard.test.ts` asserts that ordering for
+  // every server action in this app.
   const apiUrl = resolveApiBaseUrl();
   const actorResolution = await resolveActorOrRefusal();
   if (!actorResolution.ok) {
@@ -37,6 +59,13 @@ export async function settlePick(
   const operatorActor = actorResolution.actor;
   const headers = resolveCommandCenterApiHeaders();
 
+  const resolved = resolveOperatorGradingContext(attestation);
+  if (!resolved.ok) {
+    return { ok: false, error: resolved.errors.join('; ') };
+  }
+
+  const notes = attestation.notes?.trim();
+
   const res = await fetch(`${apiUrl}/api/picks/${pickId}/settle`, {
     method: 'POST',
     headers,
@@ -44,9 +73,14 @@ export async function settlePick(
       status: 'settled',
       result,
       source: 'operator',
-      confidence: 'confirmed',
-      evidenceRef: 'operator-manual',
+      // The operator states their own confidence. Hardcoding 'confirmed'
+      // asserted certainty on the operator's behalf on every settlement,
+      // including ones they were estimating.
+      confidence: attestation.confidence ?? 'confirmed',
+      evidenceRef: resolved.evidenceRef,
       settledBy: operatorActor,
+      operatorGradingContext: resolved.context,
+      ...(notes ? { notes } : {}),
     }),
   });
 

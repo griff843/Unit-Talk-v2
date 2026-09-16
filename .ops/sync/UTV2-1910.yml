@@ -1,0 +1,234 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1910
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1910
+  objective: "Command Center + manual operator settlement: the settle path is
+    deployed-reachable, the viewing surface is not — measured 2026-09-14"
+  acceptance_criteria:
+    - An authenticated operator can **list** the governed cohort (`metadata ?
+      'distributionMode'`) through a deployed surface, not by writing SQL.
+    - From that list, an operator can open one pick and see its trace —
+      lifecycle, promotion history, settlement records and audit entries —
+      reusing `/api/picks/:id/trace` rather than re-deriving it.
+    - From that view, an operator can **manually settle** a pick, and the form
+      requires all three `OperatorGradingContext` fields, refusing closed when
+      any is absent.
+    - "The refusal ordering established by
+      [UTV2-1904](https://linear.app/unit-talk-v2/issue/UTV2-1904/b1-operator-m\
+      anual-settlement-of-track-only-picks-via-the-evidence) is preserved and
+      tested: a `manual_review` request on a Track Only pick still fails exactly
+      as it does today."
+    - "The surface is reachable at a routed production URL with authentication,
+      and the role gate is exercised: a `settler` can settle, a
+      non-settler/non-operator is 403'd."
+    - Zero member delivery from any of it; Track Only containment unchanged.
+    - "**Deployment is a separate, reserved step.** This lane is not done
+      because code merged — but it may not claim the surface is usable until a
+      deploy has happened and been observed."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Measured next lane for the operator surface. **Everything below is read
+      from code and live GitHub state, not from a status document.** It corrects
+      a claim this program has carried for several passes — that manual
+      settlement is unavailable because the Command Center is undeployed. Those
+      are two different things, and only one of them is true.
+    - |-
+      What is actually true
+      ### The manual operator-settlement path IS routed, authenticated and role-gated
+
+      | Layer | Evidence |
+      | -- | -- |
+      | Route | `POST /api/picks/:id/settle`, matched at `apps/api/src/server.ts:704-716` |
+      | Auth | `apps/api/src/server.ts:614` — **every** POST goes through `authenticateRequest` then `authorizeRoute`; `authorizeRoute` denies by default when no pattern matches |
+      | Roles | `apps/api/src/auth.ts:64` — `/^\/api\/picks\/[^/]+\/settle$/` admits `settler` and `operator` only |
+      | Deployed service | `api` is a compose service (`deploy/production/docker-compose.yml:13`) behind Caddy at `{$CADDY_DOMAIN} → api:4000` (`deploy/production/Caddyfile:31-32`) |
+      | Evidence-plane settlement | [UTV2-1904](https://linear.app/unit-talk-v2/issue/UTV2-1904/b1-operator-manual-settlement-of-track-only-picks-via-the-evidence) (`b14e44412`, [griff843/Unit-Talk-v2#1579](https://linear.app/unit-talk-v2/review/utv2-1904-operator-settlement-for-evidence-plane-picks-failing-closed-7ab72cf38a93)) added the branch that lets an operator settle an `awaiting_approval` / Track Only `validated` pick, failing closed without `OperatorGradingContext` (`outcomeBasis`, `resultSourceUrl`, `observedAt` — all three required) |
+
+      So a routed production URL and authentication **both exist** for manual settlement.
+
+      ### But it is merged and NOT running
+
+      `Deploy` last ran 2026-09-14T14:54Z on `a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6`. `git merge-base --is-ancestor b14e44412 a45e9cd11` → **false**. Production is 9 commits behind with exactly five changed container files, and three of them are the operator-settlement path:
+
+      ```
+      apps/api/src/controllers/settle-pick-controller.ts
+      apps/api/src/handlers/settle-pick.ts
+      apps/api/src/settlement-service.ts
+      packages/contracts/src/settlement.ts
+      apps/api/src/grading-service.ts
+      ```
+
+      Dispatching `Deploy` is reserved decision 8 and is **not requested by this issue**.
+
+      ### The Command Center is not deployed and structurally cannot be
+
+      * `apps/command-center` exists as an application.
+      * It is in **no** compose service — `docker-compose.yml` defines `api, worker, ingestor, discord-bot, grading-cron, loki, grafana, web, smart-form, caddy` and nothing else.
+      * It is behind **no** Caddy route — the Caddyfile proxies only `api:4000`, `web:4200`, `smart-form:4400`.
+      * `.github/workflows/deploy.yml` never mentions it (`grep -ni command.center` → no matches).
+
+      **It must not be described as usable.** It has no routed production URL.
+    - |-
+      The gap this lane closes
+      An operator can, in principle, settle a pick — but only by hand-crafting an authenticated POST. There is no surface for **viewing** picks, choosing one, and inspecting audit history. The read side that does exist is `GET /api/picks/:id/trace` (authenticated since [UTV2-1823](https://linear.app/unit-talk-v2/issue/UTV2-1823/authenticate-get-apipicksidtrace-close-the-unauthenticated-canonical); returns the full lifecycle aggregate — PickRecord, submission events, promotion history, outbox entries, distribution receipts, settlement records, audit log, lifecycle events). It is a JSON endpoint, not an operator surface.
+    - >-
+      Decisions this lane surfaces but does not take
+
+      * Whether the surface is the existing `apps/command-center` (needs a
+      compose service, a Caddy route, a hostname and `COMMAND_CENTER_*` secrets
+      — secrets are reserved decision 4) or a smaller operator view added to an
+      already-routed app (`web` or `smart-form`). The second avoids every
+      reserved input and is the recommendation.
+
+      * Dispatching `Deploy` (reserved decision 8).
+
+
+      ---
+    - |-
+      Correction measured 2026-09-15 — the surface is built, not missing
+      This issue was filed on the finding that operators have no viewing/selection surface. Re-measured against `main`, that framing is wrong and the correction changes what this lane is.
+
+      `apps/command-center` carries **282 TypeScript files**, including a complete operator settlement path:
+
+      * `apps/command-center/src/app/settlement/` — the route.
+      * `apps/command-center/src/app/actions/settle.ts` — a `'use server'` action that resolves the operator actor (`resolveActorOrRefusal`, refusing when unresolved) and `POST`s to `${apiUrl}/api/picks/${pickId}/settle` with `status: 'settled'`, a concrete `result`, `source: 'operator'`, `confidence: 'confirmed'`, `evidenceRef: 'operator-manual'` and `settledBy: <actor>`.
+      * `apps/command-center/src/lib/pick-actions.ts` — `PickAction = 'settle' | 'correct' | 'void'`, with the state machine: `validated`/`queued`/`posted` may settle or void; `settled` may be corrected but not re-settled.
+      * `src/lib/data/picks.ts`, `data/results-ops.ts`, `data/queues.ts`, `approvals-model.ts`, `governance-board.ts` — the viewing/inspection half.
+
+      And the API half **is already running in production**. The settle route exists in the deployed SHA `a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6`: `apps/api/src/server.ts:704` routes `POST /api/picks/:id/settle`, `:614` authenticates it, and `apps/api/src/auth.ts:64` role-gates it to `settler|operator`, denying by default when no pattern matches.
+
+      **So there is no implementation gap in the manual-settlement chain.** The gap is a container:
+
+      | Surface | Measured |
+      | -- | -- |
+      | `deploy/production/docker-compose.yml` | 10 services — `api, worker, ingestor, discord-bot, grading-cron, loki, grafana, web, smart-form, caddy`. **No** `command-center`**.** |
+      | `deploy/production/Caddyfile` | 3 routes — `api:4000`, `web:4200`, `smart-form:4400`. Nothing else. |
+      | `.github/workflows/deploy.yml` | `grep -ni command.center` returns nothing. |
+
+      ### What this lane actually needs, in order
+
+      1. **A compose service + Caddy route + deploy-workflow wiring.** Ordinary code under `deploy/**` and `.github/workflows/deploy.yml`. Not reserved by itself.
+      2. **Command Center secrets and a hostname** — reserved decision 4.
+      3. **A** `Deploy` **dispatch** — reserved decision 8.
+
+      Only then is a manual-settlement path testable end to end, which is what this issue's acceptance criteria require.
+
+      ### One real contract drift to resolve first
+
+      [UTV2-1904](https://linear.app/unit-talk-v2/issue/UTV2-1904/b1-operator-manual-settlement-of-track-only-picks-via-the-evidence) (`b14e44412`) refined the settlement contract to the evidence-plane model and is **merged and not deployed** — `git merge-base --is-ancestor b14e44412 a45e9cd11` returns false. Production is 9 commits and 5 container files behind on this path (`settle-pick-controller.ts`, `grading-service.ts`, `handlers/settle-pick.ts`, `settlement-service.ts`, `packages/contracts/src/settlement.ts`). The deployed route therefore accepts a different basis contract than `settle.ts` sends. Reconcile that before claiming the path works, rather than after.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1910/command-center-manual-operator-settlement-the-settle-path-is-deployed
+    title: "Command Center + manual operator settlement: the settle path is
+      deployed-reachable, the viewing surface is not — measured 2026-09-14"
+    description: |-
+      Measured next lane for the operator surface. **Everything below is read from code and live GitHub state, not from a status document.** It corrects a claim this program has carried for several passes — that manual settlement is unavailable because the Command Center is undeployed. Those are two different things, and only one of them is true.
+
+      ## What is actually true
+
+      ### The manual operator-settlement path IS routed, authenticated and role-gated
+
+      | Layer | Evidence |
+      | -- | -- |
+      | Route | `POST /api/picks/:id/settle`, matched at `apps/api/src/server.ts:704-716` |
+      | Auth | `apps/api/src/server.ts:614` — **every** POST goes through `authenticateRequest` then `authorizeRoute`; `authorizeRoute` denies by default when no pattern matches |
+      | Roles | `apps/api/src/auth.ts:64` — `/^\/api\/picks\/[^/]+\/settle$/` admits `settler` and `operator` only |
+      | Deployed service | `api` is a compose service (`deploy/production/docker-compose.yml:13`) behind Caddy at `{$CADDY_DOMAIN} → api:4000` (`deploy/production/Caddyfile:31-32`) |
+      | Evidence-plane settlement | [UTV2-1904](https://linear.app/unit-talk-v2/issue/UTV2-1904/b1-operator-manual-settlement-of-track-only-picks-via-the-evidence) (`b14e44412`, [griff843/Unit-Talk-v2#1579](https://linear.app/unit-talk-v2/review/utv2-1904-operator-settlement-for-evidence-plane-picks-failing-closed-7ab72cf38a93)) added the branch that lets an operator settle an `awaiting_approval` / Track Only `validated` pick, failing closed without `OperatorGradingContext` (`outcomeBasis`, `resultSourceUrl`, `observedAt` — all three required) |
+
+      So a routed production URL and authentication **both exist** for manual settlement.
+
+      ### But it is merged and NOT running
+
+      `Deploy` last ran 2026-09-14T14:54Z on `a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6`. `git merge-base --is-ancestor b14e44412 a45e9cd11` → **false**. Production is 9 commits behind with exactly five changed container files, and three of them are the operator-settlement path:
+
+      ```
+      apps/api/src/controllers/settle-pick-controller.ts
+      apps/api/src/handlers/settle-pick.ts
+      apps/api/src/settlement-service.ts
+      packages/contracts/src/settlement.ts
+      apps/api/src/grading-service.ts
+      ```
+
+      Dispatching `Deploy` is reserved decision 8 and is **not requested by this issue**.
+
+      ### The Command Center is not deployed and structurally cannot be
+
+      * `apps/command-center` exists as an application.
+      * It is in **no** compose service — `docker-compose.yml` defines `api, worker, ingestor, discord-bot, grading-cron, loki, grafana, web, smart-form, caddy` and nothing else.
+      * It is behind **no** Caddy route — the Caddyfile proxies only `api:4000`, `web:4200`, `smart-form:4400`.
+      * `.github/workflows/deploy.yml` never mentions it (`grep -ni command.center` → no matches).
+
+      **It must not be described as usable.** It has no routed production URL.
+
+      ## The gap this lane closes
+
+      An operator can, in principle, settle a pick — but only by hand-crafting an authenticated POST. There is no surface for **viewing** picks, choosing one, and inspecting audit history. The read side that does exist is `GET /api/picks/:id/trace` (authenticated since [UTV2-1823](https://linear.app/unit-talk-v2/issue/UTV2-1823/authenticate-get-apipicksidtrace-close-the-unauthenticated-canonical); returns the full lifecycle aggregate — PickRecord, submission events, promotion history, outbox entries, distribution receipts, settlement records, audit log, lifecycle events). It is a JSON endpoint, not an operator surface.
+
+      ## Acceptance criteria
+
+      1. An authenticated operator can **list** the governed cohort (`metadata ? 'distributionMode'`) through a deployed surface, not by writing SQL.
+      2. From that list, an operator can open one pick and see its trace — lifecycle, promotion history, settlement records and audit entries — reusing `/api/picks/:id/trace` rather than re-deriving it.
+      3. From that view, an operator can **manually settle** a pick, and the form requires all three `OperatorGradingContext` fields, refusing closed when any is absent.
+      4. The refusal ordering established by [UTV2-1904](https://linear.app/unit-talk-v2/issue/UTV2-1904/b1-operator-manual-settlement-of-track-only-picks-via-the-evidence) is preserved and tested: a `manual_review` request on a Track Only pick still fails exactly as it does today.
+      5. The surface is reachable at a routed production URL with authentication, and the role gate is exercised: a `settler` can settle, a non-settler/non-operator is 403'd.
+      6. Zero member delivery from any of it; Track Only containment unchanged.
+      7. **Deployment is a separate, reserved step.** This lane is not done because code merged — but it may not claim the surface is usable until a deploy has happened and been observed.
+
+      ## Decisions this lane surfaces but does not take
+
+      * Whether the surface is the existing `apps/command-center` (needs a compose service, a Caddy route, a hostname and `COMMAND_CENTER_*` secrets — secrets are reserved decision 4) or a smaller operator view added to an already-routed app (`web` or `smart-form`). The second avoids every reserved input and is the recommendation.
+      * Dispatching `Deploy` (reserved decision 8).
+
+      ---
+
+      ## Correction measured 2026-09-15 — the surface is built, not missing
+
+      This issue was filed on the finding that operators have no viewing/selection surface. Re-measured against `main`, that framing is wrong and the correction changes what this lane is.
+
+      `apps/command-center` carries **282 TypeScript files**, including a complete operator settlement path:
+
+      * `apps/command-center/src/app/settlement/` — the route.
+      * `apps/command-center/src/app/actions/settle.ts` — a `'use server'` action that resolves the operator actor (`resolveActorOrRefusal`, refusing when unresolved) and `POST`s to `${apiUrl}/api/picks/${pickId}/settle` with `status: 'settled'`, a concrete `result`, `source: 'operator'`, `confidence: 'confirmed'`, `evidenceRef: 'operator-manual'` and `settledBy: <actor>`.
+      * `apps/command-center/src/lib/pick-actions.ts` — `PickAction = 'settle' | 'correct' | 'void'`, with the state machine: `validated`/`queued`/`posted` may settle or void; `settled` may be corrected but not re-settled.
+      * `src/lib/data/picks.ts`, `data/results-ops.ts`, `data/queues.ts`, `approvals-model.ts`, `governance-board.ts` — the viewing/inspection half.
+
+      And the API half **is already running in production**. The settle route exists in the deployed SHA `a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6`: `apps/api/src/server.ts:704` routes `POST /api/picks/:id/settle`, `:614` authenticates it, and `apps/api/src/auth.ts:64` role-gates it to `settler|operator`, denying by default when no pattern matches.
+
+      **So there is no implementation gap in the manual-settlement chain.** The gap is a container:
+
+      | Surface | Measured |
+      | -- | -- |
+      | `deploy/production/docker-compose.yml` | 10 services — `api, worker, ingestor, discord-bot, grading-cron, loki, grafana, web, smart-form, caddy`. **No** `command-center`**.** |
+      | `deploy/production/Caddyfile` | 3 routes — `api:4000`, `web:4200`, `smart-form:4400`. Nothing else. |
+      | `.github/workflows/deploy.yml` | `grep -ni command.center` returns nothing. |
+
+      ### What this lane actually needs, in order
+
+      1. **A compose service + Caddy route + deploy-workflow wiring.** Ordinary code under `deploy/**` and `.github/workflows/deploy.yml`. Not reserved by itself.
+      2. **Command Center secrets and a hostname** — reserved decision 4.
+      3. **A** `Deploy` **dispatch** — reserved decision 8.
+
+      Only then is a manual-settlement path testable end to end, which is what this issue's acceptance criteria require.
+
+      ### One real contract drift to resolve first
+
+      [UTV2-1904](https://linear.app/unit-talk-v2/issue/UTV2-1904/b1-operator-manual-settlement-of-track-only-picks-via-the-evidence) (`b14e44412`) refined the settlement contract to the evidence-plane model and is **merged and not deployed** — `git merge-base --is-ancestor b14e44412 a45e9cd11` returns false. Production is 9 commits and 5 container files behind on this path (`settle-pick-controller.ts`, `grading-service.ts`, `handlers/settle-pick.ts`, `settlement-service.ts`, `packages/contracts/src/settlement.ts`). The deployed route therefore accepts a different basis contract than `settle.ts` sends. Reconcile that before claiming the path works, rather than after.
+    captured_at: 2026-09-16T01:11:32.341Z
+    description_sha256: 32de879d8edde1770fec82a8bf91040651727a049de3380853159102c812c4a3
+  contract_hash: 35874b402da4227abe44bf6353a027faff045bb6451548fae1384c7ce18a5764

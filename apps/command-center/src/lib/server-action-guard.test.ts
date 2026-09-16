@@ -361,7 +361,17 @@ const BEHAVIOURAL_ACTIONS: Array<{
   {
     path: 'app/actions/settle.ts',
     name: 'settlePick',
-    invoke: async () => (await import('../app/actions/settle')).settlePick('pick-1', 'win'),
+    // settlePick requires a grading attestation (UTV2-1910): the API refuses an
+    // evidence-plane settlement without `operatorGradingContext`, so the action
+    // refuses one locally too. A valid attestation is passed here so the refusal
+    // under test is the authentication refusal rather than a validation one, and
+    // so the authenticated forged-actor control below still reaches `fetch`.
+    invoke: async () =>
+      (await import('../app/actions/settle')).settlePick('pick-1', 'win', {
+        outcomeBasis: 'final box score',
+        resultSourceUrl: 'https://example.invalid/box-score/pick-1',
+        observedAt: '2026-09-15T00:00:00.000Z',
+      }),
     assertRefusal: (value) => assert.equal(refusalError(value), UNAUTHENTICATED_ACTION_ERROR),
   },
   {
