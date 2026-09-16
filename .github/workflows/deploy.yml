@@ -738,7 +738,7 @@ jobs:
       # this stage (and the later promote stage) will need, at the exact
       # requested tag, BEFORE touching any running container. A stale/invalid
       # token or a tag that never got pushed must fail here, not mid-mutation.
-      - name: Preflight — verify registry auth and resolve every image tag
+      - name: Preflight — verify registry auth and resolve all 6 image tags
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
@@ -748,11 +748,11 @@ jobs:
           # Its image is always built and pushed, but a tag predating this lane
           # has no command-center image, so requiring it unconditionally would
           # make every rollback to an older tag fail this preflight.
-          services="api worker ingestor discord-bot web smart-form"
+          cc_service=""
           if [ "${CC_ENABLED:-}" = 'true' ]; then
-            services="$services command-center"
+            cc_service="command-center"
           fi
-          for svc in $services; do
+          for svc in api worker ingestor discord-bot web smart-form $cc_service; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -761,7 +761,7 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: images resolved for tag $IMAGE_TAG ($services)."
+          echo "Registry preflight passed: images resolved for tag $IMAGE_TAG (api worker ingestor discord-bot web smart-form $cc_service)."
 
       - name: Release API canary
         env:
@@ -1364,7 +1364,7 @@ jobs:
       # UTV2-1648: same pre-mutation registry preflight as the canary job --
       # this job runs on a fresh runner with its own auth, so it needs its own
       # check even though canary already verified moments earlier.
-      - name: Preflight — verify registry auth and resolve every image tag
+      - name: Preflight — verify registry auth and resolve all 6 image tags
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
@@ -1374,11 +1374,11 @@ jobs:
           # Its image is always built and pushed, but a tag predating this lane
           # has no command-center image, so requiring it unconditionally would
           # make every rollback to an older tag fail this preflight.
-          services="api worker ingestor discord-bot web smart-form"
+          cc_service=""
           if [ "${CC_ENABLED:-}" = 'true' ]; then
-            services="$services command-center"
+            cc_service="command-center"
           fi
-          for svc in $services; do
+          for svc in api worker ingestor discord-bot web smart-form $cc_service; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -1387,7 +1387,7 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: images resolved for tag $IMAGE_TAG ($services)."
+          echo "Registry preflight passed: images resolved for tag $IMAGE_TAG (api worker ingestor discord-bot web smart-form $cc_service)."
 
       - name: Promote all production containers
         env:

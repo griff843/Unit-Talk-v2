@@ -816,7 +816,7 @@ test('the canary and promote copies of the Command Center wiring do not drift', 
   // them is the recorded failure mode. Assert both moved together.
   for (const stepName of [
     'Write Next.js service env files to server',
-    'Preflight — verify registry auth and resolve every image tag',
+    'Preflight — verify registry auth and resolve all 6 image tags',
   ]) {
     const canary = String(step('canary', stepName)['run']);
     const promote = String(step('promote', stepName)['run']);
@@ -828,17 +828,24 @@ test('the canary and promote copies of the Command Center wiring do not drift', 
   // unconditionally would make every rollback fail the registry preflight.
   for (const jobId of ['canary', 'promote']) {
     const preflight = String(
-      step(jobId, 'Preflight — verify registry auth and resolve every image tag')['run'],
+      step(jobId, 'Preflight — verify registry auth and resolve all 6 image tags')['run'],
     );
     assert.match(
       preflight,
-      /services="api worker ingestor discord-bot web smart-form"/,
+      /for svc in api worker ingestor discord-bot web smart-form \$cc_service; do/,
       `${jobId} preflight must require the always-on images unconditionally`,
     );
     assert.match(
       endOfGuardedBlock(preflight),
-      /services="\$services command-center"/,
+      /cc_service="command-center"/,
       `${jobId} must require the Command Center image only when it is enabled`,
+    );
+    // The default path must resolve to the empty string, so a tag with no
+    // command-center image is never demanded by a deploy that does not use it.
+    assert.match(
+      preflight,
+      /cc_service=""/,
+      `${jobId} preflight must default the Command Center image out of the loop`,
     );
   }
 
