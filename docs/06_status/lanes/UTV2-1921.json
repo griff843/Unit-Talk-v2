@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1921-mission-plan-compaction",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1590",
   "files_changed": [],
   "file_scope_lock": [
     "docs/mission/plan-history-2026-09.md",
@@ -16,9 +16,9 @@
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-16T12:44:36.352Z",
-  "heartbeat_at": "2026-09-16T12:44:36.352Z",
+  "heartbeat_at": "2026-09-16T12:47:12.860Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1921-mission-plan-compaction.json",
