@@ -86,11 +86,11 @@ fi
 #     comment above the loop -- puts one on the wrong side of that line.
 # An empty COMPOSE_PROFILES selects no profile, which is the pre-UTV2-1922
 # behaviour byte for byte.
-if [ "$COMMAND_CENTER" = true ]; then
-  ROLLBACK_PROFILES='command-center'
-else
-  ROLLBACK_PROFILES=''
-fi
+#
+# UTV2-1922 (PM CHANGES_REQUIRED, defect 2): --command-center is now operator
+# INTENT, not the decision. The decision is made remotely, from the target
+# release's own restored configuration -- see the profile block inside the
+# remote script below.
 
 REMOTE_COMMAND=$(cat <<EOF
 set -eu
@@ -122,8 +122,25 @@ else
   rm -f .env.command-center
   echo "no .env.command-center snapshot for $TAG - removed any stale Command Center configuration"
 fi
-COMPOSE_PROFILES='$ROLLBACK_PROFILES' UNIT_TALK_IMAGE_TAG='$TAG' docker compose pull
-COMPOSE_PROFILES='$ROLLBACK_PROFILES' UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
+# UTV2-1922 (PM CHANGES_REQUIRED, defect 2): select the profile from the TARGET
+# release's own configuration, never from the operator's flag alone. The block
+# above has just made .env.command-center exist if and only if this tag has a
+# snapshot of it, so its presence is the capability test. Selecting
+# \`command-center\` without it would make compose refuse to resolve the env_file
+# it interpolates -- reintroducing, on the recovery path, the exact class of
+# failure this lane exists to prevent, at the moment the edge is least able to
+# absorb it.
+ROLLBACK_PROFILES=''
+if [ '$COMMAND_CENTER' = true ]; then
+  if [ -f .env.command-center ]; then
+    ROLLBACK_PROFILES='command-center'
+    echo 'command-center profile selected: $TAG has a Command Center configuration snapshot'
+  else
+    echo 'WARNING: --command-center was requested, but $TAG has no .env.command-center snapshot - the profile is NOT selected and the rollback proceeds without the Command Center' >&2
+  fi
+fi
+COMPOSE_PROFILES="\$ROLLBACK_PROFILES" UNIT_TALK_IMAGE_TAG='$TAG' docker compose pull
+COMPOSE_PROFILES="\$ROLLBACK_PROFILES" UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
 # UTV2-1922: the release record is advanced only after the rollback has
 # actually activated. It used to be the FIRST thing written, so a rollback that
 # failed at `docker compose up` left the host naming a release it had not

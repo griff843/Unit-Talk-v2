@@ -1286,13 +1286,35 @@ case "$1" in
         ;;
       port-conflict-then-ok)
         if [ "$attempt" = 1 ]; then
-          printf 'Error response from daemon: port is already allocated\\n' >&2
+          printf 'Error response from daemon: driver failed programming external connectivity on endpoint caddy: Bind for 0.0.0.0:443 failed: port is already allocated\\n' >&2
           exit 1
         fi
         exit 0
         ;;
       port-conflict-then-fail)
-        printf 'Error response from daemon: port is already allocated\\n' >&2
+        printf 'Error response from daemon: driver failed programming external connectivity on endpoint caddy: Bind for 0.0.0.0:443 failed: port is already allocated\\n' >&2
+        exit 1
+        ;;
+      caddy-name-conflict-then-ok)
+        if [ "$attempt" = 1 ]; then
+          printf 'Error response from daemon: Conflict. The container name "/caddy" is already in use by container "9f2c". You have to remove (or rename) that container to be able to reuse that name.\\n' >&2
+          exit 1
+        fi
+        exit 0
+        ;;
+      foreign-port-conflict)
+        # A port conflict that has nothing to do with the edge. Removing caddy
+        # could not possibly clear :4300, so taking 80/443 down would be pure
+        # collateral damage.
+        : > "$UTV2_1922_DIR/.caddy-removed"
+        printf 'Error response from daemon: driver failed programming external connectivity on endpoint command-center: Bind for 127.0.0.1:4300 failed: port is already allocated\\n' >&2
+        exit 1
+        ;;
+      foreign-name-conflict)
+        # The bare-'Conflict' case the first candidate matched. This is an
+        # ordinary container-name collision on a DIFFERENT service.
+        : > "$UTV2_1922_DIR/.caddy-removed"
+        printf 'Error response from daemon: Conflict. The container name "/api" is already in use by container "4b1a". You have to remove (or rename) that container to be able to reuse that name.\\n' >&2
         exit 1
         ;;
     esac
@@ -1394,7 +1416,7 @@ test('UTV2-1922 behaviour: a compose configuration failure cannot leave the edge
   // And the removal that the promote step itself performs stays conditional: a
   // config-parse failure is not a port conflict, so no retry may be attempted.
   assert.ok(
-    !/a stale container is holding the edge ports/.test(result.output),
+    !/the edge itself is holding ports 80\/443/.test(result.output),
     'a config-parse failure must not be treated as a port conflict',
   );
 });
@@ -1459,4 +1481,378 @@ test('UTV2-1922: this regression suite is non-vacuous and is reachable from requ
     /nextjs-deploy-wiring\.test\.ts/,
     'this suite must stay wired into test:ops, or it stops being a required check',
   );
+});
+
+// ── UTV2-1922 (PM CHANGES_REQUIRED) ─────────────────────────────────────────
+// Three defects were found in the first candidate at head b6ecf2722. Each is a
+// case where a control was WIDER or NARROWER than the canonical behaviour it
+// was meant to protect, and each repair is proven below by executing the real
+// artifact rather than by reading it.
+
+const CC_AUTH_CONTRACT_MARKER = '# UTV2-1922 (PM CHANGES_REQUIRED, defect 1)';
+
+/**
+ * The whole deploy-time accept/refuse decision starts at the required-value
+ * loop, not at the auth comment. Slicing from the marker instead was a real
+ * vacuity: the first candidate's defect -- the canonical token-only
+ * configuration made undeployable -- lived in this loop's NAME LIST, above the
+ * marker, so a mutation that put the three auth names back into it escaped the
+ * suite entirely. The fragment must therefore begin here.
+ */
+const CC_REQUIRED_VALUE_LOOP = 'for name in SUPABASE_URL';
+
+/**
+ * The deploy-time Command Center auth contract, extracted from the real
+ * env-write step so the assertions below execute the shipped code. The slice
+ * stops before the `printf` that writes the file, so what runs is exactly the
+ * accept/refuse decision and nothing that needs ssh or a host.
+ */
+function ccAuthContractFragment(jobId: string): string {
+  const body = String(step(jobId, ENV_WRITE_STEP)['run']);
+  const start = body.indexOf(CC_REQUIRED_VALUE_LOOP);
+  assert.ok(start >= 0, `${jobId}: the env-write step must carry the required-value loop`);
+  const marker = body.indexOf(CC_AUTH_CONTRACT_MARKER, start);
+  assert.ok(marker > start, `${jobId}: the env-write step must carry the Command Center auth contract`);
+  const end = body.indexOf("printf '%s\\n' \\", marker);
+  assert.ok(end > marker, `${jobId}: the auth contract must precede the file write`);
+  return body.slice(start, end);
+}
+
+/**
+ * The non-auth values the enabled branch requires unconditionally. They are
+ * present in every auth case so that what each case measures is the AUTH
+ * decision; one case blanks one of them to keep the loop itself non-vacuous.
+ * These are obvious placeholders, never real values.
+ */
+const CC_REQUIRED_NON_AUTH_ENV: Record<string, string> = {
+  SUPABASE_URL: 'https://example.invalid',
+  SUPABASE_SERVICE_ROLE_KEY: 'placeholder-not-a-real-key',
+  UNIT_TALK_CC_API_KEY: 'placeholder-not-a-real-key',
+};
+
+interface AuthCase {
+  label: string;
+  env: Record<string, string>;
+  accepted: boolean;
+}
+
+const CC_AUTH_CASES: AuthCase[] = [
+  {
+    label: 'token only — the canonical production configuration',
+    env: { COMMAND_CENTER_AUTH_TOKEN: 'tok' },
+    accepted: true,
+  },
+  {
+    label: 'complete basic auth pair, no token',
+    env: { COMMAND_CENTER_AUTH_USERNAME: 'op', COMMAND_CENTER_AUTH_PASSWORD: 'pw' },
+    accepted: true,
+  },
+  {
+    label: 'token and a complete pair together',
+    env: { COMMAND_CENTER_AUTH_TOKEN: 'tok', COMMAND_CENTER_AUTH_USERNAME: 'op', COMMAND_CENTER_AUTH_PASSWORD: 'pw' },
+    accepted: true,
+  },
+  {
+    label: 'partial pair — username without password',
+    env: { COMMAND_CENTER_AUTH_USERNAME: 'op' },
+    accepted: false,
+  },
+  {
+    label: 'partial pair — password without username',
+    env: { COMMAND_CENTER_AUTH_PASSWORD: 'pw' },
+    accepted: false,
+  },
+  {
+    label: 'no auth material at all',
+    env: {},
+    accepted: false,
+  },
+  {
+    // Keeps the required-value loop itself non-vacuous: complete auth is not
+    // sufficient if a value the file interpolates is missing.
+    label: 'complete auth but a required non-auth value missing',
+    env: { COMMAND_CENTER_AUTH_TOKEN: 'tok', UNIT_TALK_CC_API_KEY: '' },
+    accepted: false,
+  },
+];
+
+function runAuthContract(fragment: string, env: Record<string, string>): { exitCode: number; output: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'utv2-1922-auth-'));
+  const scriptPath = join(dir, 'auth.sh');
+  writeFileSync(scriptPath, `set -eu\n${fragment}\necho ACCEPTED\n`);
+  try {
+    const output = execFileSync('bash', [scriptPath], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // A clean environment: the names under test must come only from `env`,
+      // never leak in from the runner's own shell.
+      env: { PATH: process.env.PATH ?? '', ...CC_REQUIRED_NON_AUTH_ENV, ...env },
+    });
+    return { exitCode: 0, output };
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string; stderr?: string };
+    return { exitCode: failure.status ?? 1, output: `${failure.stdout ?? ''}${failure.stderr ?? ''}` };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('UTV2-1922 defect 1: deploy-time Command Center auth matches the canonical contract exactly', () => {
+  // THE DEFECT. The first candidate required COMMAND_CENTER_AUTH_TOKEN,
+  // _USERNAME and _PASSWORD all to be non-empty, which made the canonical
+  // token-only production configuration undeployable. A deploy-time refusal
+  // STRICTER than the runtime contract is still a defect: it fails a
+  // configuration the product supports. The runtime contract is stated twice on
+  // main — in deploy/production/nextjs-entrypoint.sh and in
+  // assertCommandCenterAuthConfig — and both accept a token OR a complete
+  // username/password pair, and both refuse a partial pair.
+  for (const jobId of ['canary', 'promote']) {
+    const fragment = ccAuthContractFragment(jobId);
+    for (const testCase of CC_AUTH_CASES) {
+      const result = runAuthContract(fragment, testCase.env);
+      if (testCase.accepted) {
+        assert.equal(
+          result.exitCode,
+          0,
+          `${jobId}: ${testCase.label} must remain deployable — the deploy refused it: ${result.output}`,
+        );
+        assert.match(result.output, /ACCEPTED/, `${jobId}: ${testCase.label} must reach the file write`);
+      } else {
+        assert.equal(
+          result.exitCode,
+          1,
+          `${jobId}: ${testCase.label} must fail closed, not be written to the host`,
+        );
+        assert.ok(
+          !/ACCEPTED/.test(result.output),
+          `${jobId}: ${testCase.label} must not reach the file write`,
+        );
+        assert.match(result.output, /::error::/, `${jobId}: the refusal must be a workflow error`);
+      }
+    }
+  }
+});
+
+test('UTV2-1922 defect 1: the deploy-time contract and the entrypoint agree, so neither can drift alone', () => {
+  // The two halves are written in different files and enforced at different
+  // times. If only one is repaired, a deploy would accept a configuration the
+  // container then refuses to start on — which is an outage with a green
+  // deploy. Assert the same three refusals exist in both.
+  const entrypoint = readFileSync(resolve(ROOT, 'deploy/production/nextjs-entrypoint.sh'), 'utf8');
+  const promoteFragment = ccAuthContractFragment('promote');
+  const pairs: Array<[RegExp, string]> = [
+    [/COMMAND_CENTER_AUTH_USERNAME[^\n]*\n[^\n]*without[^\n]*PASSWORD|USERNAME is set without COMMAND_CENTER_AUTH_PASSWORD/, 'username without password'],
+    [/PASSWORD is set without COMMAND_CENTER_AUTH_USERNAME/, 'password without username'],
+    [/auth is not configured/i, 'neither a token nor a complete pair'],
+  ];
+  for (const [pattern, label] of pairs) {
+    assert.match(entrypoint, pattern, `the entrypoint must still refuse ${label}`);
+    assert.match(promoteFragment, pattern, `the deploy must also refuse ${label}`);
+  }
+  // And neither may demand the token unconditionally.
+  assert.ok(
+    !/COMMAND_CENTER_AUTH_TOKEN[^\n]*\n[^\n]*Refusing to start/.test(entrypoint),
+    'the entrypoint must not require the token unconditionally',
+  );
+});
+
+interface RollbackOutcome {
+  exitCode: number;
+  profiles: string;
+  commandCenterConfigPresent: boolean;
+  release: string;
+  output: string;
+}
+
+const ROLLBACK_STUB = `#!/usr/bin/env bash
+# Records the COMPOSE_PROFILES the rollback actually selected. A rollback that
+# selects \`command-center\` without the env file is the failure under test, so
+# the stub refuses exactly as compose would.
+printf '%s\\n' "profiles=\${COMPOSE_PROFILES-}" >> "$UTV2_1922_DIR/.profiles"
+for a in "$@"; do
+  if [ "$a" = up ] || [ "$a" = pull ]; then
+    if [ "\${COMPOSE_PROFILES-}" = 'command-center' ] && [ ! -f .env.command-center ]; then
+      printf 'service "command-center" env_file .env.command-center not found\\n' >&2
+      exit 1
+    fi
+  fi
+done
+exit 0
+`;
+
+/**
+ * Runs the REAL remote script `deploy/rollback.sh` emits, against a docker stub,
+ * in a temporary directory standing in for the deploy host.
+ */
+function runRollback(options: { commandCenterFlag: boolean; snapshotPresent: boolean }): RollbackOutcome {
+  const tag = 'cccccccccccccccccccccccccccccccccccccccc';
+  const dir = mkdtempSync(join(tmpdir(), 'utv2-1922-rb-'));
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'docker'), ROLLBACK_STUB, { mode: 0o755 });
+
+  const host = join(dir, 'host');
+  mkdirSync(host);
+  writeFileSync(join(host, '.unit-talk-release'), `${OLD_TAG}\n`);
+  for (const name of ['.env.production', '.env.web', '.env.smart-form', '.env.edge']) {
+    writeFileSync(join(host, `${name}.${tag}`), 'X=1\n');
+  }
+  // A stale Command Center configuration is always present at the start: the
+  // question under test is whether the rollback leaves it, removes it, and
+  // whether it selects a profile that needs it.
+  writeFileSync(join(host, '.env.command-center'), 'STALE=1\n');
+  if (options.snapshotPresent) {
+    writeFileSync(join(host, `.env.command-center.${tag}`), 'CC=1\n');
+  }
+
+  const args = ['deploy/rollback.sh', '--tag', tag, '--path', host, '--dry-run'];
+  if (options.commandCenterFlag) args.splice(3, 0, '--command-center');
+  const dryRun = execFileSync('bash', args, { encoding: 'utf8', cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] });
+  const remote = dryRun.slice(dryRun.indexOf('\n') + 1);
+
+  const scriptPath = join(dir, 'rollback-remote.sh');
+  writeFileSync(scriptPath, remote);
+
+  let exitCode = 0;
+  let output = '';
+  try {
+    // 2>&1 so the WARNING the rollback prints when it declines to honour the
+    // flag is observable: it goes to stderr, and execFileSync returns stdout.
+    output = execFileSync('bash', ['-c', `bash "${scriptPath}" 2>&1`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}`, UTV2_1922_DIR: host },
+    });
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string; stderr?: string };
+    exitCode = failure.status ?? 1;
+    output = `${failure.stdout ?? ''}${failure.stderr ?? ''}`;
+  }
+
+  const outcome: RollbackOutcome = {
+    exitCode,
+    profiles: existsSync(join(host, '.profiles')) ? readFileSync(join(host, '.profiles'), 'utf8') : '',
+    commandCenterConfigPresent: existsSync(join(host, '.env.command-center')),
+    release: readFileSync(join(host, '.unit-talk-release'), 'utf8').trim(),
+    output,
+  };
+  rmSync(dir, { recursive: true, force: true });
+  return outcome;
+}
+
+test('UTV2-1922 defect 2: rollback to a pre-Command-Center release never selects a profile it cannot run', () => {
+  // THE DEFECT. The first candidate passed `--command-center` whenever the
+  // CURRENT deploy had the surface enabled, and the flag alone selected the
+  // profile. Rolling back from an enabled release to one that predates the
+  // Command Center therefore selected a profile whose env_file the target
+  // release does not have — reintroducing the exact config-parse failure this
+  // lane exists to prevent, on the recovery path, at the moment the edge is
+  // least able to absorb it.
+  const result = runRollback({ commandCenterFlag: true, snapshotPresent: false });
+  assert.equal(result.exitCode, 0, `the rollback must succeed: ${result.output}`);
+  assert.ok(
+    !/profiles=command-center/.test(result.profiles),
+    'the command-center profile must not be selected for a release with no Command Center snapshot',
+  );
+  assert.equal(
+    result.commandCenterConfigPresent,
+    false,
+    'and the stale Command Center configuration must be removed, not left for a later selection',
+  );
+  assert.match(result.output, /profile is NOT selected/, 'the operator must be told the flag was not honoured');
+  // Non-vacuity: the harness must have observed a selection at all, or
+  // "not command-center" would be true of a rollback that never ran compose.
+  assert.match(result.profiles, /profiles=/, 'the harness must actually observe the selection');
+  assert.equal(result.release, 'cccccccccccccccccccccccccccccccccccccccc', 'a successful rollback records the target tag');
+});
+
+test('UTV2-1922 defect 2: rollback to a Command Center release restores it and selects the profile', () => {
+  // The other half. Narrowing the selection must not disable the capability:
+  // a rollback to a release that DID run the Command Center must bring it back.
+  const result = runRollback({ commandCenterFlag: true, snapshotPresent: true });
+  assert.equal(result.exitCode, 0, `the rollback must succeed: ${result.output}`);
+  assert.match(
+    result.profiles,
+    /profiles=command-center/,
+    'the command-center profile must be selected when the target release has its configuration',
+  );
+  assert.equal(result.commandCenterConfigPresent, true, 'and its configuration must be restored from the snapshot');
+  assert.match(result.output, /restored \.env\.command-center/, 'the restore must be reported');
+});
+
+test('UTV2-1922 defect 2: without the flag the profile is never selected, snapshot or not', () => {
+  // Operator intent is still required. The snapshot makes the profile POSSIBLE;
+  // it must not make it automatic, or a routine rollback would start a surface
+  // nobody asked for.
+  for (const snapshotPresent of [true, false]) {
+    const result = runRollback({ commandCenterFlag: false, snapshotPresent });
+    assert.equal(result.exitCode, 0, `the rollback must succeed (snapshot=${snapshotPresent}): ${result.output}`);
+    assert.ok(
+      !/profiles=command-center/.test(result.profiles),
+      `no flag must mean no profile (snapshot=${snapshotPresent})`,
+    );
+    assert.match(result.profiles, /profiles=/, 'the harness must actually observe the selection');
+  }
+});
+
+test('UTV2-1922 defect 3: an unrelated container-name conflict cannot remove the public edge', () => {
+  // THE DEFECT. The first candidate's recovery arm also matched a bare
+  // 'Conflict', which Docker prints for ANY name or resource collision. An
+  // ordinary name clash on `api` or `command-center` would have taken ports 80
+  // and 443 down in the name of "clearing the edge ports" — collateral damage
+  // that cannot possibly clear the conflict it was reacting to.
+  const result = runPromote('foreign-name-conflict');
+  assert.equal(result.exitCode, 1, 'the activation still failed, so the step must fail');
+  assert.ok(
+    !/the edge itself is holding ports 80\/443/.test(result.output),
+    'a conflict on another container must not be treated as an edge port conflict',
+  );
+  assert.match(result.output, /edge preserved/, 'it must take the restore path instead');
+  assert.equal(result.edgeServing, true, 'and ports 80 and 443 must be served when the step exits');
+  assert.equal(result.release, OLD_TAG, 'release metadata must still describe reality');
+  assert.equal(result.inflightPresent, true, 'the in-flight marker must survive a failed activation');
+});
+
+test('UTV2-1922 defect 3: a port conflict on a port the edge does not own cannot remove the edge', () => {
+  // Removing caddy could not free 127.0.0.1:4300. The failure text names a real
+  // port conflict, so the words alone are not enough — the evidence has to name
+  // the edge's own ports.
+  const result = runPromote('foreign-port-conflict', '--profile command-center');
+  assert.equal(result.exitCode, 1, 'the activation still failed, so the step must fail');
+  assert.ok(
+    !/the edge itself is holding ports 80\/443/.test(result.output),
+    'a conflict on :4300 must not be treated as an edge port conflict',
+  );
+  assert.match(result.output, /edge preserved/, 'it must take the restore path instead');
+  assert.equal(result.edgeServing, true, 'and ports 80 and 443 must be served when the step exits');
+});
+
+test('UTV2-1922 defect 3: a stale caddy container by name is still a bounded recovery', () => {
+  // The narrowing must not remove the recovery it was narrowing. Docker's
+  // container-name conflict on `/caddy` is exactly the condition the original
+  // `docker rm -f caddy` was added for in ecab31704.
+  const result = runPromote('caddy-name-conflict-then-ok');
+  assert.equal(result.exitCode, 0, 'a caddy name conflict that clears on retry must succeed');
+  assert.equal(result.caddyRemoved, true, 'the stale caddy container must be cleared');
+  assert.match(result.output, /the edge itself is holding ports 80\/443/, 'and the reason must be stated');
+  assert.equal(result.release, NEW_TAG, 'a successful retry must record the new release');
+  assert.equal(result.inflightPresent, false, 'a successful retry must clear the in-flight marker');
+});
+
+test('UTV2-1922 defect 3: the recovery is bounded to one retry, and the evidence test is not vacuous', () => {
+  // A mutation control for the three cases above. If the narrowed condition
+  // ever matched NOTHING, every "must not remove the edge" assertion would pass
+  // for free. Prove the positive arm still fires, and that the negative cases
+  // differ from it observably rather than by both doing nothing.
+  const recovered = runPromote('port-conflict-then-ok');
+  assert.equal(recovered.caddyRemoved, true, 'a true edge port conflict must still reach the removal');
+  const refused = runPromote('foreign-port-conflict');
+  assert.ok(
+    /edge preserved/.test(refused.output) && !/edge preserved/.test(recovered.output),
+    'the two paths must be distinguishable in the script’s own output, or neither assertion constrains anything',
+  );
+  // Bounded: exactly one retry, never a loop.
+  const exhausted = runPromote('port-conflict-then-fail');
+  assert.equal(exhausted.exitCode, 1, 'a conflict that does not clear must fail rather than retry forever');
+  assert.equal(exhausted.edgeServing, true, 'and must restore the edge before exiting');
 });

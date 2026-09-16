@@ -729,15 +729,36 @@ jobs:
             # UTV2-1922: refuse here, where nothing has been mutated yet,
             # rather than let compose discover a short file after the edge has
             # already been taken down. Mirrors the always-on loop above.
-            for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY UNIT_TALK_CC_API_KEY \
-                        COMMAND_CENTER_AUTH_TOKEN COMMAND_CENTER_AUTH_USERNAME \
-                        COMMAND_CENTER_AUTH_PASSWORD; do
+            for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY UNIT_TALK_CC_API_KEY; do
               eval "value=\${$name:-}"
               if [ -z "$value" ]; then
                 echo "::error::$name is empty while the Command Center is enabled. Refusing to write a partial Command Center configuration."
                 exit 1
               fi
             done
+            # UTV2-1922 (PM CHANGES_REQUIRED, defect 1): auth is a CHOICE, and
+            # this check mirrors the canonical contract instead of inventing a
+            # stricter one. deploy/production/nextjs-entrypoint.sh and
+            # assertCommandCenterAuthConfig in
+            # apps/command-center/src/lib/server-api.ts both accept a token OR a
+            # complete username/password pair, and both refuse a partial pair.
+            # Demanding all three here made the canonical token-only
+            # configuration undeployable -- a deploy-time refusal stricter than
+            # the runtime contract is still a defect, because it fails a
+            # configuration the product supports.
+            if [ -n "${COMMAND_CENTER_AUTH_USERNAME:-}" ] && [ -z "${COMMAND_CENTER_AUTH_PASSWORD:-}" ]; then
+              echo "::error::COMMAND_CENTER_AUTH_USERNAME is set without COMMAND_CENTER_AUTH_PASSWORD. Refusing to write a partial Command Center configuration."
+              exit 1
+            fi
+            if [ -z "${COMMAND_CENTER_AUTH_USERNAME:-}" ] && [ -n "${COMMAND_CENTER_AUTH_PASSWORD:-}" ]; then
+              echo "::error::COMMAND_CENTER_AUTH_PASSWORD is set without COMMAND_CENTER_AUTH_USERNAME. Refusing to write a partial Command Center configuration."
+              exit 1
+            fi
+            if [ -z "${COMMAND_CENTER_AUTH_TOKEN:-}" ] \
+              && { [ -z "${COMMAND_CENTER_AUTH_USERNAME:-}" ] || [ -z "${COMMAND_CENTER_AUTH_PASSWORD:-}" ]; }; then
+              echo "::error::Command Center auth is not configured. Set COMMAND_CENTER_AUTH_TOKEN, or both COMMAND_CENTER_AUTH_USERNAME and COMMAND_CENTER_AUTH_PASSWORD. Refusing to write a Command Center configuration that cannot start."
+              exit 1
+            fi
             printf '%s\n' \
               "NODE_ENV=production" \
               "PORT=4300" \
@@ -1448,15 +1469,36 @@ jobs:
             # UTV2-1922: refuse here, where nothing has been mutated yet,
             # rather than let compose discover a short file after the edge has
             # already been taken down. Mirrors the always-on loop above.
-            for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY UNIT_TALK_CC_API_KEY \
-                        COMMAND_CENTER_AUTH_TOKEN COMMAND_CENTER_AUTH_USERNAME \
-                        COMMAND_CENTER_AUTH_PASSWORD; do
+            for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY UNIT_TALK_CC_API_KEY; do
               eval "value=\${$name:-}"
               if [ -z "$value" ]; then
                 echo "::error::$name is empty while the Command Center is enabled. Refusing to write a partial Command Center configuration."
                 exit 1
               fi
             done
+            # UTV2-1922 (PM CHANGES_REQUIRED, defect 1): auth is a CHOICE, and
+            # this check mirrors the canonical contract instead of inventing a
+            # stricter one. deploy/production/nextjs-entrypoint.sh and
+            # assertCommandCenterAuthConfig in
+            # apps/command-center/src/lib/server-api.ts both accept a token OR a
+            # complete username/password pair, and both refuse a partial pair.
+            # Demanding all three here made the canonical token-only
+            # configuration undeployable -- a deploy-time refusal stricter than
+            # the runtime contract is still a defect, because it fails a
+            # configuration the product supports.
+            if [ -n "${COMMAND_CENTER_AUTH_USERNAME:-}" ] && [ -z "${COMMAND_CENTER_AUTH_PASSWORD:-}" ]; then
+              echo "::error::COMMAND_CENTER_AUTH_USERNAME is set without COMMAND_CENTER_AUTH_PASSWORD. Refusing to write a partial Command Center configuration."
+              exit 1
+            fi
+            if [ -z "${COMMAND_CENTER_AUTH_USERNAME:-}" ] && [ -n "${COMMAND_CENTER_AUTH_PASSWORD:-}" ]; then
+              echo "::error::COMMAND_CENTER_AUTH_PASSWORD is set without COMMAND_CENTER_AUTH_USERNAME. Refusing to write a partial Command Center configuration."
+              exit 1
+            fi
+            if [ -z "${COMMAND_CENTER_AUTH_TOKEN:-}" ] \
+              && { [ -z "${COMMAND_CENTER_AUTH_USERNAME:-}" ] || [ -z "${COMMAND_CENTER_AUTH_PASSWORD:-}" ]; }; then
+              echo "::error::Command Center auth is not configured. Set COMMAND_CENTER_AUTH_TOKEN, or both COMMAND_CENTER_AUTH_USERNAME and COMMAND_CENTER_AUTH_PASSWORD. Refusing to write a Command Center configuration that cannot start."
+              exit 1
+            fi
             printf '%s\n' \
               "NODE_ENV=production" \
               "PORT=4300" \
@@ -1631,20 +1673,43 @@ jobs:
 
           if ! activation="$(UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose $PROFILE up -d --remove-orphans 2>&1)"; then
             printf '%s\n' "$activation"
+            # UTV2-1922 (PM CHANGES_REQUIRED, defect 3): removing the public
+            # edge is the most destructive act available here, so the evidence
+            # that justifies it must be specific to the edge. The previous arm
+            # also matched a bare 'Conflict', which Docker prints for any name
+            # or resource collision -- an unrelated app container's name clash
+            # would have taken 80/443 down. Two narrow cases remain, and both
+            # require the failure text to name the edge itself:
+            #   * a port bind failure that names port 80 or 443;
+            #   * a container-name collision on the caddy container.
+            # Anything else -- including every other port and every other
+            # container -- falls through to restore_edge.
+            edge_blocking=false
             case "$activation" in
-              *'address already in use'*|*'port is already allocated'*|*'is already in use by container'*|*'Conflict'*)
-                echo "a stale container is holding the edge ports; clearing caddy and retrying once"
-                docker rm -f caddy 2>/dev/null || true
-                if ! UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose $PROFILE up -d --remove-orphans; then
-                  restore_edge
-                  exit 1
-                fi
-                ;;
-              *)
-                restore_edge
-                exit 1
+              *'address already in use'*|*'port is already allocated'*)
+                case "$activation" in
+                  *':80 '*|*':80:'*|*':443 '*|*':443:'*) edge_blocking=true ;;
+                esac
                 ;;
             esac
+            case "$activation" in
+              *'is already in use by container'*)
+                case "$activation" in
+                  *'"/caddy"'*|*"'/caddy'"*) edge_blocking=true ;;
+                esac
+                ;;
+            esac
+            if [ "$edge_blocking" = true ]; then
+              echo "the edge itself is holding ports 80/443; clearing caddy and retrying once"
+              docker rm -f caddy 2>/dev/null || true
+              if ! UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose $PROFILE up -d --remove-orphans; then
+                restore_edge
+                exit 1
+              fi
+            else
+              restore_edge
+              exit 1
+            fi
           else
             printf '%s\n' "$activation"
           fi
