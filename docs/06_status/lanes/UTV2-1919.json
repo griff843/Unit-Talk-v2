@@ -18,9 +18,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1919/evidence.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-09-16T09:22:52.694Z",
-  "heartbeat_at": "2026-09-16T09:34:19.348Z",
+  "heartbeat_at": "2026-09-16T17:10:58.195Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1919-evidence-settlement-correction.json",
