@@ -1,0 +1,531 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1922
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1922
+  objective: "Production promotion is not transactional: a compose configuration
+    error removes Caddy and falsely advances release state (edge outage
+    2026-09-16)"
+  acceptance_criteria:
+    - >-
+      ## Incident
+
+
+      Deploy run `35114935565` took the public edge down for \~58 minutes
+      (15:53:34Z → 16:51:40Z). `api.unit-talk.com` and `unit-talk.com` refused
+      on both 80 and 443 for the entire window.
+
+
+      ### Measured failure sequence
+
+
+      `Promote production` → `Promote all production containers`, under `shell:
+      bash -e`:
+
+
+      ```
+
+      docker rm -f caddy                  -> SUCCEEDED, printed
+      "caddy"       15:53:34Z
+
+      printf '%s\n' "$IMAGE_TAG" > .unit-talk-release   -> advanced to 4d705caa8
+
+      rm -f .unit-talk-deploy-inflight    -> cleared
+
+      docker compose pull                 -> all 10 images pulled
+
+      docker compose up -d --remove-orphans
+         -> FAILED 15:53:36Z:
+            env file <DEPLOY_PATH>/.env.command-center not found
+      ```
+
+
+      Compose validates `env_file` at config-parse time, so `up` created
+      nothing. But `docker rm -f caddy` had already run, and `caddy` is the sole
+      binder of `80:80` and `443:443` (`deploy/production/docker-compose.yml`).
+      The step aborted before its own health loop and before the `ROLLBACK_TAG`
+      branch, so neither could help — and `ROLLBACK_TAG` was empty anyway.
+
+
+      ### Root defect
+
+
+      `deploy.yml` step **"Write Next.js service env files to server"** (`:721`
+      canary, `:1254` promote) contains the `.env.command-center` write block,
+      but its `env:` mapping never received `CC_ENABLED`. The job-level `env:`
+      carries only `SYNDICATE_MACHINE_MODE`. So:
+
+
+      | Step | `CC_ENABLED` in scope | Branch |
+
+      | -- | -- | -- |
+
+      | Write env files (`:1254`) | **no** | `else` → *"Command Center disabled;
+      .env.command-center not written."* |
+
+      | Promote containers (`:1392`) | **yes**, `true` | `--profile
+      command-center` → compose requires the file |
+
+
+      Two steps in the same job disagreed about whether the Command Center was
+      enabled.
+
+
+      The same write step also lacks `SUPABASE_URL`,
+      `SUPABASE_SERVICE_ROLE_KEY`, `UNIT_TALK_CC_API_KEY`,
+      `COMMAND_CENTER_AUTH_TOKEN`, `COMMAND_CENTER_AUTH_USERNAME`,
+      `COMMAND_CENTER_AUTH_PASSWORD` — so adding only `CC_ENABLED` would write
+      an env file of empty values. That is a second defect behind the first.
+
+
+      `compose_profile` logic exists **only** at `:1407`, inside promote. Canary
+      has none, which is why canary passed while promote failed.
+
+
+      ### Positive control
+
+
+      Recovery run `35119502596` with `UNIT_TALK_COMMAND_CENTER_ENABLED=false`:
+      Command Center resolved disabled consistently in verify
+      (`command_center.disabled`), canary and promote; `Container caddy Created
+      → Started`; API/web/Smart Form healthy; post-deploy smoke
+      `{"verdict":"PASS","httpStatus":200}`; containment confirmed `parked` with
+      `killSwitchEngaged: true`.
+
+
+      ## Scope of the repair
+
+
+      This lane must close the incident **class**, not the literal missing
+      variable.
+
+
+      1. **CC configuration propagation** — `CC_ENABLED` plus every value needed
+      for a complete `.env.command-center` in both env-write steps;
+      mode-restricted file; missing required CC configuration fails before
+      destructive mutation. When disabled: profile not selected, file not
+      required, stale configuration cannot activate the surface.
+
+      2. **Pre-destructive compose validation** — resolve the exact
+      profile/environment promotion will use and prove compose can parse it
+      *before* removing Caddy. Missing `env_file`, malformed compose, missing
+      required variable or invalid profile must fail before edge mutation.
+
+      3. **Release transaction ordering** — `.unit-talk-release` must not
+      advance and `.unit-talk-deploy-inflight` must not be cleared before
+      successful activation. A failed `up` must leave release metadata
+      describing reality.
+
+      4. **Edge preservation / recovery** — a failure after any destructive edge
+      mutation must not leave 80/443 unserved. Acceptance is behavioral; the
+      safest transaction sequence is preferred over a prescribed mechanism.
+
+      5. **Rollback completeness** — `.env.command-center` must participate in
+      snapshot/restore. A rollback to a release requiring it must restore it; a
+      rollback to one without it must not leave an unsafe active configuration.
+
+      6. **Regression proof** — required-reachable tests exercising the real
+      deploy artifacts, not duplicated pseudo-workflow logic.
+
+
+      ## Mutation / proof coverage required
+
+
+      * CC enabled but `.env.command-center` cannot be produced
+
+      * CC enabled with a required credential missing
+
+      * exact compose/profile configuration fails validation
+
+      * compose activation fails after preparation
+
+      * public edge remains available or is mechanically restored on failed
+      activation
+
+      * release marker does not advance before successful activation
+
+      * inflight marker not cleared prematurely
+
+      * CC disabled preserves the successful pre-Command-Center path
+
+      * rollback handles `.env.command-center` correctly
+
+      * the regression test itself is non-vacuous and required-reachable
+
+
+      ## File scope
+
+
+      * `.github/workflows/deploy.yml`
+
+      * `deploy/rollback.sh`
+
+      * `scripts/ci/nextjs-deploy-wiring.test.ts` (extend; already
+      required-reachable via `test:ops`)
+
+
+      ## Constraints
+
+
+      `UNIT_TALK_COMMAND_CENTER_ENABLED` stays `false` until this merges and is
+      proven by a successful contained production deploy. No change to
+      SGO/provider state, member delivery, syndicate activation, worker/ingestor
+      autorun, pricing/membership, application product logic, Smart Form
+      behavior, Command Center public exposure, database schema/data, or
+      merge-authority policy.
+
+
+      Running production release: `4d705caa861932a387d480797faeb1eb167536ed`.
+      Canonical main at lane open: `68103b6065d9ec232a2cd55c73086446ca5da3c0`.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Incident
+
+      Deploy run `35114935565` took the public edge down for \~58 minutes
+      (15:53:34Z → 16:51:40Z). `api.unit-talk.com` and `unit-talk.com` refused
+      on both 80 and 443 for the entire window.
+
+
+      ### Measured failure sequence
+
+
+      `Promote production` → `Promote all production containers`, under `shell:
+      bash -e`:
+
+
+      ```
+
+      docker rm -f caddy                  -> SUCCEEDED, printed
+      "caddy"       15:53:34Z
+
+      printf '%s\n' "$IMAGE_TAG" > .unit-talk-release   -> advanced to 4d705caa8
+
+      rm -f .unit-talk-deploy-inflight    -> cleared
+
+      docker compose pull                 -> all 10 images pulled
+
+      docker compose up -d --remove-orphans
+         -> FAILED 15:53:36Z:
+            env file <DEPLOY_PATH>/.env.command-center not found
+      ```
+
+
+      Compose validates `env_file` at config-parse time, so `up` created
+      nothing. But `docker rm -f caddy` had already run, and `caddy` is the sole
+      binder of `80:80` and `443:443` (`deploy/production/docker-compose.yml`).
+      The step aborted before its own health loop and before the `ROLLBACK_TAG`
+      branch, so neither could help — and `ROLLBACK_TAG` was empty anyway.
+
+
+      ### Root defect
+
+
+      `deploy.yml` step **"Write Next.js service env files to server"** (`:721`
+      canary, `:1254` promote) contains the `.env.command-center` write block,
+      but its `env:` mapping never received `CC_ENABLED`. The job-level `env:`
+      carries only `SYNDICATE_MACHINE_MODE`. So:
+
+
+      | Step | `CC_ENABLED` in scope | Branch |
+
+      | -- | -- | -- |
+
+      | Write env files (`:1254`) | **no** | `else` → *"Command Center disabled;
+      .env.command-center not written."* |
+
+      | Promote containers (`:1392`) | **yes**, `true` | `--profile
+      command-center` → compose requires the file |
+
+
+      Two steps in the same job disagreed about whether the Command Center was
+      enabled.
+
+
+      The same write step also lacks `SUPABASE_URL`,
+      `SUPABASE_SERVICE_ROLE_KEY`, `UNIT_TALK_CC_API_KEY`,
+      `COMMAND_CENTER_AUTH_TOKEN`, `COMMAND_CENTER_AUTH_USERNAME`,
+      `COMMAND_CENTER_AUTH_PASSWORD` — so adding only `CC_ENABLED` would write
+      an env file of empty values. That is a second defect behind the first.
+
+
+      `compose_profile` logic exists **only** at `:1407`, inside promote. Canary
+      has none, which is why canary passed while promote failed.
+
+
+      ### Positive control
+
+
+      Recovery run `35119502596` with `UNIT_TALK_COMMAND_CENTER_ENABLED=false`:
+      Command Center resolved disabled consistently in verify
+      (`command_center.disabled`), canary and promote; `Container caddy Created
+      → Started`; API/web/Smart Form healthy; post-deploy smoke
+      `{"verdict":"PASS","httpStatus":200}`; containment confirmed `parked` with
+      `killSwitchEngaged: true`.
+    - >-
+      Scope of the repair
+
+      This lane must close the incident **class**, not the literal missing
+      variable.
+
+
+      1. **CC configuration propagation** — `CC_ENABLED` plus every value needed
+      for a complete `.env.command-center` in both env-write steps;
+      mode-restricted file; missing required CC configuration fails before
+      destructive mutation. When disabled: profile not selected, file not
+      required, stale configuration cannot activate the surface.
+
+      2. **Pre-destructive compose validation** — resolve the exact
+      profile/environment promotion will use and prove compose can parse it
+      *before* removing Caddy. Missing `env_file`, malformed compose, missing
+      required variable or invalid profile must fail before edge mutation.
+
+      3. **Release transaction ordering** — `.unit-talk-release` must not
+      advance and `.unit-talk-deploy-inflight` must not be cleared before
+      successful activation. A failed `up` must leave release metadata
+      describing reality.
+
+      4. **Edge preservation / recovery** — a failure after any destructive edge
+      mutation must not leave 80/443 unserved. Acceptance is behavioral; the
+      safest transaction sequence is preferred over a prescribed mechanism.
+
+      5. **Rollback completeness** — `.env.command-center` must participate in
+      snapshot/restore. A rollback to a release requiring it must restore it; a
+      rollback to one without it must not leave an unsafe active configuration.
+
+      6. **Regression proof** — required-reachable tests exercising the real
+      deploy artifacts, not duplicated pseudo-workflow logic.
+    - >-
+      Mutation / proof coverage required
+
+      * CC enabled but `.env.command-center` cannot be produced
+
+      * CC enabled with a required credential missing
+
+      * exact compose/profile configuration fails validation
+
+      * compose activation fails after preparation
+
+      * public edge remains available or is mechanically restored on failed
+      activation
+
+      * release marker does not advance before successful activation
+
+      * inflight marker not cleared prematurely
+
+      * CC disabled preserves the successful pre-Command-Center path
+
+      * rollback handles `.env.command-center` correctly
+
+      * the regression test itself is non-vacuous and required-reachable
+    - >-
+      File scope
+
+      * `.github/workflows/deploy.yml`
+
+      * `deploy/rollback.sh`
+
+      * `scripts/ci/nextjs-deploy-wiring.test.ts` (extend; already
+      required-reachable via `test:ops`)
+    - >-
+      Constraints
+
+      `UNIT_TALK_COMMAND_CENTER_ENABLED` stays `false` until this merges and is
+      proven by a successful contained production deploy. No change to
+      SGO/provider state, member delivery, syndicate activation, worker/ingestor
+      autorun, pricing/membership, application product logic, Smart Form
+      behavior, Command Center public exposure, database schema/data, or
+      merge-authority policy.
+
+
+      Running production release: `4d705caa861932a387d480797faeb1eb167536ed`.
+      Canonical main at lane open: `68103b6065d9ec232a2cd55c73086446ca5da3c0`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1922/production-promotion-is-not-transactional-a-compose-configuration
+    title: "Production promotion is not transactional: a compose configuration error
+      removes Caddy and falsely advances release state (edge outage 2026-09-16)"
+    description: >-
+      ## Incident
+
+
+      Deploy run `35114935565` took the public edge down for \~58 minutes
+      (15:53:34Z → 16:51:40Z). `api.unit-talk.com` and `unit-talk.com` refused
+      on both 80 and 443 for the entire window.
+
+
+      ### Measured failure sequence
+
+
+      `Promote production` → `Promote all production containers`, under `shell:
+      bash -e`:
+
+
+      ```
+
+      docker rm -f caddy                  -> SUCCEEDED, printed
+      "caddy"       15:53:34Z
+
+      printf '%s\n' "$IMAGE_TAG" > .unit-talk-release   -> advanced to 4d705caa8
+
+      rm -f .unit-talk-deploy-inflight    -> cleared
+
+      docker compose pull                 -> all 10 images pulled
+
+      docker compose up -d --remove-orphans
+         -> FAILED 15:53:36Z:
+            env file <DEPLOY_PATH>/.env.command-center not found
+      ```
+
+
+      Compose validates `env_file` at config-parse time, so `up` created
+      nothing. But `docker rm -f caddy` had already run, and `caddy` is the sole
+      binder of `80:80` and `443:443` (`deploy/production/docker-compose.yml`).
+      The step aborted before its own health loop and before the `ROLLBACK_TAG`
+      branch, so neither could help — and `ROLLBACK_TAG` was empty anyway.
+
+
+      ### Root defect
+
+
+      `deploy.yml` step **"Write Next.js service env files to server"** (`:721`
+      canary, `:1254` promote) contains the `.env.command-center` write block,
+      but its `env:` mapping never received `CC_ENABLED`. The job-level `env:`
+      carries only `SYNDICATE_MACHINE_MODE`. So:
+
+
+      | Step | `CC_ENABLED` in scope | Branch |
+
+      | -- | -- | -- |
+
+      | Write env files (`:1254`) | **no** | `else` → *"Command Center disabled;
+      .env.command-center not written."* |
+
+      | Promote containers (`:1392`) | **yes**, `true` | `--profile
+      command-center` → compose requires the file |
+
+
+      Two steps in the same job disagreed about whether the Command Center was
+      enabled.
+
+
+      The same write step also lacks `SUPABASE_URL`,
+      `SUPABASE_SERVICE_ROLE_KEY`, `UNIT_TALK_CC_API_KEY`,
+      `COMMAND_CENTER_AUTH_TOKEN`, `COMMAND_CENTER_AUTH_USERNAME`,
+      `COMMAND_CENTER_AUTH_PASSWORD` — so adding only `CC_ENABLED` would write
+      an env file of empty values. That is a second defect behind the first.
+
+
+      `compose_profile` logic exists **only** at `:1407`, inside promote. Canary
+      has none, which is why canary passed while promote failed.
+
+
+      ### Positive control
+
+
+      Recovery run `35119502596` with `UNIT_TALK_COMMAND_CENTER_ENABLED=false`:
+      Command Center resolved disabled consistently in verify
+      (`command_center.disabled`), canary and promote; `Container caddy Created
+      → Started`; API/web/Smart Form healthy; post-deploy smoke
+      `{"verdict":"PASS","httpStatus":200}`; containment confirmed `parked` with
+      `killSwitchEngaged: true`.
+
+
+      ## Scope of the repair
+
+
+      This lane must close the incident **class**, not the literal missing
+      variable.
+
+
+      1. **CC configuration propagation** — `CC_ENABLED` plus every value needed
+      for a complete `.env.command-center` in both env-write steps;
+      mode-restricted file; missing required CC configuration fails before
+      destructive mutation. When disabled: profile not selected, file not
+      required, stale configuration cannot activate the surface.
+
+      2. **Pre-destructive compose validation** — resolve the exact
+      profile/environment promotion will use and prove compose can parse it
+      *before* removing Caddy. Missing `env_file`, malformed compose, missing
+      required variable or invalid profile must fail before edge mutation.
+
+      3. **Release transaction ordering** — `.unit-talk-release` must not
+      advance and `.unit-talk-deploy-inflight` must not be cleared before
+      successful activation. A failed `up` must leave release metadata
+      describing reality.
+
+      4. **Edge preservation / recovery** — a failure after any destructive edge
+      mutation must not leave 80/443 unserved. Acceptance is behavioral; the
+      safest transaction sequence is preferred over a prescribed mechanism.
+
+      5. **Rollback completeness** — `.env.command-center` must participate in
+      snapshot/restore. A rollback to a release requiring it must restore it; a
+      rollback to one without it must not leave an unsafe active configuration.
+
+      6. **Regression proof** — required-reachable tests exercising the real
+      deploy artifacts, not duplicated pseudo-workflow logic.
+
+
+      ## Mutation / proof coverage required
+
+
+      * CC enabled but `.env.command-center` cannot be produced
+
+      * CC enabled with a required credential missing
+
+      * exact compose/profile configuration fails validation
+
+      * compose activation fails after preparation
+
+      * public edge remains available or is mechanically restored on failed
+      activation
+
+      * release marker does not advance before successful activation
+
+      * inflight marker not cleared prematurely
+
+      * CC disabled preserves the successful pre-Command-Center path
+
+      * rollback handles `.env.command-center` correctly
+
+      * the regression test itself is non-vacuous and required-reachable
+
+
+      ## File scope
+
+
+      * `.github/workflows/deploy.yml`
+
+      * `deploy/rollback.sh`
+
+      * `scripts/ci/nextjs-deploy-wiring.test.ts` (extend; already
+      required-reachable via `test:ops`)
+
+
+      ## Constraints
+
+
+      `UNIT_TALK_COMMAND_CENTER_ENABLED` stays `false` until this merges and is
+      proven by a successful contained production deploy. No change to
+      SGO/provider state, member delivery, syndicate activation, worker/ingestor
+      autorun, pricing/membership, application product logic, Smart Form
+      behavior, Command Center public exposure, database schema/data, or
+      merge-authority policy.
+
+
+      Running production release: `4d705caa861932a387d480797faeb1eb167536ed`.
+      Canonical main at lane open: `68103b6065d9ec232a2cd55c73086446ca5da3c0`.
+    captured_at: 2026-09-16T17:16:24.007Z
+    description_sha256: 86231016efb0f2dc5cbe3e13ba9e40340f993cf0fa4201ea300245ca50cc23fd
+  contract_hash: e74dc86faf7b7dae1b99f0221b7c52c10ec1e47d1ed4a17a26a852f1ab0b03b7
