@@ -7,14 +7,14 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "801c35c276a2e38384e2dea9e0c824cc4bba2a24",
+    "verified_source_sha": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-16T20:10:00Z",
-    "head": "801c35c276a2e38384e2dea9e0c824cc4bba2a24",
+    "measured_at": "2026-09-16T21:55:00Z",
+    "head": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
     "note": "Measured locally on the lane head. `pnpm verify` exits 1 only at `ci:assert-staging`, which refuses by design outside the staging-ci GitHub environment (host=127.0.0.1, expected=xskgrzbteyqdufktjrjx); the TAP stream it produced contains 0 `not ok`. CI's required `verify` check on this head is the binding authority.",
     "gates": [
       {
@@ -170,11 +170,11 @@
   },
   "pm_changes_required_round": {
     "verdict_head": "b6ecf2722baa3683f99c3bf1ff9fcb761471e008",
-    "repairs_head": "801c35c276a2e38384e2dea9e0c824cc4bba2a24",
-    "main_moved": false,
-    "main": "68103b6065d9ec232a2cd55c73086446ca5da3c0",
+    "repairs_head": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+    "main_moved": true,
+    "main": "37062b2b26d018c84009de88a10ce5c65c0edc39",
     "merge_base_equals_origin_main": true,
-    "resync_or_reproof_required": false,
+    "resync_or_reproof_required": true,
     "defect_1": {
       "statement": "Command Center auth handling conflicted with the canonical behaviour: token-only was refused.",
       "closed_by": "the deploy-time check now mirrors deploy/production/nextjs-entrypoint.sh and assertCommandCenterAuthConfig -- a token OR a complete username/password pair; a partial pair and no auth at all are both refused before anything is written",
@@ -206,6 +206,21 @@
         "M21"
       ]
     },
-    "unchanged": "containment, the internal-only Command Center posture, the production-transaction protections introduced by this PR, and the release/inflight marker ordering are all unchanged by this round."
+    "unchanged": "containment, the internal-only Command Center posture, the production-transaction protections introduced by this PR, and the release/inflight marker ordering are all unchanged by this round.",
+    "resync": {
+      "reason": "main moved from 68103b6065d9ec232a2cd55c73086446ca5da3c0 to 37062b2b26d018c84009de88a10ce5c65c0edc39 (the automated readiness-ledger refresh) after the review packet was returned.",
+      "method": "pnpm ops:merge-wrapper git-merge-main -- the sanctioned verb for a branch carrying a proof bundle. main-sync refused to choose a history-rewriting verb on its own (UTV2-1678), and a rebase would have rewritten every commit SHA on this branch.",
+      "pre_sync_head": "7cc1098db52dd9f13a24c09f70186593a40cc03d",
+      "merge_head": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+      "files_the_merge_brought_in": [
+        "docs/06_status/readiness/readiness-score.json"
+      ],
+      "implementation_unchanged": "verified by blob hash, not by inspection: .github/workflows/deploy.yml b6419fbbd91b, deploy/rollback.sh 94d0f6cc7bd7 and scripts/ci/nextjs-deploy-wiring.test.ts bacf277322f1 are identical at the pre-sync head and at the merged head. No conflict occurred and nothing was resolved.",
+      "rebind_reason": "scripts/ci/proof-binding-validator.ts rule 4 requires every commit between verified_source_sha and HEAD to touch only docs/06_status/proof/ or docs/06_status/lanes/. The merge commit and the ledger refresh touch docs/06_status/readiness/, which is not a proof path, so the binding moves to the merge commit.",
+      "reproved_on_the_merged_tree": {
+        "three_deploy_suites": "87 pass, 0 fail",
+        "mutation_battery": "21 applied, 21 caught, 0 escaped, baseline-green and restore-green asserted"
+      }
+    }
   }
 }

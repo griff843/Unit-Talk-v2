@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-16T20:10:00.000Z
+Generated at: 2026-09-16T21:55:00.000Z
 Issue: UTV2-1922
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1922-deploy-promotion-transaction
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1591
-Head SHA: 801c35c276a2e38384e2dea9e0c824cc4bba2a24
+Head SHA: 3e20a5ffa77f8b1215e029fab01d59dd787617b7
 result: pass
 
 ## ASSERTIONS:
@@ -98,6 +98,7 @@ M21 the bounded recovery is disabled entirely                 -> CAUGHT
 - [x] `pnpm test`: 0 `not ok`, run inside `pnpm verify`
 - [x] `pnpm verify`: 0 `not ok`; exits 1 only at `ci:assert-staging`, which refuses by design outside the staging-ci GitHub environment
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS, no R-level artifacts required for this diff
+- [x] Resynced onto `main` 37062b2b26d018c84009de88a10ce5c65c0edc39 with `pnpm ops:merge-wrapper git-merge-main`. The merge brought in one file, `docs/06_status/readiness/readiness-score.json`, and nothing else; `.github/workflows/deploy.yml`, `deploy/rollback.sh` and `scripts/ci/nextjs-deploy-wiring.test.ts` are byte-identical across the sync by blob hash (`b6419fbbd91b`, `94d0f6cc7bd7`, `bacf277322f1`). No conflict occurred. The three deploy suites (87 pass, 0 fail) and the full 21-case mutation battery (21 caught, 0 escaped) were re-run on the merged tree.
 
 ## Runtime Verification
 
@@ -124,4 +125,4 @@ positive control in which the same workflow succeeds because the configuration r
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1591
 Approved PR head: pending merge
-Execution SHA: 801c35c276a2e38384e2dea9e0c824cc4bba2a24
+Execution SHA: 3e20a5ffa77f8b1215e029fab01d59dd787617b7

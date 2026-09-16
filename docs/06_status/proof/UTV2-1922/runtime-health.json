@@ -2,8 +2,8 @@
   "schema_version": 1,
   "issue_id": "UTV2-1922",
   "branch": "claude/utv2-1922-deploy-promotion-transaction",
-  "head_sha": "801c35c276a2e38384e2dea9e0c824cc4bba2a24",
-  "evaluated_at": "2026-09-16T20:05:00.000Z",
+  "head_sha": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+  "evaluated_at": "2026-09-16T21:55:00.000Z",
   "tier": "T1",
   "lane_type": "runtime",
   "scope_note": "Deployment wiring only. Measured: 0 files under apps/** or packages/** are changed by this lane, so no running service behaves differently. What changes is the order and failure handling of the production promotion sequence, and what deploy/rollback.sh restores.",
@@ -212,6 +212,8 @@
         "now": "the edge is removed only when the failure evidence establishes the edge itself is blocking: a port conflict whose text names port 80 or 443, or a container-name conflict that names the caddy container. Every other failure restores the edge and exits 1.",
         "bounded_recovery_preserved": "one retry, then restore_edge and exit 1"
       }
-    }
+    },
+    "resynced_onto_main": "37062b2b26d018c84009de88a10ce5c65c0edc39",
+    "implementation_unchanged_by_the_resync": true
   }
 }
