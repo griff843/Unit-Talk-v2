@@ -12,7 +12,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1918-cc-deployment-candidate
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1587
-Head SHA: 65f7e192396c794d08f0ea1d1bc420b9c8d6dc0a
+Head SHA: 4703c1c7246b614b5b36a584f2fca89554e68374
 result: pass
 
 ## ASSERTIONS:
@@ -74,6 +74,39 @@ $ UNIT_TALK_IMAGE_TAG=t docker compose -f deploy/production/docker-compose.yml -
 $ git diff --name-only origin/main...HEAD -- supabase/migrations/ | wc -l
 0
 ```
+
+### Resync onto current main — measured, not asserted
+
+The lane was resynced exactly once through `pnpm ops:merge-wrapper git-merge-main`
+(`main-sync` correctly refused to choose a history-rewriting verb; this branch carries a
+proof bundle and a durable label, so SHAs must be preserved). The merge commit is
+`4703c1c7246b614b5b36a584f2fca89554e68374`, importing `origin/main`
+`eb29fa99beb66b0e618e25fc5f9f3572235118bd`.
+
+The whole diff from the pre-resync head `2a6c603aaa3cadb406b89cc907697a88943438bf` to the
+new head is `docs/06_status/readiness/readiness-score.json` alone (49 insertions, 49
+deletions). Every one of the ten files UTV2-1918 introduces or changes is **blob-identical**
+across the resync, verified by `git cat-file` at the merge commit — i.e. measured *before*
+the proof rebind that follows it, which by design moves `evidence.json`'s
+`verified_source_sha` and this file's `Execution SHA:` row and nothing else:
+
+```
+551dab728128ede1d0b1c3051d0c735f4684b489  .github/workflows/deploy.yml
+f3bab35392769830131ea5f3422d545eb89e3bc8  .ops/sync/UTV2-1918.yml
+86e1465fdbd9813422af470b421e2455b800e1c5  deploy/production/docker-compose.yml
+b183967b9df8547767f8dd1c3271d38202746ac9  deploy/production/nextjs-entrypoint.sh
+ad492c791ec6b841584d184c4d273660a9d828ad  docs/06_status/lanes/UTV2-1918.json
+875b4db1b8fbefab230eab38fe3a5e2a5e6be59c  docs/06_status/proof/UTV2-1918/diff-summary.md
+9073d95da3cecc434cbf20d128ed9f94aa72883d  docs/06_status/proof/UTV2-1918/verification.md
+69fefd61bb3a7c721f595bc4b4460801c7bac697  docs/06_status/proof/UTV2-1918/runtime-health.json
+57323c1cb5ef374e74e00439750b27b019dcd987  docs/06_status/proof/UTV2-1918/evidence.json
+4252e3f93d08911822df0f4478d92c057fbd0be7  scripts/ci/nextjs-deploy-wiring.test.ts
+```
+
+So the measurements recorded above, taken at `65f7e192…`, apply unchanged at the new head:
+the resync imported a readiness-ledger refresh with zero overlap against this lane's files
+and could not have changed any measured behaviour. The execution anchor is rebound to
+`4703c1c72…` because it is now the last non-proof commit; nothing else in this bundle moved.
 
 `pnpm verify` is not run to completion locally: `ci:assert-staging-target` refuses a
 local invocation by design, so `verify` cannot exit 0 off CI. Its constituent gates are
@@ -173,4 +206,4 @@ its `file_scope_lock`.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1587
 Approved PR head: pending merge
-Execution SHA: 65f7e192396c794d08f0ea1d1bc420b9c8d6dc0a
+Execution SHA: 4703c1c7246b614b5b36a584f2fca89554e68374
