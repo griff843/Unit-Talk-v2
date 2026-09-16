@@ -1,0 +1,382 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1918
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1918
+  objective: "Command Center internal-only deployment candidate: add the compose
+    service, the Caddy route and the deploy.yml wiring"
+  acceptance_criteria:
+    - >-
+      Measured against `main` on 2026-09-15, read from the deployment files
+      rather than from a status document.
+
+
+      ## What is actually missing
+
+
+      `deploy/production/docker-compose.yml` defines ten services — `api`,
+      `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`,
+      `web`, `smart-form`, `caddy`. **There is no** `command-center`
+      **service.** `deploy/production/Caddyfile` carries three env-injected host
+      blocks (`{$CADDY_DOMAIN}` to `api:4000`, `{$UNIT_TALK_WEB_DOMAIN}` to
+      `web:4200`, `{$UNIT_TALK_SMART_FORM_DOMAIN}` to `smart-form:4400`) and no
+      Command Center route. So Milestone 2 condition 5 and readiness Dimension 5
+      ("all five surfaces built, none deployed") are blocked on packaging, not
+      on application code.
+
+
+      ## No `apps/**` edit is required
+
+
+      `deploy/production/Dockerfile.nextjs` is already parameterized by
+      `APP_DIR` / `APP_PACKAGE` / `APP_PORT` plus a required
+      `NEXT_PUBLIC_API_BASE_URL` build arg, and
+      `.github/workflows/deploy.yml:226-228` already drives it from a build
+      matrix of `service` / `app_dir` / `app_package`. A third Next.js app is a
+      matrix row, a compose service, a Caddy route and an env file — nothing in
+      `apps/command-center` changes.
+
+
+      One exception to confirm during implementation:
+      `deploy/production/nextjs-entrypoint.sh` gates its fail-closed startup
+      checks on `if [ "$APP_DIR" = 'apps/smart-form' ]`, so a Command Center
+      image gets either its own equivalent checks or none. Shipping it with
+      *none* is the thing to avoid.
+
+
+      ## The environment contract, read from the app
+
+
+      From `apps/command-center/src/lib/server-api.ts` and a sweep of
+      `apps/command-center/src`:
+
+
+      * `API_BASE_URL` or `UNIT_TALK_API_URL` (defaults to
+      `http://localhost:4000`)
+
+      * `UNIT_TALK_CC_API_KEY` — required in deployed environments by
+      `assertCommandCenterApiKeyConfig`
+
+      * `UNIT_TALK_COMMAND_CENTER_AUTH_TOKEN` / `COMMAND_CENTER_AUTH_TOKEN`,
+      **or** the `..._AUTH_USERNAME` / `..._AUTH_PASSWORD` pair
+
+      * `COMMAND_CENTER_OPERATOR_IDENTITY` / `OPERATOR_IDENTITY`
+
+      * `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_ACCESS_TOKEN`,
+      `SUPABASE_PROJECT_REF`
+
+      * `UNIT_TALK_COMMAND_CENTER_MANAGEMENT_API_ENABLED` — the
+      `MANAGEMENT_PLANE_GATE_ENV` at `src/lib/data/storage-health.ts:139`, off
+      unless exactly `"true"`. **It stays off in this candidate.**
+
+      * `UNIT_TALK_BOARD_CAP_PER_SLATE`,
+      `UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES`,
+      `UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_DIR`
+
+
+      `isCommandCenterAuthRequired` (`server-api.ts:343`) opens with `if
+      (isDeployedEnvironment(env)) return true;` — the deployment environment
+      decides first and nothing overrides it, so a carried
+      `COMMAND_CENTER_AUTH_MODE=fail_open` cannot switch authentication off in
+      production. That is the property this lane must not break.
+
+
+      ## Containment is untouched
+
+
+      No `SYNDICATE_MACHINE_MODE` change, no autorun change, no
+      `UNIT_TALK_ENABLED_TARGETS` change, no delivery-kill-switch change, no
+      migration. The Command Center is a read surface plus already-authenticated
+      writes through `apps/api`.
+
+
+      ## What is reserved and therefore out of this lane's authority
+
+
+      1. **The hostname and the Command Center secrets** — reserved decision 4.
+      Caddy refuses to parse an empty site address, so an unconfigured hostname
+      stops the edge; the wiring is written so the route is added only once the
+      value exists.
+
+      2. **Dispatching the deploy** — reserved decision 8.
+
+      3. **Merging it** — `.github/workflows/**` is Tier C, so the lane is
+      T1-floored and needs the `t1-approved` label plus a `pm-verdict/v1`
+      APPROVED comment.
+
+
+      This lane builds to the PR boundary and surfaces those three. It does not
+      dispatch, does not read or set a secret, and does not change containment.
+
+
+      ## Acceptance
+
+
+      * `docker compose config` parses with the new service present.
+
+      * The Caddy route is added under the same `(security_headers)` /
+      `(json_log)` snippets the other three use, and an absent hostname does not
+      break the edge.
+
+      * `deploy.yml` builds, tags, writes `.env.command-center`, health-checks
+      and replaces the container by the same path the `smart-form` service uses
+      — including the per-service replace loop at `:1286` and the duplicated
+      copy at `:961-1240`.
+
+      * Authentication is proven still required in a deployed environment by the
+      existing `isCommandCenterAuthRequired` tests.
+
+      * The management plane stays gated off.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Measured against `main` on 2026-09-15, read from the deployment files
+      rather than from a status document.
+    - >-
+      What is actually missing
+
+      `deploy/production/docker-compose.yml` defines ten services — `api`,
+      `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`,
+      `web`, `smart-form`, `caddy`. **There is no** `command-center`
+      **service.** `deploy/production/Caddyfile` carries three env-injected host
+      blocks (`{$CADDY_DOMAIN}` to `api:4000`, `{$UNIT_TALK_WEB_DOMAIN}` to
+      `web:4200`, `{$UNIT_TALK_SMART_FORM_DOMAIN}` to `smart-form:4400`) and no
+      Command Center route. So Milestone 2 condition 5 and readiness Dimension 5
+      ("all five surfaces built, none deployed") are blocked on packaging, not
+      on application code.
+    - >-
+      No `apps/**` edit is required
+
+      `deploy/production/Dockerfile.nextjs` is already parameterized by
+      `APP_DIR` / `APP_PACKAGE` / `APP_PORT` plus a required
+      `NEXT_PUBLIC_API_BASE_URL` build arg, and
+      `.github/workflows/deploy.yml:226-228` already drives it from a build
+      matrix of `service` / `app_dir` / `app_package`. A third Next.js app is a
+      matrix row, a compose service, a Caddy route and an env file — nothing in
+      `apps/command-center` changes.
+
+
+      One exception to confirm during implementation:
+      `deploy/production/nextjs-entrypoint.sh` gates its fail-closed startup
+      checks on `if [ "$APP_DIR" = 'apps/smart-form' ]`, so a Command Center
+      image gets either its own equivalent checks or none. Shipping it with
+      *none* is the thing to avoid.
+    - >-
+      The environment contract, read from the app
+
+      From `apps/command-center/src/lib/server-api.ts` and a sweep of
+      `apps/command-center/src`:
+
+
+      * `API_BASE_URL` or `UNIT_TALK_API_URL` (defaults to
+      `http://localhost:4000`)
+
+      * `UNIT_TALK_CC_API_KEY` — required in deployed environments by
+      `assertCommandCenterApiKeyConfig`
+
+      * `UNIT_TALK_COMMAND_CENTER_AUTH_TOKEN` / `COMMAND_CENTER_AUTH_TOKEN`,
+      **or** the `..._AUTH_USERNAME` / `..._AUTH_PASSWORD` pair
+
+      * `COMMAND_CENTER_OPERATOR_IDENTITY` / `OPERATOR_IDENTITY`
+
+      * `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_ACCESS_TOKEN`,
+      `SUPABASE_PROJECT_REF`
+
+      * `UNIT_TALK_COMMAND_CENTER_MANAGEMENT_API_ENABLED` — the
+      `MANAGEMENT_PLANE_GATE_ENV` at `src/lib/data/storage-health.ts:139`, off
+      unless exactly `"true"`. **It stays off in this candidate.**
+
+      * `UNIT_TALK_BOARD_CAP_PER_SLATE`,
+      `UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES`,
+      `UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_DIR`
+
+
+      `isCommandCenterAuthRequired` (`server-api.ts:343`) opens with `if
+      (isDeployedEnvironment(env)) return true;` — the deployment environment
+      decides first and nothing overrides it, so a carried
+      `COMMAND_CENTER_AUTH_MODE=fail_open` cannot switch authentication off in
+      production. That is the property this lane must not break.
+    - >-
+      Containment is untouched
+
+      No `SYNDICATE_MACHINE_MODE` change, no autorun change, no
+      `UNIT_TALK_ENABLED_TARGETS` change, no delivery-kill-switch change, no
+      migration. The Command Center is a read surface plus already-authenticated
+      writes through `apps/api`.
+    - >-
+      What is reserved and therefore out of this lane's authority
+
+      1. **The hostname and the Command Center secrets** — reserved decision 4.
+      Caddy refuses to parse an empty site address, so an unconfigured hostname
+      stops the edge; the wiring is written so the route is added only once the
+      value exists.
+
+      2. **Dispatching the deploy** — reserved decision 8.
+
+      3. **Merging it** — `.github/workflows/**` is Tier C, so the lane is
+      T1-floored and needs the `t1-approved` label plus a `pm-verdict/v1`
+      APPROVED comment.
+
+
+      This lane builds to the PR boundary and surfaces those three. It does not
+      dispatch, does not read or set a secret, and does not change containment.
+    - >-
+      Acceptance
+
+      * `docker compose config` parses with the new service present.
+
+      * The Caddy route is added under the same `(security_headers)` /
+      `(json_log)` snippets the other three use, and an absent hostname does not
+      break the edge.
+
+      * `deploy.yml` builds, tags, writes `.env.command-center`, health-checks
+      and replaces the container by the same path the `smart-form` service uses
+      — including the per-service replace loop at `:1286` and the duplicated
+      copy at `:961-1240`.
+
+      * Authentication is proven still required in a deployed environment by the
+      existing `isCommandCenterAuthRequired` tests.
+
+      * The management plane stays gated off.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1918/command-center-internal-only-deployment-candidate-add-the-compose
+    title: "Command Center internal-only deployment candidate: add the compose
+      service, the Caddy route and the deploy.yml wiring"
+    description: >-
+      Measured against `main` on 2026-09-15, read from the deployment files
+      rather than from a status document.
+
+
+      ## What is actually missing
+
+
+      `deploy/production/docker-compose.yml` defines ten services — `api`,
+      `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`,
+      `web`, `smart-form`, `caddy`. **There is no** `command-center`
+      **service.** `deploy/production/Caddyfile` carries three env-injected host
+      blocks (`{$CADDY_DOMAIN}` to `api:4000`, `{$UNIT_TALK_WEB_DOMAIN}` to
+      `web:4200`, `{$UNIT_TALK_SMART_FORM_DOMAIN}` to `smart-form:4400`) and no
+      Command Center route. So Milestone 2 condition 5 and readiness Dimension 5
+      ("all five surfaces built, none deployed") are blocked on packaging, not
+      on application code.
+
+
+      ## No `apps/**` edit is required
+
+
+      `deploy/production/Dockerfile.nextjs` is already parameterized by
+      `APP_DIR` / `APP_PACKAGE` / `APP_PORT` plus a required
+      `NEXT_PUBLIC_API_BASE_URL` build arg, and
+      `.github/workflows/deploy.yml:226-228` already drives it from a build
+      matrix of `service` / `app_dir` / `app_package`. A third Next.js app is a
+      matrix row, a compose service, a Caddy route and an env file — nothing in
+      `apps/command-center` changes.
+
+
+      One exception to confirm during implementation:
+      `deploy/production/nextjs-entrypoint.sh` gates its fail-closed startup
+      checks on `if [ "$APP_DIR" = 'apps/smart-form' ]`, so a Command Center
+      image gets either its own equivalent checks or none. Shipping it with
+      *none* is the thing to avoid.
+
+
+      ## The environment contract, read from the app
+
+
+      From `apps/command-center/src/lib/server-api.ts` and a sweep of
+      `apps/command-center/src`:
+
+
+      * `API_BASE_URL` or `UNIT_TALK_API_URL` (defaults to
+      `http://localhost:4000`)
+
+      * `UNIT_TALK_CC_API_KEY` — required in deployed environments by
+      `assertCommandCenterApiKeyConfig`
+
+      * `UNIT_TALK_COMMAND_CENTER_AUTH_TOKEN` / `COMMAND_CENTER_AUTH_TOKEN`,
+      **or** the `..._AUTH_USERNAME` / `..._AUTH_PASSWORD` pair
+
+      * `COMMAND_CENTER_OPERATOR_IDENTITY` / `OPERATOR_IDENTITY`
+
+      * `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_ACCESS_TOKEN`,
+      `SUPABASE_PROJECT_REF`
+
+      * `UNIT_TALK_COMMAND_CENTER_MANAGEMENT_API_ENABLED` — the
+      `MANAGEMENT_PLANE_GATE_ENV` at `src/lib/data/storage-health.ts:139`, off
+      unless exactly `"true"`. **It stays off in this candidate.**
+
+      * `UNIT_TALK_BOARD_CAP_PER_SLATE`,
+      `UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES`,
+      `UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_DIR`
+
+
+      `isCommandCenterAuthRequired` (`server-api.ts:343`) opens with `if
+      (isDeployedEnvironment(env)) return true;` — the deployment environment
+      decides first and nothing overrides it, so a carried
+      `COMMAND_CENTER_AUTH_MODE=fail_open` cannot switch authentication off in
+      production. That is the property this lane must not break.
+
+
+      ## Containment is untouched
+
+
+      No `SYNDICATE_MACHINE_MODE` change, no autorun change, no
+      `UNIT_TALK_ENABLED_TARGETS` change, no delivery-kill-switch change, no
+      migration. The Command Center is a read surface plus already-authenticated
+      writes through `apps/api`.
+
+
+      ## What is reserved and therefore out of this lane's authority
+
+
+      1. **The hostname and the Command Center secrets** — reserved decision 4.
+      Caddy refuses to parse an empty site address, so an unconfigured hostname
+      stops the edge; the wiring is written so the route is added only once the
+      value exists.
+
+      2. **Dispatching the deploy** — reserved decision 8.
+
+      3. **Merging it** — `.github/workflows/**` is Tier C, so the lane is
+      T1-floored and needs the `t1-approved` label plus a `pm-verdict/v1`
+      APPROVED comment.
+
+
+      This lane builds to the PR boundary and surfaces those three. It does not
+      dispatch, does not read or set a secret, and does not change containment.
+
+
+      ## Acceptance
+
+
+      * `docker compose config` parses with the new service present.
+
+      * The Caddy route is added under the same `(security_headers)` /
+      `(json_log)` snippets the other three use, and an absent hostname does not
+      break the edge.
+
+      * `deploy.yml` builds, tags, writes `.env.command-center`, health-checks
+      and replaces the container by the same path the `smart-form` service uses
+      — including the per-service replace loop at `:1286` and the duplicated
+      copy at `:961-1240`.
+
+      * Authentication is proven still required in a deployed environment by the
+      existing `isCommandCenterAuthRequired` tests.
+
+      * The management plane stays gated off.
+    captured_at: 2026-09-16T01:46:15.317Z
+    description_sha256: 9e2f19de93f991d005525285484d1d1ae1d426cd06bc97e7123f676676c14b30
+  contract_hash: cfd0fa9085c22f778f71b16ea481ff59726c02c3363df9c776a595dfcc0cbbb5

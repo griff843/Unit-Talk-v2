@@ -233,6 +233,53 @@ services:
           memory: 512m
           cpus: '0.5'
 
+  command-center:
+    # Internal-only operator surface (apps/command-center). UTV2-1918.
+    #
+    # Three deliberate differences from the two Next.js services above, each of
+    # which is the whole point of this service rather than an oversight:
+    #
+    #   1. `profiles:` — this service is OFF unless the deploy explicitly enables
+    #      the `command-center` profile. A plain `docker compose up -d` on the
+    #      deploy host starts every other service and leaves this one stopped, so
+    #      merging this file changes nothing about what runs in production.
+    #   2. `ports:` bound to 127.0.0.1 rather than `expose:` — the Command Center
+    #      gets no Caddyfile site block and no public hostname. It is reached by
+    #      an SSH local forward (`ssh -L 4300:127.0.0.1:4300 <deploy host>`) and
+    #      is unreachable from the internet even while running. Internal-only
+    #      means internal, not "public behind a login".
+    #   3. The healthcheck probes `/api/health`, not `/login`. Copying
+    #      smart-form's probe verbatim would fail closed forever: this app has no
+    #      `/login` route. `/api/health` answers 200 unauthenticated with only
+    #      `{"ok":true,"service":"command-center"}` — liveness without leaking
+    #      privileged health detail, which the authenticated branch returns.
+    image: ghcr.io/griff843/unit-talk-v2/command-center:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    profiles:
+      - command-center
+    # Narrow env file: operator auth material and the service-role Supabase
+    # client this surface reads through. Deliberately NOT .env.production.
+    env_file:
+      - .env.command-center
+    ports:
+      - "127.0.0.1:4300:4300"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4300/api/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 40s
+      retries: 5
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+
   caddy:
     image: caddy:2-alpine
     container_name: caddy
