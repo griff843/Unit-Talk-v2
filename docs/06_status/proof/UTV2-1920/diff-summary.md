@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1920-contracts-utf8-repair
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1588
 Head SHA: 967aa113efdfece7f0eed0a347ee11350655ce31
-Merge SHA: N/A
+Merge SHA: 3a02487d253ef5c84288aef91efcb1bafaee676e
 Diff base: f47a35859e16b869d7398de3589f251a68727008
 Diff target: 967aa113efdfece7f0eed0a347ee11350655ce31
 
@@ -35,4 +35,4 @@ M	scripts/ci/nextjs-deploy-wiring.test.ts
 
 ## SHA Binding
 Head SHA: 967aa113efdfece7f0eed0a347ee11350655ce31
-Merge SHA: N/A
+Merge SHA: 3a02487d253ef5c84288aef91efcb1bafaee676e
