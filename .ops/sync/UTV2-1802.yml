@@ -1,0 +1,125 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1802
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1802
+  objective: "Command Center: remove or fail-closed gate the Management-API
+    arbitrary-SQL path in storage-health"
+  acceptance_criteria:
+    - With the gate unset (or after removal), **no Management-API request is
+      issued** — assert on the absence of the request, not on the rendered
+      output.
+    - System Health reports the storage source as unavailable. It must not omit
+      the row, and it must not render a value that a viewer would read as
+      healthy.
+    - "**Inversion (required):** remove the gate and the test must fail. A gate
+      that is merely present and green proves nothing — this is the specific
+      control being bought, so it must be proven to fail on the condition it
+      names."
+  guardrails:
+    - App-only — `apps/command-center/**`. No packages, no apps/api, no DB, no
+      workflows. Production stays parked. No production mutation, no provider
+      contact, no secret access beyond confirming the gate reads config
+      correctly.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Created 2026-09-01 per PM factory decision #7 — a bounded app-only child of [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative)'s measured six-surface boundary, serving **surface 6, System Health**. **Active implementation exists in PR #1494; current PM disposition is CHANGES REQUIRED (2026-09-03).**
+    - |-
+      Defect
+      `apps/command-center/src/lib/data/storage-health.ts:147` POSTs **arbitrary SQL** to the Supabase Management API endpoint `https://api.supabase.com/v1/projects/{ref}/database/query` in order to populate the System Health surface. This is a privileged-capability surface inside the internal Command Center operator app: the Management API key is far broader than the data client, and the call path accepts SQL rather than a fixed query shape. The Command Center is internal-only and not a member-facing product surface.
+
+      It was named as an unresolved deployment blocker in [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative)'s own `verification.md`, under "Residual risks and deferred work", alongside the auth `fail_open` defect that became [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open).
+    - >-
+      Required
+
+      Either:
+
+
+      * **Remove the path** and have System Health degrade honestly — showing
+      the storage source as unavailable rather than absent-as-healthy; or
+
+      * **Gate it behind an explicit fail-closed config check** — with the gate
+      unset, no Management-API request is issued at all.
+
+
+      Both are acceptable. What is not acceptable is a gate that defaults to on,
+      or a removal that leaves System Health silently omitting the source so the
+      page reads healthy.
+    - |-
+      Mechanical classification — read this before routing
+      * **Tier: T1, Claude-only, PM-gated.** The classifier returns `mechanical_minimum: T3`, but `DELEGATION_POLICY.md:117` ("security or privacy posture changes… Tier C plus PM presence") and `:226` ("a Codex lane is never authorized to run Tier C work") govern. **Do not dispatch this to Codex.** This is the same escalation that moved [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) out of [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative).
+      * Lane type: `delivery-ui` — `.lane/lanes/delivery-ui.yml` admits `apps/command-center/**`. Capped at `max_per_app: 1`, so this serializes against every other Command Center lane.
+      * Ordering: after PR #1474 ([UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)) merges. Both touch the Command Center privileged-access story; keeping them serial avoids a contested review. That sequencing is now historical: [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) / PR #1474 is Done.
+    - >-
+      File scope
+
+      * `apps/command-center/src/lib/data/storage-health.ts` (exists)
+
+      * `apps/command-center/src/lib/data/storage-health.test.ts` (NEW — must
+      live under `src/lib/data/` to be picked up by the app's existing `tsx
+      --test src/lib/*.test.ts src/lib/data/*.test.ts` glob; a test placed
+      elsewhere is newly-unwired and hard-fails `executable-wiring`)
+
+      * the System Health render path, if the field is dropped
+
+      * lane, sync and proof paths
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1802/command-center-remove-or-fail-closed-gate-the-management-api-arbitrary
+    title: "Command Center: remove or fail-closed gate the Management-API
+      arbitrary-SQL path in storage-health"
+    description: |-
+      Created 2026-09-01 per PM factory decision #7 — a bounded app-only child of [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative)'s measured six-surface boundary, serving **surface 6, System Health**. **Active implementation exists in PR #1494; current PM disposition is CHANGES REQUIRED (2026-09-03).**
+
+      ## Defect
+
+      `apps/command-center/src/lib/data/storage-health.ts:147` POSTs **arbitrary SQL** to the Supabase Management API endpoint `https://api.supabase.com/v1/projects/{ref}/database/query` in order to populate the System Health surface. This is a privileged-capability surface inside the internal Command Center operator app: the Management API key is far broader than the data client, and the call path accepts SQL rather than a fixed query shape. The Command Center is internal-only and not a member-facing product surface.
+
+      It was named as an unresolved deployment blocker in [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative)'s own `verification.md`, under "Residual risks and deferred work", alongside the auth `fail_open` defect that became [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open).
+
+      ## Required
+
+      Either:
+
+      * **Remove the path** and have System Health degrade honestly — showing the storage source as unavailable rather than absent-as-healthy; or
+      * **Gate it behind an explicit fail-closed config check** — with the gate unset, no Management-API request is issued at all.
+
+      Both are acceptable. What is not acceptable is a gate that defaults to on, or a removal that leaves System Health silently omitting the source so the page reads healthy.
+
+      ## Acceptance criteria
+
+      1. With the gate unset (or after removal), **no Management-API request is issued** — assert on the absence of the request, not on the rendered output.
+      2. System Health reports the storage source as unavailable. It must not omit the row, and it must not render a value that a viewer would read as healthy.
+      3. **Inversion (required):** remove the gate and the test must fail. A gate that is merely present and green proves nothing — this is the specific control being bought, so it must be proven to fail on the condition it names.
+
+      ## Mechanical classification — read this before routing
+
+      * **Tier: T1, Claude-only, PM-gated.** The classifier returns `mechanical_minimum: T3`, but `DELEGATION_POLICY.md:117` ("security or privacy posture changes… Tier C plus PM presence") and `:226` ("a Codex lane is never authorized to run Tier C work") govern. **Do not dispatch this to Codex.** This is the same escalation that moved [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) out of [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative).
+      * Lane type: `delivery-ui` — `.lane/lanes/delivery-ui.yml` admits `apps/command-center/**`. Capped at `max_per_app: 1`, so this serializes against every other Command Center lane.
+      * Ordering: after PR #1474 ([UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open)) merges. Both touch the Command Center privileged-access story; keeping them serial avoids a contested review. That sequencing is now historical: [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) / PR #1474 is Done.
+
+      ## File scope
+
+      * `apps/command-center/src/lib/data/storage-health.ts` (exists)
+      * `apps/command-center/src/lib/data/storage-health.test.ts` (NEW — must live under `src/lib/data/` to be picked up by the app's existing `tsx --test src/lib/*.test.ts src/lib/data/*.test.ts` glob; a test placed elsewhere is newly-unwired and hard-fails `executable-wiring`)
+      * the System Health render path, if the field is dropped
+      * lane, sync and proof paths
+
+      ## Guardrails
+
+      App-only — `apps/command-center/**`. No packages, no apps/api, no DB, no workflows. Production stays parked. No production mutation, no provider contact, no secret access beyond confirming the gate reads config correctly.
+    captured_at: 2026-09-06T00:05:55.185Z
+    description_sha256: 358f91b3bc6d8e4ce1533aba34270e143ace77bafeedad484e7feebf46e8d96d
+  contract_hash: b3dd095d545fb9fcb28d38d7a45903af73e5bcd671eae8a330c6026bc8d7d838
