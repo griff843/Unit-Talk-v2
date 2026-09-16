@@ -14,6 +14,7 @@
  *   - the QA authentication bypass reaching production.
  */
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
@@ -853,4 +854,61 @@ test('the canary and promote copies of the Command Center wiring do not drift', 
   const health = String(step('promote', 'Verify Next.js surfaces are healthy')['run']);
   assert.match(health, /surfaces="web smart-form"/, 'the always-on surfaces stay unconditional');
   assert.ok(health.includes(CC_ENABLE_GUARD), 'an enabled Command Center must be health-gated too');
+});
+
+/**
+ * UTV2-1920 — every source file a Next.js build can read must decode as UTF-8.
+ *
+ * Next compiles through SWC, which is Rust and refuses a source stream that is
+ * not valid UTF-8 outright: `Failed to read source code from <path>` /
+ * `stream did not contain valid UTF-8`. `tsc` and esbuild accept the same
+ * bytes, so the defect is invisible to `pnpm type-check` and `pnpm test` and
+ * surfaces only inside a Next build — for `apps/command-center`, only inside
+ * the Docker image build that `deploy.yml` runs.
+ *
+ * That is exactly how a lone CP1252 `0x97` in a doc comment sat in
+ * `packages/contracts/src/picks.ts` from `cc1944555` (UTV2-930) until the
+ * first Command Center image build failed on it (Deploy run 35075808951).
+ */
+test('every tracked app and package source file decodes as valid UTF-8', () => {
+  const decode = (bytes: Buffer): { ok: true } | { ok: false; reason: string } => {
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
+  // The control comes first: a probe that cannot observe a bad byte would make
+  // the sweep below pass vacuously no matter what is on disk.
+  const cp1252EmDash = Buffer.from([0x2f, 0x2f, 0x20, 0x97, 0x0a]);
+  assert.equal(decode(cp1252EmDash).ok, false, 'the probe must reject a lone CP1252 0x97 byte');
+  assert.equal(decode(Buffer.from('// —\n', 'utf8')).ok, true, 'the probe must accept a UTF-8 em dash');
+
+  const tracked = execFileSync(
+    'git',
+    ['ls-files', '-z', '--', 'apps/**/*.ts', 'apps/**/*.tsx', 'apps/**/*.js', 'apps/**/*.jsx',
+      'apps/**/*.mjs', 'apps/**/*.cjs', 'apps/**/*.json',
+      'packages/**/*.ts', 'packages/**/*.tsx', 'packages/**/*.js', 'packages/**/*.jsx',
+      'packages/**/*.mjs', 'packages/**/*.cjs', 'packages/**/*.json'],
+    { cwd: ROOT, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
+  )
+    .toString('utf8')
+    .split('\0')
+    .filter((entry) => entry.length > 0);
+
+  assert.ok(tracked.length > 100, `expected a real file list, got ${tracked.length}`);
+
+  const invalid: string[] = [];
+  for (const relativePath of tracked) {
+    const verdict = decode(readFileSync(resolve(ROOT, relativePath)));
+    if (!verdict.ok) invalid.push(`${relativePath}: ${verdict.reason}`);
+  }
+
+  assert.deepEqual(
+    invalid,
+    [],
+    `these files are not valid UTF-8 and will fail any Next.js build that reads them:\n${invalid.join('\n')}`,
+  );
 });
