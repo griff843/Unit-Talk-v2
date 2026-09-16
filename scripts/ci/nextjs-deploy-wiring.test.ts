@@ -39,7 +39,26 @@ const compose = asRecord(parseYaml(readFileSync(COMPOSE_PATH, 'utf8')));
 const caddyfile = readFileSync(CADDYFILE_PATH, 'utf8');
 const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 
+/**
+ * Always-on, publicly-routed Next.js surfaces. Every assertion keyed on this
+ * list is about a service the edge serves to the internet on every deploy.
+ */
 const NEXTJS_SERVICES = ['web', 'smart-form'] as const;
+
+/**
+ * UTV2-1918. Profiled, default-off, internal-only surfaces. Deliberately a
+ * SEPARATE list rather than an extra entry in the one above: several of those
+ * assertions are false for this service on purpose — it publishes a host port
+ * (loopback only) and it has no Caddy route at all — and folding it in would
+ * have forced those assertions to be weakened for the services they exist to
+ * protect. A property that differs gets its own assertion, never a looser
+ * shared one.
+ */
+const OPTIONAL_NEXTJS_SERVICES = ['command-center'] as const;
+const ALL_NEXTJS_SERVICES = [...NEXTJS_SERVICES, ...OPTIONAL_NEXTJS_SERVICES] as const;
+
+/** The repository variable that is the single enable switch for the profiled surfaces. */
+const CC_ENABLE_GUARD = 'if [ "${CC_ENABLED:-}" = \'true\' ]';
 
 /** Server-only values that must never reach a browser bundle or an extra container. */
 const SERVER_ONLY_SECRETS = [
@@ -68,18 +87,26 @@ function step(jobId: string, name: string): Record<string, unknown> {
   return asRecord(found);
 }
 
-test('both Next.js apps are built and pushed by the deploy workflow', () => {
+test('every Next.js app is built and pushed by the deploy workflow', () => {
   const buildJob = job('build-nextjs');
   const included = field(buildJob, 'strategy', 'matrix', 'include') as Record<string, string>[];
   assert.ok(Array.isArray(included), 'build-nextjs must build from a matrix include list');
   assert.deepEqual(
     included.map((entry) => entry.service).sort(),
-    [...NEXTJS_SERVICES].sort(),
-    'build-nextjs must cover exactly the two Next.js services',
+    [...ALL_NEXTJS_SERVICES].sort(),
+    'build-nextjs must cover exactly the Next.js services this repository deploys',
   );
 
+  // UTV2-1918: the profiled surface is built UNCONDITIONALLY alongside the other
+  // two. Building an image starts nothing — the compose profile decides that —
+  // whereas a conditional build would leave the first deploy after enabling the
+  // surface with no image to pull, and the registry preflight would refuse it.
   for (const entry of included) {
-    assert.match(entry.app_dir, /^apps\/(web|smart-form)$/, 'app_dir must name a Next.js app');
+    assert.ok(
+      (ALL_NEXTJS_SERVICES as readonly string[]).includes(entry.service),
+      `${entry.service} is built but is not a declared Next.js service`,
+    );
+    assert.equal(entry.app_dir, `apps/${entry.service}`, 'app_dir must name its own app directory');
     assert.match(entry.app_package, /^@unit-talk\//, 'app_package must be a workspace package');
     assert.match(entry.app_port, /^\d+$/, 'app_port must be a port number');
   }
@@ -562,4 +589,261 @@ test('the host-trust correction leaves parked containment untouched', () => {
       `${jobId} must not write AUTH_TRUST_HOST into .env.production`,
     );
   }
+});
+
+/*
+ * UTV2-1918 — the internal-only Command Center deployment candidate.
+ *
+ * The whole point of this service is that merging it changes nothing about what
+ * runs in production until an operator deliberately enables it, and that when
+ * they do, it is reachable only from the deploy host itself. Both halves are
+ * easy to lose to an innocuous-looking edit, so both are asserted here.
+ */
+
+const COMMAND_CENTER = 'command-center';
+
+/**
+ * The body of the first `if [ "${CC_ENABLED:-}" = 'true' ]` block in a script.
+ *
+ * Anchored on the closing `fi` as a whole LINE. A plain `indexOf('fi')` finds
+ * the one inside `compose_profile`, which truncates the slice to nothing and
+ * makes every assertion against it vacuously... loud, but for the wrong reason.
+ */
+function endOfGuardedBlock(script: string): string {
+  const start = script.indexOf(CC_ENABLE_GUARD);
+  assert.ok(start > -1, 'script must contain the enable guard');
+  const body = script.slice(start);
+  const close = body.search(/\n\s*fi\s*$/m);
+  assert.ok(close > -1, 'the enable guard must be closed');
+  return body.slice(0, close);
+}
+
+test('the Command Center is off unless a deploy deliberately enables it', () => {
+  const svc = service(COMMAND_CENTER);
+
+  // Without a profile the service would start on the next `docker compose up`,
+  // which is what makes this the load-bearing line of the whole lane.
+  assert.deepEqual(
+    svc['profiles'],
+    [COMMAND_CENTER],
+    'the Command Center must sit behind its own compose profile',
+  );
+  for (const name of NEXTJS_SERVICES) {
+    assert.ok(
+      !service(name)['profiles'],
+      `${name} must stay in the default profile — it runs on every deploy`,
+    );
+  }
+
+  // Exactly one place may activate that profile, and it must be guarded.
+  const promote = String(step('promote', 'Promote all production containers')['run']);
+  assert.ok(
+    promote.includes(CC_ENABLE_GUARD),
+    'the promote step must gate the profile on the enable variable',
+  );
+  // Anchored on the closing `fi` LINE: a bare indexOf('fi') matches inside
+  // `compose_profile` and would silently assert against an empty slice.
+  const guardedProfile = endOfGuardedBlock(promote);
+  assert.match(
+    guardedProfile,
+    /compose_profile="--profile command-center"/,
+    'the profile may only be set inside the enable guard',
+  );
+  assert.ok(
+    !promote.replace(guardedProfile, '').includes('--profile'),
+    'no unguarded compose invocation may activate the profile',
+  );
+
+  // Every other compose invocation in the workflow must be profile-free, or the
+  // surface would start somewhere this test does not describe.
+  for (const jobId of ['canary', 'promote']) {
+    for (const entry of (job(jobId)['steps'] as unknown[]) ?? []) {
+      const stepRecord = asRecord(entry);
+      const script = String(stepRecord['run'] ?? '');
+      if (!script.includes('--profile')) continue;
+      assert.equal(
+        stepRecord['name'],
+        'Promote all production containers',
+        `${jobId} step "${String(stepRecord['name'])}" must not activate a compose profile`,
+      );
+    }
+  }
+});
+
+test('an enabled Command Center is reachable only from the deploy host', () => {
+  const svc = service(COMMAND_CENTER);
+
+  // Internal-only means no public ingress at all, not "public behind a login".
+  const ports = (svc['ports'] as string[] | undefined) ?? [];
+  assert.deepEqual(ports, ['127.0.0.1:4300:4300'], 'the Command Center must bind loopback only');
+  for (const port of ports) {
+    assert.ok(port.startsWith('127.0.0.1:'), `${port} would publish the surface on every interface`);
+  }
+
+  // No Caddy site block, so nothing resolves to it from the internet.
+  assert.ok(
+    !caddyfile.includes(COMMAND_CENTER),
+    'the Command Center must have no Caddy route — it is reached by an SSH local forward',
+  );
+
+  // The probe must be one that exists. apps/command-center has no /login route,
+  // so copying the smart-form healthcheck verbatim would fail closed forever.
+  assert.deepEqual(
+    field(svc, 'healthcheck', 'test'),
+    ['CMD', 'curl', '-fsS', 'http://localhost:4300/api/health'],
+    'the Command Center healthcheck must probe a route that exists',
+  );
+});
+
+test('enabling the Command Center cannot break a deploy that does not use it', () => {
+  const inventory = String(step('verify', 'Validate production secret inventory')['run']);
+
+  // The `missing` list is unconditionally required, so a Command Center secret
+  // appended to it would fail every deploy — which today is all of them.
+  const missingEntries = [...inventory.matchAll(/(?<![A-Za-z0-9_])missing\+=\(([^)]*)\)/g)].map(
+    (m) => m[1],
+  );
+  assert.ok(missingEntries.length > 10, 'the unconditional secret list must still be read');
+  for (const entry of missingEntries) {
+    assert.ok(
+      !/COMMAND_CENTER|CC_API_KEY/.test(entry),
+      `${entry} must not be an unconditionally required secret`,
+    );
+  }
+
+  // Its checks exist, and live inside the enable guard.
+  assert.ok(inventory.includes(CC_ENABLE_GUARD), 'the inventory must gate its Command Center checks');
+  const guardedBlock = inventory.slice(inventory.indexOf(CC_ENABLE_GUARD), inventory.indexOf('case "$SECRET_SYNDICATE_MACHINE_ENABLED"'));
+  for (const secret of ['UNIT_TALK_CC_API_KEY', 'COMMAND_CENTER_AUTH_TOKEN']) {
+    assert.ok(guardedBlock.includes(secret), `${secret} must be checked when the surface is enabled`);
+  }
+  assert.match(
+    guardedBlock,
+    /must be set together/,
+    'a partial basic-auth pair must be its own error, not a silent fall-through',
+  );
+
+  // Containment is decided after, and by, code this lane does not touch.
+  assert.match(
+    inventory,
+    /case "\$SECRET_SYNDICATE_MACHINE_ENABLED" in\s*\n\s*true\) syndicate_machine_mode=active ;;\s*\n\s*false\) syndicate_machine_mode=parked ;;/,
+    'the syndicate-machine mode decision must be unchanged',
+  );
+});
+
+test('the Command Center container receives no credential it does not need', () => {
+  const svc = service(COMMAND_CENTER);
+  assert.deepEqual(
+    svc['env_file'],
+    ['.env.command-center'],
+    'the Command Center must read its own narrow env file',
+  );
+  assert.ok(
+    !((svc['env_file'] as string[]) ?? []).includes('.env.production'),
+    'the Command Center must not read .env.production',
+  );
+
+  for (const jobId of ['canary', 'promote']) {
+    const script = String(step(jobId, 'Write Next.js service env files to server')['run']);
+    const start = script.indexOf(CC_ENABLE_GUARD);
+    assert.ok(start > -1, `${jobId} must write .env.command-center only when enabled`);
+    const block = script.slice(start, script.indexOf('.env.command-center'));
+
+    // Auth.js/Google material belongs to the Smart Form alone. The Command
+    // Center has its own auth and must not be handed the capper allow-list.
+    for (const secret of SERVER_ONLY_SECRETS) {
+      assert.ok(
+        !block.includes(`${secret}=$`),
+        `${jobId} must not write ${secret} into the Command Center env file`,
+      );
+    }
+    // Nothing in this surface is browser-safe configuration.
+    assert.ok(
+      !/"NEXT_PUBLIC_[A-Z0-9_]+=/.test(block),
+      `${jobId} must not inline any value from this env file into a browser bundle`,
+    );
+    // It opens a service-role Supabase client, so both halves must be present.
+    for (const name of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'UNIT_TALK_CC_API_KEY']) {
+      assert.ok(block.includes(`${name}=$`), `${jobId} must write ${name} for the Command Center`);
+    }
+    assert.ok(
+      block.includes('UNIT_TALK_APP_ENV=production'),
+      `${jobId} must state the deployed environment explicitly`,
+    );
+  }
+});
+
+test('the Command Center refuses to start on a configuration it cannot serve', () => {
+  // Before this branch existed a third app started with NO startup validation:
+  // the existing guard is keyed on apps/smart-form alone.
+  assert.ok(
+    entrypoint.includes("if [ \"$APP_DIR\" = 'apps/command-center' ]"),
+    'the entrypoint must validate the Command Center at startup',
+  );
+  const branch = entrypoint.slice(entrypoint.indexOf("'apps/command-center'"));
+
+  // Each of these mirrors an assertion the application itself already makes;
+  // without them the container passes its healthcheck and fails on first use.
+  for (const name of [
+    'UNIT_TALK_CC_API_KEY',
+    'COMMAND_CENTER_AUTH_TOKEN',
+    'COMMAND_CENTER_AUTH_USERNAME',
+    'COMMAND_CENTER_AUTH_PASSWORD',
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'UNIT_TALK_APP_ENV',
+  ]) {
+    assert.ok(branch.includes(name), `the entrypoint must check ${name}`);
+  }
+  // Every failure must stop the process rather than warn and continue.
+  const refusals = [...branch.matchAll(/FATAL:/g)].length;
+  assert.ok(refusals >= 6, `expected every Command Center check to be fatal, found ${refusals}`);
+  assert.equal(
+    [...branch.matchAll(/exit 1/g)].length,
+    refusals,
+    'every FATAL message must be followed by a refusal to start',
+  );
+
+  // The smart-form guard must be untouched by this branch.
+  assert.ok(
+    entrypoint.includes("if [ \"$APP_DIR\" = 'apps/smart-form' ]"),
+    'the Smart Form startup guard must still exist',
+  );
+});
+
+test('the canary and promote copies of the Command Center wiring do not drift', () => {
+  // This workflow keeps two near-identical deployment bodies, and drift between
+  // them is the recorded failure mode. Assert both moved together.
+  for (const stepName of [
+    'Write Next.js service env files to server',
+    'Preflight — verify registry auth and resolve every image tag',
+  ]) {
+    const canary = String(step('canary', stepName)['run']);
+    const promote = String(step('promote', stepName)['run']);
+    assert.ok(canary.includes(CC_ENABLE_GUARD), `canary "${stepName}" must carry the enable guard`);
+    assert.ok(promote.includes(CC_ENABLE_GUARD), `promote "${stepName}" must carry the enable guard`);
+  }
+
+  // A tag predating this lane has no command-center image, so requiring it
+  // unconditionally would make every rollback fail the registry preflight.
+  for (const jobId of ['canary', 'promote']) {
+    const preflight = String(
+      step(jobId, 'Preflight — verify registry auth and resolve every image tag')['run'],
+    );
+    assert.match(
+      preflight,
+      /services="api worker ingestor discord-bot web smart-form"/,
+      `${jobId} preflight must require the always-on images unconditionally`,
+    );
+    assert.match(
+      endOfGuardedBlock(preflight),
+      /services="\$services command-center"/,
+      `${jobId} must require the Command Center image only when it is enabled`,
+    );
+  }
+
+  // An enabled surface is held to the same health bar as the other two.
+  const health = String(step('promote', 'Verify Next.js surfaces are healthy')['run']);
+  assert.match(health, /surfaces="web smart-form"/, 'the always-on surfaces stay unconditional');
+  assert.ok(health.includes(CC_ENABLE_GUARD), 'an enabled Command Center must be health-gated too');
 });

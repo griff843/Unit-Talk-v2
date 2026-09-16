@@ -72,6 +72,15 @@ jobs:
           SECRET_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           SECRET_NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           SECRET_ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
+          # UTV2-1918. A repository VARIABLE, deliberately not a secret: whether
+          # the internal Command Center runs is an operational switch, not
+          # credential material, and keeping it out of the secret surface means
+          # turning the surface on or off is not itself a reserved action.
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          SECRET_UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
+          SECRET_COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
+          SECRET_COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
+          SECRET_COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
         run: |
           missing=()
           test -n "$SECRET_SUPABASE_URL"              || missing+=(SUPABASE_URL)
@@ -101,6 +110,39 @@ jobs:
           if [ ${#missing[@]} -gt 0 ]; then
             echo "ERROR: Required production secrets are not configured: ${missing[*]}"
             exit 1
+          fi
+          # UTV2-1918: the Command Center's secrets are checked SEPARATELY and
+          # only when it is enabled, never appended to `missing` above. Every
+          # entry in that list is unconditionally required, so adding these to
+          # it would fail every deploy that does not run the Command Center --
+          # which today is all of them. The surface is default-off, and a
+          # default-off surface must not be able to break the default path.
+          #
+          # When it IS enabled the checks are as fail-closed as the rest: the
+          # deploy is refused here, before any container is touched, rather than
+          # producing a container that crash-loops on the entrypoint asserts.
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            cc_missing=()
+            test -n "${SECRET_UNIT_TALK_CC_API_KEY:-}" || cc_missing+=(UNIT_TALK_CC_API_KEY)
+            # Either credential shape is acceptable to the application; a
+            # PARTIAL basic-auth pair is not, and is its own error rather than a
+            # silent fall-through to "no credentials configured".
+            if { [ -n "${SECRET_COMMAND_CENTER_AUTH_USERNAME:-}" ] && [ -z "${SECRET_COMMAND_CENTER_AUTH_PASSWORD:-}" ]; } \
+               || { [ -z "${SECRET_COMMAND_CENTER_AUTH_USERNAME:-}" ] && [ -n "${SECRET_COMMAND_CENTER_AUTH_PASSWORD:-}" ]; }; then
+              echo "::error::COMMAND_CENTER_AUTH_USERNAME and COMMAND_CENTER_AUTH_PASSWORD must be set together."
+              exit 1
+            fi
+            if [ -z "${SECRET_COMMAND_CENTER_AUTH_TOKEN:-}" ] \
+               && { [ -z "${SECRET_COMMAND_CENTER_AUTH_USERNAME:-}" ] || [ -z "${SECRET_COMMAND_CENTER_AUTH_PASSWORD:-}" ]; }; then
+              cc_missing+=("COMMAND_CENTER_AUTH_TOKEN (or COMMAND_CENTER_AUTH_USERNAME+COMMAND_CENTER_AUTH_PASSWORD)")
+            fi
+            if [ ${#cc_missing[@]} -gt 0 ]; then
+              echo "::error::UNIT_TALK_COMMAND_CENTER_ENABLED is 'true' but required Command Center secrets are not configured: ${cc_missing[*]}"
+              exit 1
+            fi
+            echo "{\"service\":\"deploy\",\"event\":\"command_center.enabled\"}"
+          else
+            echo "{\"service\":\"deploy\",\"event\":\"command_center.disabled\"}"
           fi
           case "$SECRET_SYNDICATE_MACHINE_ENABLED" in
             true) syndicate_machine_mode=active ;;
@@ -227,6 +269,17 @@ jobs:
             app_dir: apps/smart-form
             app_package: '@unit-talk/smart-form'
             app_port: '4400'
+          # UTV2-1918. Built and pushed unconditionally, exactly like the two
+          # above. Building an image starts nothing: the compose service sits
+          # behind a profile, so an image that is never enabled is an unused
+          # layer in the registry rather than a running container. Making the
+          # BUILD conditional would instead mean the first deploy after enabling
+          # the surface has no image to pull -- the registry preflight would
+          # refuse it, correctly, and the operator would have to deploy twice.
+          - service: command-center
+            app_dir: apps/command-center
+            app_package: '@unit-talk/command-center'
+            app_port: '4300'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -431,6 +484,12 @@ jobs:
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          # UTV2-1918 -- see the Command Center block further down this step.
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
+          COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
+          COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
+          COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
         run: |
           # UTV2-1646: parked mode must fully stop provider-derived producers and
           # public delivery, not just the API's own schedulers (SYNDICATE_MACHINE_ENABLED).
@@ -634,6 +693,35 @@ jobs:
             echo "::error::A QA auth bypass variable reached the production Smart Form env file."
             exit 1
           fi
+          # UTV2-1918: the Command Center env file is written ONLY when the
+          # surface is enabled. Writing it unconditionally would leave a
+          # 600-mode file holding the service-role key and an operator
+          # credential on the deploy host for a container that never starts --
+          # a standing secret with no running consumer.
+          #
+          # Every value the app needs is written explicitly rather than left to
+          # the image's own configuration layers: `process.env` takes precedence
+          # over those layers, and `resolveWorkspaceRoot()` walks five
+          # directories up from the module, which nothing proves is the right
+          # place inside an image built for a third app. Writing the complete
+          # set makes the container's configuration independent of that walk.
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            printf '%s\n' \
+              "NODE_ENV=production" \
+              "PORT=4300" \
+              "UNIT_TALK_APP_ENV=production" \
+              "SUPABASE_URL=$SUPABASE_URL" \
+              "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+              "UNIT_TALK_CC_API_KEY=$UNIT_TALK_CC_API_KEY" \
+              "COMMAND_CENTER_AUTH_TOKEN=$COMMAND_CENTER_AUTH_TOKEN" \
+              "COMMAND_CENTER_AUTH_USERNAME=$COMMAND_CENTER_AUTH_USERNAME" \
+              "COMMAND_CENTER_AUTH_PASSWORD=$COMMAND_CENTER_AUTH_PASSWORD" \
+              "UNIT_TALK_API_URL=http://api:4000" \
+              | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                  "cat > '$DEPLOY_PATH/.env.command-center' && chmod 600 '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center written'"
+          else
+            echo "Command Center disabled; .env.command-center not written."
+          fi
           echo "Next.js env files written; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret. github.token is the
@@ -650,12 +738,21 @@ jobs:
       # this stage (and the later promote stage) will need, at the exact
       # requested tag, BEFORE touching any running container. A stale/invalid
       # token or a tag that never got pushed must fail here, not mid-mutation.
-      - name: Preflight — verify registry auth and resolve all 6 image tags
+      - name: Preflight — verify registry auth and resolve every image tag
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
         run: |
           failed=""
-          for svc in api worker ingestor discord-bot web smart-form; do
+          # UTV2-1918: command-center joins the loop only when it is enabled.
+          # Its image is always built and pushed, but a tag predating this lane
+          # has no command-center image, so requiring it unconditionally would
+          # make every rollback to an older tag fail this preflight.
+          services="api worker ingestor discord-bot web smart-form"
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            services="$services command-center"
+          fi
+          for svc in $services; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -664,7 +761,7 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: all 6 images resolved for tag $IMAGE_TAG."
+          echo "Registry preflight passed: images resolved for tag $IMAGE_TAG ($services)."
 
       - name: Release API canary
         env:
@@ -1024,6 +1121,12 @@ jobs:
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          # UTV2-1918 -- see the Command Center block further down this step.
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
+          COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
+          COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
+          COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
         run: |
           # UTV2-1646: parked mode must fully stop provider-derived producers and
           # public delivery, not just the API's own schedulers (SYNDICATE_MACHINE_ENABLED).
@@ -1220,6 +1323,35 @@ jobs:
             echo "::error::A QA auth bypass variable reached the production Smart Form env file."
             exit 1
           fi
+          # UTV2-1918: the Command Center env file is written ONLY when the
+          # surface is enabled. Writing it unconditionally would leave a
+          # 600-mode file holding the service-role key and an operator
+          # credential on the deploy host for a container that never starts --
+          # a standing secret with no running consumer.
+          #
+          # Every value the app needs is written explicitly rather than left to
+          # the image's own configuration layers: `process.env` takes precedence
+          # over those layers, and `resolveWorkspaceRoot()` walks five
+          # directories up from the module, which nothing proves is the right
+          # place inside an image built for a third app. Writing the complete
+          # set makes the container's configuration independent of that walk.
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            printf '%s\n' \
+              "NODE_ENV=production" \
+              "PORT=4300" \
+              "UNIT_TALK_APP_ENV=production" \
+              "SUPABASE_URL=$SUPABASE_URL" \
+              "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+              "UNIT_TALK_CC_API_KEY=$UNIT_TALK_CC_API_KEY" \
+              "COMMAND_CENTER_AUTH_TOKEN=$COMMAND_CENTER_AUTH_TOKEN" \
+              "COMMAND_CENTER_AUTH_USERNAME=$COMMAND_CENTER_AUTH_USERNAME" \
+              "COMMAND_CENTER_AUTH_PASSWORD=$COMMAND_CENTER_AUTH_PASSWORD" \
+              "UNIT_TALK_API_URL=http://api:4000" \
+              | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                  "cat > '$DEPLOY_PATH/.env.command-center' && chmod 600 '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center written'"
+          else
+            echo "Command Center disabled; .env.command-center not written."
+          fi
           echo "Next.js env files written; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret -- see the matching
@@ -1232,12 +1364,21 @@ jobs:
       # UTV2-1648: same pre-mutation registry preflight as the canary job --
       # this job runs on a fresh runner with its own auth, so it needs its own
       # check even though canary already verified moments earlier.
-      - name: Preflight — verify registry auth and resolve all 6 image tags
+      - name: Preflight — verify registry auth and resolve every image tag
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
         run: |
           failed=""
-          for svc in api worker ingestor discord-bot web smart-form; do
+          # UTV2-1918: command-center joins the loop only when it is enabled.
+          # Its image is always built and pushed, but a tag predating this lane
+          # has no command-center image, so requiring it unconditionally would
+          # make every rollback to an older tag fail this preflight.
+          services="api worker ingestor discord-bot web smart-form"
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            services="$services command-center"
+          fi
+          for svc in $services; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -1246,20 +1387,34 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: all 6 images resolved for tag $IMAGE_TAG."
+          echo "Registry preflight passed: images resolved for tag $IMAGE_TAG ($services)."
 
       - name: Promote all production containers
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           ROLLBACK_TAG: ${{ inputs.rollback_tag }}
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
         run: |
+          # UTV2-1918: the `command-center` compose profile is activated here and
+          # nowhere else. With the flag unset or not exactly 'true' this is the
+          # byte-identical command it has always been, so a deploy that does not
+          # run the Command Center behaves exactly as it did before this lane.
+          #
+          # `--remove-orphans` is deliberately kept on both branches: when the
+          # flag is turned back off, the running container SHOULD be removed.
+          # Disabling the surface has to actually stop it, or "default-off" would
+          # only describe hosts that had never enabled it.
+          compose_profile=""
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            compose_profile="--profile command-center"
+          fi
           ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu && cd '$DEPLOY_PATH' && \
              docker rm -f caddy 2>/dev/null || true && \
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
              rm -f .unit-talk-deploy-inflight && \
-             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
-             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose $compose_profile pull && \
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose $compose_profile up -d --remove-orphans"
           for attempt in $(seq 1 30); do
             if ssh "$DEPLOY_USER@$DEPLOY_HOST" "curl -fsS http://localhost:4000/health >/dev/null 2>&1"; then
               exit 0
@@ -1281,9 +1436,18 @@ jobs:
       - name: Verify Next.js surfaces are healthy
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
         run: |
           set -eu
-          for svc in web smart-form; do
+          # UTV2-1918: an enabled Command Center is held to the same bar as the
+          # other two surfaces. Its healthcheck probes /api/health, which answers
+          # before authentication, so "healthy" here means the process started and
+          # survived the entrypoint asserts -- not that anyone can sign in.
+          surfaces="web smart-form"
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            surfaces="$surfaces command-center"
+          fi
+          for svc in $surfaces; do
             healthy=""
             for attempt in $(seq 1 30); do
               if status=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
