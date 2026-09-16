@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1920",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "967aa113efdfece7f0eed0a347ee11350655ce31",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "not_run",
+    "note": "Populate with measured gate results before review; proof-generate does not execute verification."
+  }
+}
