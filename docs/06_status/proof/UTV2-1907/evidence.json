@@ -6,13 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "f61b57734a6f270ccb8a0281d8eeb47c33871499",
     "verified_source_sha": "a2b70987642533486136ec3e8966b61374932bc5",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "note": "a2b70987642533486136ec3e8966b61374932bc5 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1907/. It adds docs/05_operations/db-writer-classification.json; its parent 66cc39a99 adds the behaviour-level staging proof and its root package.json wiring. The earlier anchor 84c356190224d9aa83e82583e4b93b39b2774e5b is where the STATIC measurements in static_proof were taken, and it is named there rather than here so the two are not conflated: this field binds the execution anchor, not the measurement tree. The proof bundle commit that follows touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the anchor does not move when this file lands.",
-    "bound_at": "2026-09-15T17:45:00.000Z",
+    "bound_at": "2026-09-16T00:15:16.904Z",
     "ci_sentinels": {
       "run_id": 34987107993,
       "run_attempt": 1,

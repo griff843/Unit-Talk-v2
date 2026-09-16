@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1907-capper-id-attribution
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1581
 Head SHA: 84c356190224d9aa83e82583e4b93b39b2774e5b
-Merge SHA: N/A
+Merge SHA: f61b57734a6f270ccb8a0281d8eeb47c33871499
 Diff base: 0e65c1b4cb4e2f26acad4d69a43c9bd7402a63d2
 Diff target: 84c356190224d9aa83e82583e4b93b39b2774e5b
 
@@ -39,4 +39,4 @@ A	docs/06_status/proof/UTV2-1907/.gitkeep
 
 ## SHA Binding
 Head SHA: 84c356190224d9aa83e82583e4b93b39b2774e5b
-Merge SHA: N/A
+Merge SHA: f61b57734a6f270ccb8a0281d8eeb47c33871499

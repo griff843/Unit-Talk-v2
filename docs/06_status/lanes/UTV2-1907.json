@@ -7,9 +7,21 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1907-capper-id-attribution",
   "branch": "claude/utv2-1907-capper-id-attribution",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "f61b57734a6f270ccb8a0281d8eeb47c33871499",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1581",
-  "files_changed": [],
+  "files_changed": [
+    "apps/api/src/capper-identity.ts",
+    "apps/api/src/clv-feedback.ts",
+    "apps/api/src/promotion-edge-integration.test.ts",
+    "apps/api/src/promotion-service.ts",
+    "apps/api/src/t1-proof-utv2-1907-capper-attribution.test.ts",
+    "docs/05_operations/db-writer-classification.json",
+    "docs/06_status/proof/UTV2-1907/.gitkeep",
+    "docs/06_status/proof/UTV2-1907/diff-summary.md",
+    "docs/06_status/proof/UTV2-1907/evidence.json",
+    "docs/06_status/proof/UTV2-1907/verification.md",
+    "package.json"
+  ],
   "file_scope_lock": [
     "apps/api/src/capper-identity.ts",
     "apps/api/src/clv-feedback.ts",
@@ -19,14 +31,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1907/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-15T02:01:20.002Z",
-  "heartbeat_at": "2026-09-15T02:13:23.863Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-16T00:15:19.554Z",
+  "closed_at": "2026-09-16T00:15:19.554Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1907-capper-id-attribution.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-16T00:15:16.910Z",
+      "verdict": "pass",
+      "merge_sha": "f61b57734a6f270ccb8a0281d8eeb47c33871499",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
