@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1910",
+  "lane_type": "delivery-ui",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1910-cc-operator-grading-context",
+  "branch": "claude/utv2-1910-cc-operator-grading-context",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/src/app/actions/settle.ts",
+    "apps/command-center/src/app/picks/[id]/page.tsx",
+    "apps/command-center/src/app/settlement/page.tsx",
+    "apps/command-center/src/components/CorrectionForm.tsx",
+    "apps/command-center/src/components/InlineSettleButton.tsx",
+    "apps/command-center/src/components/SettlementForm.tsx",
+    "apps/command-center/src/components/SettlementWorkbench.tsx",
+    "apps/command-center/src/lib/operator-grading-context.test.ts",
+    "apps/command-center/src/lib/operator-grading-context.ts",
+    "apps/command-center/src/lib/server-action-guard.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1910/diff-summary.md",
+    "docs/06_status/proof/UTV2-1910/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-09-16T01:11:46.545Z",
+  "heartbeat_at": "2026-09-16T01:11:46.545Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1910-cc-operator-grading-context.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1910-cc-operator-grading-context",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
