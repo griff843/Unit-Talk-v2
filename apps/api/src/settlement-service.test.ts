@@ -1062,3 +1062,200 @@ test('a posted pick still settles without any operator grading context', async (
   assert.equal(result.finalLifecycleState, 'settled');
   assert.notEqual(result.lifecycleEvent, null);
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1919: an evidence-plane settlement can be corrected
+//
+// An evidence-plane pick keeps its status after it settles, so every later
+// operator grade re-enters `recordOperatorEvidenceSettlement` rather than
+// `recordSettlementCorrection`. Before this lane that wrote a second *original*
+// — `corrects_id` null — which production's partial unique index
+// `settlement_records_pick_source_idx (pick_id, source) WHERE corrects_id IS
+// NULL` refuses with 23505, and which the handler then reported as success.
+//
+// In memory there is no unique index, so the pre-fix failure shows up as its
+// other half instead: two root records, which `resolveEffectiveSettlement`
+// refuses as MULTIPLE_ROOT_RECORDS. Both halves are asserted below.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1919: a second operator grade corrects the first rather than writing a second original', async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  const first = await recordPickSettlement(
+    pick.id,
+    operatorSettlementRequest({ result: 'win', evidenceRef: 'manual:box-score:v1' }),
+    repositories,
+  );
+
+  assert.equal(first.settlementRecord.corrects_id, null, 'the first settlement is the original');
+  assert.equal(
+    (first.settlementRecord.payload as Record<string, unknown>)['correction'],
+    false,
+  );
+
+  const second = await recordPickSettlement(
+    pick.id,
+    operatorSettlementRequest({ result: 'loss', evidenceRef: 'manual:box-score:v2' }),
+    repositories,
+  );
+
+  // The correction is a NEW row that points at the one it supersedes.
+  assert.notEqual(second.settlementRecord.id, first.settlementRecord.id);
+  assert.equal(
+    second.settlementRecord.corrects_id,
+    first.settlementRecord.id,
+    'the correction must reference the settlement it supersedes',
+  );
+  assert.equal(second.settlementRecord.result, 'loss');
+
+  const secondPayload = second.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(secondPayload['correction'], true);
+  assert.equal(secondPayload['priorSettlementRecordId'], first.settlementRecord.id);
+  assert.equal(secondPayload['priorResult'], 'win');
+  assert.equal(secondPayload['evidencePlane'], true);
+  assert.equal(secondPayload['operatorSettled'], true);
+
+  // The original is immutable — read it back from the repository rather than
+  // trusting the object returned before the correction was written.
+  const all = await repositories.settlements.listByPick(pick.id);
+  assert.equal(all.length, 2, 'a correction adds a row; it never mutates one');
+  const original = all.find((row) => row.id === first.settlementRecord.id);
+  assert.equal(original?.result, 'win', 'the superseded settlement keeps its original result');
+  assert.equal(original?.corrects_id, null);
+
+  // Exactly one statistical contribution, and it is the corrected one.
+  assert.equal(second.downstream.unresolvedReason, null);
+  assert.equal(
+    second.downstream.effectiveSettlement?.effective_record_id,
+    second.settlementRecord.id,
+  );
+  assert.equal(second.downstream.effectiveSettlement?.result, 'loss');
+  assert.equal(second.downstream.effectiveSettlement?.correction_depth, 1);
+
+  assert.deepEqual(
+    second.auditRecords.map((record) => record.action),
+    ['settlement.operator_evidence_corrected'],
+    'a correction must be auditable as a correction, not as a first grading',
+  );
+});
+
+test('UTV2-1919: WIN -> LOSS -> WIN yields one contribution at each point and never two', async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  const results: Array<'win' | 'loss'> = ['win', 'loss', 'win'];
+  const ids: string[] = [];
+
+  for (const [index, result] of results.entries()) {
+    const settlement = await recordPickSettlement(
+      pick.id,
+      operatorSettlementRequest({ result, evidenceRef: `manual:box-score:v${index + 1}` }),
+      repositories,
+    );
+    ids.push(settlement.settlementRecord.id);
+
+    // At every point in the chain — not only at the end — the pick contributes
+    // exactly one settled outcome, and it is the most recent grade.
+    assert.equal(
+      settlement.downstream.unresolvedReason,
+      null,
+      `chain must resolve after grade ${index + 1}`,
+    );
+    assert.equal(
+      settlement.downstream.effectiveSettlement?.result,
+      result,
+      `the effective settlement after grade ${index + 1} must be ${result}`,
+    );
+    assert.equal(
+      settlement.downstream.effectiveSettlement?.correction_depth,
+      index,
+      'correction depth must track the position in the chain',
+    );
+    // `total_picks` is the statistical contribution — one pick, one outcome,
+    // however many times it has been regraded. `total_records` is the audit
+    // trail behind it: 1 + correction_depth, so it grows with the chain while
+    // the contribution does not. Asserting both is what distinguishes "the
+    // correction was recorded" from "the correction was double-counted".
+    assert.equal(
+      settlement.downstream.settlementSummary.total_picks,
+      1,
+      'a corrected pick contributes one settlement to statistics, never two',
+    );
+    assert.equal(
+      settlement.downstream.settlementSummary.total_records,
+      index + 1,
+      'the audit trail keeps every grade even though only one of them counts',
+    );
+    assert.deepEqual(
+      settlement.downstream.settlementSummary.by_result,
+      { [result]: 1 },
+      'only the effective grade may appear in the statistical rollup',
+    );
+  }
+
+  const all = await repositories.settlements.listByPick(pick.id);
+  assert.equal(all.length, 3, 'three grades, three immutable rows');
+  assert.deepEqual(
+    all
+      .slice()
+      .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id))
+      .map((row) => [row.result, row.corrects_id]),
+    [
+      ['win', null],
+      ['loss', ids[0]],
+      ['win', ids[1]],
+    ],
+    'exactly one root; each later grade points at its immediate predecessor',
+  );
+
+  // Zero delivery throughout. A correction must not become a route to a member.
+  const anyOutbox = await repositories.outbox.findLatestByPick(pick.id, [
+    'pending',
+    'claimed',
+    'sent',
+    'failed',
+    'dead_letter',
+  ]);
+  assert.equal(anyOutbox, null);
+});
+
+test('UTV2-1919: a duplicate-key race is refused, never reported as a successful settlement', async () => {
+  const { repositories, pick } = await createTrackOnlyValidatedPick();
+
+  await recordPickSettlement(pick.id, operatorSettlementRequest({ result: 'win' }), repositories);
+
+  // Simulate the race the 23505 catch exists for: the pre-insert read finds
+  // nothing, and another writer lands the canonical row before this insert.
+  // The in-memory repository has no unique index, so the violation is injected
+  // at the repository boundary rather than pretended at the service boundary.
+  const settlements = repositories.settlements;
+  const realRecord = settlements.record.bind(settlements);
+  const realFindLatest = settlements.findLatestForPick.bind(settlements);
+  settlements.findLatestForPick = async () => null;
+  settlements.record = async () => {
+    const err: Error & { code?: string } = new Error(
+      'duplicate key value violates unique constraint "settlement_records_pick_source_idx"',
+    );
+    err.code = '23505';
+    throw err;
+  };
+
+  try {
+    await assert.rejects(
+      () =>
+        recordPickSettlement(
+          pick.id,
+          operatorSettlementRequest({ result: 'loss' }),
+          repositories,
+        ),
+      /SETTLEMENT_ALREADY_RECORDED|already carries a settlement/,
+      'a refused INSERT must surface as a refusal — returning the other writer\'s row told the operator their grade had persisted when a different one had',
+    );
+  } finally {
+    settlements.record = realRecord;
+    settlements.findLatestForPick = realFindLatest;
+  }
+
+  // And the refusal wrote nothing.
+  const all = await realFindLatest(pick.id);
+  assert.equal(all?.result, 'win', 'the pre-existing settlement is untouched by the refusal');
+});
