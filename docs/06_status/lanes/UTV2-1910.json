@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1910-cc-operator-grading-context",
   "branch": "claude/utv2-1910-cc-operator-grading-context",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "a23cadea5cff61b344012bab2400bb883c6cb6d6",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1586",
   "files_changed": [],
   "file_scope_lock": [
@@ -26,14 +26,22 @@
     "docs/06_status/proof/UTV2-1910/diff-summary.md",
     "docs/06_status/proof/UTV2-1910/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-16T01:11:46.545Z",
-  "heartbeat_at": "2026-09-16T01:15:58.985Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-16T01:56:23.569Z",
+  "closed_at": "2026-09-16T01:56:23.569Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1910-cc-operator-grading-context.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-16T01:56:21.662Z",
+      "verdict": "pass",
+      "merge_sha": "a23cadea5cff61b344012bab2400bb883c6cb6d6",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

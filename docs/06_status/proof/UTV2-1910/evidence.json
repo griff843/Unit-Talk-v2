@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "a23cadea5cff61b344012bab2400bb883c6cb6d6",
     "verified_source_sha": "8e44be6d66f98db946708d64cdcbcc3fb7509911",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "evidence_commit_sha": "8e44be6d66f98db946708d64cdcbcc3fb7509911",
+    "current_pr_head_sha": "5a1b6f096d2eff123e86484b3c98d10373a9df51",
     "sha_type": "verified_source_sha",
     "note": "8e44be6d66f98db946708d64cdcbcc3fb7509911 is the last commit on this lane carrying non-proof changes and is the execution anchor named in verification.md. Every commit after it touches only docs/06_status/proof/UTV2-1910/, so no measurement recorded below was taken on a different tree than the one this SHA names. merge_sha is null because the pull request is open: merge authority does not exist yet and is bound by post-merge-lane-close.yml once GitHub supplies it.",
     "ci_sentinels": {
