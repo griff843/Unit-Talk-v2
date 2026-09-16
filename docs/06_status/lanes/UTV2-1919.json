@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1919-evidence-settlement-correction",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1589",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/settlement-service.test.ts",
@@ -18,9 +18,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1919/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-16T09:22:52.694Z",
-  "heartbeat_at": "2026-09-16T09:22:52.694Z",
+  "heartbeat_at": "2026-09-16T09:34:19.348Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1919-evidence-settlement-correction.json",
