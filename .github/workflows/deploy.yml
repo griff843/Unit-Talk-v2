@@ -418,7 +418,7 @@ jobs:
             echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
           fi
 
-          for f in .env.production .env.web .env.smart-form; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
             [ -f "$f" ] || continue
 
             if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
@@ -446,7 +446,7 @@ jobs:
           # not an error. This heredoc runs under `set -eu` today, but other
           # remote bodies in this workflow use `pipefail` and this line must not
           # become a silent step failure if it is ever hardened to match.
-          for f in .env.production .env.web .env.smart-form; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
             { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
@@ -630,6 +630,26 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
+          # UTV2-1922: this mapping is the whole of the 2026-09-16 edge outage.
+          # The body below has carried a `.env.command-center` branch since
+          # UTV2-1918, but CC_ENABLED reached only the promote step -- so two
+          # steps in ONE job disagreed about whether the surface was enabled:
+          # this one wrote nothing, and promote then selected
+          # `--profile command-center`, which made Docker Compose require the
+          # file at config-parse time. `docker rm -f caddy` had already run.
+          #
+          # The six values below are not decoration either. With CC_ENABLED
+          # alone this step would have written an env file of empty strings,
+          # which the container's own entrypoint refuses -- a crash-loop in
+          # place of a refused deploy. A step that writes a file must hold
+          # every value that file requires.
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
+          COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
+          COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
+          COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
         run: |
           set -eu
           # Fail closed a second time at the point of use. The verify job checked
@@ -706,6 +726,18 @@ jobs:
           # place inside an image built for a third app. Writing the complete
           # set makes the container's configuration independent of that walk.
           if [ "${CC_ENABLED:-}" = 'true' ]; then
+            # UTV2-1922: refuse here, where nothing has been mutated yet,
+            # rather than let compose discover a short file after the edge has
+            # already been taken down. Mirrors the always-on loop above.
+            for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY UNIT_TALK_CC_API_KEY \
+                        COMMAND_CENTER_AUTH_TOKEN COMMAND_CENTER_AUTH_USERNAME \
+                        COMMAND_CENTER_AUTH_PASSWORD; do
+              eval "value=\${$name:-}"
+              if [ -z "$value" ]; then
+                echo "::error::$name is empty while the Command Center is enabled. Refusing to write a partial Command Center configuration."
+                exit 1
+              fi
+            done
             printf '%s\n' \
               "NODE_ENV=production" \
               "PORT=4300" \
@@ -720,7 +752,14 @@ jobs:
               | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                   "cat > '$DEPLOY_PATH/.env.command-center' && chmod 600 '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center written'"
           else
-            echo "Command Center disabled; .env.command-center not written."
+            # UTV2-1922: removing a stale file is part of what "disabled"
+            # means, not an extra. A `.env.command-center` left behind by an
+            # earlier enabled deploy is a 0600 file holding the service-role
+            # key and an operator credential with no running consumer, and it
+            # is precisely what would let a later profile selection activate
+            # the surface on configuration nobody reviewed.
+            ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+              "rm -f '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center absent (Command Center disabled)'"
           fi
           echo "Next.js env files written; QA auth bypass absent."
 
@@ -763,18 +802,68 @@ jobs:
           fi
           echo "Registry preflight passed: images resolved for tag $IMAGE_TAG (api worker ingestor discord-bot web smart-form $cc_service)."
 
+      # UTV2-1922: Docker Compose resolves `env_file`, variable interpolation
+      # and `profiles:` at CONFIG-PARSE time -- before it creates, starts or
+      # removes any container. Every failure of that class is therefore
+      # knowable HERE, while the edge is still serving, and on 2026-09-16 it
+      # was discovered instead by `docker compose up`, two commands after
+      # `docker rm -f caddy` had already taken :80 and :443 down.
+      #
+      # `config` reads and resolves. It starts nothing, stops nothing and
+      # removes nothing, so this step cannot itself be the destructive one.
+      - name: Preflight — validate the resolved compose configuration
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+        run: |
+          set -eu
+          compose_profile=""
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            compose_profile="--profile command-center"
+          fi
+          echo "resolving compose configuration for tag $IMAGE_TAG (profile: ${compose_profile:-default})"
+          if ! services=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                 "set -eu && cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose $compose_profile config --services" 2>&1); then
+            echo "::error::The production compose configuration does not resolve for tag $IMAGE_TAG (profile: ${compose_profile:-default}). Refusing to mutate the running deployment. Compose reported: $services"
+            exit 1
+          fi
+          resolved=" $(echo $services) "
+          # caddy is the sole binder of :80 and :443. A configuration that does
+          # not resolve it would remove the public edge by omission.
+          case "$resolved" in
+            *" caddy "*) ;;
+            *)
+              echo "::error::The resolved compose configuration does not include the caddy service, which is the only binder of ports 80 and 443. Refusing to proceed. Resolved services:$resolved"
+              exit 1
+              ;;
+          esac
+          if [ -n "$compose_profile" ]; then
+            case "$resolved" in
+              *" command-center "*) ;;
+              *)
+                echo "::error::The command-center profile is selected but the resolved configuration does not include the command-center service. Refusing to proceed. Resolved services:$resolved"
+                exit 1
+                ;;
+            esac
+          fi
+          echo "compose configuration resolves; services:$resolved"
+
       - name: Release API canary
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           ROLLBACK_TAG: ${{ inputs.rollback_tag }}
         run: |
+          # UTV2-1922: same false-advance as promote -- the release record was
+          # written and the in-flight marker cleared BEFORE `docker compose up`,
+          # so a canary that failed to activate still left the host claiming the
+          # new tag. Canary never touches caddy, so ordering is the whole fix.
           ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu && cd '$DEPLOY_PATH' && \
              if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.previous; fi && \
-             printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
-             rm -f .unit-talk-deploy-inflight && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
-             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps api"
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps api && \
+             printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
+             rm -f .unit-talk-deploy-inflight"
           for attempt in $(seq 1 30); do
             if ssh "$DEPLOY_USER@$DEPLOY_HOST" "curl -fsS http://localhost:4000/health >/dev/null 2>&1"; then
               exit 0
@@ -1055,7 +1144,7 @@ jobs:
             echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
           fi
 
-          for f in .env.production .env.web .env.smart-form; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
             [ -f "$f" ] || continue
 
             if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
@@ -1083,7 +1172,7 @@ jobs:
           # not an error. This heredoc runs under `set -eu` today, but other
           # remote bodies in this workflow use `pipefail` and this line must not
           # become a silent step failure if it is ever hardened to match.
-          for f in .env.production .env.web .env.smart-form; do
+          for f in .env.production .env.web .env.smart-form .env.edge .env.command-center; do
             { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
@@ -1260,6 +1349,26 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
+          # UTV2-1922: this mapping is the whole of the 2026-09-16 edge outage.
+          # The body below has carried a `.env.command-center` branch since
+          # UTV2-1918, but CC_ENABLED reached only the promote step -- so two
+          # steps in ONE job disagreed about whether the surface was enabled:
+          # this one wrote nothing, and promote then selected
+          # `--profile command-center`, which made Docker Compose require the
+          # file at config-parse time. `docker rm -f caddy` had already run.
+          #
+          # The six values below are not decoration either. With CC_ENABLED
+          # alone this step would have written an env file of empty strings,
+          # which the container's own entrypoint refuses -- a crash-loop in
+          # place of a refused deploy. A step that writes a file must hold
+          # every value that file requires.
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
+          COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
+          COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
+          COMMAND_CENTER_AUTH_PASSWORD: ${{ secrets.COMMAND_CENTER_AUTH_PASSWORD }}
         run: |
           set -eu
           # Fail closed a second time at the point of use. The verify job checked
@@ -1336,6 +1445,18 @@ jobs:
           # place inside an image built for a third app. Writing the complete
           # set makes the container's configuration independent of that walk.
           if [ "${CC_ENABLED:-}" = 'true' ]; then
+            # UTV2-1922: refuse here, where nothing has been mutated yet,
+            # rather than let compose discover a short file after the edge has
+            # already been taken down. Mirrors the always-on loop above.
+            for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY UNIT_TALK_CC_API_KEY \
+                        COMMAND_CENTER_AUTH_TOKEN COMMAND_CENTER_AUTH_USERNAME \
+                        COMMAND_CENTER_AUTH_PASSWORD; do
+              eval "value=\${$name:-}"
+              if [ -z "$value" ]; then
+                echo "::error::$name is empty while the Command Center is enabled. Refusing to write a partial Command Center configuration."
+                exit 1
+              fi
+            done
             printf '%s\n' \
               "NODE_ENV=production" \
               "PORT=4300" \
@@ -1350,7 +1471,14 @@ jobs:
               | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                   "cat > '$DEPLOY_PATH/.env.command-center' && chmod 600 '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center written'"
           else
-            echo "Command Center disabled; .env.command-center not written."
+            # UTV2-1922: removing a stale file is part of what "disabled"
+            # means, not an extra. A `.env.command-center` left behind by an
+            # earlier enabled deploy is a 0600 file holding the service-role
+            # key and an operator credential with no running consumer, and it
+            # is precisely what would let a later profile selection activate
+            # the surface on configuration nobody reviewed.
+            ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+              "rm -f '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center absent (Command Center disabled)'"
           fi
           echo "Next.js env files written; QA auth bypass absent."
 
@@ -1389,6 +1517,52 @@ jobs:
           fi
           echo "Registry preflight passed: images resolved for tag $IMAGE_TAG (api worker ingestor discord-bot web smart-form $cc_service)."
 
+      # UTV2-1922: Docker Compose resolves `env_file`, variable interpolation
+      # and `profiles:` at CONFIG-PARSE time -- before it creates, starts or
+      # removes any container. Every failure of that class is therefore
+      # knowable HERE, while the edge is still serving, and on 2026-09-16 it
+      # was discovered instead by `docker compose up`, two commands after
+      # `docker rm -f caddy` had already taken :80 and :443 down.
+      #
+      # `config` reads and resolves. It starts nothing, stops nothing and
+      # removes nothing, so this step cannot itself be the destructive one.
+      - name: Preflight — validate the resolved compose configuration
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+        run: |
+          set -eu
+          compose_profile=""
+          if [ "${CC_ENABLED:-}" = 'true' ]; then
+            compose_profile="--profile command-center"
+          fi
+          echo "resolving compose configuration for tag $IMAGE_TAG (profile: ${compose_profile:-default})"
+          if ! services=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                 "set -eu && cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose $compose_profile config --services" 2>&1); then
+            echo "::error::The production compose configuration does not resolve for tag $IMAGE_TAG (profile: ${compose_profile:-default}). Refusing to mutate the running deployment. Compose reported: $services"
+            exit 1
+          fi
+          resolved=" $(echo $services) "
+          # caddy is the sole binder of :80 and :443. A configuration that does
+          # not resolve it would remove the public edge by omission.
+          case "$resolved" in
+            *" caddy "*) ;;
+            *)
+              echo "::error::The resolved compose configuration does not include the caddy service, which is the only binder of ports 80 and 443. Refusing to proceed. Resolved services:$resolved"
+              exit 1
+              ;;
+          esac
+          if [ -n "$compose_profile" ]; then
+            case "$resolved" in
+              *" command-center "*) ;;
+              *)
+                echo "::error::The command-center profile is selected but the resolved configuration does not include the command-center service. Refusing to proceed. Resolved services:$resolved"
+                exit 1
+                ;;
+            esac
+          fi
+          echo "compose configuration resolves; services:$resolved"
+
       - name: Promote all production containers
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
@@ -1404,25 +1578,103 @@ jobs:
           # flag is turned back off, the running container SHOULD be removed.
           # Disabling the surface has to actually stop it, or "default-off" would
           # only describe hosts that had never enabled it.
+          set -eu
           compose_profile=""
+          cc_rollback_flag=""
           if [ "${CC_ENABLED:-}" = 'true' ]; then
             compose_profile="--profile command-center"
+            cc_rollback_flag="--command-center"
           fi
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu && cd '$DEPLOY_PATH' && \
-             docker rm -f caddy 2>/dev/null || true && \
-             printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
-             rm -f .unit-talk-deploy-inflight && \
-             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose $compose_profile pull && \
-             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose $compose_profile up -d --remove-orphans"
+
+          # UTV2-1922: this body used to assert three things before they were
+          # true -- caddy removed, `.unit-talk-release` advanced to the new tag
+          # and the in-flight marker cleared -- and only then ran the command
+          # that makes them true. On 2026-09-16 `docker compose up` failed at
+          # config-parse, so the edge was gone, the host recorded a release it
+          # had never started, and the marker whose whole job is to say "do not
+          # trust what you find here" had already been erased.
+          #
+          # The sequence below inverts every one of those:
+          #   * pull first -- the long, failure-prone, NON-destructive half,
+          #     with the edge still serving throughout;
+          #   * activate with the edge still up. `docker rm -f caddy` runs only
+          #     after a failure whose own text proves a stale container is
+          #     holding the ports -- the single case it was added for in
+          #     ecab31704 (2026-06-08);
+          #   * if activation still fails, restore the edge before exiting, and
+          #     leave both markers untouched so the host keeps describing what
+          #     is actually running.
+          if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$DEPLOY_PATH' '$IMAGE_TAG' '$compose_profile'" <<'PROMOTE_REMOTE'
+          set -eu
+          cd "$1"
+          IMAGE_TAG="$2"
+          PROFILE="$3"
+
+          # Never leave 80/443 unserved. Caddy's own image is pinned
+          # (caddy:2-alpine), so this does not depend on the tag being promoted;
+          # UNIT_TALK_IMAGE_TAG is supplied only because every other service
+          # interpolates it and compose evaluates the whole file. --no-deps is
+          # deliberate: the edge must come back even when an app container is
+          # unhealthy, because a 502 from a live edge is recoverable and a
+          # refused connection on :443 is an outage.
+          restore_edge() {
+            recorded="$(cat .unit-talk-release 2>/dev/null || true)"
+            UNIT_TALK_IMAGE_TAG="${recorded:-$IMAGE_TAG}" docker compose up -d --no-deps caddy || true
+            if [ -n "$(docker ps --filter 'name=^caddy$' --filter status=running --quiet)" ]; then
+              echo "edge preserved: caddy is running, ports 80 and 443 are served"
+            else
+              echo "EDGE DOWN: caddy could not be restored" >&2
+            fi
+          }
+
+          UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose $PROFILE pull
+
+          if ! activation="$(UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose $PROFILE up -d --remove-orphans 2>&1)"; then
+            printf '%s\n' "$activation"
+            case "$activation" in
+              *'address already in use'*|*'port is already allocated'*|*'is already in use by container'*|*'Conflict'*)
+                echo "a stale container is holding the edge ports; clearing caddy and retrying once"
+                docker rm -f caddy 2>/dev/null || true
+                if ! UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose $PROFILE up -d --remove-orphans; then
+                  restore_edge
+                  exit 1
+                fi
+                ;;
+              *)
+                restore_edge
+                exit 1
+                ;;
+            esac
+          else
+            printf '%s\n' "$activation"
+          fi
+
+          # Only now is either of these a true statement about the host.
+          printf '%s\n' "$IMAGE_TAG" > .unit-talk-release
+          rm -f .unit-talk-deploy-inflight
+          echo "activated $IMAGE_TAG: release record advanced and in-flight marker cleared"
+          PROMOTE_REMOTE
+          then
+            echo "::error::Production activation failed for tag $IMAGE_TAG. The release record was NOT advanced and the in-flight marker was NOT cleared, so .unit-talk-release still names the release that is actually running."
+            if [ -n "$ROLLBACK_TAG" ]; then
+              bash deploy/rollback.sh --tag "$ROLLBACK_TAG" $cc_rollback_flag --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"
+            fi
+            exit 1
+          fi
+
           for attempt in $(seq 1 30); do
             if ssh "$DEPLOY_USER@$DEPLOY_HOST" "curl -fsS http://localhost:4000/health >/dev/null 2>&1"; then
               exit 0
             fi
             sleep 10
           done
+          # UTV2-1922: the health loop can time out with caddy stopped -- it
+          # depends_on the API being healthy -- so the edge is restored here too
+          # before the job fails, whether or not a rollback tag was supplied.
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu && cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps caddy" || true
           if [ -n "$ROLLBACK_TAG" ]; then
-            bash deploy/rollback.sh --tag "$ROLLBACK_TAG" --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"
+            bash deploy/rollback.sh --tag "$ROLLBACK_TAG" $cc_rollback_flag --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"
           fi
           exit 1
 

@@ -15,8 +15,9 @@
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { parse as parseYaml } from 'yaml';
 
@@ -657,15 +658,39 @@ test('the Command Center is off unless a deploy deliberately enables it', () => 
 
   // Every other compose invocation in the workflow must be profile-free, or the
   // surface would start somewhere this test does not describe.
+  //
+  // UTV2-1922 widened this from one step to two, and the second is admitted on
+  // a condition rather than by name alone. The validation step has to resolve
+  // the SAME profile the promotion will use -- a validation that checked a
+  // different configuration than the one about to be applied would prove
+  // nothing -- but it must never be able to start the surface. So it is allowed
+  // to name the profile only while every compose verb it invokes is read-only.
+  const READ_ONLY_PROFILE_STEP = 'Preflight — validate the resolved compose configuration';
   for (const jobId of ['canary', 'promote']) {
     for (const entry of (job(jobId)['steps'] as unknown[]) ?? []) {
       const stepRecord = asRecord(entry);
+      const name = String(stepRecord['name'] ?? '');
       const script = String(stepRecord['run'] ?? '');
       if (!script.includes('--profile')) continue;
+      if (name === READ_ONLY_PROFILE_STEP) {
+        for (const verb of ['up', 'pull', 'run', 'start', 'create', 'down', 'rm', 'stop']) {
+          assert.ok(
+            !new RegExp(`docker compose[^\n]*\\b${verb}\\b`).test(script),
+            `"${name}" activates a compose profile, so it may only read the configuration — ` +
+              `\`docker compose ... ${verb}\` would make the validation step itself mutate the deployment`,
+          );
+        }
+        assert.match(
+          script,
+          /docker compose [^\n]*config/,
+          `"${name}" must resolve the configuration with \`docker compose config\`, which starts nothing`,
+        );
+        continue;
+      }
       assert.equal(
-        stepRecord['name'],
+        name,
         'Promote all production containers',
-        `${jobId} step "${String(stepRecord['name'])}" must not activate a compose profile`,
+        `${jobId} step "${name}" must not activate a compose profile`,
       );
     }
   }
@@ -910,5 +935,528 @@ test('every tracked app and package source file decodes as valid UTF-8', () => {
     invalid,
     [],
     `these files are not valid UTF-8 and will fail any Next.js build that reads them:\n${invalid.join('\n')}`,
+  );
+});
+
+/* ------------------------------------------------------------------------- *
+ * UTV2-1922 — production promotion is transactional.
+ *
+ * On 2026-09-16 a production promotion removed the public edge and then failed,
+ * leaving ports 80 and 443 unserved while `.unit-talk-release` claimed the
+ * release that had never started and the in-flight marker that exists to say
+ * "do not trust this metadata" had already been deleted. Deploy run
+ * 35114935565 is the failure; run 35119502596 is the recovery that restored
+ * service, and is the positive control for what a healthy promotion looks like.
+ *
+ * The literal trigger was one missing variable -- `CC_ENABLED` was absent from
+ * the env-write step's `env:` mapping, so `.env.command-center` was never
+ * written and compose could not parse the file it was pointed at. These tests
+ * deliberately do NOT stop at that variable. Each one names a member of the
+ * incident class: a configuration failure that is knowable while the edge is
+ * still serving must not be discovered after it has been taken down, and
+ * release metadata must never describe a state the host never reached.
+ *
+ * Where a property is about BEHAVIOUR rather than wiring, the test executes the
+ * real script body extracted from `deploy.yml` against a stubbed `docker`,
+ * rather than restating the workflow's logic in the test. A test that
+ * re-implements the thing it checks cannot fail on a real regression.
+ * ------------------------------------------------------------------------- */
+
+const CC_REQUIRED_ENV = [
+  'CC_ENABLED',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'UNIT_TALK_CC_API_KEY',
+  'COMMAND_CENTER_AUTH_TOKEN',
+  'COMMAND_CENTER_AUTH_USERNAME',
+  'COMMAND_CENTER_AUTH_PASSWORD',
+] as const;
+
+const ENV_WRITE_STEP = 'Write Next.js service env files to server';
+const VALIDATE_STEP = 'Preflight — validate the resolved compose configuration';
+const PROMOTE_STEP = 'Promote all production containers';
+const CANARY_STEP = 'Release API canary';
+
+function stepIndex(jobId: string, name: string): number {
+  const steps = job(jobId)['steps'];
+  assert.ok(Array.isArray(steps), `job ${jobId} must have steps`);
+  const index = steps.findIndex((entry) => asRecord(entry)['name'] === name);
+  assert.ok(index >= 0, `step "${name}" must exist in job ${jobId}`);
+  return index;
+}
+
+/**
+ * The remote script the promote step pipes over ssh, taken from the workflow
+ * rather than retyped. If the heredoc is renamed or removed this throws, which
+ * is the correct outcome: the behavioural tests below would otherwise silently
+ * start proving nothing.
+ */
+function promoteRemoteBody(): string {
+  const run = String(step('promote', PROMOTE_STEP)['run']);
+  const open = "<<'PROMOTE_REMOTE'\n";
+  const close = '\nPROMOTE_REMOTE\n';
+  const start = run.indexOf(open);
+  assert.ok(start >= 0, 'the promote step must ship its remote script as a quoted PROMOTE_REMOTE heredoc');
+  const end = run.indexOf(close, start);
+  assert.ok(end > start, 'the PROMOTE_REMOTE heredoc must be terminated');
+  return run.slice(start + open.length, end);
+}
+
+test('UTV2-1922: both env-write steps receive every value a complete .env.command-center needs', () => {
+  // THE VACUITY THIS CLOSES. The pre-existing Command Center assertions all read
+  // the printf TEXT inside the step body -- which named `$SUPABASE_URL`,
+  // `$UNIT_TALK_CC_API_KEY` and the rest, and looked complete. None of them read
+  // the step's `env:` MAPPING, which is what actually populates those names. On
+  // 2026-09-16 the body was correct and the mapping was empty of all seven, so
+  // the step wrote a file of empty values -- or, for CC_ENABLED, never entered
+  // the branch at all. A test that reads only the text a step contains cannot
+  // see the difference between a variable and an empty string.
+  const canaryEnv = asRecord(step('canary', ENV_WRITE_STEP)['env']);
+  const promoteEnv = asRecord(step('promote', ENV_WRITE_STEP)['env']);
+
+  for (const [label, envMap] of [['canary', canaryEnv], ['promote', promoteEnv]] as const) {
+    for (const name of CC_REQUIRED_ENV) {
+      const value = envMap[name];
+      assert.ok(
+        typeof value === 'string' && value.trim().length > 0,
+        `the ${label} env-write step must pass ${name} through its env: mapping — ` +
+          'naming it in the script body alone writes an empty value',
+      );
+      assert.match(
+        String(value),
+        /^\$\{\{\s*(secrets|vars)\./,
+        `${name} must come from a secret or repository variable, never a literal in the workflow`,
+      );
+    }
+  }
+
+  // The two copies are byte-identical by design; drift between them means the
+  // canary validated one configuration and production wrote another.
+  assert.deepEqual(
+    canaryEnv,
+    promoteEnv,
+    'the canary and promote env-write steps must pass an identical environment',
+  );
+});
+
+test('UTV2-1922: an enabled Command Center with a missing value fails before it writes a partial file', () => {
+  const body = String(step('promote', ENV_WRITE_STEP)['run']);
+  const guardAt = body.indexOf(CC_ENABLE_GUARD);
+  assert.ok(guardAt >= 0, 'the env-write step must gate Command Center config on the enable variable');
+
+  const guarded = body.slice(guardAt);
+  const refusalAt = guarded.indexOf('is empty while the Command Center is enabled');
+  assert.ok(
+    refusalAt >= 0,
+    'an enabled Command Center with an empty required value must refuse explicitly — ' +
+      'writing a file of empty strings is how a config error reaches `docker compose up`',
+  );
+  // The refusal must precede the write, or it refuses a file that already exists.
+  const writeAt = guarded.indexOf(".env.command-center'");
+  assert.ok(writeAt >= 0, 'the guarded block must write .env.command-center');
+  assert.ok(
+    refusalAt < writeAt,
+    'the required-value check must run before the file is written, not after',
+  );
+  assert.match(guarded.slice(refusalAt, writeAt), /exit 1/, 'the refusal must be fatal, not a warning');
+});
+
+test('UTV2-1922: a disabled Command Center removes stale config rather than leaving it to be found', () => {
+  // The pre-UTV2-1922 else-branch only echoed. A `.env.command-center` left over
+  // from an earlier enabled deploy would survive indefinitely, holding the
+  // service-role key and an operator credential at rest, and would be picked up
+  // by the next profile selection -- activating a surface nobody enabled.
+  for (const jobId of ['canary', 'promote']) {
+    const body = String(step(jobId, ENV_WRITE_STEP)['run']);
+    const elseAt = body.indexOf('else', body.indexOf(CC_ENABLE_GUARD));
+    assert.ok(elseAt > 0, `${jobId}: the enable guard must have a disabled branch`);
+    const disabled = body.slice(elseAt, body.indexOf('\n      fi', elseAt) + 1 || undefined);
+    assert.match(
+      disabled,
+      /rm -f '\$DEPLOY_PATH\/\.env\.command-center'/,
+      `${jobId}: the disabled branch must remove any stale .env.command-center`,
+    );
+  }
+
+  // And the surface must stay unselected: no profile is chosen when disabled.
+  const promote = String(step('promote', PROMOTE_STEP)['run']);
+  assert.match(
+    promote,
+    /compose_profile=""/,
+    'the promote step must default to no compose profile when the surface is disabled',
+  );
+});
+
+test('UTV2-1922: compose configuration is validated before anything destructive runs', () => {
+  for (const jobId of ['canary', 'promote']) {
+    const mutation = jobId === 'canary' ? CANARY_STEP : PROMOTE_STEP;
+    const validateAt = stepIndex(jobId, VALIDATE_STEP);
+    const mutationAt = stepIndex(jobId, mutation);
+    assert.ok(
+      validateAt < mutationAt,
+      `${jobId}: the compose configuration must be validated before "${mutation}" runs`,
+    );
+
+    const validate = String(step(jobId, VALIDATE_STEP)['run']);
+    // `config` resolves env_file, interpolation and profiles and starts nothing.
+    // That is precisely the set of failures the 2026-09-16 promotion discovered
+    // from `up`, two commands after the edge had already been removed.
+    assert.match(validate, /docker compose [^\n]*config/, `${jobId}: validation must resolve the configuration`);
+    assert.match(
+      validate,
+      /exit 1/,
+      `${jobId}: validation must fail closed — a warning would leave the promotion running`,
+    );
+    // caddy is the only binder of :80 and :443. A configuration that resolves
+    // without it would remove the edge by omission rather than by error.
+    assert.match(
+      validate,
+      /caddy/,
+      `${jobId}: validation must confirm the resolved configuration still includes caddy`,
+    );
+    assert.match(
+      validate,
+      /command-center/,
+      `${jobId}: validation must confirm a selected profile actually resolves the surface`,
+    );
+  }
+});
+
+test('UTV2-1922: rollback and snapshot cover every env file the deploy overwrites', () => {
+  const rollback = readFileSync(resolve(ROOT, 'deploy/rollback.sh'), 'utf8');
+  for (const file of ['.env.production', '.env.web', '.env.smart-form', '.env.edge']) {
+    assert.ok(rollback.includes(file), `rollback.sh must restore ${file}`);
+  }
+  // `.env.edge` carries the hostnames Caddy parses its own config from, so a
+  // rollback that skipped it restored an edge configured by the release it was
+  // rolling away from.
+  assert.match(
+    rollback,
+    /\.env\.command-center/,
+    'rollback.sh must handle .env.command-center',
+  );
+  // Its absence means something the other files\' absence does not: rolling back
+  // to a release with no Command Center must leave no Command Center config.
+  assert.match(
+    rollback,
+    /rm -f \.env\.command-center/,
+    'rolling back to a tag with no Command Center snapshot must remove stale Command Center config, not keep it',
+  );
+
+  for (const jobId of ['canary', 'promote']) {
+    const snapshot = String(step(jobId, 'Snapshot outgoing configuration for rollback')['run']);
+    for (const file of ['.env.edge', '.env.command-center']) {
+      assert.ok(
+        snapshot.includes(file),
+        `${jobId}: the rollback snapshot must capture ${file}, or rollback has nothing to restore`,
+      );
+    }
+  }
+});
+
+test('UTV2-1922: rollback advances the release record only after it has activated', () => {
+  const rollback = readFileSync(resolve(ROOT, 'deploy/rollback.sh'), 'utf8');
+  const activateAt = rollback.indexOf('docker compose up -d --remove-orphans');
+  const releaseAt = rollback.lastIndexOf("> .unit-talk-release");
+  assert.ok(activateAt > 0 && releaseAt > 0, 'rollback.sh must both activate and record the release');
+  assert.ok(
+    activateAt < releaseAt,
+    'rollback.sh must write .unit-talk-release after activation — writing it first makes a failed ' +
+      'rollback leave the host naming a release it never started',
+  );
+});
+
+/**
+ * Ordering assertions scan a script as text, so a shell COMMENT that happens to
+ * quote a command lands on the wrong side of the line being asserted and makes
+ * the assertion pass or fail for a reason that has nothing to do with what the
+ * script does. Strip comments first. (Found by mutation M7: a comment above the
+ * canary body explaining this very defect quoted `docker compose up`, and the
+ * reverted ordering went undetected.)
+ */
+function executableLines(script: string): string {
+  return script
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+}
+
+test('UTV2-1922: no mutation step advances release metadata before activation succeeds', () => {
+  for (const [jobId, name] of [['canary', CANARY_STEP], ['promote', PROMOTE_STEP]] as const) {
+    const body = executableLines(String(step(jobId, name)['run']));
+    const activateAt = body.indexOf('docker compose');
+    const releaseAt = body.indexOf('> .unit-talk-release');
+    const clearAt = body.indexOf('rm -f .unit-talk-deploy-inflight');
+    assert.ok(activateAt > 0, `${jobId}: the mutation step must invoke compose`);
+    assert.ok(releaseAt > 0, `${jobId}: the mutation step must record the release`);
+    assert.ok(clearAt > 0, `${jobId}: the mutation step must clear the in-flight marker`);
+    assert.ok(
+      activateAt < releaseAt,
+      `${jobId}: .unit-talk-release must be written after activation, never before it`,
+    );
+    assert.ok(
+      activateAt < clearAt,
+      `${jobId}: the in-flight marker must be cleared after activation — clearing it first erases the ` +
+        'one signal that says the metadata on the host cannot be trusted',
+    );
+    // deploy-config-rollback.test.ts additionally requires release-then-clear.
+    assert.ok(releaseAt < clearAt, `${jobId}: the release record must be written before the marker is cleared`);
+  }
+});
+
+test('UTV2-1922: the edge is removed only on a failure that proves a stale container holds it', () => {
+  const remote = executableLines(promoteRemoteBody());
+  const removeAt = remote.indexOf('docker rm -f caddy');
+  assert.ok(removeAt > 0, 'the promote body must retain the stale-container recovery it was given in ecab31704');
+
+  const before = remote.slice(0, removeAt);
+  // Unconditional removal is the defect. The removal must sit downstream of an
+  // activation attempt whose own failure text names a port conflict.
+  assert.match(before, /docker compose \$PROFILE up/, 'activation must be attempted before caddy is removed');
+  assert.match(
+    before,
+    /address already in use|port is already allocated|is already in use by container/,
+    'caddy may only be removed on a failure that identifies a port conflict',
+  );
+  assert.match(remote, /restore_edge/, 'the promote body must define an edge-restoration path');
+});
+
+/* ------------------------------------------------------------------------- *
+ * UTV2-1922 — behavioural proof.
+ *
+ * The assertions above describe the shape of the promote body. These ones run
+ * it. The script under test is extracted from `deploy.yml` by
+ * `promoteRemoteBody()`, so it is the artifact the deploy actually ships, not a
+ * transcription of it, and `docker` is replaced by a stub that can be told to
+ * fail the way the 2026-09-16 promotion failed.
+ *
+ * What each case proves is a state of the HOST after the script exits: whether
+ * the edge is serving, and whether the two release markers describe something
+ * that really happened.
+ * ------------------------------------------------------------------------- */
+
+const DOCKER_STUB = `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$UTV2_1922_LOG"
+mode="$(cat "$UTV2_1922_MODE")"
+case "$1" in
+  ps)
+    # Reports whether caddy is running. The stub keeps a flag file so that a
+    # removal is actually observable rather than assumed.
+    if [ -f "$UTV2_1922_DIR/.caddy-removed" ]; then
+      if [ -f "$UTV2_1922_DIR/.caddy-restored" ]; then printf 'cid\\n'; fi
+    else
+      printf 'cid\\n'
+    fi
+    exit 0
+    ;;
+  rm)
+    : > "$UTV2_1922_DIR/.caddy-removed"
+    exit 0
+    ;;
+  compose)
+    verb=""
+    nodeps=no
+    for a in "$@"; do
+      case "$a" in
+        up) verb=up ;;
+        pull) verb=pull ;;
+        config) verb=config ;;
+        --no-deps) nodeps=yes ;;
+      esac
+    done
+    if [ "$verb" = pull ] || [ "$verb" = config ]; then exit 0; fi
+    if [ "$verb" = up ] && [ "$nodeps" = yes ]; then
+      # Restoring the edge on its pinned image. Always succeeds in these cases;
+      # the case where it cannot is covered by the assertion on its || true.
+      : > "$UTV2_1922_DIR/.caddy-restored"
+      exit 0
+    fi
+    attempt=$(( $(cat "$UTV2_1922_DIR/.attempts" 2>/dev/null || echo 0) + 1 ))
+    printf '%s' "$attempt" > "$UTV2_1922_DIR/.attempts"
+    case "$mode" in
+      ok) exit 0 ;;
+      parse-fail)
+        # \`up --remove-orphans\` reconciles the project before it can discover
+        # every configuration error, so a failing activation can and does leave
+        # containers stopped. Modelling the failure as leaving the edge intact
+        # would make the edge-preservation assertions pass for free.
+        : > "$UTV2_1922_DIR/.caddy-removed"
+        printf 'service "command-center" env_file .env.command-center not found\\n' >&2
+        exit 1
+        ;;
+      port-conflict-then-ok)
+        if [ "$attempt" = 1 ]; then
+          printf 'Error response from daemon: port is already allocated\\n' >&2
+          exit 1
+        fi
+        exit 0
+        ;;
+      port-conflict-then-fail)
+        printf 'Error response from daemon: port is already allocated\\n' >&2
+        exit 1
+        ;;
+    esac
+    exit 1
+    ;;
+esac
+exit 0
+`;
+
+const OLD_TAG = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const NEW_TAG = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+interface PromoteOutcome {
+  exitCode: number;
+  release: string;
+  inflightPresent: boolean;
+  caddyRemoved: boolean;
+  edgeServing: boolean;
+  output: string;
+}
+
+function runPromote(mode: string, profile = ''): PromoteOutcome {
+  const dir = mkdtempSync(join(tmpdir(), 'utv2-1922-'));
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  const dockerPath = join(bin, 'docker');
+  writeFileSync(dockerPath, DOCKER_STUB, { mode: 0o755 });
+
+  const host = join(dir, 'host');
+  mkdirSync(host);
+  writeFileSync(join(host, '.unit-talk-release'), `${OLD_TAG}\n`);
+  writeFileSync(join(host, '.unit-talk-deploy-inflight'), '35114935565\n');
+  writeFileSync(join(dir, 'mode'), mode);
+  const logPath = join(dir, 'docker.log');
+  writeFileSync(logPath, '');
+
+  const scriptPath = join(dir, 'promote-remote.sh');
+  writeFileSync(scriptPath, promoteRemoteBody());
+
+  let exitCode = 0;
+  let output = '';
+  try {
+    output = execFileSync('bash', [scriptPath, host, NEW_TAG, profile], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        UTV2_1922_LOG: logPath,
+        UTV2_1922_MODE: join(dir, 'mode'),
+        UTV2_1922_DIR: host,
+      },
+    });
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string; stderr?: string };
+    exitCode = failure.status ?? 1;
+    output = `${failure.stdout ?? ''}${failure.stderr ?? ''}`;
+  }
+
+  const outcome: PromoteOutcome = {
+    exitCode,
+    release: readFileSync(join(host, '.unit-talk-release'), 'utf8').trim(),
+    inflightPresent: existsSync(join(host, '.unit-talk-deploy-inflight')),
+    caddyRemoved: existsSync(join(host, '.caddy-removed')),
+    edgeServing:
+      !existsSync(join(host, '.caddy-removed')) || existsSync(join(host, '.caddy-restored')),
+    output,
+  };
+  rmSync(dir, { recursive: true, force: true });
+  return outcome;
+}
+
+test('UTV2-1922 behaviour: a successful promotion advances both markers and never touches the edge', () => {
+  // The positive control. Deploy run 35119502596 is its production counterpart:
+  // an activation that worked, after which the release record was true.
+  const result = runPromote('ok');
+  assert.equal(result.exitCode, 0, 'a successful activation must exit 0');
+  assert.equal(result.release, NEW_TAG, 'a successful activation must record the new release');
+  assert.equal(result.inflightPresent, false, 'a successful activation must clear the in-flight marker');
+  assert.equal(result.caddyRemoved, false, 'a successful activation must not remove the edge at all');
+  assert.equal(result.edgeServing, true, 'ports 80 and 443 must still be served');
+});
+
+test('UTV2-1922 behaviour: a compose configuration failure cannot leave the edge unserved', () => {
+  // This is the 2026-09-16 sequence exactly: `docker compose up` fails at
+  // config-parse because `.env.command-center` does not exist. Before this
+  // repair the edge was already gone by the time that happened.
+  const result = runPromote('parse-fail', '--profile command-center');
+  assert.equal(result.exitCode, 1, 'a failed activation must fail the step');
+  assert.equal(result.edgeServing, true, 'a failed activation must leave ports 80 and 443 served');
+  // The step is not required to keep caddy running through a failed `up` --
+  // compose owns the project -- but it IS required not to exit while the edge is
+  // down. The acceptance condition is behavioural: ports 80 and 443 served.
+  assert.match(
+    result.output,
+    /edge preserved/,
+    'a failed activation must report the state of the edge rather than exiting silently',
+  );
+  // And the removal that the promote step itself performs stays conditional: a
+  // config-parse failure is not a port conflict, so no retry may be attempted.
+  assert.ok(
+    !/a stale container is holding the edge ports/.test(result.output),
+    'a config-parse failure must not be treated as a port conflict',
+  );
+});
+
+test('UTV2-1922 behaviour: a failed activation leaves release metadata describing reality', () => {
+  const result = runPromote('parse-fail', '--profile command-center');
+  assert.equal(
+    result.release,
+    OLD_TAG,
+    'a failed activation must leave .unit-talk-release naming the release that is actually running',
+  );
+  assert.equal(
+    result.inflightPresent,
+    true,
+    'a failed activation must leave the in-flight marker in place — it is the signal that the ' +
+      'configuration on the host may not match the running release',
+  );
+});
+
+test('UTV2-1922 behaviour: a genuine port conflict is still recovered, and only then', () => {
+  // The removal introduced in ecab31704 exists for a real condition: a stale
+  // caddy container from a prior partial deploy holding :80. Repairing the
+  // unconditional removal must not remove the recovery.
+  const result = runPromote('port-conflict-then-ok');
+  assert.equal(result.exitCode, 0, 'a port conflict that clears on retry must succeed');
+  assert.equal(result.caddyRemoved, true, 'the stale container must be cleared on a port conflict');
+  assert.equal(result.release, NEW_TAG, 'a successful retry must record the new release');
+  assert.equal(result.inflightPresent, false, 'a successful retry must clear the in-flight marker');
+});
+
+test('UTV2-1922 behaviour: a port conflict whose retry also fails still restores the edge', () => {
+  // The one path that genuinely does take the edge down. It must put it back.
+  const result = runPromote('port-conflict-then-fail');
+  assert.equal(result.exitCode, 1, 'a failed retry must fail the step');
+  assert.equal(result.caddyRemoved, true, 'the retry path removed caddy');
+  assert.equal(result.edgeServing, true, 'and must have restored it before exiting');
+  assert.equal(result.release, OLD_TAG, 'a failed retry must not advance the release record');
+  assert.equal(result.inflightPresent, true, 'a failed retry must not clear the in-flight marker');
+});
+
+test('UTV2-1922: this regression suite is non-vacuous and is reachable from required verify', () => {
+  // A mutation control for the behavioural cases. If `promoteRemoteBody()` ever
+  // returned something inert -- an empty string, a comment block -- every
+  // behavioural assertion above would pass against a script that does nothing,
+  // because the markers it never touches are exactly the markers a failure must
+  // not touch. Assert the extracted body really is the promotion.
+  const remote = promoteRemoteBody();
+  assert.ok(remote.trim().length > 0, 'the extracted promote body must not be empty');
+  for (const token of ['docker compose', '.unit-talk-release', '.unit-talk-deploy-inflight', 'restore_edge']) {
+    assert.ok(remote.includes(token), `the extracted promote body must contain ${token}`);
+  }
+  // And the positive control proves the harness can observe a marker CHANGING,
+  // so "unchanged" is a real observation rather than a stub that writes nothing.
+  assert.equal(runPromote('ok').release, NEW_TAG, 'the harness must be able to observe a successful advance');
+
+  // Required-reachable: `pnpm verify` runs `test:ops`, and this file must be in it.
+  const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  assert.match(
+    pkg.scripts['test:ops'] ?? '',
+    /nextjs-deploy-wiring\.test\.ts/,
+    'this suite must stay wired into test:ops, or it stops being a required check',
   );
 });
