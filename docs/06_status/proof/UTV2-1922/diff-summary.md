@@ -1,26 +1,29 @@
 # UTV2-1922 Diff Summary
 
-Generated at: 2026-09-16T17:31:16.971Z
+Generated at: 2026-09-16T20:10:00.000Z
 Issue: UTV2-1922
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1922-deploy-promotion-transaction
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1591
-Head SHA: 84411a21bea3e3f99b92b35340f59f3bb3a250b2
+Head SHA: 801c35c276a2e38384e2dea9e0c824cc4bba2a24
 Merge SHA: N/A
 Diff base: 68103b6065d9ec232a2cd55c73086446ca5da3c0
-Diff target: 84411a21bea3e3f99b92b35340f59f3bb3a250b2
+Diff target: 801c35c276a2e38384e2dea9e0c824cc4bba2a24
 
 ## Git Diff Stat
 ```
-.github/workflows/deploy.yml            | 286 +++++++++++++++-
- .lane/lanes/runtime.yml                 |  13 +
- .ops/sync/UTV2-1922.yml                 | 531 ++++++++++++++++++++++++++++++
- deploy/rollback.sh                      |  61 +++-
- docs/06_status/lanes/UTV2-1922.json     |  39 +++
- docs/06_status/proof/UTV2-1922/.gitkeep |   0
- scripts/ci/nextjs-deploy-wiring.test.ts | 556 +++++++++++++++++++++++++++++++-
- 7 files changed, 1460 insertions(+), 26 deletions(-)
+ .github/workflows/deploy.yml                       | 351 +++++++-
+ .lane/lanes/runtime.yml                            |  13 +
+ .ops/sync/UTV2-1922.yml                            | 531 ++++++++++++
+ deploy/rollback.sh                                 |  78 +-
+ docs/06_status/lanes/UTV2-1922.json                |  39 +
+ docs/06_status/proof/UTV2-1922/diff-summary.md     |  42 +
+ docs/06_status/proof/UTV2-1922/evidence.json       | 120 +++
+ docs/06_status/proof/UTV2-1922/runtime-health.json | 134 +++
+ docs/06_status/proof/UTV2-1922/verification.md     | 109 +++
+ scripts/ci/nextjs-deploy-wiring.test.ts            | 952 ++++++++++++++++++++-
+ 10 files changed, 2343 insertions(+), 26 deletions(-)
 ```
 
 ## Git Name Status
@@ -30,7 +33,10 @@ M	.lane/lanes/runtime.yml
 A	.ops/sync/UTV2-1922.yml
 M	deploy/rollback.sh
 A	docs/06_status/lanes/UTV2-1922.json
-A	docs/06_status/proof/UTV2-1922/.gitkeep
+A	docs/06_status/proof/UTV2-1922/diff-summary.md
+A	docs/06_status/proof/UTV2-1922/evidence.json
+A	docs/06_status/proof/UTV2-1922/runtime-health.json
+A	docs/06_status/proof/UTV2-1922/verification.md
 M	scripts/ci/nextjs-deploy-wiring.test.ts
 ```
 
@@ -38,5 +44,5 @@ M	scripts/ci/nextjs-deploy-wiring.test.ts
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: 84411a21bea3e3f99b92b35340f59f3bb3a250b2
+Head SHA: 801c35c276a2e38384e2dea9e0c824cc4bba2a24
 Merge SHA: N/A
