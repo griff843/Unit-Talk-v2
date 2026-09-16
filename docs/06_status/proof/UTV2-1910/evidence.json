@@ -1,0 +1,128 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1910",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "8e44be6d66f98db946708d64cdcbcc3fb7509911",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "8e44be6d66f98db946708d64cdcbcc3fb7509911 is the last commit on this lane carrying non-proof changes and is the execution anchor named in verification.md. Every commit after it touches only docs/06_status/proof/UTV2-1910/, so no measurement recorded below was taken on a different tree than the one this SHA names. merge_sha is null because the pull request is open: merge authority does not exist yet and is bound by post-merge-lane-close.yml once GitHub supplies it.",
+    "ci_sentinels": {
+      "head_sha": "e006da223ef850cd41256bbbd6f48c41e84635e4",
+      "run_id": 35043889077,
+      "verify": {
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "conclusion": "success"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. Both contexts were green at e006da223ef850cd41256bbbd6f48c41e84635e4, a descendant of the execution anchor, in run 35043889077. This block is a record of that run, not a claim about any later head; the binding head is set by CI."
+    }
+  },
+  "what_this_lane_delivers": {
+    "capability": "Every Command Center settlement and correction now collects an operator grading attestation and sends it to the API as operatorGradingContext, so a Smart Form Track Only pick can actually be settled manually.",
+    "what_it_deliberately_does_not_do": "It changes no API, no domain rule and no database. The server-side contract it satisfies (apps/api/src/settlement-service.ts:518, OPERATOR_GRADING_CONTEXT_REQUIRED) is unchanged by this lane; this lane stops the client violating it.",
+    "why_that_split": "The refusal at settlement-service.ts:518 is correct and was landed deliberately by UTV2-1861. The defect was entirely on the client: settlePick sent six fields and never the attestation, so manual settlement of an evidence-plane pick could not succeed at all.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm --filter @unit-talk/command-center test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 524,
+          "pass": 524,
+          "fail": 0
+        },
+        "label": "The whole Command Center package suite at the execution anchor, including the 9 new tests in apps/command-center/src/lib/operator-grading-context.test.ts built on a Chiefs -2.5 fixture: a complete attestation resolves, each missing required field is named individually, and evidenceRef derives as operator-manual:<observedAt>:<resultSourceUrl> rather than the former constant."
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6360,
+          "pass": 6360,
+          "fail": 0
+        },
+        "label": "The full repository suite in the lane worktree at this anchor."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0,
+      "note": "pnpm exec tsc -b tsconfig.json reported no diagnostics."
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0,
+      "note": "eslint . reported no findings."
+    },
+    "full_repository_test": {
+      "command": "pnpm test",
+      "environment": "workstation",
+      "status": "RUN",
+      "is_pass": true,
+      "row_counts": {
+        "tests": 6360,
+        "pass": 6360,
+        "fail": 0
+      },
+      "note": "pnpm verify itself was NOT run locally and is recorded as not run: ci:assert-staging-target inside it cannot succeed off CI. The binding repository-wide verification is the required verify check on this pull request, green at e006da223ef850cd41256bbbd6f48c41e84635e4."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 11,
+      "rules_matched": [
+        "operator-ui"
+      ],
+      "note": "The operator-ui rule triggered and its required artifacts — a diff summary and a verification log — are present."
+    },
+    "control_sensitivity": {
+      "control": "apps/command-center/src/lib/server-action-guard.test.ts — 'the authenticated forged-actor cases actually reach the backend'",
+      "method": "Measured rather than asserted: with settlePick invoked on two arguments the control failed (not ok 345, 523/524 passing), and it passes at this anchor with a valid attestation supplied as the third argument.",
+      "why_it_matters": "settlePick now refuses an incomplete attestation. Without updating the call the guard suite would have gone vacuous — the forged-actor case would never have reached fetch, and the refusal under test would have silently become the attestation refusal rather than the authentication refusal it names."
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off — no provider key read, tested or activated",
+    "member_delivery": "disabled — unchanged",
+    "track_only_containment": "enabled — unchanged",
+    "note": "The change is confined to apps/command-center client and server-action code plus this lane's own metadata. It adds no API route, no repository call and no migration."
+  },
+  "runtime_proof_disposition": {
+    "claimed": false,
+    "why": "No runtime proof is claimed and none is owed at T2. This lane writes nothing to any database and adds no migration; the behaviour it repairs is asserted against the canonical validateOperatorGradingContext imported from @unit-talk/contracts rather than against a live API. The live assertion belongs to the Chiefs production E2E, which follows deployment of the Command Center and is tracked on its own merits.",
+    "profile_note": "proof_profile is static because this bundle carries static proof only. Authoring app-runtime would oblige non-empty runtime_proof.queries and runtime_proof.row_counts, and this lane has no live queries or row counts to record — fabricating them to satisfy a profile field is exactly what this bundle refuses to do."
+  },
+  "known_gaps": [
+    {
+      "gap": "No browser proof of the new attestation fields.",
+      "disposition": "The Command Center has no Playwright suite wired into CI and is deployed nowhere, so there is no running surface to drive. Recorded as a dependency of the deployment candidate rather than as coverage."
+    },
+    {
+      "gap": "The API's refusal is not exercised end to end against a running apps/api.",
+      "disposition": "Deliberate. The client validator is the canonical contract validator itself, so client and server cannot drift; the end-to-end assertion is the Chiefs production E2E after deployment."
+    }
+  ],
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Check issue references",
+      "cause": "Branch Discipline Guard reports multiple_issue_references because the commit bodies cite the issues this lane repairs.",
+      "disposition": "Non-required. Clearing it means rewriting commit messages, which moves the head and invalidates the executor result bound to it."
+    },
+    {
+      "check": "QA Experience Regression (Advisory)",
+      "cause": "The job fails posting its own PR comment with 403 Resource not accessible by integration.",
+      "disposition": "Non-required, and environmental rather than a QA result."
+    }
+  ]
+}

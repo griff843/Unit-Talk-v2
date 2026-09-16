@@ -20,6 +20,9 @@ export function SettlementWorkbench({
         <p className="mt-2 text-sm cc-text-muted">
           Load a canonical pick before settlement controls are enabled. Submitting uses the existing Command Center
           server action and canonical API; correction records append and never overwrite the original.
+          Every settlement carries a grading attestation — what the outcome was based on, where it can be
+          independently checked, and when it was observed — because the API refuses an evidence-plane
+          settlement without one.
         </p>
         <form className="mt-4 flex flex-col gap-3 sm:flex-row" action="/settlement" method="get">
           <label className="sr-only" htmlFor="settlement-pick-id">Canonical pick ID</label>
