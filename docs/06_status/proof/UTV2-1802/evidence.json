@@ -6,7 +6,7 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "31eb6bf5acf32570c8618e401c2c3dd7334945c4",
     "verified_source_sha": "d7bf9b06fe459dbb49275517bbada79a1d7a5621",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -17,8 +17,8 @@
       "r_level_check": "PASS — `npx tsx scripts/ci/r-level-check.ts --base c3679fda71de97c29e3750d92046943365345e96 --head d7bf9b06fe459dbb49275517bbada79a1d7a5621` reports Verdict: PASS, Changed files: 11, Rules matched: operator-ui — identical to the previous anchor's receipt, which is the expected result since the resync imported main work and changed no lane file. Explicit SHAs are required: the script forces cwd to the root checkout, so --head HEAD would measure main rather than this lane.",
       "pnpm_verify": "set-by-ci — the required `verify` check re-runs on this head and is the authoritative result. The previous receipt (head 8f6dbcd17, run 34001056027) is bound to a head that is two resyncs stale."
     },
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-08T11:20:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-16T01:00:38.239Z",
     "anchor_note": "d7bf9b06fe459dbb49275517bbada79a1d7a5621 is the merge of origin/main into this branch, made with `pnpm ops:merge-wrapper git-merge-main` because the PR was BEHIND again and strict freshness means it cannot merge in that state; merging BEHIND would be an admin exemption rather than permission. `main-sync` refuses a diverged branch outright — it will not choose a history-rewriting verb — so the explicit git-merge-main verb is the sanctioned path and it preserves every existing SHA. It is the anchor because the imported delta carries apps/**, packages/** and scripts/** paths, none of which are in PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43), so the merge commit is the last commit on this branch outside those prefixes. It supersedes aab575f64311070f069ce961ed4da1f2d13da5dd, which superseded ef38423dc0c9650db928ee2ea55d5d97063b9590. Every receipt above was re-executed at this commit rather than carried forward. The resync changed no lane file and no scope declaration, and the lane's own diff is byte-identical to what it was at the previous anchor. Commits made after this one are confined to docs/06_status/proof/ and docs/06_status/lanes/ and do not move the anchor."
   },
   "static_proof": {

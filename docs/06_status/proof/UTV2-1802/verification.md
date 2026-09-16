@@ -1,6 +1,6 @@
 # PROOF: UTV2-1802
 
-MERGE_SHA: pending merge
+MERGE_SHA: 31eb6bf5acf32570c8618e401c2c3dd7334945c4
 
 > Pre-merge the merge row is intentionally the ratified `pending merge` anchor; the
 > Execution SHA row carries the verified implementation identity.
@@ -201,7 +201,7 @@ does not exist yet.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 31eb6bf5acf32570c8618e401c2c3dd7334945c4
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1513
 Approved PR head: pending merge
 Execution SHA: d7bf9b06fe459dbb49275517bbada79a1d7a5621

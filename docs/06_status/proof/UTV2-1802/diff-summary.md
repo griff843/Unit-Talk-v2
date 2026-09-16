@@ -1,6 +1,6 @@
 # Diff summary — UTV2-1802
 
-MERGE_SHA: pending merge
+MERGE_SHA: 31eb6bf5acf32570c8618e401c2c3dd7334945c4
 
 > Pre-merge the merge row is the ratified `pending merge` anchor; the Execution SHA row
 > below carries the verified implementation identity. `post-merge-lane-close.yml` rebinds
