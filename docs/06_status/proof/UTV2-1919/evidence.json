@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1919",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b149c1a9bf93ff22c85acc4357fa25fc8dec3166",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "b149c1a9bf93ff22c85acc4357fa25fc8dec3166 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1919/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the execution anchor does not move when this file lands."
+  },
+  "what_this_lane_repairs": {
+    "defect": "An evidence-plane settlement could not be corrected. An evidence-plane pick keeps its status (validated / awaiting_approval) after it settles \u2014 deliberately, because validated -> settled is not a legal FSM edge \u2014 so recordPickSettlement dispatched every LATER operator grade back into recordOperatorEvidenceSettlement rather than to recordSettlementCorrection. The second grade was written as another *original*, corrects_id null, which production's partial unique index settlement_records_pick_source_idx (pick_id, source) WHERE corrects_id IS NULL rejects with 23505.",
+    "the_second_half_is_worse_than_the_first": "The 23505 catch then read back the pre-existing row and RETURNED it as this request's settlementRecord with auditRecords: []. So an operator who regraded a pick from WIN to LOSS received a success response naming a WIN settlement. The refusal was converted into a report that their grade had persisted, when a different grade had. A defect that loses a correction silently is materially worse than one that refuses it.",
+    "why_the_dispatch_is_not_simply_reordered": "Routing evidence-plane picks to recordSettlementCorrection would be wrong in two ways: that function requires the pick to be in 'settled' state (an evidence-plane pick never is) and it writes a same-state lifecycle event, which the evidence plane deliberately does not do. The correction SHAPE is mirrored \u2014 read the latest row, link the new one to it, never mutate the old \u2014 without adopting the delivery plane's lifecycle behaviour.",
+    "fail_closed_shape": "The 23505 catch is retained as a genuine race guard and now throws ApiError(409, SETTLEMENT_ALREADY_RECORDED) instead of returning someone else's row. The race it guards is real \u2014 another writer landing the canonical (pick, source) row between the pre-insert read and this insert \u2014 and the correct answer to it is 're-read the current settlement and resubmit', not a fabricated success.",
+    "no_lifecycle_transition_and_no_delivery": "Unchanged by this lane and asserted by it: the operator path still returns lifecycleEvent: null and finalLifecycleState: pick.status, and the WIN -> LOSS -> WIN test counts zero distribution_outbox rows across ALL five statuses after three grades. A correction must not become a route to a member.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/settlement-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 38,
+          "pass": 38,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Three new tests plus the 35 pre-existing ones unchanged. (1) A second operator grade corrects the first: a new row id, corrects_id equal to the first row's id, payload correction:true / priorSettlementRecordId / priorResult:'win', the ORIGINAL read back from the repository still result:'win' with corrects_id null, effectiveSettlement naming the tip at correction_depth 1, and auditActions deepEqual ['settlement.operator_evidence_corrected'] rather than ...graded. (2) WIN -> LOSS -> WIN: at EVERY point in the chain unresolvedReason is null, the effective result is the grade just written, correction_depth equals the position, settlementSummary.total_picks is 1 and total_records is index+1; the three rows read back are [win,null],[loss,id0],[win,id1]; zero outbox rows across all five statuses. (3) A duplicate-key race is refused: the repository is made to throw a code-23505 error at the insert, and the call rejects with SETTLEMENT_ALREADY_RECORDED while the pre-existing settlement is left untouched."
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6369,
+          "pass": 6369,
+          "fail": 0,
+          "not_ok_lines": 0
+        },
+        "label": "Full workspace unit suite, run to completion on this tree: 6369 tests, 6369 pass, 0 fail, zero 'not ok' TAP lines, exit 0. The pre-existing assertion deepEqual(auditActions, ['settlement.operator_evidence_graded']) on the FIRST settlement still holds, because the action is renamed only on a correction."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint apps/api/src/settlement-service.ts apps/api/src/settlement-service.test.ts apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts",
+      "exit_code": 0,
+      "note": "Scoped to the three files this lane changes. A whole-tree lint is run by the CI verify job; see the note under verify."
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: verify ends at test:live-db, which ci:assert-staging refuses when the host resolves to the containment placeholder. This lane carries t1_live_db_precondition: deferred_to_ci, so verify and Writable DB proof (staging only) are obtained from CI on the merge SHA, which is exactly what G6 enforces at closeout."
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied to apps/api/src/settlement-service.ts alone, the suite run, then the file restored byte-for-byte from a pre-mutation copy. Run with no other suite executing concurrently.",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "Drop `...(isCorrection ? { correctsId: priorSettlement.id } : {})` from the settlements.record() call \u2014 i.e. keep the pre-insert read but write the correction as another root.",
+          "expected": "The chain breaks into two roots.",
+          "observed": "2 failures \u2014 'a second operator grade corrects the first' and 'WIN -> LOSS -> WIN'. The reported actual value is 'MULTIPLE_ROOT_RECORDS'.",
+          "why_this_is_the_right_discriminator": "The in-memory repository does NOT implement the partial unique index, so it never throws 23505 and a mutation test cannot assert on that error here. What it CAN observe is the downstream consequence the index exists to prevent: resolveEffectiveSettlement refuses two root records and returns effectiveSettlement: null. Asserting on MULTIPLE_ROOT_RECORDS is therefore a real discriminator rather than a restatement of the code."
+        },
+        {
+          "id": "M2",
+          "mutation": "Restore the pre-lane behaviour of the 23505 catch: look up findLatestForPick and return it as this request's settlementRecord with auditRecords: [].",
+          "expected": "The refusal is reported as a success.",
+          "observed": "1 failure \u2014 'a duplicate-key race is refused, never reported as a successful settlement'. The other 37 tests pass, which is the point: before this lane nothing in the repository failed on that behaviour."
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test apps/api/src/settlement-service.test.ts",
+        "pass": 38,
+        "fail": 0
+      }
+    },
+    "why_no_domain_change_was_needed": "resolveEffectiveSettlement (packages/domain/src/outcomes/settlement-downstream.ts) already walks root -> tip via corrects_id and already refuses a broken chain. computeSettlementSummary already reports total_picks as the statistical contribution and total_records as 1 + correction_depth. So 'latest effective settlement wins' and 'one statistical contribution per pick' were already implemented and were simply unreachable from the evidence plane, because nothing ever wrote a corrects_id there. This was verified before the fix was written, and it is why the lane is typed runtime: packages/domain/src/** is not admitted by this lane type and did not need to be.",
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 6,
+      "rules_matched": [
+        "settlement-grading"
+      ],
+      "advisory_missing": [
+        "r4-fault-report"
+      ],
+      "note": "r4-fault-report is listed advisory and PM-gated, not required, so the verdict is PASS. It is not supplied here: an R4 fault report is the artifact for a lane that repairs a production fault with a production blast radius, and this lane's blast radius is a code path that could not previously execute at all. Writing one to fill a slot would be the self-serving paperwork the R-level rule exists to avoid."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PENDING_CI",
+    "job": "Writable DB proof (staging only)",
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "suite": "apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "note": "Filled at closeout by autoHarvestCiDbProofIntoEvidence from the merge-SHA run. It is deliberately NOT hand-filled here: this lane carries t1_live_db_precondition: deferred_to_ci, the workstation cannot reach a writable database under containment, and writing a measured-looking result for a job that has not run would be fabrication. The third test below is what that job will execute.",
+    "what_the_added_test_proves": [
+      "Three operator grades on one real Track Only pick, submitted through submitPickController against real PostgREST, persist as THREE settlement_records rows \u2014 read back from the database ordered by created_at rather than from the return values.",
+      "Exactly ONE of the three has corrects_id IS NULL. That is the assertion the in-memory suite structurally cannot make: it is the live partial unique index settlement_records_pick_source_idx that permits the second and third rows only because they carry corrects_id, and a second canonical row would have been rejected by Postgres before the test could count it.",
+      "The chain is linked pairwise \u2014 grade 2's corrects_id is grade 1's id, grade 3's is grade 2's, NOT grade 1's \u2014 so a correction supersedes the current settlement rather than always pointing back at the original.",
+      "The original row still reads result='win' after two later grades. Immutability is measured in the database, not inferred from the absence of an UPDATE in the code.",
+      "The effective settlement is the tip (correction_depth 2, result 'win') and settlementSummary.total_picks is 1: three grades, one statistical contribution.",
+      "picks.status is still 'validated', zero pick_lifecycle rows carry to_state='settled', and distribution_outbox holds zero rows for the pick after all three grades."
+    ],
+    "why_this_suite_and_not_the_in_memory_one": "The in-memory repository does not enforce the (pick_id, source) partial unique index \u2014 packages/db/CLAUDE.md records this under Known Drift in as many words. So the in-memory tests can prove the chain is built correctly and cannot prove the database accepts it. Only the staging suite exercises the constraint that produced the original 23505."
+  },
+  "directive_requirements": {
+    "original_settlement_immutable": "Asserted twice: in memory by reading the first row back from listByPick after the correction (result still 'win', corrects_id still null), and against Postgres by reading the ordered chain back and asserting roots[0].result === 'win'.",
+    "correction_creates_a_new_settlement_row": "Asserted: three grades, three rows, distinct ids.",
+    "corrects_id_references_the_superseded_settlement": "Asserted pairwise rather than only at the tip, so 'always points at the original' would fail.",
+    "latest_effective_settlement_wins": "Asserted at every point in the chain, not only at the end: after grade N the effective result is grade N's result and correction_depth is N-1.",
+    "23505_cannot_be_swallowed_and_returned_as_fake_success": "Asserted by the race test and mutation-verified by M2, which restores the old behaviour and turns exactly that test red.",
+    "win_loss_win_produces_one_statistical_contribution_at_each_point": "Asserted as settlementSummary.total_picks === 1 at each of the three points, alongside total_records === index + 1 so that 'the correction was recorded' is distinguished from 'the correction was double-counted'.",
+    "zero_member_delivery_outbox_execution_intent_artifacts": "Asserted in memory across all five outbox statuses after three grades, and in staging as a zero row count on distribution_outbox for the pick.",
+    "staging_or_test_data_only": "Honoured. Every mutation test runs against createInMemoryRepositoryBundle; the live test runs against staging xskgrzbteyqdufktjrjx, pinned by assert-staging-target. Griff's production Chiefs pick 04174f12-9a01-4e4c-94ec-9a7bf70d0538 was not read, written or referenced by any part of this lane."
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off \u2014 no provider key read, tested or activated",
+    "member_delivery": "disabled \u2014 unchanged",
+    "track_only_containment": "enabled \u2014 unchanged",
+    "files_changed": 3,
+    "note": "Three files, all inside the pinned file_scope_lock: apps/api/src/settlement-service.ts and its two test files. No migration, no schema change, no new test FILE (the live proof extends the existing UTV2-1904 suite), and therefore no root package.json edit."
+  },
+  "dependency_record": {
+    "the_read_half_is_not_in_this_lane": {
+      "finding": "Four readers treat corrects_id IS NULL as 'the canonical settlement'. Once a correction exists that predicate selects the SUPERSEDED row, so a corrected pick would be reported with its old result. Sites: apps/command-center/src/lib/data/analytics.ts:317, :513, :773 and apps/api/src/model-performance-service.ts:184.",
+      "is_this_a_regression_introduced_here": "No. Those readers are wrong today and were unreachable today: nothing in the evidence plane ever wrote a corrects_id, so no correction existed for them to mis-select. This lane makes corrections possible, which is what makes the reader defect reachable \u2014 and fixing the writer first is the right order, because until a correction row exists there is nothing for those readers to select.",
+      "why_it_is_not_in_this_lane": "No lane type admits both surfaces. runtime admits apps/api/** and does not admit apps/command-center/**; delivery-ui admits apps/command-center/** and does not admit apps/api/**. Splitting the read half across two lanes, or re-typing this one to fit, are both worse than recording it.",
+      "status": "Recorded as the immediate follow-on lane. Not filed as new governance debt \u2014 it is product work with a named owner surface."
+    }
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair",
+      "disposition": "Reserved. Requires the t1-approved label AND a pm-verdict/v1 APPROVED comment from CODEOWNERS, both pinned to this head. Not actionable by the executor."
+    },
+    {
+      "check": "Close eligibility preflight \u2014 CEP-E7",
+      "cause": "runtime_proof.status is PENDING_CI pre-merge",
+      "disposition": "Expected for this evidence shape and ratified by PM on UTV2-1918: 'an expected pre-merge tooling mismatch for this evidence shape, not authorization to invent evidence and not a product defect'. runtime_proof is populated at closeout by autoHarvestCiDbProofIntoEvidence from the merge-SHA run. Hand-filling it pre-merge to turn the check green would be fabrication."
+    }
+  ]
+}
