@@ -108,5 +108,13 @@
       "positive_control_run": "35119502596",
       "claim": "The three defects the failure run combined -- an unmapped Command Center env write, --remove-orphans reconciling before the configuration error surfaced, and release markers advanced ahead of activation -- are each now refused by a named assertion in scripts/ci/nextjs-deploy-wiring.test.ts, and each refusal was mutation-proven."
     }
+  },
+  "runtime_proof_pending": {
+    "status": "pending_merge_harvest",
+    "reason": "CEP-E7 requires a populated runtime_proof block for the app-runtime profile, and the only sanctioned source is ci-db-proof-receipt/v2 from CI's `Writable DB proof (staging only)` job. That receipt binds exactly to the SHA its run was triggered by, which pre-merge is the merge-preview commit, not the PR head: harvestCiDbProofForMergeSha(ff4ff627c...) returns receipt_invalid with 'downloaded receipt sha=89f7d3644f085ab969efb5b4187cb7e154f4dc1e does not equal the merge SHA ... its run was triggered by'. The block is therefore unpopulatable before the merge exists, and is harvested by post-merge-lane-close.yml at closeout.",
+    "not_fabricated": "No runtime_proof was hand-authored. Populating it from anything other than the verified receipt would be exactly the fabrication the harvest module exists to prevent.",
+    "precedent": "UTV2-1918 (#1587) merged with Close Eligibility Preflight red on the same CEP-E7 failure at pre-merge head cbef15236 (runtime_proof absent), and main's UTV2-1918 bundle carries a harvested runtime_proof today.",
+    "ci_evidence_that_the_run_is_green": "`Writable DB proof (staging only)` passes on PR head ff4ff627c5284eea19782a763e126a64791b336b.",
+    "required_check": false
   }
 }
