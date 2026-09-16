@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1918",
+  "branch": "claude/utv2-1918-cc-deployment-candidate",
+  "head_sha": "667a3b7fb22f0a10960112057e5dd6081f850f02",
+  "evaluated_at": "2026-09-16T01:58:20.000Z",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "scope_note": "Deployment wiring only. This lane changes no application runtime path: no apps/** or packages/** file is touched, so no running service behaves differently until an operator sets UNIT_TALK_COMMAND_CENTER_ENABLED=true and dispatches a deploy.",
+  "containment": {
+    "syndicate_machine_case_statement": "byte_identical",
+    "measured_parked_output": "{\"service\":\"deploy\",\"event\":\"syndicate_machine_mode.validated\",\"mode\":\"parked\"}",
+    "measured_rejects_non_boolean": true,
+    "ingestor_autorun_changed": false,
+    "ingestor_scheduling_changed": false,
+    "worker_autorun_changed": false,
+    "enabled_targets_changed": false,
+    "delivery_kill_switches_changed": false,
+    "caddyfile_changed": false,
+    "migrations_added": 0
+  },
+  "default_off_proof": {
+    "method": "docker compose config --services, with and without the profile",
+    "services_without_profile": 10,
+    "services_with_profile": 11,
+    "command_center_in_default_set": false,
+    "profile_activation_sites": 1,
+    "profile_activation_site": "promote job, inside the UNIT_TALK_COMMAND_CENTER_ENABLED guard"
+  },
+  "ingress": {
+    "published_ports": ["127.0.0.1:4300:4300"],
+    "loopback_only": true,
+    "caddy_site_blocks_added": 0,
+    "public_hostname_required": false,
+    "reachable_by": "ssh -L 4300:127.0.0.1:4300 <deploy host>"
+  },
+  "entrypoint_refusals": {
+    "harness": "executed against deploy/production/nextjs-entrypoint.sh with the exec line replaced",
+    "complete_config": "starts",
+    "basic_auth_pair_instead_of_token": "starts",
+    "partial_basic_pair_username_only": "refuses",
+    "partial_basic_pair_password_only": "refuses",
+    "no_auth_material": "refuses",
+    "missing_cc_api_key": "refuses",
+    "missing_service_role_key": "refuses",
+    "app_env_not_production": "refuses",
+    "control_smart_form_unchanged": true,
+    "control_web_unchanged": true
+  },
+  "secret_inventory": {
+    "unconditional_missing_list_entries_added": 0,
+    "cc_checks_are_conditional": true,
+    "cc_unset_exit_code": 0,
+    "cc_true_complete_exit_code": 0,
+    "cc_true_incomplete_exit_code": 1,
+    "partial_basic_pair_is_its_own_error": true
+  },
+  "mutation_battery": {
+    "mutations": 7,
+    "caught": 7,
+    "control_unmutated": "19/19 pass",
+    "detail": [
+      "remove the compose profile -> 'Command Center is off unless a deploy deliberately enables it'",
+      "publish on every interface -> 'reachable only from the deploy host'",
+      "copy the smart-form /login probe -> 'reachable only from the deploy host'",
+      "make a Command Center secret unconditional -> 'enabling cannot break a deploy that does not use it'",
+      "drop the entrypoint branch -> 'refuses to start on a configuration it cannot serve'",
+      "unguard the canary env write -> 'receives no credential it does not need' + canary/promote drift",
+      "let promote skip the profile -> 'Command Center is off unless a deploy deliberately enables it'"
+    ]
+  },
+  "reserved_not_taken": {
+    "secrets_read_or_set": 0,
+    "deploy_dispatched": false,
+    "containment_changed": false,
+    "required_operator_inputs": [
+      "UNIT_TALK_CC_API_KEY (secret, reserved decision 4)",
+      "COMMAND_CENTER_AUTH_TOKEN (secret, reserved decision 4)",
+      "UNIT_TALK_COMMAND_CENTER_ENABLED=true (repository variable, not a secret)"
+    ],
+    "non_secret_success_criterion": "the promote job's 'Verify Next.js surfaces are healthy' step reports 'command-center: healthy', and curl -fsS http://127.0.0.1:4300/api/health on the deploy host returns {\"ok\":true,\"service\":\"command-center\"}"
+  },
+  "known_gap": {
+    "item": "deploy/rollback.sh restores .env.production, .env.web and .env.smart-form only",
+    "reason_not_fixed": "outside this lane's file_scope_lock, which is pinned at lane-start",
+    "impact": ".env.command-center is rewritten from secrets on every deploy and holds no code-versioned value, so a rollback leaves a working configuration for a surface that is default-off"
+  }
+}
