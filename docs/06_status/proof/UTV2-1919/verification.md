@@ -10,7 +10,7 @@ Issue: UTV2-1919
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1919-evidence-settlement-correction
-PR URL: https://github.com/griff843/Unit-Talk-v2/pull/PENDING
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1589
 Head SHA: b149c1a9bf93ff22c85acc4357fa25fc8dec3166
 result: pass
 
@@ -144,6 +144,6 @@ unreachable from this workstation.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: https://github.com/griff843/Unit-Talk-v2/pull/PENDING
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1589
 Approved PR head: pending merge
 Execution SHA: b149c1a9bf93ff22c85acc4357fa25fc8dec3166
