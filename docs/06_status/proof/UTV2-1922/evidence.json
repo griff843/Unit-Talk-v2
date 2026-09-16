@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1922",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "84411a21bea3e3f99b92b35340f59f3bb3a250b2",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-16T17:20:00Z",
+    "head": "84411a21bea3e3f99b92b35340f59f3bb3a250b2",
+    "note": "Measured locally on the lane head. `pnpm verify` exits 1 only at `ci:assert-staging`, which refuses by design outside the staging-ci GitHub environment (host=127.0.0.1, expected=xskgrzbteyqdufktjrjx); the TAP stream it produced contains 0 `not ok`. CI's required `verify` check on this head is the binding authority.",
+    "gates": [
+      {
+        "command": "tsx --test scripts/ci/deploy-config-rollback.test.ts scripts/ci/deploy-parked-mode.test.ts scripts/ci/nextjs-deploy-wiring.test.ts",
+        "tests": 78,
+        "pass": 78,
+        "fail": 0,
+        "baseline_before_change": 64
+      },
+      {
+        "command": "tsx scripts/deploy-check.ts",
+        "not_ok": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm verify",
+        "not_ok": 0,
+        "exit_code": 1,
+        "result": "pass_with_known_local_refusal",
+        "refusal": "ci:assert-staging REFUSED: writable-DB verification requires the staging-ci GitHub environment"
+      }
+    ],
+    "mutation_battery": {
+      "command": "scratchpad mutation-battery-1922.py",
+      "applied": 11,
+      "caught": 11,
+      "escaped": 0,
+      "baseline_green_asserted": true,
+      "restore_green_asserted": true,
+      "note": "Each mutation was caught by the assertion it was designed to target. Two mutations (M7, M9) initially ESCAPED and exposed vacuities in the new tests themselves -- a comment quoting the command an ordering assertion indexed for, and a behavioural test that passed for free because nothing in that stub mode removed the edge. Both were repaired and the reason recorded in code comments; the 11/11 result is post-repair.",
+      "cases": [
+        {
+          "id": "M1",
+          "mutates": "deploy.yml env-write step drops CC_ENABLED from the env: mapping",
+          "caught_by": "every Command Center value the env file interpolates is mapped into the step"
+        },
+        {
+          "id": "M2",
+          "mutates": "deploy.yml removes the fail-closed required-value loop",
+          "caught_by": "an empty required Command Center value refuses the write"
+        },
+        {
+          "id": "M3",
+          "mutates": "deploy.yml disabled branch no longer removes .env.command-center",
+          "caught_by": "a disabled Command Center leaves no configuration behind"
+        },
+        {
+          "id": "M4",
+          "mutates": "deploy.yml promote job loses its preflight validation step",
+          "caught_by": "compose configuration is validated before anything destructive runs"
+        },
+        {
+          "id": "M5",
+          "mutates": "deploy.yml validation step moved after the mutation step",
+          "caught_by": "compose configuration is validated before anything destructive runs"
+        },
+        {
+          "id": "M6",
+          "mutates": "promote advances .unit-talk-release before activation",
+          "caught_by": "no mutation step advances the release markers before activation"
+        },
+        {
+          "id": "M7",
+          "mutates": "canary advances markers before activation",
+          "caught_by": "no mutation step advances the release markers before activation (via executableLines())"
+        },
+        {
+          "id": "M8",
+          "mutates": "promote removes caddy unconditionally instead of on a proven port conflict",
+          "caught_by": "the edge is removed only on a proven port conflict"
+        },
+        {
+          "id": "M9",
+          "mutates": "promote's generic failure path no longer calls restore_edge",
+          "caught_by": "a configuration failure cannot leave the edge unserved (behavioural, docker stub)"
+        },
+        {
+          "id": "M10",
+          "mutates": "rollback.sh drops .env.edge from the restore loop",
+          "caught_by": "rollback restores every env file the running stack reads"
+        },
+        {
+          "id": "M11",
+          "mutates": "rollback.sh advances .unit-talk-release before activation",
+          "caught_by": "rollback advances the release record only after activation"
+        }
+      ]
+    },
+    "incident_binding": {
+      "failure_run": "35114935565",
+      "positive_control_run": "35119502596",
+      "claim": "The three defects the failure run combined -- an unmapped Command Center env write, --remove-orphans reconciling before the configuration error surfaced, and release markers advanced ahead of activation -- are each now refused by a named assertion in scripts/ci/nextjs-deploy-wiring.test.ts, and each refusal was mutation-proven."
+    }
+  }
+}
