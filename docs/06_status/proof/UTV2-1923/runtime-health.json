@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1923",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "measured_at": "2026-09-17T01:45:00Z",
+  "measured_against_sha": "98c478a06f93a28658bbcb0772d2cd27baed1659",
+  "claim": "A human capper delivery path exists end to end and cannot fire as merged.",
+  "note": "Every value below is the posture of the code ON THIS BRANCH, not of the deployed system. The deployed release still predates this branch; see docs/mission/plan.md for deploy drift.",
+  "delivery_posture": {
+    "target": "official-picks",
+    "delivery_target": "discord:official-picks",
+    "is_promotion_target": false,
+    "in_governed_target_list": true,
+    "registry_enabled_as_shipped": false,
+    "registry_disabled_reason": "Human capper official picks delivery is not activated",
+    "has_bootstrap_kill_switch_row": false,
+    "kill_switch_state_without_row": "killed",
+    "kill_switch_contract": "DeliveryKillSwitchRepository.isKilled() returns true for an unknown target",
+    "operator_kill_switch_route_accepts_target": true,
+    "worker_target_coverage_includes_target": true
+  },
+  "authorization": {
+    "keys_required": 2,
+    "key_one": {
+      "name": "server allow-list",
+      "env": "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST",
+      "posture_env": "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
+      "default_state": "unset",
+      "unset_behaviour": "refuse",
+      "reachable_from_request": false,
+      "refusal_reasons": [
+        "no-capper-identity",
+        "human-delivery-posture-off",
+        "allowlist-unset",
+        "capper-not-allowlisted"
+      ],
+      "every_decision_audited": true,
+      "allowlist_contents_recorded": false
+    },
+    "key_two": {
+      "name": "operator approval",
+      "surface": "review-pick-controller",
+      "transition": "awaiting_approval -> queued",
+      "atomic_with_outbox_write": true,
+      "promotion_reevaluation_skipped_for_human_picks": true
+    }
+  },
+  "chokepoints": {
+    "submit_handler_forgery_strip": "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
+    "submit_handler_track_only_pin": "UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD",
+    "controller_request_integrity": "HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD",
+    "controller_brake": "HUMAN_DELIVERY_BRAKE_GUARD",
+    "enqueue_authorization": "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
+    "enqueue_target_exclusivity": "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
+    "atomic_enqueue": "HUMAN_DELIVERY_ATOMIC_GUARD",
+    "release": "HUMAN_DELIVERY_RELEASE_GUARD",
+    "approval_key": "HUMAN_DELIVERY_APPROVAL_KEY_GUARD",
+    "requeue": "REQUEUE_HUMAN_DELIVERY_GUARD",
+    "settlement_recap": "HUMAN_CAPPER_RECAP_GUARD",
+    "worker_target_derivation": "WORKER_GOVERNED_TARGET_DERIVATION_GUARD"
+  },
+  "mutation_controls": {
+    "count": 5,
+    "guards_proven": [
+      "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
+      "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
+      "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
+      "HUMAN_DELIVERY_BRAKE_GUARD",
+      "REQUEUE_HUMAN_DELIVERY_GUARD"
+    ],
+    "method": "the guarded region is deleted from a mutant copy of the module, which is then imported and shown to fail open"
+  },
+  "containment": {
+    "syndicate_machine_mode_values": ["active", "parked", "human-capper"],
+    "parked_semantics_changed": false,
+    "human_capper_mode_reachable_from_secret": false,
+    "human_capper_mode_source": "repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
+    "human_capper_mode_releases": ["worker autorun"],
+    "human_capper_mode_keeps_parked": [
+      "provider ingestion",
+      "ingestor scheduling",
+      "syndicate machine",
+      "system picks"
+    ],
+    "human_capper_mode_enabled_targets": "official-picks",
+    "deploy_refuses_if_target_unmapped": true,
+    "deploy_refuses_if_mapped_to_capper_channel": true,
+    "model_board_target_postures_changed": false,
+    "sgo_models_grading_ingestor_touched": false
+  },
+  "known_residue": [
+    {
+      "observation": "The scoring lane stamps picks.promotion_target on a human capper pick at submission time, for a pick no model was asked to score.",
+      "status": "recorded, not repaired",
+      "why_safe": "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD refuses delivery of an authorized human pick to any board target, so the value cannot be acted on. Repairing the write itself means changing promotion persistence, which is outside this lane's scope."
+    }
+  ],
+  "activation_sequence_remaining": [
+    "Griff sets the repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
+    "Griff maps discord:official-picks in UNIT_TALK_DISCORD_TARGET_MAP",
+    "Griff configures UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST",
+    "Griff dispatches Deploy",
+    "Griff releases the delivery_kill_switch row for official-picks",
+    "canary E2E, then the decision to open member delivery"
+  ],
+  "result": "pass"
+}

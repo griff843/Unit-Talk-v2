@@ -1,0 +1,93 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1923",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "98c478a06f93a28658bbcb0772d2cd27baed1659",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-17T01:45:00Z",
+    "measured_against_sha": "98c478a06f93a28658bbcb0772d2cd27baed1659",
+    "commands": [
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "no diagnostics"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "ok_lines": 5832,
+        "not_ok_lines": 0
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "no output"
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "verdict": "PASS",
+        "changed_files": 22,
+        "rules_matched": [
+          "lifecycle-fsm"
+        ],
+        "advisory_missing": [
+          "r4-fault-report (PM-gated)"
+        ]
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": null,
+        "result": "not_run_locally",
+        "note": "ci:assert-staging refuses outside the staging-ci GitHub environment; the authoritative run is the `verify` check on PR #1592"
+      }
+    ],
+    "new_coverage": [
+      {
+        "file": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
+        "tests": 25,
+        "pass": 25,
+        "fail": 0,
+        "mutation_controls": 5
+      },
+      {
+        "file": "apps/api/src/capper-delivery-authorization.test.ts",
+        "tests": 12,
+        "pass": 12,
+        "fail": 0
+      },
+      {
+        "file": "scripts/ci/deploy-parked-mode.test.ts",
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "new_tests": 7
+      },
+      {
+        "file": "apps/worker/src/worker-runtime.test.ts",
+        "tests": 70,
+        "pass": 70,
+        "fail": 0,
+        "new_tests": 4
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "see_runtime_health",
+    "note": "This lane's runtime claim is a refusal: a delivery path exists and cannot fire. The measured posture of every control is in runtime-health.json. A live-DB run against production is deliberately not performed -- it would require creating a delivery_kill_switch row for official-picks, a production write whose only effect would be to weaken the fail-closed default this lane depends on. The staging live-DB receipt is produced by the `verify` and `Writable DB proof (staging only)` checks on PR #1592 and is harvested at closeout by ops:proof-generate --merge-sha.",
+    "artifact": "docs/06_status/proof/UTV2-1923/runtime-health.json"
+  }
+}
