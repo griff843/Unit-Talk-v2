@@ -8,7 +8,7 @@
 MERGE_SHA: pending merge
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1593
-Anchor commit (implementation): 53ecbfde248e524639db77174d1d2503b43d47d9
+Anchor commit (implementation): c517574ec8a3d5351c746b96a0b19c4da21da5e9
 
 ## ASSERTIONS:
 
