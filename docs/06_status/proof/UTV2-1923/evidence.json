@@ -7,16 +7,43 @@
   "status": "in_review",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "c2f35a6a5a0c73fb9832b0b92ecc8f221e449bd1",
+    "verified_source_sha": "5194341b7576eadf97776b04d12190559487bb2c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-17T22:22:58.037Z"
+    "bound_at": "2026-09-17T23:23:25Z",
+    "ci_sentinels": {
+      "note": "Receipts that pin this evidence to its verified_source_sha. The GitHub check-run ids for this head are not knowable at commit time; the authoritative post-push result is the set of required contexts on PR #1599 at this exact head, and post-merge rebinding replaces merge_sha. Recorded here because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat fields instead; the bundle carries both shapes deliberately.",
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "ok_lines": 5898,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "local_close_eligibility_preflight": {
+        "fails": 0,
+        "findings": 13
+      },
+      "production_defect_run": "35278517112",
+      "production_rollback_run": "35279450108",
+      "production_deployed_sha": "616994604292345b9e44cfd0c91339fcbe9bcdef",
+      "required_contexts_authority": "PR #1599: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T22:23:16Z",
-    "measured_against_sha": "c2f35a6a5a0c73fb9832b0b92ecc8f221e449bd1",
+    "measured_at": "2026-09-17T23:23:25Z",
+    "measured_against_sha": "5194341b7576eadf97776b04d12190559487bb2c",
     "commands": [
       {
         "command": "pnpm type-check",
@@ -28,8 +55,10 @@
         "command": "pnpm test",
         "exit_code": 0,
         "result": "pass",
-        "ok_lines": 6027,
-        "not_ok_lines": 0
+        "ok_lines": 5898,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
       },
       {
         "command": "pnpm lint",
@@ -41,11 +70,17 @@
         "command": "pnpm verify",
         "exit_code": 1,
         "result": "refused_by_containment",
-        "ok_lines": 6027,
+        "ok_lines": 5898,
         "not_ok_lines": 0,
-        "suite_blocks": 105,
+        "suite_blocks": 104,
         "suite_blocks_with_failures": 0,
         "note": "0 not-ok lines and 105 suite blocks each '# fail 0'; every stage through verify:commands clean. Exit 1 originates solely in ci:assert-staging: 'host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx'. This is deliberate staging-isolation containment, not a defect in the diff. The authoritative full-tree result is the required `verify` check on PR #1599, which runs inside staging-ci."
+      },
+      {
+        "command": "pnpm exec tsx --test packages/config/src/env.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "13 pass / 0 fail; 3 new tests covering the Command Center production configuration contract"
       }
     ],
     "new_coverage": [
@@ -84,8 +119,8 @@
   },
   "runtime_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T22:25:30Z",
-    "note": "This increment's defect was discovered in production, not in a test. The runtime evidence is the failure, the diagnosis, the containment readback and the rollback. All SQL is read-only against production zfzdnfwdarxucxtaojxm; nothing in this lane writes to production.",
+    "measured_at": "2026-09-17T23:23:25Z",
+    "note": "Increment 3. Two production startup defects on one activation path. The worker defect was reproduced by a failed production promote and repaired; the Command Center defect was reproduced against the running production container and is proven repaired by an image built at this head and started on exactly the key set deploy.yml writes. The canonical deploy was NOT run -- dispatching a production deployment is reserved -- so the image-level start is the honest stand-in, and it is labelled as one.",
     "queries": [
       {
         "name": "the official-picks kill switch is explicitly engaged",
@@ -122,6 +157,24 @@
         "method": "docker exec unit-talk-worker-1 printenv, read from the running production container",
         "result": "UNIT_TALK_WORKER_AUTORUN=false, UNIT_TALK_ENABLED_TARGETS=none, SYNDICATE_MACHINE_ENABLED=false, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false, UNIT_TALK_INGESTOR_AUTORUN=false, UNIT_TALK_DISTRIBUTION_TARGETS=discord:1296531122234327100",
         "significance": "Parked posture restored, read from the process environment rather than from deploy logs. The distribution target is a raw channel id matching ^discord:\\d+$, which is the escape hatch that lets parked mode start and human-capper mode does not have \u2014 the defect this increment fixes."
+      },
+      {
+        "name": "containment_readback_increment_3",
+        "target": "production zfzdnfwdarxucxtaojxm",
+        "statement": "kill switch, official-picks outbox rows, outbox total/newest, sent today, governed pick cohort",
+        "result": "official-picks killed=true (updated 2026-09-17 21:24:35.602039+00); 0 official-picks outbox rows; outbox total 5747, newest 2026-07-30 20:04:41.893448+00; 0 sent today; 6 governed picks, 0 not track-only"
+      },
+      {
+        "name": "production_posture_readback",
+        "target": "running containers + repo variables",
+        "statement": "derived readback of activation flags; no secret values read",
+        "result": "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false (repo variable and worker container); SYNDICATE_MACHINE_ENABLED=false; UNIT_TALK_WORKER_AUTORUN=false; UNIT_TALK_ENABLED_TARGETS=none; UNIT_TALK_INGESTOR_AUTORUN=false; worker running restarts=0"
+      },
+      {
+        "name": "command_center_exposure",
+        "target": "production host",
+        "statement": "docker inspect port bindings; grep -c command-center /opt/unit-talk/Caddyfile",
+        "result": "{\"4300/tcp\":[{\"HostIp\":\"127.0.0.1\",\"HostPort\":\"4300\"}]}; Caddyfile matches = 0"
       }
     ],
     "row_counts": [
@@ -156,6 +209,26 @@
       {
         "probe": "consecutive official-picks kill-switch readbacks returning killed=true",
         "value": 10
+      },
+      {
+        "name": "official_picks_outbox_rows",
+        "value": 0
+      },
+      {
+        "name": "outbox_rows_total",
+        "value": 5747
+      },
+      {
+        "name": "outbox_rows_sent_today",
+        "value": 0
+      },
+      {
+        "name": "governed_picks_not_track_only",
+        "value": 0
+      },
+      {
+        "name": "command_center_public_routes",
+        "value": 0
       }
     ],
     "deploy_runs": [
@@ -204,6 +277,61 @@
         "evidence": "UNIT_TALK_WORKER_AUTORUN=false, UNIT_TALK_ENABLED_TARGETS=none, SYNDICATE_MACHINE_ENABLED=false, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false, UNIT_TALK_INGESTOR_AUTORUN=false"
       }
     ],
-    "artifact": "docs/06_status/proof/UTV2-1923/runtime-health.json"
-  }
+    "artifact": "docs/06_status/proof/UTV2-1923/runtime-health.json",
+    "command_center_startup_proof": {
+      "method": "image built from this head with deploy/production/Dockerfile.nextjs and the production build args, started with exactly the ten keys parsed out of deploy.yml. No host edits.",
+      "image_build_exit": 0,
+      "container_state": "running restarts=0 exit=0, Ready in 463ms",
+      "unauthenticated_get_root": 401,
+      "authenticated_get_root": 200,
+      "authenticated_get_picks": 200,
+      "missing_env_var_errors_in_log": 0,
+      "supabase_required_errors_in_log": 0,
+      "only_observed_errors": "3x fetch failed (deliberately unreachable fixture Supabase host; request-time, not configuration)",
+      "fail_closed_control_a": "SUPABASE_SERVICE_ROLE_KEY removed -> FATAL, exit 1",
+      "fail_closed_control_b": "all Command Center auth removed -> FATAL, exit 1",
+      "deploy_dispatched": false,
+      "deploy_reserved_to": "Griff"
+    }
+  },
+  "mutation_controls": [
+    {
+      "control": "createWorkerRuntimeDependencies starts a human delivery target with no shared channel mapping",
+      "mutation": "remove the isHumanDeliveryTarget exemption from assertDiscordTargetMapCoversTargets",
+      "expected": "the human-target control fails",
+      "observed": "not ok 17 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition",
+      "note": "reproduces the exact production crash-loop of deploy run 35278517112"
+    },
+    {
+      "control": "createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping",
+      "mutation": "widen the exemption to governedTarget !== null",
+      "expected": "the non-human refusal control fails",
+      "observed": "not ok 18 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "the env file deploy.yml writes is sufficient for the Command Center data client",
+      "mutation": "delete SUPABASE_SERVICE_ROLE_KEY from both .env.command-center writers in deploy.yml",
+      "expected": "the deploy-contract control fails",
+      "observed": "not ok 11 (1 fail / 12 pass)",
+      "result": "fails_on_the_named_condition",
+      "note": "proves the test is coupled to the workflow rather than self-consistent"
+    },
+    {
+      "control": "loadEnvironment does not demand workspace metadata no runtime service reads",
+      "mutation": "make UNIT_TALK_LEGACY_WORKSPACE required again in the runtime loader",
+      "expected": "the workspace-metadata controls fail",
+      "observed": "not ok 11 and not ok 12 (2 fail / 11 pass)",
+      "result": "fails_on_the_named_condition",
+      "note": "reproduces the exact Command Center startup failure"
+    },
+    {
+      "control": "unmutated baseline",
+      "mutation": "none",
+      "expected": "all pass",
+      "observed": "worker 72 pass / 0 fail; config 13 pass / 0 fail",
+      "result": "pass"
+    }
+  ]
 }
