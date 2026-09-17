@@ -98,10 +98,27 @@ export interface SubmitPickPayload {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * The submission response.
+ *
+ * UTV2-1925: the four fields below `lifecycleState` were already being SENT by
+ * `submitPickController` and were already arriving at runtime -- this type
+ * simply stopped declaring them, so the receipt had no typed access to what the
+ * server actually determined and fell back to asserting it from client form
+ * state. They are optional rather than required because an older API build may
+ * omit them, and "the server did not say" must stay distinguishable from "the
+ * server said no". See `resolveDeliveryDisposition`.
+ */
 export interface SubmitPickResult {
   submissionId: string;
   pickId: string;
   lifecycleState: string;
+  /** Whether the server created a delivery record. The one positive delivery fact. */
+  outboxEnqueued?: boolean;
+  promotionStatus?: string;
+  promotionTarget?: string | null;
+  shadowMode?: boolean;
+  governanceBrake?: boolean;
 }
 
 function normalizeCatalogData(data: unknown): CatalogData {

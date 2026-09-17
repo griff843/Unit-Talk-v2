@@ -270,7 +270,9 @@ export function BetSlipPanel({
             </div>
           )}
 
-          <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Track Only — records stay internal. No member delivery.' : 'Delivery eligible — subject to approval and routing checks.'}</p>
+          {/* UTV2-1925: this is pre-submission, so it describes the REQUEST. The
+              outcome is the server's to determine and is stated on the receipt. */}
+          <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Requesting Track Only — the server decides delivery, and the receipt will report what it did.' : 'Requesting delivery eligible — subject to server authorization, approval and routing checks.'}</p>
 
           <Button
             data-testid="smart-form-submit-button"
@@ -300,7 +302,7 @@ export function BetSlipPanel({
       >
         <div className="flex items-center justify-between gap-4 max-w-lg mx-auto">
           <div className="min-w-0">
-            <p className="mb-1 text-[10px] uppercase tracking-widest text-primary">{values.trackOnly ? 'Track Only' : 'Delivery eligible'}</p>
+            <p className="mb-1 text-[10px] uppercase tracking-widest text-primary">{values.trackOnly ? 'Track Only requested' : 'Delivery eligible requested'}</p>
             {legs.length > 0 && (
               <p className="text-xs font-medium text-foreground truncate">
                 {legs.length === 1 ? '1 leg on slip' : `${legs.length} legs on slip`}
