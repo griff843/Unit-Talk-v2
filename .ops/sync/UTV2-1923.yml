@@ -1,0 +1,274 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1923
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1923
+  objective: >-
+    Build — **not activate** — one complete production transaction for a human
+    capper's official pick:
+
+    authorized human capper → delivery-eligible server posture →
+    `awaiting_approval` → explicit operator approval → governed member-facing
+    delivery target → worker/Discord → manual settlement → immediate per-pick
+    recap → bounded human-only containment mode.
+
+    PM-ratified as ONE coherent T1 runtime lane (W1+W2+W3+W4+W6). Do not split
+    into separate runtime/deploy lanes unless live lane mechanics force it.
+  acceptance_criteria:
+    - |-
+      ## Objective
+
+      Build — **not activate** — one complete production transaction for a human capper's official pick:
+
+      authorized human capper → delivery-eligible server posture → `awaiting_approval` → explicit operator approval → governed member-facing delivery target → worker/Discord → manual settlement → immediate per-pick recap → bounded human-only containment mode.
+
+      PM-ratified as ONE coherent T1 runtime lane (W1+W2+W3+W4+W6). Do not split into separate runtime/deploy lanes unless live lane mechanics force it.
+
+      ## Hard constraints
+
+      * **Build only. Member delivery is NOT activated.** The new target starts `killed = true` / fail-closed.
+      * All existing Track Only behaviour for **unauthorized** cappers remains enforced and **mutation-proven**.
+      * The browser/client cannot grant delivery. `cappers.active` and generic `cappers.metadata` are **not** authorization.
+      * **Do not route member picks through** `DISCORD_CAPPER_CHANNEL_ID` — that is the private capper home/onboarding channel.
+      * Do not activate SGO, models, automated grading, ingestor, system picks, board picks or alert delivery.
+      * Grading, CLV, SGO and models are outside this milestone. CLV may be null and must not block delivery, settlement, recap or E2E success.
+
+      ## Measured starting position (main @ 6206cbb)
+
+      1. `apps/api/src/handlers/submit-pick.ts:93-106` pins `distributionMode = 'track-only'` for every authenticated capper and 403s anything else.
+      2. Every delivery route is model-gated: auto-enqueue fires only on `promotionStatus === 'qualified' && promotionTarget != null` (`submit-pick-controller.ts:181`), `requeue-controller.ts:30` refuses on the same condition, and `enqueueDistributionWork` re-checks it. Qualification is the promotion scorer.
+      3. Containment is binary: `deploy.yml:499-537` / `1246-1284` — `parked` forces `_worker_autorun=false` and `_enabled_targets=none`; only `active` starts the worker, and it also starts the ingestor and syndicate machine.
+      4. `apps/worker/src/runner.ts:244-273` derives `isGoverned` from a **hardcoded three-name literal**, so both the registry check and the DB kill switch apply only to `best-bets`/`trader-insights`/`exclusive-insights`. A `discord:<channelId>` target is ungoverned.
+      5. `picks.promotion_target` is `string | null` in Postgres — **no enum**, so a new governed promotion target needs **no DDL**.
+      6. `postSettlementRecapIfPossible` (`grading-service.ts:775`) is exported but called only from the automated grading pass at `:484`; the manual settlement path emits no per-pick recap. Both recap emitters post by direct `fetch`, so neither is covered by `delivery_kill_switch`.
+
+      ## Scope
+
+      **W1 — authorization (key 1).** Explicit server-side capper allow-list, empty/unset ⇒ fail-closed. Every authorization consultation written to `audit_log`. No DDL.
+
+      **W2 — delivery-eligible posture.** An authorized capper's pick is born `awaiting_approval` and is not Track Only. Every unauthorized path keeps the Track Only pin byte-for-byte.
+
+      **W3 — governed official-picks target (key 2 + delivery).**
+
+      * Introduce an explicit governed member-facing official-picks promotion target; it must participate in `defaultTargetRegistry`, worker target coverage, and `delivery_kill_switch`.
+      * Derive `isGoverned` from the canonical target list instead of the hardcoded literal, so no target can be governed by one control and not the other.
+      * Enqueue on explicit operator `approve` (`review-pick-controller`, mandatory `reason` + `decidedBy`, `pick_reviews` row + audit row) — **never** off `promotionStatus`.
+      * Registry entry ships `enabled: false`; the kill-switch row ships `killed = true`.
+
+      **W4 — immediate per-pick settlement recap.** Wire the existing exported `postSettlementRecapIfPossible` into the manual settlement path for delivered picks, and bring both recap emitters under the delivery kill switch.
+
+      **W6 — bounded human-only containment mode.** A `deploy.yml` mode that starts the worker with only the official-picks target enabled, leaving ingestor, system picks, board and alert off. `parked` semantics must remain byte-identical.
+
+      ## Mutation coverage required
+
+      * Unauthorized capper (allow-list empty, unset, or not containing the capper) still pinned Track Only, on every path including the idempotent-duplicate path.
+      * A client-supplied `distributionMode` cannot grant delivery.
+      * The official-picks target cannot be enqueued without an explicit approval decision.
+      * The official-picks target cannot escape the registry check or the kill switch.
+      * `parked` mode still resolves `_enabled_targets=none` and `_worker_autorun=false`.
+      * The bounded mode does not enable ingestor, system picks, board or alert delivery.
+      * The per-pick recap refuses when the kill switch is engaged.
+      * The nine existing `isTrackOnlyPickMetadata` chokepoints remain enforcing.
+
+      ## Activation sequence (NOT part of this lane)
+
+      current-main deploy proving the [griff843/Unit-Talk-v2#1591](https://linear.app/unit-talk-v2/review/utv2-1922-make-production-promotion-transactional-so-a-config-error-a87bcf88a0de) transaction repair with Command Center / member delivery disabled → Command Center internal-only verification → human-cap foundation deployed with target killed → canary E2E → Griff decision to open member delivery.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Hard constraints
+
+      * **Build only. Member delivery is NOT activated.** The new target starts
+      `killed = true` / fail-closed.
+
+      * All existing Track Only behaviour for **unauthorized** cappers remains
+      enforced and **mutation-proven**.
+
+      * The browser/client cannot grant delivery. `cappers.active` and generic
+      `cappers.metadata` are **not** authorization.
+
+      * **Do not route member picks through** `DISCORD_CAPPER_CHANNEL_ID` — that
+      is the private capper home/onboarding channel.
+
+      * Do not activate SGO, models, automated grading, ingestor, system picks,
+      board picks or alert delivery.
+
+      * Grading, CLV, SGO and models are outside this milestone. CLV may be null
+      and must not block delivery, settlement, recap or E2E success.
+    - >-
+      Measured starting position (main @ 6206cbb)
+
+      1. `apps/api/src/handlers/submit-pick.ts:93-106` pins `distributionMode =
+      'track-only'` for every authenticated capper and 403s anything else.
+
+      2. Every delivery route is model-gated: auto-enqueue fires only on
+      `promotionStatus === 'qualified' && promotionTarget != null`
+      (`submit-pick-controller.ts:181`), `requeue-controller.ts:30` refuses on
+      the same condition, and `enqueueDistributionWork` re-checks it.
+      Qualification is the promotion scorer.
+
+      3. Containment is binary: `deploy.yml:499-537` / `1246-1284` — `parked`
+      forces `_worker_autorun=false` and `_enabled_targets=none`; only `active`
+      starts the worker, and it also starts the ingestor and syndicate machine.
+
+      4. `apps/worker/src/runner.ts:244-273` derives `isGoverned` from a
+      **hardcoded three-name literal**, so both the registry check and the DB
+      kill switch apply only to
+      `best-bets`/`trader-insights`/`exclusive-insights`. A
+      `discord:<channelId>` target is ungoverned.
+
+      5. `picks.promotion_target` is `string | null` in Postgres — **no enum**,
+      so a new governed promotion target needs **no DDL**.
+
+      6. `postSettlementRecapIfPossible` (`grading-service.ts:775`) is exported
+      but called only from the automated grading pass at `:484`; the manual
+      settlement path emits no per-pick recap. Both recap emitters post by
+      direct `fetch`, so neither is covered by `delivery_kill_switch`.
+    - >-
+      Scope
+
+      **W1 — authorization (key 1).** Explicit server-side capper allow-list,
+      empty/unset ⇒ fail-closed. Every authorization consultation written to
+      `audit_log`. No DDL.
+
+
+      **W2 — delivery-eligible posture.** An authorized capper's pick is born
+      `awaiting_approval` and is not Track Only. Every unauthorized path keeps
+      the Track Only pin byte-for-byte.
+
+
+      **W3 — governed official-picks target (key 2 + delivery).**
+
+
+      * Introduce an explicit governed member-facing official-picks promotion
+      target; it must participate in `defaultTargetRegistry`, worker target
+      coverage, and `delivery_kill_switch`.
+
+      * Derive `isGoverned` from the canonical target list instead of the
+      hardcoded literal, so no target can be governed by one control and not the
+      other.
+
+      * Enqueue on explicit operator `approve` (`review-pick-controller`,
+      mandatory `reason` + `decidedBy`, `pick_reviews` row + audit row) —
+      **never** off `promotionStatus`.
+
+      * Registry entry ships `enabled: false`; the kill-switch row ships `killed
+      = true`.
+
+
+      **W4 — immediate per-pick settlement recap.** Wire the existing exported
+      `postSettlementRecapIfPossible` into the manual settlement path for
+      delivered picks, and bring both recap emitters under the delivery kill
+      switch.
+
+
+      **W6 — bounded human-only containment mode.** A `deploy.yml` mode that
+      starts the worker with only the official-picks target enabled, leaving
+      ingestor, system picks, board and alert off. `parked` semantics must
+      remain byte-identical.
+    - >-
+      Mutation coverage required
+
+      * Unauthorized capper (allow-list empty, unset, or not containing the
+      capper) still pinned Track Only, on every path including the
+      idempotent-duplicate path.
+
+      * A client-supplied `distributionMode` cannot grant delivery.
+
+      * The official-picks target cannot be enqueued without an explicit
+      approval decision.
+
+      * The official-picks target cannot escape the registry check or the kill
+      switch.
+
+      * `parked` mode still resolves `_enabled_targets=none` and
+      `_worker_autorun=false`.
+
+      * The bounded mode does not enable ingestor, system picks, board or alert
+      delivery.
+
+      * The per-pick recap refuses when the kill switch is engaged.
+
+      * The nine existing `isTrackOnlyPickMetadata` chokepoints remain
+      enforcing.
+    - |-
+      Activation sequence (NOT part of this lane)
+      current-main deploy proving the [griff843/Unit-Talk-v2#1591](https://linear.app/unit-talk-v2/review/utv2-1922-make-production-promotion-transactional-so-a-config-error-a87bcf88a0de) transaction repair with Command Center / member delivery disabled → Command Center internal-only verification → human-cap foundation deployed with target killed → canary E2E → Griff decision to open member delivery.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper
+    title: "Human capper official-picks delivery transaction: authorized capper →
+      approval → governed member target → worker → manual settlement → immediate
+      recap → bounded human-only containment mode"
+    description: |-
+      ## Objective
+
+      Build — **not activate** — one complete production transaction for a human capper's official pick:
+
+      authorized human capper → delivery-eligible server posture → `awaiting_approval` → explicit operator approval → governed member-facing delivery target → worker/Discord → manual settlement → immediate per-pick recap → bounded human-only containment mode.
+
+      PM-ratified as ONE coherent T1 runtime lane (W1+W2+W3+W4+W6). Do not split into separate runtime/deploy lanes unless live lane mechanics force it.
+
+      ## Hard constraints
+
+      * **Build only. Member delivery is NOT activated.** The new target starts `killed = true` / fail-closed.
+      * All existing Track Only behaviour for **unauthorized** cappers remains enforced and **mutation-proven**.
+      * The browser/client cannot grant delivery. `cappers.active` and generic `cappers.metadata` are **not** authorization.
+      * **Do not route member picks through** `DISCORD_CAPPER_CHANNEL_ID` — that is the private capper home/onboarding channel.
+      * Do not activate SGO, models, automated grading, ingestor, system picks, board picks or alert delivery.
+      * Grading, CLV, SGO and models are outside this milestone. CLV may be null and must not block delivery, settlement, recap or E2E success.
+
+      ## Measured starting position (main @ 6206cbb)
+
+      1. `apps/api/src/handlers/submit-pick.ts:93-106` pins `distributionMode = 'track-only'` for every authenticated capper and 403s anything else.
+      2. Every delivery route is model-gated: auto-enqueue fires only on `promotionStatus === 'qualified' && promotionTarget != null` (`submit-pick-controller.ts:181`), `requeue-controller.ts:30` refuses on the same condition, and `enqueueDistributionWork` re-checks it. Qualification is the promotion scorer.
+      3. Containment is binary: `deploy.yml:499-537` / `1246-1284` — `parked` forces `_worker_autorun=false` and `_enabled_targets=none`; only `active` starts the worker, and it also starts the ingestor and syndicate machine.
+      4. `apps/worker/src/runner.ts:244-273` derives `isGoverned` from a **hardcoded three-name literal**, so both the registry check and the DB kill switch apply only to `best-bets`/`trader-insights`/`exclusive-insights`. A `discord:<channelId>` target is ungoverned.
+      5. `picks.promotion_target` is `string | null` in Postgres — **no enum**, so a new governed promotion target needs **no DDL**.
+      6. `postSettlementRecapIfPossible` (`grading-service.ts:775`) is exported but called only from the automated grading pass at `:484`; the manual settlement path emits no per-pick recap. Both recap emitters post by direct `fetch`, so neither is covered by `delivery_kill_switch`.
+
+      ## Scope
+
+      **W1 — authorization (key 1).** Explicit server-side capper allow-list, empty/unset ⇒ fail-closed. Every authorization consultation written to `audit_log`. No DDL.
+
+      **W2 — delivery-eligible posture.** An authorized capper's pick is born `awaiting_approval` and is not Track Only. Every unauthorized path keeps the Track Only pin byte-for-byte.
+
+      **W3 — governed official-picks target (key 2 + delivery).**
+
+      * Introduce an explicit governed member-facing official-picks promotion target; it must participate in `defaultTargetRegistry`, worker target coverage, and `delivery_kill_switch`.
+      * Derive `isGoverned` from the canonical target list instead of the hardcoded literal, so no target can be governed by one control and not the other.
+      * Enqueue on explicit operator `approve` (`review-pick-controller`, mandatory `reason` + `decidedBy`, `pick_reviews` row + audit row) — **never** off `promotionStatus`.
+      * Registry entry ships `enabled: false`; the kill-switch row ships `killed = true`.
+
+      **W4 — immediate per-pick settlement recap.** Wire the existing exported `postSettlementRecapIfPossible` into the manual settlement path for delivered picks, and bring both recap emitters under the delivery kill switch.
+
+      **W6 — bounded human-only containment mode.** A `deploy.yml` mode that starts the worker with only the official-picks target enabled, leaving ingestor, system picks, board and alert off. `parked` semantics must remain byte-identical.
+
+      ## Mutation coverage required
+
+      * Unauthorized capper (allow-list empty, unset, or not containing the capper) still pinned Track Only, on every path including the idempotent-duplicate path.
+      * A client-supplied `distributionMode` cannot grant delivery.
+      * The official-picks target cannot be enqueued without an explicit approval decision.
+      * The official-picks target cannot escape the registry check or the kill switch.
+      * `parked` mode still resolves `_enabled_targets=none` and `_worker_autorun=false`.
+      * The bounded mode does not enable ingestor, system picks, board or alert delivery.
+      * The per-pick recap refuses when the kill switch is engaged.
+      * The nine existing `isTrackOnlyPickMetadata` chokepoints remain enforcing.
+
+      ## Activation sequence (NOT part of this lane)
+
+      current-main deploy proving the [griff843/Unit-Talk-v2#1591](https://linear.app/unit-talk-v2/review/utv2-1922-make-production-promotion-transactional-so-a-config-error-a87bcf88a0de) transaction repair with Command Center / member delivery disabled → Command Center internal-only verification → human-cap foundation deployed with target killed → canary E2E → Griff decision to open member delivery.
+    captured_at: 2026-09-17T01:15:53.142Z
+    description_sha256: 06c505408c716398ace25428b22373326f5b6b0f8988b1e4859ef4b61d4ea82a
+  contract_hash: fa490c16c51cbd6411bf97f23a9d4fb690acae6143e6728af85daa4a31358431
