@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
+import { americanToDecimal as localAmericanToDecimal } from '../odds-math.js';
 import { SRC } from '../test-support/source-walk';
 import {
   classifyAttribution,
@@ -241,4 +242,33 @@ test('Track Only rows are still measured, just measured separately', () => {
   const trackOnly = rows.filter(isTrackOnlyPick);
   assert.equal(trackOnly.length, 2, 'exclusion from published is not deletion');
   assert.equal(computeStats(trackOnly).settled, 2);
+});
+
+// ── 5. No second odds converter ───────────────────────────────
+
+test('the contracts price conversion and the local one do not disagree', () => {
+  // `apps/command-center/src/lib/odds-math.ts` already carries an
+  // `americanToDecimal`. This file deliberately uses the `@unit-talk/contracts`
+  // one instead, because that is the primitive the ticket pricing and the Track
+  // Only reporter are built on -- but two converters in one app is two things
+  // that can drift. This test fails the moment they stop agreeing, so the choice
+  // of which to use stays a preference rather than a correctness risk.
+  for (const odds of [100, 110, 150, 275, 1000, -100, -110, -150, -333, -1000]) {
+    const expected = localAmericanToDecimal(odds);
+    const priced = pickProfitUnits('win', odds, 1);
+    assert.ok(priced !== null, `odds ${odds} should be priceable`);
+    assert.ok(
+      Math.abs((priced as number) - (expected - 1)) < 1e-12,
+      `odds ${odds}: contracts gives ${String((priced as number) + 1)}, odds-math gives ${expected}`,
+    );
+  }
+});
+
+test('contracts validation is stricter than the local converter, not looser', () => {
+  // The local converter accepts a non-integer and a price inside (-100, 100);
+  // `isValidAmericanOdds` refuses both. A stricter gate can only turn a number
+  // into a refusal, never a refusal into a wrong number.
+  assert.equal(pickProfitUnits('win', 110.5, 1), null, 'non-integer price is refused');
+  assert.equal(pickProfitUnits('win', 50, 1), null, 'price inside (-100, 100) is refused');
+  assert.ok(Number.isFinite(localAmericanToDecimal(110.5)), 'the local converter would have priced it');
 });
