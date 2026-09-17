@@ -112,7 +112,15 @@ against real repositories and the real deploy script:
 - the deploy mode is asserted against the actual `deploy.yml` source, parsed,
   in both the canary and production blocks.
 
-**A live-DB run against production is deliberately NOT performed.** It would
+**Read-only production measurement was performed**, 2026-09-17, against
+`zfzdnfwdarxucxtaojxm`. It writes nothing and changes no containment setting:
+`delivery_kill_switch` holds 4 rows and `official-picks` is not one of them;
+`distribution_outbox` holds 0 rows on `discord:official-picks`; 0 picks carry
+`promotion_target = 'official-picks'`; and 0 picks carry a
+`metadata.deliveryAuthorization` record. The exact counts are in
+`evidence.json` under `runtime_proof.row_counts`.
+
+**A live-DB WRITE run against production is deliberately NOT performed.** It would
 require creating a `delivery_kill_switch` row for `official-picks` — a
 production write whose only effect would be to *weaken* the fail-closed default
 this lane depends on. The absence of that row is the control. The staging

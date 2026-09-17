@@ -86,8 +86,109 @@
     ]
   },
   "runtime_proof": {
-    "status": "see_runtime_health",
+    "status": "pass",
+    "measured_at": "2026-09-17T02:10:00Z",
     "note": "This lane's runtime claim is a refusal: a delivery path exists and cannot fire. The measured posture of every control is in runtime-health.json. A live-DB run against production is deliberately not performed -- it would require creating a delivery_kill_switch row for official-picks, a production write whose only effect would be to weaken the fail-closed default this lane depends on. The staging live-DB receipt is produced by the `verify` and `Writable DB proof (staging only)` checks on PR #1592 and is harvested at closeout by ops:proof-generate --merge-sha.",
+    "queries": [
+      {
+        "name": "the governed target holds no kill-switch row in production",
+        "method": "read-only SELECT against production zfzdnfwdarxucxtaojxm: `select target, killed from delivery_kill_switch order by target`",
+        "result": "4 rows: best-bets killed=true, exclusive-insights killed=true, trader-insights killed=true, t1-proof-utv2-1427-kill-switch killed=false. `official-picks` is absent.",
+        "significance": "DeliveryKillSwitchRepository.isKilled returns true for an unknown target, so the ABSENCE of the row is the kill. The lane deliberately does not create one -- creating it would be a production write whose only effect is to weaken this default."
+      },
+      {
+        "name": "nothing has ever been delivered, or queued, on the governed target",
+        "method": "read-only SELECT: `select count(*) from distribution_outbox where target = 'discord:official-picks'` and `select count(*) from picks where promotion_target = 'official-picks'`",
+        "result": "0 and 0.",
+        "significance": "The shipped posture is measured in production, not asserted from the branch."
+      },
+      {
+        "name": "no production pick carries a delivery authorization record",
+        "method": "read-only SELECT: `select count(*) from picks where metadata ? 'deliveryAuthorization'`",
+        "result": "0.",
+        "significance": "The authorization key this lane introduces does not yet exist on any persisted row, so no existing pick changes behaviour when the code ships."
+      },
+      {
+        "name": "the two-key path, the brake and the approval transaction, end to end",
+        "method": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts driven against the real in-memory repository bundle -- the same code paths the database bundle implements",
+        "result": "25/25 pass. An authorized submission is server-pinned delivery-eligible and parks in awaiting_approval with outboxEnqueued=false; approval with the target disabled enqueues nothing and reports target-disabled; approval with the target released enqueues exactly one row on discord:official-picks.",
+        "significance": "Operator approval is the only path out of the brake, and it is still subordinate to the kill switch."
+      },
+      {
+        "name": "the client cannot reach the authorization decision",
+        "method": "a forged metadata.deliveryAuthorization submitted on the capper path and on the unauthenticated path; a client requesting distributionMode delivery-eligible",
+        "result": "the record is deleted before anything reads it on every source; the request is refused 403 CAPPER_TRACK_ONLY_REQUIRED",
+        "significance": "Browser/client cannot grant delivery, which is the PM-stated V1 authorization shape."
+      },
+      {
+        "name": "the worker's registry and kill-switch checks, exercised",
+        "method": "runWorkerCycles with a real InMemoryDeliveryKillSwitchRepository (isKilled fail-closed on unknown), apps/worker/src/worker-runtime.test.ts",
+        "result": "70/70 pass, 4 new: a raw discord:<channelId> target is now subject to the kill switch; a released raw channel still delivers and is not registry-refused; the governed human target is killed until released; registry and kill switch are independent.",
+        "significance": "Closes the discord:<channelId> hole, which previously bypassed the kill switch entirely."
+      },
+      {
+        "name": "the bounded deploy mode, parsed from the real workflow",
+        "method": "scripts/ci/deploy-parked-mode.test.ts asserting against .github/workflows/deploy.yml source, in both the canary and production blocks",
+        "result": "32/32 pass, 7 new. human-capper releases the worker only; SYNDICATE_MACHINE_ENABLED stays false; parked is byte-identical; the mode is unreachable from the SYNDICATE_MACHINE_ENABLED secret (it is a repository variable, so reserved decision 4 is untouched); an unmapped or capper-channel-colliding target map is a hard deploy error.",
+        "significance": "Containment is not widened, and the PM instruction not to route member picks through DISCORD_CAPPER_CHANNEL_ID is enforced at deploy time, not in prose."
+      },
+      {
+        "name": "every guard has a mutation control",
+        "method": "withGuardRemoved copies the module with the text between the UTV2-1923 *_START/_END markers deleted, imports the mutant, and asserts it fails open",
+        "result": "5/5 controls kill their mutant: forgery guard, enqueue authorization guard, submit brake, requeue guard, target exclusivity guard.",
+        "significance": "Each control demonstrates the specific failure it prevents rather than merely existing."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "delivery_kill_switch rows for 'official-picks' (production)",
+        "value": 0
+      },
+      {
+        "probe": "delivery_kill_switch rows total (production)",
+        "value": 4
+      },
+      {
+        "probe": "delivery_kill_switch rows with killed=true (production)",
+        "value": 3
+      },
+      {
+        "probe": "distribution_outbox rows on 'discord:official-picks' (production)",
+        "value": 0
+      },
+      {
+        "probe": "picks with promotion_target='official-picks' (production)",
+        "value": 0
+      },
+      {
+        "probe": "picks carrying metadata.deliveryAuthorization (production)",
+        "value": 0
+      },
+      {
+        "probe": "outbox rows created by an authorized submission before operator approval",
+        "value": 0
+      },
+      {
+        "probe": "outbox rows created by operator approval while the target is disabled",
+        "value": 0
+      },
+      {
+        "probe": "outbox rows created by operator approval once the target is released",
+        "value": 1
+      },
+      {
+        "probe": "mutation controls that kill their mutant",
+        "value": 5
+      },
+      {
+        "probe": "new tests added by this lane",
+        "value": 48
+      },
+      {
+        "probe": "containment settings changed by this lane",
+        "value": 0
+      }
+    ],
     "artifact": "docs/06_status/proof/UTV2-1923/runtime-health.json"
   }
 }
