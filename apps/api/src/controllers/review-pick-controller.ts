@@ -121,12 +121,19 @@ export async function reviewPickController(
   // This is the governance brake release path (Phase 7A, UTV2-491/UTV2-509).
   const pickLifecycleState = pick.status as string;
   // UTV2-1923 HUMAN_DELIVERY_APPROVAL_KEY_GUARD_START
-  // This is the second of the two keys. The first (the server allow-list) said
-  // this capper's picks MAY enter the approval path; this one says THIS pick
-  // may leave it. Neither alone delivers anything, and no client can supply
-  // either: the allow-list is read from server env, and this decision arrives
-  // on an operator-authenticated route with a required `decidedBy` and reason
-  // that are both written to the audit log.
+  // RECOVERY DOOR, NOT THE CANONICAL PATH.
+  //
+  // An authorized human capper's pick is delivered at submission time and does
+  // not enter `awaiting_approval` -- approval governs autonomous producers, not
+  // people (see `humanCapperDeliveryRequiresOperatorApproval` in
+  // distribution-service.ts, which is `false` and is asserted by test). So this
+  // branch fires only for a human capper pick an operator has deliberately
+  // parked there, and it exists so such a pick is not stranded.
+  //
+  // It must never become the way human picks are delivered. In particular a
+  // delivery control that refuses at submission time (target disabled, or
+  // killed) is fail-closed and does NOT park the pick here; reintroducing that
+  // would rebuild the approval dependency this lane removed.
   const isHumanCapperDelivery = isHumanCapperDeliveryAuthorized(
     isRecord(pick.metadata) ? pick.metadata : null,
   );

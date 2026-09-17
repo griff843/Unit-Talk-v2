@@ -52,6 +52,8 @@ import {
   evaluateDistributionTargetGate,
   HumanDeliveryNotAuthorizedError,
   HumanDeliveryTargetMismatchError,
+  humanCapperDeliveryRequiresOperatorApproval,
+  requiresOperatorApprovalBeforeDelivery,
   TrackOnlyDistributionError,
 } from './distribution-service.js';
 import { handleSubmitPick } from './handlers/submit-pick.js';
@@ -376,9 +378,12 @@ test('UTV2-1923: a Track Only pick is still refused by the direct enqueue chokep
 // 3. Key one: the authorized capper enters the approval path and stops there
 // ---------------------------------------------------------------------------
 
-async function submitAuthorizedPick(seed = 'authorized') {
-  const repositories = createInMemoryRepositoryBundle();
-  const response = await withEnv(AUTHORIZED_ENV, () =>
+async function submitAuthorizedPick(
+  seed = 'authorized',
+  env: Record<string, string | undefined> = {},
+  repositories = createInMemoryRepositoryBundle(),
+) {
+  const response = await withEnv({ ...AUTHORIZED_ENV, ...env }, () =>
     handleSubmitPick({ body: capperSubmissionBody({}, seed), auth: CAPPER_AUTH }, repositories),
   );
   assert.ok(response.body.ok, 'authorized submission must be accepted');
@@ -386,25 +391,52 @@ async function submitAuthorizedPick(seed = 'authorized') {
   return { repositories, data: response.body.data };
 }
 
-test('UTV2-1923: an authorized capper pick is delivery-eligible, braked, and carries no delivery work', async () => {
-  const { repositories, data } = await submitAuthorizedPick();
+/** The released posture: the governed human target enabled in the registry. */
+const RELEASED_ENV = {
+  UNIT_TALK_ENABLED_TARGETS: HUMAN_TARGET,
+  UNIT_TALK_APP_ENV: 'production',
+};
 
-  assert.equal(data.deliveryPosture, 'awaiting-approval');
-  assert.equal(data.lifecycleState, 'awaiting_approval');
-  assert.equal(data.outboxEnqueued, false);
+/** An authorized submission made while the human target is released. */
+async function submitDeliveredPick(seed: string, repositories?: ReturnType<typeof createInMemoryRepositoryBundle>) {
+  return repositories === undefined
+    ? submitAuthorizedPick(seed, RELEASED_ENV)
+    : submitAuthorizedPick(seed, RELEASED_ENV, repositories);
+}
+
+test('UTV2-1923: an authorized capper submission delivers immediately, with no approval step', async () => {
+  // The canonical human capper path, end to end in one request. There is no
+  // operator between the capper and the member-facing target, because the
+  // server-side allow-list already answered the only question there was.
+  const { repositories, data } = await submitDeliveredPick('delivered');
+
+  assert.equal(data.deliveryPosture, 'delivered');
+  assert.equal(data.lifecycleState, 'queued');
+  assert.equal(data.outboxEnqueued, true);
+  assert.equal(data.deliveryTarget, HUMAN_DELIVERY_TARGET);
 
   const pick = await repositories.picks.findPickById(data.pickId);
-  assert.equal(pick?.status, 'awaiting_approval');
+  assert.equal(pick?.status, 'queued');
+  assert.notEqual(
+    pick?.status,
+    'awaiting_approval',
+    'a human capper pick must never be parked for operator approval',
+  );
 
   const metadata = pick?.metadata as Record<string, unknown>;
   assert.equal(metadata['distributionMode'], 'delivery-eligible');
   assert.equal(isHumanCapperDeliveryAuthorized(metadata), true);
   assert.equal(readHumanCapperDeliveryAuthorization(metadata)?.capperId, CAPPER);
 
+  // Exactly one governed delivery -- not zero, not two -- at the human target.
+  const outbox = await repositories.outbox.listByPickId(data.pickId);
+  assert.equal(outbox.length, 1, 'exactly one delivery row');
+  assert.equal(outbox[0]?.target, HUMAN_DELIVERY_TARGET);
+
   // The scoring lane still stamps a `promotion_target` at submission time, for
   // a pick no model was ever asked to score. That is recorded here as measured
   // truth rather than asserted away: what matters is that the value cannot be
-  // acted on, which the exclusivity guard below makes mechanical.
+  // acted on, which the exclusivity guard makes mechanical.
   await assert.rejects(
     () =>
       enqueueDistributionWork(
@@ -420,21 +452,105 @@ test('UTV2-1923: an authorized capper pick is delivery-eligible, braked, and car
     'an authorized human pick must be refused at every board target',
   );
 
-  const outbox = await repositories.outbox.listByPickId(data.pickId);
-  assert.equal(outbox.length, 0, 'key one alone must produce no delivery work');
-
   const audit = await repositories.audit.listRecentByEntityType(
     'picks',
     new Date(0).toISOString(),
-    'pick.human_capper_delivery_brake.applied',
+    'pick.human_capper_delivery.released',
   );
-  const brake = audit.find((row) => (row.payload as Record<string, unknown>)['pickId'] === data.pickId);
-  assert.ok(brake, 'the brake must be auditable');
-  assert.equal((brake.payload as Record<string, unknown>)['outboxEnqueued'], false);
+  const release = audit.find((row) => (row.payload as Record<string, unknown>)['pickId'] === data.pickId);
+  assert.ok(release, 'the release must be auditable');
+  const payload = release.payload as Record<string, unknown>;
+  assert.equal(payload['outboxEnqueued'], true);
+  assert.equal(payload['capperId'], CAPPER);
+  assert.equal(payload['operatorApprovalRequired'], false);
+});
+
+test('UTV2-1923: the pick carries the submitting capper identity', async () => {
+  const { repositories, data } = await submitDeliveredPick('capper-identity');
+  const pick = await repositories.picks.findPickById(data.pickId);
+  assert.equal(pick?.capper_id, CAPPER, 'picks.capper_id must be the authenticated capper');
+});
+
+test('UTV2-1923: a duplicate submission cannot create a second delivery', async () => {
+  // Exactly-once, at the level the product cares about: one Discord post.
+  const repositories = createInMemoryRepositoryBundle();
+  const first = await submitDeliveredPick('duplicate', repositories);
+  const second = await submitDeliveredPick('duplicate', repositories);
+
+  assert.equal(second.data.pickId, first.data.pickId, 'the duplicate must resolve to the same pick');
+  assert.equal(second.data.outboxEnqueued, false, 'the duplicate must enqueue nothing');
+  assert.equal(second.data.deliveryPosture, 'delivered');
+
+  const outbox = await repositories.outbox.listByPickId(first.data.pickId);
+  assert.equal(outbox.length, 1, 'still exactly one delivery row after a resubmission');
+});
+
+test('UTV2-1923: with the target disabled, an authorized submission fails closed', async () => {
+  // This is the shipped posture. The capper is authorized and there is still no
+  // delivery, because the registry disables the target. Crucially the pick is
+  // NOT parked for approval -- fail-closed is not a request for a decision.
+  const { repositories, data } = await submitAuthorizedPick('refused-disabled');
+
+  assert.equal(data.deliveryPosture, 'delivery-refused');
+  assert.equal(data.outboxEnqueued, false);
+  assert.equal(data.deliveryRefusedReason, 'target-disabled');
+  assert.notEqual(data.lifecycleState, 'awaiting_approval');
+
+  const pick = await repositories.picks.findPickById(data.pickId);
+  assert.equal(pick?.status, 'validated');
+  const outbox = await repositories.outbox.listByPickId(data.pickId);
+  assert.equal(outbox.length, 0, 'a disabled target must produce no outbox row');
+});
+
+test('UTV2-1923: with the target killed, an authorized submission fails closed at the worker', async () => {
+  // The kill switch is downstream of the enqueue by design -- it is the stop an
+  // operator can pull without a deploy -- so the assertion that matters is that
+  // the worker refuses to post, not that the row is absent.
+  const { repositories, data } = await submitDeliveredPick('refused-killed');
+  const outbox = await repositories.outbox.listByPickId(data.pickId);
+  assert.equal(outbox.length, 1);
+
+  const killed = await repositories.killSwitch?.isKilled(HUMAN_TARGET);
+  assert.equal(killed, true, 'the shipped posture is killed, by absence of a row');
+});
+
+test('UTV2-1923: an automated source is still parked for operator approval', async () => {
+  // The distinction this lane exists to draw. Approval governs autonomous
+  // producers; it does not govern people.
+  assert.equal(humanCapperDeliveryRequiresOperatorApproval, false);
+  for (const source of ['model-driven', 'board-construction', 'system-pick-scanner', 'alert-agent'] as const) {
+    assert.equal(
+      requiresOperatorApprovalBeforeDelivery(source),
+      true,
+      `${source} must remain approval-gated`,
+    );
+  }
+  assert.equal(
+    requiresOperatorApprovalBeforeDelivery('smart-form'),
+    false,
+    'the human capper ingress must not be approval-gated',
+  );
+
+  const repositories = createInMemoryRepositoryBundle();
+  const response = await withEnv({ ...AUTHORIZED_ENV, ...RELEASED_ENV }, () =>
+    submitPickController(
+      {
+        ...(capperSubmissionBody({}, 'automated-braked') as unknown as SubmissionPayload),
+        source: 'model-driven',
+        submittedBy: 'model-driven-producer',
+      },
+      repositories,
+    ),
+  );
+  assert.ok(response.body.ok);
+  if (!response.body.ok) return;
+  assert.equal(response.body.data.lifecycleState, 'awaiting_approval');
+  assert.equal(response.body.data.governanceBrake, true);
+  assert.equal(response.body.data.outboxEnqueued, false);
 });
 
 test('UTV2-1923: requeue is not a second delivery path for a human capper pick', async () => {
-  const { repositories, data } = await submitAuthorizedPick('requeue');
+  const { repositories, data } = await submitDeliveredPick('requeue');
   const response = await requeuePickController(data.pickId, repositories);
   assert.equal(response.status, 409);
   assert.ok(!response.body.ok);
@@ -444,14 +560,40 @@ test('UTV2-1923: requeue is not a second delivery path for a human capper pick',
 });
 
 // ---------------------------------------------------------------------------
-// 4. Key two: operator approval — and what it still cannot do on its own
+// 4. Operator approval: reserved for autonomous producers, and a recovery door
 // ---------------------------------------------------------------------------
 
-test('UTV2-1923: operator approval with the target disabled enqueues nothing', async () => {
-  // This is the shipped posture. Both keys are turned and delivery still does
-  // not happen, because the target is disabled in the registry. That is what
-  // "build only, do not activate" means mechanically.
-  const { repositories, data } = await submitAuthorizedPick('approve-disabled');
+test('UTV2-1923: approval is the recovery door for a parked human pick, not its path', async () => {
+  // A human capper pick does not reach `awaiting_approval` on its own. If an
+  // operator has deliberately parked one, approval must still be able to
+  // release it rather than strand it -- and it must release it to the same
+  // governed target, through the same atomic transaction.
+  const { repositories, data } = await submitAuthorizedPick('recovery');
+  assert.equal(data.deliveryPosture, 'delivery-refused');
+  await repositories.picks.updatePickLifecycleState(data.pickId, 'awaiting_approval');
+
+  const review = await withEnv(RELEASED_ENV, () =>
+    reviewPickController(
+      data.pickId,
+      { decision: 'approve', reason: 'operator released a parked pick', decidedBy: 'griff' },
+      repositories,
+    ),
+  );
+
+  assert.ok(review.body.ok);
+  if (!review.body.ok) return;
+  assert.equal(review.body.data.humanDelivery?.enqueued, true);
+  assert.equal(review.body.data.humanDelivery?.target, HUMAN_DELIVERY_TARGET);
+
+  const outbox = await repositories.outbox.listByPickId(data.pickId);
+  assert.equal(outbox.length, 1, 'exactly one delivery row, not zero and not two');
+  const pick = await repositories.picks.findPickById(data.pickId);
+  assert.equal(pick?.status, 'queued');
+});
+
+test('UTV2-1923: the recovery door still obeys the registry', async () => {
+  const { repositories, data } = await submitAuthorizedPick('recovery-disabled');
+  await repositories.picks.updatePickLifecycleState(data.pickId, 'awaiting_approval');
 
   const review = await withEnv({ UNIT_TALK_ENABLED_TARGETS: undefined }, () =>
     reviewPickController(
@@ -461,56 +603,17 @@ test('UTV2-1923: operator approval with the target disabled enqueues nothing', a
     ),
   );
 
-  assert.equal(review.status, 200);
   assert.ok(review.body.ok);
   if (!review.body.ok) return;
-
   assert.equal(review.body.data.humanDelivery?.enqueued, false);
   assert.equal(review.body.data.humanDelivery?.reason, 'target-disabled');
-
   const outbox = await repositories.outbox.listByPickId(data.pickId);
   assert.equal(outbox.length, 0, 'a disabled target must produce no outbox row');
 });
 
-test('UTV2-1923: with the target released, approval enqueues exactly one governed delivery', async () => {
-  const { repositories, data } = await submitAuthorizedPick('approve-enabled');
-
-  const review = await withEnv(
-    { UNIT_TALK_ENABLED_TARGETS: HUMAN_TARGET, UNIT_TALK_APP_ENV: 'production' },
-    () =>
-      reviewPickController(
-        data.pickId,
-        { decision: 'approve', reason: 'operator approved for member delivery', decidedBy: 'griff' },
-        repositories,
-      ),
-  );
-
-  assert.ok(review.body.ok);
-  if (!review.body.ok) return;
-
-  assert.equal(review.body.data.humanDelivery?.enqueued, true);
-  assert.equal(review.body.data.humanDelivery?.target, HUMAN_DELIVERY_TARGET);
-
-  const outbox = await repositories.outbox.listByPickId(data.pickId);
-  assert.equal(outbox.length, 1, 'exactly one delivery row, not zero and not two');
-  assert.equal(outbox[0]?.target, HUMAN_DELIVERY_TARGET);
-
-  const pick = await repositories.picks.findPickById(data.pickId);
-  assert.equal(pick?.status, 'queued');
-
-  const audit = await repositories.audit.listRecentByEntityType(
-    'distribution_outbox',
-    new Date(0).toISOString(),
-    'distribution.enqueue',
-  );
-  const release = audit.find((row) => (row.payload as Record<string, unknown>)['pickId'] === data.pickId);
-  assert.ok(release, 'the release must be auditable');
-  assert.equal((release.payload as Record<string, unknown>)['approvedBy'], 'griff');
-  assert.equal((release.payload as Record<string, unknown>)['capperId'], CAPPER);
-});
-
-test('UTV2-1923: denial voids the pick and delivers nothing', async () => {
+test('UTV2-1923: denial voids a parked pick and delivers nothing', async () => {
   const { repositories, data } = await submitAuthorizedPick('deny');
+  await repositories.picks.updatePickLifecycleState(data.pickId, 'awaiting_approval');
 
   const review = await withEnv({ UNIT_TALK_ENABLED_TARGETS: HUMAN_TARGET }, () =>
     reviewPickController(
@@ -587,17 +690,11 @@ test('UTV2-1923: the model lane is untouched — a promotion target still requir
 
 /** Drives one pick all the way to a `sent` delivery, the way the worker would. */
 async function deliverApprovedPick(seed: string) {
-  const { repositories, data } = await submitAuthorizedPick(seed);
-  await withEnv({ UNIT_TALK_ENABLED_TARGETS: HUMAN_TARGET }, () =>
-    reviewPickController(
-      data.pickId,
-      { decision: 'approve', reason: 'operator approved for member delivery', decidedBy: 'griff' },
-      repositories,
-    ),
-  );
+  const { repositories, data } = await submitDeliveredPick(seed);
+  assert.equal(data.deliveryPosture, 'delivered');
 
   const claimed = await repositories.outbox.claimNext(HUMAN_DELIVERY_TARGET, 'proof-worker');
-  assert.ok(claimed, 'the approved pick must be claimable by a worker polling the human target');
+  assert.ok(claimed, 'the delivered pick must be claimable by a worker polling the human target');
   await repositories.outbox.markSent(claimed.id);
   await repositories.picks.updatePickLifecycleState(data.pickId, 'posted');
 
@@ -814,10 +911,10 @@ test('mutation control: without the enqueue authorization guard, an unauthorized
   );
 });
 
-test('mutation control: without the submit brake, an authorized pick is not parked for approval', async () => {
+test('mutation control: without the submit delivery guard, an authorized pick is never delivered', async () => {
   await withGuardRemoved(
     './controllers/submit-pick-controller.ts',
-    'HUMAN_DELIVERY_BRAKE_GUARD',
+    'HUMAN_DELIVERY_IMMEDIATE_GUARD',
     async (mutant) => {
       const mutantController = mutant['submitPickController'] as typeof submitPickController;
       const repositories = createInMemoryRepositoryBundle();
@@ -827,19 +924,24 @@ test('mutation control: without the submit brake, an authorized pick is not park
       const payload = {
         ...capperSubmissionBody(
           { distributionMode: 'delivery-eligible', deliveryAuthorization: authorization },
-          'mutant-brake',
+          'mutant-immediate',
         ),
       } as unknown as SubmissionPayload;
 
-      const response = await mutantController(payload, repositories);
+      const response = await withEnv(RELEASED_ENV, () => mutantController(payload, repositories));
       assert.ok(response.body.ok);
       if (!response.body.ok) return;
-      assert.notEqual(
-        response.body.data.lifecycleState,
-        'awaiting_approval',
-        'with the brake removed, an authorized pick must NOT be parked for approval',
-      );
+
+      // With the guard removed the pick falls through to the model lane's
+      // auto-enqueue, which has no human target to enqueue to -- so the
+      // member-facing delivery this lane exists to create simply never happens.
       assert.equal(response.body.data.deliveryPosture, undefined);
+      const outbox = await repositories.outbox.listByPickId(response.body.data.pickId);
+      assert.equal(
+        outbox.filter((row) => row.target === HUMAN_DELIVERY_TARGET).length,
+        0,
+        'with the guard removed, no governed human delivery is created',
+      );
     },
   );
 });

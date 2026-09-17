@@ -1,8 +1,8 @@
 /**
  * UTV2-1923 — human capper delivery authorization (W1).
  *
- * The single server-side answer to: may this authenticated capper's pick enter
- * the approval-for-delivery path, or is it internal Track Only tracking?
+ * The single server-side answer to: is this authenticated capper's pick
+ * deliverable to members, or is it internal Track Only tracking?
  *
  * Design constraints, all PM-ratified:
  *
@@ -17,9 +17,20 @@
  *   - **Auditable.** Every call returns a record that is written onto the pick
  *     and into the audit log, including refusals and why.
  *
- * This is one of TWO keys. This one says a capper *may* enter the path. The
- * second is an explicit operator approval on the individual pick
- * (`review-pick-controller`). Neither alone delivers anything.
+ * This IS the authorization, and it is deliberately the only one. Operator
+ * approval governs autonomous producers -- the model, the board builder, the
+ * scanner, the alert agent -- because those decide for themselves that a pick
+ * should exist and nobody outside the system is accountable for the decision.
+ * A human capper is a person making their own accountable selection, and the
+ * operator's judgement about that person is exactly what putting them on this
+ * list expressed. Asking for it again, per pick, would be asking the same
+ * question twice. See `humanCapperDeliveryRequiresOperatorApproval` in
+ * `distribution-service.ts`, which is `false` and asserted by test.
+ *
+ * What still stands between an authorized pick and members is not a second
+ * decision but a set of CONTROLS, each of which fails closed on its own: the
+ * target registry, the delivery kill switch, and the deploy posture. A control
+ * that refuses is never a request for approval.
  */
 
 import {

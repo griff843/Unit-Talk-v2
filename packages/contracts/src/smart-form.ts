@@ -61,9 +61,10 @@ export function isTrackOnlyPickMetadata(
 // ---------------------------------------------------------------------------
 
 /**
- * The server's recorded answer to "may this capper's pick enter the
- * approval-for-delivery path?", written onto the pick's metadata at submit
- * time and never accepted from a client.
+ * The server's recorded answer to "may this capper's pick be delivered to
+ * members?", written onto the pick's metadata at submit time and never
+ * accepted from a client. An authorized pick is delivered immediately; no
+ * per-pick operator approval stands between a human capper and members.
  *
  * `cappers.active` and generic `cappers.metadata` are explicitly NOT
  * authorization: an active capper is one who may submit, which is a different

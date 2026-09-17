@@ -125,6 +125,44 @@ export function isGovernanceBrakeSource(source: PickSource): boolean {
 }
 
 /**
+ * UTV2-1923 — what operator approval is FOR, stated where it is enforced.
+ *
+ * Operator approval governs AUTONOMOUS PRODUCERS: something inside this system
+ * decided, by itself, that a pick should exist. Nobody outside the system is
+ * accountable for that decision, so a human ratifies it before members see it.
+ * That is the entire membership rule for `GOVERNANCE_BRAKE_SOURCES`, and every
+ * member of the set is such a producer.
+ *
+ * It does NOT govern an AUTHORIZED HUMAN CAPPER. A capper on the server-side
+ * allow-list has already been judged — by the operator who put them on the
+ * list — and each pick is a person's own accountable selection. There is no
+ * second question for an operator to answer, so an authorized capper's
+ * submission is delivered immediately by `submit-pick-controller` and never
+ * enters `awaiting_approval`.
+ *
+ * The two rules are therefore keyed on different things and must stay that way:
+ * approval on the pick's SOURCE, human delivery on the server's AUTHORIZATION
+ * of the capper. Neither may be derived from the other, and in particular a
+ * refused delivery control (target disabled, or killed) is not a reason to
+ * treat a human pick as awaiting approval — it is fail-closed, full stop.
+ *
+ * `humanCapperDeliveryRequiresOperatorApproval` exists so that this is a
+ * mechanically testable statement rather than a comment that can rot. It is
+ * a constant, deliberately: if a future change makes it conditional, the
+ * conditions have to be written down and argued for in review.
+ */
+export const humanCapperDeliveryRequiresOperatorApproval = false as const;
+
+/**
+ * True when a pick of this source needs an operator to ratify it before member
+ * delivery. Human ingress sources answer false — including the Smart Form,
+ * which is how an authorized human capper submits.
+ */
+export function requiresOperatorApprovalBeforeDelivery(source: PickSource): boolean {
+  return isGovernanceBrakeSource(source);
+}
+
+/**
  * Thrown when a caller attempts to enqueue a pick whose lifecycle state is
  * `awaiting_approval`. Picks in this state must go through operator approval
  * (which transitions to `queued` via the review controller) before any

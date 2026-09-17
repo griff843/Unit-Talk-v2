@@ -343,18 +343,66 @@ export interface HumanCapperDeliveryReleaseResult {
 }
 
 /**
- * Release an approved human capper pick from `awaiting_approval` into the
- * governed member-facing delivery target, atomically, with a run and an audit
- * record for both outcomes.
+ * UTV2-1923 (revised): which lifecycle state this release leaves from, and
+ * under whose authority.
+ *
+ * There are exactly two lawful entries, and they are NOT interchangeable:
+ *
+ *   `submission`  — the CANONICAL path for an authorized human capper. The
+ *                   pick leaves `validated` under the `promoter` role at
+ *                   submission time. No operator stands between the capper and
+ *                   the member-facing post, because for a human capper there is
+ *                   nothing for an operator to decide: the server already
+ *                   decided, from its own allow-list, that this capper's picks
+ *                   are deliverable.
+ *
+ *   `approval`    — the RECOVERY path only. It leaves `awaiting_approval` under
+ *                   `operator_override`. A human capper pick does not enter
+ *                   `awaiting_approval` on the canonical path, so this entry
+ *                   exists for a pick an operator has deliberately parked, and
+ *                   for nothing else.
+ *
+ * `approval` is the default so that every pre-existing caller keeps its exact
+ * previous behaviour and a new caller must state which door it is using.
+ */
+export type HumanCapperDeliveryReleaseEntry = 'approval' | 'submission';
+
+interface HumanCapperDeliveryReleaseEntrySpec {
+  fromState: 'awaiting_approval' | 'validated';
+  writerRole: 'operator_override' | 'promoter';
+  runIdempotencySuffix: string;
+}
+
+const HUMAN_DELIVERY_RELEASE_ENTRIES: Readonly<
+  Record<HumanCapperDeliveryReleaseEntry, HumanCapperDeliveryReleaseEntrySpec>
+> = {
+  approval: {
+    fromState: 'awaiting_approval',
+    writerRole: 'operator_override',
+    runIdempotencySuffix: 'human-delivery-release',
+  },
+  submission: {
+    fromState: 'validated',
+    writerRole: 'promoter',
+    runIdempotencySuffix: 'human-delivery-submit',
+  },
+};
+
+/**
+ * Release an authorized human capper pick into the governed member-facing
+ * delivery target, atomically, with a run and an audit record for both
+ * outcomes. `entry` selects which lifecycle door it leaves by — see
+ * `HumanCapperDeliveryReleaseEntry`. The canonical human capper path is
+ * `submission`; `approval` is an operator recovery door.
  *
  * This is deliberately NOT `enqueueDistributionWithRunTracking`. That function
- * exists to serve the model/board lane and refuses `awaiting_approval`
- * outright, because for that lane an awaiting-approval pick has by definition
- * not been approved. Here, approval is precisely what has just happened — the
- * release out of `awaiting_approval` IS the operator's decision being
- * executed, so it must happen in the same transaction as the outbox row rather
- * than in a separate transition that could succeed on its own and leave a
- * queued pick with nothing to deliver.
+ * exists to serve the model/board lane, where an enqueue is the downstream
+ * consequence of a scoring decision and an `awaiting_approval` pick is by
+ * definition not yet approved. Nothing here is scored, and — on the canonical
+ * `submission` entry — nothing here is approved either; the server's own
+ * allow-list already decided. What both entries share is the reason this is
+ * one transaction: the lifecycle move and the outbox row must land together,
+ * or a pick reaches `queued` with nothing to deliver.
  *
  * Every control still applies, and each is re-read from the persisted row
  * rather than trusted from the caller:
@@ -374,7 +422,9 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
   outboxRepository: OutboxRepository,
   systemRunRepository: SystemRunRepository,
   auditLogRepository: AuditLogRepository,
+  entry: HumanCapperDeliveryReleaseEntry = 'approval',
 ): Promise<HumanCapperDeliveryReleaseResult> {
+  const entrySpec = HUMAN_DELIVERY_RELEASE_ENTRIES[entry];
   const target = `discord:${humanDeliveryTargets[0]}`;
   const resolvedTarget = resolveDeliveryTarget(target);
 
@@ -392,9 +442,9 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
   if (!isHumanCapperDeliveryAuthorized(persistedMetadata)) {
     throw new HumanDeliveryNotAuthorizedError(pickId, resolvedTarget);
   }
-  if (currentPick.status !== 'awaiting_approval') {
+  if (currentPick.status !== entrySpec.fromState) {
     throw new Error(
-      `Human capper delivery release failed: pick ${pickId} is ${currentPick.status}, not awaiting_approval`,
+      `Human capper delivery release failed: pick ${pickId} is ${currentPick.status}, not ${entrySpec.fromState}`,
     );
   }
   // UTV2-1923 HUMAN_DELIVERY_RELEASE_GUARD_END
@@ -407,9 +457,10 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
       pickId,
       target: resolvedTarget,
       lane: 'human-capper-delivery',
+      entry,
       capperId: authorization?.capperId ?? null,
     },
-    idempotencyKey: `${pickId}:${resolvedTarget}:human-delivery-release`,
+    idempotencyKey: `${pickId}:${resolvedTarget}:${entrySpec.runIdempotencySuffix}`,
   });
 
   const targetGate = evaluateDistributionTargetGate(target);
@@ -429,6 +480,7 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
         pickId,
         target: resolvedTarget,
         lane: 'human-capper-delivery',
+        entry,
         skipped: true,
         reason: targetGate.reason,
       },
@@ -452,9 +504,9 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
     try {
       const atomicResult = await outboxRepository.enqueueDistributionAtomic({
         pickId,
-        fromState: 'awaiting_approval',
+        fromState: entrySpec.fromState,
         toState: 'queued',
-        writerRole: 'operator_override',
+        writerRole: entrySpec.writerRole,
         reason,
         lifecycleCreatedAt: new Date().toISOString(),
         outboxTarget: resolvedTarget,
@@ -481,7 +533,7 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
         pickId,
         'queued',
         reason,
-        'operator_override',
+        entrySpec.writerRole,
       );
       const queuedPick = await pickRepository.findPickById(pickId);
       const distribution = await enqueueDistributionWork(
@@ -505,6 +557,7 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
             pickId,
             target: resolvedTarget,
             lane: 'human-capper-delivery',
+            entry,
             skipped: true,
             reason: distribution.reason,
           },
@@ -539,7 +592,8 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
         outboxId: outboxRecord.id,
         capperId: authorization?.capperId ?? null,
         authority: authorization?.authority ?? null,
-        approvedBy: actor,
+        entry,
+        releasedBy: actor,
       },
     });
 
@@ -563,6 +617,7 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
         pickId,
         target: resolvedTarget,
         lane: 'human-capper-delivery',
+        entry,
         error: error instanceof Error ? error.message : String(error),
       },
     });

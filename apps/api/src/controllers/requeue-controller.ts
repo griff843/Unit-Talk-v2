@@ -38,12 +38,12 @@ export async function requeuePickController(
   // it can never satisfy the check below -- but relying on that would be an
   // accident of two unrelated facts lining up. Refuse it explicitly and name
   // the correct repair, so that a future change to promotion fields cannot
-  // quietly turn this route into a second, unapproved delivery path.
+  // quietly turn this route into a second, ungoverned delivery path.
   if (isHumanCapperDeliveryAuthorized(isRecord(pick.metadata) ? pick.metadata : null)) {
     return errorResponse(
       409,
       'HUMAN_DELIVERY_REQUEUE_BLOCKED',
-      `Pick ${pickId} is a human capper delivery pick; it is released by operator approval, not by requeue`,
+      `Pick ${pickId} is a human capper delivery pick; it is delivered at submission through the governed human target, not by requeue`,
     );
   }
   // UTV2-1923 REQUEUE_HUMAN_DELIVERY_GUARD_END
