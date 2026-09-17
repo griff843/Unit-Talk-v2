@@ -84,9 +84,100 @@
   },
   "runtime_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T22:23:16Z",
-    "environment": "production zfzdnfwdarxucxtaojxm",
-    "note": "This increment's defect was discovered in production, not in a test. The runtime evidence is the failure, the diagnosis and the rollback.",
+    "measured_at": "2026-09-17T22:25:30Z",
+    "note": "This increment's defect was discovered in production, not in a test. The runtime evidence is the failure, the diagnosis, the containment readback and the rollback. All SQL is read-only against production zfzdnfwdarxucxtaojxm; nothing in this lane writes to production.",
+    "queries": [
+      {
+        "name": "the official-picks kill switch is explicitly engaged",
+        "method": "read-only SELECT against production zfzdnfwdarxucxtaojxm: `select target, killed, updated_at from delivery_kill_switch where target in ('official-picks','best-bets','trader-insights','exclusive-insights')`",
+        "result": "4 rows, all killed=true. official-picks killed=true, updated_at 2026-09-17 21:24:35.602039+00.",
+        "significance": "Increment 1 relied on the ABSENCE of the row (isKilled returns true for an unknown target). PM added an explicit engaged row, so the prepared state no longer rests on a default. Read back 10 consecutive times across both deploy attempts and the rollback; true every time."
+      },
+      {
+        "name": "no official-picks delivery was ever enqueued",
+        "method": "read-only SELECT: `select count(*) from distribution_outbox where target = 'discord:official-picks'`",
+        "result": "0",
+        "significance": "The worker crash-looped in createWorkerRuntimeDependencies, before any delivery path was constructed. This confirms mechanically that the failure could not have delivered, rather than inferring it from the stack trace."
+      },
+      {
+        "name": "the pre-existing outbox was untouched by the attempt",
+        "method": "read-only SELECT: `select count(*), max(created_at) from distribution_outbox`",
+        "result": "5747 rows, newest 2026-07-30 20:04:41.893448+00 \u2014 identical before Phase A, after Phase A, after the Phase B failure and after the rollback",
+        "significance": "Turning the worker on is inert against the 5,747 legacy rows: the claim loop and the stale-claim reaper are both target-scoped, and automated recovery is disabled. An unchanged newest-row timestamp is the measurement of that, not a claim about it."
+      },
+      {
+        "name": "nothing was delivered on the day of the attempt",
+        "method": "read-only SELECT: `select count(*) from distribution_outbox where status = 'sent' and created_at >= current_date`",
+        "result": "0",
+        "significance": "Covers the whole window containing both deploy attempts and the rollback."
+      },
+      {
+        "name": "the governed pick cohort is intact and Track Only",
+        "method": "read-only SELECT: `select count(*) from picks where metadata ? 'distributionMode'`",
+        "result": "6 \u2014 the 4 pre-existing plus the 2 submitted through the deployed Smart Form at 21:45:31Z and 21:47:00Z, both capper_id=griff843, both distributionMode=track-only, both carrying deliveryAuthorization.decision='refused' with reason 'human-delivery-posture-off'",
+        "significance": "The human-capper authorization path from increment 1 is running in production and refusing per pick, recorded on the row rather than inferred."
+      },
+      {
+        "name": "the running worker container's posture after rollback",
+        "method": "docker exec unit-talk-worker-1 printenv, read from the running production container",
+        "result": "UNIT_TALK_WORKER_AUTORUN=false, UNIT_TALK_ENABLED_TARGETS=none, SYNDICATE_MACHINE_ENABLED=false, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false, UNIT_TALK_INGESTOR_AUTORUN=false, UNIT_TALK_DISTRIBUTION_TARGETS=discord:1296531122234327100",
+        "significance": "Parked posture restored, read from the process environment rather than from deploy logs. The distribution target is a raw channel id matching ^discord:\\d+$, which is the escape hatch that lets parked mode start and human-capper mode does not have \u2014 the defect this increment fixes."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "delivery_kill_switch rows for 'official-picks' with killed=true (production)",
+        "value": 1
+      },
+      {
+        "probe": "delivery_kill_switch rows with killed=false (production)",
+        "value": 0
+      },
+      {
+        "probe": "distribution_outbox rows on 'discord:official-picks' (production)",
+        "value": 0
+      },
+      {
+        "probe": "distribution_outbox rows total (production, unchanged across all three deploy runs)",
+        "value": 5747
+      },
+      {
+        "probe": "distribution_outbox rows with status='sent' created today (production)",
+        "value": 0
+      },
+      {
+        "probe": "picks carrying metadata.distributionMode (production)",
+        "value": 6
+      },
+      {
+        "probe": "picks carrying metadata.distributionMode that are NOT track-only (production)",
+        "value": 0
+      },
+      {
+        "probe": "consecutive official-picks kill-switch readbacks returning killed=true",
+        "value": 10
+      }
+    ],
+    "deploy_runs": [
+      {
+        "run": "35276529846",
+        "phase": "Phase A",
+        "result": "success",
+        "note": "parked posture with Command Center enabled; all 8 containers on 616994604292345b9e44cfd0c91339fcbe9bcdef"
+      },
+      {
+        "run": "35278517112",
+        "phase": "Phase B",
+        "result": "failure",
+        "note": "promote FAILED at 'Confirm syndicate machine gate in production container'; worker Restarting (1) with RuntimeConfigError RUNTIME_REQUIRED_ENV_MISSING at apps/worker/src/runtime.ts:284 \u2014 the defect this increment fixes"
+      },
+      {
+        "run": "35279450108",
+        "phase": "rollback",
+        "result": "success",
+        "note": "same SHA with UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false; success end to end including post-deploy smoke; worker recovered Restarting (1) -> Up (healthy)"
+      }
+    ],
     "observations": [
       {
         "what": "defect reproduced in production",
@@ -112,6 +203,7 @@
         "what": "parked posture verified from the running containers",
         "evidence": "UNIT_TALK_WORKER_AUTORUN=false, UNIT_TALK_ENABLED_TARGETS=none, SYNDICATE_MACHINE_ENABLED=false, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false, UNIT_TALK_INGESTOR_AUTORUN=false"
       }
-    ]
+    ],
+    "artifact": "docs/06_status/proof/UTV2-1923/runtime-health.json"
   }
 }

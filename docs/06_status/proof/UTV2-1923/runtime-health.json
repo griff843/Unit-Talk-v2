@@ -3,10 +3,10 @@
   "issue_id": "UTV2-1923",
   "tier": "T1",
   "lane_type": "runtime",
-  "measured_at": "2026-09-17T18:40:00Z",
-  "measured_against_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
-  "claim": "A human capper delivery path exists end to end, routes to that capper's own picks-only destination, and cannot fire as merged.",
-  "note": "Every value below is the posture of the code ON THIS BRANCH, not of the deployed system. The deployed release still predates this branch; see docs/mission/plan.md for deploy drift.",
+  "measured_at": "2026-09-17T22:25:45Z",
+  "measured_against_sha": "c2f35a6a5a0c73fb9832b0b92ecc8f221e449bd1",
+  "claim": "The bounded human-capper mode can now START its worker. Nothing about its inertness changes: the target is still killed, still registry-disabled, and the delivery posture flag is still false.",
+  "note": "Increment 2. Unlike increment 1, this was measured against the RUNNING production system at 616994604292345b9e44cfd0c91339fcbe9bcdef, not against branch code: the defect was found by a failed production promote (run 35278517112) and the containment values below are read-only production reads taken during and after it. The fix itself is proven by two inverted mutation controls rather than by a deploy, because deploying it is a separate reserved decision.",
   "delivery_posture": {
     "target": "official-picks",
     "delivery_target": "discord:official-picks",
@@ -114,42 +114,44 @@
     "release_destination": "HUMAN_DELIVERY_DESTINATION_GUARD",
     "worker_pinned_destination": "WORKER_PINNED_DESTINATION_GUARD"
   },
-  "mutation_controls": {
-    "count": 7,
-    "guards_proven": [
-      "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
-      "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
-      "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
-      "HUMAN_DELIVERY_IMMEDIATE_GUARD",
-      "REQUEUE_HUMAN_DELIVERY_GUARD",
-      "RECAP_HUMAN_DELIVERY_STOP_GUARD",
-      "HUMAN_DELIVERY_DESTINATION_GUARD"
-    ],
-    "method": "the guarded region is deleted from a mutant copy of the module, which is then imported and shown to fail open"
-  },
+  "mutation_controls": [
+    {
+      "control": "createWorkerRuntimeDependencies starts a human delivery target with no shared channel mapping",
+      "mutation": "remove the isHumanDeliveryTarget exemption",
+      "observed": "not ok 17 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping",
+      "mutation": "widen the exemption to every governed target",
+      "observed": "not ok 18 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "unmutated baseline",
+      "mutation": "none",
+      "observed": "72 pass / 0 fail",
+      "result": "pass"
+    }
+  ],
   "containment": {
-    "syndicate_machine_mode_values": [
-      "active",
-      "parked",
-      "human-capper"
-    ],
-    "parked_semantics_changed": false,
-    "human_capper_mode_reachable_from_secret": false,
-    "human_capper_mode_source": "repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
-    "human_capper_mode_releases": [
-      "worker autorun"
-    ],
-    "human_capper_mode_keeps_parked": [
-      "provider ingestion",
-      "ingestor scheduling",
-      "syndicate machine",
-      "system picks"
-    ],
-    "human_capper_mode_enabled_targets": "official-picks",
-    "model_board_target_postures_changed": false,
-    "sgo_models_grading_ingestor_touched": false,
-    "deploy_refuses_shared_official_picks_mapping": true,
-    "deploy_assertion_inverted_note": "The deploy previously REQUIRED a discord:official-picks entry in UNIT_TALK_DISCORD_TARGET_MAP. With per-capper routing that entry is the defect, not the prerequisite, so both blocks now refuse it."
+    "measured_against": "production zfzdnfwdarxucxtaojxm and the running containers, read-only",
+    "official_picks_kill_switch_killed": true,
+    "consecutive_readbacks_true": 10,
+    "official_picks_outbox_rows": 0,
+    "outbox_rows_total": 5747,
+    "outbox_newest_created_at": "2026-07-30T20:04:41.893448Z",
+    "outbox_rows_sent_today": 0,
+    "governed_picks": 6,
+    "governed_picks_not_track_only": 0,
+    "worker_env_after_rollback": {
+      "UNIT_TALK_WORKER_AUTORUN": "false",
+      "UNIT_TALK_ENABLED_TARGETS": "none",
+      "SYNDICATE_MACHINE_ENABLED": "false",
+      "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED": "false",
+      "UNIT_TALK_INGESTOR_AUTORUN": "false"
+    },
+    "member_delivery_occurred": false
   },
   "known_residue": [
     {
@@ -159,13 +161,17 @@
     }
   ],
   "activation_sequence_remaining": [
-    "Griff sets the repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
-    "Griff writes cappers.metadata.discord for each authorized capper (guildId, picksChannelId, discussionChannelId) -- reserved, not performed by this lane",
-    "Griff configures UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST",
-    "Griff confirms DISCORD_GUILD_ID is set for the API service",
-    "Griff dispatches Deploy",
-    "Griff releases the delivery_kill_switch row for official-picks",
-    "canary E2E, then the decision to open member delivery"
+    "merge this increment (PM: pm-verdict/v1 APPROVED + t1-approved)",
+    "re-attempt the human-capper deploy (reserved: Griff)",
+    "release the official-picks kill switch (reserved: Griff; the single remaining control capable of member delivery)"
   ],
-  "result": "pass"
+  "result": "pass",
+  "increment": 2,
+  "defect_repaired": {
+    "symptom": "worker container in Restarting (1); RuntimeConfigError RUNTIME_REQUIRED_ENV_MISSING at apps/worker/src/runtime.ts:284",
+    "mechanism": "deploy.yml:612/1411 refuse UNIT_TALK_DISCORD_TARGET_MAP containing discord:official-picks; assertDiscordTargetMapCoversTargets refused its absence. No value of the secret satisfied both.",
+    "why_the_assertion_was_wrong": "delivery-adapters.ts WORKER_PINNED_DESTINATION_GUARD resolves a human delivery target from the per-capper pin on the outbox row and refuses rather than falling back to the shared map, so the assertion demanded a mapping the delivery path never reads.",
+    "fix": "exempt human delivery targets via the canonical isHumanDeliveryTarget predicate; the deploy-time refusal is unchanged.",
+    "escape_hatch_note": "parked mode starts only because its target discord:1296531122234327100 matches ^discord:\\d+$; discord:official-picks has no such form."
+  }
 }
