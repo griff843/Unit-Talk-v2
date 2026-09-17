@@ -3951,7 +3951,7 @@ export function BetForm({
     <main className="smart-form-shell min-h-screen px-4 pt-5 pb-36 sm:px-6 sm:pt-8 lg:px-8 lg:pb-12">
       <header className="smart-form-brand mx-auto mb-8 flex max-w-7xl items-center justify-between gap-4 pb-4">
         <BrandLogo />
-        <span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold">{watchedValues.trackOnly ? 'Track Only · Internal' : 'Delivery eligible'}</span>
+        <span className="track-only-pill rounded-full px-3 py-1.5 text-xs font-semibold">{watchedValues.trackOnly ? 'Track Only requested' : 'Delivery eligible requested'}</span>
       </header>
       {missingQaIdentity && (
         <div role="note" data-testid="missing-qa-identity" className="mx-auto mb-6 max-w-7xl rounded-xl border border-amber-400/40 bg-amber-400/10 p-4 text-sm">

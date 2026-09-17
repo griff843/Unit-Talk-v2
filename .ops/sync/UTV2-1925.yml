@@ -1,0 +1,153 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1925
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1925
+  objective: Smart Form receipt must display server delivery truth, not client form state
+  acceptance_criteria:
+    - >-
+      The Smart Form receipt asserts a containment outcome from client-side form
+      state.
+
+
+      `SuccessReceipt.tsx:39` renders "Track Only — no member delivery" from
+      `submittedValues.trackOnly`, which is a client form value defaulting to
+      `true` (`form-schema.ts:70`). It never reads what the server actually did.
+
+
+      The server already returns the truth. `SubmitPickControllerResult` carries
+      `lifecycleState`, `promotionStatus`, `promotionTarget` and
+      `outboxEnqueued`, and the Track Only branch returns `outboxEnqueued:
+      false` explicitly. The Smart Form's own `SubmitPickResult` type
+      (`api-client.ts:101`) keeps only three of those fields and discards the
+      rest.
+
+
+      Consequence: a server-authorized capper whose submission enters the
+      approval-for-delivery path is still shown "Track Only — no member
+      delivery". The UI states a delivery fact it did not receive and cannot
+      know.
+
+
+      Acceptance:
+
+
+      * the receipt renders from the server response, never from
+      `submittedValues.trackOnly`
+
+      * absence of a server determination is rendered as "not confirmed", never
+      as "no member delivery" — fail closed in the truthfulness direction
+
+      * the UI displays server truth and controls no delivery authorization
+
+      * existing Track Only behaviour for unauthorized cappers is unchanged and
+      stays mutation-proven
+
+
+      Scope: `apps/smart-form/**`. Independent of the human-capper delivery
+      branch — it needs no new server field.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      The Smart Form receipt asserts a containment outcome from client-side form
+      state.
+
+
+      `SuccessReceipt.tsx:39` renders "Track Only — no member delivery" from
+      `submittedValues.trackOnly`, which is a client form value defaulting to
+      `true` (`form-schema.ts:70`). It never reads what the server actually did.
+
+
+      The server already returns the truth. `SubmitPickControllerResult` carries
+      `lifecycleState`, `promotionStatus`, `promotionTarget` and
+      `outboxEnqueued`, and the Track Only branch returns `outboxEnqueued:
+      false` explicitly. The Smart Form's own `SubmitPickResult` type
+      (`api-client.ts:101`) keeps only three of those fields and discards the
+      rest.
+
+
+      Consequence: a server-authorized capper whose submission enters the
+      approval-for-delivery path is still shown "Track Only — no member
+      delivery". The UI states a delivery fact it did not receive and cannot
+      know.
+
+
+      Acceptance:
+
+
+      * the receipt renders from the server response, never from
+      `submittedValues.trackOnly`
+
+      * absence of a server determination is rendered as "not confirmed", never
+      as "no member delivery" — fail closed in the truthfulness direction
+
+      * the UI displays server truth and controls no delivery authorization
+
+      * existing Track Only behaviour for unauthorized cappers is unchanged and
+      stays mutation-proven
+
+
+      Scope: `apps/smart-form/**`. Independent of the human-capper delivery
+      branch — it needs no new server field.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1925/smart-form-receipt-must-display-server-delivery-truth-not-client-form
+    title: Smart Form receipt must display server delivery truth, not client form
+      state
+    description: >-
+      The Smart Form receipt asserts a containment outcome from client-side form
+      state.
+
+
+      `SuccessReceipt.tsx:39` renders "Track Only — no member delivery" from
+      `submittedValues.trackOnly`, which is a client form value defaulting to
+      `true` (`form-schema.ts:70`). It never reads what the server actually did.
+
+
+      The server already returns the truth. `SubmitPickControllerResult` carries
+      `lifecycleState`, `promotionStatus`, `promotionTarget` and
+      `outboxEnqueued`, and the Track Only branch returns `outboxEnqueued:
+      false` explicitly. The Smart Form's own `SubmitPickResult` type
+      (`api-client.ts:101`) keeps only three of those fields and discards the
+      rest.
+
+
+      Consequence: a server-authorized capper whose submission enters the
+      approval-for-delivery path is still shown "Track Only — no member
+      delivery". The UI states a delivery fact it did not receive and cannot
+      know.
+
+
+      Acceptance:
+
+
+      * the receipt renders from the server response, never from
+      `submittedValues.trackOnly`
+
+      * absence of a server determination is rendered as "not confirmed", never
+      as "no member delivery" — fail closed in the truthfulness direction
+
+      * the UI displays server truth and controls no delivery authorization
+
+      * existing Track Only behaviour for unauthorized cappers is unchanged and
+      stays mutation-proven
+
+
+      Scope: `apps/smart-form/**`. Independent of the human-capper delivery
+      branch — it needs no new server field.
+    captured_at: 2026-09-17T02:17:59.204Z
+    description_sha256: f259819d9d2c23b707b1dde2785d4fd04ac7fe97c852ccc8563cac48cbcaf50b
+  contract_hash: 86006bb8a4a3688432cc4d75d2561060aa367de2199bc682dd1796ba98e09935
