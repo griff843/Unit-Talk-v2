@@ -772,15 +772,29 @@ function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
     : Number.POSITIVE_INFINITY;
 }
 
+/**
+ * UTV2-1923: now returns its outcome instead of `void`.
+ *
+ * Every existing caller ignores the return value, so behaviour is unchanged
+ * for them. The settle-pick controller needs it: a per-pick recap is part of
+ * the human capper delivery transaction, and "we tried and something skipped
+ * it" has to be distinguishable from "it posted" at the operator surface.
+ * A skip is a legitimate outcome here, not an error, so it is reported rather
+ * than thrown.
+ */
+export type SettlementRecapOutcome =
+  | { posted: true }
+  | { posted: false; reason: string };
+
 export async function postSettlementRecapIfPossible(
   pick: PickRecord,
   settlementRecord: SettlementRecord,
   repositories: Pick<RepositoryBundle, 'outbox' | 'receipts' | 'runs'>,
   options: RunGradingPassOptions,
-) {
+): Promise<SettlementRecapOutcome> {
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
   if (!botToken) {
-    return;
+    return { posted: false, reason: 'no_discord_bot_token' };
   }
 
   const resolution = await resolveRecapChannel(pick.id, repositories);
@@ -788,7 +802,7 @@ export async function postSettlementRecapIfPossible(
     options.logger?.warn?.(
       `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
     );
-    return;
+    return { posted: false, reason: resolution.reason };
   }
 
   // UTV2-1815: fail closed on an unknown stake. The recap renders a
@@ -809,7 +823,7 @@ export async function postSettlementRecapIfPossible(
         `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
         'computed against an assumed stake',
     );
-    return;
+    return { posted: false, reason: `stake_units_${stakeResolution.status}` };
   }
 
   const response = await fetch(
@@ -841,7 +855,7 @@ export async function postSettlementRecapIfPossible(
     options.logger?.warn?.(
       `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
     );
-    return;
+    return { posted: false, reason: `discord_post_failed_${response.status}` };
   }
 
   try {
@@ -858,6 +872,8 @@ export async function postSettlementRecapIfPossible(
   } catch {
     // recap.post observability is best-effort; don't fail the recap
   }
+
+  return { posted: true };
 }
 
 async function resolveRecapChannel(

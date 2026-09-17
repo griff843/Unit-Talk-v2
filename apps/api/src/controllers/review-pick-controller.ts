@@ -1,8 +1,10 @@
 import type { RepositoryBundle, ApprovalStatus } from '@unit-talk/db';
 import type { PickReviewDecision } from '@unit-talk/db';
 import { transitionPickLifecycle, InvalidTransitionError } from '@unit-talk/db';
+import { isHumanCapperDeliveryAuthorized } from '@unit-talk/contracts';
 import type { ApiResponse } from '../http.js';
 import { successResponse, errorResponse } from '../http.js';
+import { releaseHumanCapperDeliveryWithRunTracking } from '../run-audit-service.js';
 
 const VALID_DECISIONS: PickReviewDecision[] = ['approve', 'deny', 'hold', 'return'];
 
@@ -29,6 +31,17 @@ export interface ReviewPickResult {
   approvalStatus: string;
   auditId: string;
   promotionError?: string;
+  /**
+   * UTV2-1923: present only for a human capper pick released to the governed
+   * member-facing target by this approval. `enqueued: false` means a control
+   * (the registry, or the kill switch downstream) refused — that is a correct
+   * outcome, not an error, and it is reported rather than hidden.
+   */
+  humanDelivery?: {
+    target: string;
+    enqueued: boolean;
+    reason?: string;
+  };
 }
 
 export async function reviewPickController(
@@ -107,19 +120,62 @@ export async function reviewPickController(
   // a lifecycle transition: approved → queued, denied → voided.
   // This is the governance brake release path (Phase 7A, UTV2-491/UTV2-509).
   const pickLifecycleState = pick.status as string;
+  // UTV2-1923 HUMAN_DELIVERY_APPROVAL_KEY_GUARD_START
+  // This is the second of the two keys. The first (the server allow-list) said
+  // this capper's picks MAY enter the approval path; this one says THIS pick
+  // may leave it. Neither alone delivers anything, and no client can supply
+  // either: the allow-list is read from server env, and this decision arrives
+  // on an operator-authenticated route with a required `decidedBy` and reason
+  // that are both written to the audit log.
+  const isHumanCapperDelivery = isHumanCapperDeliveryAuthorized(
+    isRecord(pick.metadata) ? pick.metadata : null,
+  );
+  // UTV2-1923 HUMAN_DELIVERY_APPROVAL_KEY_GUARD_END
+  let humanDelivery: ReviewPickResult['humanDelivery'];
+
   if (pickLifecycleState === 'awaiting_approval') {
     if (decision === 'approve') {
       try {
-        await transitionPickLifecycle(
-          repositories.picks,
-          pickId,
-          'queued',
-          `operator approved: ${payload.reason.trim()}`,
-          'operator_override',
-        );
+        if (isHumanCapperDelivery) {
+          // The release performs the awaiting_approval -> queued transition and
+          // the outbox write in ONE transaction. Transitioning separately would
+          // allow a pick to reach `queued` with no delivery work behind it --
+          // the zombie-queued shape the model lane has produced before.
+          const released = await releaseHumanCapperDeliveryWithRunTracking(
+            pickId,
+            payload.decidedBy.trim(),
+            `operator approved: ${payload.reason.trim()}`,
+            repositories.picks,
+            repositories.outbox,
+            repositories.runs,
+            repositories.audit,
+          );
+          humanDelivery = {
+            target: released.target,
+            enqueued: released.enqueued,
+            ...(released.reason === undefined ? {} : { reason: released.reason }),
+          };
+        } else {
+          await transitionPickLifecycle(
+            repositories.picks,
+            pickId,
+            'queued',
+            `operator approved: ${payload.reason.trim()}`,
+            'operator_override',
+          );
+        }
       } catch (err: unknown) {
         if (err instanceof InvalidTransitionError) {
           return errorResponse(409, 'INVALID_LIFECYCLE_TRANSITION', err.message);
+        }
+        if (isHumanCapperDelivery) {
+          // A refused release must not be reported as an approval that worked.
+          // The pick stays in `awaiting_approval` and the reason is returned.
+          return errorResponse(
+            409,
+            'HUMAN_DELIVERY_RELEASE_FAILED',
+            err instanceof Error ? err.message : String(err),
+          );
         }
         throw err;
       }
@@ -158,8 +214,14 @@ export async function reviewPickController(
   });
 
   // If approved, trigger promotion re-evaluation
+  // UTV2-1923: a human capper pick is deliberately excluded from promotion
+  // re-evaluation. No model scored it and none should: re-evaluating would let
+  // the board lane assign it a `promotion_target`, which is the one thing that
+  // could route an approved human pick into a model-lane Discord target it was
+  // never approved for. Models are outside this milestone by PM instruction,
+  // and this is where that instruction becomes mechanical.
   let promotionError: string | undefined;
-  if (decision === 'approve') {
+  if (decision === 'approve' && !isHumanCapperDelivery) {
     try {
       const { evaluateAllPoliciesEagerAndPersist } = await import('../promotion-service.js');
       // settlements passed to enable CLV-based trust adjustment.
@@ -208,5 +270,13 @@ export async function reviewPickController(
     result.promotionError = promotionError;
   }
 
+  if (humanDelivery) {
+    result.humanDelivery = humanDelivery;
+  }
+
   return successResponse(200, result);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

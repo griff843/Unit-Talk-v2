@@ -1,4 +1,9 @@
-import { isTrackOnlyPickMetadata, type CanonicalPick, type PickLifecycleState } from '@unit-talk/contracts';
+import {
+  isHumanCapperDeliveryAuthorized,
+  isTrackOnlyPickMetadata,
+  type CanonicalPick,
+  type PickLifecycleState,
+} from '@unit-talk/contracts';
 import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
 import { errorResponse, successResponse, type ApiResponse } from '../http.js';
 import { enqueueDistributionWithRunTracking } from '../run-audit-service.js';
@@ -26,6 +31,22 @@ export async function requeuePickController(
     return errorResponse(409, 'TRACK_ONLY_DELIVERY_BLOCKED', `Pick ${pickId} is track-only and cannot be re-queued`);
   }
   // UTV2-1672 TRACK_ONLY_REQUEUE_GUARD_END
+
+  // UTV2-1923 REQUEUE_HUMAN_DELIVERY_GUARD_START
+  // Requeue is the model lane's operator repair for a qualified pick whose
+  // enqueue failed. A human capper pick has no promotion target by design, so
+  // it can never satisfy the check below -- but relying on that would be an
+  // accident of two unrelated facts lining up. Refuse it explicitly and name
+  // the correct repair, so that a future change to promotion fields cannot
+  // quietly turn this route into a second, unapproved delivery path.
+  if (isHumanCapperDeliveryAuthorized(isRecord(pick.metadata) ? pick.metadata : null)) {
+    return errorResponse(
+      409,
+      'HUMAN_DELIVERY_REQUEUE_BLOCKED',
+      `Pick ${pickId} is a human capper delivery pick; it is released by operator approval, not by requeue`,
+    );
+  }
+  // UTV2-1923 REQUEUE_HUMAN_DELIVERY_GUARD_END
 
   if (pick.promotion_status !== 'qualified' || pick.promotion_target == null) {
     return errorResponse(

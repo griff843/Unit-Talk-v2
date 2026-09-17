@@ -1,4 +1,10 @@
-import { isTrackOnlyPickMetadata, type SubmissionPayload } from '@unit-talk/contracts';
+import {
+  humanDeliveryTargets,
+  isHumanCapperDeliveryAuthorized,
+  isTrackOnlyPickMetadata,
+  readHumanCapperDeliveryAuthorization,
+  type SubmissionPayload,
+} from '@unit-talk/contracts';
 import { isShadowEnabled, parseShadowModeEnv } from '@unit-talk/domain';
 import { transitionPickLifecycle } from '@unit-talk/db';
 import type { RepositoryBundle } from '@unit-talk/db';
@@ -22,6 +28,14 @@ export interface SubmitPickControllerResult {
   outboxEnqueued: boolean;
   shadowMode?: boolean;
   governanceBrake?: boolean;
+  /**
+   * UTV2-1923: the server's own account of this pick's delivery posture, so a
+   * surface can render truth instead of guessing. `track-only` means no
+   * delivery is possible; `awaiting-approval` means an authorized capper's
+   * pick is parked awaiting an explicit operator approval and has produced no
+   * delivery work. A surface may DISPLAY this; it may not influence it.
+   */
+  deliveryPosture?: 'track-only' | 'awaiting-approval';
 }
 
 export async function submitPickController(
@@ -105,10 +119,106 @@ export async function submitPickController(
           promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
           promotionTarget: result.pick.promotionTarget ?? null,
           outboxEnqueued: false,
+          deliveryPosture: 'track-only',
         },
       },
     };
   }
+
+  // UTV2-1923 HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD_START
+  // The mirror of the Track Only guard above, for the other direction. On the
+  // idempotent-duplicate path `processSubmission` discards the incoming
+  // payload and returns a pre-existing row. An authorized capper's
+  // delivery-eligible submission could therefore be answered with some older
+  // pick that was never authorized -- or, worse, an unauthorized submission
+  // could be answered with a pick that IS delivery-authorized, handing the
+  // caller a pick the delivery path will accept. Refuse either mismatch rather
+  // than reusing a row whose authorization is not the one just decided.
+  if (
+    !routingShadowEnabled &&
+    isHumanCapperDeliveryAuthorized(payload.metadata) !==
+      isHumanCapperDeliveryAuthorized(result.pick.metadata)
+  ) {
+    throw new ApiError(
+      409,
+      'DELIVERY_AUTHORIZATION_CONFLICT',
+      'This submission matches an existing pick whose delivery authorization differs from the one decided for this request; it cannot be reused.',
+    );
+  }
+  // UTV2-1923 HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD_END
+
+  // UTV2-1923 HUMAN_DELIVERY_BRAKE_GUARD_START
+  // An authorized human capper's pick is delivery-eligible, so none of the
+  // eight Track Only chokepoints stop it -- and no model gate stops it either,
+  // because no model ever runs on it. Without this brake it would fall through
+  // to the bottom of this controller and be enqueued the moment anything set
+  // its promotion fields.
+  //
+  // So it is braked here, explicitly: parked in `awaiting_approval`, its
+  // delivery destination pinned server-side to the governed human target, and
+  // no outbox row written. The ONLY way out is an explicit operator approval
+  // in `review-pick-controller`. That is the second key.
+  const humanDeliveryAuthorization = routingShadowEnabled
+    ? null
+    : readHumanCapperDeliveryAuthorization(result.pick.metadata);
+
+  if (humanDeliveryAuthorization?.decision === 'authorized') {
+    const humanDeliveryTarget = humanDeliveryTargets[0];
+    const alreadyBraked = result.pick.lifecycleState === 'awaiting_approval';
+    const brakeEventId = alreadyBraked
+      ? result.lifecycleEventRecord.id
+      : (
+          await transitionPickLifecycle(
+            repositories.picks,
+            result.pick.id,
+            'awaiting_approval',
+            `human capper delivery brake: ${humanDeliveryAuthorization.capperId ?? 'unknown capper'} awaiting operator approval`,
+            'promoter',
+          )
+        ).lifecycleEvent.id;
+
+    // `picks.promotion_target` is deliberately NOT written here. That column
+    // is the model/board lane's record of a scoring decision, and no scoring
+    // decision was made about this pick. The human destination is derived at
+    // approval time from the authorization record, which is the thing that
+    // actually authorizes it.
+    await repositories.audit.record({
+      entityType: 'picks',
+      entityId: brakeEventId,
+      entityRef: result.pick.id,
+      action: 'pick.human_capper_delivery_brake.applied',
+      actor: 'submission',
+      payload: {
+        pickId: result.pick.id,
+        source: result.pick.source,
+        capperId: humanDeliveryAuthorization.capperId,
+        authority: humanDeliveryAuthorization.authority,
+        allowlistSource: humanDeliveryAuthorization.allowlistSource,
+        decidedAt: humanDeliveryAuthorization.decidedAt,
+        intendedDeliveryTarget: humanDeliveryTarget,
+        fromState: alreadyBraked ? null : result.pick.lifecycleState,
+        toState: 'awaiting_approval',
+        outboxEnqueued: false,
+      },
+    });
+
+    return {
+      status: 201,
+      body: {
+        ok: true,
+        data: {
+          submissionId: result.submission.id,
+          pickId: result.pick.id,
+          lifecycleState: 'awaiting_approval',
+          promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+          promotionTarget: result.pick.promotionTarget ?? null,
+          outboxEnqueued: false,
+          deliveryPosture: 'awaiting-approval',
+        },
+      },
+    };
+  }
+  // UTV2-1923 HUMAN_DELIVERY_BRAKE_GUARD_END
 
   if (governanceBrakeApplied) {
     // UTV2-1611: the brake is STATE-AWARE. An automated production admitted by

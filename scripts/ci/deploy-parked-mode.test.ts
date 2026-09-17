@@ -902,3 +902,139 @@ test('EXECUTABLE: production confirm step rejects ambiguous container evidence w
     `expected an ambiguous-match rejection; got stdout: ${JSON.stringify(result.stdout)}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1923 — the bounded `human-capper` mode
+// ---------------------------------------------------------------------------
+//
+// `human-capper` is a third deploy mode, not a loosening of `parked`. It is
+// parked in every respect the readiness contract measures — provider
+// ingestion, the syndicate machine, system picks — and differs in exactly one:
+// the outbox worker is allowed to run, so that an operator-approved human
+// capper pick has something to carry it.
+//
+// Two properties have to hold together, and the second is the one worth a
+// test: the new mode does what it says, AND `parked` still does exactly what
+// it did before. The audit above already proves the second for every gate it
+// covers; these add the first, plus the assertions specific to this mode.
+
+function modeCaseBlock(source: string, mode: string): string[] {
+  const blocks: string[] = [];
+  const pattern = new RegExp(`\\n\\s*${mode}\\)\\n([\\s\\S]*?);;`, 'gu');
+  for (const match of source.matchAll(pattern)) {
+    blocks.push(match[1] ?? '');
+  }
+  return blocks;
+}
+
+test('UTV2-1923: human-capper mode runs the worker and nothing else', () => {
+  const blocks = modeCaseBlock(deployWorkflowSource, 'human-capper').filter((block) =>
+    block.includes('SYNDICATE_MACHINE_ENABLED'),
+  );
+  assert.equal(blocks.length, 2, 'canary and production must each derive the mode');
+
+  for (const block of blocks) {
+    assert.match(block, /SYNDICATE_MACHINE_ENABLED=false/u);
+    assert.match(block, /_ingestor_autorun=false/u);
+    assert.match(block, /_ingestor_scheduling_enabled=false/u);
+    assert.match(
+      block,
+      /_worker_autorun=true/u,
+      'the worker is the single thing human-capper mode releases',
+    );
+  }
+});
+
+test('UTV2-1923: parked mode is unchanged — all four flags still false', () => {
+  const blocks = modeCaseBlock(deployWorkflowSource, 'parked').filter((block) =>
+    block.includes('SYNDICATE_MACHINE_ENABLED'),
+  );
+  assert.equal(blocks.length, 2);
+
+  for (const block of blocks) {
+    assert.match(block, /SYNDICATE_MACHINE_ENABLED=false/u);
+    assert.match(block, /_ingestor_autorun=false/u);
+    assert.match(block, /_ingestor_scheduling_enabled=false/u);
+    assert.match(
+      block,
+      /_worker_autorun=false/u,
+      'adding a third mode must not have released the worker in parked mode',
+    );
+  }
+});
+
+test('UTV2-1923: human-capper mode names its one target literally, not from a secret', () => {
+  // The same refusal-to-trust-the-configured-value that parked mode makes.
+  // `UNIT_TALK_ENABLED_TARGETS` is overridden rather than read, so a stale or
+  // wrong secret cannot widen what this mode delivers to.
+  const occurrences = deployWorkflowSource.match(
+    /elif \[ "\$SYNDICATE_MACHINE_MODE" = "human-capper" \]; then\n(?:.*\n)*?\s*_enabled_targets="official-picks"\n\s*_dist_targets="discord:official-picks"\n\s*_human_capper_delivery=true/gu,
+  );
+  assert.equal(occurrences?.length, 2, 'canary and production must both pin the target');
+});
+
+test('UTV2-1923: the API delivery posture defaults to false on every path', () => {
+  const declarations = deployWorkflowSource.match(/^\s*_human_capper_delivery=false$/gmu);
+  assert.equal(
+    declarations?.length,
+    2,
+    'each deploy block must declare the posture off BEFORE the mode branch, so no path leaves it unset',
+  );
+
+  const writes = deployWorkflowSource.match(
+    /"UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=\$_human_capper_delivery"/gu,
+  );
+  assert.equal(writes?.length, 2, 'both env files must carry the posture');
+});
+
+test('UTV2-1923: human-capper mode refuses to deploy with the target unmapped or misrouted', () => {
+  const guards = deployWorkflowSource.match(
+    /if \[ "\$SYNDICATE_MACHINE_MODE" = "human-capper" \]; then\n\s*_official_channel=/gu,
+  );
+  assert.equal(guards?.length, 2, 'canary and production must both assert the channel mapping');
+
+  assert.equal(
+    (deployWorkflowSource.match(/Human capper target unmapped/gu) ?? []).length,
+    2,
+  );
+  assert.equal(
+    (deployWorkflowSource.match(/Human capper target misrouted/gu) ?? []).length,
+    2,
+    'both blocks must refuse DISCORD_CAPPER_CHANNEL_ID as the member-facing destination',
+  );
+});
+
+test('UTV2-1923: the mode is not reachable from the syndicate-machine secret', () => {
+  // `human-capper` is derived in the verify job from a repository *variable*,
+  // after the secret has been validated as `active` or `parked`. It is
+  // deliberately not a third accepted value of the secret: that keeps
+  // activation a deliberate, separately-held decision rather than a typo in an
+  // existing one.
+  const secretCase = deployWorkflowSource.match(
+    /case "\$SECRET_SYNDICATE_MACHINE_ENABLED" in\n([\s\S]*?)\n\s*esac/u,
+  )?.[1];
+  assert.ok(secretCase, 'the syndicate-machine secret must still be validated by a case block');
+  assert.doesNotMatch(
+    secretCase,
+    /human-capper/u,
+    'the secret validator must still accept only active and parked',
+  );
+
+  assert.match(
+    deployWorkflowSource,
+    /if \[ "\$syndicate_machine_mode" = "parked" \] && \[ "\$\{VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-\}" = "true" \]; then\n\s*syndicate_machine_mode=human-capper/u,
+  );
+  assert.match(
+    deployWorkflowSource,
+    /elif \[ "\$syndicate_machine_mode" = "active" \] && \[ "\$\{VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-\}" = "true" \]; then/u,
+    'active + the human-capper variable must be a hard error, never a silent precedence',
+  );
+});
+
+test('UTV2-1923: production readiness asserts the human-capper posture as tightly as parked', () => {
+  assert.match(
+    deployWorkflowSource,
+    /if \[ "\$SYNDICATE_MACHINE_MODE" = "human-capper" \] && \[ "\$ENABLED_TARGETS_VALUE" != "official-picks" \]; then/u,
+    'the production container must be confirmed to carry exactly the one target',
+  );
+});
