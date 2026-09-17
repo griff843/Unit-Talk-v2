@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1926-merge-gate-bounce-field
 PR URL: N/A
 Head SHA: 43888904f76fa0ba1c361e3922fc5305462ff4cb
-Merge SHA: N/A
+Merge SHA: 09326d5531a859961654970f1cf1ff78beaf0247
 Diff base: 35880d66c3911fd34d5d581191c765368f4eb481
 Diff target: 43888904f76fa0ba1c361e3922fc5305462ff4cb
 
@@ -35,4 +35,4 @@ M	scripts/ops/merge-gate-verdict.test.ts
 
 ## SHA Binding
 Head SHA: 43888904f76fa0ba1c361e3922fc5305462ff4cb
-Merge SHA: N/A
+Merge SHA: 09326d5531a859961654970f1cf1ff78beaf0247
