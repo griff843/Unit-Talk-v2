@@ -1,6 +1,6 @@
 # UTV2-1923 Diff Summary
 
-Generated at: 2026-09-17T10:52:11.000Z
+Generated at: 2026-09-17T12:04:13.000Z
 Issue: UTV2-1923
 Tier: T1
 Lane type: runtime
@@ -8,7 +8,7 @@ Branch: claude/utv2-1923-human-capper-official-picks-delivery
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1592
 Head SHA: 4e125c78e9721298f738b477ad4240a463f93758
 Merge SHA: N/A
-Diff base: 40968bf807f0a078687ae7116c1518c8a5ba2263
+Diff base: 35880d66c3911fd34d5d581191c765368f4eb481
 Diff target: 4e125c78e9721298f738b477ad4240a463f93758
 
 ## Git Diff Stat
@@ -37,12 +37,12 @@ Diff target: 4e125c78e9721298f738b477ad4240a463f93758
  docs/06_status/proof/UTV2-1923/evidence.json       |  194 ++++
  docs/06_status/proof/UTV2-1923/runtime-health.json |  108 ++
  docs/06_status/proof/UTV2-1923/verification.md     |  143 +++
- docs/06_status/readiness/readiness-score.json      |   97 +-
+ docs/06_status/readiness/readiness-score.json      |   95 +-
  package.json                                       |    4 +-
  packages/contracts/src/promotion.ts                |  111 +-
  packages/contracts/src/smart-form.ts               |   90 ++
  scripts/ci/deploy-parked-mode.test.ts              |  136 +++
- 29 files changed, 3863 insertions(+), 134 deletions(-)
+ 29 files changed, 3862 insertions(+), 133 deletions(-)
 ```
 
 ## Git Name Status
