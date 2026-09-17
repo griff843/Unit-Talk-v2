@@ -1,5 +1,9 @@
 import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
-import { isTrackOnlyPickMetadata } from '@unit-talk/contracts';
+import {
+  humanDeliveryTargets,
+  isHumanCapperDeliveryAuthorized,
+  isTrackOnlyPickMetadata,
+} from '@unit-talk/contracts';
 import { recordDistributionReceipt } from './distribution-receipt-service.js';
 
 export type RecapPeriod = 'daily' | 'weekly' | 'monthly';
@@ -62,8 +66,29 @@ export interface PostRecapOptions {
 
 type RecapDeliveryRepositories = Pick<
   RepositoryBundle,
-  'settlements' | 'picks' | 'outbox' | 'receipts' | 'audit'
+  'settlements' | 'picks' | 'outbox' | 'receipts' | 'audit' | 'killSwitch'
 >;
+
+type RecapComputeRepositories = Pick<
+  RepositoryBundle,
+  'settlements' | 'picks' | 'killSwitch'
+>;
+
+/**
+ * UTV2-1923: whether the governed human-cap member-delivery target is stopped.
+ *
+ * `killSwitch` is optional on the bundle, so its absence has to mean something.
+ * It means stopped. A caller that cannot ask whether delivery is permitted has
+ * not established that it is, and this is a member-facing publication path.
+ */
+async function isHumanDeliveryStopped(
+  repositories: Pick<RepositoryBundle, 'killSwitch'>,
+): Promise<boolean> {
+  if (!repositories.killSwitch) {
+    return true;
+  }
+  return repositories.killSwitch.isKilled(humanDeliveryTargets[0]);
+}
 
 export type PostRecapResult =
   | {
@@ -148,10 +173,15 @@ export function detectRecapCollision(
 
 export async function computeRecapSummary(
   period: RecapPeriod,
-  repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  repositories: RecapComputeRepositories,
   now: Date = new Date(),
 ): Promise<RecapSummary | null> {
   const window = getRecapWindow(period, now);
+  // UTV2-1923: resolved once per recap rather than per row. One answer for the
+  // whole window is also the honest one -- a recap is a single publication, and
+  // a stop that took effect halfway through building it would otherwise produce
+  // an aggregate that is partly stopped and partly not.
+  const humanDeliveryStopped = await isHumanDeliveryStopped(repositories);
   // Pass window.startsAt as the since lower bound to avoid full-table ORDER BY scan (UTV2-1355)
   const settlements = await repositories.settlements.listRecent(RECENT_SETTLEMENT_LIMIT, window.startsAt);
   const relevantSettlements = settlements.filter((settlement) => {
@@ -188,6 +218,15 @@ export async function computeRecapSummary(
         return null;
       }
 
+      // Read once, outside both exclusion guards. Each guard below is removable
+      // on its own by a mutation control, and a shared binding declared inside
+      // one of them would make removing that one a compile error in the other
+      // -- which reads as a killed mutant without the behaviour ever differing.
+      const pickMetadata =
+        pick.metadata && typeof pick.metadata === 'object' && !Array.isArray(pick.metadata)
+          ? (pick.metadata as Record<string, unknown>)
+          : null;
+
       // UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_START
       // A Track Only pick is internal tracking. It must not appear in a
       // member-facing recap, and it must never become `topPlay`: postRecapSummary
@@ -196,14 +235,26 @@ export async function computeRecapSummary(
       // function's try block, so the whole recap would fail rather than skip
       // one pick. Excluding it here also keeps Track Only results out of the
       // member-facing W/L and ROI totals, which is the product answer anyway.
-      const pickMetadata =
-        pick.metadata && typeof pick.metadata === 'object' && !Array.isArray(pick.metadata)
-          ? (pick.metadata as Record<string, unknown>)
-          : null;
       if (isTrackOnlyPickMetadata(pickMetadata)) {
         return null;
       }
       // UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_END
+
+      // UTV2-1923 RECAP_HUMAN_DELIVERY_STOP_GUARD_START
+      // The immediate per-pick recap checks the kill switch in
+      // settle-pick-controller, but the scheduled aggregate never did, and it
+      // publishes the same results to the same members a day later. Without
+      // this the stop would suppress the immediate recap and then let the
+      // daily/weekly/monthly one say it anyway.
+      //
+      // Scoped deliberately to authorized human-cap picks. A stopped human
+      // delivery posture is not a reason to stop recapping everything else, so
+      // non-human rows fall through untouched and Track Only stays excluded
+      // above for its own, separate reason.
+      if (humanDeliveryStopped && isHumanCapperDeliveryAuthorized(pickMetadata)) {
+        return null;
+      }
+      // UTV2-1923 RECAP_HUMAN_DELIVERY_STOP_GUARD_END
 
       const result = settlement.result as 'win' | 'loss' | 'push';
       const stakeUnits = readStakeUnits(pick);

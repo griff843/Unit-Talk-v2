@@ -38,6 +38,12 @@ import {
 import type { SubmissionPayload } from '@unit-talk/contracts';
 
 import { createInMemoryRepositoryBundle } from './persistence.js';
+import { processSubmission } from './submission-service.js';
+import { computeRecapSummary } from './recap-service.js';
+import {
+  checkAndPostRecapsForTests,
+  resetRecapSchedulerStateForTests,
+} from './recap-scheduler.js';
 import { submitPickController } from './controllers/submit-pick-controller.js';
 import { reviewPickController } from './controllers/review-pick-controller.js';
 import { requeuePickController } from './controllers/requeue-controller.js';
@@ -909,5 +915,234 @@ test('UTV2-1923: no model/board delivery target changed its shipped posture', ()
       before.enabled,
       `${target} must keep its shipped enabled state — this lane changes no model target`,
     );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 9. The scheduled aggregate recap obeys the same stop as the immediate one
+//
+// PM finding on head 3c1145597, and it was right: the immediate per-pick recap
+// checked the `official-picks` kill switch, and the scheduled aggregate did
+// not. Human-cap picks are no longer Track Only, so they are eligible for
+// aggregation -- meaning a stop engaged after delivery would suppress the
+// immediate recap and then publish the same result to the same members in the
+// next daily, weekly or monthly one. A delivery stop that only holds until the
+// next morning is not a delivery stop.
+//
+// These exercise the real scheduled path -- `postRecapSummary`, and the
+// scheduler tick that calls it -- not a re-implementation of it.
+// ---------------------------------------------------------------------------
+
+const RECAP_NOW = new Date('2026-03-28T16:00:00.000Z');
+const RECAP_SETTLED_AT = '2026-03-27T10:00:00.000Z';
+
+async function settleIntoRecapWindow(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+  result: 'win' | 'loss' | 'push',
+) {
+  await repositories.settlements.record({
+    pickId,
+    status: 'settled',
+    result,
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: `utv2-1923://recap-window/${pickId}`,
+    settledBy: 'griff',
+    settledAt: RECAP_SETTLED_AT,
+    payload: {},
+  });
+}
+
+/**
+ * One delivered, authorized, settled human-cap pick and one ordinary settled
+ * pick, both inside the same daily recap window.
+ *
+ * The ordinary pick is the control. Every assertion about the human-cap pick
+ * disappearing is only worth something if something else stayed.
+ */
+async function recapWindowFixture(seed: string) {
+  const { repositories, pickId: humanPickId } = await deliverApprovedPick(seed);
+  await settleIntoRecapWindow(repositories, humanPickId, 'win');
+
+  const ordinary = await processSubmission(
+    {
+      source: 'api',
+      market: 'assists-all-game-ou',
+      selection: `Ordinary Play ${seed}`,
+      odds: 100,
+      stakeUnits: 1,
+      submittedBy: 'house-analyst',
+      metadata: { submittedBy: 'house-analyst' },
+    },
+    repositories,
+  );
+  await settleIntoRecapWindow(repositories, ordinary.pick.id, 'win');
+
+  return { repositories, humanPickId, ordinarySelection: `Ordinary Play ${seed}` };
+}
+
+const releaseHumanTarget = (
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) =>
+  repositories.killSwitch?.setKilled({
+    target: HUMAN_TARGET,
+    killed: false,
+    actor: 'griff',
+  });
+
+test('UTV2-1923: a stopped human target keeps human-cap results out of the scheduled aggregate recap', async () => {
+  const { repositories, ordinarySelection } = await recapWindowFixture('recap-stopped');
+
+  const summary = await computeRecapSummary('daily', repositories, RECAP_NOW);
+
+  assert.ok(summary, 'the ordinary pick must still produce a recap');
+  assert.equal(
+    summary.settledCount,
+    1,
+    'the human-cap result must not be counted while the delivery target is stopped',
+  );
+  assert.equal(summary.topPlay.selection, ordinarySelection);
+  assert.ok(
+    !summary.picks.some((line) => line.selection.startsWith('Northgate Foundry ML')),
+    'no human-cap line may appear in a member-facing aggregate while delivery is stopped',
+  );
+});
+
+test('UTV2-1923: releasing the human target is what puts the result back in the aggregate', async () => {
+  const { repositories } = await recapWindowFixture('recap-released');
+  await releaseHumanTarget(repositories);
+
+  const summary = await computeRecapSummary('daily', repositories, RECAP_NOW);
+
+  assert.ok(summary);
+  assert.equal(
+    summary.settledCount,
+    2,
+    'with the stop released the human-cap result is an ordinary member-facing result',
+  );
+  assert.ok(
+    summary.picks.some((line) => line.selection.startsWith('Northgate Foundry ML')),
+    'the exclusion must be the stop, not a blanket ban on human-cap picks',
+  );
+});
+
+test('UTV2-1923: the stop does not disable non-human recap behaviour', async () => {
+  const { repositories, ordinarySelection } = await recapWindowFixture('recap-nonhuman');
+
+  const stopped = await computeRecapSummary('daily', repositories, RECAP_NOW);
+  await releaseHumanTarget(repositories);
+  const released = await computeRecapSummary('daily', repositories, RECAP_NOW);
+
+  // The ordinary pick is reported identically either way. A delivery stop is
+  // scoped to what it governs; it is not an outage.
+  const ordinaryLine = (summary: typeof stopped) =>
+    summary?.picks.find((line) => line.selection === ordinarySelection);
+  assert.ok(ordinaryLine(stopped));
+  assert.deepEqual(ordinaryLine(stopped), ordinaryLine(released));
+});
+
+test('UTV2-1923: Track Only exclusion is unchanged in both stop states', async () => {
+  const { repositories } = await recapWindowFixture('recap-trackonly');
+  const trackOnly = await withEnv(CONTAINED_ENV, () =>
+    processSubmission(
+      {
+        source: 'smart-form',
+        market: 'points-all-game-ou',
+        selection: 'Track Only Monster',
+        odds: 900,
+        stakeUnits: 5,
+        submittedBy: 'capper-track-only',
+        metadata: { submittedBy: 'capper-track-only', distributionMode: 'track-only' },
+      },
+      repositories,
+    ),
+  );
+  await settleIntoRecapWindow(repositories, trackOnly.pick.id, 'win');
+
+  const stopped = await computeRecapSummary('daily', repositories, RECAP_NOW);
+  await releaseHumanTarget(repositories);
+  const released = await computeRecapSummary('daily', repositories, RECAP_NOW);
+
+  for (const [label, summary] of [['stopped', stopped], ['released', released]] as const) {
+    assert.ok(summary);
+    assert.ok(
+      !summary.picks.some((line) => line.selection === 'Track Only Monster'),
+      `Track Only must stay out of the aggregate with the human target ${label}`,
+    );
+    assert.notEqual(summary.topPlay.selection, 'Track Only Monster');
+  }
+});
+
+test('UTV2-1923: the scheduler tick itself publishes no human-cap result while the target is stopped', async () => {
+  const { repositories, ordinarySelection } = await recapWindowFixture('recap-scheduler');
+  resetRecapSchedulerStateForTests();
+
+  const logged: string[] = [];
+  const logger = {
+    error: (line: string) => logged.push(line),
+    info: (line: string) => logged.push(line),
+  };
+
+  // The real tick: `shouldPostRecap` -> `postRecapSummary`. Dry run so the
+  // proof exercises the scheduler rather than Discord, and so the summary the
+  // scheduler actually built is the thing asserted against.
+  await withEnv(
+    {
+      RECAP_DRY_RUN: 'true',
+      // A resolvable recaps channel, so the tick gets past target resolution and
+      // actually builds the summary. It is never posted to: the dry run returns
+      // before any Discord call, and no bot token is set.
+      UNIT_TALK_DISCORD_TARGET_MAP: JSON.stringify({ 'discord:recaps': '100000000000000001' }),
+    },
+    () => checkAndPostRecapsForTests(repositories, logger, () => RECAP_NOW),
+  );
+  resetRecapSchedulerStateForTests();
+
+  const dryRunLine = logged
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .find((entry) => entry['event'] === 'tick.dry_run');
+  assert.ok(dryRunLine, 'the scheduler must have reached the recap post for this window');
+
+  const summary = dryRunLine['summary'] as { settledCount: number; picks: { selection: string }[] };
+  assert.equal(summary.settledCount, 1);
+  assert.deepEqual(
+    summary.picks.map((line) => line.selection),
+    [ordinarySelection],
+    'the scheduled publication must contain the ordinary pick and nothing human-cap',
+  );
+});
+
+test('mutation control: removing RECAP_HUMAN_DELIVERY_STOP_GUARD republishes the stopped human-cap result', async () => {
+  const sourcePath = fileURLToPath(new URL('./recap-service.ts', import.meta.url));
+  const suffix = `__mutant_recap_human_stop_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const mutantSource = source.replace(
+    /[ ]*\/\/ UTV2-1923 RECAP_HUMAN_DELIVERY_STOP_GUARD_START[\s\S]*?\/\/ UTV2-1923 RECAP_HUMAN_DELIVERY_STOP_GUARD_END\n/u,
+    '',
+  );
+  assert.notEqual(mutantSource, source, 'mutation control could not remove the guard');
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = (await import(
+      `${pathToFileURL(mutantPath).href}?mutation=recap-human-delivery-stop`
+    )) as Record<string, unknown>;
+    const mutantCompute = mutant['computeRecapSummary'] as typeof computeRecapSummary;
+
+    const { repositories } = await recapWindowFixture('recap-mutant');
+    const summary = await mutantCompute('daily', repositories, RECAP_NOW);
+
+    assert.equal(
+      summary?.settledCount,
+      2,
+      'the mutant must aggregate the human-cap result despite the stop',
+    );
+    assert.ok(
+      summary?.picks.some((line) => line.selection.startsWith('Northgate Foundry ML')),
+      'the mutant must publish the human-cap line the guard withholds',
+    );
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
   }
 });

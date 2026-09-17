@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-17T01:42:32.435Z
+Generated at: 2026-09-17T03:00:33.000Z
 Issue: UTV2-1923
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1923-human-capper-official-picks-delivery
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1592
-Head SHA: 98c478a06f93a28658bbcb0772d2cd27baed1659
+Head SHA: a7c88f7f18e27cc0710cad5aed2c9741a956f5e8
 result: pass
 
 ## ASSERTIONS:
@@ -31,6 +31,7 @@ assertion a named test makes; none is a restatement of intent.
 - [x] An authorized human pick cannot be delivered to any board target, despite the `promotion_target` the scoring lane stamps on it at submission.
 - [x] Requeue refuses a human capper pick outright (`409 HUMAN_DELIVERY_REQUEUE_BLOCKED`).
 - [x] A manually settled human pick settles, and its immediate per-pick recap is gated by the live kill switch — the recap posts by direct `fetch`, outside the outbox, so the worker's check never sees it.
+- [x] The SCHEDULED aggregate recap honours the same delivery stop as the immediate per-pick recap, so a stop engaged after delivery cannot be undone by the next morning's daily/weekly/monthly publication.
 - [x] The `human-capper` deploy mode releases the worker and nothing else; `parked` remains byte-identical; the mode is unreachable from the syndicate-machine secret.
 - [x] A `discord:<channelId>` delivery is now subject to the kill switch, and a raw channel is still not refused by the registry it can never appear in.
 - [x] No model/board delivery target changed its shipped posture.
@@ -38,7 +39,7 @@ assertion a named test makes; none is a restatement of intent.
 
 ## EVIDENCE:
 
-Measured on `98c478a06f93a28658bbcb0772d2cd27baed1659`, in the lane worktree.
+Measured on `a7c88f7f18e27cc0710cad5aed2c9741a956f5e8`, in the lane worktree.
 
 ```
 $ pnpm type-check
@@ -46,11 +47,11 @@ $ pnpm type-check
 exit=0
 
 $ pnpm test
-5832 `ok` lines, 0 `not ok` lines across every package.
+5867 `ok` lines, 0 `not ok` lines across every package.
 (tail, the last file in the run — the new T1 proof:)
-1..25
-# tests 25
-# pass 25
+1..31
+# tests 31
+# pass 31
 # fail 0
 exit=0
 
@@ -60,7 +61,7 @@ exit=0
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 22
+Changed files: 27
 Rules matched: lifecycle-fsm
 
 Advisory (PM-gated) artifacts missing:
@@ -77,10 +78,13 @@ Per-file detail for the new coverage:
 
 ```
 $ pnpm exec tsx --test apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
-# tests 25   # pass 25   # fail 0        (includes 5 mutation controls)
+# tests 31   # pass 31   # fail 0        (includes 6 mutation controls)
 
 $ pnpm exec tsx --test apps/api/src/capper-delivery-authorization.test.ts
 # tests 12   # pass 12   # fail 0
+
+$ pnpm exec tsx --test apps/api/src/recap-service.test.ts
+# tests 27   # pass 27   # fail 0        (scheduled aggregate recap stop)
 
 $ pnpm exec tsx --test scripts/ci/deploy-parked-mode.test.ts
 # tests 32   # pass 32   # fail 0        (7 new, incl. `parked` unchanged)
@@ -93,7 +97,7 @@ $ pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts
 - [x] `pnpm type-check`: exit 0, no diagnostics
 - [x] `pnpm test`: exit 0, 0 failing assertions across the whole suite
 - [ ] `pnpm verify`: cannot run locally — `ci:assert-staging` refuses outside the `staging-ci` environment; the authoritative run is the `verify` check on PR #1592
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS (22 changed files, `lifecycle-fsm` matched; the one missing artifact is PM-gated advisory)
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS (27 changed files, `lifecycle-fsm` matched; the one missing artifact is PM-gated advisory)
 
 ## Runtime Verification
 
@@ -136,4 +140,4 @@ control as shipped.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1592
 Approved PR head: pending merge
-Execution SHA: 98c478a06f93a28658bbcb0772d2cd27baed1659
+Execution SHA: a7c88f7f18e27cc0710cad5aed2c9741a956f5e8
