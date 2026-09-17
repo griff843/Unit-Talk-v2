@@ -33,10 +33,12 @@ import {
   parsePromotionTargetFromDeliveryTarget,
   promotionTargets,
   readHumanCapperDeliveryAuthorization,
+  readPinnedDeliveryDestination,
   resolveTargetRegistry,
 } from '@unit-talk/contracts';
 import type { SubmissionPayload } from '@unit-talk/contracts';
 
+import { InMemoryCapperRepository } from '@unit-talk/db';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { computeRecapSummary } from './recap-service.js';
@@ -63,6 +65,44 @@ import { settlePickController } from './controllers/settle-pick-controller.js';
 const HUMAN_TARGET = humanDeliveryTargets[0];
 const HUMAN_DELIVERY_TARGET = `discord:${HUMAN_TARGET}`;
 const CAPPER = 'griff843';
+
+// Fixture snowflakes. Deliberately NOT the production ids: this file must not
+// encode where a real capper's picks go, and a test that passed only against
+// one real channel would be asserting configuration rather than behaviour.
+const GUILD_ID = '100000000000000001';
+const PICKS_CHANNEL_ID = '100000000000000002';
+const DISCUSSION_CHANNEL_ID = '100000000000000003';
+const RESERVED_CAPPER_CHANNEL_ID = '100000000000000004';
+
+/**
+ * Seed `capperId`'s canonical row. `metadata` is the WHOLE metadata column, so
+ * a case can express "row exists, no `discord` block at all" as `{}` — which
+ * an argument of just the block could not, and which is the real production
+ * shape today.
+ */
+function seedCapperRouting(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  metadata: Record<string, unknown> = {
+    discord: {
+      guildId: GUILD_ID,
+      picksChannelId: PICKS_CHANNEL_ID,
+      discussionChannelId: DISCUSSION_CHANNEL_ID,
+    },
+  },
+  capperId = CAPPER,
+) {
+  const cappers = repositories.cappers as InMemoryCapperRepository | undefined;
+  assert.ok(cappers, 'the repository bundle must expose a canonical capper reader');
+  cappers.seed({
+    id: capperId,
+    display_name: capperId,
+    active: true,
+    metadata,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  return repositories;
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -395,13 +435,18 @@ async function submitAuthorizedPick(
 const RELEASED_ENV = {
   UNIT_TALK_ENABLED_TARGETS: HUMAN_TARGET,
   UNIT_TALK_APP_ENV: 'production',
+  DISCORD_GUILD_ID: GUILD_ID,
+  DISCORD_CAPPER_CHANNEL_ID: RESERVED_CAPPER_CHANNEL_ID,
 };
 
 /** An authorized submission made while the human target is released. */
 async function submitDeliveredPick(seed: string, repositories?: ReturnType<typeof createInMemoryRepositoryBundle>) {
-  return repositories === undefined
-    ? submitAuthorizedPick(seed, RELEASED_ENV)
-    : submitAuthorizedPick(seed, RELEASED_ENV, repositories);
+  // A released target is not sufficient on its own any more: the capper must
+  // also have its OWN picks destination. Seeding it here keeps every existing
+  // scenario asserting what it was written to assert, and the destination
+  // failures are exercised explicitly below.
+  const bundle = seedCapperRouting(repositories ?? createInMemoryRepositoryBundle());
+  return submitAuthorizedPick(seed, RELEASED_ENV, bundle);
 }
 
 test('UTV2-1923: an authorized capper submission delivers immediately, with no approval step', async () => {
@@ -568,7 +613,11 @@ test('UTV2-1923: approval is the recovery door for a parked human pick, not its 
   // operator has deliberately parked one, approval must still be able to
   // release it rather than strand it -- and it must release it to the same
   // governed target, through the same atomic transaction.
-  const { repositories, data } = await submitAuthorizedPick('recovery');
+  const { repositories, data } = await submitAuthorizedPick(
+    'recovery',
+    {},
+    seedCapperRouting(createInMemoryRepositoryBundle()),
+  );
   assert.equal(data.deliveryPosture, 'delivery-refused');
   await repositories.picks.updatePickLifecycleState(data.pickId, 'awaiting_approval');
 
@@ -1247,4 +1296,244 @@ test('mutation control: removing RECAP_HUMAN_DELIVERY_STOP_GUARD republishes the
   } finally {
     await unlink(mutantPath).catch(() => undefined);
   }
+});
+
+// ---------------------------------------------------------------------------
+// 7. Destination routing — the capper's OWN picks-only destination
+// ---------------------------------------------------------------------------
+
+test('UTV2-1923: an authorized delivery routes to that capper’s own picks destination', async () => {
+  const { repositories, data } = await submitDeliveredPick('routed');
+
+  assert.equal(data.outboxEnqueued, true);
+  const rows = await repositories.outbox.listByPickId(data.pickId);
+  assert.equal(rows.length, 1, 'exactly one governed delivery');
+
+  // The governed TARGET is unchanged -- the registry, the kill switch and the
+  // worker's target coverage all still key on it. What changed is that the row
+  // now carries WHERE it goes, resolved server-side.
+  assert.equal(rows[0]?.target, HUMAN_DELIVERY_TARGET);
+
+  const pinned = readPinnedDeliveryDestination(rows[0]?.payload);
+  assert.ok(pinned, 'the outbox row must carry a pinned destination');
+  assert.equal(pinned.channelId, PICKS_CHANNEL_ID);
+  assert.equal(pinned.guildId, GUILD_ID);
+  assert.equal(pinned.capperId, CAPPER);
+  assert.equal(pinned.source, 'cappers.metadata.discord.picksChannelId');
+});
+
+test('UTV2-1923: the discussion destination is never the delivery destination', async () => {
+  const { repositories, data } = await submitDeliveredPick('never-discussion');
+  const rows = await repositories.outbox.listByPickId(data.pickId);
+  const pinned = readPinnedDeliveryDestination(rows[0]?.payload);
+
+  assert.notEqual(pinned?.channelId, DISCUSSION_CHANNEL_ID);
+  // And the Capper Space id appears NOWHERE on the row, not merely as a
+  // different field: a payload that carried it could still be read by some
+  // future routing change.
+  assert.ok(
+    !JSON.stringify(rows[0]?.payload ?? {}).includes(DISCUSSION_CHANNEL_ID),
+    'the discussion destination must not appear on the delivery row at all',
+  );
+});
+
+test('UTV2-1923: a capper with no mapping delivers nowhere', async () => {
+  // No `seedCapperRouting` -- the capper row does not exist at all, which is
+  // the state production is in before the operator writes the mapping.
+  const { repositories, data } = await submitAuthorizedPick('unmapped', RELEASED_ENV);
+
+  assert.equal(data.deliveryPosture, 'delivery-refused');
+  assert.equal(data.deliveryRefusedReason, 'destination-refused:capper-row-missing');
+  assert.equal(data.outboxEnqueued, false);
+  assert.equal(data.lifecycleState, 'validated', 'the pick is not parked, and not queued');
+
+  const rows = await repositories.outbox.listByPickId(data.pickId);
+  assert.equal(rows.length, 0, 'an unroutable pick creates no delivery');
+});
+
+test('UTV2-1923: every malformed mapping fails closed, by name', async () => {
+  const cases: Array<[string, Record<string, unknown>, string]> = [
+    // The exact shape production holds today: the row exists, metadata is `{}`.
+    ['no discord block', {}, 'discord-routing-absent'],
+    ['discord is not an object', { discord: 'channel-name' }, 'discord-routing-not-an-object'],
+    [
+      'guild missing',
+      { discord: { picksChannelId: PICKS_CHANNEL_ID } },
+      'guild-id-missing-or-malformed',
+    ],
+    [
+      'picks channel is a name, not an id',
+      { discord: { guildId: GUILD_ID, picksChannelId: '#griff-official-picks' } },
+      'picks-channel-missing-or-malformed',
+    ],
+    [
+      'picks channel is a mention',
+      { discord: { guildId: GUILD_ID, picksChannelId: `<#${PICKS_CHANNEL_ID}>` } },
+      'picks-channel-missing-or-malformed',
+    ],
+    [
+      'discussion channel malformed',
+      {
+        discord: {
+          guildId: GUILD_ID,
+          picksChannelId: PICKS_CHANNEL_ID,
+          discussionChannelId: 'general',
+        },
+      },
+      'discussion-channel-malformed',
+    ],
+    [
+      'picks and discussion are the same destination',
+      {
+        discord: {
+          guildId: GUILD_ID,
+          picksChannelId: PICKS_CHANNEL_ID,
+          discussionChannelId: PICKS_CHANNEL_ID,
+        },
+      },
+      'picks-channel-is-discussion-channel',
+    ],
+    [
+      'mapped into another guild',
+      { discord: { guildId: '999999999999999999', picksChannelId: PICKS_CHANNEL_ID } },
+      'guild-mismatch',
+    ],
+    [
+      'mapped at the private global capper channel',
+      { discord: { guildId: GUILD_ID, picksChannelId: RESERVED_CAPPER_CHANNEL_ID } },
+      'picks-channel-is-reserved-global-channel',
+    ],
+  ];
+
+  for (const [label, metadata, reason] of cases) {
+    const bundle = seedCapperRouting(createInMemoryRepositoryBundle(), metadata);
+    const { repositories, data } = await submitAuthorizedPick(
+      `malformed-${reason}`,
+      RELEASED_ENV,
+      bundle,
+    );
+    assert.equal(data.deliveryPosture, 'delivery-refused', label);
+    assert.equal(data.deliveryRefusedReason, `destination-refused:${reason}`, label);
+    const rows = await repositories.outbox.listByPickId(data.pickId);
+    assert.equal(rows.length, 0, `${label}: no delivery row`);
+  }
+});
+
+test('UTV2-1923: the browser cannot supply or override the destination', async () => {
+  // Every shape a client could try: a routing block on the submitted metadata,
+  // and a pre-pinned destination. Neither reaches the outbox row, which carries
+  // the server-resolved destination and nothing else.
+  const forgedChannel = '100000000000000009';
+  const bundle = seedCapperRouting(createInMemoryRepositoryBundle());
+  const response = await withEnv({ ...AUTHORIZED_ENV, ...RELEASED_ENV }, () =>
+    handleSubmitPick(
+      {
+        body: capperSubmissionBody(
+          {
+            discord: { guildId: GUILD_ID, picksChannelId: forgedChannel },
+            deliveryDestination: {
+              version: 'capper-discord-routing/v1',
+              guildId: GUILD_ID,
+              channelId: forgedChannel,
+              capperId: CAPPER,
+              source: 'client',
+            },
+          },
+          'client-forged-destination',
+        ),
+        auth: CAPPER_AUTH,
+      },
+      bundle,
+    ),
+  );
+  assert.ok(response.body.ok);
+  if (!response.body.ok) throw new Error('unreachable');
+
+  const rows = await bundle.outbox.listByPickId(response.body.data.pickId);
+  assert.equal(rows.length, 1);
+  const pinned = readPinnedDeliveryDestination(rows[0]?.payload);
+  assert.equal(pinned?.channelId, PICKS_CHANNEL_ID, 'the server destination wins');
+  assert.notEqual(pinned?.channelId, forgedChannel);
+  assert.equal(pinned?.source, 'cappers.metadata.discord.picksChannelId');
+});
+
+test('UTV2-1923: a duplicate submission still creates no second capper delivery', async () => {
+  const bundle = seedCapperRouting(createInMemoryRepositoryBundle());
+  const first = await submitAuthorizedPick('dup-routed', RELEASED_ENV, bundle);
+  const second = await submitAuthorizedPick('dup-routed', RELEASED_ENV, bundle);
+
+  assert.equal(first.data.pickId, second.data.pickId);
+  const rows = await bundle.outbox.listByPickId(first.data.pickId);
+  assert.equal(rows.length, 1, 'exactly one Discord delivery for two submissions');
+});
+
+test('UTV2-1923: routing is resolved per capper, not once per deployment', async () => {
+  const other = 'secondcapper';
+  const otherChannel = '100000000000000011';
+  const bundle = createInMemoryRepositoryBundle();
+  seedCapperRouting(bundle);
+  seedCapperRouting(bundle, { discord: { guildId: GUILD_ID, picksChannelId: otherChannel } }, other);
+
+  const mine = await submitAuthorizedPick('per-capper-mine', RELEASED_ENV, bundle);
+  const theirs = await withEnv(
+    { ...AUTHORIZED_ENV, ...RELEASED_ENV, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: other },
+    () =>
+      handleSubmitPick(
+        { body: capperSubmissionBody({}, 'per-capper-theirs'), auth: { role: 'capper' as const, capperId: other, identity: other } },
+        bundle,
+      ),
+  );
+  assert.ok(theirs.body.ok);
+  if (!theirs.body.ok) throw new Error('unreachable');
+
+  const mineRows = await bundle.outbox.listByPickId(mine.data.pickId);
+  const theirRows = await bundle.outbox.listByPickId(theirs.body.data.pickId);
+  assert.equal(readPinnedDeliveryDestination(mineRows[0]?.payload)?.channelId, PICKS_CHANNEL_ID);
+  assert.equal(readPinnedDeliveryDestination(theirRows[0]?.payload)?.channelId, otherChannel);
+});
+
+test('mutation control: without the destination guard, delivery falls back to a shared channel', async () => {
+  // Remove the resolution and every authorized capper's pick enqueues with no
+  // destination at all -- which is exactly the pre-correction behaviour, where
+  // the worker resolved one shared target-map channel for everybody.
+  await withGuardRemoved(
+    './run-audit-service.ts',
+    'HUMAN_DELIVERY_DESTINATION_GUARD',
+    async (mutant) => {
+      const release = mutant['releaseHumanCapperDeliveryWithRunTracking'] as (
+        ...args: unknown[]
+      ) => Promise<{ enqueued: boolean }>;
+      // No mapping seeded at all: the guard is what refuses this.
+      const { repositories, data } = await submitAuthorizedPick('mutant-destination', {
+        ...RELEASED_ENV,
+        UNIT_TALK_ENABLED_TARGETS: '',
+      });
+
+      const released = await withEnv(RELEASED_ENV, () =>
+        release(
+          data.pickId,
+          'submission',
+          'mutation control',
+          repositories.picks,
+          repositories.outbox,
+          repositories.runs,
+          repositories.audit,
+          'submission',
+          repositories.cappers,
+        ),
+      );
+
+      assert.equal(
+        released.enqueued,
+        true,
+        'without the guard an unmapped capper is enqueued anyway',
+      );
+      const rows = await repositories.outbox.listByPickId(data.pickId);
+      assert.equal(
+        readPinnedDeliveryDestination(rows[0]?.payload),
+        null,
+        'and the row carries no destination, so the worker would fall back to the shared map',
+      );
+    },
+  );
 });

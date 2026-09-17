@@ -27,6 +27,7 @@ import type {
   AuditLogRepository,
   BrowseSearchResult,
   ClosingLineLookupCriteria,
+  CapperRepository,
   DeliveryKillSwitchRepository,
   DeliveryKillSwitchRow,
   DeliveryKillSwitchSetInput,
@@ -127,6 +128,7 @@ import type {
 import type {
   AlertDetectionRecord,
   AuditLogRow,
+  CapperRow,
   EventStatus,
   EventParticipantRow,
   ExperimentLedgerRecord,
@@ -2362,6 +2364,23 @@ export class InMemoryDeliveryKillSwitchRepository implements DeliveryKillSwitchR
 
   async listAll(): Promise<DeliveryKillSwitchRow[]> {
     return [...this.state.values()];
+  }
+}
+
+/**
+ * UTV2-1923: in-memory canonical capper rows. Read-only, exactly like the
+ * database implementation; `seed` exists for tests and for nothing else, and
+ * is not part of `CapperRepository`.
+ */
+export class InMemoryCapperRepository implements CapperRepository {
+  private readonly rows = new Map<string, CapperRow>();
+
+  seed(row: CapperRow): void {
+    this.rows.set(row.id, row);
+  }
+
+  async findById(capperId: string): Promise<CapperRow | null> {
+    return this.rows.get(capperId) ?? null;
   }
 }
 
@@ -5978,6 +5997,35 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
   }
 }
 
+/**
+ * UTV2-1923: the canonical `cappers` row, read-only.
+ *
+ * A read error is NOT distinguished from a missing row here, and that is
+ * deliberate: both mean "this server cannot prove where this capper's picks
+ * belong", and the only safe answer to that is to deliver nowhere. The caller
+ * turns `null` into a named refusal.
+ */
+export class DatabaseCapperRepository implements CapperRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async findById(capperId: string): Promise<CapperRow | null> {
+    const { data, error } = await this.client
+      .from('cappers')
+      .select('id, display_name, active, metadata, created_at, updated_at')
+      .eq('id', capperId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+    return data as unknown as CapperRow;
+  }
+}
+
 export class DatabaseDeliveryKillSwitchRepository implements DeliveryKillSwitchRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -9129,6 +9177,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     executionIntents: new InMemoryExecutionIntentRepository(),
     pickOfferSnapshots: new InMemoryPickOfferSnapshotRepository(),
     killSwitch: new InMemoryDeliveryKillSwitchRepository(),
+    cappers: new InMemoryCapperRepository(),
   };
 }
 
@@ -9166,6 +9215,7 @@ export function createDatabaseRepositoryBundle(
     executionIntents: new DatabaseExecutionIntentRepository(connection),
     pickOfferSnapshots: new DatabasePickOfferSnapshotRepository(connection),
     killSwitch: new DatabaseDeliveryKillSwitchRepository(connection),
+    cappers: new DatabaseCapperRepository(connection),
   };
 }
 

@@ -349,6 +349,14 @@ export async function enqueueDistributionWork(
   outboxRepository: OutboxRepository,
   target: string,
   targetRegistry?: TargetRegistryEntry[],
+  /**
+   * UTV2-1923: extra payload keys the CALLER resolved server-side — today, the
+   * capper-specific destination pinned onto a human capper delivery. Merged
+   * over the built work item so the sequential fallback path produces the same
+   * row the atomic path does; without it a fallback enqueue would lose the
+   * destination and the worker would refuse to deliver it.
+   */
+  payloadExtension?: Record<string, unknown>,
 ): Promise<DistributionEnqueueResult | DistributionSkippedResult> {
   // UTV2-1672 TRACK_ONLY_DIRECT_ENQUEUE_GUARD_START
   if (isTrackOnlyPickMetadata(pick.metadata)) {
@@ -428,7 +436,10 @@ export async function enqueueDistributionWork(
   const outboxRecord = await outboxRepository.enqueue({
     pickId: workItem.pickId,
     target: workItem.target,
-    payload: workItem.payload,
+    payload:
+      payloadExtension === undefined
+        ? workItem.payload
+        : { ...workItem.payload, ...payloadExtension },
     idempotencyKey: workItem.idempotencyKey,
   });
 

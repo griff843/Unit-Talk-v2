@@ -227,6 +227,7 @@ export async function submitPickController(
       repositories.runs,
       repositories.audit,
       'submission',
+      repositories.cappers,
     );
 
     await repositories.audit.record({
@@ -243,6 +244,8 @@ export async function submitPickController(
         allowlistSource: humanDeliveryAuthorization.allowlistSource,
         decidedAt: humanDeliveryAuthorization.decidedAt,
         deliveryTarget: released.target,
+        destinationChannelId: released.destination?.channelId ?? null,
+        destinationSource: released.destination?.source ?? null,
         fromState: 'validated',
         toState: released.enqueued ? 'queued' : result.pick.lifecycleState,
         outboxEnqueued: released.enqueued,

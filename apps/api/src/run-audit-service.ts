@@ -8,11 +8,13 @@ import type {
   SystemRunRepository,
 } from '@unit-talk/db';
 import {
+  capperDiscordRoutingVersion,
   humanDeliveryTargets,
   isHumanCapperDeliveryAuthorized,
   isHumanDeliveryTarget,
   isTrackOnlyPickMetadata,
   parseGovernedTargetFromDeliveryTarget,
+  pinnedDeliveryDestinationKey,
   readHumanCapperDeliveryAuthorization,
   type CanonicalPick,
 } from '@unit-talk/contracts';
@@ -30,6 +32,11 @@ import {
   TrackOnlyDistributionError,
   type DistributionEnqueueResult,
 } from './distribution-service.js';
+import {
+  loadCapperDeliveryDestination,
+  type CapperDeliveryDestination,
+  type CapperRoutingReader,
+} from './capper-delivery-authorization.js';
 import { ensurePickLifecycleState } from './lifecycle-service.js';
 import { evaluateAndPersistPromotion } from './promotion-service.js';
 
@@ -340,6 +347,8 @@ export interface HumanCapperDeliveryReleaseResult {
   /** False when a control refused the release without erroring — e.g. the registry has the target disabled. */
   enqueued: boolean;
   reason?: string;
+  /** The capper-specific destination this release routed to, when one was resolved. */
+  destination?: CapperDeliveryDestination;
 }
 
 /**
@@ -423,6 +432,7 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
   systemRunRepository: SystemRunRepository,
   auditLogRepository: AuditLogRepository,
   entry: HumanCapperDeliveryReleaseEntry = 'approval',
+  capperRepository?: CapperRoutingReader | undefined,
 ): Promise<HumanCapperDeliveryReleaseResult> {
   const entrySpec = HUMAN_DELIVERY_RELEASE_ENTRIES[entry];
   const target = `discord:${humanDeliveryTargets[0]}`;
@@ -495,10 +505,87 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
     };
   }
 
+  // Declared OUTSIDE the guard region on purpose: the mutation control deletes
+  // that region, and a mutant that crashed on an undefined binding would prove
+  // nothing about the guard. Removing it must produce the failure the guard
+  // prevents -- an enqueue with no destination -- not a ReferenceError.
+  let destination: CapperDeliveryDestination | null = null;
+  // UTV2-1923 HUMAN_DELIVERY_DESTINATION_GUARD_START
+  // WHERE this pick goes is resolved here, from the canonical `cappers` row,
+  // and from nowhere else. Not from the request -- the browser never sees this
+  // code path. Not from `UNIT_TALK_DISCORD_TARGET_MAP` -- that is one shared
+  // value and would send every capper's picks to one channel. Not from a
+  // channel's NAME -- a name is not an identity.
+  //
+  // A capper with no mapping, a malformed mapping, a mapping into another
+  // guild, or a mapping that points at the private global capper channel
+  // delivers NOWHERE. There is deliberately no default destination, because
+  // every candidate default is either somebody else's audience or an audience
+  // this pick was never authorized to reach. The refusal is reported the same
+  // way the registry refusal above is: a completed run, an audit record naming
+  // the reason, `enqueued: false`, and the pick left exactly where it was.
+  const destinationResult = await loadCapperDeliveryDestination({
+    capperId: authorization?.capperId ?? null,
+    capperRepository,
+  });
+  if (destinationResult.decision === 'refused') {
+    const reason = `destination-refused:${destinationResult.reason}`;
+    const completedRun = await systemRunRepository.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: { target: resolvedTarget, reason },
+    });
+    const audit = await auditLogRepository.record({
+      entityType: 'distribution_outbox',
+      entityId: run.id,
+      entityRef: pickId,
+      action: 'distribution.enqueue',
+      actor,
+      payload: {
+        pickId,
+        target: resolvedTarget,
+        lane: 'human-capper-delivery',
+        entry,
+        skipped: true,
+        reason,
+        capperId: authorization?.capperId ?? null,
+      },
+    });
+    return {
+      run: completedRun,
+      audit,
+      target: resolvedTarget,
+      pickId,
+      enqueued: false,
+      reason,
+    };
+  }
+  destination = destinationResult.destination;
+  // UTV2-1923 HUMAN_DELIVERY_DESTINATION_GUARD_END
+
   try {
     const canonicalPick = mapPickRecordToCanonicalPickForDelivery(currentPick);
     const { buildDistributionWorkItem: buildWorkItem } = await import('@unit-talk/domain');
     const workItem = buildWorkItem(canonicalPick, resolvedTarget);
+    // The resolved destination travels WITH the row. See
+    // `pinnedDeliveryDestinationKey` for why it is pinned rather than re-read
+    // at delivery time.
+    const pinnedDestination =
+      destination === null
+        ? {}
+        : {
+            [pinnedDeliveryDestinationKey]: {
+              version: capperDiscordRoutingVersion,
+              guildId: destination.guildId,
+              channelId: destination.channelId,
+              capperId: destination.capperId,
+              source: destination.source,
+            },
+          };
+    const pinnedPayload: Record<string, unknown> = {
+      ...workItem.payload,
+      ...pinnedDestination,
+    };
 
     let outboxRecord: OutboxRecord;
     try {
@@ -510,7 +597,7 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
         reason,
         lifecycleCreatedAt: new Date().toISOString(),
         outboxTarget: resolvedTarget,
-        outboxPayload: workItem.payload,
+        outboxPayload: pinnedPayload,
         outboxIdempotencyKey: workItem.idempotencyKey,
       });
 
@@ -540,6 +627,8 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
         mapPickRecordToCanonicalPickForDelivery(queuedPick ?? currentPick),
         outboxRepository,
         resolvedTarget,
+        undefined,
+        pinnedDestination,
       );
       if ('enqueued' in distribution) {
         const completedRun = await systemRunRepository.completeRun({
@@ -594,10 +683,20 @@ export async function releaseHumanCapperDeliveryWithRunTracking(
         authority: authorization?.authority ?? null,
         entry,
         releasedBy: actor,
+        destinationChannelId: destination?.channelId ?? null,
+        destinationGuildId: destination?.guildId ?? null,
+        destinationSource: destination?.source ?? null,
       },
     });
 
-    return { run: completedRun, audit, target: resolvedTarget, pickId, enqueued: true };
+    return {
+      run: completedRun,
+      audit,
+      target: resolvedTarget,
+      pickId,
+      enqueued: true,
+      ...(destination === null ? {} : { destination }),
+    };
   } catch (error) {
     await systemRunRepository.completeRun({
       runId: run.id,

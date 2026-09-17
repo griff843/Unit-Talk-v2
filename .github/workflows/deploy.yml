@@ -598,22 +598,18 @@ jobs:
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
           [ -z "$_target_map" ] && _target_map='{}'
-          # UTV2-1923: in human-capper mode the worker is configured to poll
-          # `discord:official-picks`, and `resolveDiscordChannelId` resolves a
-          # non-numeric target ONLY through this map. Without an entry the
-          # deploy would come up looking healthy and fail every delivery at the
-          # adapter -- fail-closed, but discovered at activation instead of at
-          # deploy. Two assertions, both about the same instruction: the target
-          # must be mapped, and it must not be mapped to the private capper
-          # channel, which is onboarding, not a member-facing destination.
+          # UTV2-1923 (destination routing): an official pick goes to THAT
+          # capper's own picks-only destination, resolved server-side from
+          # `cappers.metadata.discord.picksChannelId` and pinned onto the outbox
+          # row. `discord:official-picks` therefore has no single channel, and a
+          # shared entry for it in this map is not a fallback -- it is the one
+          # way every capper's picks could converge on one channel. The worker
+          # refuses to use it, and the deploy refuses to carry it, so the
+          # misconfiguration cannot exist in a running system at all.
           if [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ]; then
             _official_channel=$(printf '%s' "$_target_map" | jq -r '."discord:official-picks" // empty')
-            if [ -z "$_official_channel" ]; then
-              echo "::error title=Human capper target unmapped::UNIT_TALK_DISCORD_TARGET_MAP must map \"discord:official-picks\" to the member-facing channel id before human-capper mode can deploy." >&2
-              exit 1
-            fi
-            if [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ] && [ "$_official_channel" = "${DISCORD_CAPPER_CHANNEL_ID}" ]; then
-              echo "::error title=Human capper target misrouted::\"discord:official-picks\" is mapped to DISCORD_CAPPER_CHANNEL_ID, which is the private capper home channel, not a member-facing destination." >&2
+            if [ -n "$_official_channel" ]; then
+              echo "::error title=Human capper target must not be shared-mapped::UNIT_TALK_DISCORD_TARGET_MAP maps \"discord:official-picks\" to a single channel. Official picks route per capper from cappers.metadata.discord.picksChannelId; remove this entry." >&2
               exit 1
             fi
             unset _official_channel
@@ -1401,22 +1397,18 @@ jobs:
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
           [ -z "$_target_map" ] && _target_map='{}'
-          # UTV2-1923: in human-capper mode the worker is configured to poll
-          # `discord:official-picks`, and `resolveDiscordChannelId` resolves a
-          # non-numeric target ONLY through this map. Without an entry the
-          # deploy would come up looking healthy and fail every delivery at the
-          # adapter -- fail-closed, but discovered at activation instead of at
-          # deploy. Two assertions, both about the same instruction: the target
-          # must be mapped, and it must not be mapped to the private capper
-          # channel, which is onboarding, not a member-facing destination.
+          # UTV2-1923 (destination routing): an official pick goes to THAT
+          # capper's own picks-only destination, resolved server-side from
+          # `cappers.metadata.discord.picksChannelId` and pinned onto the outbox
+          # row. `discord:official-picks` therefore has no single channel, and a
+          # shared entry for it in this map is not a fallback -- it is the one
+          # way every capper's picks could converge on one channel. The worker
+          # refuses to use it, and the deploy refuses to carry it, so the
+          # misconfiguration cannot exist in a running system at all.
           if [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ]; then
             _official_channel=$(printf '%s' "$_target_map" | jq -r '."discord:official-picks" // empty')
-            if [ -z "$_official_channel" ]; then
-              echo "::error title=Human capper target unmapped::UNIT_TALK_DISCORD_TARGET_MAP must map \"discord:official-picks\" to the member-facing channel id before human-capper mode can deploy." >&2
-              exit 1
-            fi
-            if [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ] && [ "$_official_channel" = "${DISCORD_CAPPER_CHANNEL_ID}" ]; then
-              echo "::error title=Human capper target misrouted::\"discord:official-picks\" is mapped to DISCORD_CAPPER_CHANNEL_ID, which is the private capper home channel, not a member-facing destination." >&2
+            if [ -n "$_official_channel" ]; then
+              echo "::error title=Human capper target must not be shared-mapped::UNIT_TALK_DISCORD_TARGET_MAP maps \"discord:official-picks\" to a single channel. Official picks route per capper from cappers.metadata.discord.picksChannelId; remove this entry." >&2
               exit 1
             fi
             unset _official_channel

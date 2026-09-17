@@ -156,6 +156,8 @@ export async function reviewPickController(
             repositories.outbox,
             repositories.runs,
             repositories.audit,
+            'approval',
+            repositories.cappers,
           );
           humanDelivery = {
             target: released.target,

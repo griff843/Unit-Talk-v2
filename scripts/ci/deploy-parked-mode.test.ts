@@ -987,20 +987,29 @@ test('UTV2-1923: the API delivery posture defaults to false on every path', () =
   assert.equal(writes?.length, 2, 'both env files must carry the posture');
 });
 
-test('UTV2-1923: human-capper mode refuses to deploy with the target unmapped or misrouted', () => {
+test('UTV2-1923: human-capper mode refuses to deploy with a SHARED official-picks mapping', () => {
+  // The assertion inverted when routing became per capper. A single mapping for
+  // `discord:official-picks` is no longer the prerequisite -- it is the defect,
+  // because it is the only way every capper's picks could reach one channel.
   const guards = deployWorkflowSource.match(
     /if \[ "\$SYNDICATE_MACHINE_MODE" = "human-capper" \]; then\n\s*_official_channel=/gu,
   );
-  assert.equal(guards?.length, 2, 'canary and production must both assert the channel mapping');
+  assert.equal(guards?.length, 2, 'canary and production must both assert the mapping');
 
   assert.equal(
-    (deployWorkflowSource.match(/Human capper target unmapped/gu) ?? []).length,
+    (deployWorkflowSource.match(/Human capper target must not be shared-mapped/gu) ?? []).length,
     2,
+    'both blocks must refuse a shared channel mapping for the human delivery target',
   );
   assert.equal(
-    (deployWorkflowSource.match(/Human capper target misrouted/gu) ?? []).length,
-    2,
-    'both blocks must refuse DISCORD_CAPPER_CHANNEL_ID as the member-facing destination',
+    (deployWorkflowSource.match(/Human capper target unmapped/gu) ?? []).length,
+    0,
+    'the old "must be mapped" assertion must be gone, not merely supplemented',
+  );
+  assert.match(
+    deployWorkflowSource,
+    /cappers\.metadata\.discord\.picksChannelId/u,
+    'the deploy must name where the destination actually comes from',
   );
 });
 

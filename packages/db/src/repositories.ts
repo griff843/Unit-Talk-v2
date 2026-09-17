@@ -16,6 +16,7 @@ import type {
   AlertDetectionTier,
   ApprovalStatus,
   AuditLogRow,
+  CapperRow,
   EventParticipantRole,
   EventParticipantRow,
   EventRow,
@@ -933,6 +934,21 @@ export interface DeliveryKillSwitchSetInput {
   reason?: string | undefined;
 }
 
+/**
+ * UTV2-1923 (destination routing): read-only access to the canonical `cappers`
+ * row, so the server can resolve a capper's OWN member-facing destination
+ * rather than routing every capper to one shared channel.
+ *
+ * Read-only on purpose. This lane consumes the mapping; it never writes it.
+ * Writing `cappers.metadata` is an operator action taken deliberately
+ * elsewhere, and a delivery path that could also write its own routing would
+ * be a path that could authorize its own destination.
+ */
+export interface CapperRepository {
+  /** The canonical row for this capper identity, or null when there is none. */
+  findById(capperId: string): Promise<CapperRow | null>;
+}
+
 export interface DeliveryKillSwitchRepository {
   /**
    * Whether delivery to this target is currently killed. Must return `true`
@@ -1162,6 +1178,13 @@ export interface RepositoryBundle {
   pickOfferSnapshots?: PickOfferSnapshotRepository;
   /** UTV2-1427: live delivery kill switch, read by the worker before dequeue. */
   killSwitch?: DeliveryKillSwitchRepository;
+  /**
+   * UTV2-1923: canonical capper rows, read to resolve a capper's own
+   * picks-only Discord destination. Optional so a partial fake bundle in an
+   * older test keeps working; a delivery path that finds it absent refuses to
+   * route rather than falling back to a shared destination.
+   */
+  cappers?: CapperRepository;
 }
 
 export type { IMarketUniverseRepository, MarketUniverseClosingLine, MarketUniverseUpsertInput };
