@@ -7,7 +7,7 @@
 
 MERGE_SHA: pending merge
 Merge SHA: pending merge
-PR: PR_URL_PLACEHOLDER
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1594
 Anchor commit (implementation): ca8e98878482a9bff510af84ed4d09049c0fcd4d
 
 ## The defect

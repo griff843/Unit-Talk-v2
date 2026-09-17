@@ -19,23 +19,79 @@
     "head": "ca8e98878482a9bff510af84ed4d09049c0fcd4d",
     "note": "Measured locally on the lane head. `pnpm verify` exits non-zero only at `ci:assert-staging`, which refuses by design outside the staging-ci GitHub environment; CI's required `verify` check on this head is the binding authority.",
     "gates": [
-      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
-      { "command": "pnpm test", "tests": 6398, "pass": 6398, "fail": 0, "exit_code": 0, "result": "pass" },
-      { "command": "pnpm --filter @unit-talk/smart-form test", "tests": 206, "pass": 206, "fail": 0, "result": "pass" },
-      { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
-      { "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1925 --head HEAD", "verdict": "PASS", "rules_matched": ["operator-ui"], "result": "pass" }
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "tests": 6398,
+        "pass": 6398,
+        "fail": 0,
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm --filter @unit-talk/smart-form test",
+        "tests": 206,
+        "pass": 206,
+        "fail": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1925 --head HEAD",
+        "verdict": "PASS",
+        "rules_matched": [
+          "operator-ui"
+        ],
+        "result": "pass"
+      }
     ],
     "mutation_battery": {
       "target_files": [
         "apps/smart-form/lib/delivery-disposition.ts",
         "apps/smart-form/app/submit/components/SuccessReceipt.tsx"
       ],
-      "baseline": { "tests": 33, "pass": 33, "fail": 0 },
+      "baseline": {
+        "tests": 33,
+        "pass": 33,
+        "fail": 0
+      },
       "mutations": [
-        { "id": "M1", "description": "undetermined defaults to the reassuring 'Track Only - no member delivery.'", "pass": 32, "fail": 1, "killed": true },
-        { "id": "M2", "description": "awaiting_approval folded into not-enqueued", "pass": 32, "fail": 1, "killed": true },
-        { "id": "M3", "description": "a missing outboxEnqueued is read as false rather than unknown", "pass": 32, "fail": 1, "killed": true },
-        { "id": "M4", "description": "the receipt reverts to v.trackOnly for its delivery sentence", "pass": 31, "fail": 2, "killed": true }
+        {
+          "id": "M1",
+          "description": "undetermined defaults to the reassuring 'Track Only - no member delivery.'",
+          "pass": 32,
+          "fail": 1,
+          "killed": true
+        },
+        {
+          "id": "M2",
+          "description": "awaiting_approval folded into not-enqueued",
+          "pass": 32,
+          "fail": 1,
+          "killed": true
+        },
+        {
+          "id": "M3",
+          "description": "a missing outboxEnqueued is read as false rather than unknown",
+          "pass": 32,
+          "fail": 1,
+          "killed": true
+        },
+        {
+          "id": "M4",
+          "description": "the receipt reverts to v.trackOnly for its delivery sentence",
+          "pass": 31,
+          "fail": 2,
+          "killed": true
+        }
       ],
       "killed": 4,
       "survived": 0,
@@ -49,5 +105,6 @@
     "containment_changes": 0,
     "note": "Diff confined to apps/smart-form/**. No apps/api, no outbox, no kill switch, no runtime flag."
   },
-  "generated_at": "2026-09-17T02:30:00.000Z"
+  "generated_at": "2026-09-17T02:30:00.000Z",
+  "pr_number": 1594
 }
