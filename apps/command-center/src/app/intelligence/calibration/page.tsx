@@ -30,6 +30,8 @@ export default async function ScoringCalibrationPage() {
   }
 
   const sampleSize = data.scoreQuality.scoreVsOutcome.sampleSize;
+  // `null` means neither cohort could be priced, which is not a zero delta.
+  const roiDelta = data.decisionQuality.approvedVsDeniedRoiDelta;
   const recentFeedback = data.feedbackLoop.slice(0, 10);
   const sportWindows = Object.entries(data.recentForm.bySport);
   const sourceWindows = Object.entries(data.recentForm.bySource);
@@ -58,8 +60,12 @@ export default async function ScoringCalibrationPage() {
         />
         <MetricsCard
           label="Approved vs denied ROI"
-          value={`${data.decisionQuality.approvedVsDeniedRoiDelta >= 0 ? '+' : ''}${data.decisionQuality.approvedVsDeniedRoiDelta.toFixed(1)}%`}
-          trend={data.decisionQuality.approvedVsDeniedRoiDelta > 0 ? 'up' : data.decisionQuality.approvedVsDeniedRoiDelta < 0 ? 'down' : 'flat'}
+          value={
+            roiDelta === null
+              ? '—'
+              : `${roiDelta >= 0 ? '+' : ''}${roiDelta.toFixed(1)}%`
+          }
+          trend={roiDelta === null ? 'flat' : roiDelta > 0 ? 'up' : roiDelta < 0 ? 'down' : 'flat'}
         />
       </div>
 

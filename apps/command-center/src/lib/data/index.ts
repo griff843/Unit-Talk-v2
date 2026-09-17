@@ -6,6 +6,8 @@ export { getBoardState, getBoardQueue, getBoardPerformance, type BoardQueueData,
 export { getExceptionQueues } from './picks.js';
 export { getRoutingPreview, getPromotionPreview } from './preview.js';
 export { getPerformanceData, getLeaderboard, getReviewHistory, getIntelligenceData } from './analytics.js';
+export { pickProfitUnits, computeStats, resolveCapperId, classifyAttribution, isTrackOnlyPick } from './analytics.js';
+export type { Stats, PerformanceData, LeaderboardRow, LeaderboardResult } from './analytics.js';
 export { getReviewQueue, getHeldQueue, searchPicks, getPickDetail } from './queues.js';
 export { getPropOffers, getResearchLines, getResearchMatchups, getResearchPlayers, getMarketUniverseStaleness, getMarketUniverseStalenessByMarketKey, formatRelativeTime, computeProximityTier, isFreshnessWindowFailed, type PropOffersResponse, type PropOfferRow, type ResearchLinesResult, type ResearchMatchup, type ResearchMatchupsResult, type ResearchPlayer, type ResearchPlayersResult, type MarketUniverseStalenessRow } from './research.js';
 export { getDashboardData, getDashboardRuntimeData, getInterventionAudit, getDailyPickCounts, type InterventionAuditRow, type DailyPickCount } from './dashboard.js';
