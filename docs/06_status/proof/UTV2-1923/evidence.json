@@ -7,14 +7,14 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "a7c88f7f18e27cc0710cad5aed2c9741a956f5e8",
+    "verified_source_sha": "4e125c78e9721298f738b477ad4240a463f93758",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T03:00:42Z",
-    "measured_against_sha": "a7c88f7f18e27cc0710cad5aed2c9741a956f5e8",
+    "measured_at": "2026-09-17T03:13:36Z",
+    "measured_against_sha": "4e125c78e9721298f738b477ad4240a463f93758",
     "commands": [
       {
         "command": "pnpm type-check",

@@ -4,7 +4,7 @@
   "tier": "T1",
   "lane_type": "runtime",
   "measured_at": "2026-09-17T01:45:00Z",
-  "measured_against_sha": "a7c88f7f18e27cc0710cad5aed2c9741a956f5e8",
+  "measured_against_sha": "4e125c78e9721298f738b477ad4240a463f93758",
   "claim": "A human capper delivery path exists end to end and cannot fire as merged.",
   "note": "Every value below is the posture of the code ON THIS BRANCH, not of the deployed system. The deployed release still predates this branch; see docs/mission/plan.md for deploy drift.",
   "delivery_posture": {

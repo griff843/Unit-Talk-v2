@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-17T03:00:33.000Z
+Generated at: 2026-09-17T03:13:36.000Z
 Issue: UTV2-1923
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1923-human-capper-official-picks-delivery
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1592
-Head SHA: a7c88f7f18e27cc0710cad5aed2c9741a956f5e8
+Head SHA: 4e125c78e9721298f738b477ad4240a463f93758
 result: pass
 
 ## ASSERTIONS:
@@ -39,7 +39,7 @@ assertion a named test makes; none is a restatement of intent.
 
 ## EVIDENCE:
 
-Measured on `a7c88f7f18e27cc0710cad5aed2c9741a956f5e8`, in the lane worktree.
+Measured on `4e125c78e9721298f738b477ad4240a463f93758`, in the lane worktree.
 
 ```
 $ pnpm type-check
@@ -140,4 +140,4 @@ control as shipped.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1592
 Approved PR head: pending merge
-Execution SHA: a7c88f7f18e27cc0710cad5aed2c9741a956f5e8
+Execution SHA: 4e125c78e9721298f738b477ad4240a463f93758

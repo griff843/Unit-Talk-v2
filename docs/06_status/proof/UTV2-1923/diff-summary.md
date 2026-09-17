@@ -6,10 +6,10 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1923-human-capper-official-picks-delivery
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1592
-Head SHA: a7c88f7f18e27cc0710cad5aed2c9741a956f5e8
+Head SHA: 4e125c78e9721298f738b477ad4240a463f93758
 Merge SHA: N/A
 Diff base: 05616d393cbde32df47a7310d4bb4fe29a33b1cf
-Diff target: a7c88f7f18e27cc0710cad5aed2c9741a956f5e8
+Diff target: 4e125c78e9721298f738b477ad4240a463f93758
 
 ## Git Diff Stat
 ```
@@ -86,5 +86,5 @@ M	scripts/ci/deploy-parked-mode.test.ts
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: a7c88f7f18e27cc0710cad5aed2c9741a956f5e8
+Head SHA: 4e125c78e9721298f738b477ad4240a463f93758
 Merge SHA: N/A
