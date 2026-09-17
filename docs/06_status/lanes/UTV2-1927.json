@@ -16,7 +16,11 @@
     "docs/06_status/lanes/UTV2-1927.json",
     "docs/06_status/proof/UTV2-1927/**"
   ],
-  "expected_proof_paths": [],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1927/evidence.json",
+    "docs/06_status/proof/UTV2-1927/verification.md",
+    "docs/06_status/proof/UTV2-1927/diff-summary.md"
+  ],
   "status": "in_review",
   "started_at": "2026-09-17T18:05:08.235Z",
   "heartbeat_at": "2026-09-17T18:14:57.322Z",
