@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1925-smart-form-receipt-server-truth",
   "branch": "claude/utv2-1925-smart-form-receipt-server-truth",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "97af7f25841893f87b3ec36e4713cb31901b463f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1594",
   "files_changed": [],
   "file_scope_lock": [
@@ -17,14 +17,22 @@
     "docs/06_status/proof/UTV2-1925/diff-summary.md",
     "docs/06_status/proof/UTV2-1925/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-17T02:18:14.206Z",
-  "heartbeat_at": "2026-09-17T02:30:45.587Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-17T02:49:49.233Z",
+  "closed_at": "2026-09-17T02:49:49.233Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1925-smart-form-receipt-server-truth.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-17T02:49:46.612Z",
+      "verdict": "pass",
+      "merge_sha": "97af7f25841893f87b3ec36e4713cb31901b463f",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

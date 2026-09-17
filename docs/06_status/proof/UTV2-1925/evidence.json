@@ -4,14 +4,14 @@
   "tier": "T2",
   "lane_type": "delivery-ui",
   "proof_profile": "static",
-  "status": "open",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "97af7f25841893f87b3ec36e4713cb31901b463f",
     "verified_source_sha": "ca8e98878482a9bff510af84ed4d09049c0fcd4d",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "source_sha",
-    "bound_at": "2026-09-17T02:30:00.000Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-17T02:49:45.465Z"
   },
   "static_proof": {
     "status": "pass",
