@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
@@ -434,11 +435,8 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
 // explicitly and nullably in `tracker_ref` rather than being inferred from this
 // field. See LaneManifest.tracker_ref.
 //
-// KNOWN BOUND: `merge-gate.yml`, `p0-protocol.yml` and
-// `executor-result-validator.yml` are RESERVED surfaces under the same
-// ratification and still resolve a lane by `UTV2-###`. A `WORK-###` lane is
-// therefore fully usable for discovery, delegation, verification, PR and
-// closeout, and is NOT yet mergeable. Do not widen those workflows here.
+// Required workflows resolve WORK identities through their repository manifests;
+// tracker namespaces remain separate and cannot supply merge authority.
 // The single source of truth for which identifier namespaces name a unit of work.
 // `branch-discipline-guard.ts` kept its own copy of this alternation and was not
 // widened when `WORK-###` was minted, which silently made an issue-ID-free task
@@ -758,6 +756,466 @@ export function requireIssueId(issueId: string): string {
  * no issue by that name to look up, and inventing one would produce a lookup
  * that always fails rather than a check that correctly skips.
  */
+/** Identifies explicitly detached identities for optional tracker diagnostics.
+ * This association helper never authorizes a default execution-time tracker call.
+ */
+export function isTrackerIndependent(
+  manifest: Pick<LaneManifest, 'issue_id'> & { tracker_ref?: string | null },
+): boolean {
+  return /^WORK-\d+$/i.test(manifest.issue_id) || manifest.tracker_ref === null;
+}
+
+/**
+ * Repo-minted work identity. `WORK-###` is the namespace a task uses when it
+ * has no tracker issue at all; `UTV2-###` / `UNI-###` remain tracker keys.
+ */
+export function isRepoMintedWorkIdentity(issueId: string | null | undefined): boolean {
+  return /^WORK-\d+$/i.test(String(issueId ?? '').trim());
+}
+
+/** The P0 Actions consumer -- the required `P0 Protocol` check's workflow. */
+export const P0_ACTIONS_CONSUMER_PATH = '.github/workflows/p0-protocol.yml';
+/** The trusted-base repository P0 evaluator the consumer must delegate to. */
+export const P0_TRUSTED_EVALUATOR_PATH = 'scripts/ops/tracker-independence/p0-workflow.cjs';
+/** The required-check context the consumer has to produce for delegation to be enforced. */
+export const P0_REQUIRED_CHECK_CONTEXT = 'P0 Protocol';
+/**
+ * The only ref activation is ever read from. The protected base is what runs
+ * the required check; a working tree, a branch head or a local `main` that may
+ * be ahead of the remote is candidate content and proves nothing.
+ */
+export const P0_TRUSTED_BASE_REF = 'origin/main';
+
+export interface RepoMintedP0Coverage {
+  covered: boolean;
+  reason: string;
+  /** The ref the consumer and evaluator were read from, and its commit when it resolved. */
+  source: { ref: string; sha: string | null };
+}
+
+export interface RepoMintedP0CoverageOptions {
+  /**
+   * Test seam only: the ref to treat as the installed base. Production callers
+   * never pass it, so they always read `origin/main`.
+   */
+  trustedRef?: string;
+}
+
+export type P0DelegationFinding =
+  | { executed: true; job: string; step: string }
+  | { executed: false; detail: string };
+
+function isLiteralFalse(value: unknown): boolean {
+  if (value === false || value === 0) return true;
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().replace(/^\$\{\{\s*/, '').replace(/\s*\}\}$/, '').trim().toLowerCase();
+  return normalized === 'false' || normalized === '0' || normalized === "'false'" || normalized === '"false"';
+}
+
+function hasPullRequestTrigger(on: unknown): boolean {
+  if (typeof on === 'string') return on === 'pull_request';
+  if (Array.isArray(on)) return on.some((entry) => entry === 'pull_request');
+  if (on && typeof on === 'object') return Object.prototype.hasOwnProperty.call(on, 'pull_request');
+  return false;
+}
+
+/**
+ * Blanks every string and template literal in a github-script body so that
+ * nothing inside one can read as code, and refuses (returns null) any body the
+ * predicate cannot read literally: a `/` outside a string (a comment, a regex
+ * literal or a division -- a comment stripper is exactly what independent
+ * review round 5 fooled with `//` inside a quoted string), a template
+ * substitution `${` (a nested template can expose text as code), a raw
+ * newline or carriage return inside a quote, an unterminated literal, or a
+ * backslash, control character or non-ASCII character outside a literal.
+ * Only the evaluator path literal keeps its content; every other string
+ * becomes `''`.
+ */
+function blankJsLiterals(script: string): string | null {
+  let out = '';
+  for (let i = 0; i < script.length; ) {
+    const c = script[i]!;
+    if (c === "'" || c === '"') {
+      let j = i + 1;
+      let content = '';
+      while (j < script.length && script[j] !== c) {
+        if (script[j] === '\n' || script[j] === '\r') return null;
+        if (script[j] === '\\') {
+          content += script.slice(j, j + 2);
+          j += 2;
+        } else {
+          content += script[j];
+          j += 1;
+        }
+      }
+      if (j >= script.length) return null;
+      const keep = content === P0_TRUSTED_EVALUATOR_PATH || content === `./${P0_TRUSTED_EVALUATOR_PATH}`;
+      out += c + (keep ? content : '') + c;
+      i = j + 1;
+      continue;
+    }
+    if (c === '`') {
+      let j = i + 1;
+      while (j < script.length && script[j] !== '`') {
+        if (script[j] === '$' && script[j + 1] === '{') return null;
+        j += script[j] === '\\' ? 2 : 1;
+      }
+      if (j >= script.length) return null;
+      out += '``';
+      i = j + 1;
+      continue;
+    }
+    if (c === '/') return null;
+    // Outside a literal the body is plain ASCII source: a backslash would be a
+    // Unicode escape inside an identifier (`r\u0065quire`, independent review
+    // round 6), and a control or non-ASCII character is nothing the accepted
+    // forms need.
+    const code = c.charCodeAt(0);
+    if (c === '\\' || code > 0x7e || (code < 0x20 && c !== '\n' && c !== '\t')) return null;
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * The evaluator's only entry point. `p0-workflow.cjs` exports this function
+ * and has no CLI: `node <path>` loads the module and exits 0 having evaluated
+ * nothing, which is why a shell `run:` step is never counted as a delegation
+ * (independent review, round 2). A consumer delegates only by requiring the
+ * module and calling this export.
+ */
+export const P0_EVALUATOR_ENTRY = 'evaluatePullRequest';
+
+/**
+ * Does a (literal-blanked) github-script body delegate to the evaluator?
+ * Exactly three call forms are accepted, each at the start of a line
+ * (optionally as the right-hand side of a declaration, or behind
+ * `await`/`return`): `require(<evaluator>).evaluatePullRequest(` inlined; a
+ * destructuring `const { evaluatePullRequest } = require(<evaluator>)` followed
+ * by a statement-level `evaluatePullRequest(`; or `const <name> =
+ * require(<evaluator>)` followed by a statement-level
+ * `<name>.evaluatePullRequest(`. `<evaluator>` is the path literal or a
+ * `const` binding of it declared once in the body. Everything else that could
+ * reach the loaded module or the entry point by name refuses the body: another
+ * occurrence of `evaluatePullRequest`, of a module binding, of the path
+ * literal or of a `require` of it; a `require` not immediately called, or
+ * with an argument that is not a string literal or a path binding; a
+ * redefinition of `require` or the entry point; an assignment to a path
+ * binding; and `eval`, `Function`, `with`, `import`, `module` or `globalThis`.
+ * JavaScript control flow is not analysed: a statement inside a never-called
+ * function or a false branch is not distinguished from a live one, and a body
+ * that throws before the call fails the required check, which is fail-closed
+ * for the PR. The reviewed bootstrap lane that installs the consumer on the
+ * base is where that reading happens.
+ */
+function scriptDelegatesToEvaluator(script: string): boolean {
+  const evaluator = escapeRegExp(P0_TRUSTED_EVALUATOR_PATH);
+  const literal = String.raw`['"](?:\./)?${evaluator}['"]`;
+  const entry = P0_EVALUATOR_ENTRY;
+  const ident = String.raw`[A-Za-z_$][\w$]*`;
+  const word = (name: string): RegExp => new RegExp(String.raw`(?<![\w$.])${name}(?![\w$])`);
+  for (const name of ['eval', 'Function', 'with', 'import', 'module', 'globalThis']) {
+    if (word(name).test(script)) return false;
+  }
+  // `require` only ever appears as a bare, immediately-called `require(`:
+  // `require.cache`, `require.resolve`, a property `x.require`, `require (`
+  // with whitespace before the parenthesis (independent review round 7), a
+  // parameter named `require` and a shadowing declaration all refuse.
+  for (const match of script.matchAll(/(?<![\w$])require(?![\w$])/g)) {
+    if (script[match.index! - 1] === '.' || script[match.index! + 'require'.length] !== '(') return false;
+  }
+  const redefines = new RegExp(
+    String.raw`(?:^|[^.\w$])(?:(?:const|let|var|function|async\s+function|class)\s+(?:${entry}|require)\b|${entry}\s*\([^)]*\)\s*\{)`,
+    'm',
+  );
+  if (redefines.test(script)) return false;
+  // A declaration or a plain assignment (`summary = await ...`) may prefix a
+  // call statement; the accepted span starts at the call itself, so a tracked
+  // name inside that prefix is still an uncovered occurrence.
+  const declaration = String.raw`(?:(?:const|let|var)\s+)?(?:\{[^}]*\}|${ident}(?:\.${ident})*)\s*=\s*`;
+  const statementStart = String.raw`^\s*(?:${declaration})?(?:await\s+|return\s+)?`;
+  const pathBindings = [...script.matchAll(
+    new RegExp(String.raw`^\s*const\s+(${ident})\s*=\s*${literal}\s*;?\s*$`, 'gm'),
+  )];
+  const pathNames = pathBindings.map(([, name]) => name!);
+  const moduleRef = [literal, ...pathNames.map(escapeRegExp)].join('|');
+  // Every `require(` takes a string literal or a path binding, and every one
+  // of them is seen by that rule (an argument containing parentheses is not).
+  const requireArguments = [...script.matchAll(/require\(\s*([^()]*?)\s*\)/g)];
+  if (requireArguments.length !== (script.match(/require\(/g) ?? []).length) return false;
+  for (const [, argument] of requireArguments) {
+    if (!new RegExp(String.raw`^(?:'[^'\\]*'|"[^"\\]*"|${moduleRef})$`).test(argument!)) return false;
+  }
+  const spans: Array<[number, number]> = [];
+  for (const match of pathBindings) spans.push([match.index!, match.index! + match[0].length]);
+  const collectCalls = (pattern: RegExp): number => {
+    let count = 0;
+    for (const match of script.matchAll(pattern)) {
+      const end = match.index! + match[0].length;
+      spans.push([end - match[1]!.length, end]);
+      count += 1;
+    }
+    return count;
+  };
+  const inlineCalls = collectCalls(
+    new RegExp(statementStart + String.raw`(require\(\s*(?:${moduleRef})\s*\)\.${entry}\s*\()`, 'gm'),
+  );
+  const destructured = [...script.matchAll(
+    new RegExp(String.raw`^\s*const\s*\{\s*${entry}\s*\}\s*=\s*require\(\s*(?:${moduleRef})\s*\)\s*;?\s*$`, 'gm'),
+  )];
+  for (const match of destructured) spans.push([match.index!, match.index! + match[0].length]);
+  const moduleBindings = [...script.matchAll(
+    new RegExp(String.raw`^\s*const\s+(${ident})\s*=\s*require\(\s*(?:${moduleRef})\s*\)\s*;?\s*$`, 'gm'),
+  )];
+  for (const match of moduleBindings) spans.push([match.index!, match.index! + match[0].length]);
+  const moduleNames = moduleBindings.map(([, name]) => name!);
+  const bindingNames = [...pathNames, ...moduleNames];
+  if (new Set(bindingNames).size !== bindingNames.length) return false;
+  const directCalls = destructured.length > 0
+    ? collectCalls(new RegExp(statementStart + String.raw`(${entry}\s*\()`, 'gm'))
+    : 0;
+  const boundCalls = moduleNames.length > 0
+    ? collectCalls(new RegExp(statementStart + String.raw`((?:${moduleNames.map(escapeRegExp).join('|')})\.${entry}\s*\()`, 'gm'))
+    : 0;
+  const covered = (index: number): boolean => spans.some(([from, to]) => index >= from && index < to);
+  const tracked = [entry, ...moduleNames.map(escapeRegExp)].join('|');
+  for (const match of script.matchAll(new RegExp(String.raw`(?<![\w$])(?:${tracked})(?![\w$])`, 'g'))) {
+    if (!covered(match.index!)) return false;
+  }
+  for (const match of script.matchAll(new RegExp(literal, 'g'))) {
+    if (!covered(match.index!)) return false;
+  }
+  for (const match of script.matchAll(new RegExp(String.raw`require\(\s*(?:${moduleRef})\s*\)`, 'g'))) {
+    if (!covered(match.index!)) return false;
+  }
+  // A path binding is a const and may be read anywhere (the staged activation
+  // checks it exists); an assignment to it refuses.
+  if (pathNames.length > 0) {
+    const assigned = new RegExp(String.raw`(?<![\w$.])(?:${pathNames.map(escapeRegExp).join('|')})\s*(?:=(?!=)|\+\+|--|\[)`, 'g');
+    for (const match of script.matchAll(assigned)) {
+      if (!covered(match.index!)) return false;
+    }
+  }
+  return inlineCalls + directCalls + boundCalls > 0;
+}
+
+/** True when a `strategy.matrix` cannot produce a single job instance. */
+function matrixIsEmpty(strategy: unknown): boolean {
+  if (!strategy || typeof strategy !== 'object') return false;
+  const matrix = (strategy as Record<string, unknown>)['matrix'];
+  if (!matrix || typeof matrix !== 'object') return false;
+  const entries = Object.entries(matrix as Record<string, unknown>);
+  if (entries.length === 0) return true;
+  // Matrix expansion is not modelled: an `exclude` can remove every
+  // instance, so any non-empty `exclude` is treated as possibly empty and
+  // refused (fail closed). The staged activation declares no matrix.
+  const exclude = (matrix as Record<string, unknown>)['exclude'];
+  if (Array.isArray(exclude) && exclude.length > 0) return true;
+  return entries.some(([key, value]) => Array.isArray(value) && value.length === 0 && key !== 'exclude');
+}
+
+/**
+ * Structural read of the P0 consumer. Coverage is an EXECUTED delegation: a
+ * `pull_request`-triggered workflow, a job whose check context is exactly
+ * `P0 Protocol`, and inside it a step that is not disabled, cannot be ignored
+ * on failure, and whose `run:` or github-script body invokes the evaluator
+ * read literally. A comment naming the path, a step under `if: false`,
+ * a `continue-on-error: true` step, or a step in some other job is a
+ * reference, not enforcement, and returns `executed: false`.
+ */
+export function findExecutedP0Delegation(consumerYaml: string): P0DelegationFinding {
+  let doc: unknown;
+  try {
+    doc = parseYaml(consumerYaml);
+  } catch (error) {
+    return { executed: false, detail: `consumer is not parseable YAML (${(error as Error).message})` };
+  }
+  if (!doc || typeof doc !== 'object') {
+    return { executed: false, detail: 'consumer is not a workflow document' };
+  }
+  const workflow = doc as Record<string, unknown>;
+  if (!hasPullRequestTrigger(workflow['on'])) {
+    return { executed: false, detail: 'consumer does not run on pull_request, so it cannot produce the required check on a PR' };
+  }
+  const jobs = workflow['jobs'];
+  if (!jobs || typeof jobs !== 'object') {
+    return { executed: false, detail: 'consumer declares no jobs' };
+  }
+  let sawContextJob = false;
+  let mentionedElsewhere = false;
+  const contextJobs = Object.entries(jobs as Record<string, unknown>).filter(([jobKey, jobValue]) => {
+    if (!jobValue || typeof jobValue !== 'object') return false;
+    const name = (jobValue as Record<string, unknown>)['name'];
+    return (typeof name === 'string' ? name : jobKey) === P0_REQUIRED_CHECK_CONTEXT;
+  });
+  if (contextJobs.length > 1) {
+    // Two jobs reporting the same check context make it ambiguous which one
+    // branch protection is satisfied by; refuse rather than pick.
+    return {
+      executed: false,
+      detail: `${contextJobs.length} jobs produce the "${P0_REQUIRED_CHECK_CONTEXT}" check context; the consumer must have exactly one`,
+    };
+  }
+  for (const [jobKey, jobValue] of Object.entries(jobs as Record<string, unknown>)) {
+    if (!jobValue || typeof jobValue !== 'object') continue;
+    const job = jobValue as Record<string, unknown>;
+    const context = typeof job['name'] === 'string' ? job['name'] : jobKey;
+    const steps = Array.isArray(job['steps']) ? (job['steps'] as unknown[]) : [];
+    if (context !== P0_REQUIRED_CHECK_CONTEXT) {
+      if (JSON.stringify(steps).includes(P0_TRUSTED_EVALUATOR_PATH)) mentionedElsewhere = true;
+      continue;
+    }
+    sawContextJob = true;
+    if (isLiteralFalse(job['if'])) continue;
+    // A job-level `continue-on-error` that is not literally false lets the
+    // whole job fail without failing the run; a job that `needs` a job which
+    // is disabled or absent is itself skipped; an empty matrix never
+    // instantiates the job. Skipped and neutral checks satisfy branch
+    // protection, so none of these produces an enforced evaluation.
+    if (job['continue-on-error'] !== undefined && !isLiteralFalse(job['continue-on-error'])) continue;
+    const needs = Array.isArray(job['needs']) ? job['needs'] : job['needs'] === undefined ? [] : [job['needs']];
+    const needsSkipped = needs.some((needed) => {
+      if (typeof needed !== 'string') return true;
+      const upstream = (jobs as Record<string, unknown>)[needed];
+      if (!upstream || typeof upstream !== 'object') return true;
+      return isLiteralFalse((upstream as Record<string, unknown>)['if']);
+    });
+    if (needsSkipped) continue;
+    if (matrixIsEmpty(job['strategy'])) continue;
+    for (const [index, stepValue] of steps.entries()) {
+      if (!stepValue || typeof stepValue !== 'object') continue;
+      const step = stepValue as Record<string, unknown>;
+      if (isLiteralFalse(step['if'])) continue;
+      // Any `continue-on-error` that is not literally false -- `true`, an
+      // expression, a string -- can let the step fail without failing the
+      // check, so it is ignorable and does not count.
+      if (step['continue-on-error'] !== undefined && !isLiteralFalse(step['continue-on-error'])) continue;
+      // Only a github-script step can delegate: see P0_EVALUATOR_ENTRY. A
+      // shell `run:` step naming the path is a reference, never an execution.
+      const invoked =
+        typeof step['uses'] === 'string' &&
+        /^actions\/github-script(?:@|$)/.test(step['uses']) &&
+        step['with'] && typeof step['with'] === 'object' &&
+        typeof (step['with'] as Record<string, unknown>)['script'] === 'string' &&
+        scriptDelegatesToEvaluator(blankJsLiterals((step['with'] as Record<string, unknown>)['script'] as string) ?? '');
+      if (invoked) {
+        const stepName = typeof step['name'] === 'string' ? step['name'] : `step ${index + 1}`;
+        return { executed: true, job: context, step: stepName };
+      }
+    }
+  }
+  if (!sawContextJob) {
+    return { executed: false, detail: `consumer has no job producing the "${P0_REQUIRED_CHECK_CONTEXT}" check context` };
+  }
+  return {
+    executed: false,
+    detail: mentionedElsewhere
+      ? `the evaluator is named outside the "${P0_REQUIRED_CHECK_CONTEXT}" job, which does not make the required check evaluate a WORK-### PR`
+      : `no live, non-ignorable step of the "${P0_REQUIRED_CHECK_CONTEXT}" job invokes the evaluator (a comment, a disabled step or a continue-on-error step is a reference, not enforcement)`,
+  };
+}
+
+/**
+ * Does the INSTALLED P0 Actions consumer actually evaluate a repo-minted
+ * `WORK-###` identity?
+ *
+ * The consumer on `main` resolves an identifier with `/(?:UTV2|UNI)-\d+/i` and
+ * auto-passes anything it cannot match, so a `WORK-###` PR clears the required
+ * `P0 Protocol` check without any P0 evaluation ever running. That is a hole in
+ * a required safety check, not an administrative gap. Until the consumer on the
+ * protected base executes the trusted-base evaluator, repo-minted WORK
+ * execution is refused by every local control that reads this predicate:
+ * preflight `PW1`, `ops:lane-start` admission and the merge wrapper's
+ * pre-merge authorization.
+ *
+ * Two properties are load-bearing and were both missing from the first version
+ * of this function (PR #1556 review, comment 5647259413):
+ *
+ * 1. It reads the TRUSTED BASE, never the working tree. Both files are read
+ *    with `git show origin/main:<path>`. A branch that carries the activation
+ *    in its own tree -- candidate-only activation -- is not covered, because the
+ *    required check that runs on a PR is the workflow on the base, not the one
+ *    in the diff. A local `main` is not consulted either; it can be ahead of
+ *    the remote. If the ref cannot be resolved the answer is "not covered".
+ * 2. Coverage means an EXECUTED delegation, found by parsing the workflow
+ *    rather than by substring. Appending `# TODO: <evaluator path>` to the
+ *    narrow consumer used to flip the answer to covered; it now does not.
+ *    See `findExecutedP0Delegation` for exactly what counts.
+ *
+ * What this predicate is NOT: required-check enforcement. Every consumer of it
+ * is a local control, and the required checks on `main` are unchanged by this
+ * module. A hand-written `WORK-###` manifest on a branch is read by Merge Gate
+ * at the candidate head regardless of this function; what keeps such a PR from
+ * merging today is that Merge Gate resolves no tier for a repo-minted branch
+ * name at all (measured on #1556: "No issue ID found in PR branch or title"),
+ * and the local merge wrapper refuses it here. The foundation that activates
+ * the consumer therefore lands through the established bootstrap route -- a
+ * tracker-keyed lane whose trusted-base artifacts Merge Gate can resolve -- not
+ * by treating these local refusals as if they were the required check.
+ *
+ * It fails closed on an unreadable or absent consumer -- a missing
+ * required-check workflow is the one state in which "assume it is covered"
+ * would be worst -- and it is self-releasing: once the base executes the
+ * evaluator the refusal lifts, and it re-arms if the delegation is removed.
+ */
+export function evaluateRepoMintedP0Coverage(
+  root: string = ROOT,
+  options: RepoMintedP0CoverageOptions = {},
+): RepoMintedP0Coverage {
+  const ref = options.trustedRef ?? P0_TRUSTED_BASE_REF;
+  const resolved = git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], root);
+  if (!resolved.ok || !/^[0-9a-f]{40}$/.test(resolved.stdout)) {
+    return {
+      covered: false,
+      reason:
+        `trusted base ${ref} cannot be resolved${resolved.stderr ? ` (${resolved.stderr})` : ''}; ` +
+        'activation is read only from the installed base, never from a working tree, so repo-minted WORK execution stays blocked.',
+      source: { ref, sha: null },
+    };
+  }
+  const source = { ref, sha: resolved.stdout };
+  const consumer = git(['show', `${ref}:${P0_ACTIONS_CONSUMER_PATH}`], root);
+  if (!consumer.ok) {
+    return {
+      covered: false,
+      reason: `P0 Actions consumer ${P0_ACTIONS_CONSUMER_PATH} is missing or unreadable at ${ref} (${source.sha.slice(0, 9)}); repo-minted WORK execution stays blocked.`,
+      source,
+    };
+  }
+  const delegation = findExecutedP0Delegation(consumer.stdout);
+  if (!delegation.executed) {
+    return {
+      covered: false,
+      reason:
+        `${P0_ACTIONS_CONSUMER_PATH} at ${ref} (${source.sha.slice(0, 9)}) does not execute ${P0_TRUSTED_EVALUATOR_PATH}: ` +
+        `${delegation.detail}. A WORK-### PR would auto-pass the required P0 Protocol check without evaluation.`,
+      source,
+    };
+  }
+  const evaluator = git(['cat-file', '-e', `${ref}:${P0_TRUSTED_EVALUATOR_PATH}`], root);
+  if (!evaluator.ok) {
+    return {
+      covered: false,
+      reason:
+        `${P0_ACTIONS_CONSUMER_PATH} at ${ref} executes ${P0_TRUSTED_EVALUATOR_PATH} from "${delegation.job}" / "${delegation.step}", ` +
+        `but that evaluator is not present at ${ref} (${source.sha.slice(0, 9)}); a consumer that requires a file the base lacks is not coverage.`,
+      source,
+    };
+  }
+  return {
+    covered: true,
+    reason:
+      `${P0_ACTIONS_CONSUMER_PATH} at ${ref} (${source.sha.slice(0, 9)}) delegates repo-minted work identities to ` +
+      `${P0_TRUSTED_EVALUATOR_PATH} from job "${delegation.job}", step "${delegation.step}", and the evaluator is present at that ref.`,
+    source,
+  };
+}
+
 export function resolveTrackerRef(
   manifest: Pick<LaneManifest, 'issue_id'> & { tracker_ref?: string | null },
 ): string | null {
@@ -1422,7 +1880,7 @@ export interface ActiveLaneDiscoveryDeps {
  * not lane branches, which are skipped rather than treated as failures.
  */
 export function issueIdFromBranchName(branch: string): string | null {
-  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(branch);
+  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni|work)-(\d+)(?:-|$)/i.exec(branch);
   return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
 }
 

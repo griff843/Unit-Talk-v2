@@ -14,7 +14,7 @@ Unit Talk V2 operates three parallel execution lanes: Codex (implementation), Cl
 
 ## Workflow states
 
-All 13 states are live in Linear. The table below is the canonical definition.
+These workflow states describe repository work. Existing tracker states are optional mirrors; a tracker account or issue is not required.
 
 | State | Type | Owner | Meaning |
 |---|---|---|---|
@@ -76,7 +76,7 @@ Done requires:
 - `pnpm verify` green on merge SHA
 - PR merged to `main`
 - Lane manifest closed (`status: "merged"`)
-- Linear state = Done
+- Repository manifest records verified completion
 
 ### Proof-bearing issues (`phase:proof` or `phase:closeout`)
 
@@ -84,7 +84,7 @@ Done requires everything above **plus**:
 - Issue must pass through **In Proof** before Done (skipping In Proof is a workflow violation)
 - Evidence bundle exists at `docs/06_status/proof/UTV2-###/evidence.json`, tied to merge SHA
 - T1: runtime proof against live Supabase; static proof alone is insufficient
-- Linear state = Done only after Merge Authority is satisfied per tier (canonical definition + artifacts: `CLAUDE.md` "Verification expectations", mechanically enforced by `.github/workflows/merge-gate.yml`) — T1 requires `t1-approved` label + `pm-verdict/v1` APPROVED comment; T2 requires a GitHub PR review approval or `pm-verdict/v1` APPROVED comment; T3 merges on green CI alone
+- Repository work is Done only after Merge Authority is satisfied per tier (canonical definition + artifacts: `CLAUDE.md` "Verification expectations", mechanically enforced by `.github/workflows/merge-gate.yml`) — T1 requires `t1-approved` label + `pm-verdict/v1` APPROVED comment; T2 requires a GitHub PR review approval or `pm-verdict/v1` APPROVED comment; T3 merges on green CI alone
 
 ---
 

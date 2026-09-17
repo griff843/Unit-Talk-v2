@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # .claude/hooks/linear-sync-reminder.sh
-# PostToolUse(Bash) hook: reminds Claude to update Linear after a PR merge.
+# PostToolUse(Bash) hook: reminds Claude to verify repository closeout after a PR merge.
 # Outputs JSON systemMessage — non-blocking feedback only.
 
 input=$(cat)
@@ -15,7 +15,7 @@ except Exception:
 
 if echo "$command" | grep -qE "gh pr merge"; then
   pr_num=$(echo "$command" | grep -oE '[0-9]+' | head -1)
-  echo "{\"continue\": true, \"systemMessage\": \"PR #${pr_num} merged — mark Linear issue Done via MCP or pnpm linear:close.\"}"
+  echo "{\"continue\": true, \"systemMessage\": \"PR #${pr_num} merged — run governed ops:lane-close for its work identity and verify merge-SHA proof, manifest completion and lease release. Optional tracker mirroring is non-blocking.\"}"
 fi
 
 exit 0

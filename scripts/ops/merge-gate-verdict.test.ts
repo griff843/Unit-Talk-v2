@@ -216,3 +216,12 @@ test('UTV2-1554: bounce limit only counts authorized CHANGES_REQUIRED verdicts',
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
 });
+
+for (const issue of ['WORK-2026091001', 'UTV2-1501', 'UNI-42']) {
+  test(`repository and legacy identity ${issue} retain exact-head PM approval checks`, () => {
+    const verdict = verdictRecord(approvedComment({ issue }));
+    assert.equal(verdict.parsed.issueId, issue);
+    assert.deepEqual(validateT1Verdicts([verdict], { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS }), []);
+    assert.ok(validateT1Verdicts([verdict], { prNumber: PR_NUMBER, headSha: OLD_HEAD_SHA, authorizedReviewers: REVIEWERS }).length > 0);
+  });
+}

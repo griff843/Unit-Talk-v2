@@ -50,10 +50,11 @@ jobs:
         if: steps.tier.outputs.required == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          ISSUE="$(echo "${{ github.event.pull_request.head.ref }}" | sed -nE 's/.*(utv2|UTV2)-([0-9]+).*/UTV2-\2/p')"
+          ISSUE="$(node -e 'const match = process.env.HEAD_REF.match(/(?:^|[/_-])((?:UTV2|UNI|WORK)-\d+)(?:$|[/_-])/i); process.stdout.write(match ? match[1].toUpperCase() : "");')"
           if [ -z "$ISSUE" ]; then
-            echo "Unable to infer UTV2 issue id from branch ${{ github.event.pull_request.head.ref }}"
+            echo "Unable to infer repository work identity from branch $HEAD_REF"
             exit 1
           fi
           pnpm ops:pr-review-packet -- \

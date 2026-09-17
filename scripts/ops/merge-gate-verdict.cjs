@@ -27,7 +27,7 @@ function parseVerdict(body) {
   const verdictMatch = lines[0].replace(/^\$/, '').match(/^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i);
   if (!verdictMatch) return null;
   if (lines[1] !== 'schema: pm-verdict/v1') return null;
-  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+)$/i);
+  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI|WORK)-\d+)$/i);
   if (!issueMatch) return null;
 
   const field = (name) => {

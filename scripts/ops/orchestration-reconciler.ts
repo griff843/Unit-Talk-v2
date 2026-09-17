@@ -8,6 +8,7 @@ import {
   emitJson,
   parseArgs,
   readAllManifests,
+  isTrackerIndependent,
   type LaneManifest,
 } from './shared.js';
 import { readAllLeases, type DispatchLease } from './lease-registry.js';
@@ -341,7 +342,7 @@ function evidence(
 }
 
 function issueIdFromBranch(branch: string): string | null {
-  const match = branch.match(/(?:^|\/)(utv2|uni)-(\d+)(?:-|$)/i);
+  const match = branch.match(/(?:^|\/)(utv2|uni|work)-(\d+)(?:-|$)/i);
   if (!match) {
     return null;
   }
@@ -1653,11 +1654,30 @@ interface LinearIssueQueryData {
   } | null;
 }
 
+/** Scope tracker queries before fetching: a WORK recovery must not query unrelated legacy lanes. */
+export function selectTrackerIssueIds(
+  issueIds: string[],
+  manifests: LaneManifest[],
+  pullRequests: PullRequestSnapshot[],
+  requestedIssueId?: string,
+): string[] {
+  const byIssue = mapByIssueId(manifests);
+  for (const pr of pullRequests) {
+    if (pr.state === 'open' && pr.head_manifest) {
+      byIssue.set(normalizeIssueId(pr.head_manifest.issue_id), pr.head_manifest);
+    }
+  }
+  return [...new Set(requestedIssueId ? [requestedIssueId] : issueIds)]
+    .filter((id) => !isTrackerIndependent(byIssue.get(normalizeIssueId(id)) ?? { issue_id: id }))
+    .sort((left, right) => left.localeCompare(right));
+}
+
 async function fetchLinearIssues(
   issueIds: string[],
   infraErrors: string[],
   linearFailures: LinearLookupFailure[],
 ): Promise<LinearIssueSnapshot[]> {
+  if (issueIds.length === 0) return [];
   const token = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
   if (!token) {
     infraErrors.push('Linear query skipped: LINEAR_API_TOKEN or LINEAR_API_KEY is required');
@@ -1782,7 +1802,7 @@ function parseIssueFilter(parsed: ReturnType<typeof parseArgs>): string | undefi
     return undefined;
   }
   const normalized = normalizeIssueId(issueId);
-  if (!/^(UTV2|UNI)-\d+$/.test(normalized)) {
+  if (!/^(UTV2|UNI|WORK)-\d+$/.test(normalized)) {
     throw new Error(`Invalid --issue value: ${issueId}`);
   }
   return normalized;
@@ -1819,15 +1839,13 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
   });
   // The "is this issue in the current working set" signal is deliberately no
   // longer collected here: Linear failure classification must not depend on it.
-  const linearIssueIds = new Set(issueIds);
-  if (issueId) {
-    linearIssueIds.add(issueId);
-  }
-  const linearIssues = await fetchLinearIssues(
-    [...linearIssueIds].sort((left, right) => left.localeCompare(right)),
+  const linearIssueIds = selectTrackerIssueIds(issueIds, manifests, pullRequests, issueId);
+  // Tracker diagnostics are explicitly requested and never participate in default execution.
+  const linearIssues = parsed.bools.has('check-linear') ? await fetchLinearIssues(
+    linearIssueIds,
     infraErrors,
     linearFailures,
-  );
+  ) : [];
 
   const report = buildOrchestrationReconcilerReport({
     linearIssues,

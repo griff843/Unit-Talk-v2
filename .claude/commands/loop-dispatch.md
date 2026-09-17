@@ -11,6 +11,8 @@ Continuous dispatch loop. Invokes `/dispatch-board` repeatedly until the board i
 
 **Arguments:** `$ARGUMENTS`
 
+Before the safety sequence, prepare `<local-candidates.json>` from the explicitly scoped local contracts/current PRs using the existing CandidateLane shape in `scripts/ops/lane-maximizer.ts`. It is a temporary input, not a new queue. Always supply explicit JSON via `--from-stdin < local-candidates.json` (or inline `--candidates` JSON); bare maximizer can consult a configured tracker. Admission still independently enforces scope, tier floors and global capacity.
+
 ---
 
 ## Ownership boundary
@@ -25,19 +27,15 @@ Run the live governor and reconciliation checks before dispatching any issue. Ab
 
 ### Gate 0 — Lane substrate
 
-The gate sequence below (Gates 0–4) is canonical in `/dispatch` Phase 0 — keep the same gates in the same order there and here. One intentional difference: this loop runs `ops:substrate-guard --check-linear` where `/dispatch` and `/dispatch-board` run it bare, because the loop dispatches across repeated cycles and must catch Linear/manifest drift that accumulates between them. Keep the flag. `/dispatch` runs the substrate guard before it starts a lane; the loop must do the same before it starts a *board* of lanes. Run it first:
+The gate sequence below uses repository authority consistently with `/dispatch` and `/dispatch-board`. Run the local substrate guard first:
 
 ```bash
-pnpm ops:substrate-guard --check-linear
+pnpm ops:substrate-guard
 ```
 
-This validates the lease dir, merge-lock, active-lane worktree integrity, board hard-fail state, and (with `--check-linear`, when `LINEAR_API_TOKEN` is present) manifest↔Linear drift. On any `hard_fail`:
+It validates leases, merge mutex, worktrees and board hard-fail state. Any hard failure stops dispatch. Reconciliation uses manifests, leases, worktrees, branches, PRs and heartbeat; a configured Linear token never adds a tracker prerequisite. Optional tracker inspection must be explicitly requested and cannot substitute for local checks.
 
-```
-[loop-dispatch] HALTED — substrate unsafe: {top finding}. Run `pnpm ops:substrate-guard` for detail and resolve before /loop-dispatch.
-```
 
-If `--check-linear` reports `linear_check_skipped` (no token), do not treat the board as reconciled on the strength of substrate-guard alone — Gate 4 (`ops:orchestration-reconcile --current`) remains the Linear/manifest drift authority.
 
 ### Gate 1 — Merge risk
 
@@ -66,7 +64,7 @@ Use this report as the concurrency authority for active lanes by executor, avail
 ### Gate 3 — Lane maximizer
 
 ```bash
-pnpm ops:lane-maximizer
+pnpm ops:lane-maximizer --from-stdin < local-candidates.json
 ```
 
 Use this report as the dispatch recommendation authority. If it reports no safe dispatchable candidates, a hard fail, or a blocked wave plan:
@@ -137,10 +135,10 @@ A cycle **made progress** if any field is non-zero. Merges are one field among n
 1. Increment `cycle_count`.
 2. Re-run the live safety gates:
    ```bash
-   pnpm ops:substrate-guard --check-linear
+   pnpm ops:substrate-guard
    pnpm ops:merge-risk
    pnpm ops:execution-state
-   pnpm ops:lane-maximizer
+   pnpm ops:lane-maximizer --from-stdin < local-candidates.json
    pnpm ops:orchestration-reconcile --current --json
    ```
    Stop before new dispatch on any hard fail/block. If reconciliation does not pass, surface exactly one repair command from the first repair-plan action.
@@ -189,10 +187,10 @@ The gate pauses **only the gated lane** — it does not halt the loop — *unles
 After each cycle, run:
 
 ```bash
-pnpm ops:digest --json 2>/dev/null || source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json
+pnpm ops:brief
 ```
 
-Parse `dispatch_candidates`. If empty (all remaining issues are external-gated, blocked, or untiered):
+Refresh the explicitly scoped local candidates from contracts, manifests and current PRs. If none remain executable (all remaining work is external-gated, blocked, or lacks admitted risk):
 
 ```
 [loop-dispatch] Board clear — no remaining dispatchable issues.
@@ -246,7 +244,7 @@ Lane-level Done is mechanical and strong (`ops:truth-check` + `ops:lane-close`).
 Before the report, classify every issue in `touched_issues`. A lane may be reported **executing** only if **all** of these hold:
 
 ```
-Linear state ∈ {In Claude, In Codex}
+Repository manifest status ∈ {started, in_progress, in_review}
   AND lane manifest exists (docs/06_status/lanes/UTV2-###.json, non-done status)
   AND lease exists (.ops/leases/UTV2-###.json)
   AND worktree exists (git worktree list)
@@ -256,9 +254,9 @@ Linear state ∈ {In Claude, In Codex}
 
 If any element is missing, the lane is **not executing** — classify it precisely instead:
 
-- **staged** — substrate provisioned (branch/worktree/manifest) but no work product and Linear not `In *` (e.g. lane-start ran, then Linear reverted to `Ready`).
+- **staged** — substrate provisioned (branch/worktree/manifest) but no work product or fresh executor heartbeat.
 - **diagnosed** — analysis done, no branch/commit yet.
-- **drifted** — manifest, Linear, and GitHub disagree (merged-but-`In Claude`, manifest-`started` but Linear `Ready`, branch with no PR, etc.).
+- **drifted** — manifest, worktree, and GitHub disagree (merged-but-not-closed, manifest-`started` with no active executor, branch with no PR, etc.).
 
 Never report a staged/diagnosed/drifted lane as "executing." A drifted lane is a finding, not a running lane — surface it and let the next reconcile repair it. (`ops:execution-state` infers "active" from the manifest alone; this classification is stricter on purpose and is the loop's defense against the ghost-lane class.)
 
@@ -348,12 +346,12 @@ When invoked as `/loop-dispatch --dry-run`:
 
 ## Rules
 
-- **Substrate guard runs first.** `pnpm ops:substrate-guard --check-linear` gates Phase 0 and every cycle start, exactly as `/dispatch` runs it before a single lane. A `hard_fail` halts the loop.
+- **Substrate guard runs first.** `pnpm ops:substrate-guard` gates Phase 0 and every cycle start, exactly as `/dispatch` runs it before a single lane. A `hard_fail` halts the loop.
 - **Harvest Codex returns before new dispatch.** Each cycle runs `/dispatch-board --check-codex` before `/dispatch-board`, because Codex lanes close only on the `--check-codex` re-entry. Dispatching Codex without harvesting is the bug that makes a working board look stalled.
 - **Progress is a vector, not a merge count.** STALL only when the whole progress vector is zero for two consecutive cycles. A cycle that harvested a Codex return, opened a PR, surfaced a PM gate, or reconciled drift made progress — never STALL it on `prs_merged = 0`.
 - **Never bypass a PM gate.** Surface T1 plan/merge gates and any PM-visible gate (per the `/dispatch-board` T2 risk-class matrix). A PM gate pauses **only the gated lane** unless it holds a singleton / file-scope / runtime / migration / data-canonical lock or the merge mutex; safe unrelated lanes keep moving.
 - **Loop-level Done is asserted, not assumed.** Before exit, every touched issue must land in exactly one terminal-or-running bucket (Done / awaiting-PM / blocked / external-gated / executing) and pass active-lane truth. `merged-but-not-closed` or unaccounted-for issues mean the loop is not Done — repair before reporting.
-- **Active-lane truth is strict.** Report a lane as *executing* only with Linear `In *` AND manifest AND lease AND worktree AND branch AND fresh heartbeat. Anything weaker is staged / diagnosed / drifted — a finding, not a running lane.
+- **Active-lane truth is strict.** Report a lane as *executing* only with manifest AND lease AND worktree AND branch AND fresh heartbeat. Anything weaker is staged / diagnosed / drifted — a finding, not a running lane.
 - **Hard limit: 5 cycles per invocation (default).** `--cycles N` overrides up to 10. This is a hard cap — no exceptions. Autonomous amplification of drift is worse than manual execution.
 - **Live ops scripts are authoritative.** `ops:substrate-guard`, `ops:merge-risk`, `ops:execution-state`, `ops:lane-maximizer`, and `ops:orchestration-reconcile --current --json` must pass before each cycle starts.
 - **Reconciliation gates bookend each cycle.** Start and end every cycle with `ops:orchestration-reconcile --current --json`; surface one repair command on drift.

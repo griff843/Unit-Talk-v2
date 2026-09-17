@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Pre-commit hook: warns when committing on a UTV2-NNN branch without a
-# close-intent marker in the message. Non-blocking — outputs systemMessage only.
+# Pre-commit hook: warns when a commit omits its repository work identity. Non-blocking — outputs systemMessage only.
 #
-# Close markers recognized (matches linear-auto-close.yml logic):
+# Historical tracker close markers remain optional:
 #   Closes UTV2-NNN
 #   Fixes UTV2-NNN
 #   Resolves UTV2-NNN
@@ -25,10 +24,10 @@ fi
 
 # Get current branch
 toplevel=$(git rev-parse --show-toplevel 2>/dev/null || echo ".")
-branch=$(git -C "$toplevel" rev-parse --abbrev-ref HEAD 2>/dev/null)
+branch=$(git -C "$toplevel" branch --show-current 2>/dev/null)
 
 # Detect UTV2 issue on branch (case-insensitive — branches use lowercase utv2-)
-issue=$(echo "$branch" | grep -ioE 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+issue=$(echo "$branch" | grep -ioE '(UTV2|UNI|WORK)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
 if [ -z "$issue" ]; then
   exit 0
 fi
@@ -44,14 +43,9 @@ if [ -z "$msg" ]; then
   exit 0
 fi
 
-# Check for a close-intent marker (case-insensitive verb, exact UTV2 prefix)
-if echo "$msg" | grep -qiE '(closes|fixes|resolves)[[:space:]]+UTV2-[0-9]+'; then
+# Repository identity is required; tracker-close syntax is optional.
+if echo "$msg" | grep -qiF "$issue"; then
   exit 0
 fi
-if echo "$msg" | grep -qE '^Linear-Close:[[:space:]]+UTV2-[0-9]+'; then
-  exit 0
-fi
-
-# Warn but never block
-echo "{\"systemMessage\": \"Reminder: commit on ${issue} branch has no close marker. Add 'Closes ${issue}' to the final commit to trigger Linear auto-close on merge.\"}"
+echo "{\"systemMessage\": \"Reminder: reference repository work ${issue} in the commit message. Tracker close markers are optional; completion uses governed lane closeout.\"}"
 exit 0

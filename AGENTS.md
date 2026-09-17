@@ -4,6 +4,16 @@ This file is read by Codex before every task. Follow every rule here exactly.
 
 ---
 
+## Outcome-first execution
+
+Deliver the authorized product outcome at its intended scope. Use the membership product contract for the destination and the active work contract for acceptance criteria. Give delegated work its purpose, relevant sources, observable result, and material boundaries; leave routine implementation choices to the executor.
+
+For an assessment request, provide findings without unsolicited changes. During authorized execution, incorporate questions and corrections without abandoning the active task. Consult existing decisions before asking Griff; ask only when a material ambiguity or action outside existing authority remains. Existing authorization does not replace a required exact-head approval artifact or independent review.
+
+Use relevant context and proportionate verification. Reuse evidence only when its source, environment, head binding, and applicable freshness rules remain valid. Avoid additional checks solely because a session changed. Required gates still apply. Report outcomes, material evidence, limitations, and a specific decision if needed; keep routine progress brief.
+
+Complete bounded tasks when their acceptance criteria and required closeout are satisfied. Continue broader mission work only when that broader execution is authorized. Do not turn a small task into an unsolicited board audit or cleanup project.
+
 ## Mission Context
 
 Before executing work, read:
@@ -44,9 +54,11 @@ Claude owns `plan.md`; Codex may use it as context but does not change orchestra
 - Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
 - Legacy repo: `C:\dev\unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
 
-**Execution model:** Parallel lanes run in dedicated git worktrees. The main checkout (`C:\Dev\Unit-Talk-v2-main` / `/home/griff843/code/Unit-Talk-v2`) is the control and merge checkout only. `/dispatch` and `/dispatch-board` must start each executable lane through `pnpm ops:lane-start`, which creates or resumes the lane worktree, records `worktree_path`, reserves the file-scope lock, and verifies the lane cwd. Do not execute parallel lane work by branch-switching the main checkout. Merge, branch-refresh, Linear Done, and lane closeout remain serialized through the merge mutex.
+**Execution model:** Parallel lanes run in dedicated git worktrees. The main checkout (`C:\Dev\Unit-Talk-v2-main` / `/home/griff843/code/Unit-Talk-v2`) is the control and merge checkout only. `/dispatch` and `/dispatch-board` must start each executable lane through `pnpm ops:lane-start`, which creates or resumes the lane worktree, records `worktree_path`, reserves the file-scope lock, and verifies the lane cwd. Do not execute parallel lane work by branch-switching the main checkout. Merge, branch-refresh, optional tracker mirroring, and lane closeout remain serialized through the merge mutex.
 
-**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Use Linear MCP (`linear`) for Linear issue lookup/update workflows when available; fall back to the repo CLI commands only when MCP is unavailable.
+**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Linear is an optional mirror, used only for explicitly requested tracker work. A configured token never makes tracker access a prerequisite.
+
+**Work authority:** Recover mission intent/spec/plan, local `.ops/work/<ID>.md` contracts, active manifests/worktrees/leases, current PRs and runtime evidence. Use repository-owned `WORK-<number>` identity for new local work; existing `UTV2-<number>` and `UNI-<number>` identities remain valid. Missing scope requires a local contract repair, not a tracker ticket. Repository admission determines tier with mechanical risk floors; labels alone cannot lower risk. Preserve lane isolation, independent review, exact-head proof and reserved merge approvals. Optional tracker failures cannot block otherwise verified repository work.
 
 ---
 
@@ -134,7 +146,7 @@ All services use a **repository abstraction** with two implementations:
 
 Services receive a `RepositoryBundle` (or individual repos) and must work with either implementation. Never call Supabase directly from a service — always go through a repository interface.
 
-When writing tests: use `InMemory*` repos. When writing DB implementations: implement the same interface as the InMemory version.
+Use `InMemory*` repositories for unit and in-process integration tests. Use the actual database implementations in the authorized staging environment when verifying persistence and repository integration. Label the boundary exercised; neither test class substitutes for browser or deployed acceptance. Both implementations must satisfy the same repository interface.
 
 ---
 
@@ -249,12 +261,12 @@ These paths require PM plan approval + PM merge approval (Delegation Policy Tier
 
 ---
 
-## Live Discord Targets
+## Configured Discord Targets
 
 | Target | Channel ID | Status |
 |---|---|---|
-| `discord:canary` | `1296531122234327100` | Live |
-| `discord:best-bets` | `1288613037539852329` | Live |
+| `discord:canary` | `1296531122234327100` | Configured; activation requires current containment authority |
+| `discord:best-bets` | `1288613037539852329` | Configured; activation requires current containment authority |
 | `discord:trader-insights` | `1356613995175481405` | **Blocked** |
 | `discord:exclusive-insights` | `1288613114815840466` | **Blocked** |
 | `discord:game-threads` | — | **Blocked** |
@@ -287,7 +299,7 @@ This runs: env:check + lint + type-check + build + test. All must pass. If any f
 pnpm test:db
 ```
 T1 issues ALWAYS require `pnpm test:db` regardless of whether they explicitly touch the DB layer.
-T2/T3 issues: run `pnpm test:db` only if changed files include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts`. When in doubt, run it — it's non-destructive.
+T2/T3 issues: run `pnpm test:db` only if changed files include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts`. Use the approved staging target and credential path: these suites may write fixtures and must not be described as non-destructive or directed at production.
 
 ---
 
@@ -303,12 +315,12 @@ Before opening any PR, complete all 7 steps in order:
 3. **Scope check** — every file you changed must be within the issue's acceptance criteria. Revert any scope bleed.
 4. **No new `any` casts** — unless the existing code already uses them and the issue does not require typed fixes.
 5. **Tests** — new runtime behavior requires new `node:test` tests. No test count decrease.
-6. **Commit message** — must reference the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
+6. **Commit message** — must reference the repository work ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
 7. **Tier label** — after opening the PR with `gh pr create`, immediately run:
    ```bash
    gh pr edit <PR-URL-or-number> --add-label "tier:T2"
    ```
-   Replace `T2` with the actual tier from the Linear issue labels. Never skip this step — tier-label-check CI will block the merge gate.
+   Replace `T2` with the authoritative admitted manifest tier (subject to mechanical risk floors). Never skip this step — tier-label-check CI will block the merge gate.
 
 ### Forbidden actions (never do these in a PR)
 
@@ -361,4 +373,4 @@ State whether this PR must merge before or after any other currently open PR.
 - No new `any` casts unless the existing code already uses them and the issue doesn't require typed fixes
 - No new packages added without clear necessity
 - No docs files modified unless the AC explicitly requires it
-- Commit message references the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`)
+- Commit message references the repository work ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`)

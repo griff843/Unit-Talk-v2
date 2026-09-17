@@ -842,3 +842,95 @@ test('BMW-11: the merge wrapper allowlist admits no application or runtime path'
     }
   }
 });
+
+
+test('protected merge lookup resolves WORK identity and keeps boundaries', async () => {
+  const { issueIdFromHeadRef } = await import('./pre-merge-authorization.js');
+  assert.equal(issueIdFromHeadRef('codex/work-903-product'), 'WORK-903');
+  assert.equal(issueIdFromHeadRef('codex/work-903x'), null);
+  assert.equal(issueIdFromHeadRef('codex/../WORK-903'), null);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Repo-minted `WORK-###` boundary in the sanctioned merge path. Lane admission
+// refuses a NEW WORK lane while the installed P0 consumer auto-passes WORK PRs,
+// but a manifest that already exists on a branch never passes admission again.
+// The wrapper therefore holds the same line. The predicate is injected here;
+// the real one reads `origin/main` and is tested in shared.test.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function workStateDeps(headRef: string): Pick<PreMergeAuthorizationDeps, 'fetchPullRequestState' | 'fetchLaneManifestAtHead'> {
+  return {
+    fetchPullRequestState: async () => ({ headSha: CURRENT_HEAD_SHA, labels: ['tier:T3'], headRef }),
+    fetchLaneManifestAtHead: async () => ({ tier: 'T3' }),
+  };
+}
+
+test('WORK boundary: a repo-minted head ref is refused while the installed P0 consumer cannot evaluate it, even with every required check green', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...workStateDeps('codex/work-2026091001-tracker-independence'),
+    fetchComments: async () => [],
+    evaluateRepoMintedP0Coverage: () => ({
+      covered: false,
+      reason: '.github/workflows/p0-protocol.yml at origin/main (1399f83ed) does not execute scripts/ops/tracker-independence/p0-workflow.cjs',
+      source: { ref: 'origin/main', sha: '1399f83ed28ec633b5f806555b21d4cc981888ba' },
+    }),
+  });
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.resolved, 'T3');
+  assert.strictEqual(receipt.repoMintedP0?.issueId, 'WORK-2026091001');
+  assert.strictEqual(receipt.repoMintedP0?.covered, false);
+  assert.match(receipt.reason ?? '', /repo-minted identity WORK-2026091001 cannot merge through the wrapper/u);
+  assert.match(receipt.reason ?? '', /does not execute/u);
+});
+
+test('WORK boundary: a covered trusted base releases only that refusal, and the receipt records where it was read', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...workStateDeps('codex/work-2026091001-tracker-independence'),
+    fetchComments: async () => [],
+    evaluateRepoMintedP0Coverage: () => ({
+      covered: true,
+      reason: 'delegates from job "P0 Protocol", step "Classify and enforce P0"',
+      source: { ref: 'origin/main', sha: 'a'.repeat(40) },
+    }),
+  });
+  assert.strictEqual(receipt.authorized, true);
+  assert.strictEqual(receipt.repoMintedP0?.covered, true);
+  assert.strictEqual(receipt.repoMintedP0?.source.ref, 'origin/main');
+  assert.strictEqual(receipt.reason, undefined);
+
+  // Coverage never overrides a failing required check.
+  const redCheck = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, [checkRun('Merge Gate', 'failure', 1), checkRun('Executor Result Validation', 'success', 2)]),
+    ...workStateDeps('codex/work-2026091001-tracker-independence'),
+    fetchComments: async () => [],
+    evaluateRepoMintedP0Coverage: () => ({ covered: true, reason: 'ok', source: { ref: 'origin/main', sha: 'a'.repeat(40) } }),
+  });
+  assert.strictEqual(redCheck.authorized, false);
+});
+
+test('WORK boundary: a predicate that throws is a refusal, not an assumption of coverage', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...workStateDeps('codex/work-2026091001-tracker-independence'),
+    fetchComments: async () => [],
+    evaluateRepoMintedP0Coverage: () => { throw new Error('git unavailable'); },
+  });
+  assert.strictEqual(receipt.authorized, false);
+  assert.match(receipt.reason ?? '', /could not be evaluated \(git unavailable\); refusing/u);
+});
+
+test('WORK boundary: a tracker-keyed head ref never consults the predicate and carries no repoMintedP0 block', async () => {
+  let consulted = false;
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...workStateDeps('codex/utv2-1661-tier-aware-merge-authorization'),
+    fetchComments: async () => [],
+    evaluateRepoMintedP0Coverage: () => { consulted = true; return { covered: false, reason: 'must not be read', source: { ref: 'origin/main', sha: null } }; },
+  });
+  assert.strictEqual(consulted, false);
+  assert.strictEqual(receipt.repoMintedP0, undefined);
+  assert.strictEqual(receipt.authorized, true);
+});

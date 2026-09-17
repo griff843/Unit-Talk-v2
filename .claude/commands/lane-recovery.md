@@ -1,12 +1,14 @@
 # /lane-recovery
 
-Triage and repair a lane whose state has already broken. `/lane-management` is the forward path — start, progress, close. This skill is the reverse path: a lane is stuck, a gate is refusing, or manifest / Linear / GitHub disagree, and you need to know which repair to run.
+Triage and repair a lane whose state has already broken. `/lane-management` is the forward path — start, progress, close. This skill is the reverse path: a lane is stuck, a gate is refusing, or manifest / worktree / GitHub disagree, and you need to know which repair to run.
 
 **Never invent a repair.** Every fix below is an existing governed script. If the symptom is not in this tree, stop and report it — do not hand-edit a manifest, delete a lease, or force a status.
 
 ---
 
 ## Rule 0 — identify the symptom before touching anything
+
+Start with the actual refusal and the affected lane. Select relevant diagnostics below; do not run a full orchestration sweep for every local failure unless the command policy requires it or evidence suggests a shared problem. Check cheap prerequisites before expensive retries. Use governed recovery within existing authority, and stop retrying an unchanged failure whose prerequisite remains unresolved. A gate blocks its dependent work, not unrelated authorized work.
 
 ```bash
 pnpm ops:substrate-guard            # fail-closed: is the substrate even safe?
@@ -64,7 +66,7 @@ Usually means *ambiguous*, not absent — multiple PRs opened off one lane branc
 gh workflow run post-merge-lane-close.yml -f pr=<number>
 ```
 
-Then release the local lease (S1) and re-run Linear auto-close by hand if the issue is still in an executing state.
+Then run governed lane closeout and verify lease release. Optional tracker mirroring failures do not invalidate repository completion.
 
 ### S5. Manifest missing `pr_url` or `commit_sha`
 

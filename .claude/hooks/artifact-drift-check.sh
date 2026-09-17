@@ -26,11 +26,11 @@ if echo "$fp" | grep -qE '/src/.*\.(js|d\.ts|js\.map)$'; then
   exit 2
 fi
 
-# --- Check 2: PROGRAM_STATUS.md edited — remind to sync Linear ---
+# --- Check 2: PROGRAM_STATUS.md edited — remind to verify repository truth ---
 if echo "$fp" | grep -q "PROGRAM_STATUS.md"; then
   echo "REMINDER: PROGRAM_STATUS.md was updated." >&2
-  echo "Verify that Linear issue statuses reflect the current program state." >&2
-  echo "  pnpm linear:issues   — check queue state" >&2
+  echo "Verify claims against mission, lane manifests, current PRs and exact-SHA proof." >&2
+  echo "  pnpm ops:execution-state   — inspect repository execution state" >&2
   exit 2
 fi
 

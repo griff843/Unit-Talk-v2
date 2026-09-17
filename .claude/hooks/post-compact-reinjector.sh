@@ -46,7 +46,8 @@ try {
     .filter(m => m && ACTIVE.has(m.status));
   const claudeUsed = active.filter(m => m.executor === 'claude').length;
   const codexUsed = active.filter(m => ['codex-cli','codex-cloud'].includes(m.executor)).length;
-  process.stdout.write('claude:' + claudeUsed + '/2 codex:' + codexUsed + '/4');
+  const config = JSON.parse(fs.readFileSync(path.join('$ROOT', 'docs/governance/CONCURRENCY_CONFIG.json'), 'utf8'));
+  process.stdout.write('claude:' + claudeUsed + '/' + config.executors.claude + ' codex:' + codexUsed + '/' + config.executors.codex);
 } catch(e) { process.stdout.write('slots:error'); }
 " 2>/dev/null || echo "slots:unavailable")
 
@@ -78,7 +79,7 @@ try {
 
 GHOST_PART=""
 [ -n "$GHOST_WARNING" ] && GHOST_PART=" | $GHOST_WARNING"
-MSG="[post-compact] Context compacted. Branch: $BRANCH | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | Active lanes: $LANE_SUMMARY | Full state: docs/06_status/SYSTEM_STATE.md"
+MSG="[post-compact] Context compacted. Branch: $BRANCH | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | Active lanes: $LANE_SUMMARY | Recover mission intent/spec/plan and .ops/work/<ID>.md, current PRs, leases/worktrees and runtime evidence. No Linear required. | Full state: .out/ops/session-state/SYSTEM_STATE.md"
 
 python3 -c "
 import json, sys

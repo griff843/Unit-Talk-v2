@@ -6,7 +6,7 @@
 **Manifest location:** `docs/06_status/lanes/<UTV2-###>.json`
 **Schema file (target):** `docs/05_operations/schemas/lane_manifest_v1.schema.json`
 
-The lane manifest is the **sole authoritative source for active lane state** in Unit Talk V2. Linear and GitHub track intent and shipped truth; the manifest tracks what is *actively happening right now*. A lane without a manifest does not exist.
+The lane manifest is the **sole authoritative source for active lane state** in Unit Talk V2. Local work contracts and GitHub track intent and shipped truth; the manifest tracks what is *actively happening right now*. A lane without a manifest does not exist.
 
 ---
 
@@ -22,7 +22,7 @@ Encode lane execution state in a machine-readable artifact that:
 
 The manifest is authoritative for: **what lane exists, where it is working, what it is touching, what it promises to prove, and its current lifecycle state.**
 
-The manifest is **not** authoritative for: shipped code (use `main`), CI outcomes on merge (use GitHub), issue intent or acceptance criteria (use Linear), or completion (use truth-check output).
+The manifest is **not** authoritative for: shipped code (use `main`), CI outcomes on merge (use GitHub), issue intent or acceptance criteria (use mission and the local work contract), or completion (use truth-check output).
 
 ---
 
@@ -103,7 +103,7 @@ The manifest is a single JSON object. Unknown fields are preserved but not acted
 | `issue_id` | string | yes | no | must match filename. Repo-owned work identity: `UTV2-###` **or** `WORK-###` (see §17) |
 | `tracker_ref` | string\|null | no | no | optional tracker key (`UTV2-###` / `UNI-###`); explicit `null` declares the lane has no tracker issue; absent means unstated (see §17) |
 | `lane_type` | enum | yes | no | determines merge authority |
-| `tier` | enum | yes | no | mirrors Linear label; snapshot at start |
+| `tier` | enum | yes | no | authoritative admitted risk; checked against mechanical floors |
 | `worktree_path` | string | yes | no | absolute path |
 | `branch` | string | yes | no | must exist at start |
 | `base_branch` | string | yes | no | usually `main` |
@@ -173,17 +173,18 @@ obligation.
 | Source | Leads On | Follows From |
 |---|---|---|
 | **Manifest** | `status`, `heartbeat_at`, `file_scope_lock`, `expected_proof_paths`, `truth_check_history` | — |
-| **Linear** | issue intent, acceptance criteria, tier label, ownership | manifest writes Linear on start and close |
+| **Local work contract** | intent, acceptance criteria, scope, dependencies and ownership | read during admission |
+| **Linear** | optional mirror only | best-effort only; never required |
 | **GitHub** | `commit_sha`, `pr_url`, `files_changed`, CI outcomes | manifest pulls from GitHub on merge and close |
 
 Reconciliation rules:
 
-- If Linear says Done but manifest is not closed → manifest wins, Linear is corrected by `ops:reconcile`.
+- If an optional tracker says Done but the manifest is not closed, repository truth wins; report optional mirror drift without blocking local work.
 - If GitHub says merged but manifest is `in_review` → reconcile transitions manifest to `merged`.
-- If manifest is `done` but Linear is not → reconcile transitions Linear to Done (this path is only reached via `ops:lane-close`, so it is normally impossible).
-- If manifest does not exist but Linear is In Progress → Linear is stale; reconcile transitions Linear to Ready and notifies PM.
+- If the manifest is `done` but an optional tracker is not, repository completion stands; mirroring is best-effort.
+- A tracker In Progress state without an admitted manifest is not an executing lane; inspect repository work rather than inventing a lane.
 
-**The manifest is never patched from Linear.** Linear is patched from the manifest. This is the enforcement of §1 authority.
+**The manifest is never patched from Linear.** Optional mirrors may be updated from repository truth. This is the enforcement of §1 authority.
 
 ---
 
@@ -263,7 +264,7 @@ Detection:
 - Stranded: `now - heartbeat_at` > 24h → transition to `blocked`, append `blocked_by: ["stranded"]`, append note to `truth_check_history` as `{verdict: "fail", failures: ["stranded"], runner: "ops:reconcile"}`.
 - Orphaned: branch not present locally or on origin → flag `orphaned: true`, require `ops:lane:resume --force-orphan` or `ops:lane-close --abandon`.
 
-Stranded detection never merges code, never modifies branches, and never touches Linear outside of marking the issue Blocked with a reason.
+Stranded detection never merges code, never modifies branches, and does not require tracker mutations.
 
 ---
 
@@ -297,7 +298,7 @@ No prose enforces these. Scripts enforce these. Prose only references the script
 
 - Shipped code (→ `main`)
 - CI results on merge (→ GitHub)
-- Issue intent, acceptance criteria, tier definition (→ Linear + `EXECUTION_TRUTH_MODEL.md`)
+- Issue intent, acceptance criteria, tier definition (→ local work contract + `EXECUTION_TRUTH_MODEL.md`)
 - Completion (→ `ops:truth-check` output, which is then recorded *into* the manifest)
 - Proof content validity (→ `evidence:validate` + `ops:truth-check`)
 - Code review outcomes (→ GitHub PR review)
@@ -317,9 +318,9 @@ The manifest points to these sources; it does not replace them.
 
 ## 12. Non-Goals
 
-- Manifest does not store narrative progress notes (use Linear comments).
+- Manifest does not store narrative progress notes (use the local work/PR evidence path).
 - Manifest does not store test output (use proof files).
-- Manifest does not replace Linear or GitHub — it supplements them at a higher rank for *active* state only.
+- Manifest does not replace GitHub shipped truth or the local work contract; it owns active lane state.
 - Manifest does not enforce policy by itself; scripts and CI do, using the manifest as input.
 
 ---
@@ -442,18 +443,17 @@ three-valued and the distinction is load-bearing:
 | absent | unstated — `resolveTrackerRef()` falls back to `issue_id` when that is itself a tracker key |
 
 **Absent is never read as `null`.** Every manifest written before this field existed is
-absent, and treating that silence as an opt-out would silently skip closeout checks the
-lane never opted out of. `resolveTrackerRef()` (`scripts/ops/shared.ts`) is the single
+absent. Preserve its legacy mirror reference without making it an execution requirement. This compatibility lookup does not authorize a network request. `resolveTrackerRef()` (`scripts/ops/shared.ts`) is the single
 resolver; nothing reads the field directly.
 
 `WORK-###` is deliberately **not** a valid `tracker_ref` — a repo-minted identity is not
 a tracker key, and admitting it would let the two namespaces silently merge.
 
-### Known bound — a `WORK-###` lane is not yet mergeable
+### Repository identity through protected merge
 
-`merge-gate.yml`, `p0-protocol.yml` and `executor-result-validator.yml` still resolve a
-lane by `UTV2-###`. All three are **reserved surfaces** (merge authority, `intent.md`
-reserved decision 7) and are not changed here. A `WORK-###` lane is therefore usable for
-discovery, delegation, verification and closeout, and is **not yet mergeable**. Closing
-that gap is a PM decision on the merge gate, not an ordinary lane.
-
+`merge-gate.yml`, `p0-protocol.yml` and `executor-result-validator.yml` resolve
+repository WORK identity alongside legacy UTV2/UNI identity. This cutover changes
+identity and classification sources, not merge authority: trusted evaluators,
+mechanical risk floors, independent review, exact-head proof, required checks and
+reserved human approvals remain mandatory. A missing identity or authoritative
+manifest remains a refusal. Existing canonical branches retain their identity and governed readmission path; no tracker ticket or administrative restart is required. Identity-less historical branches still require a supported explicit admission binding; title edits alone do not satisfy branch identity checks.
