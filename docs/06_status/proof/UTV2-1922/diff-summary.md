@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1922-deploy-promotion-transaction
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1591
 Head SHA: 3e20a5ffa77f8b1215e029fab01d59dd787617b7
-Merge SHA: N/A
+Merge SHA: 3c168746932c4646ee4e5df6b6cda655d658b6e8
 Diff base: 37062b2b26d018c84009de88a10ce5c65c0edc39
 Diff target: 3e20a5ffa77f8b1215e029fab01d59dd787617b7
 
@@ -45,4 +45,4 @@ M	scripts/ci/nextjs-deploy-wiring.test.ts
 
 ## SHA Binding
 Head SHA: 3e20a5ffa77f8b1215e029fab01d59dd787617b7
-Merge SHA: N/A
+Merge SHA: 3c168746932c4646ee4e5df6b6cda655d658b6e8

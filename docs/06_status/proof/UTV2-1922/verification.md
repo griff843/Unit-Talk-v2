@@ -1,6 +1,6 @@
 # PROOF: UTV2-1922
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3c168746932c4646ee4e5df6b6cda655d658b6e8
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -122,7 +122,7 @@ positive control in which the same workflow succeeds because the configuration r
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3c168746932c4646ee4e5df6b6cda655d658b6e8
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1591
 Approved PR head: pending merge
 Execution SHA: 3e20a5ffa77f8b1215e029fab01d59dd787617b7

@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1922-deploy-promotion-transaction",
   "branch": "claude/utv2-1922-deploy-promotion-transaction",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "3c168746932c4646ee4e5df6b6cda655d658b6e8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1591",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1922/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-16T17:16:38.539Z",
-  "heartbeat_at": "2026-09-16T17:31:37.215Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-17T00:44:10.180Z",
+  "closed_at": "2026-09-17T00:44:10.180Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1922-deploy-promotion-transaction.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-17T00:44:07.634Z",
+      "verdict": "pass",
+      "merge_sha": "3c168746932c4646ee4e5df6b6cda655d658b6e8",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
