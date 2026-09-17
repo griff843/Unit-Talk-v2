@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { AppEnv } from '@unit-talk/config';
+import { RuntimeConfigError, type AppEnv } from '@unit-talk/config';
 import type {
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
@@ -1215,6 +1215,48 @@ test('createWorkerRuntimeDependencies fails closed in production when enabled ta
         }),
       }),
     /trader-insights requires discord:trader-insights/,
+  );
+});
+
+test('createWorkerRuntimeDependencies starts a human delivery target with no shared channel mapping', () => {
+  // UTV2-1923 regression. `deploy.yml` refuses to deploy when
+  // `UNIT_TALK_DISCORD_TARGET_MAP` carries a `discord:official-picks` entry,
+  // because official picks route per capper from the pin on the outbox row.
+  // `assertDiscordTargetMapCoversTargets` used to refuse the ABSENCE of that
+  // same entry, so no value of the secret satisfied both guards and the worker
+  // crash-looped on startup in human-capper mode. The human target must start
+  // with the mapping absent.
+  const runtime = createWorkerRuntimeDependencies({
+    environment: makeProductionWorkerEnvironment({
+      UNIT_TALK_ENABLED_TARGETS: 'official-picks',
+      UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:official-picks',
+      UNIT_TALK_DISCORD_TARGET_MAP: JSON.stringify({}),
+    }),
+  });
+
+  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, ['discord:official-picks']);
+});
+
+test('createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping', () => {
+  // The inversion: the exemption above must be scoped to human delivery
+  // targets only. A governed non-human target with no mapping and no literal
+  // channel id has no way to resolve a destination, so it must still fail
+  // closed. If this passes, the exemption has been widened into a hole.
+  assert.throws(
+    () =>
+      createWorkerRuntimeDependencies({
+        environment: makeProductionWorkerEnvironment({
+          UNIT_TALK_ENABLED_TARGETS: 'best-bets',
+          UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:best-bets',
+          UNIT_TALK_DISCORD_TARGET_MAP: JSON.stringify({}),
+        }),
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof RuntimeConfigError);
+      assert.equal(error.code, 'RUNTIME_REQUIRED_ENV_MISSING');
+      assert.match(error.message, /discord:best-bets/);
+      return true;
+    },
   );
 });
 

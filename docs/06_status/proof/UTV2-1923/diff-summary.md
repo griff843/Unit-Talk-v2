@@ -1,90 +1,74 @@
 # UTV2-1923 Diff Summary
 
-Generated at: 2026-09-17T18:45:00.000Z
+Generated at: 2026-09-17T23:22:46.000Z
 Issue: UTV2-1923
 Tier: T1
 Lane type: runtime
-Branch: claude/utv2-1923-human-capper-official-picks-delivery
-PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1592
-Head SHA: 7bba38a2cd5f6582c52facb1e673468678661f22
-Merge SHA: a26894731e68ec65de4537a7642931c74d6ccd02
-Diff base: 35880d66c3911fd34d5d581191c765368f4eb481
-Diff target: 7bba38a2cd5f6582c52facb1e673468678661f22
+Branch: claude/utv2-1923-worker-human-target-map-exemption
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1599
+Head SHA: 5194341b7576eadf97776b04d12190559487bb2c
+Merge SHA: pending merge
+Diff base: 616994604292345b9e44cfd0c91339fcbe9bcdef
+Diff target: 5194341b7576eadf97776b04d12190559487bb2c
 
 ## Git Diff Stat
 ```
- .github/workflows/deploy.yml                       |  149 ++
- .ops/sync/UTV2-1923.yml                            |  274 ++++
- apps/api/src/capper-delivery-authorization.test.ts |  194 +++
- apps/api/src/capper-delivery-authorization.ts      |  307 ++++
- apps/api/src/controllers/requeue-controller.ts     |   23 +-
- apps/api/src/controllers/review-pick-controller.ts |   95 +-
- apps/api/src/controllers/settle-pick-controller.ts |   67 +-
- apps/api/src/controllers/submit-pick-controller.ts |  172 ++-
- apps/api/src/distribution-service.ts               |  190 ++-
- apps/api/src/grading-service.ts                    |   26 +-
- apps/api/src/handlers/submit-pick.ts               |   46 +-
- apps/api/src/recap-service.ts                      |   65 +-
- apps/api/src/routes/kill-switch.ts                 |   15 +-
- apps/api/src/run-audit-service.ts                  |  447 +++++-
- ...1-proof-utv2-1923-human-capper-delivery.test.ts | 1539 ++++++++++++++++++++
- apps/worker/src/delivery-adapters.test.ts          |   96 ++
- apps/worker/src/delivery-adapters.ts               |   40 +-
- apps/worker/src/runner.ts                          |   47 +-
- apps/worker/src/worker-runtime.test.ts             |  114 ++
- docs/06_status/lanes/UTV2-1923.json                |   70 +
- docs/06_status/proof/UTV2-1923/.gitkeep            |    0
- docs/06_status/proof/UTV2-1923/diff-summary.md     |   82 ++
- docs/06_status/proof/UTV2-1923/evidence.json       |  219 +++
- docs/06_status/proof/UTV2-1923/runtime-health.json |  133 ++
- docs/06_status/proof/UTV2-1923/verification.md     |  160 ++
- package.json                                       |    4 +-
- packages/contracts/src/promotion.ts                |  111 +-
- packages/contracts/src/smart-form.ts               |  266 ++++
- packages/db/src/repositories.ts                    |   23 +
- packages/db/src/runtime-repositories.ts            |   50 +
- scripts/ci/deploy-parked-mode.test.ts              |  145 ++
- 31 files changed, 5094 insertions(+), 75 deletions(-)
+ apps/worker/src/runtime.ts                         |  27 +-
+ apps/worker/src/worker-runtime.test.ts             |  44 +++-
+ docs/06_status/lanes/UTV2-1923.json                |  61 +----
+ docs/06_status/proof/UTV2-1923/evidence.json       | 279 ++++++++-------------
+ docs/06_status/proof/UTV2-1923/runtime-health.json | 100 ++++----
+ docs/06_status/proof/UTV2-1923/verification.md     | 228 ++++++-----------
+ packages/config/src/env.test.ts                    | 203 +++++++++++++++
+ packages/config/src/env.ts                         |  77 ++++--
+ packages/db/src/client.ts                          |  11 +-
+ 9 files changed, 574 insertions(+), 456 deletions(-)
 ```
 
-## Git Name Status
-```
-M	.github/workflows/deploy.yml
-A	.ops/sync/UTV2-1923.yml
-A	apps/api/src/capper-delivery-authorization.test.ts
-A	apps/api/src/capper-delivery-authorization.ts
-M	apps/api/src/controllers/requeue-controller.ts
-M	apps/api/src/controllers/review-pick-controller.ts
-M	apps/api/src/controllers/settle-pick-controller.ts
-M	apps/api/src/controllers/submit-pick-controller.ts
-M	apps/api/src/distribution-service.ts
-M	apps/api/src/grading-service.ts
-M	apps/api/src/handlers/submit-pick.ts
-M	apps/api/src/recap-service.ts
-M	apps/api/src/routes/kill-switch.ts
-M	apps/api/src/run-audit-service.ts
-A	apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
-M	apps/worker/src/delivery-adapters.test.ts
-M	apps/worker/src/delivery-adapters.ts
-M	apps/worker/src/runner.ts
-M	apps/worker/src/worker-runtime.test.ts
-A	docs/06_status/lanes/UTV2-1923.json
-A	docs/06_status/proof/UTV2-1923/.gitkeep
-A	docs/06_status/proof/UTV2-1923/diff-summary.md
-A	docs/06_status/proof/UTV2-1923/evidence.json
-A	docs/06_status/proof/UTV2-1923/runtime-health.json
-A	docs/06_status/proof/UTV2-1923/verification.md
-M	package.json
-M	packages/contracts/src/promotion.ts
-M	packages/contracts/src/smart-form.ts
-M	packages/db/src/repositories.ts
-M	packages/db/src/runtime-repositories.ts
-M	scripts/ci/deploy-parked-mode.test.ts
-```
+## What changed, and why
 
-## Manifest Files Changed
-- No files_changed entries recorded.
+Two defects, both of which only production could surface, both preventing a service from
+STARTING. Neither activates anything.
 
-## SHA Binding
-Head SHA: 7bba38a2cd5f6582c52facb1e673468678661f22
-Merge SHA: a26894731e68ec65de4537a7642931c74d6ccd02
+### 1. The `human-capper` worker could not start (increment 2)
+
+`apps/worker/src/runtime.ts` — `assertDiscordTargetMapCoversTargets` demanded a
+`UNIT_TALK_DISCORD_TARGET_MAP` entry for every distribution target. `deploy.yml:612`/`:1411`
+refuse that entry for `discord:official-picks`, because a human capper's official pick routes
+per capper from the pin the server writes onto the outbox row. The two guards were mutually
+unsatisfiable: the deploy refused the mapping when present, and the worker crash-looped when
+absent.
+
+The startup assertion was the wrong guard. `delivery-adapters.ts` (WORKER_PINNED_DESTINATION_GUARD)
+never consults the map for a human target — it reads the per-capper pin and REFUSES rather than
+falling back. The assertion demanded a mapping the delivery path is designed never to read.
+Human delivery targets are now exempt via the canonical `isHumanDeliveryTarget` predicate, so a
+target cannot be exempt at startup and governed at delivery.
+
+### 2. Command Center could not start from its canonical env file (increment 3)
+
+`packages/config/src/env.ts`, `packages/db/src/client.ts` — the Command Center data client
+reaches `loadEnvironment()` and `requireSupabaseEnvironment()`. Between them they demanded six
+values the surface never reads, and reported them one per restart.
+
+Five were workspace metadata (`UNIT_TALK_LEGACY_WORKSPACE`, `LINEAR_TEAM_KEY`, `LINEAR_TEAM_NAME`,
+`NOTION_WORKSPACE_NAME`, `SLACK_WORKSPACE_NAME`) with **zero** runtime readers anywhere in `apps/`
+or `packages/`; only `scripts/` tooling uses them, from the developer workspace, where
+`scripts/validate-env.mjs` still requires them and is unchanged. Two callers already fabricated
+values to satisfy the check. They are now optional in the runtime loader, and `requireEnv` is
+deleted because those five were its only remaining callers.
+
+The sixth was `SUPABASE_ANON_KEY`, demanded even of a caller that opens the connection with the
+service-role key and discards the anon key — while `deploy/production/nextjs-entrypoint.sh` says
+in its own comment that "the anon key is not a substitute and is not used". The check is now
+role-aware.
+
+**`.github/workflows/deploy.yml` is deliberately unchanged.** The ten keys it already writes are
+correct and complete. Supplying the six would have institutionalized fake dependencies and
+shipped Command Center an unused credential.
+
+## Files outside `file_scope_lock`
+
+`packages/config/src/env.ts`, `packages/config/src/env.test.ts` and `packages/db/src/client.ts`
+are not in this lane's `file_scope_lock`, which is pinned at lane-start and cannot be widened on
+the branch. They require a PM `scope-override/v1` on PR #1599. No other lane locks either file.

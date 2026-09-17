@@ -3,10 +3,10 @@
   "issue_id": "UTV2-1923",
   "tier": "T1",
   "lane_type": "runtime",
-  "measured_at": "2026-09-17T18:40:00Z",
-  "measured_against_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
-  "claim": "A human capper delivery path exists end to end, routes to that capper's own picks-only destination, and cannot fire as merged.",
-  "note": "Every value below is the posture of the code ON THIS BRANCH, not of the deployed system. The deployed release still predates this branch; see docs/mission/plan.md for deploy drift.",
+  "measured_at": "2026-09-17T23:23:33Z",
+  "measured_against_sha": "5194341b7576eadf97776b04d12190559487bb2c",
+  "claim": "Two startup defects on the human-capper activation path are repaired: the worker can start in bounded human-capper mode, and Command Center can start from its canonical deploy-written env file with no manual host patch. Nothing about inertness changes -- the target is still killed, still registry-disabled, and the delivery posture flag is still false.",
+  "note": "Increment 3. Measured against the RUNNING production system and against an image built at this head. The canonical deploy was not dispatched; that is reserved to Griff, and Human Capper activation stays OFF until this merges and is separately deployed.",
   "delivery_posture": {
     "target": "official-picks",
     "delivery_target": "discord:official-picks",
@@ -114,42 +114,51 @@
     "release_destination": "HUMAN_DELIVERY_DESTINATION_GUARD",
     "worker_pinned_destination": "WORKER_PINNED_DESTINATION_GUARD"
   },
-  "mutation_controls": {
-    "count": 7,
-    "guards_proven": [
-      "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
-      "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
-      "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
-      "HUMAN_DELIVERY_IMMEDIATE_GUARD",
-      "REQUEUE_HUMAN_DELIVERY_GUARD",
-      "RECAP_HUMAN_DELIVERY_STOP_GUARD",
-      "HUMAN_DELIVERY_DESTINATION_GUARD"
-    ],
-    "method": "the guarded region is deleted from a mutant copy of the module, which is then imported and shown to fail open"
-  },
+  "mutation_controls": [
+    {
+      "control": "human delivery target starts with no shared channel mapping",
+      "observed": "not ok 17 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "non-human target still refuses with no channel mapping",
+      "observed": "not ok 18 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "deploy.yml key set is sufficient for the Command Center data client",
+      "observed": "not ok 11 (1 fail / 12 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "loadEnvironment does not demand unread workspace metadata",
+      "observed": "not ok 11 + not ok 12 (2 fail / 11 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "unmutated baseline",
+      "observed": "worker 72/72, config 13/13",
+      "result": "pass"
+    }
+  ],
   "containment": {
-    "syndicate_machine_mode_values": [
-      "active",
-      "parked",
-      "human-capper"
-    ],
-    "parked_semantics_changed": false,
-    "human_capper_mode_reachable_from_secret": false,
-    "human_capper_mode_source": "repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
-    "human_capper_mode_releases": [
-      "worker autorun"
-    ],
-    "human_capper_mode_keeps_parked": [
-      "provider ingestion",
-      "ingestor scheduling",
-      "syndicate machine",
-      "system picks"
-    ],
-    "human_capper_mode_enabled_targets": "official-picks",
-    "model_board_target_postures_changed": false,
-    "sgo_models_grading_ingestor_touched": false,
-    "deploy_refuses_shared_official_picks_mapping": true,
-    "deploy_assertion_inverted_note": "The deploy previously REQUIRED a discord:official-picks entry in UNIT_TALK_DISCORD_TARGET_MAP. With per-capper routing that entry is the defect, not the prerequisite, so both blocks now refuse it."
+    "measured_against": "production zfzdnfwdarxucxtaojxm and the running containers, read-only",
+    "official_picks_kill_switch_killed": true,
+    "official_picks_kill_switch_updated_at": "2026-09-17T21:24:35.602039+00:00",
+    "official_picks_outbox_rows": 0,
+    "outbox_rows_total": 5747,
+    "outbox_newest_created_at": "2026-07-30T20:04:41.893448+00:00",
+    "outbox_rows_sent_today": 0,
+    "governed_picks": 6,
+    "governed_picks_not_track_only": 0,
+    "human_capper_delivery_enabled": false,
+    "syndicate_machine_enabled": false,
+    "worker_autorun": false,
+    "enabled_targets": "none",
+    "ingestor_autorun": false,
+    "command_center_port_binding": "127.0.0.1:4300",
+    "command_center_public_routes": 0,
+    "member_delivery_occurred": false
   },
   "known_residue": [
     {
@@ -159,13 +168,26 @@
     }
   ],
   "activation_sequence_remaining": [
-    "Griff sets the repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
-    "Griff writes cappers.metadata.discord for each authorized capper (guildId, picksChannelId, discussionChannelId) -- reserved, not performed by this lane",
-    "Griff configures UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST",
-    "Griff confirms DISCORD_GUILD_ID is set for the API service",
-    "Griff dispatches Deploy",
-    "Griff releases the delivery_kill_switch row for official-picks",
-    "canary E2E, then the decision to open member delivery"
+    "PM: scope-override/v1 for the three out-of-scope paths, pm-verdict/v1 APPROVED, t1-approved label",
+    "merge this increment",
+    "re-attempt the human-capper deploy (reserved: Griff)",
+    "release the official-picks kill switch (reserved: Griff; the single remaining control capable of member delivery)"
   ],
-  "result": "pass"
+  "result": "pass",
+  "increment": 3,
+  "defect_repaired": [
+    {
+      "symptom": "worker container in Restarting (1); RuntimeConfigError RUNTIME_REQUIRED_ENV_MISSING at apps/worker/src/runtime.ts:284",
+      "mechanism": "deploy.yml:612/1411 refuse UNIT_TALK_DISCORD_TARGET_MAP containing discord:official-picks; assertDiscordTargetMapCoversTargets refused its absence. No value of the secret satisfied both.",
+      "why_the_assertion_was_wrong": "delivery-adapters.ts WORKER_PINNED_DESTINATION_GUARD resolves a human delivery target from the per-capper pin on the outbox row and refuses rather than falling back to the shared map, so the assertion demanded a mapping the delivery path never reads.",
+      "fix": "exempt human delivery targets via the canonical isHumanDeliveryTarget predicate; the deploy-time refusal is unchanged.",
+      "escape_hatch_note": "parked mode starts only because its target discord:1296531122234327100 matches ^discord:\\d+$; discord:official-picks has no such form."
+    },
+    {
+      "symptom": "Command Center unreachable in production; served only via a hand-patched /opt/unit-talk/.env.command-center that the next deploy erases",
+      "mechanism": "loadEnvironment required five workspace-metadata names with zero runtime readers, and requireSupabaseEnvironment required SUPABASE_ANON_KEY even for a service-role caller that discards it. The deploy-written file carries none of the six, so startup failed one variable at a time.",
+      "fix": "workspace metadata is optional in the runtime loader (requireEnv deleted -- those five were its only callers); the Supabase credential check is role-aware. deploy.yml is unchanged: its ten keys were already correct.",
+      "not_done": "the six values were NOT added to deploy.yml; that would institutionalize fake dependencies and ship an unused credential"
+    }
+  ]
 }

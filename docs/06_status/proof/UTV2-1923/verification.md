@@ -1,180 +1,178 @@
 # PROOF: UTV2-1923
 
-MERGE_SHA: a26894731e68ec65de4537a7642931c74d6ccd02
+MERGE_SHA: pending merge
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-17T18:45:00.000Z
+Generated at: 2026-09-17T23:23:11.000Z
 Issue: UTV2-1923
 Tier: T1
 Lane type: runtime
-Branch: claude/utv2-1923-human-capper-official-picks-delivery
-PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1592
-Head SHA: 7bba38a2cd5f6582c52facb1e673468678661f22
+Branch: claude/utv2-1923-worker-human-target-map-exemption
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1599
+Head SHA: 5194341b7576eadf97776b04d12190559487bb2c
+Execution SHA: 5194341b7576eadf97776b04d12190559487bb2c
+Diff base: 616994604292345b9e44cfd0c91339fcbe9bcdef
 result: pass
+
+> **Increment 3.** Increment 1 (PR #1592, merge `a26894731`) built the human capper
+> official-picks delivery transaction. Increment 2 repaired the worker defect that prevented
+> the bounded `human-capper` mode from starting. Increment 3 repairs the second startup
+> defect on the same activation path: Command Center could not start from the env file
+> `deploy.yml` writes for it, and was only reachable at all because of a manual host patch
+> that the next deploy would erase.
 
 ## ASSERTIONS:
 
-The lane claims one product transaction, built and inert. Each box is an
-assertion a named test makes; none is a restatement of intent.
+Each box is an assertion a named, mutation-proven test makes. None is a restatement of intent.
 
-- [x] An authorized human capper's submission is pinned `delivery-eligible` by the SERVER, from an allow-list the request cannot reach, and is delivered IMMEDIATELY: `validated → queued` and exactly one outbox row on `discord:official-picks`, in one transaction, with no operator step.
-- [x] The delivered row carries the authenticated submitting capper as `picks.capper_id`.
-- [x] The delivery is routed to THAT capper's own picks-only destination, resolved server-side from `cappers.metadata.discord.picksChannelId` on the canonical `cappers` row. No channel id is hard-coded; routing is per capper, not per deployment.
-- [x] The capper's discussion / Capper Space destination appears nowhere on the delivered row. A record whose `picksChannelId` equals its `discussionChannelId` is refused before either id is returned, so the discussion destination has no path to delivery at all.
-- [x] A capper with NO mapping delivers nowhere: `destination-refused:capper-row-missing`, zero outbox rows, and the pick stays `validated` — not parked in `awaiting_approval`.
-- [x] A MALFORMED mapping fails closed by name rather than being treated as valid configuration — nine shapes, including the exact production shape today (`metadata` present but `{}`), a channel NAME, a `<#…>` mention, a non-object `discord` block, and a guild this deployment does not serve.
-- [x] The mapping is refused when it points at the private global `DISCORD_CAPPER_CHANNEL_ID`.
-- [x] The browser/client can neither supply nor override the destination: a `deliveryDestination` in the request body is not read, and the pinned value is the server-resolved one.
-- [x] A duplicate submission resolves to the same pick and creates no second delivery — still exactly one outbox row.
-- [x] An unauthorized capper is still pinned Track Only, and every pre-existing Track Only chokepoint still refuses.
-- [x] A client-supplied `deliveryAuthorization` record is destroyed before anything reads it, on every source — not only the capper path.
-- [x] A capper requesting `distributionMode: 'delivery-eligible'` is refused `403 CAPPER_TRACK_ONLY_REQUIRED`.
-- [x] Operator approval is reserved for AUTONOMOUS producers: `model-driven`, `board-construction`, `system-pick-scanner` and `alert-agent` are still braked into `awaiting_approval` with zero outbox rows, and the human ingress is not. Asserted mechanically via `requiresOperatorApprovalBeforeDelivery` and `humanCapperDeliveryRequiresOperatorApproval` (`false`), which live beside `GOVERNANCE_BRAKE_SOURCES`.
-- [x] With the target disabled — the shipped posture — an authorized submission FAILS CLOSED: `delivery-refused` with reason `target-disabled`, zero outbox rows, and the pick stays `validated`. It is NOT parked in `awaiting_approval`; a refusing control is never a request for approval.
-- [x] Approval remains a RECOVERY door for a human pick an operator has deliberately parked: it releases exactly one row on `discord:official-picks` when the target is released, enqueues nothing and says `target-disabled` when it is not, and denial voids the pick.
-- [x] `official-picks` participates in the target registry, worker target coverage, the delivery kill switch and the operator kill-switch route; it ships `enabled: false` and holds no kill-switch row, so it is killed twice over.
-- [x] An authorized human pick cannot be delivered to any board target, despite the `promotion_target` the scoring lane stamps on it at submission.
-- [x] Requeue refuses a human capper pick outright (`409 HUMAN_DELIVERY_REQUEUE_BLOCKED`), so it cannot become a second delivery path.
-- [x] A manually settled human pick settles, and its immediate per-pick recap is gated by the live kill switch — the recap posts by direct `fetch`, outside the outbox, so the worker's check never sees it.
-- [x] The SCHEDULED aggregate recap honours the same delivery stop as the immediate per-pick recap, so a stop engaged after delivery cannot be undone by the next morning's daily/weekly/monthly publication.
-- [x] The `human-capper` deploy mode releases the worker and nothing else; `parked` remains byte-identical; the mode is unreachable from the syndicate-machine secret.
-- [x] A `discord:<channelId>` delivery is now subject to the kill switch, and a raw channel is still not refused by the registry it can never appear in.
-- [x] No model/board delivery target changed its shipped posture.
-- [x] The worker reads the pinned destination and, for a human delivery carrying none, REFUSES rather than falling back to the shared target map.
-- [x] `deploy.yml` refuses a shared `discord:official-picks` entry in `UNIT_TALK_DISCORD_TARGET_MAP` outright, in both the canary and production blocks. The previous assertion REQUIRED that entry; under per-capper routing it is the one misconfiguration that could converge every capper's picks on one channel, so the assertion is inverted.
-- [x] Every guard above has a mutation control that removes it and demonstrates the failure it prevents — including the destination guard, whose mutant enqueues a delivery with no destination and falls back to the shared mapping.
+### Worker — bounded `human-capper` mode can start
 
-## EVIDENCE:
+- [x] A human delivery target starts the worker with NO entry in `UNIT_TALK_DISCORD_TARGET_MAP`. Asserted by `createWorkerRuntimeDependencies starts a human delivery target with no shared channel mapping` (`apps/worker/src/worker-runtime.test.ts`), which builds the production worker environment with `UNIT_TALK_DISTRIBUTION_TARGETS=discord:official-picks` and an empty map, and requires `createWorkerRuntimeDependencies` not to throw.
+- [x] The exemption is scoped to human delivery targets ONLY. Asserted by `createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping`, which requires `discord:best-bets` with an empty map to still throw `RuntimeConfigError` with code `RUNTIME_REQUIRED_ENV_MISSING` naming that target.
+- [x] The exemption uses the canonical `isHumanDeliveryTarget` predicate (`packages/contracts/src/promotion.ts:43`), not a new literal, so a target cannot be exempt at startup and governed at delivery.
+- [x] A human capper delivery with no valid pinned destination still REFUSES. Unchanged from increment 1 and still asserted by `mutation control: without the destination guard, delivery falls back to a shared channel` (`apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts`, 44/44 pass).
+- [x] The deploy-time shared-map refusal is UNCHANGED. `deploy.yml:612` (canary) and `:1411` (promote) still refuse a `discord:official-picks` entry, so the per-capper routing guarantee is intact from both directions.
 
-Measured on `7bba38a2cd5f6582c52facb1e673468678661f22`, in the lane worktree.
+### Command Center — starts from the canonical deploy path, no host edits
 
-```
-$ pnpm type-check
-(no output)
-exit=0
+- [x] The exact key set `deploy.yml` writes into `.env.command-center` is sufficient. Asserted by `the env file deploy.yml writes is sufficient for the Command Center data client` (`packages/config/src/env.test.ts`), which **parses the key list out of the workflow** rather than restating it, loads it against an empty workspace root, and requires the service-role connection to build.
+- [x] The canary and promote writers have not drifted apart. Same test: it extracts both `printf` blocks and requires identical key lists. That exact two-step divergence was the 2026-09-16 edge outage.
+- [x] The runtime loader no longer demands workspace metadata no runtime service reads. Asserted by `loadEnvironment does not demand workspace metadata no runtime service reads`.
+- [x] Credential validation still fails closed, per role. Asserted by `requireSupabaseEnvironment still fails closed on the credential each role uses`: a missing service-role key refuses for `service_role`, a missing anon key refuses for `anon`, a missing URL refuses for both, and **neither key is accepted as a substitute for the other**.
+- [x] The anon key is NOT distributed to Command Center. Same test asserts `SUPABASE_ANON_KEY` is absent from the workflow's writer, matching `deploy/production/nextjs-entrypoint.sh:79` — "the anon key is not a substitute and is not used".
+- [x] `scripts/validate-env.mjs` is unchanged, so a developer/CI checkout still requires the workspace metadata. The requirement was removed from the *runtime* loader only.
 
-$ pnpm test
-5880 `ok` lines, 0 `not ok` lines across every package.
-exit=0
+## MUTATION CONTROLS:
 
-$ pnpm lint
-(no output)
-exit=0
+A control that cannot fail proves nothing. All four were inverted against the running suite at
+this exact head, and the baseline restored byte-identical after each.
 
-$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
-Verdict: PASS
-Changed files: 31
-Rules matched: lifecycle-fsm
+| Mutation applied | Expected | Observed |
+|---|---|---|
+| Remove the `isHumanDeliveryTarget` exemption from `assertDiscordTargetMapCoversTargets` | the human-target control fails | `not ok 17 - createWorkerRuntimeDependencies starts a human delivery target with no shared channel mapping` — 1 fail / 71 pass |
+| Widen the exemption from `isHumanDeliveryTarget(governedTarget)` to `governedTarget !== null` | the non-human refusal control fails | `not ok 18 - createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping` — 1 fail / 71 pass |
+| Delete `SUPABASE_SERVICE_ROLE_KEY` from BOTH `.env.command-center` writers in `deploy.yml` | the deploy-contract control fails | `not ok 11 - the env file deploy.yml writes is sufficient for the Command Center data client` — 1 fail / 12 pass |
+| Make `UNIT_TALK_LEGACY_WORKSPACE` required again in the runtime loader | the workspace-metadata controls fail | `not ok 11` and `not ok 12 - loadEnvironment does not demand workspace metadata no runtime service reads` — 2 fail / 11 pass |
+| None (baseline) | all pass | worker 72 pass / 0 fail; config 13 pass / 0 fail |
 
-Advisory (PM-gated) artifacts missing:
-  - r4-fault-report [PM-gated]
-exit=0
+Mutation 1 reproduces the exact production crash-loop. Mutation 2 proves the exemption cannot be
+widened into a hole without a control firing. Mutation 3 proves the deploy-contract test is
+genuinely coupled to the workflow and not self-consistent. Mutation 4 reproduces the exact
+Command Center startup failure.
 
-$ pnpm verify
-REFUSED locally: `ci:assert-staging` refuses to run outside the `staging-ci`
-GitHub environment, by design. `pnpm verify` therefore cannot exit 0 on a
-developer machine, and its authoritative run is the `verify` check on this PR.
-```
+## RUNTIME EVIDENCE:
 
-Per-file detail for the new coverage:
+Both defects were found in production, not in a test.
 
-```
-$ pnpm exec tsx --test apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
-# tests 44   # pass 44   # fail 0        (includes 7 mutation controls)
+### Worker (increment 2)
 
-$ pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts
-# tests 7    # pass 7    # fail 0        (3 new: the pinned destination beats a
-                                          present shared map entry; a human target
-                                          with no pin refuses; a malformed pin is
-                                          not a destination)
+| Observation | Evidence |
+|---|---|
+| Defect reproduced in production | Deploy run `35278517112`, promote FAILED at `Confirm syndicate machine gate in production container`; worker container `Restarting (1)` with `RuntimeConfigError` / `RUNTIME_REQUIRED_ENV_MISSING` at `apps/worker/src/runtime.ts:284` |
+| The two guards are mutually unsatisfiable | `deploy.yml:612` and `:1411` refuse the deploy when `UNIT_TALK_DISCORD_TARGET_MAP` contains `discord:official-picks`; `runtime.ts:284` refused its absence. No value of the secret satisfies both. |
+| Parked mode starts only via the numeric escape hatch | production worker env `UNIT_TALK_DISTRIBUTION_TARGETS=discord:1296531122234327100`, which matches `^discord:\d+$`; `discord:official-picks` does not |
+| Production restored | Rollback run `35279450108` success end to end, same SHA `616994604292345b9e44cfd0c91339fcbe9bcdef`; worker recovered `Restarting (1)` → `Up (healthy)`, now `running restarts=0` |
 
-$ pnpm exec tsx --test apps/api/src/capper-delivery-authorization.test.ts
-# tests 12   # pass 12   # fail 0
+### Command Center (increment 3) — startup proof from an image built at this head
 
-$ pnpm exec tsx --test apps/api/src/recap-service.test.ts
-# tests 27   # pass 27   # fail 0        (scheduled aggregate recap stop)
+The canonical deploy is a reserved action, so the deploy itself was NOT run. The equivalent was
+measured instead: the production image was built from this head with the production Dockerfile
+and build args, and started with **exactly** the key set `deploy.yml` writes — synthesised by
+parsing the workflow, ten keys, nothing else, no host edits.
 
-$ pnpm exec tsx --test scripts/ci/deploy-parked-mode.test.ts
-# tests 32   # pass 32   # fail 0        (incl. the inverted shared-map rule)
+| Observation | Evidence |
+|---|---|
+| Image builds from this head | `docker build -f deploy/production/Dockerfile.nextjs --build-arg APP_DIR=apps/command-center --build-arg APP_PACKAGE=@unit-talk/command-center --build-arg APP_PORT=4300` → exit 0 |
+| Starts on the canonical env file alone | container `running restarts=0 exit=0`; `✓ Ready in 463ms` |
+| Unauthenticated access refused | `GET /` → **401**, `command_center.auth_failed` / `COMMAND_CENTER_AUTH_REQUIRED` |
+| Overview renders for an operator | `GET /` with `Authorization: Bearer <token>` → **200** |
+| Pick inspection renders for an operator | `GET /picks` with the same credential → **200** |
+| The old failure mode is gone | **0** occurrences of `Missing required env var` and **0** of `are required for Supabase` in the container log. The only errors are 3× `fetch failed`, from the deliberately unreachable fixture Supabase host — a request-time network error, not a configuration refusal. |
+| Fail-closed control A | same image, `SUPABASE_SERVICE_ROLE_KEY` removed → refuses to start: `FATAL: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are both required by the Command Center data client. Refusing to start.` exit 1 |
+| Fail-closed control B | same image, all three auth values removed → refuses to start: `FATAL: Command Center auth is not configured.` exit 1 |
+| Settlement action configuration intact | `UNIT_TALK_CC_API_KEY` and `UNIT_TALK_API_URL` are among the ten keys and are untouched by this diff |
+| Bound to loopback only, no public route | production `unit-talk-command-center-1` publishes `{"4300/tcp":[{"HostIp":"127.0.0.1","HostPort":"4300"}]}`; `grep -c command-center /opt/unit-talk/Caddyfile` → **0**. This diff touches no compose, Caddy or workflow file. |
 
-$ pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts
-# tests 70   # pass 70   # fail 0        (4 new kill-switch tests)
+### Containment — unchanged throughout
 
-$ pnpm exec tsx --test apps/api/src/distribution-service.test.ts
-# tests 35   # pass 35   # fail 0
-
-$ pnpm exec tsx --test apps/api/src/controllers/review-pick-controller.test.ts
-# tests 18   # pass 18   # fail 0        (the recovery door, unchanged)
-
-$ pnpm exec tsx --test apps/api/src/controllers/submit-pick-controller.test.ts
-# tests 13   # pass 13   # fail 0
-```
+| Probe | Value |
+|---|---|
+| `official-picks` kill switch | `killed = true` (updated `2026-09-17 21:24:35.602039+00`) |
+| `distribution_outbox` rows for `official-picks` | **0** |
+| `distribution_outbox` total / newest | **5,747** / `2026-07-30 20:04:41.893448+00` — both unchanged |
+| Rows sent today | **0** |
+| Governed picks / not `track-only` | **6** / **0** |
+| `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED` | `false` — in the repo variable AND in the running worker |
+| Worker / ingestor posture | `UNIT_TALK_WORKER_AUTORUN=false`, `UNIT_TALK_ENABLED_TARGETS=none`, `SYNDICATE_MACHINE_ENABLED=false`, `UNIT_TALK_INGESTOR_AUTORUN=false` |
+| Member-facing delivery | none occurred |
 
 ## Verification
-- [x] `pnpm type-check`: exit 0, no diagnostics
-- [x] `pnpm lint`: exit 0, no output
-- [x] `pnpm test`: exit 0, 5880 `ok` / 0 `not ok` across the whole suite
-- [ ] `pnpm verify`: cannot run locally — `ci:assert-staging` refuses outside the `staging-ci` environment; the authoritative run is the `verify` check on PR #1592
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS (31 changed files, `lifecycle-fsm` matched; the one missing artifact is PM-gated advisory)
 
-## Runtime Verification
+EVIDENCE:
 
-**What this lane's runtime proof can and cannot be, stated plainly.**
+| Command | Exit | Result |
+|---|---|---|
+| `pnpm type-check` | 0 | pass — no diagnostics |
+| `pnpm test` | 0 | pass — **5,898 `ok` lines, 0 `not ok`, 104 suite blocks each `# fail 0`** |
+| `pnpm lint` | 0 | pass — no output |
+| `pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts` | 0 | 72 pass / 0 fail |
+| `pnpm exec tsx --test packages/config/src/env.test.ts` | 0 | 13 pass / 0 fail (3 new tests) |
+| `r-level-check` | — | enforced by the `R-Level Compliance Check` required context on PR #1599 |
+| `pnpm verify` | 1 | **refused by containment** — see below |
 
-The lane now claims two things, and they need different evidence. The positive
-claim — an authorized capper's submission creates exactly one governed delivery,
-with no operator step — is exercised end to end against real repositories. The
-negative claim is the one that matters for containment: as SHIPPED, that path
-cannot fire, because the target is disabled in the registry and killed by the
-absence of a kill-switch row. Both are exercised here against real repositories
-and the real deploy script:
+```
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+Writable DB verification requires xskgrzbteyqdufktjrjx.
+```
 
-- the server-side authorization path, the immediate release transaction, the
-  approval recovery door, the enqueue chokepoints and the recap gate run end to
-  end against the in-memory repository bundle — the same code paths the database
-  bundle implements;
-- the worker's registry and kill-switch checks run through `runWorkerCycles`
-  with a real `InMemoryDeliveryKillSwitchRepository`, whose `isKilled` is the
-  same fail-closed contract the database repository implements;
-- the deploy mode is asserted against the actual `deploy.yml` source, parsed,
-  in both the canary and production blocks.
+`pnpm verify` exits 1 solely in `ci:assert-staging`; that is deliberate staging-isolation
+containment, not a defect in this diff. A local `pnpm verify` cannot exit 0 on this repository.
+The authoritative full-tree result is the required `verify` check on PR #1599, which runs inside
+the `staging-ci` GitHub environment.
 
-**Read-only production measurement was performed**, 2026-09-17, against
-`zfzdnfwdarxucxtaojxm`. It writes nothing and changes no containment setting:
-`delivery_kill_switch` holds 4 rows and `official-picks` is not one of them;
-`distribution_outbox` holds 0 rows on `discord:official-picks`; 0 picks carry
-`promotion_target = 'official-picks'`; and 0 picks carry a
-`metadata.deliveryAuthorization` record. The exact counts are in
-`evidence.json` under `runtime_proof.row_counts`.
+## STOP CONDITIONS ENCOUNTERED:
 
-**A live-DB WRITE run against production is deliberately NOT performed.** It would
-require creating a `delivery_kill_switch` row for `official-picks` — a
-production write whose only effect would be to *weaken* the fail-closed default
-this lane depends on. The absence of that row is the control. The staging
-live-DB receipt is produced by the `verify` check and the `Writable DB proof
-(staging only)` check on PR #1592, which run in the `staging-ci` environment
-against the staging project, not production.
+- `PT1 BLOCKED_BY_CONTAINMENT` at preflight — the T1 live-DB health ping cannot run because
+  `SUPABASE_URL` resolves to the documented containment placeholder. Preflight verdict was
+  nonetheless `PASS (41 checks)`.
+- `File scope lock` is expected RED, for two independent reasons. First, UTV2-1923 is a reopened
+  multi-increment lane, and `resolveTrustedManifests` in `scripts/ci/file-scope-guard.ts` reads
+  the manifest from base, where increment 1's closed manifest still sits. Second, this increment
+  touches three files outside `file_scope_lock` — `packages/config/src/env.ts`,
+  `packages/config/src/env.test.ts` and `packages/db/src/client.ts` — and the lock is pinned at
+  lane-start and cannot be widened on the branch. **A PM `scope-override/v1` on PR #1599 is
+  required for those three paths.** No other active lane locks either file. `File scope lock` is
+  not one of the four required contexts.
+- The canonical deploy was NOT run. Dispatching a production deployment is reserved to Griff, and
+  Human Capper activation stays OFF until this is merged and separately deployed. The startup
+  proof above is an image built at this head, not a deploy.
 
-**The Discord destinations were identified by read-only enumeration, not inferred
-from names.** The enumeration ran inside the already-authorized
-`unit-talk-discord-bot-1` container against the live guild, read the bot token
-only from that container's own environment, and printed names, ids, types and
-parents only — no secret value was emitted, nothing was created, renamed or
-modified. The capper destinations are forum THREADS (type 11) inside the
-`👑・cappers-space` forum, one `Official Picks` thread and one
-`Q&A & Discussion` thread per capper. The exact ids are in the PM hand-off; they
-are deliberately NOT written into source, into this bundle's code paths, or into
-production `cappers.metadata`, which remains unwritten pending PM review.
+## Finding recorded, deliberately NOT fixed here
 
-`runtime-health.json` in this bundle records the measured posture of every
-control as shipped, including the destination-routing block.
+`.dockerignore` excludes `*.tsbuildinfo`, which in Docker ignore syntax matches only the repo
+root. The nested `packages/*/tsconfig.tsbuildinfo` are therefore copied into the build context,
+and `tsc` treats every package as up to date and emits nothing — so a Next.js image built from a
+working tree that has run `pnpm type-check` fails with `Module not found: Can't resolve
+'../../../../../packages/config/dist/env.js'`. CI is unaffected, because a fresh checkout has no
+`.tsbuildinfo`. Reproduced and confirmed by rebuilding after clearing the cache. Out of scope for
+this PR; recorded so it is not rediscovered.
+
+## Sign-off
+
+Verifier Identity: Claude Opus 5 (1M context), acting as execution orchestrator
+Date: 2026-09-17
+Commit SHA(s): 5194341b7576eadf97776b04d12190559487bb2c
+Related PRs: https://github.com/griff843/Unit-Talk-v2/pull/1599 (this increment), https://github.com/griff843/Unit-Talk-v2/pull/1592 (increment 1)
+
+Merge authority for this T1 lane remains with PM: `pm-verdict/v1` APPROVED plus the
+`t1-approved` label, and a `scope-override/v1` for the three out-of-scope paths. Nothing in this
+bundle self-certifies Done.
 
 ## Merge SHA Binding
 
-Merge SHA: a26894731e68ec65de4537a7642931c74d6ccd02
-PR: https://github.com/griff843/Unit-Talk-v2/pull/1592
-Approved PR head: pending merge
-Execution SHA: 7bba38a2cd5f6582c52facb1e673468678661f22
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1599

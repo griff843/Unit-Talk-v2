@@ -23,14 +23,13 @@ export function createDatabaseConnectionConfig(
   options: DatabaseClientOptions = {},
 ): DatabaseConnectionConfig {
   const env = options.env ?? loadEnvironment();
-  const supabase = requireSupabaseEnvironment(env);
   const useServiceRole = options.useServiceRole ?? false;
 
-  return {
-    url: supabase.url,
-    key: useServiceRole ? supabase.serviceRoleKey : supabase.anonKey,
-    role: useServiceRole ? 'service_role' : 'anon',
-  };
+  // UTV2-1923: resolve the role first, then demand only that role's credential.
+  // Previously both keys were required here and one was discarded, so a
+  // service-role-only deployment could not build a connection it was fully
+  // configured for.
+  return requireSupabaseEnvironment(env, useServiceRole ? 'service_role' : 'anon');
 }
 
 export function createServiceRoleDatabaseConnectionConfig(
