@@ -3,7 +3,10 @@ import type { ApiRuntimeDependencies } from '../server.js';
 import { readJsonBody } from '../server.js';
 import { writeJson } from '../http-utils.js';
 import type { AuthContext } from '../auth.js';
-import { promotionTargets, type PromotionTarget } from '@unit-talk/contracts';
+import {
+  governedDeliveryTargets,
+  type GovernedDeliveryTarget,
+} from '@unit-talk/contracts';
 
 /**
  * UTV2-1427: staff-authorized, auditable, reversible live kill switch for
@@ -18,8 +21,12 @@ interface KillSwitchRequestBody {
   reason?: unknown;
 }
 
-function isValidTarget(value: unknown): value is PromotionTarget {
-  return typeof value === 'string' && (promotionTargets as readonly string[]).includes(value);
+// UTV2-1923: every GOVERNED destination, not only the promotion ones. An
+// operator who cannot name a target here cannot kill it, so a target missing
+// from this list is a delivery lane with no stop control -- which is exactly
+// the hole `discord:<channelId>` left open in the worker.
+function isValidTarget(value: unknown): value is GovernedDeliveryTarget {
+  return typeof value === 'string' && (governedDeliveryTargets as readonly string[]).includes(value);
 }
 
 export async function handleKillSwitchSet(
@@ -32,7 +39,7 @@ export async function handleKillSwitchSet(
   if (!isValidTarget(body.target)) {
     return writeJson(response, 400, {
       ok: false,
-      error: { code: 'INVALID_TARGET', message: `target must be one of: ${promotionTargets.join(', ')}` },
+      error: { code: 'INVALID_TARGET', message: `target must be one of: ${governedDeliveryTargets.join(', ')}` },
     });
   }
   if (typeof body.killed !== 'boolean') {

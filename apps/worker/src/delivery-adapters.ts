@@ -1,5 +1,10 @@
 import { loadEnvironment } from '@unit-talk/config';
 import type { OutboxRecord } from '@unit-talk/db';
+import {
+  isHumanDeliveryTarget,
+  parseGovernedTargetFromDeliveryTarget,
+  readPinnedDeliveryDestination,
+} from '@unit-talk/contracts';
 import { createLogger, serializeError } from '@unit-talk/observability';
 import type { DeliveryAdapter } from './runner.js';
 
@@ -103,7 +108,11 @@ export function createDiscordDeliveryAdapter(options?: {
         throw new Error('DISCORD_BOT_TOKEN is required for live Discord delivery.');
       }
 
-      if (outbox.target !== 'discord:game-threads' && outbox.target !== 'discord:strategy-room') {
+      if (
+        outbox.target !== 'discord:game-threads' &&
+        outbox.target !== 'discord:strategy-room' &&
+        readPinnedDeliveryDestination(outbox.payload) === null
+      ) {
         resolveDiscordChannelId(outbox.target, targetMap);
       }
 
@@ -231,6 +240,35 @@ async function resolveDiscordDeliveryRoute(
   if (outbox.target === 'discord:strategy-room') {
     return resolveDiscordStrategyRoomRoute(outbox, options);
   }
+
+  // UTV2-1923 WORKER_PINNED_DESTINATION_GUARD_START
+  // A human capper's official pick goes to THAT capper's picks-only
+  // destination, pinned onto the row by the server at enqueue time. The shared
+  // `UNIT_TALK_DISCORD_TARGET_MAP` entry is not a fallback for it: falling back
+  // would send every capper's picks to one channel, which is precisely the
+  // behaviour this routing replaced. So for the human delivery target a missing
+  // or malformed pin is a REFUSAL, not a reason to use the map.
+  const pinned = readPinnedDeliveryDestination(outbox.payload);
+  if (pinned) {
+    return {
+      channelId: pinned.channelId,
+      payload: {
+        channelId: pinned.channelId,
+        route: 'capper-pinned',
+        capperId: pinned.capperId,
+        guildId: pinned.guildId,
+        destinationSource: pinned.source,
+      },
+    };
+  }
+
+  const governedTarget = parseGovernedTargetFromDeliveryTarget(outbox.target);
+  if (governedTarget !== null && isHumanDeliveryTarget(governedTarget)) {
+    throw new Error(
+      `Human capper delivery for outbox ${outbox.id} carries no pinned destination; refusing to fall back to a shared channel mapping.`,
+    );
+  }
+  // UTV2-1923 WORKER_PINNED_DESTINATION_GUARD_END
 
   const channelId = resolveDiscordChannelId(outbox.target, options.targetMap);
   return {

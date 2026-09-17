@@ -1,11 +1,20 @@
-import { isTrackOnlyPickMetadata, type SubmissionPayload } from '@unit-talk/contracts';
+import {
+  humanDeliveryTargets,
+  isHumanCapperDeliveryAuthorized,
+  isTrackOnlyPickMetadata,
+  readHumanCapperDeliveryAuthorization,
+  type SubmissionPayload,
+} from '@unit-talk/contracts';
 import { isShadowEnabled, parseShadowModeEnv } from '@unit-talk/domain';
 import { transitionPickLifecycle } from '@unit-talk/db';
 import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { ApiError } from '../errors.js';
 import { processShadowSubmission, processSubmission } from '../submission-service.js';
-import { enqueueDistributionWithRunTracking } from '../run-audit-service.js';
+import {
+  enqueueDistributionWithRunTracking,
+  releaseHumanCapperDeliveryWithRunTracking,
+} from '../run-audit-service.js';
 import { isGovernanceBrakeSource } from '../distribution-service.js';
 import {
   type Logger,
@@ -22,6 +31,26 @@ export interface SubmitPickControllerResult {
   outboxEnqueued: boolean;
   shadowMode?: boolean;
   governanceBrake?: boolean;
+  /**
+   * UTV2-1923: the server's own account of this pick's delivery posture, so a
+   * surface can render truth instead of guessing. A surface may DISPLAY this;
+   * it may not influence it.
+   *
+   *   `track-only`       no delivery is possible for this pick, ever.
+   *   `delivered`        an authorized human capper's pick created exactly one
+   *                      governed member-facing delivery, in this request.
+   *   `delivery-refused` an authorized human capper's pick created NO delivery
+   *                      because a control refused — the target is disabled or
+   *                      killed. This is fail-closed, and it is NOT a request
+   *                      for operator approval: no approval exists that would
+   *                      deliver it, and the pick is not parked awaiting one.
+   *                      `deliveryRefusedReason` carries the control's reason.
+   */
+  deliveryPosture?: 'track-only' | 'delivered' | 'delivery-refused';
+  /** Present only with `deliveryPosture: 'delivery-refused'`. */
+  deliveryRefusedReason?: string;
+  /** The governed member-facing target, present whenever a human delivery was attempted. */
+  deliveryTarget?: string;
 }
 
 export async function submitPickController(
@@ -105,10 +134,149 @@ export async function submitPickController(
           promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
           promotionTarget: result.pick.promotionTarget ?? null,
           outboxEnqueued: false,
+          deliveryPosture: 'track-only',
         },
       },
     };
   }
+
+  // UTV2-1923 HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD_START
+  // The mirror of the Track Only guard above, for the other direction. On the
+  // idempotent-duplicate path `processSubmission` discards the incoming
+  // payload and returns a pre-existing row. An authorized capper's
+  // delivery-eligible submission could therefore be answered with some older
+  // pick that was never authorized -- or, worse, an unauthorized submission
+  // could be answered with a pick that IS delivery-authorized, handing the
+  // caller a pick the delivery path will accept. Refuse either mismatch rather
+  // than reusing a row whose authorization is not the one just decided.
+  if (
+    !routingShadowEnabled &&
+    isHumanCapperDeliveryAuthorized(payload.metadata) !==
+      isHumanCapperDeliveryAuthorized(result.pick.metadata)
+  ) {
+    throw new ApiError(
+      409,
+      'DELIVERY_AUTHORIZATION_CONFLICT',
+      'This submission matches an existing pick whose delivery authorization differs from the one decided for this request; it cannot be reused.',
+    );
+  }
+  // UTV2-1923 HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD_END
+
+  // UTV2-1923 HUMAN_DELIVERY_IMMEDIATE_GUARD_START
+  // An authorized human capper's pick is delivery-eligible, so none of the
+  // eight Track Only chokepoints stop it -- and no model gate stops it either,
+  // because no model ever runs on it. Nor should one: for a human capper there
+  // is nothing left to decide. The server already decided, from its own
+  // allow-list, that this capper's picks go to members. Approval exists to
+  // govern producers that decide for themselves -- the model, the board
+  // builder, the scanner, the alert agent -- and a human capper is not one of
+  // them. Parking this pick would be inventing a second decision to make about
+  // something already decided.
+  //
+  // So it is released here, immediately, in ONE transaction with the outbox
+  // row: `validated -> queued` plus the governed delivery, or neither.
+  //
+  // Fail-closed is NOT approval. If the registry has the target disabled or
+  // the kill switch has it killed, this returns `delivery-refused` with the
+  // control's own reason, writes no outbox row, and leaves the pick in
+  // `validated`. It does not park the pick in `awaiting_approval`, because no
+  // operator decision would release it -- only releasing the control would,
+  // and that is a deliberate operator action taken elsewhere.
+  const humanDeliveryAuthorization = routingShadowEnabled
+    ? null
+    : readHumanCapperDeliveryAuthorization(result.pick.metadata);
+
+  if (humanDeliveryAuthorization?.decision === 'authorized') {
+    const humanDeliveryTarget = `discord:${humanDeliveryTargets[0]}`;
+
+    // The idempotent-duplicate path. `processSubmission` returns a pre-existing
+    // row rather than creating a second one, so a resubmission of the same pick
+    // arrives here already past `validated`. Re-releasing it is what would
+    // produce a second Discord post, so it is not attempted: the existing
+    // delivery is reported instead. Exactly-once is held at two levels -- this
+    // check, and the outbox idempotency key underneath it.
+    if (result.pick.lifecycleState !== 'validated') {
+      return {
+        status: 201,
+        body: {
+          ok: true,
+          data: {
+            submissionId: result.submission.id,
+            pickId: result.pick.id,
+            lifecycleState: result.pick.lifecycleState,
+            promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+            promotionTarget: result.pick.promotionTarget ?? null,
+            outboxEnqueued: false,
+            deliveryPosture: 'delivered',
+            deliveryTarget: humanDeliveryTarget,
+          },
+        },
+      };
+    }
+
+    // `picks.promotion_target` is deliberately NOT written. That column is the
+    // model/board lane's record of a scoring decision, and no scoring decision
+    // was made about this pick. The human destination comes from the
+    // authorization record, which is the thing that actually authorizes it.
+    const released = await releaseHumanCapperDeliveryWithRunTracking(
+      result.pick.id,
+      'submission',
+      `human capper delivery: ${humanDeliveryAuthorization.capperId ?? 'unknown capper'} authorized by ${humanDeliveryAuthorization.authority}`,
+      repositories.picks,
+      repositories.outbox,
+      repositories.runs,
+      repositories.audit,
+      'submission',
+      repositories.cappers,
+    );
+
+    await repositories.audit.record({
+      entityType: 'picks',
+      entityId: released.run.id,
+      entityRef: result.pick.id,
+      action: 'pick.human_capper_delivery.released',
+      actor: 'submission',
+      payload: {
+        pickId: result.pick.id,
+        source: result.pick.source,
+        capperId: humanDeliveryAuthorization.capperId,
+        authority: humanDeliveryAuthorization.authority,
+        allowlistSource: humanDeliveryAuthorization.allowlistSource,
+        decidedAt: humanDeliveryAuthorization.decidedAt,
+        deliveryTarget: released.target,
+        destinationChannelId: released.destination?.channelId ?? null,
+        destinationSource: released.destination?.source ?? null,
+        fromState: 'validated',
+        toState: released.enqueued ? 'queued' : result.pick.lifecycleState,
+        outboxEnqueued: released.enqueued,
+        operatorApprovalRequired: false,
+        ...(released.reason === undefined ? {} : { refusedReason: released.reason }),
+      },
+    });
+
+    return {
+      status: 201,
+      body: {
+        ok: true,
+        data: {
+          submissionId: result.submission.id,
+          pickId: result.pick.id,
+          lifecycleState: released.enqueued ? 'queued' : result.pick.lifecycleState,
+          promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+          promotionTarget: result.pick.promotionTarget ?? null,
+          outboxEnqueued: released.enqueued,
+          deliveryTarget: released.target,
+          ...(released.enqueued
+            ? { deliveryPosture: 'delivered' as const }
+            : {
+                deliveryPosture: 'delivery-refused' as const,
+                ...(released.reason === undefined ? {} : { deliveryRefusedReason: released.reason }),
+              }),
+        },
+      },
+    };
+  }
+  // UTV2-1923 HUMAN_DELIVERY_IMMEDIATE_GUARD_END
 
   if (governanceBrakeApplied) {
     // UTV2-1611: the brake is STATE-AWARE. An automated production admitted by

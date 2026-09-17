@@ -65,6 +65,9 @@ jobs:
           SECRET_UNIT_TALK_DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
           SECRET_UNIT_TALK_DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
           SECRET_SYNDICATE_MACHINE_ENABLED: ${{ secrets.SYNDICATE_MACHINE_ENABLED }}
+          # UTV2-1923: a repository VARIABLE, not a secret -- this is a posture,
+          # and it must stay readable in the deploy log.
+          VAR_HUMAN_CAPPER_DELIVERY_ENABLED: ${{ vars.UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED }}
           SECRET_CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
           SECRET_UNIT_TALK_WEB_DOMAIN: ${{ secrets.UNIT_TALK_WEB_DOMAIN }}
           SECRET_UNIT_TALK_SMART_FORM_DOMAIN: ${{ secrets.UNIT_TALK_SMART_FORM_DOMAIN }}
@@ -152,6 +155,30 @@ jobs:
               exit 1
               ;;
           esac
+          # UTV2-1923: a THIRD, bounded mode. `parked` and `active` are a binary
+          # with nothing between them -- `active` simultaneously starts the
+          # ingestor, enables the syndicate machine and releases the enabled
+          # targets, so asking for human capper delivery under the old binary
+          # was asking to activate provider ingestion and system picks too.
+          #
+          # `human-capper` is parked in every one of those respects and differs
+          # from `parked` in exactly two: the worker may run, and exactly one
+          # governed target -- the human capper official-picks target -- is
+          # enabled. It cannot deliver anything on its own: that target has no
+          # `delivery_kill_switch` row, and `isKilled()` is fail-closed for a
+          # target it has no row for, so a deliberate operator release is still
+          # required before a single message reaches a member.
+          #
+          # It is driven by a repository VARIABLE, like
+          # UNIT_TALK_COMMAND_CENTER_ENABLED (UTV2-1918), not by a secret --
+          # the mode is a posture, not a credential, and it stays readable in
+          # the deploy log.
+          if [ "$syndicate_machine_mode" = "parked" ] && [ "${VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-}" = "true" ]; then
+            syndicate_machine_mode=human-capper
+          elif [ "$syndicate_machine_mode" = "active" ] && [ "${VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-}" = "true" ]; then
+            echo "::error::UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED is only meaningful while the syndicate machine is parked; active mode already releases delivery."
+            exit 1
+          fi
           echo "mode=$syndicate_machine_mode" >> "$GITHUB_OUTPUT"
           echo "{\"service\":\"deploy\",\"event\":\"syndicate_machine_mode.validated\",\"mode\":\"$syndicate_machine_mode\"}"
           echo "All required production secrets are present."
@@ -486,6 +513,12 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           # UTV2-1918 -- see the Command Center block further down this step.
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          # UTV2-1923: the server-side human capper delivery allow-list. A
+          # repository variable, not a secret: these are capper identities, not
+          # credentials, and an allow-list nobody can read is an allow-list
+          # nobody can audit. Unset is the fail-closed default -- the API
+          # authorizes nobody for an empty list.
+          UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: ${{ vars.UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST }}
           UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
@@ -509,6 +542,17 @@ jobs:
               _ingestor_scheduling_enabled=false
               _worker_autorun=false
               ;;
+            # UTV2-1923: parked in every respect except the worker. Provider
+            # ingestion, the syndicate machine and system picks all stay off;
+            # only the outbox worker is allowed to run, so that an operator-
+            # approved human capper pick has something to carry it. The target
+            # it may carry it to is still killed at the live switch.
+            human-capper)
+              SYNDICATE_MACHINE_ENABLED=false
+              _ingestor_autorun=false
+              _ingestor_scheduling_enabled=false
+              _worker_autorun=true
+              ;;
             *)
               echo "::error::Validated syndicate-machine mode is missing or invalid for canary deploy."
               exit 1
@@ -528,16 +572,48 @@ jobs:
             _dist_targets="discord:0"
             [ -z "$_enabled_targets" ] && _enabled_targets="none"
           fi
+          # UTV2-1923: the API's own human-capper authorization posture is OFF
+          # unless human-capper mode set it below. Declared here, before the
+          # branch, so that no path can leave it unset -- an unset value would
+          # be written to the env file as an empty string, and the API reads
+          # anything other than the literal 'true' as off, but relying on that
+          # would make the fail-closed default an accident of parsing.
+          _human_capper_delivery=false
           # UTV2-1646: parked mode must never resolve to a real target (public delivery
           # must remain impossible), regardless of what UNIT_TALK_ENABLED_TARGETS holds.
           # Active mode keeps its prior fallback semantics unchanged (best-bets when unset).
           if [ "$SYNDICATE_MACHINE_MODE" = "parked" ]; then
             _enabled_targets="none"
+          elif [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ]; then
+            # UTV2-1923: exactly one target, named literally, regardless of what
+            # UNIT_TALK_ENABLED_TARGETS holds -- the same refusal-to-trust-the-
+            # secret that parked mode makes above, for the same reason. The
+            # worker must also be configured to poll it, or the pick would sit
+            # in the outbox forever with no worker claiming its target.
+            _enabled_targets="official-picks"
+            _dist_targets="discord:official-picks"
+            _human_capper_delivery=true
           elif [ -z "$_enabled_targets" ]; then
             _enabled_targets="best-bets"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
           [ -z "$_target_map" ] && _target_map='{}'
+          # UTV2-1923 (destination routing): an official pick goes to THAT
+          # capper's own picks-only destination, resolved server-side from
+          # `cappers.metadata.discord.picksChannelId` and pinned onto the outbox
+          # row. `discord:official-picks` therefore has no single channel, and a
+          # shared entry for it in this map is not a fallback -- it is the one
+          # way every capper's picks could converge on one channel. The worker
+          # refuses to use it, and the deploy refuses to carry it, so the
+          # misconfiguration cannot exist in a running system at all.
+          if [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ]; then
+            _official_channel=$(printf '%s' "$_target_map" | jq -r '."discord:official-picks" // empty')
+            if [ -n "$_official_channel" ]; then
+              echo "::error title=Human capper target must not be shared-mapped::UNIT_TALK_DISCORD_TARGET_MAP maps \"discord:official-picks\" to a single channel. Official picks route per capper from cappers.metadata.discord.picksChannelId; remove this entry." >&2
+              exit 1
+            fi
+            unset _official_channel
+          fi
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
@@ -583,6 +659,8 @@ jobs:
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
             "UNIT_TALK_ENABLED_TARGETS=$_enabled_targets" \
+            "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=$_human_capper_delivery" \
+            "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST=${UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST:-}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
@@ -923,6 +1001,7 @@ jobs:
           case "$SYNDICATE_MACHINE_MODE" in
             active) REQUESTED_VALUE=true ;;
             parked) REQUESTED_VALUE=false ;;
+            human-capper) REQUESTED_VALUE=false ;;
             *)
               echo "::error::Validated syndicate-machine mode is missing or invalid for canary readiness."
               exit 1
@@ -1233,6 +1312,12 @@ jobs:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           # UTV2-1918 -- see the Command Center block further down this step.
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
+          # UTV2-1923: the server-side human capper delivery allow-list. A
+          # repository variable, not a secret: these are capper identities, not
+          # credentials, and an allow-list nobody can read is an allow-list
+          # nobody can audit. Unset is the fail-closed default -- the API
+          # authorizes nobody for an empty list.
+          UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: ${{ vars.UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST }}
           UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
@@ -1256,6 +1341,17 @@ jobs:
               _ingestor_scheduling_enabled=false
               _worker_autorun=false
               ;;
+            # UTV2-1923: parked in every respect except the worker. Provider
+            # ingestion, the syndicate machine and system picks all stay off;
+            # only the outbox worker is allowed to run, so that an operator-
+            # approved human capper pick has something to carry it. The target
+            # it may carry it to is still killed at the live switch.
+            human-capper)
+              SYNDICATE_MACHINE_ENABLED=false
+              _ingestor_autorun=false
+              _ingestor_scheduling_enabled=false
+              _worker_autorun=true
+              ;;
             *)
               echo "::error::Validated syndicate-machine mode is missing or invalid for production deploy."
               exit 1
@@ -1275,16 +1371,48 @@ jobs:
             _dist_targets="discord:0"
             [ -z "$_enabled_targets" ] && _enabled_targets="none"
           fi
+          # UTV2-1923: the API's own human-capper authorization posture is OFF
+          # unless human-capper mode set it below. Declared here, before the
+          # branch, so that no path can leave it unset -- an unset value would
+          # be written to the env file as an empty string, and the API reads
+          # anything other than the literal 'true' as off, but relying on that
+          # would make the fail-closed default an accident of parsing.
+          _human_capper_delivery=false
           # UTV2-1646: parked mode must never resolve to a real target (public delivery
           # must remain impossible), regardless of what UNIT_TALK_ENABLED_TARGETS holds.
           # Active mode keeps its prior fallback semantics unchanged (best-bets when unset).
           if [ "$SYNDICATE_MACHINE_MODE" = "parked" ]; then
             _enabled_targets="none"
+          elif [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ]; then
+            # UTV2-1923: exactly one target, named literally, regardless of what
+            # UNIT_TALK_ENABLED_TARGETS holds -- the same refusal-to-trust-the-
+            # secret that parked mode makes above, for the same reason. The
+            # worker must also be configured to poll it, or the pick would sit
+            # in the outbox forever with no worker claiming its target.
+            _enabled_targets="official-picks"
+            _dist_targets="discord:official-picks"
+            _human_capper_delivery=true
           elif [ -z "$_enabled_targets" ]; then
             _enabled_targets="best-bets"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
           [ -z "$_target_map" ] && _target_map='{}'
+          # UTV2-1923 (destination routing): an official pick goes to THAT
+          # capper's own picks-only destination, resolved server-side from
+          # `cappers.metadata.discord.picksChannelId` and pinned onto the outbox
+          # row. `discord:official-picks` therefore has no single channel, and a
+          # shared entry for it in this map is not a fallback -- it is the one
+          # way every capper's picks could converge on one channel. The worker
+          # refuses to use it, and the deploy refuses to carry it, so the
+          # misconfiguration cannot exist in a running system at all.
+          if [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ]; then
+            _official_channel=$(printf '%s' "$_target_map" | jq -r '."discord:official-picks" // empty')
+            if [ -n "$_official_channel" ]; then
+              echo "::error title=Human capper target must not be shared-mapped::UNIT_TALK_DISCORD_TARGET_MAP maps \"discord:official-picks\" to a single channel. Official picks route per capper from cappers.metadata.discord.picksChannelId; remove this entry." >&2
+              exit 1
+            fi
+            unset _official_channel
+          fi
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
@@ -1330,6 +1458,8 @@ jobs:
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
             "UNIT_TALK_ENABLED_TARGETS=$_enabled_targets" \
+            "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=$_human_capper_delivery" \
+            "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST=${UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST:-}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
@@ -1820,6 +1950,14 @@ jobs:
               REQUESTED_INGESTOR_SCHEDULING=false
               REQUESTED_WORKER_AUTORUN=false
               ;;
+            # UTV2-1923: asserted just as strictly as parked. The ONLY thing
+            # that may differ from parked is the worker.
+            human-capper)
+              REQUESTED_VALUE=false
+              REQUESTED_INGESTOR_AUTORUN=false
+              REQUESTED_INGESTOR_SCHEDULING=false
+              REQUESTED_WORKER_AUTORUN=true
+              ;;
             *)
               echo "::error::Validated syndicate-machine mode is missing or invalid for production readiness."
               exit 1
@@ -1960,12 +2098,23 @@ jobs:
             echo "::error::UNIT_TALK_ENABLED_TARGETS readiness RED in production container: parked mode requires 'none', runtime='${ENABLED_TARGETS_VALUE:-missing}'"
             exit 1
           fi
+          # UTV2-1923: human-capper mode is asserted exactly as tightly. One
+          # target, named literally. Anything else running in the container --
+          # including a real promotion target leaking in from the
+          # UNIT_TALK_ENABLED_TARGETS secret -- is a red readiness result, not
+          # a variation.
+          if [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ] && [ "$ENABLED_TARGETS_VALUE" != "official-picks" ]; then
+            echo "::error::UNIT_TALK_ENABLED_TARGETS readiness RED in production container: human-capper mode requires 'official-picks', runtime='${ENABLED_TARGETS_VALUE:-missing}'"
+            exit 1
+          fi
           # In parked mode the contract is exactly "none"; in active mode there
           # is no fixed expected string (it legitimately varies with the
           # UNIT_TALK_ENABLED_TARGETS secret), so the docker-inspect step below
           # cross-checks against whichever value compose-exec already proved.
           if [ "$SYNDICATE_MACHINE_MODE" = "parked" ]; then
             REQUESTED_ENABLED_TARGETS="none"
+          elif [ "$SYNDICATE_MACHINE_MODE" = "human-capper" ]; then
+            REQUESTED_ENABLED_TARGETS="official-picks"
           else
             REQUESTED_ENABLED_TARGETS="$ENABLED_TARGETS_VALUE"
           fi
