@@ -5,6 +5,7 @@
 
 ## Merge SHA Binding
 
+MERGE_SHA: pending merge
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1593
 Anchor commit (implementation): 53ecbfde248e524639db77174d1d2503b43d47d9
@@ -37,6 +38,16 @@ Commands run in the lane worktree `.out/worktrees/claude__utv2-1924-human-capper
 transcribed from the runs rather than recalled:
 
 ```
+$ pnpm type-check
+> pnpm exec tsc -b tsconfig.json
+(exit 0, no diagnostics)
+
+$ pnpm test
+# tests 6411
+# pass 6411
+# fail 0
+(exit 0)
+
 $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1924 --head HEAD
 Verdict: PASS
 Changed files: 11
@@ -57,6 +68,8 @@ $ pnpm lint
 (exit 0, no diagnostics)
 ```
 
+- [x] `pnpm type-check`: exit 0, no diagnostics
+- [x] `pnpm test`: exit 0, **6411 pass / 0 fail** across the whole repository
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1924 --head HEAD`: PASS, 11 changed
       files, `operator-ui` matched, no missing required artifacts
 - [x] `pnpm --filter @unit-talk/command-center exec tsc --noEmit -p tsconfig.json`: exit 0, no
@@ -71,6 +84,8 @@ $ pnpm lint
 
 | Command | Result |
 |---|---|
+| `pnpm type-check` | clean, exit 0 |
+| `pnpm test` | **6411 pass / 0 fail**, exit 0 |
 | `pnpm --filter @unit-talk/command-center exec tsx --test src/lib/data/analytics.test.ts` | **21 pass / 0 fail** |
 | `pnpm --filter @unit-talk/command-center test` | **545 pass / 0 fail** |
 | `pnpm --filter @unit-talk/command-center exec tsc --noEmit -p tsconfig.json` | clean |
