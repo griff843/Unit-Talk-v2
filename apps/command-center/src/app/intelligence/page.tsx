@@ -51,7 +51,7 @@ export default async function IntelligencePage() {
                 </div>
                 <div className="mt-3 flex gap-6 text-sm text-[var(--cc-text-secondary)]">
                   <span>{band.hitRatePct.toFixed(1)}% hit</span>
-                  <span>{band.roiPct.toFixed(1)}% ROI</span>
+                  <span>{band.roiPct === null ? '— ROI' : `${band.roiPct.toFixed(1)}% ROI`}</span>
                 </div>
               </article>
             ))}
