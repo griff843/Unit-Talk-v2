@@ -3,9 +3,9 @@
   "issue_id": "UTV2-1923",
   "tier": "T1",
   "lane_type": "runtime",
-  "measured_at": "2026-09-17T01:45:00Z",
-  "measured_against_sha": "4e125c78e9721298f738b477ad4240a463f93758",
-  "claim": "A human capper delivery path exists end to end and cannot fire as merged.",
+  "measured_at": "2026-09-17T18:40:00Z",
+  "measured_against_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
+  "claim": "A human capper delivery path exists end to end, routes to that capper's own picks-only destination, and cannot fire as merged.",
   "note": "Every value below is the posture of the code ON THIS BRANCH, not of the deployed system. The deployed release still predates this branch; see docs/mission/plan.md for deploy drift.",
   "delivery_posture": {
     "target": "official-picks",
@@ -18,7 +18,41 @@
     "kill_switch_state_without_row": "killed",
     "kill_switch_contract": "DeliveryKillSwitchRepository.isKilled() returns true for an unknown target",
     "operator_kill_switch_route_accepts_target": true,
-    "worker_target_coverage_includes_target": true
+    "worker_target_coverage_includes_target": true,
+    "destination_routing": {
+      "resolved_from": "cappers.metadata.discord.picksChannelId",
+      "resolved_where": "server-side, in the release transaction, before any outbox write",
+      "client_can_supply_or_override": false,
+      "hard_coded_channel_ids_in_source": 0,
+      "outbox_target_unchanged": "discord:official-picks",
+      "why_target_unchanged": "parseGovernedTargetFromDeliveryTarget returns null for a raw discord:<channelId> target, which would skip the registry check and make the kill switch key on the channel id. The governed target is kept and the per-capper channel is pinned in the payload instead -- the same shape discord:game-threads already uses.",
+      "discussion_channel_deliverable": false,
+      "discussion_channel_refusal": "picks-channel-is-discussion-channel, raised inside readCapperDiscordRouting before either id is returned",
+      "reserved_global_channel_refused": true,
+      "reserved_global_channel_env": "DISCORD_CAPPER_CHANNEL_ID",
+      "guild_must_match_env": "DISCORD_GUILD_ID",
+      "missing_mapping_behaviour": "refuse; 0 outbox rows; pick stays validated; NOT parked in awaiting_approval",
+      "malformed_mapping_behaviour": "refuse by name; never defaulted",
+      "absent_capper_reader_behaviour": "refuse (capper-routing-unavailable) -- an unprovable destination delivers nowhere",
+      "refusal_reasons": [
+        "capper-row-missing",
+        "capper-metadata-not-an-object",
+        "discord-routing-absent",
+        "discord-routing-not-an-object",
+        "guild-id-missing-or-malformed",
+        "picks-channel-missing-or-malformed",
+        "discussion-channel-malformed",
+        "picks-channel-is-discussion-channel",
+        "no-capper-identity",
+        "capper-routing-unavailable",
+        "expected-guild-unset",
+        "guild-mismatch",
+        "picks-channel-is-reserved-global-channel"
+      ],
+      "worker_falls_back_to_shared_map": false,
+      "worker_refusal_without_pin": "Human capper delivery for outbox <id> carries no pinned destination; refusing to fall back to a shared channel mapping.",
+      "deploy_refuses_shared_target_map_entry": true
+    }
   },
   "authorization": {
     "keys_required": 2,
@@ -76,17 +110,20 @@
     "approval_key": "HUMAN_DELIVERY_APPROVAL_KEY_GUARD",
     "requeue": "REQUEUE_HUMAN_DELIVERY_GUARD",
     "settlement_recap": "HUMAN_CAPPER_RECAP_GUARD",
-    "worker_target_derivation": "WORKER_GOVERNED_TARGET_DERIVATION_GUARD"
+    "worker_target_derivation": "WORKER_GOVERNED_TARGET_DERIVATION_GUARD",
+    "release_destination": "HUMAN_DELIVERY_DESTINATION_GUARD",
+    "worker_pinned_destination": "WORKER_PINNED_DESTINATION_GUARD"
   },
   "mutation_controls": {
-    "count": 6,
+    "count": 7,
     "guards_proven": [
       "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
       "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
       "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
       "HUMAN_DELIVERY_IMMEDIATE_GUARD",
       "REQUEUE_HUMAN_DELIVERY_GUARD",
-      "RECAP_HUMAN_DELIVERY_STOP_GUARD"
+      "RECAP_HUMAN_DELIVERY_STOP_GUARD",
+      "HUMAN_DELIVERY_DESTINATION_GUARD"
     ],
     "method": "the guarded region is deleted from a mutant copy of the module, which is then imported and shown to fail open"
   },
@@ -109,10 +146,10 @@
       "system picks"
     ],
     "human_capper_mode_enabled_targets": "official-picks",
-    "deploy_refuses_if_target_unmapped": true,
-    "deploy_refuses_if_mapped_to_capper_channel": true,
     "model_board_target_postures_changed": false,
-    "sgo_models_grading_ingestor_touched": false
+    "sgo_models_grading_ingestor_touched": false,
+    "deploy_refuses_shared_official_picks_mapping": true,
+    "deploy_assertion_inverted_note": "The deploy previously REQUIRED a discord:official-picks entry in UNIT_TALK_DISCORD_TARGET_MAP. With per-capper routing that entry is the defect, not the prerequisite, so both blocks now refuse it."
   },
   "known_residue": [
     {
@@ -123,8 +160,9 @@
   ],
   "activation_sequence_remaining": [
     "Griff sets the repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
-    "Griff maps discord:official-picks in UNIT_TALK_DISCORD_TARGET_MAP",
+    "Griff writes cappers.metadata.discord for each authorized capper (guildId, picksChannelId, discussionChannelId) -- reserved, not performed by this lane",
     "Griff configures UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST",
+    "Griff confirms DISCORD_GUILD_ID is set for the API service",
     "Griff dispatches Deploy",
     "Griff releases the delivery_kill_switch row for official-picks",
     "canary E2E, then the decision to open member delivery"

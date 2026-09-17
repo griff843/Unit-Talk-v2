@@ -7,14 +7,14 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "86d35be5ad85ba8f72065fcd8e60b6ed715e3554",
+    "verified_source_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T12:30:00Z",
-    "measured_against_sha": "86d35be5ad85ba8f72065fcd8e60b6ed715e3554",
+    "measured_at": "2026-09-17T18:45:00Z",
+    "measured_against_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
     "commands": [
       {
         "command": "pnpm type-check",
@@ -26,7 +26,7 @@
         "command": "pnpm test",
         "exit_code": 0,
         "result": "pass",
-        "ok_lines": 5872,
+        "ok_lines": 5880,
         "not_ok_lines": 0
       },
       {
@@ -40,7 +40,7 @@
         "exit_code": 0,
         "result": "pass",
         "verdict": "PASS",
-        "changed_files": 27,
+        "changed_files": 31,
         "rules_matched": [
           "lifecycle-fsm"
         ],
@@ -58,10 +58,10 @@
     "new_coverage": [
       {
         "file": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
-        "tests": 36,
-        "pass": 36,
+        "tests": 44,
+        "pass": 44,
         "fail": 0,
-        "mutation_controls": 6
+        "mutation_controls": 7
       },
       {
         "file": "apps/api/src/capper-delivery-authorization.test.ts",
@@ -74,7 +74,8 @@
         "tests": 32,
         "pass": 32,
         "fail": 0,
-        "new_tests": 7
+        "new_tests": 7,
+        "note": "the shared-map rule is inverted: a discord:official-picks entry is now refused"
       },
       {
         "file": "apps/worker/src/worker-runtime.test.ts",
@@ -107,13 +108,21 @@
         "tests": 13,
         "pass": 13,
         "fail": 0
+      },
+      {
+        "file": "apps/worker/src/delivery-adapters.test.ts",
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "new_tests": 3,
+        "note": "pinned destination beats a present shared map entry; a human target with no pin refuses; a malformed pin is not a destination"
       }
     ]
   },
   "runtime_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T12:30:00Z",
-    "note": "This lane makes two claims. Positive: an authorized human capper's submission creates exactly one governed delivery on discord:official-picks, in one transaction, with no operator approval step -- operator approval is reserved for autonomous producers (model-driven, board-construction, system-pick-scanner, alert-agent), which remain braked. Negative, and the one that matters for containment: as SHIPPED that delivery path cannot fire, because official-picks is enabled:false in the registry and holds no delivery_kill_switch row, and isKilled() is fail-closed on an unknown target. A refusing control returns delivery-refused and does NOT park the pick for approval. The measured posture of every control is in runtime-health.json. A live-DB run against production is deliberately not performed -- it would require creating a delivery_kill_switch row for official-picks, a production write whose only effect would be to weaken the fail-closed default this lane depends on. The staging live-DB receipt is produced by the `verify` and `Writable DB proof (staging only)` checks on PR #1592 and is harvested at closeout by ops:proof-generate --merge-sha.",
+    "measured_at": "2026-09-17T18:45:00Z",
+    "note": "This lane makes three claims. Positive: an authorized human capper's submission creates exactly one governed delivery on discord:official-picks, in one transaction, with no operator approval step. Routing: that delivery reaches THAT capper's own picks-only destination, resolved server-side from cappers.metadata.discord.picksChannelId, never a shared channel, never the capper's discussion/Capper Space destination, and never a value the browser supplied -- operator approval is reserved for autonomous producers (model-driven, board-construction, system-pick-scanner, alert-agent), which remain braked. Negative, and the one that matters for containment: as SHIPPED that delivery path cannot fire, because official-picks is enabled:false in the registry and holds no delivery_kill_switch row, and isKilled() is fail-closed on an unknown target. A refusing control returns delivery-refused and does NOT park the pick for approval. The measured posture of every control is in runtime-health.json. A live-DB run against production is deliberately not performed -- it would require creating a delivery_kill_switch row for official-picks, a production write whose only effect would be to weaken the fail-closed default this lane depends on. The staging live-DB receipt is produced by the `verify` and `Writable DB proof (staging only)` checks on PR #1592 and is harvested at closeout by ops:proof-generate --merge-sha.",
     "queries": [
       {
         "name": "the governed target holds no kill-switch row in production",
@@ -162,6 +171,30 @@
         "method": "withGuardRemoved copies the module with the text between the UTV2-1923 *_START/_END markers deleted, imports the mutant, and asserts it fails open",
         "result": "5/5 controls kill their mutant: forgery guard, enqueue authorization guard, submit brake, requeue guard, target exclusivity guard.",
         "significance": "Each control demonstrates the specific failure it prevents rather than merely existing."
+      },
+      {
+        "name": "the delivery routes to the capper's own picks destination, and the discussion destination appears nowhere",
+        "method": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts against the real in-memory repository bundle, with a seeded cappers row carrying metadata.discord.{guildId,picksChannelId,discussionChannelId}",
+        "result": "exactly one outbox row, pinned to picksChannelId; a full JSON scan of the row finds no occurrence of discussionChannelId; a second capper with a different mapping routes to its own channel, so routing is per capper and not per deployment.",
+        "significance": "This is the PM-stated product behaviour: the capper's picks-only destination, with Capper Space kept separate."
+      },
+      {
+        "name": "a missing or malformed mapping fails closed",
+        "method": "the same suite: a capper with no cappers row; a 9-case malformed table covering metadata {} (the exact production shape today), a non-object discord block, an absent/blank/name-shaped/mention-shaped picksChannelId, a malformed discussionChannelId, picks==discussion, and a foreign guildId; plus a bundle exposing no cappers reader at all",
+        "result": "every case refuses by NAME (destination-refused:<reason>), creates 0 outbox rows and leaves the pick `validated`. No case defaults to a channel and no case parks the pick in awaiting_approval.",
+        "significance": "A malformed configuration record is never treated as valid configuration, which is what PM asked the typed parser to guarantee."
+      },
+      {
+        "name": "the worker will not fall back to the shared target map",
+        "method": "apps/worker/src/delivery-adapters.test.ts: a pinned outbox row delivered while a conflicting shared map entry is present; a human-target row with no pin; a row whose pin carries a channel NAME",
+        "result": "7/7 pass. The pin wins over the shared map; an unpinned human delivery refuses (`no pinned destination`) and the HTTP layer is never reached; a malformed pin is not a destination.",
+        "significance": "The shared-channel convergence has no path at runtime, independently of the deploy-time refusal."
+      },
+      {
+        "name": "the Discord destinations were identified read-only, not inferred",
+        "method": "a read-only enumeration executed inside the already-authorized unit-talk-discord-bot-1 container, reading DISCORD_BOT_TOKEN from that container's own environment and printing only names, ids, types and parents",
+        "result": "guild 1284478946171293736; capper destinations are forum THREADS (type 11) under the cappers-space forum, one Official Picks thread and one Q&A & Discussion thread per capper. DISCORD_CAPPER_CHANNEL_ID in production resolves to a canary-publish channel, not a capper destination.",
+        "significance": "PM's precondition for proceeding with code. No secret value was printed, nothing was created, renamed or modified, and no id is hard-coded in source."
       }
     ],
     "row_counts": [
@@ -203,14 +236,38 @@
       },
       {
         "probe": "mutation controls that kill their mutant",
-        "value": 5
+        "value": 7
       },
       {
         "probe": "new tests added by this lane",
-        "value": 48
+        "value": 59
       },
       {
         "probe": "containment settings changed by this lane",
+        "value": 0
+      },
+      {
+        "probe": "hard-coded Discord channel ids in source added by this lane",
+        "value": 0
+      },
+      {
+        "probe": "production cappers.metadata rows written by this lane",
+        "value": 0
+      },
+      {
+        "probe": "Discord channels or threads created, renamed or modified by this lane",
+        "value": 0
+      },
+      {
+        "probe": "outbox rows created when the capper has no mapping",
+        "value": 0
+      },
+      {
+        "probe": "malformed mapping shapes proven to fail closed",
+        "value": 9
+      },
+      {
+        "probe": "occurrences of the discussion channel id on the delivered outbox row",
         "value": 0
       }
     ],
