@@ -7,14 +7,14 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "4e125c78e9721298f738b477ad4240a463f93758",
+    "verified_source_sha": "86d35be5ad85ba8f72065fcd8e60b6ed715e3554",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T03:13:36Z",
-    "measured_against_sha": "4e125c78e9721298f738b477ad4240a463f93758",
+    "measured_at": "2026-09-17T12:30:00Z",
+    "measured_against_sha": "86d35be5ad85ba8f72065fcd8e60b6ed715e3554",
     "commands": [
       {
         "command": "pnpm type-check",
@@ -26,7 +26,7 @@
         "command": "pnpm test",
         "exit_code": 0,
         "result": "pass",
-        "ok_lines": 5867,
+        "ok_lines": 5872,
         "not_ok_lines": 0
       },
       {
@@ -58,10 +58,10 @@
     "new_coverage": [
       {
         "file": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
-        "tests": 25,
-        "pass": 25,
+        "tests": 36,
+        "pass": 36,
         "fail": 0,
-        "mutation_controls": 5
+        "mutation_controls": 6
       },
       {
         "file": "apps/api/src/capper-delivery-authorization.test.ts",
@@ -82,13 +82,38 @@
         "pass": 70,
         "fail": 0,
         "new_tests": 4
+      },
+      {
+        "file": "apps/api/src/recap-service.test.ts",
+        "tests": 27,
+        "pass": 27,
+        "fail": 0
+      },
+      {
+        "file": "apps/api/src/distribution-service.test.ts",
+        "tests": 35,
+        "pass": 35,
+        "fail": 0
+      },
+      {
+        "file": "apps/api/src/controllers/review-pick-controller.test.ts",
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "note": "the approval recovery door, unchanged"
+      },
+      {
+        "file": "apps/api/src/controllers/submit-pick-controller.test.ts",
+        "tests": 13,
+        "pass": 13,
+        "fail": 0
       }
     ]
   },
   "runtime_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T02:10:00Z",
-    "note": "This lane's runtime claim is a refusal: a delivery path exists and cannot fire. The measured posture of every control is in runtime-health.json. A live-DB run against production is deliberately not performed -- it would require creating a delivery_kill_switch row for official-picks, a production write whose only effect would be to weaken the fail-closed default this lane depends on. The staging live-DB receipt is produced by the `verify` and `Writable DB proof (staging only)` checks on PR #1592 and is harvested at closeout by ops:proof-generate --merge-sha.",
+    "measured_at": "2026-09-17T12:30:00Z",
+    "note": "This lane makes two claims. Positive: an authorized human capper's submission creates exactly one governed delivery on discord:official-picks, in one transaction, with no operator approval step -- operator approval is reserved for autonomous producers (model-driven, board-construction, system-pick-scanner, alert-agent), which remain braked. Negative, and the one that matters for containment: as SHIPPED that delivery path cannot fire, because official-picks is enabled:false in the registry and holds no delivery_kill_switch row, and isKilled() is fail-closed on an unknown target. A refusing control returns delivery-refused and does NOT park the pick for approval. The measured posture of every control is in runtime-health.json. A live-DB run against production is deliberately not performed -- it would require creating a delivery_kill_switch row for official-picks, a production write whose only effect would be to weaken the fail-closed default this lane depends on. The staging live-DB receipt is produced by the `verify` and `Writable DB proof (staging only)` checks on PR #1592 and is harvested at closeout by ops:proof-generate --merge-sha.",
     "queries": [
       {
         "name": "the governed target holds no kill-switch row in production",

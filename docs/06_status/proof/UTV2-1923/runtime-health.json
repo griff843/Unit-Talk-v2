@@ -38,19 +38,37 @@
       "every_decision_audited": true,
       "allowlist_contents_recorded": false
     },
-    "key_two": {
-      "name": "operator approval",
-      "surface": "review-pick-controller",
-      "transition": "awaiting_approval -> queued",
+    "key_one_is_the_only_authorization": true,
+    "operator_approval": {
+      "scope": "autonomous producers only",
+      "braked_sources": [
+        "model-driven",
+        "board-construction",
+        "system-pick-scanner",
+        "alert-agent"
+      ],
+      "human_capper_requires_approval": false,
+      "asserted_by": "distribution-service.ts humanCapperDeliveryRequiresOperatorApproval / requiresOperatorApprovalBeforeDelivery",
+      "recovery_door": {
+        "surface": "review-pick-controller",
+        "transition": "awaiting_approval -> queued",
+        "atomic_with_outbox_write": true,
+        "note": "not the canonical human capper path; reachable only for a pick an operator deliberately parked"
+      }
+    },
+    "human_capper_delivery": {
+      "surface": "submit-pick-controller",
+      "transition": "validated -> queued",
       "atomic_with_outbox_write": true,
-      "promotion_reevaluation_skipped_for_human_picks": true
+      "operator_step": null,
+      "refused_posture": "delivery-refused; pick stays validated; NOT parked in awaiting_approval"
     }
   },
   "chokepoints": {
     "submit_handler_forgery_strip": "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
     "submit_handler_track_only_pin": "UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD",
     "controller_request_integrity": "HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD",
-    "controller_brake": "HUMAN_DELIVERY_BRAKE_GUARD",
+    "controller_immediate_delivery": "HUMAN_DELIVERY_IMMEDIATE_GUARD",
     "enqueue_authorization": "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
     "enqueue_target_exclusivity": "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
     "atomic_enqueue": "HUMAN_DELIVERY_ATOMIC_GUARD",
@@ -61,22 +79,29 @@
     "worker_target_derivation": "WORKER_GOVERNED_TARGET_DERIVATION_GUARD"
   },
   "mutation_controls": {
-    "count": 5,
+    "count": 6,
     "guards_proven": [
       "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
       "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
       "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
-      "HUMAN_DELIVERY_BRAKE_GUARD",
-      "REQUEUE_HUMAN_DELIVERY_GUARD"
+      "HUMAN_DELIVERY_IMMEDIATE_GUARD",
+      "REQUEUE_HUMAN_DELIVERY_GUARD",
+      "RECAP_HUMAN_DELIVERY_STOP_GUARD"
     ],
     "method": "the guarded region is deleted from a mutant copy of the module, which is then imported and shown to fail open"
   },
   "containment": {
-    "syndicate_machine_mode_values": ["active", "parked", "human-capper"],
+    "syndicate_machine_mode_values": [
+      "active",
+      "parked",
+      "human-capper"
+    ],
     "parked_semantics_changed": false,
     "human_capper_mode_reachable_from_secret": false,
     "human_capper_mode_source": "repository variable UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
-    "human_capper_mode_releases": ["worker autorun"],
+    "human_capper_mode_releases": [
+      "worker autorun"
+    ],
     "human_capper_mode_keeps_parked": [
       "provider ingestion",
       "ingestor scheduling",

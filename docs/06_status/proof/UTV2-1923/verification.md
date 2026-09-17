@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-17T03:13:36.000Z
+Generated at: 2026-09-17T12:30:00.000Z
 Issue: UTV2-1923
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1923-human-capper-official-picks-delivery
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1592
-Head SHA: 4e125c78e9721298f738b477ad4240a463f93758
+Head SHA: 86d35be5ad85ba8f72065fcd8e60b6ed715e3554
 result: pass
 
 ## ASSERTIONS:
@@ -20,16 +20,18 @@ result: pass
 The lane claims one product transaction, built and inert. Each box is an
 assertion a named test makes; none is a restatement of intent.
 
-- [x] An authorized human capper's submission is pinned `delivery-eligible` by the SERVER, from an allow-list the request cannot reach, and parks in `awaiting_approval` with zero outbox rows.
+- [x] An authorized human capper's submission is pinned `delivery-eligible` by the SERVER, from an allow-list the request cannot reach, and is delivered IMMEDIATELY: `validated → queued` and exactly one outbox row on `discord:official-picks`, in one transaction, with no operator step.
+- [x] The delivered row carries the authenticated submitting capper as `picks.capper_id`.
+- [x] A duplicate submission resolves to the same pick and creates no second delivery — still exactly one outbox row.
 - [x] An unauthorized capper is still pinned Track Only, and every pre-existing Track Only chokepoint still refuses.
 - [x] A client-supplied `deliveryAuthorization` record is destroyed before anything reads it, on every source — not only the capper path.
 - [x] A capper requesting `distributionMode: 'delivery-eligible'` is refused `403 CAPPER_TRACK_ONLY_REQUIRED`.
-- [x] Operator approval performs the `awaiting_approval → queued` transition and the outbox write as one transaction, and is the ONLY path out of the brake.
-- [x] With the target disabled — the shipped posture — approval enqueues nothing and says why (`target-disabled`).
-- [x] With the target released, approval enqueues exactly one row, on `discord:official-picks`, auditable with both the approver and the capper.
+- [x] Operator approval is reserved for AUTONOMOUS producers: `model-driven`, `board-construction`, `system-pick-scanner` and `alert-agent` are still braked into `awaiting_approval` with zero outbox rows, and the human ingress is not. Asserted mechanically via `requiresOperatorApprovalBeforeDelivery` and `humanCapperDeliveryRequiresOperatorApproval` (`false`), which live beside `GOVERNANCE_BRAKE_SOURCES`.
+- [x] With the target disabled — the shipped posture — an authorized submission FAILS CLOSED: `delivery-refused` with reason `target-disabled`, zero outbox rows, and the pick stays `validated`. It is NOT parked in `awaiting_approval`; a refusing control is never a request for approval.
+- [x] Approval remains a RECOVERY door for a human pick an operator has deliberately parked: it releases exactly one row on `discord:official-picks` when the target is released, enqueues nothing and says `target-disabled` when it is not, and denial voids the pick.
 - [x] `official-picks` participates in the target registry, worker target coverage, the delivery kill switch and the operator kill-switch route; it ships `enabled: false` and holds no kill-switch row, so it is killed twice over.
 - [x] An authorized human pick cannot be delivered to any board target, despite the `promotion_target` the scoring lane stamps on it at submission.
-- [x] Requeue refuses a human capper pick outright (`409 HUMAN_DELIVERY_REQUEUE_BLOCKED`).
+- [x] Requeue refuses a human capper pick outright (`409 HUMAN_DELIVERY_REQUEUE_BLOCKED`), so it cannot become a second delivery path.
 - [x] A manually settled human pick settles, and its immediate per-pick recap is gated by the live kill switch — the recap posts by direct `fetch`, outside the outbox, so the worker's check never sees it.
 - [x] The SCHEDULED aggregate recap honours the same delivery stop as the immediate per-pick recap, so a stop engaged after delivery cannot be undone by the next morning's daily/weekly/monthly publication.
 - [x] The `human-capper` deploy mode releases the worker and nothing else; `parked` remains byte-identical; the mode is unreachable from the syndicate-machine secret.
@@ -39,7 +41,7 @@ assertion a named test makes; none is a restatement of intent.
 
 ## EVIDENCE:
 
-Measured on `4e125c78e9721298f738b477ad4240a463f93758`, in the lane worktree.
+Measured on `86d35be5ad85ba8f72065fcd8e60b6ed715e3554`, in the lane worktree.
 
 ```
 $ pnpm type-check
@@ -47,11 +49,11 @@ $ pnpm type-check
 exit=0
 
 $ pnpm test
-5867 `ok` lines, 0 `not ok` lines across every package.
+5872 `ok` lines, 0 `not ok` lines across every package.
 (tail, the last file in the run — the new T1 proof:)
-1..31
-# tests 31
-# pass 31
+1..36
+# tests 36
+# pass 36
 # fail 0
 exit=0
 
@@ -78,7 +80,7 @@ Per-file detail for the new coverage:
 
 ```
 $ pnpm exec tsx --test apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
-# tests 31   # pass 31   # fail 0        (includes 6 mutation controls)
+# tests 36   # pass 36   # fail 0        (includes 6 mutation controls)
 
 $ pnpm exec tsx --test apps/api/src/capper-delivery-authorization.test.ts
 # tests 12   # pass 12   # fail 0
@@ -91,11 +93,21 @@ $ pnpm exec tsx --test scripts/ci/deploy-parked-mode.test.ts
 
 $ pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts
 # tests 70   # pass 70   # fail 0        (4 new kill-switch tests)
+
+$ pnpm exec tsx --test apps/api/src/distribution-service.test.ts
+# tests 35   # pass 35   # fail 0
+
+$ pnpm exec tsx --test apps/api/src/controllers/review-pick-controller.test.ts
+# tests 18   # pass 18   # fail 0        (the recovery door, unchanged)
+
+$ pnpm exec tsx --test apps/api/src/controllers/submit-pick-controller.test.ts
+# tests 13   # pass 13   # fail 0
 ```
 
 ## Verification
 - [x] `pnpm type-check`: exit 0, no diagnostics
-- [x] `pnpm test`: exit 0, 0 failing assertions across the whole suite
+- [x] `pnpm lint`: exit 0, no output
+- [x] `pnpm test`: exit 0, 5872 `ok` / 0 `not ok` across the whole suite
 - [ ] `pnpm verify`: cannot run locally — `ci:assert-staging` refuses outside the `staging-ci` environment; the authoritative run is the `verify` check on PR #1592
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS (27 changed files, `lifecycle-fsm` matched; the one missing artifact is PM-gated advisory)
 
@@ -103,13 +115,18 @@ $ pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts
 
 **What this lane's runtime proof can and cannot be, stated plainly.**
 
-The behaviour under test is a *refusal*: the claim is that a delivery path
-exists and cannot fire. Every control that makes it not fire is exercised here
-against real repositories and the real deploy script:
+The lane now claims two things, and they need different evidence. The positive
+claim — an authorized capper's submission creates exactly one governed delivery,
+with no operator step — is exercised end to end against real repositories. The
+negative claim is the one that matters for containment: as SHIPPED, that path
+cannot fire, because the target is disabled in the registry and killed by the
+absence of a kill-switch row. Both are exercised here against real repositories
+and the real deploy script:
 
-- the two-key authorization path, the brake, the approval transaction, the
-  enqueue chokepoints and the recap gate run end to end against the in-memory
-  repository bundle — the same code paths the database bundle implements;
+- the server-side authorization path, the immediate release transaction, the
+  approval recovery door, the enqueue chokepoints and the recap gate run end to
+  end against the in-memory repository bundle — the same code paths the database
+  bundle implements;
 - the worker's registry and kill-switch checks run through `runWorkerCycles`
   with a real `InMemoryDeliveryKillSwitchRepository`, whose `isKilled` is the
   same fail-closed contract the database repository implements;
@@ -140,4 +157,4 @@ control as shipped.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1592
 Approved PR head: pending merge
-Execution SHA: 4e125c78e9721298f738b477ad4240a463f93758
+Execution SHA: 86d35be5ad85ba8f72065fcd8e60b6ed715e3554
