@@ -1,0 +1,111 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1927
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1927
+  objective: Remove stale human-approval language from INTERNAL_PICK_APPROVAL_PROTOCOL.md
+  acceptance_criteria:
+    - >-
+      PM-directed follow-up, deliberately kept out of the Human Capper
+      official-picks delivery PR.
+
+
+      `docs/05_operations/INTERNAL_PICK_APPROVAL_PROTOCOL.md` reads as though
+      every internal pick must pass through `awaiting_approval` before delivery.
+      That is no longer true and was never intended for human capper
+      submissions.
+
+
+      PM ratification carried into this lane:
+
+
+      * Approval is reserved for SYSTEM-GENERATED / AUTOMATED picks
+      (`model-driven`, `board-construction`, `system-pick-scanner`,
+      `alert-agent`).
+
+      * A human capper submission must not enter `awaiting_approval` merely
+      because it is delivery-eligible.
+
+      * If official-picks is killed or disabled, delivery must fail closed. That
+      must not be reinterpreted as "needs operator approval."
+
+
+      Scope: documentation only. No code, no contract semantics change, no gate
+      change.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      PM-directed follow-up, deliberately kept out of the Human Capper
+      official-picks delivery PR.
+
+
+      `docs/05_operations/INTERNAL_PICK_APPROVAL_PROTOCOL.md` reads as though
+      every internal pick must pass through `awaiting_approval` before delivery.
+      That is no longer true and was never intended for human capper
+      submissions.
+
+
+      PM ratification carried into this lane:
+
+
+      * Approval is reserved for SYSTEM-GENERATED / AUTOMATED picks
+      (`model-driven`, `board-construction`, `system-pick-scanner`,
+      `alert-agent`).
+
+      * A human capper submission must not enter `awaiting_approval` merely
+      because it is delivery-eligible.
+
+      * If official-picks is killed or disabled, delivery must fail closed. That
+      must not be reinterpreted as "needs operator approval."
+
+
+      Scope: documentation only. No code, no contract semantics change, no gate
+      change.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1927/remove-stale-human-approval-language-from-internal-pick-approval
+    title: Remove stale human-approval language from
+      INTERNAL_PICK_APPROVAL_PROTOCOL.md
+    description: >-
+      PM-directed follow-up, deliberately kept out of the Human Capper
+      official-picks delivery PR.
+
+
+      `docs/05_operations/INTERNAL_PICK_APPROVAL_PROTOCOL.md` reads as though
+      every internal pick must pass through `awaiting_approval` before delivery.
+      That is no longer true and was never intended for human capper
+      submissions.
+
+
+      PM ratification carried into this lane:
+
+
+      * Approval is reserved for SYSTEM-GENERATED / AUTOMATED picks
+      (`model-driven`, `board-construction`, `system-pick-scanner`,
+      `alert-agent`).
+
+      * A human capper submission must not enter `awaiting_approval` merely
+      because it is delivery-eligible.
+
+      * If official-picks is killed or disabled, delivery must fail closed. That
+      must not be reinterpreted as "needs operator approval."
+
+
+      Scope: documentation only. No code, no contract semantics change, no gate
+      change.
+    captured_at: 2026-09-17T18:04:53.674Z
+    description_sha256: 8f99b7f77fe9046c9200679a497680cf3d9e97a0e74186b6dc55bbb70cc39baf
+  contract_hash: 3773e7f6b1817950f8669a3152c792c3c80ca2864b7a96ee3705f5f9cbf8ffa5
