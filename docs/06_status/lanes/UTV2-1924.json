@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1924-human-capper-surface-truth",
   "branch": "claude/utv2-1924-human-capper-surface-truth",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "9e21e8a5d35e762ec2ce3bf2c9a2abec61449c32",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1593",
   "files_changed": [],
   "file_scope_lock": [
@@ -17,9 +17,9 @@
     "docs/06_status/proof/UTV2-1924/diff-summary.md",
     "docs/06_status/proof/UTV2-1924/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-09-17T01:49:06.764Z",
-  "heartbeat_at": "2026-09-17T01:57:54.660Z",
+  "heartbeat_at": "2026-09-17T03:17:18.482Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1924-human-capper-surface-truth.json",
