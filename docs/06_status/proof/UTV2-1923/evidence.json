@@ -4,12 +4,14 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "a26894731e68ec65de4537a7642931c74d6ccd02",
     "verified_source_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-17T20:07:10.758Z"
   },
   "static_proof": {
     "status": "pass",
