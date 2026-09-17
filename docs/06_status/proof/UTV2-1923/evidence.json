@@ -4,19 +4,19 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "merged",
+  "status": "in_review",
   "sha_binding": {
-    "merge_sha": "a26894731e68ec65de4537a7642931c74d6ccd02",
-    "verified_source_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
+    "merge_sha": null,
+    "verified_source_sha": "c2f35a6a5a0c73fb9832b0b92ecc8f221e449bd1",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "merge_sha",
-    "bound_at": "2026-09-17T20:07:10.758Z"
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-17T22:22:58.037Z"
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T18:45:00Z",
-    "measured_against_sha": "7bba38a2cd5f6582c52facb1e673468678661f22",
+    "measured_at": "2026-09-17T22:23:16Z",
+    "measured_against_sha": "c2f35a6a5a0c73fb9832b0b92ecc8f221e449bd1",
     "commands": [
       {
         "command": "pnpm type-check",
@@ -28,7 +28,7 @@
         "command": "pnpm test",
         "exit_code": 0,
         "result": "pass",
-        "ok_lines": 5880,
+        "ok_lines": 6027,
         "not_ok_lines": 0
       },
       {
@@ -38,241 +38,80 @@
         "note": "no output"
       },
       {
-        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-        "exit_code": 0,
-        "result": "pass",
-        "verdict": "PASS",
-        "changed_files": 31,
-        "rules_matched": [
-          "lifecycle-fsm"
-        ],
-        "advisory_missing": [
-          "r4-fault-report (PM-gated)"
-        ]
-      },
-      {
         "command": "pnpm verify",
-        "exit_code": null,
-        "result": "not_run_locally",
-        "note": "ci:assert-staging refuses outside the staging-ci GitHub environment; the authoritative run is the `verify` check on PR #1592"
+        "exit_code": 1,
+        "result": "refused_by_containment",
+        "ok_lines": 6027,
+        "not_ok_lines": 0,
+        "suite_blocks": 105,
+        "suite_blocks_with_failures": 0,
+        "note": "0 not-ok lines and 105 suite blocks each '# fail 0'; every stage through verify:commands clean. Exit 1 originates solely in ci:assert-staging: 'host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx'. This is deliberate staging-isolation containment, not a defect in the diff. The authoritative full-tree result is the required `verify` check on PR #1599, which runs inside staging-ci."
       }
     ],
     "new_coverage": [
       {
-        "file": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
-        "tests": 44,
-        "pass": 44,
-        "fail": 0,
-        "mutation_controls": 7
-      },
-      {
-        "file": "apps/api/src/capper-delivery-authorization.test.ts",
-        "tests": 12,
-        "pass": 12,
-        "fail": 0
-      },
-      {
-        "file": "scripts/ci/deploy-parked-mode.test.ts",
-        "tests": 32,
-        "pass": 32,
-        "fail": 0,
-        "new_tests": 7,
-        "note": "the shared-map rule is inverted: a discord:official-picks entry is now refused"
-      },
-      {
         "file": "apps/worker/src/worker-runtime.test.ts",
-        "tests": 70,
-        "pass": 70,
+        "tests": 72,
+        "pass": 72,
         "fail": 0,
-        "new_tests": 4
+        "new_tests": 2,
+        "mutation_controls": 2
+      }
+    ],
+    "mutation_controls": [
+      {
+        "control": "createWorkerRuntimeDependencies starts a human delivery target with no shared channel mapping",
+        "mutation": "remove the isHumanDeliveryTarget exemption from assertDiscordTargetMapCoversTargets",
+        "observed": "not ok 17 (1 failure, 71 pass)",
+        "result": "fails_on_the_named_condition",
+        "proves": "the control reproduces the shipped deadlock rather than passing vacuously"
       },
       {
-        "file": "apps/api/src/recap-service.test.ts",
-        "tests": 27,
-        "pass": 27,
-        "fail": 0
+        "control": "createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping",
+        "mutation": "widen the exemption from isHumanDeliveryTarget(governedTarget) to governedTarget !== null",
+        "observed": "not ok 18 (1 failure, 71 pass)",
+        "result": "fails_on_the_named_condition",
+        "proves": "the exemption cannot be widened into a hole without a control firing"
       },
       {
-        "file": "apps/api/src/distribution-service.test.ts",
-        "tests": 35,
-        "pass": 35,
-        "fail": 0
-      },
-      {
-        "file": "apps/api/src/controllers/review-pick-controller.test.ts",
-        "tests": 18,
-        "pass": 18,
-        "fail": 0,
-        "note": "the approval recovery door, unchanged"
-      },
-      {
-        "file": "apps/api/src/controllers/submit-pick-controller.test.ts",
-        "tests": 13,
-        "pass": 13,
-        "fail": 0
-      },
-      {
-        "file": "apps/worker/src/delivery-adapters.test.ts",
-        "tests": 7,
-        "pass": 7,
-        "fail": 0,
-        "new_tests": 3,
-        "note": "pinned destination beats a present shared map entry; a human target with no pin refuses; a malformed pin is not a destination"
+        "control": "unmutated baseline",
+        "mutation": "none",
+        "observed": "72 pass / 0 fail",
+        "result": "pass",
+        "proves": "both controls pass only with the fix exactly as written"
       }
     ]
   },
   "runtime_proof": {
     "status": "pass",
-    "measured_at": "2026-09-17T18:45:00Z",
-    "note": "This lane makes three claims. Positive: an authorized human capper's submission creates exactly one governed delivery on discord:official-picks, in one transaction, with no operator approval step. Routing: that delivery reaches THAT capper's own picks-only destination, resolved server-side from cappers.metadata.discord.picksChannelId, never a shared channel, never the capper's discussion/Capper Space destination, and never a value the browser supplied -- operator approval is reserved for autonomous producers (model-driven, board-construction, system-pick-scanner, alert-agent), which remain braked. Negative, and the one that matters for containment: as SHIPPED that delivery path cannot fire, because official-picks is enabled:false in the registry and holds no delivery_kill_switch row, and isKilled() is fail-closed on an unknown target. A refusing control returns delivery-refused and does NOT park the pick for approval. The measured posture of every control is in runtime-health.json. A live-DB run against production is deliberately not performed -- it would require creating a delivery_kill_switch row for official-picks, a production write whose only effect would be to weaken the fail-closed default this lane depends on. The staging live-DB receipt is produced by the `verify` and `Writable DB proof (staging only)` checks on PR #1592 and is harvested at closeout by ops:proof-generate --merge-sha.",
-    "queries": [
+    "measured_at": "2026-09-17T22:23:16Z",
+    "environment": "production zfzdnfwdarxucxtaojxm",
+    "note": "This increment's defect was discovered in production, not in a test. The runtime evidence is the failure, the diagnosis and the rollback.",
+    "observations": [
       {
-        "name": "the governed target holds no kill-switch row in production",
-        "method": "read-only SELECT against production zfzdnfwdarxucxtaojxm: `select target, killed from delivery_kill_switch order by target`",
-        "result": "4 rows: best-bets killed=true, exclusive-insights killed=true, trader-insights killed=true, t1-proof-utv2-1427-kill-switch killed=false. `official-picks` is absent.",
-        "significance": "DeliveryKillSwitchRepository.isKilled returns true for an unknown target, so the ABSENCE of the row is the kill. The lane deliberately does not create one -- creating it would be a production write whose only effect is to weaken this default."
+        "what": "defect reproduced in production",
+        "evidence": "Deploy run 35278517112 promote FAILED at 'Confirm syndicate machine gate in production container'; worker container in Restarting (1) with RuntimeConfigError RUNTIME_REQUIRED_ENV_MISSING at apps/worker/src/runtime.ts:284"
       },
       {
-        "name": "nothing has ever been delivered, or queued, on the governed target",
-        "method": "read-only SELECT: `select count(*) from distribution_outbox where target = 'discord:official-picks'` and `select count(*) from picks where promotion_target = 'official-picks'`",
-        "result": "0 and 0.",
-        "significance": "The shipped posture is measured in production, not asserted from the branch."
+        "what": "the two guards are mutually unsatisfiable",
+        "evidence": "deploy.yml:612 and :1411 refuse the deploy when UNIT_TALK_DISCORD_TARGET_MAP contains discord:official-picks; runtime.ts:284 refused its absence. No value of the secret satisfies both."
       },
       {
-        "name": "no production pick carries a delivery authorization record",
-        "method": "read-only SELECT: `select count(*) from picks where metadata ? 'deliveryAuthorization'`",
-        "result": "0.",
-        "significance": "The authorization key this lane introduces does not yet exist on any persisted row, so no existing pick changes behaviour when the code ships."
+        "what": "parked mode starts only via the numeric escape hatch",
+        "evidence": "production worker env UNIT_TALK_DISTRIBUTION_TARGETS=discord:1296531122234327100 matches ^discord:\\d+$; human-capper mode's discord:official-picks does not"
       },
       {
-        "name": "the two-key path, the brake and the approval transaction, end to end",
-        "method": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts driven against the real in-memory repository bundle -- the same code paths the database bundle implements",
-        "result": "25/25 pass. An authorized submission is server-pinned delivery-eligible and parks in awaiting_approval with outboxEnqueued=false; approval with the target disabled enqueues nothing and reports target-disabled; approval with the target released enqueues exactly one row on discord:official-picks.",
-        "significance": "Operator approval is the only path out of the brake, and it is still subordinate to the kill switch."
+        "what": "containment held throughout the failure",
+        "evidence": "official-picks kill switch killed=true on 10 consecutive readbacks; 0 distribution_outbox rows for discord:official-picks; 0 rows sent today; newest outbox row repo-wide unchanged at 2026-07-30 20:04:41; outbox total unchanged at 5747"
       },
       {
-        "name": "the client cannot reach the authorization decision",
-        "method": "a forged metadata.deliveryAuthorization submitted on the capper path and on the unauthenticated path; a client requesting distributionMode delivery-eligible",
-        "result": "the record is deleted before anything reads it on every source; the request is refused 403 CAPPER_TRACK_ONLY_REQUIRED",
-        "significance": "Browser/client cannot grant delivery, which is the PM-stated V1 authorization shape."
+        "what": "production restored",
+        "evidence": "Rollback run 35279450108 success end to end including post-deploy smoke, same SHA 616994604292345b9e44cfd0c91339fcbe9bcdef with UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false; worker recovered from Restarting (1) to Up (healthy)"
       },
       {
-        "name": "the worker's registry and kill-switch checks, exercised",
-        "method": "runWorkerCycles with a real InMemoryDeliveryKillSwitchRepository (isKilled fail-closed on unknown), apps/worker/src/worker-runtime.test.ts",
-        "result": "70/70 pass, 4 new: a raw discord:<channelId> target is now subject to the kill switch; a released raw channel still delivers and is not registry-refused; the governed human target is killed until released; registry and kill switch are independent.",
-        "significance": "Closes the discord:<channelId> hole, which previously bypassed the kill switch entirely."
-      },
-      {
-        "name": "the bounded deploy mode, parsed from the real workflow",
-        "method": "scripts/ci/deploy-parked-mode.test.ts asserting against .github/workflows/deploy.yml source, in both the canary and production blocks",
-        "result": "32/32 pass, 7 new. human-capper releases the worker only; SYNDICATE_MACHINE_ENABLED stays false; parked is byte-identical; the mode is unreachable from the SYNDICATE_MACHINE_ENABLED secret (it is a repository variable, so reserved decision 4 is untouched); an unmapped or capper-channel-colliding target map is a hard deploy error.",
-        "significance": "Containment is not widened, and the PM instruction not to route member picks through DISCORD_CAPPER_CHANNEL_ID is enforced at deploy time, not in prose."
-      },
-      {
-        "name": "every guard has a mutation control",
-        "method": "withGuardRemoved copies the module with the text between the UTV2-1923 *_START/_END markers deleted, imports the mutant, and asserts it fails open",
-        "result": "5/5 controls kill their mutant: forgery guard, enqueue authorization guard, submit brake, requeue guard, target exclusivity guard.",
-        "significance": "Each control demonstrates the specific failure it prevents rather than merely existing."
-      },
-      {
-        "name": "the delivery routes to the capper's own picks destination, and the discussion destination appears nowhere",
-        "method": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts against the real in-memory repository bundle, with a seeded cappers row carrying metadata.discord.{guildId,picksChannelId,discussionChannelId}",
-        "result": "exactly one outbox row, pinned to picksChannelId; a full JSON scan of the row finds no occurrence of discussionChannelId; a second capper with a different mapping routes to its own channel, so routing is per capper and not per deployment.",
-        "significance": "This is the PM-stated product behaviour: the capper's picks-only destination, with Capper Space kept separate."
-      },
-      {
-        "name": "a missing or malformed mapping fails closed",
-        "method": "the same suite: a capper with no cappers row; a 9-case malformed table covering metadata {} (the exact production shape today), a non-object discord block, an absent/blank/name-shaped/mention-shaped picksChannelId, a malformed discussionChannelId, picks==discussion, and a foreign guildId; plus a bundle exposing no cappers reader at all",
-        "result": "every case refuses by NAME (destination-refused:<reason>), creates 0 outbox rows and leaves the pick `validated`. No case defaults to a channel and no case parks the pick in awaiting_approval.",
-        "significance": "A malformed configuration record is never treated as valid configuration, which is what PM asked the typed parser to guarantee."
-      },
-      {
-        "name": "the worker will not fall back to the shared target map",
-        "method": "apps/worker/src/delivery-adapters.test.ts: a pinned outbox row delivered while a conflicting shared map entry is present; a human-target row with no pin; a row whose pin carries a channel NAME",
-        "result": "7/7 pass. The pin wins over the shared map; an unpinned human delivery refuses (`no pinned destination`) and the HTTP layer is never reached; a malformed pin is not a destination.",
-        "significance": "The shared-channel convergence has no path at runtime, independently of the deploy-time refusal."
-      },
-      {
-        "name": "the Discord destinations were identified read-only, not inferred",
-        "method": "a read-only enumeration executed inside the already-authorized unit-talk-discord-bot-1 container, reading DISCORD_BOT_TOKEN from that container's own environment and printing only names, ids, types and parents",
-        "result": "guild 1284478946171293736; capper destinations are forum THREADS (type 11) under the cappers-space forum, one Official Picks thread and one Q&A & Discussion thread per capper. DISCORD_CAPPER_CHANNEL_ID in production resolves to a canary-publish channel, not a capper destination.",
-        "significance": "PM's precondition for proceeding with code. No secret value was printed, nothing was created, renamed or modified, and no id is hard-coded in source."
+        "what": "parked posture verified from the running containers",
+        "evidence": "UNIT_TALK_WORKER_AUTORUN=false, UNIT_TALK_ENABLED_TARGETS=none, SYNDICATE_MACHINE_ENABLED=false, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false, UNIT_TALK_INGESTOR_AUTORUN=false"
       }
-    ],
-    "row_counts": [
-      {
-        "probe": "delivery_kill_switch rows for 'official-picks' (production)",
-        "value": 0
-      },
-      {
-        "probe": "delivery_kill_switch rows total (production)",
-        "value": 4
-      },
-      {
-        "probe": "delivery_kill_switch rows with killed=true (production)",
-        "value": 3
-      },
-      {
-        "probe": "distribution_outbox rows on 'discord:official-picks' (production)",
-        "value": 0
-      },
-      {
-        "probe": "picks with promotion_target='official-picks' (production)",
-        "value": 0
-      },
-      {
-        "probe": "picks carrying metadata.deliveryAuthorization (production)",
-        "value": 0
-      },
-      {
-        "probe": "outbox rows created by an authorized submission before operator approval",
-        "value": 0
-      },
-      {
-        "probe": "outbox rows created by operator approval while the target is disabled",
-        "value": 0
-      },
-      {
-        "probe": "outbox rows created by operator approval once the target is released",
-        "value": 1
-      },
-      {
-        "probe": "mutation controls that kill their mutant",
-        "value": 7
-      },
-      {
-        "probe": "new tests added by this lane",
-        "value": 59
-      },
-      {
-        "probe": "containment settings changed by this lane",
-        "value": 0
-      },
-      {
-        "probe": "hard-coded Discord channel ids in source added by this lane",
-        "value": 0
-      },
-      {
-        "probe": "production cappers.metadata rows written by this lane",
-        "value": 0
-      },
-      {
-        "probe": "Discord channels or threads created, renamed or modified by this lane",
-        "value": 0
-      },
-      {
-        "probe": "outbox rows created when the capper has no mapping",
-        "value": 0
-      },
-      {
-        "probe": "malformed mapping shapes proven to fail closed",
-        "value": 9
-      },
-      {
-        "probe": "occurrences of the discussion channel id on the delivered outbox row",
-        "value": 0
-      }
-    ],
-    "artifact": "docs/06_status/proof/UTV2-1923/runtime-health.json"
+    ]
   }
 }
