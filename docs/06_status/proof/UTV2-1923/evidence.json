@@ -4,14 +4,14 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "in_review",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "cc57268a86c9b93ea2b5c2e9d2d0a937d0d889c8",
     "verified_source_sha": "5194341b7576eadf97776b04d12190559487bb2c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-17T23:23:25Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-17T23:54:12.460Z",
     "ci_sentinels": {
       "note": "Receipts that pin this evidence to its verified_source_sha. The GitHub check-run ids for this head are not knowable at commit time; the authoritative post-push result is the set of required contexts on PR #1599 at this exact head, and post-merge rebinding replaces merge_sha. Recorded here because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat fields instead; the bundle carries both shapes deliberately.",
       "local_full_suite": {
@@ -137,7 +137,7 @@
       {
         "name": "the pre-existing outbox was untouched by the attempt",
         "method": "read-only SELECT: `select count(*), max(created_at) from distribution_outbox`",
-        "result": "5747 rows, newest 2026-07-30 20:04:41.893448+00 \u2014 identical before Phase A, after Phase A, after the Phase B failure and after the rollback",
+        "result": "5747 rows, newest 2026-07-30 20:04:41.893448+00 — identical before Phase A, after Phase A, after the Phase B failure and after the rollback",
         "significance": "Turning the worker on is inert against the 5,747 legacy rows: the claim loop and the stale-claim reaper are both target-scoped, and automated recovery is disabled. An unchanged newest-row timestamp is the measurement of that, not a claim about it."
       },
       {
@@ -149,14 +149,14 @@
       {
         "name": "the governed pick cohort is intact and Track Only",
         "method": "read-only SELECT: `select count(*) from picks where metadata ? 'distributionMode'`",
-        "result": "6 \u2014 the 4 pre-existing plus the 2 submitted through the deployed Smart Form at 21:45:31Z and 21:47:00Z, both capper_id=griff843, both distributionMode=track-only, both carrying deliveryAuthorization.decision='refused' with reason 'human-delivery-posture-off'",
+        "result": "6 — the 4 pre-existing plus the 2 submitted through the deployed Smart Form at 21:45:31Z and 21:47:00Z, both capper_id=griff843, both distributionMode=track-only, both carrying deliveryAuthorization.decision='refused' with reason 'human-delivery-posture-off'",
         "significance": "The human-capper authorization path from increment 1 is running in production and refusing per pick, recorded on the row rather than inferred."
       },
       {
         "name": "the running worker container's posture after rollback",
         "method": "docker exec unit-talk-worker-1 printenv, read from the running production container",
         "result": "UNIT_TALK_WORKER_AUTORUN=false, UNIT_TALK_ENABLED_TARGETS=none, SYNDICATE_MACHINE_ENABLED=false, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=false, UNIT_TALK_INGESTOR_AUTORUN=false, UNIT_TALK_DISTRIBUTION_TARGETS=discord:1296531122234327100",
-        "significance": "Parked posture restored, read from the process environment rather than from deploy logs. The distribution target is a raw channel id matching ^discord:\\d+$, which is the escape hatch that lets parked mode start and human-capper mode does not have \u2014 the defect this increment fixes."
+        "significance": "Parked posture restored, read from the process environment rather than from deploy logs. The distribution target is a raw channel id matching ^discord:\\d+$, which is the escape hatch that lets parked mode start and human-capper mode does not have — the defect this increment fixes."
       },
       {
         "name": "containment_readback_increment_3",
@@ -242,7 +242,7 @@
         "run": "35278517112",
         "phase": "Phase B",
         "result": "failure",
-        "note": "promote FAILED at 'Confirm syndicate machine gate in production container'; worker Restarting (1) with RuntimeConfigError RUNTIME_REQUIRED_ENV_MISSING at apps/worker/src/runtime.ts:284 \u2014 the defect this increment fixes"
+        "note": "promote FAILED at 'Confirm syndicate machine gate in production container'; worker Restarting (1) with RuntimeConfigError RUNTIME_REQUIRED_ENV_MISSING at apps/worker/src/runtime.ts:284 — the defect this increment fixes"
       },
       {
         "run": "35279450108",

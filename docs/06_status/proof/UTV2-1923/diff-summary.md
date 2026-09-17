@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1923-worker-human-target-map-exemption
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1599
 Head SHA: 5194341b7576eadf97776b04d12190559487bb2c
-Merge SHA: pending merge
+Merge SHA: cc57268a86c9b93ea2b5c2e9d2d0a937d0d889c8
 Diff base: 616994604292345b9e44cfd0c91339fcbe9bcdef
 Diff target: 5194341b7576eadf97776b04d12190559487bb2c
 
