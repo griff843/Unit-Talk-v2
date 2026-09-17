@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1927-internal-pick-approval-docs
 PR URL: N/A
 Head SHA: 47a5866741fd1613c30dba4d32d08f5311471e55
-Merge SHA: N/A
+Merge SHA: a8fdf2c1196c4c73fb620ebd79d78f272d12d217
 Diff base: 84a5a9dd15b4549ec287b2bee521ff8393ec02a4
 Diff target: 47a5866741fd1613c30dba4d32d08f5311471e55
 
@@ -33,4 +33,4 @@ A	docs/06_status/proof/UTV2-1927/.gitkeep
 
 ## SHA Binding
 Head SHA: 47a5866741fd1613c30dba4d32d08f5311471e55
-Merge SHA: N/A
+Merge SHA: a8fdf2c1196c4c73fb620ebd79d78f272d12d217
