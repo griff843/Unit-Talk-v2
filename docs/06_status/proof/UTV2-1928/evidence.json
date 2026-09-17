@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1928",
+  "tier": "T3",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": "d8fa8a784e8120f2610309369f593b6c3f74e7bb",
+    "verified_source_sha": "797dadf886e67641ad69bf3901d94c670076694b",
+    "evidence_commit_sha": "797dadf886e67641ad69bf3901d94c670076694b",
+    "current_pr_head_sha": "9ebefea7c7847028bfad639bff01fa5a19afa224"
+  },
+  "static_proof": {
+    "status": "pass",
+    "note": "pnpm test exit 0 (5826 ok / 0 not ok), pnpm type-check exit 0, pnpm lint exit 0, r-level-check PASS (no artifacts required). Measured on 797dadf88; command output is recorded in verification.md.",
+    "commands": [
+      { "command": "pnpm test", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
+      { "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "exit_code": 0, "result": "pass" }
+    ]
+  }
+}
