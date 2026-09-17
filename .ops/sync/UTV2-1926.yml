@@ -1,0 +1,222 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1926
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1926
+  objective: Merge Gate bounce limit counts CHANGES_REQUIRED-shaped comments
+    instead of the canonical Bounce field
+  acceptance_criteria:
+    - |-
+      ## Defect
+
+      `scripts/ops/merge-gate-verdict.cjs:125-130` derives bounce state from the **lifetime count of authorized CHANGES_REQUIRED-shaped comments**:
+
+      ```js
+      const changesRequested = authorized.filter((v) => v.parsed.verdict === 'CHANGES_REQUIRED');
+      if (changesRequested.length >= 3) { ... }
+      ```
+
+      `parseVerdict` never extracts the `Bounce:` field at all, so the implementation cannot see the value the canonical schema makes authoritative.
+
+      ## Canonical authority
+
+      `docs/05_operations/schemas/pm-verdict-v1.md`
+
+      * Validation rule 6: *"If* `CHANGES_REQUIRED`*:* `Bounce:` *field required with numeric value"*
+      * Bounce Limit: *"Maximum 2 bounces (CHANGES_REQUIRED cycles). On bounce 3, the issue moves to* `Failed` *with labels* `needs-reframe` *+* `pm-triage`*."*
+
+      A `CHANGES_REQUIRED` comment with no `Bounce:` field, or a non-numeric one, is **invalid under the schema** and must not drive a bounce-3 failure.
+
+      ## Measured impact
+
+      PR [griff843/Unit-Talk-v2#1592](https://linear.app/unit-talk-v2/review/utv2-1923-build-the-human-capper-official-picks-delivery-transaction-44d8df916499) ([UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper), Human Capper official-picks delivery, T1) carries three authorized `CHANGES_REQUIRED` comments from `griff843`, **none of which contains a** `Bounce:` **field**:
+
+      | created | verdict | Bounce field |
+      | -- | -- | -- |
+      | 2026-09-17T02:15:51Z | CHANGES_REQUIRED | absent |
+      | 2026-09-17T10:47:18Z | APPROVED | n/a |
+      | 2026-09-17T10:48:45Z | CHANGES_REQUIRED | absent |
+      | 2026-09-17T12:41:56Z | CHANGES_REQUIRED | absent |
+
+      The bounce check runs **unconditionally** — it is outside the `latest !== APPROVED` branch — so an APPROVED verdict clears the "not APPROVED" error and leaves `Bounce limit exceeded` standing. [griff843/Unit-Talk-v2#1592](https://linear.app/unit-talk-v2/review/utv2-1923-build-the-human-capper-official-picks-delivery-transaction-44d8df916499) therefore cannot merge on any verdict, and Human Capper Live E2E is blocked behind it.
+
+      The existing unit test `a later APPROVED verdict supersedes an earlier CHANGES_REQUIRED one` passes only because its fixture carries **one** CHANGES_REQUIRED, not three, so it never exercised this path.
+
+      ## Required behavior
+
+      1. `CHANGES_REQUIRED` without `Bounce:` is invalid and must not count.
+      2. Non-numeric or malformed `Bounce:` is invalid and must not count.
+      3. Valid Bounce 1 is accepted.
+      4. Valid Bounce 2 is accepted.
+      5. Valid Bounce 3 triggers Failed / PM triage exactly as the canonical contract specifies.
+      6. Bounce state is derived from the explicit canonical `Bounce:` field, never from a lifetime count of CHANGES_REQUIRED-shaped comments.
+      7. Bot / non-CODEOWNERS verdicts remain ignored.
+      8. Exact-PR / exact-head APPROVED validation is unchanged.
+      9. Historical PR comments remain untouched and auditable.
+
+      An invalid `CHANGES_REQUIRED` must still **block** via the latest-verdict rule. Excluding it from bounce counting must not turn a PM refusal into a silent pass.
+
+      ## Scope
+
+      `scripts/ops/merge-gate-verdict.cjs` and `scripts/ops/merge-gate-verdict.test.ts` only. No workflow, CODEOWNERS or branch-protection change. No historical comment is edited.
+
+      Related: [UTV2-1559](https://linear.app/unit-talk-v2/issue/UTV2-1559/add-auditable-pm-triage-continuation-after-t1-bounce-cap-freeze) (auditable PM-triage continuation *after* a legitimate bounce-cap freeze — a different defect; this issue is about the freeze firing on invalid artifacts).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Defect
+
+      `scripts/ops/merge-gate-verdict.cjs:125-130` derives bounce state from the
+      **lifetime count of authorized CHANGES_REQUIRED-shaped comments**:
+
+
+      ```js
+
+      const changesRequested = authorized.filter((v) => v.parsed.verdict ===
+      'CHANGES_REQUIRED');
+
+      if (changesRequested.length >= 3) { ... }
+
+      ```
+
+
+      `parseVerdict` never extracts the `Bounce:` field at all, so the
+      implementation cannot see the value the canonical schema makes
+      authoritative.
+    - >-
+      Canonical authority
+
+      `docs/05_operations/schemas/pm-verdict-v1.md`
+
+
+      * Validation rule 6: *"If* `CHANGES_REQUIRED`*:* `Bounce:` *field required
+      with numeric value"*
+
+      * Bounce Limit: *"Maximum 2 bounces (CHANGES_REQUIRED cycles). On bounce
+      3, the issue moves to* `Failed` *with labels* `needs-reframe` *+*
+      `pm-triage`*."*
+
+
+      A `CHANGES_REQUIRED` comment with no `Bounce:` field, or a non-numeric
+      one, is **invalid under the schema** and must not drive a bounce-3
+      failure.
+    - |-
+      Measured impact
+      PR [griff843/Unit-Talk-v2#1592](https://linear.app/unit-talk-v2/review/utv2-1923-build-the-human-capper-official-picks-delivery-transaction-44d8df916499) ([UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper), Human Capper official-picks delivery, T1) carries three authorized `CHANGES_REQUIRED` comments from `griff843`, **none of which contains a** `Bounce:` **field**:
+
+      | created | verdict | Bounce field |
+      | -- | -- | -- |
+      | 2026-09-17T02:15:51Z | CHANGES_REQUIRED | absent |
+      | 2026-09-17T10:47:18Z | APPROVED | n/a |
+      | 2026-09-17T10:48:45Z | CHANGES_REQUIRED | absent |
+      | 2026-09-17T12:41:56Z | CHANGES_REQUIRED | absent |
+
+      The bounce check runs **unconditionally** — it is outside the `latest !== APPROVED` branch — so an APPROVED verdict clears the "not APPROVED" error and leaves `Bounce limit exceeded` standing. [griff843/Unit-Talk-v2#1592](https://linear.app/unit-talk-v2/review/utv2-1923-build-the-human-capper-official-picks-delivery-transaction-44d8df916499) therefore cannot merge on any verdict, and Human Capper Live E2E is blocked behind it.
+
+      The existing unit test `a later APPROVED verdict supersedes an earlier CHANGES_REQUIRED one` passes only because its fixture carries **one** CHANGES_REQUIRED, not three, so it never exercised this path.
+    - >-
+      Required behavior
+
+      1. `CHANGES_REQUIRED` without `Bounce:` is invalid and must not count.
+
+      2. Non-numeric or malformed `Bounce:` is invalid and must not count.
+
+      3. Valid Bounce 1 is accepted.
+
+      4. Valid Bounce 2 is accepted.
+
+      5. Valid Bounce 3 triggers Failed / PM triage exactly as the canonical
+      contract specifies.
+
+      6. Bounce state is derived from the explicit canonical `Bounce:` field,
+      never from a lifetime count of CHANGES_REQUIRED-shaped comments.
+
+      7. Bot / non-CODEOWNERS verdicts remain ignored.
+
+      8. Exact-PR / exact-head APPROVED validation is unchanged.
+
+      9. Historical PR comments remain untouched and auditable.
+
+
+      An invalid `CHANGES_REQUIRED` must still **block** via the latest-verdict
+      rule. Excluding it from bounce counting must not turn a PM refusal into a
+      silent pass.
+    - |-
+      Scope
+      `scripts/ops/merge-gate-verdict.cjs` and `scripts/ops/merge-gate-verdict.test.ts` only. No workflow, CODEOWNERS or branch-protection change. No historical comment is edited.
+
+      Related: [UTV2-1559](https://linear.app/unit-talk-v2/issue/UTV2-1559/add-auditable-pm-triage-continuation-after-t1-bounce-cap-freeze) (auditable PM-triage continuation *after* a legitimate bounce-cap freeze — a different defect; this issue is about the freeze firing on invalid artifacts).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1926/merge-gate-bounce-limit-counts-changes-required-shaped-comments
+    title: Merge Gate bounce limit counts CHANGES_REQUIRED-shaped comments instead
+      of the canonical Bounce field
+    description: |-
+      ## Defect
+
+      `scripts/ops/merge-gate-verdict.cjs:125-130` derives bounce state from the **lifetime count of authorized CHANGES_REQUIRED-shaped comments**:
+
+      ```js
+      const changesRequested = authorized.filter((v) => v.parsed.verdict === 'CHANGES_REQUIRED');
+      if (changesRequested.length >= 3) { ... }
+      ```
+
+      `parseVerdict` never extracts the `Bounce:` field at all, so the implementation cannot see the value the canonical schema makes authoritative.
+
+      ## Canonical authority
+
+      `docs/05_operations/schemas/pm-verdict-v1.md`
+
+      * Validation rule 6: *"If* `CHANGES_REQUIRED`*:* `Bounce:` *field required with numeric value"*
+      * Bounce Limit: *"Maximum 2 bounces (CHANGES_REQUIRED cycles). On bounce 3, the issue moves to* `Failed` *with labels* `needs-reframe` *+* `pm-triage`*."*
+
+      A `CHANGES_REQUIRED` comment with no `Bounce:` field, or a non-numeric one, is **invalid under the schema** and must not drive a bounce-3 failure.
+
+      ## Measured impact
+
+      PR [griff843/Unit-Talk-v2#1592](https://linear.app/unit-talk-v2/review/utv2-1923-build-the-human-capper-official-picks-delivery-transaction-44d8df916499) ([UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper), Human Capper official-picks delivery, T1) carries three authorized `CHANGES_REQUIRED` comments from `griff843`, **none of which contains a** `Bounce:` **field**:
+
+      | created | verdict | Bounce field |
+      | -- | -- | -- |
+      | 2026-09-17T02:15:51Z | CHANGES_REQUIRED | absent |
+      | 2026-09-17T10:47:18Z | APPROVED | n/a |
+      | 2026-09-17T10:48:45Z | CHANGES_REQUIRED | absent |
+      | 2026-09-17T12:41:56Z | CHANGES_REQUIRED | absent |
+
+      The bounce check runs **unconditionally** — it is outside the `latest !== APPROVED` branch — so an APPROVED verdict clears the "not APPROVED" error and leaves `Bounce limit exceeded` standing. [griff843/Unit-Talk-v2#1592](https://linear.app/unit-talk-v2/review/utv2-1923-build-the-human-capper-official-picks-delivery-transaction-44d8df916499) therefore cannot merge on any verdict, and Human Capper Live E2E is blocked behind it.
+
+      The existing unit test `a later APPROVED verdict supersedes an earlier CHANGES_REQUIRED one` passes only because its fixture carries **one** CHANGES_REQUIRED, not three, so it never exercised this path.
+
+      ## Required behavior
+
+      1. `CHANGES_REQUIRED` without `Bounce:` is invalid and must not count.
+      2. Non-numeric or malformed `Bounce:` is invalid and must not count.
+      3. Valid Bounce 1 is accepted.
+      4. Valid Bounce 2 is accepted.
+      5. Valid Bounce 3 triggers Failed / PM triage exactly as the canonical contract specifies.
+      6. Bounce state is derived from the explicit canonical `Bounce:` field, never from a lifetime count of CHANGES_REQUIRED-shaped comments.
+      7. Bot / non-CODEOWNERS verdicts remain ignored.
+      8. Exact-PR / exact-head APPROVED validation is unchanged.
+      9. Historical PR comments remain untouched and auditable.
+
+      An invalid `CHANGES_REQUIRED` must still **block** via the latest-verdict rule. Excluding it from bounce counting must not turn a PM refusal into a silent pass.
+
+      ## Scope
+
+      `scripts/ops/merge-gate-verdict.cjs` and `scripts/ops/merge-gate-verdict.test.ts` only. No workflow, CODEOWNERS or branch-protection change. No historical comment is edited.
+
+      Related: [UTV2-1559](https://linear.app/unit-talk-v2/issue/UTV2-1559/add-auditable-pm-triage-continuation-after-t1-bounce-cap-freeze) (auditable PM-triage continuation *after* a legitimate bounce-cap freeze — a different defect; this issue is about the freeze firing on invalid artifacts).
+    captured_at: 2026-09-17T14:56:47.119Z
+    description_sha256: 028f4664b16bab9dd401ba4c2777ae5b6cd54ff6312cba04f671a3a22ff97334
+  contract_hash: 8c05164effc1c81e4de98eb7827815e8769ca9dbaf3c4c3fb32fadf776fa559a
