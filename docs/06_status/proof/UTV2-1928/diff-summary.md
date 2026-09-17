@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1928-plan-reconcile
 PR URL: N/A
 Head SHA: 797dadf886e67641ad69bf3901d94c670076694b
-Merge SHA: N/A
+Merge SHA: d8fa8a784e8120f2610309369f593b6c3f74e7bb
 Diff base: 84a5a9dd15b4549ec287b2bee521ff8393ec02a4
 Diff target: 797dadf886e67641ad69bf3901d94c670076694b
 
@@ -33,4 +33,4 @@ M	docs/mission/plan.md
 
 ## SHA Binding
 Head SHA: 797dadf886e67641ad69bf3901d94c670076694b
-Merge SHA: N/A
+Merge SHA: d8fa8a784e8120f2610309369f593b6c3f74e7bb
