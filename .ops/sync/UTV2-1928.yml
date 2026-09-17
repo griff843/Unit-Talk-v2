@@ -1,0 +1,139 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1928
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1928
+  objective: Reconcile docs/mission/plan.md against live truth — deploy blocker
+    and drift are stale
+  acceptance_criteria:
+    - >-
+      `docs/mission/plan.md` is startup context injected into every session. Its
+      §2 headline currently reads "main cannot currently produce a deployable
+      build, and that is the single most important fact on this page." That is
+      no longer true.
+
+
+      Measured 2026-09-17:
+
+
+      * `packages/contracts/src/picks.ts` on `main` is valid UTF-8; the
+      invalid-byte blocker is repaired.
+
+      * `Deploy` run 35212632008 at `40968bf807f0a078687ae7116c1518c8a5ba2263`
+      succeeded 2026-09-17T10:51Z.
+
+      * Drift `deployed..main` is 4 commits / 8 files / 0 migrations, and every
+      file is a lane artifact, the readiness ledger, or a CI-only script. Zero
+      container drift.
+
+
+      Consequences for the page: the "43 commits, 28 container files" figure is
+      stale, §5 decisions 1 and 2 are complete, §3's "merged and awaiting
+      deployment" table is now deployed, and the §4 blocker table's first row is
+      closed.
+
+
+      Also to reconcile, each re-measured rather than edited forward: Milestone
+      2 condition status, the Command Center's actual runtime state (image
+      deployed, `UNIT_TALK_COMMAND_CENTER_ENABLED=false`), the results supply
+      (unchanged since 2026-06-30), containment (unchanged), and the open-PR
+      count.
+
+
+      Scope: `docs/mission/plan.md` and its archives only. Documentation. No
+      code, no gate, no contract.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `docs/mission/plan.md` is startup context injected into every session. Its
+      §2 headline currently reads "main cannot currently produce a deployable
+      build, and that is the single most important fact on this page." That is
+      no longer true.
+
+
+      Measured 2026-09-17:
+
+
+      * `packages/contracts/src/picks.ts` on `main` is valid UTF-8; the
+      invalid-byte blocker is repaired.
+
+      * `Deploy` run 35212632008 at `40968bf807f0a078687ae7116c1518c8a5ba2263`
+      succeeded 2026-09-17T10:51Z.
+
+      * Drift `deployed..main` is 4 commits / 8 files / 0 migrations, and every
+      file is a lane artifact, the readiness ledger, or a CI-only script. Zero
+      container drift.
+
+
+      Consequences for the page: the "43 commits, 28 container files" figure is
+      stale, §5 decisions 1 and 2 are complete, §3's "merged and awaiting
+      deployment" table is now deployed, and the §4 blocker table's first row is
+      closed.
+
+
+      Also to reconcile, each re-measured rather than edited forward: Milestone
+      2 condition status, the Command Center's actual runtime state (image
+      deployed, `UNIT_TALK_COMMAND_CENTER_ENABLED=false`), the results supply
+      (unchanged since 2026-06-30), containment (unchanged), and the open-PR
+      count.
+
+
+      Scope: `docs/mission/plan.md` and its archives only. Documentation. No
+      code, no gate, no contract.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1928/reconcile-docsmissionplanmd-against-live-truth-deploy-blocker-and
+    title: Reconcile docs/mission/plan.md against live truth — deploy blocker and
+      drift are stale
+    description: >-
+      `docs/mission/plan.md` is startup context injected into every session. Its
+      §2 headline currently reads "main cannot currently produce a deployable
+      build, and that is the single most important fact on this page." That is
+      no longer true.
+
+
+      Measured 2026-09-17:
+
+
+      * `packages/contracts/src/picks.ts` on `main` is valid UTF-8; the
+      invalid-byte blocker is repaired.
+
+      * `Deploy` run 35212632008 at `40968bf807f0a078687ae7116c1518c8a5ba2263`
+      succeeded 2026-09-17T10:51Z.
+
+      * Drift `deployed..main` is 4 commits / 8 files / 0 migrations, and every
+      file is a lane artifact, the readiness ledger, or a CI-only script. Zero
+      container drift.
+
+
+      Consequences for the page: the "43 commits, 28 container files" figure is
+      stale, §5 decisions 1 and 2 are complete, §3's "merged and awaiting
+      deployment" table is now deployed, and the §4 blocker table's first row is
+      closed.
+
+
+      Also to reconcile, each re-measured rather than edited forward: Milestone
+      2 condition status, the Command Center's actual runtime state (image
+      deployed, `UNIT_TALK_COMMAND_CENTER_ENABLED=false`), the results supply
+      (unchanged since 2026-06-30), containment (unchanged), and the open-PR
+      count.
+
+
+      Scope: `docs/mission/plan.md` and its archives only. Documentation. No
+      code, no gate, no contract.
+    captured_at: 2026-09-17T18:30:45.576Z
+    description_sha256: 378b396d92958d3e16cf99357497794f3009ffb8f505319cececb4e7b7c0a2ad
+  contract_hash: 1a3eace403116ee4aeff2d991301ca983b102981b297cb4351b43941b1b7441b
