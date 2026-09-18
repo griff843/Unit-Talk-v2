@@ -7,9 +7,9 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
-    "evidence_commit_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
-    "current_pr_head_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
+    "verified_source_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
+    "evidence_commit_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
+    "current_pr_head_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
     "sha_type": "verified_source_sha",
     "bound_at": "2026-09-18T13:45:00.000Z",
     "ci_sentinels": {
@@ -29,8 +29,8 @@
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-18T13:00:00Z",
-    "measured_against_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
+    "measured_at": "2026-09-18T13:55:00Z",
+    "measured_against_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
     "commands": [
       { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
       { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
@@ -53,7 +53,7 @@
         "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
         "exit_code": 0,
         "result": "pass",
-        "note": "Verdict PASS; 13 changed files; rules matched operator-ui"
+        "note": "Verdict PASS; 16 changed files; rules matched operator-ui"
       },
       {
         "command": "pnpm verify",

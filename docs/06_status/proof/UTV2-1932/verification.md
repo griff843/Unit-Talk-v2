@@ -12,9 +12,9 @@ Tier: T2
 Lane type: delivery-ui
 Branch: claude/utv2-1932-command-center-dim5-operator-fields
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1606
-Head SHA: 5ab1f83946766f005ef3b9d847f630342db5f408
-Execution SHA: 5ab1f83946766f005ef3b9d847f630342db5f408
-Diff base: 3a07f41b0a09fddb924e964e255e16b6c8e0a80b
+Head SHA: ee665990d6461ad09a8886112b66ea63c5a99ffe
+Execution SHA: ee665990d6461ad09a8886112b66ea63c5a99ffe
+Diff base: 5a66810cfe5b8635829ca5a8243143ec07dd8602
 result: pass
 
 ## Summary
@@ -102,7 +102,7 @@ authoritative full-tree result is the required `verify` context on PR #1606.
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 13
+Changed files: 16
 Rules matched: operator-ui
 ```
 
@@ -130,7 +130,7 @@ measurement.
 - [x] `pnpm verify`: exit 1 locally, refused by `ci:assert-staging` before any assertion
       about this diff; authoritative result is the required `verify` context on #1606
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS,
-      13 changed files, rules matched `operator-ui`, no required artifact missing
+      16 changed files, rules matched `operator-ui`, no required artifact missing
 - [x] `pnpm test:db`: not run locally — same staging-isolation refusal. This lane writes
       nothing and reads nothing new from the database; the CI-produced
       `ci-db-proof-receipt/v2` verified inside the required `verify` context is the authority.
@@ -154,11 +154,11 @@ picks in the governed cohort.
 ## Sign-off
 
 Executor: Claude (Opus 5, 1M context)
-Every number above was measured at `5ab1f83946766f005ef3b9d847f630342db5f408`, not recalled.
+Every number above was measured at `ee665990d6461ad09a8886112b66ea63c5a99ffe`, not recalled.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1606
 Approved PR head: pending merge
-Execution SHA: 5ab1f83946766f005ef3b9d847f630342db5f408
+Execution SHA: ee665990d6461ad09a8886112b66ea63c5a99ffe
