@@ -1,0 +1,149 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1932",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
+    "evidence_commit_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
+    "current_pr_head_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-18T13:45:00.000Z",
+    "ci_sentinels": {
+      "note": "Pinned to the last non-proof commit on the branch. The authoritative result is the set of required contexts on PR #1606 at this head; post-merge-lane-close.yml rebinds merge_sha.",
+      "local_lint": { "command": "pnpm lint", "exit_code": 0 },
+      "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "ok_lines": 5928,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      "required_contexts_authority": "PR #1606: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T13:00:00Z",
+    "measured_against_sha": "5ab1f83946766f005ef3b9d847f630342db5f408",
+    "commands": [
+      { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "ok_lines": 5928,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/command-center/src/lib/clv-summary.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "7 tests, 7 pass, 0 fail, 0 skipped"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 13 changed files; rules matched operator-ui"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "verify:static and verify:commands pass; ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx. The authoritative full-tree result is the required verify context on PR #1606."
+      }
+    ],
+    "new_coverage": [
+      {
+        "file": "apps/command-center/src/lib/clv-summary.test.ts",
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "new_tests": 7,
+        "mutation_controls": 2,
+        "note": "First unit tests over the CLV rendering, which previously existed only inline in app/picks/[id]/page.tsx."
+      }
+    ],
+    "mutation_controls": [
+      {
+        "control": "a measured zero CLV is a measurement, not an absence",
+        "mutation": "replace `clvPercent != null` with a falsy check (`!settlement.clvPercent`)",
+        "observed": "not ok 4 - zero CLV is a measurement, not an absence (6 pass / 1 fail)",
+        "result": "fails_on_the_named_condition",
+        "proves": "a real 0.00% CLV can no longer render as 'missing'"
+      },
+      {
+        "control": "an opening-line fallback says so",
+        "mutation": "drop the ' via opening fallback' suffix",
+        "observed": "not ok 2 - a CLV measured against the opening line says so (6 pass / 1 fail)",
+        "result": "fails_on_the_named_condition",
+        "proves": "a fallback measurement cannot be read as a closing-line measurement"
+      },
+      {
+        "control": "unmutated baseline",
+        "mutation": "none",
+        "observed": "7 pass / 0 fail, source restored with a clean git diff",
+        "result": "pass"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T13:45:00Z",
+    "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no containment setting, kill switch or delivery target was touched. These are the exact populations the repaired surfaces render.",
+    "queries": [
+      {
+        "name": "CLV is absent on every settled pick in the governed cohort",
+        "method": "read-only SELECT over picks LEFT JOIN settlement_records WHERE picks.metadata ? 'distributionMode', counting settlement rows whose payload->>'clvPercent' is null",
+        "result": "7 governed picks, 6 settlement rows, 6 with clvPercent null, 0 with a value, 0 carrying isOpeningLineFallback",
+        "significance": "This is why the rendering matters. Every CLV cell an operator sees today is an absence, and the old bare dash made 'no closing line was ever captured' indistinguishable from 'this column does not apply'. The repaired renderer names the reason instead. It manufactures no value: CLV stays null and stays deferred until the provider decision resolves."
+      },
+      {
+        "name": "the held queue is structurally excluded from the review queue",
+        "method": "read-only SELECT over picks_current_state WHERE status = 'awaiting_approval' OR approval_status = 'pending', partitioned on review_decision = 'hold' — the exact predicates getHeldQueue and getReviewQueue apply",
+        "result": "21,871 rows in approval scope; 2,075 with review_decision = 'hold'; 19,796 without",
+        "significance": "The previous /held redirect sent an operator to a surface whose own filter excludes all 2,075 held rows. The count is not theoretical, and the redirect repair is what makes those rows reachable."
+      }
+    ],
+    "row_counts": [
+      { "name": "governed_picks", "value": 7 },
+      { "name": "settlement_rows", "value": 6 },
+      { "name": "settled_rows_with_null_clv", "value": 6 },
+      { "name": "settled_rows_with_clv_value", "value": 0 },
+      { "name": "approval_scope_rows", "value": 21871 },
+      { "name": "held_queue_rows", "value": 2075 },
+      { "name": "review_queue_rows", "value": 19796 },
+      { "name": "rows_written_updated_or_deleted_by_this_proof", "value": 0 }
+    ],
+    "observations": [
+      {
+        "what": "the repair is presentational; the underlying data is unchanged",
+        "evidence": "0 rows written, updated or deleted. Every file in the diff is under apps/command-center, which reads Supabase directly and writes only through apps/api."
+      },
+      {
+        "what": "provider-dependent capability is deferred, not faked",
+        "evidence": "clvPercent remains null on all 6 settled rows; this lane makes the null legible and adds no synthetic value"
+      },
+      {
+        "what": "containment was not altered",
+        "evidence": "the proof is read-only; no kill switch, delivery target, runtime flag or deploy was touched"
+      }
+    ],
+    "limitations": [
+      {
+        "what": "the rendered pages were not exercised against production in a browser",
+        "why": "the Command Center is deployed behind operator auth and this lane holds no credential for it; pnpm verify and pnpm test:db are refused locally by ci:assert-staging",
+        "where_it_does_execute": "the required verify context on PR #1606, which runs inside the staging-ci GitHub environment"
+      }
+    ]
+  }
+}
