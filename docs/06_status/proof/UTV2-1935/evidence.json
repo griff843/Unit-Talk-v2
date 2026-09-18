@@ -14,8 +14,14 @@
     "bound_at": "2026-09-18T16:55:00.000Z",
     "ci_sentinels": {
       "note": "Pinned to the last non-proof commit on the branch. Commits after it touch only docs/06_status/lanes/ and docs/06_status/proof/, both proof-only prefixes. The authoritative result is the set of required contexts on PR #1608 at the current head; post-merge-lane-close.yml rebinds merge_sha.",
-      "local_lint": { "command": "pnpm lint", "exit_code": 0 },
-      "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
       "local_full_suite": {
         "command": "pnpm test",
         "exit_code": 0,
@@ -32,8 +38,16 @@
     "measured_at": "2026-09-18T16:20:00Z",
     "measured_against_sha": "09b8396bfe5431a2da00a469aadf5f8b7cf81a6d",
     "commands": [
-      { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
-      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
       {
         "command": "pnpm test",
         "exit_code": 0,
@@ -105,38 +119,70 @@
   },
   "runtime_proof": {
     "status": "pass",
-    "measured_at": "2026-09-18T16:50:00Z",
-    "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no containment setting, kill switch or delivery target was read or touched. These are the exact populations the repaired surfaces render.",
+    "measured_at": "2026-09-18T17:15:00Z",
+    "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no containment setting, kill switch or delivery target was read or touched. An earlier draft of this bundle reported the raw approval-scope figure (10,882 of 21,870 suppressed picks, 49.8%, with no reason) without partitioning it. That figure is arithmetically correct and materially misleading, and it is corrected here: the entire approval-scope population is legacy/fixture, and the live pipeline writers miss a reason only 0.6-2.9% of the time.",
     "queries": [
       {
-        "name": "half the suppressed population records no reason at all",
-        "method": "read-only SELECT over picks_current_state WHERE status = 'awaiting_approval' OR approval_status = 'pending', partitioned on promotion_status IN ('suppressed','not_eligible') and on whether promotion_reason is null or blank after btrim",
-        "result": "21,870 suppressed rows in approval scope; 10,882 with no usable reason; 10,988 with one",
-        "significance": "This is the measurement that justifies rendering a missing reason as a stated defect rather than an em dash. 49.8% of the suppressed population would have rendered as 'nothing to say here'. The red label does not create this defect; it makes an existing one visible, and its size is why a dash was the wrong choice."
+        "name": "the approval-scope population is entirely legacy/fixture",
+        "method": "read-only SELECT over picks_current_state WHERE status = 'awaiting_approval' OR approval_status = 'pending', partitioned on the governed-cohort predicate metadata ? 'distributionMode'",
+        "result": "governed cohort: 0 rows. legacy/fixture: 21,870 suppressed, 10,882 without a usable reason, 2,075 held.",
+        "significance": "No genuine operator submission is currently sitting in approval scope, so the raw 49.8% blank-reason rate describes fixtures, not the product. Quoting it unpartitioned would have overstated the defect this lane renders."
+      },
+      {
+        "name": "the live writers do record a reason; two fixture sources do not",
+        "method": "read-only SELECT over all suppressed picks grouped by source, counting null-or-blank promotion_reason",
+        "result": "system-pick-scanner 87/14,730 blank (0.6%); board-construction 19/1,100 (1.7%); alert-agent 45/4,341 (1.0%); model-driven 42/4,313 (1.0%); api 357/12,127 (2.9%); manual 0/4. Against that: smart-form 60,203/60,205 (99.997%) and t1-proof 2,146/2,146 (100%), every row predating 2026-07-30.",
+        "significance": "This is the honest shape of the defect. The real pipeline explains a suppression 97-99% of the time, so the red 'no reason recorded' cell will be rare on genuine rows and will mean something when it appears. A dash would have hidden exactly the 1-3% that matters, and the whitespace-aware blank check is what keeps a blank string from reading as an explanation."
       },
       {
         "name": "the held population is real and had no page of its own",
-        "method": "read-only SELECT over the same approval scope, counting review_decision = 'hold' — the exact predicate getHeldQueue applies",
-        "result": "2,075 held rows out of 21,871 in approval scope",
-        "significance": "getHeldQueue already computed heldBy, ageHours and holdReason for these 2,075 rows and no surface consumed them. The route named after the held queue was a redirect."
+        "method": "read-only SELECT over the same approval scope counting review_decision = 'hold', the exact predicate getHeldQueue applies",
+        "result": "2,075 held rows",
+        "significance": "getHeldQueue already computed heldBy, ageHours and holdReason for these rows and no surface consumed them; the route named after the held queue was a redirect. This count is also fixture-dominated, and the page is correct regardless of which rows populate it."
       }
     ],
     "row_counts": [
-      { "name": "approval_scope_rows", "value": 21871 },
-      { "name": "suppressed_rows", "value": 21870 },
-      { "name": "suppressed_without_reason", "value": 10882 },
-      { "name": "suppressed_with_reason", "value": 10988 },
-      { "name": "held_rows", "value": 2075 },
-      { "name": "rows_written_updated_or_deleted_by_this_proof", "value": 0 }
+      {
+        "name": "approval_scope_rows",
+        "value": 21871
+      },
+      {
+        "name": "approval_scope_governed_cohort_rows",
+        "value": 0
+      },
+      {
+        "name": "suppressed_rows_all_fixture",
+        "value": 21870
+      },
+      {
+        "name": "suppressed_without_reason_all_fixture",
+        "value": 10882
+      },
+      {
+        "name": "live_writer_blank_reason_rate_pct_range",
+        "value": "0.6-2.9"
+      },
+      {
+        "name": "held_rows",
+        "value": 2075
+      },
+      {
+        "name": "rows_written_updated_or_deleted_by_this_proof",
+        "value": 0
+      }
     ],
     "observations": [
       {
-        "what": "the repair is presentational; the underlying data is unchanged",
-        "evidence": "0 rows written, updated or deleted. Every file in the diff is under apps/command-center, which reads Supabase directly and writes only through apps/api."
+        "what": "the claim this bundle makes is bounded to rendering, not to data quality",
+        "evidence": "0 rows written. The lane changes how a missing reason is displayed; it does not change how many are missing, and it asserts no improvement in that rate."
+      },
+      {
+        "what": "Dimension 4 metric 2 is not measurable from this population",
+        "evidence": "'suppression always explicit \u2014 100%' cannot be evaluated against a cohort of 0 governed rows. Recorded as unmeasured, not as pass or fail."
       },
       {
         "what": "provider-dependent capability is deferred, not faked",
-        "evidence": "promotion_reason is written by the scoring path today. This lane makes no claim about CLV, closing lines or automated grading, all of which remain explicitly deferred."
+        "evidence": "This lane makes no claim about CLV, closing lines or automated grading, all of which remain explicitly deferred."
       },
       {
         "what": "containment is untouched",
