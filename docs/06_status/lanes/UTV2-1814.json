@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1814-certification-propagation-rpc",
   "branch": "claude/utv2-1814-certification-propagation-rpc",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d122f28372784ebce01d92e3e3ae19f7a7b7c30c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1600",
   "files_changed": [],
   "file_scope_lock": [
@@ -26,14 +26,22 @@
     "docs/06_status/proof/UTV2-1814/diff-summary.md",
     "docs/06_status/proof/UTV2-1814/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-18T04:17:39.335Z",
-  "heartbeat_at": "2026-09-18T04:25:42.381Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-18T05:32:06.233Z",
+  "closed_at": "2026-09-18T05:32:06.233Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1814-certification-propagation-rpc.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-18T05:32:03.844Z",
+      "verdict": "pass",
+      "merge_sha": "d122f28372784ebce01d92e3e3ae19f7a7b7c30c",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

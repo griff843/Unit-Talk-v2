@@ -1,6 +1,6 @@
 # PROOF: UTV2-1814 — Verification
 
-MERGE_SHA: pending merge
+MERGE_SHA: d122f28372784ebce01d92e3e3ae19f7a7b7c30c
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1600
 Tier: T2
 Lane: claude
@@ -154,6 +154,6 @@ The full receipt table and the drill output are in the sibling
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d122f28372784ebce01d92e3e3ae19f7a7b7c30c
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1600
 Verified source SHA: 36b4de331a40c00c4f4163938bf24e3dbaf4e451
