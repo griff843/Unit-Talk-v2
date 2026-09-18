@@ -1,0 +1,141 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1930
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1930
+  objective: Governed operator event seeding — routine current-game availability
+    for Smart Form without SGO
+  acceptance_criteria:
+    - |-
+      Smart Form's read side is complete and deployed: GET /api/reference-data/{catalog,availability,leagues,matchups,search/\*,events,events/:id} all work, and a manually seeded event is visible through them (probed 2026-09-18: GET /api/reference-data/events?sport=NFL&date=2026-09-17 returns the Lions @ Bills canary event; the same query for 2026-09-18 returns \[\]).
+
+      The gap is the write side. Only the ingestor writes `events` / `event_participants`, and the ingestor is parked under containment. `grep -rn operator-manual-entry` across apps/packages/scripts/docs returns nothing — there is no governed operator surface for creating an event at all, so the canary event was hand-seeded by raw SQL.
+
+      Scope: add a governed operator write surface for events, so current-game availability becomes routine without activating SGO and without adding a provider.
+
+      * POST /api/reference-data/events, operator role only (ROUTE_ROLES), using the existing EventRepository.upsertByExternalId + EventParticipantRepository.upsert.
+      * Participants resolved from the existing canonical participant catalog only — never minted inline. NFL already has 32 team participants.
+      * Honest provenance on the row: metadata records `operator-manual-entry`, the operator identity from the auth context (never the body), and observedAt. It must be impossible for an operator-seeded event to be mistaken for provider-observed data.
+      * Refuses fail-closed on an unknown participant, a duplicate external id owned by a provider, or a missing provenance field.
+      * An operator surface in the Command Center to drive it.
+
+      Out of scope: SGO activation, any new odds/market provider (PROVIDER_AUTHORITY_LOCK.md makes that a PM decision), any DDL, any containment change, player reference data.
+
+      ---
+
+      ## Escalation finding (2026-09-18, Claude)
+
+      As originally scoped this is **not** an autonomous T2 lane. `docs/05_operations/DELEGATION_POLICY.md` puts two of the required files in always-escalate / Tier C categories:
+
+      * `apps/api/src/auth.ts` and RBAC route protection — "Always escalate. Security posture change." A new privileged POST route needs a `ROUTE_ROLES` entry, because `authorizeRoute` denies by default when no pattern matches.
+      * `packages/contracts/src/**` — "Tier C. Canonical cross-package contracts. No autonomous edits."
+
+      There is a known workaround — `server.ts:630-640` states the pick-trace route's role policy inline precisely because that lane could not edit `auth.ts` — but its own comment says the policy "belongs in ROUTE_ROLES and should move there when a lane is authorized to touch auth.ts". Reproducing that workaround to avoid escalation would be evading the rule, not satisfying it.
+
+      So this issue carries a PM decision: approve the new governed operator write route (which is a deliberate, bounded security-posture change), or direct the shorter operator-script path instead.
+
+      The smaller alternative that IS executable under existing authority: an operator CLI under `scripts/ops/` that writes the same `events` + `event_participants` rows with the same honest `operator-manual-entry` provenance, through the existing `EventRepository` / `EventParticipantRepository`. It adds no route, no auth surface and no contract edit. It makes seeding routine for an internal operator, but it is not a Command Center surface.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Smart Form's read side is complete and deployed: GET /api/reference-data/{catalog,availability,leagues,matchups,search/\*,events,events/:id} all work, and a manually seeded event is visible through them (probed 2026-09-18: GET /api/reference-data/events?sport=NFL&date=2026-09-17 returns the Lions @ Bills canary event; the same query for 2026-09-18 returns \[\]).
+
+      The gap is the write side. Only the ingestor writes `events` / `event_participants`, and the ingestor is parked under containment. `grep -rn operator-manual-entry` across apps/packages/scripts/docs returns nothing — there is no governed operator surface for creating an event at all, so the canary event was hand-seeded by raw SQL.
+
+      Scope: add a governed operator write surface for events, so current-game availability becomes routine without activating SGO and without adding a provider.
+
+      * POST /api/reference-data/events, operator role only (ROUTE_ROLES), using the existing EventRepository.upsertByExternalId + EventParticipantRepository.upsert.
+      * Participants resolved from the existing canonical participant catalog only — never minted inline. NFL already has 32 team participants.
+      * Honest provenance on the row: metadata records `operator-manual-entry`, the operator identity from the auth context (never the body), and observedAt. It must be impossible for an operator-seeded event to be mistaken for provider-observed data.
+      * Refuses fail-closed on an unknown participant, a duplicate external id owned by a provider, or a missing provenance field.
+      * An operator surface in the Command Center to drive it.
+
+      Out of scope: SGO activation, any new odds/market provider (PROVIDER_AUTHORITY_LOCK.md makes that a PM decision), any DDL, any containment change, player reference data.
+
+      ---
+    - >-
+      Escalation finding (2026-09-18, Claude)
+
+      As originally scoped this is **not** an autonomous T2 lane.
+      `docs/05_operations/DELEGATION_POLICY.md` puts two of the required files
+      in always-escalate / Tier C categories:
+
+
+      * `apps/api/src/auth.ts` and RBAC route protection — "Always escalate.
+      Security posture change." A new privileged POST route needs a
+      `ROUTE_ROLES` entry, because `authorizeRoute` denies by default when no
+      pattern matches.
+
+      * `packages/contracts/src/**` — "Tier C. Canonical cross-package
+      contracts. No autonomous edits."
+
+
+      There is a known workaround — `server.ts:630-640` states the pick-trace
+      route's role policy inline precisely because that lane could not edit
+      `auth.ts` — but its own comment says the policy "belongs in ROUTE_ROLES
+      and should move there when a lane is authorized to touch auth.ts".
+      Reproducing that workaround to avoid escalation would be evading the rule,
+      not satisfying it.
+
+
+      So this issue carries a PM decision: approve the new governed operator
+      write route (which is a deliberate, bounded security-posture change), or
+      direct the shorter operator-script path instead.
+
+
+      The smaller alternative that IS executable under existing authority: an
+      operator CLI under `scripts/ops/` that writes the same `events` +
+      `event_participants` rows with the same honest `operator-manual-entry`
+      provenance, through the existing `EventRepository` /
+      `EventParticipantRepository`. It adds no route, no auth surface and no
+      contract edit. It makes seeding routine for an internal operator, but it
+      is not a Command Center surface.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1930/governed-operator-event-seeding-routine-current-game-availability-for
+    title: Governed operator event seeding — routine current-game availability for
+      Smart Form without SGO
+    description: |-
+      Smart Form's read side is complete and deployed: GET /api/reference-data/{catalog,availability,leagues,matchups,search/\*,events,events/:id} all work, and a manually seeded event is visible through them (probed 2026-09-18: GET /api/reference-data/events?sport=NFL&date=2026-09-17 returns the Lions @ Bills canary event; the same query for 2026-09-18 returns \[\]).
+
+      The gap is the write side. Only the ingestor writes `events` / `event_participants`, and the ingestor is parked under containment. `grep -rn operator-manual-entry` across apps/packages/scripts/docs returns nothing — there is no governed operator surface for creating an event at all, so the canary event was hand-seeded by raw SQL.
+
+      Scope: add a governed operator write surface for events, so current-game availability becomes routine without activating SGO and without adding a provider.
+
+      * POST /api/reference-data/events, operator role only (ROUTE_ROLES), using the existing EventRepository.upsertByExternalId + EventParticipantRepository.upsert.
+      * Participants resolved from the existing canonical participant catalog only — never minted inline. NFL already has 32 team participants.
+      * Honest provenance on the row: metadata records `operator-manual-entry`, the operator identity from the auth context (never the body), and observedAt. It must be impossible for an operator-seeded event to be mistaken for provider-observed data.
+      * Refuses fail-closed on an unknown participant, a duplicate external id owned by a provider, or a missing provenance field.
+      * An operator surface in the Command Center to drive it.
+
+      Out of scope: SGO activation, any new odds/market provider (PROVIDER_AUTHORITY_LOCK.md makes that a PM decision), any DDL, any containment change, player reference data.
+
+      ---
+
+      ## Escalation finding (2026-09-18, Claude)
+
+      As originally scoped this is **not** an autonomous T2 lane. `docs/05_operations/DELEGATION_POLICY.md` puts two of the required files in always-escalate / Tier C categories:
+
+      * `apps/api/src/auth.ts` and RBAC route protection — "Always escalate. Security posture change." A new privileged POST route needs a `ROUTE_ROLES` entry, because `authorizeRoute` denies by default when no pattern matches.
+      * `packages/contracts/src/**` — "Tier C. Canonical cross-package contracts. No autonomous edits."
+
+      There is a known workaround — `server.ts:630-640` states the pick-trace route's role policy inline precisely because that lane could not edit `auth.ts` — but its own comment says the policy "belongs in ROUTE_ROLES and should move there when a lane is authorized to touch auth.ts". Reproducing that workaround to avoid escalation would be evading the rule, not satisfying it.
+
+      So this issue carries a PM decision: approve the new governed operator write route (which is a deliberate, bounded security-posture change), or direct the shorter operator-script path instead.
+
+      The smaller alternative that IS executable under existing authority: an operator CLI under `scripts/ops/` that writes the same `events` + `event_participants` rows with the same honest `operator-manual-entry` provenance, through the existing `EventRepository` / `EventParticipantRepository`. It adds no route, no auth surface and no contract edit. It makes seeding routine for an internal operator, but it is not a Command Center surface.
+    captured_at: 2026-09-18T07:37:14.514Z
+    description_sha256: 644da568e0ccb22c8197dc4474a92add2a3afb44045990e8b3015a324bbffd13
+  contract_hash: d588e9bfeb11b12b946ccadc13153828a00642dbffab7aea4c1f871f0be5b7ab
