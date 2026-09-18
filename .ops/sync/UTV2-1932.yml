@@ -1,0 +1,271 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1932
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1932
+  objective: "Command Center Dimension 5: render the contract's required operator
+    fields without placeholders"
+  acceptance_criteria:
+    - >-
+      `T1_PRODUCTION_READINESS_CONTRACT.md` Dimension 5 (Operator Decision
+      Support) is provider-independent and is the largest readiness dimension
+      closable without live provider data. Audited against `main` 2026-09-18;
+      four of the five required surfaces fail, and none of the failures is a
+      data-availability problem.
+
+
+      **The contract requires, with no placeholder UI** (a cell rendering "—",
+      "N/A", or blank where real data should be is a failing violation):
+
+
+      | Surface | Required |
+
+      | -- | -- |
+
+      | Pick detail | edge source, trust level, score breakdown, settlement
+      status, CLV when available |
+
+      | Picks list / queue | score, routing target, status, edge source
+      indicator |
+
+      | Review queue | suppressed picks with `suppressionReason` rendered
+      non-null, non-blank |
+
+      | Held picks queue | exists, shows held picks |
+
+      | Settlement display | outcome (won/lost/push), CLV when resolved |
+
+
+      **Measured failures:**
+
+
+      1. **Picks list omits three required fields entirely.**
+      `components/PicksExplorerClient.tsx:91-98` renders Pick, Status, Sport,
+      Market, Odds, Line, Result, Created. Score, routing target and edge source
+      are not rendered *and not queried*. `components/PickLifecycleTable.tsx`
+      already implements all three (`:52-63`, `:81-92`) but is dead code —
+      nothing imports it. `promotion_score`, `promotion_target` and the metadata
+      that drives `lib/score-insight.ts` are already written by the promotion
+      pipeline, so this is a pure UI omission.
+
+      2. `suppressionReason` **is never fetched and never rendered.** Suppressed
+      picks are queried only at `lib/data/picks.ts:163`, and that `.select(...)`
+      omits `promotion_reason` — the column that holds the reason
+      (`baseline_live_schema.sql:2968`, populated at
+      `apps/api/src/promotion-service.ts:1234`). Its only consumer,
+      `app/exceptions/page.tsx`, reduces the queue to a numeric count. No live
+      page renders a per-pick suppression reason.
+
+      3. `/held` **is an operator dead end.** `app/held/page.tsx` redirects to
+      `/review`, and `getReviewQueue` (`lib/data/queues.ts:345`) explicitly
+      excludes `review_decision = 'hold'`. So the held-picks route sends the
+      operator to a page that structurally cannot show held picks. Note
+      `picks.status` has no `held` value (CHECK constraint,
+      `baseline_live_schema.sql:2980`); held is `review_decision = 'hold'`,
+      reachable today only buried inside `/operations/approvals`.
+
+      4. **Settlement display placeholders the one field the contract names.**
+      `app/settlement/page.tsx:45` renders `{row.result ?? '—'}` for the
+      settlement outcome. There is also no CLV column at all —
+      `lib/data/results-ops.ts` contains zero CLV references.
+
+
+      **Provider boundary.** CLV *values* and market-backed *edge* require a
+      live odds provider and stay deferred. Everything above is renderable from
+      data the system already holds. Where CLV is genuinely absent, render the
+      existing honest `clvUnavailableReason` (as `picks/[id]/page.tsx:231-232`
+      already does) rather than a bare dash — an honest empty state is not a
+      placeholder violation; a bare dash standing in for real data is.
+
+
+      **Acceptance:** each of the five surfaces renders its contract-named
+      fields from real data; no contract-named field falls back to a bare
+      placeholder glyph; `/held` reaches a view that actually shows held picks;
+      suppressed picks show their reason.
+
+
+      Not in scope: CLV/edge values that need provider data, and any change to
+      grading, delivery, containment or merge authority.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `T1_PRODUCTION_READINESS_CONTRACT.md` Dimension 5 (Operator Decision
+      Support) is provider-independent and is the largest readiness dimension
+      closable without live provider data. Audited against `main` 2026-09-18;
+      four of the five required surfaces fail, and none of the failures is a
+      data-availability problem.
+
+
+      **The contract requires, with no placeholder UI** (a cell rendering "—",
+      "N/A", or blank where real data should be is a failing violation):
+
+
+      | Surface | Required |
+
+      | -- | -- |
+
+      | Pick detail | edge source, trust level, score breakdown, settlement
+      status, CLV when available |
+
+      | Picks list / queue | score, routing target, status, edge source
+      indicator |
+
+      | Review queue | suppressed picks with `suppressionReason` rendered
+      non-null, non-blank |
+
+      | Held picks queue | exists, shows held picks |
+
+      | Settlement display | outcome (won/lost/push), CLV when resolved |
+
+
+      **Measured failures:**
+
+
+      1. **Picks list omits three required fields entirely.**
+      `components/PicksExplorerClient.tsx:91-98` renders Pick, Status, Sport,
+      Market, Odds, Line, Result, Created. Score, routing target and edge source
+      are not rendered *and not queried*. `components/PickLifecycleTable.tsx`
+      already implements all three (`:52-63`, `:81-92`) but is dead code —
+      nothing imports it. `promotion_score`, `promotion_target` and the metadata
+      that drives `lib/score-insight.ts` are already written by the promotion
+      pipeline, so this is a pure UI omission.
+
+      2. `suppressionReason` **is never fetched and never rendered.** Suppressed
+      picks are queried only at `lib/data/picks.ts:163`, and that `.select(...)`
+      omits `promotion_reason` — the column that holds the reason
+      (`baseline_live_schema.sql:2968`, populated at
+      `apps/api/src/promotion-service.ts:1234`). Its only consumer,
+      `app/exceptions/page.tsx`, reduces the queue to a numeric count. No live
+      page renders a per-pick suppression reason.
+
+      3. `/held` **is an operator dead end.** `app/held/page.tsx` redirects to
+      `/review`, and `getReviewQueue` (`lib/data/queues.ts:345`) explicitly
+      excludes `review_decision = 'hold'`. So the held-picks route sends the
+      operator to a page that structurally cannot show held picks. Note
+      `picks.status` has no `held` value (CHECK constraint,
+      `baseline_live_schema.sql:2980`); held is `review_decision = 'hold'`,
+      reachable today only buried inside `/operations/approvals`.
+
+      4. **Settlement display placeholders the one field the contract names.**
+      `app/settlement/page.tsx:45` renders `{row.result ?? '—'}` for the
+      settlement outcome. There is also no CLV column at all —
+      `lib/data/results-ops.ts` contains zero CLV references.
+
+
+      **Provider boundary.** CLV *values* and market-backed *edge* require a
+      live odds provider and stay deferred. Everything above is renderable from
+      data the system already holds. Where CLV is genuinely absent, render the
+      existing honest `clvUnavailableReason` (as `picks/[id]/page.tsx:231-232`
+      already does) rather than a bare dash — an honest empty state is not a
+      placeholder violation; a bare dash standing in for real data is.
+
+
+      **Acceptance:** each of the five surfaces renders its contract-named
+      fields from real data; no contract-named field falls back to a bare
+      placeholder glyph; `/held` reaches a view that actually shows held picks;
+      suppressed picks show their reason.
+
+
+      Not in scope: CLV/edge values that need provider data, and any change to
+      grading, delivery, containment or merge authority.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator
+    title: "Command Center Dimension 5: render the contract's required operator
+      fields without placeholders"
+    description: >-
+      `T1_PRODUCTION_READINESS_CONTRACT.md` Dimension 5 (Operator Decision
+      Support) is provider-independent and is the largest readiness dimension
+      closable without live provider data. Audited against `main` 2026-09-18;
+      four of the five required surfaces fail, and none of the failures is a
+      data-availability problem.
+
+
+      **The contract requires, with no placeholder UI** (a cell rendering "—",
+      "N/A", or blank where real data should be is a failing violation):
+
+
+      | Surface | Required |
+
+      | -- | -- |
+
+      | Pick detail | edge source, trust level, score breakdown, settlement
+      status, CLV when available |
+
+      | Picks list / queue | score, routing target, status, edge source
+      indicator |
+
+      | Review queue | suppressed picks with `suppressionReason` rendered
+      non-null, non-blank |
+
+      | Held picks queue | exists, shows held picks |
+
+      | Settlement display | outcome (won/lost/push), CLV when resolved |
+
+
+      **Measured failures:**
+
+
+      1. **Picks list omits three required fields entirely.**
+      `components/PicksExplorerClient.tsx:91-98` renders Pick, Status, Sport,
+      Market, Odds, Line, Result, Created. Score, routing target and edge source
+      are not rendered *and not queried*. `components/PickLifecycleTable.tsx`
+      already implements all three (`:52-63`, `:81-92`) but is dead code —
+      nothing imports it. `promotion_score`, `promotion_target` and the metadata
+      that drives `lib/score-insight.ts` are already written by the promotion
+      pipeline, so this is a pure UI omission.
+
+      2. `suppressionReason` **is never fetched and never rendered.** Suppressed
+      picks are queried only at `lib/data/picks.ts:163`, and that `.select(...)`
+      omits `promotion_reason` — the column that holds the reason
+      (`baseline_live_schema.sql:2968`, populated at
+      `apps/api/src/promotion-service.ts:1234`). Its only consumer,
+      `app/exceptions/page.tsx`, reduces the queue to a numeric count. No live
+      page renders a per-pick suppression reason.
+
+      3. `/held` **is an operator dead end.** `app/held/page.tsx` redirects to
+      `/review`, and `getReviewQueue` (`lib/data/queues.ts:345`) explicitly
+      excludes `review_decision = 'hold'`. So the held-picks route sends the
+      operator to a page that structurally cannot show held picks. Note
+      `picks.status` has no `held` value (CHECK constraint,
+      `baseline_live_schema.sql:2980`); held is `review_decision = 'hold'`,
+      reachable today only buried inside `/operations/approvals`.
+
+      4. **Settlement display placeholders the one field the contract names.**
+      `app/settlement/page.tsx:45` renders `{row.result ?? '—'}` for the
+      settlement outcome. There is also no CLV column at all —
+      `lib/data/results-ops.ts` contains zero CLV references.
+
+
+      **Provider boundary.** CLV *values* and market-backed *edge* require a
+      live odds provider and stay deferred. Everything above is renderable from
+      data the system already holds. Where CLV is genuinely absent, render the
+      existing honest `clvUnavailableReason` (as `picks/[id]/page.tsx:231-232`
+      already does) rather than a bare dash — an honest empty state is not a
+      placeholder violation; a bare dash standing in for real data is.
+
+
+      **Acceptance:** each of the five surfaces renders its contract-named
+      fields from real data; no contract-named field falls back to a bare
+      placeholder glyph; `/held` reaches a view that actually shows held picks;
+      suppressed picks show their reason.
+
+
+      Not in scope: CLV/edge values that need provider data, and any change to
+      grading, delivery, containment or merge authority.
+    captured_at: 2026-09-18T12:53:21.197Z
+    description_sha256: d49286ef1f038c9093752362831972362ed025a9ce86da697df4d374ef81b5f5
+  contract_hash: daa55dbe147c85003311b35809fe3381d860610de7ade351d40b9771d9a8d64c
