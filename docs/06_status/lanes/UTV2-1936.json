@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1936",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1936-fixture-guard-presence-check",
+  "branch": "claude/utv2-1936-fixture-guard-presence-check",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1936.yml",
+    "apps/api/src/alert-query-service.test.ts",
+    "apps/api/src/alert-query-service.ts",
+    "apps/command-center/src/lib/data/client.test.ts",
+    "apps/command-center/src/lib/data/client.ts",
+    "docs/06_status/lanes/UTV2-1936.json",
+    "docs/06_status/proof/UTV2-1936/diff-summary.md",
+    "docs/06_status/proof/UTV2-1936/evidence.json",
+    "docs/06_status/proof/UTV2-1936/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1936/diff-summary.md",
+    "docs/06_status/proof/UTV2-1936/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-09-18T15:26:09.027Z",
+  "heartbeat_at": "2026-09-18T15:26:09.027Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1936-fixture-guard-presence-check.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1936-fixture-guard-presence-check",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
