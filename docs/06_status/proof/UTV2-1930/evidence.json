@@ -7,13 +7,13 @@
   "status": "open",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "4b7957935c657b82b4394485a1858357d364a5f1",
+    "verified_source_sha": "17b3f964fb04faa4060fa43fc095531a4f8e8942",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
     "bound_at": "2026-09-18T07:47:13.000Z",
     "ci_sentinels": {
-      "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1602 at this head. post-merge-lane-close.yml rebinds merge_sha.",
+      "note": "Re-anchored 2026-09-18. The original verified_source_sha 4b7957935 was the last non-proof commit on the UTV2-1930 implementation branch; #1602 was squash-merged, so that commit is not in main's history and is not an ancestor of any later head. The squash commit 17b3f964fb04faa4060fa43fc095531a4f8e8942 carries exactly the tree this evidence was executed against, so it is the stable anchor. Every commit after it on this branch touches only docs/06_status/lanes/** and docs/06_status/proof/**. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1602 at that head. post-merge-lane-close.yml rebinds merge_sha.",
       "local_type_check": {
         "command": "pnpm type-check",
         "exit_code": 0
