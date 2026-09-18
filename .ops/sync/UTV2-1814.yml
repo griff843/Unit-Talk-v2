@@ -1,0 +1,144 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1814
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1814
+  objective: DB RPC contract parity — two runtime client.rpc() dependencies exist
+    in no governed migration and no live database
+  acceptance_criteria:
+    - |-
+      ## What was found
+
+      [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) added a static parity test (`apps/api/src/rpc-contract-parity.test.ts`) that relates every runtime `.rpc('name')` call site to a `CREATE [OR REPLACE] FUNCTION` under `supabase/migrations/`. Beyond the `consume_rate_limit_bucket` gap that L0 fixes, the first run surfaced **two more pre-existing instances of the same defect class**. Both were confirmed absent from the governed migrations *and* from live `pg_proc` in production (`zfzdnfwdarxucxtaojxm`) and staging (`xskgrzbteyqdufktjrjx`).
+
+      ### 1. `list_provider_offer_history_partition_dates` — name mismatch, not just a missing migration
+
+      * Call site: `apps/ingestor/src/provider-offer-history-retention.ts:94` (merged on `main`).
+      * The unmerged [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) branch defines `public.list_provider_offer_history_partition_**days**()`, not `..._dates`.
+      * So the call site shipped ahead of its migration, **and** merging PR #1451 as-is would still leave the retention path calling a function that does not exist.
+
+      ### 2. `insert_certification_propagation_batch`
+
+      * Call sites: `apps/worker/src/certification-runtime.ts:152` and `apps/worker/src/scripts/utv2-1177-atomic-certification-propagation-proof.ts`.
+      * Defined in no migration, including the `00000000000000_baseline_live_schema.sql` replay root, and present in neither database. The historical migration filename `20260527001_utv2_1177_atomic_certification_propagation_batch.sql` no longer exists as a forward migration and its function is not in the baseline.
+
+      ## Why it matters
+
+      Both callers reach the database through fail-closed paths, so a missing function is a total outage on that path rather than a degradation — the same shape as the Smart Form submission outage. Neither is live-impacting **today** only because the ingestor and worker are parked. Unparking either subsystem without fixing this reproduces the L0 failure in a different surface.
+
+      ## Current containment
+
+      The two names are carried as a documented allowlist in the parity test with a pointer to this issue, so the test still fails on any **new** gap while not blocking L0 on unrelated pre-existing debt. The allowlist entries must be deleted as each is fixed — the test asserts an allowlisted name is still genuinely missing, so a stale entry fails rather than rots.
+
+      ## Definition of done
+
+      1. Determine the intended function for each call site and land the governed migration, or correct the call site.
+      2. Resolve the `_days` / `_dates` mismatch before or with PR #1451.
+      3. Remove both allowlist entries from `apps/api/src/rpc-contract-parity.test.ts`.
+      4. Confirm `pg_proc` in staging and production carries each function with the exact callable signature the caller uses.
+
+      ## Related — separate proof blind spot
+
+      `scripts/ci/schema-roundtrip-hash.ts` runs `pg_dump --no-acl`, so the migration round-trip drill cannot observe grants at all. A migration shipping a browser-executable RPC would pass every existing gate silently, and CI's scratch Postgres has no `anon`/`authenticated` role to catch it either. [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) proves its own ACLs directly from `pg_proc.proacl` instead of relying on the gate; closing the gate generally is not in that lane's scope.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      What was found
+      [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) added a static parity test (`apps/api/src/rpc-contract-parity.test.ts`) that relates every runtime `.rpc('name')` call site to a `CREATE [OR REPLACE] FUNCTION` under `supabase/migrations/`. Beyond the `consume_rate_limit_bucket` gap that L0 fixes, the first run surfaced **two more pre-existing instances of the same defect class**. Both were confirmed absent from the governed migrations *and* from live `pg_proc` in production (`zfzdnfwdarxucxtaojxm`) and staging (`xskgrzbteyqdufktjrjx`).
+
+      ### 1. `list_provider_offer_history_partition_dates` — name mismatch, not just a missing migration
+
+      * Call site: `apps/ingestor/src/provider-offer-history-retention.ts:94` (merged on `main`).
+      * The unmerged [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) branch defines `public.list_provider_offer_history_partition_**days**()`, not `..._dates`.
+      * So the call site shipped ahead of its migration, **and** merging PR #1451 as-is would still leave the retention path calling a function that does not exist.
+
+      ### 2. `insert_certification_propagation_batch`
+
+      * Call sites: `apps/worker/src/certification-runtime.ts:152` and `apps/worker/src/scripts/utv2-1177-atomic-certification-propagation-proof.ts`.
+      * Defined in no migration, including the `00000000000000_baseline_live_schema.sql` replay root, and present in neither database. The historical migration filename `20260527001_utv2_1177_atomic_certification_propagation_batch.sql` no longer exists as a forward migration and its function is not in the baseline.
+    - >-
+      Why it matters
+
+      Both callers reach the database through fail-closed paths, so a missing
+      function is a total outage on that path rather than a degradation — the
+      same shape as the Smart Form submission outage. Neither is live-impacting
+      **today** only because the ingestor and worker are parked. Unparking
+      either subsystem without fixing this reproduces the L0 failure in a
+      different surface.
+    - >-
+      Current containment
+
+      The two names are carried as a documented allowlist in the parity test
+      with a pointer to this issue, so the test still fails on any **new** gap
+      while not blocking L0 on unrelated pre-existing debt. The allowlist
+      entries must be deleted as each is fixed — the test asserts an allowlisted
+      name is still genuinely missing, so a stale entry fails rather than rots.
+    - >-
+      Definition of done
+
+      1. Determine the intended function for each call site and land the
+      governed migration, or correct the call site.
+
+      2. Resolve the `_days` / `_dates` mismatch before or with PR #1451.
+
+      3. Remove both allowlist entries from
+      `apps/api/src/rpc-contract-parity.test.ts`.
+
+      4. Confirm `pg_proc` in staging and production carries each function with
+      the exact callable signature the caller uses.
+    - |-
+      Related — separate proof blind spot
+      `scripts/ci/schema-roundtrip-hash.ts` runs `pg_dump --no-acl`, so the migration round-trip drill cannot observe grants at all. A migration shipping a browser-executable RPC would pass every existing gate silently, and CI's scratch Postgres has no `anon`/`authenticated` role to catch it either. [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) proves its own ACLs directly from `pg_proc.proacl` instead of relying on the gate; closing the gate generally is not in that lane's scope.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1814/db-rpc-contract-parity-two-runtime-clientrpc-dependencies-exist-in-no
+    title: DB RPC contract parity — two runtime client.rpc() dependencies exist in
+      no governed migration and no live database
+    description: |-
+      ## What was found
+
+      [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) added a static parity test (`apps/api/src/rpc-contract-parity.test.ts`) that relates every runtime `.rpc('name')` call site to a `CREATE [OR REPLACE] FUNCTION` under `supabase/migrations/`. Beyond the `consume_rate_limit_bucket` gap that L0 fixes, the first run surfaced **two more pre-existing instances of the same defect class**. Both were confirmed absent from the governed migrations *and* from live `pg_proc` in production (`zfzdnfwdarxucxtaojxm`) and staging (`xskgrzbteyqdufktjrjx`).
+
+      ### 1. `list_provider_offer_history_partition_dates` — name mismatch, not just a missing migration
+
+      * Call site: `apps/ingestor/src/provider-offer-history-retention.ts:94` (merged on `main`).
+      * The unmerged [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) branch defines `public.list_provider_offer_history_partition_**days**()`, not `..._dates`.
+      * So the call site shipped ahead of its migration, **and** merging PR #1451 as-is would still leave the retention path calling a function that does not exist.
+
+      ### 2. `insert_certification_propagation_batch`
+
+      * Call sites: `apps/worker/src/certification-runtime.ts:152` and `apps/worker/src/scripts/utv2-1177-atomic-certification-propagation-proof.ts`.
+      * Defined in no migration, including the `00000000000000_baseline_live_schema.sql` replay root, and present in neither database. The historical migration filename `20260527001_utv2_1177_atomic_certification_propagation_batch.sql` no longer exists as a forward migration and its function is not in the baseline.
+
+      ## Why it matters
+
+      Both callers reach the database through fail-closed paths, so a missing function is a total outage on that path rather than a degradation — the same shape as the Smart Form submission outage. Neither is live-impacting **today** only because the ingestor and worker are parked. Unparking either subsystem without fixing this reproduces the L0 failure in a different surface.
+
+      ## Current containment
+
+      The two names are carried as a documented allowlist in the parity test with a pointer to this issue, so the test still fails on any **new** gap while not blocking L0 on unrelated pre-existing debt. The allowlist entries must be deleted as each is fixed — the test asserts an allowlisted name is still genuinely missing, so a stale entry fails rather than rots.
+
+      ## Definition of done
+
+      1. Determine the intended function for each call site and land the governed migration, or correct the call site.
+      2. Resolve the `_days` / `_dates` mismatch before or with PR #1451.
+      3. Remove both allowlist entries from `apps/api/src/rpc-contract-parity.test.ts`.
+      4. Confirm `pg_proc` in staging and production carries each function with the exact callable signature the caller uses.
+
+      ## Related — separate proof blind spot
+
+      `scripts/ci/schema-roundtrip-hash.ts` runs `pg_dump --no-acl`, so the migration round-trip drill cannot observe grants at all. A migration shipping a browser-executable RPC would pass every existing gate silently, and CI's scratch Postgres has no `anon`/`authenticated` role to catch it either. [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) proves its own ACLs directly from `pg_proc.proacl` instead of relying on the gate; closing the gate generally is not in that lane's scope.
+    captured_at: 2026-09-18T04:17:23.623Z
+    description_sha256: 6a2982bb40b022a4ad9057aba67d7bca14789e9eca8ecb588844bceda449a186
+  contract_hash: 4d4f8822aa54e45e6c57a6b00fb70d60f6b87969c9c2e80c19a6d2ffb37f6352
