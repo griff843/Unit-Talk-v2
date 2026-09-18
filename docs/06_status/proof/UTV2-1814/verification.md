@@ -1,4 +1,4 @@
-# UTV2-1814 — Verification
+# PROOF: UTV2-1814 — Verification
 
 MERGE_SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1600
@@ -90,6 +90,67 @@ The issue's definition of done covers **two** ungoverned RPCs. This lane resolve
 `insert_certification_propagation_batch` only. `list_provider_offer_history_partition_dates` is a
 name mismatch against UTV2-1736's `..._days` and remains open, with its allowlist entry
 deliberately retained. The issue must not be marked Done on this lane.
+
+## ASSERTIONS:
+
+- [x] `public.insert_certification_propagation_batch(jsonb, jsonb)` is absent from the baseline replay
+      root, from production `zfzdnfwdarxucxtaojxm` and from staging `xskgrzbteyqdufktjrjx`.
+- [x] The migration creates it on an empty scratch schema and is idempotent under its own ownership
+      marker; against an unmarked function of the same signature it raises SQLSTATE `42723` before any
+      DDL, with a byte-identical schema fingerprint across the attempt.
+- [x] The rollback drops exactly that function and, run a second time, raises SQLSTATE `42501` rather
+      than dropping an object it does not own.
+- [x] Round-trip convergence holds: post-down equals pre-up and re-up equals post-up, with
+      pre-up != post-up proving the hash is sensitive to this migration.
+- [x] The function is atomic and fail-closed: an invalid enum in the event inserts neither the record
+      nor the event; empty batch, count mismatch and non-array input each raise.
+- [x] ACLs are explicit — `proacl` is `{postgres=X/postgres}`, so PUBLIC, `anon` and `authenticated`
+      hold no EXECUTE on a `SECURITY DEFINER` writer into the certification ledger.
+- [x] The allowlist deletion is forced, not cosmetic: removing the migration file makes
+      `t1-proof-utv2-1811-rpc-contract-parity.test.ts` report `not ok 1`.
+- [x] Containment is untouched. `official-picks` stayed `killed = true` throughout, the staged pick and
+      its single outbox row are unchanged, and nothing was unparked.
+
+## EVIDENCE:
+
+Static verification, run on the branch:
+
+```
+$ pnpm verify
+  -> env:check + lint + pnpm type-check + build + pnpm test
+  Locally exits 1 solely at the ci:assert-staging containment refusal,
+  with 0 "not ok" lines and 0 non-zero fail counters.
+  PASS in CI at this head as the required `verify` context.
+
+$ pnpm exec tsx --test apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts
+# tests 8 / # pass 8 / # fail 0
+
+$ pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts
+# tests 8 / # pass 8 / # fail 0
+```
+
+R-level evidence requirement, evaluated against the real diff:
+
+```
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 12
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+The defect, measured on the production worker before any change:
+
+```
+$ ssh unit-talk-prod docker inspect -f '{{.State.Health.Status}} {{.RestartCount}}' unit-talk-worker-1
+healthy 0
+$ ssh unit-talk-prod docker logs --tail 40 unit-talk-worker-1
+"autorun": true,
+"error": "certification propagation batch insert failed: Could not find the function
+ public.insert_certification_propagation_batch(p_events, p_records) in the schema cache"
+```
+
+The full receipt table and the drill output are in the sibling
+`diff-summary.md`, which is the artifact the executor result names.
 
 ## Merge SHA Binding
 
