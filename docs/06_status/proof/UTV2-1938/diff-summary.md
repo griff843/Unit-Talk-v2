@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1938-human-capper-event-gate-waiver
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1611
 Head SHA: af490ecd4bb1354e7e337e8faca8bef64205572d
-Merge SHA: N/A
+Merge SHA: 4eb4d9a3fd14d1c57abb509ad0188543979eff44
 Diff base: 157547cfe47abf1bf11bffd92ae4e93dc1ec3164
 Diff target: af490ecd4bb1354e7e337e8faca8bef64205572d
 
@@ -37,4 +37,4 @@ A	docs/06_status/lanes/UTV2-1938.json
 
 ## SHA Binding
 Head SHA: af490ecd4bb1354e7e337e8faca8bef64205572d
-Merge SHA: N/A
+Merge SHA: 4eb4d9a3fd14d1c57abb509ad0188543979eff44

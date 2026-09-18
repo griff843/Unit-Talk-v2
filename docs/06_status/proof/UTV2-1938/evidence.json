@@ -4,16 +4,22 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "4eb4d9a3fd14d1c57abb509ad0188543979eff44",
     "verified_source_sha": "af490ecd4bb1354e7e337e8faca8bef64205572d",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1611 at this head. post-merge-lane-close.yml rebinds merge_sha.",
-      "local_lint": { "command": "pnpm lint", "exit_code": 0 },
-      "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
       "local_full_suite": {
         "command": "pnpm test",
         "exit_code": 0,
@@ -24,16 +30,33 @@
         "suite_blocks_with_failures": 0
       },
       "required_contexts_authority": "PR #1611: verify, Executor Result Validation, Merge Gate, P0 Protocol"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T20:21:02.128Z"
   },
   "static_proof": {
     "status": "pass",
     "measured_at": "2026-09-18T19:45:00Z",
     "measured_against_sha": "af490ecd4bb1354e7e337e8faca8bef64205572d",
     "commands": [
-      { "command": "pnpm lint", "exit_code": 0, "result": "pass", "note": "eslint . --cache, no output" },
-      { "command": "pnpm type-check", "exit_code": 0, "result": "pass", "note": "pnpm exec tsc -b tsconfig.json, no diagnostics" },
-      { "command": "pnpm build", "exit_code": 0, "result": "pass", "note": "pnpm exec tsc -b tsconfig.json" },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "eslint . --cache, no output"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "pnpm exec tsc -b tsconfig.json, no diagnostics"
+      },
+      {
+        "command": "pnpm build",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "pnpm exec tsc -b tsconfig.json"
+      },
       {
         "command": "pnpm test",
         "exit_code": 0,
@@ -160,15 +183,42 @@
       }
     ],
     "row_counts": [
-      { "name": "events_total", "value": 790 },
-      { "name": "events_in_listupcoming_90_day_band", "value": 178 },
-      { "name": "events_today_or_future", "value": 0 },
-      { "name": "governed_pick_cohort", "value": 7 },
-      { "name": "delivery_eligible_picks_with_no_matching_event", "value": 0 },
-      { "name": "track_only_picks_with_no_matching_event", "value": 5 },
-      { "name": "governed_picks_created_last_24h", "value": 3 },
-      { "name": "governed_delivery_targets_killed", "value": 4 },
-      { "name": "rows_written_updated_or_deleted_by_this_proof", "value": 0 }
+      {
+        "name": "events_total",
+        "value": 790
+      },
+      {
+        "name": "events_in_listupcoming_90_day_band",
+        "value": 178
+      },
+      {
+        "name": "events_today_or_future",
+        "value": 0
+      },
+      {
+        "name": "governed_pick_cohort",
+        "value": 7
+      },
+      {
+        "name": "delivery_eligible_picks_with_no_matching_event",
+        "value": 0
+      },
+      {
+        "name": "track_only_picks_with_no_matching_event",
+        "value": 5
+      },
+      {
+        "name": "governed_picks_created_last_24h",
+        "value": 3
+      },
+      {
+        "name": "governed_delivery_targets_killed",
+        "value": 4
+      },
+      {
+        "name": "rows_written_updated_or_deleted_by_this_proof",
+        "value": 0
+      }
     ],
     "observations": [
       {

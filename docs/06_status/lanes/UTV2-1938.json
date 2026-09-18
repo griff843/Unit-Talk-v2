@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1938-human-capper-event-gate-waiver",
   "branch": "claude/utv2-1938-human-capper-event-gate-waiver",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "4eb4d9a3fd14d1c57abb509ad0188543979eff44",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1611",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1938/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-18T19:27:14.347Z",
-  "heartbeat_at": "2026-09-18T19:41:41.609Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-18T20:21:04.795Z",
+  "closed_at": "2026-09-18T20:21:04.795Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1938-human-capper-event-gate-waiver.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-18T20:21:02.134Z",
+      "verdict": "pass",
+      "merge_sha": "4eb4d9a3fd14d1c57abb509ad0188543979eff44",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

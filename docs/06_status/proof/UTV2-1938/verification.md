@@ -1,6 +1,6 @@
 # PROOF: UTV2-1938
 
-MERGE_SHA: pending merge
+MERGE_SHA: 4eb4d9a3fd14d1c57abb509ad0188543979eff44
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -147,7 +147,7 @@ armed-gate live-DB test.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 4eb4d9a3fd14d1c57abb509ad0188543979eff44
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1611
 Approved PR head: pending merge
 Execution SHA: af490ecd4bb1354e7e337e8faca8bef64205572d
