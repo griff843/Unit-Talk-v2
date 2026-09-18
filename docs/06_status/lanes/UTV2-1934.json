@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1934-startup-context-containment-truth",
   "branch": "claude/utv2-1934-startup-context-containment-truth",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "902e8ba0ae4bb832b2e1679519da6b8923262bb8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1605",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,22 @@
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-18T12:54:19.092Z",
-  "heartbeat_at": "2026-09-18T13:06:38.418Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-18T13:40:19.157Z",
+  "closed_at": "2026-09-18T13:40:19.157Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1934-startup-context-containment-truth.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-18T13:40:16.721Z",
+      "verdict": "pass",
+      "merge_sha": "902e8ba0ae4bb832b2e1679519da6b8923262bb8",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

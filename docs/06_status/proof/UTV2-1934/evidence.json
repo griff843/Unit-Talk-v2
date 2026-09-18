@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "pre_merge",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "902e8ba0ae4bb832b2e1679519da6b8923262bb8",
     "verified_source_sha": "bfed688855be2e0fc5d84076811cdc03cd6e6ff8",
     "evidence_commit_sha": "bfed688855be2e0fc5d84076811cdc03cd6e6ff8",
-    "current_pr_head_sha": "bfed688855be2e0fc5d84076811cdc03cd6e6ff8",
+    "current_pr_head_sha": "a830fa640b9f66e2c562c4ca236caf279109daa5",
     "sha_type": "verified_source_sha",
     "bound_at": "2026-09-18T13:35:00.000Z",
     "ci_sentinels": {
