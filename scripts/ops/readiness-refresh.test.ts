@@ -15,6 +15,8 @@ import {
   probeDeploySha,
   probeIngestorHealth,
   probeWorkerOutboxHealth,
+  bucketStaleProcessingRows,
+  STALE_PROCESSING_READ_LIMIT,
   resolveProductionDb,
   wrapReadOnlyClient,
   type DbFilter,
@@ -294,6 +296,101 @@ test('a dead letter with an unusable attempt_count is treated as attempted', asy
 
   assert.equal(result.status, 'fail');
   assert.equal(result.measured?.['true_failure_count'], 1);
+});
+
+// ── stale processing rows: claimable vs unclaimable ──────────────────────────
+//
+// The defect these cover: this probe used to count every stale `processing` row
+// and fail a blocking dimension on the total. 32 of them sit on
+// `utv2-1497-canary-*` targets that no worker polls, claims or reaps, so the
+// dimension could never pass and a real stuck row changed nothing anyone saw.
+
+/** One stale processing row, shaped as `selectRows` returns it. */
+function staleProcessingRow(target: unknown): Record<string, unknown> {
+  return { id: 'row', target, updated_at: minutesAgo(60) };
+}
+
+function healthyHeartbeat() {
+  return { system_runs: { status: 'success', started_at: minutesAgo(1) } };
+}
+
+async function outboxProbe(selected: Record<string, unknown>[]) {
+  return probeWorkerOutboxHealth(
+    context({
+      dbUnavailableReason: null,
+      db: stubDb({ rows: healthyHeartbeat(), selected }),
+    }),
+  );
+}
+
+test('a governed target is claimable and an ungoverned one is not', () => {
+  const buckets = bucketStaleProcessingRows([
+    staleProcessingRow('official-picks'),
+    staleProcessingRow('best-bets'),
+    staleProcessingRow('utv2-1497-canary-a'),
+    staleProcessingRow('utv2-1497-canary-b'),
+    staleProcessingRow('utv2-1497-canary-a'),
+  ]);
+
+  assert.equal(buckets.claimable, 2);
+  assert.equal(buckets.unclaimable, 3);
+  assert.deepEqual(buckets.unclaimableTargets, ['utv2-1497-canary-a', 'utv2-1497-canary-b']);
+});
+
+// Fail-closed: an unreadable target is not evidence that nothing owns the row.
+test('a row with a missing or non-string target counts as claimable', () => {
+  const buckets = bucketStaleProcessingRows([
+    staleProcessingRow(undefined),
+    staleProcessingRow(null),
+    staleProcessingRow(42),
+    {},
+  ]);
+
+  assert.equal(buckets.claimable, 4);
+  assert.equal(buckets.unclaimable, 0);
+});
+
+test('worker/outbox health passes when every stale row is on an ungoverned target', async () => {
+  const result = await outboxProbe([
+    staleProcessingRow('utv2-1497-canary-a'),
+    staleProcessingRow('utv2-1497-canary-b'),
+  ]);
+
+  assert.equal(result.status, 'pass');
+  assert.equal(result.measured?.['stale_unknown_count'], 2);
+  assert.equal(result.measured?.['stale_unknown_claimable_count'], 0);
+  assert.equal(result.measured?.['stale_unknown_unclaimable_count'], 2);
+});
+
+// The whole point of the repair is that this direction still fails. A probe that
+// stopped failing on a real stuck row would be the same defect with the sign flipped.
+test('worker/outbox health still fails on one stale row on a governed target', async () => {
+  const result = await outboxProbe([
+    staleProcessingRow('official-picks'),
+    staleProcessingRow('utv2-1497-canary-a'),
+  ]);
+
+  assert.equal(result.status, 'fail');
+  assert.match(result.evidence, /1 claimable bucket:stale_unknown/);
+  assert.equal(result.measured?.['stale_unknown_claimable_count'], 1);
+});
+
+test('the unclaimable rows are never hidden — the evidence names their targets', async () => {
+  const result = await outboxProbe([staleProcessingRow('utv2-1497-canary-a')]);
+
+  assert.match(result.evidence, /unclaimable=1/);
+  assert.match(result.evidence, /utv2-1497-canary-a/);
+  assert.deepEqual(result.measured?.['stale_unknown_unclaimable_targets'], ['utv2-1497-canary-a']);
+});
+
+test('a stale-processing read that hits its row limit fails rather than partitioning a partial set', async () => {
+  const rows = Array.from({ length: STALE_PROCESSING_READ_LIMIT }, () =>
+    staleProcessingRow('utv2-1497-canary-a'),
+  );
+  const result = await outboxProbe(rows);
+
+  assert.equal(result.status, 'fail');
+  assert.match(result.evidence, /partition is incomplete/);
 });
 
 test('worker/outbox health fails on a stale heartbeat even with an empty queue', async () => {

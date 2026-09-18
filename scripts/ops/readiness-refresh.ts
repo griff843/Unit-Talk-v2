@@ -53,6 +53,7 @@ import {
   extractProjectRefFromUrl,
 } from '../ci/isolated-proof-attestation.js';
 import { classifyDeadLetter } from './outbox-triage.js';
+import { isGovernedDeliveryTarget } from '@unit-talk/contracts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -105,7 +106,7 @@ export const SCHEDULED_OBSERVERS = [
   'reconcile-stale-lanes.yml',
 ] as const;
 
-export const QUEUE_SEMANTICS_VERSION = '1.1';
+export const QUEUE_SEMANTICS_VERSION = '1.2';
 export const QUEUE_SEMANTICS_DOC = 'docs/05_operations/QUEUE_READINESS_SEMANTICS.md';
 
 // ── Ledger shape ─────────────────────────────────────────────────────────────
@@ -435,6 +436,79 @@ export async function probeIngestorHealth(ctx: ProbeContext): Promise<ReadinessD
   }
 }
 
+export const STALE_PROCESSING_READ_LIMIT = 20000;
+
+export interface StaleProcessingBuckets {
+  /** Rows on a target some worker configuration can actually claim and reap. */
+  claimable: number;
+  /**
+   * Rows pinned to a target no worker governs. No worker polls them, so no worker
+   * can claim them, and `reapStaleClaims` never sees them either. They are inert by
+   * construction and will sit in `processing` forever.
+   */
+  unclaimable: number;
+  /** The distinct unclaimable targets, so the evidence names them. */
+  unclaimableTargets: string[];
+}
+
+/**
+ * Split stale `processing` rows by whether any worker could ever claim them.
+ *
+ * ## Why this is not a count query
+ *
+ * The previous form of this probe counted every `status='processing'` row older
+ * than the window and failed a **blocking** readiness dimension on the total. That
+ * total is dominated by 32 rows on four `utv2-1497-canary-*` targets: synthetic
+ * targets that appear in no worker configuration. No worker polls them, so no
+ * worker claims them, so `reapStaleClaims` never reaps them. They cannot drain,
+ * which means the dimension they fail can never pass, which means a *real* stuck
+ * row on a real target changes nothing an operator would see. A control that is
+ * already red conveys no information when the thing it watches actually breaks.
+ *
+ * The mirror image of the same missing distinction lives in
+ * `apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts`, which reads the same
+ * population and asserts `ok(true)` on it. So that control can never fail while
+ * this one can never pass. Neither asked the question that decides the row:
+ * could any worker ever claim this?
+ *
+ * `isGovernedDeliveryTarget` is imported from `@unit-talk/contracts` rather than
+ * matched against a literal here. A hardcoded comparison is exactly how
+ * `discord:<channelId>` became a delivery lane no control could see (UTV2-1923),
+ * and a second copy of the target list is how this gate and the worker would come
+ * to disagree about the same row.
+ *
+ * Fail-closed direction: a row whose `target` is absent or not a string counts as
+ * **claimable**. An unreadable target is not evidence that nothing owns the row.
+ */
+export function bucketStaleProcessingRows(
+  rows: readonly Record<string, unknown>[],
+): StaleProcessingBuckets {
+  const buckets: StaleProcessingBuckets = {
+    claimable: 0,
+    unclaimable: 0,
+    unclaimableTargets: [],
+  };
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const rawTarget = row['target'];
+    const target = typeof rawTarget === 'string' ? rawTarget : null;
+
+    if (target !== null && !isGovernedDeliveryTarget(target)) {
+      buckets.unclaimable += 1;
+      if (!seen.has(target)) {
+        seen.add(target);
+        buckets.unclaimableTargets.push(target);
+      }
+    } else {
+      buckets.claimable += 1;
+    }
+  }
+
+  buckets.unclaimableTargets.sort();
+  return buckets;
+}
+
 export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<ReadinessDimension> {
   const base = {
     id: 'worker_outbox_health',
@@ -445,7 +519,8 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       source: `supabase:${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}`,
       query:
         "system_runs where run_type='worker.heartbeat' order by started_at desc limit 1; " +
-        "count distribution_outbox where status='processing' and updated_at < now-5m; " +
+        "select target from distribution_outbox where status='processing' and updated_at < now-5m, " +
+        'partitioned by isGovernedDeliveryTarget(target); ' +
         "count distribution_outbox where status='pending' and attempt_count>0 and updated_at < now-30m; " +
         "count distribution_outbox where status in ('pending','processing')",
     },
@@ -460,7 +535,7 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       ctx.now.getTime() - THRESHOLDS.outboxStalePendingMinutes * 60_000,
     ).toISOString();
 
-    const [heartbeat, pending, processing, staleUnknown, stuckRetryable] = await Promise.all([
+    const [heartbeat, pending, processing, staleProcessingRows, stuckRetryable] = await Promise.all([
       db.latestRow(
         'system_runs',
         'status, started_at',
@@ -470,10 +545,18 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       db.countRows('distribution_outbox', [{ column: 'status', op: 'eq', value: 'pending' }]),
       db.countRows('distribution_outbox', [{ column: 'status', op: 'eq', value: 'processing' }]),
       // Bucket 5 (stale-unknown): processing past the expected processing window.
-      db.countRows('distribution_outbox', [
-        { column: 'status', op: 'eq', value: 'processing' },
-        { column: 'updated_at', op: 'lt', value: staleProcessingBefore },
-      ]),
+      // Rows, not a count -- the verdict depends on each row's target, and
+      // `DbFilter` cannot express "the target is one a worker governs".
+      // See {@link bucketStaleProcessingRows}.
+      db.selectRows(
+        'distribution_outbox',
+        'id, target, updated_at',
+        [
+          { column: 'status', op: 'eq', value: 'processing' },
+          { column: 'updated_at', op: 'lt', value: staleProcessingBefore },
+        ],
+        STALE_PROCESSING_READ_LIMIT,
+      ),
       // Bucket 4 gone bad: attempted, still pending, past the retry window.
       db.countRows('distribution_outbox', [
         { column: 'status', op: 'eq', value: 'pending' },
@@ -486,12 +569,25 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
     const heartbeatStatus = typeof heartbeat?.['status'] === 'string' ? (heartbeat['status'] as string) : null;
     const heartbeatAge = heartbeatAt ? minutesBetween(heartbeatAt, ctx.now) : null;
 
+    const staleBuckets = bucketStaleProcessingRows(staleProcessingRows);
+    const staleUnknown = staleBuckets.claimable + staleBuckets.unclaimable;
+
     const failures: string[] = [];
     if (heartbeatAge === null) failures.push('no worker.heartbeat row exists');
     else if (heartbeatAge > THRESHOLDS.workerHeartbeatMaxMinutes)
       failures.push(`worker.heartbeat is ${heartbeatAge}m old (threshold ${THRESHOLDS.workerHeartbeatMaxMinutes}m), last status "${heartbeatStatus}"`);
-    if (staleUnknown > 0)
-      failures.push(`${staleUnknown} bucket:stale_unknown rows (processing > ${THRESHOLDS.outboxStaleProcessingMinutes}m)`);
+    // Only claimable rows fail the dimension. An unclaimable row is a data-hygiene
+    // finding, not a worker-health one: no worker can drain it, so failing on it
+    // pins this blocking dimension red forever and hides the rows that matter.
+    // It stays measured, named and visible in the evidence -- it is not discarded.
+    if (staleBuckets.claimable > 0)
+      failures.push(
+        `${staleBuckets.claimable} claimable bucket:stale_unknown rows (processing > ${THRESHOLDS.outboxStaleProcessingMinutes}m)`,
+      );
+    if (staleProcessingRows.length >= STALE_PROCESSING_READ_LIMIT)
+      failures.push(
+        `stale processing read hit its ${STALE_PROCESSING_READ_LIMIT}-row limit, so the partition is incomplete`,
+      );
     if (stuckRetryable > 0)
       failures.push(`${stuckRetryable} attempted rows still pending after ${THRESHOLDS.outboxStalePendingMinutes}m`);
 
@@ -501,7 +597,12 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       observed_at: ctx.now.toISOString(),
       evidence:
         `Queue buckets per ${QUEUE_SEMANTICS_DOC} v${QUEUE_SEMANTICS_VERSION}: pending=${pending}, processing=${processing}, ` +
-        `stale_unknown=${staleUnknown}, attempted-and-stuck=${stuckRetryable}. ` +
+        `stale_unknown=${staleUnknown} (claimable=${staleBuckets.claimable}, ` +
+        `unclaimable=${staleBuckets.unclaimable}` +
+        (staleBuckets.unclaimableTargets.length > 0
+          ? ` on ${staleBuckets.unclaimableTargets.join(', ')}`
+          : '') +
+        `), attempted-and-stuck=${stuckRetryable}. ` +
         `worker.heartbeat ${heartbeatAt ?? 'none'} (${heartbeatAge ?? 'n/a'}m, status ${heartbeatStatus ?? 'n/a'}). ` +
         (failures.length === 0 ? 'No stuck rows.' : `FAIL: ${failures.join('; ')}.`),
       measured: {
@@ -511,6 +612,9 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
         pending_count: pending,
         processing_count: processing,
         stale_unknown_count: staleUnknown,
+        stale_unknown_claimable_count: staleBuckets.claimable,
+        stale_unknown_unclaimable_count: staleBuckets.unclaimable,
+        stale_unknown_unclaimable_targets: staleBuckets.unclaimableTargets,
         stuck_retryable_count: stuckRetryable,
       },
       unreadable_reason: null,

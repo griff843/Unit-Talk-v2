@@ -1,7 +1,7 @@
 # Queue Readiness Semantics — Unit Talk V2
 
-**Version:** 1.1  
-**Authority:** PM-ratified (UTV2-1320); Bucket 6 corrected under UTV2-1875  
+**Version:** 1.2  
+**Authority:** PM-ratified (UTV2-1320); Bucket 6 corrected under UTV2-1875; Bucket 5 split into claimable/unclaimable under UTV2-1933  
 **Status:** ACTIVE  
 **Last updated:** 2026-09-09
 
@@ -69,9 +69,47 @@ Every row in `distribution_outbox` (pending/processing) and `dead_letter` maps t
 
 **Definition:** Row has been in `processing` status for longer than the expected processing window (typically >5 minutes) with no disposition. This could indicate a stuck worker, a timeout that didn't properly DLQ the row, or an orphaned processing lock. Requires investigation but is NOT necessarily a delivery failure.
 
-**Readiness impact:** MEDIUM. Stale-unknown rows should be investigated. They may self-resolve when the worker restarts or times out; they are not automatically failures.
-
 **Evidence marker:** `status = 'processing'` AND `updated_at < NOW() - INTERVAL '5 minutes'`
+
+#### 5a — claimable, and 5b — unclaimable (UTV2-1933)
+
+The undifferentiated bucket-5 count is not a readiness signal, because a row only
+says something about worker health if a worker could ever have claimed it.
+
+- **5a, claimable** — `target` is a member of `governedDeliveryTargets`
+  (`packages/contracts/src/promotion.ts`), or is absent/unreadable. Some worker
+  configuration polls this target, so `reapStaleClaims` should have released the
+  claim within one cycle. A row here past the window means the reaper is not
+  draining it.
+- **5b, unclaimable** — `target` is a real string that is **not** a governed
+  delivery target. No worker polls it, so no worker claims it, and the reaper never
+  sees it. The row cannot drain by any runtime mechanism.
+
+Membership is decided by `isGovernedDeliveryTarget()`, never by a literal match —
+a second copy of the target list is how a control and the worker come to disagree
+about the same row (UTV2-1923).
+
+**Fail-closed direction:** a row whose `target` is missing or not a string is
+**claimable**. An unreadable target is not evidence that nothing owns the row.
+
+**Readiness impact:** only 5a gates. `worker_outbox_health` fails on any 5a row and
+does **not** fail on 5b.
+
+Why the split exists: production held 32 bucket-5 rows on four
+`utv2-1497-canary-*` targets, none of them governed. Counting them made
+`worker_outbox_health` — a *blocking* dimension — permanently red, so a genuine
+stuck row on a real target would have changed nothing an operator could see. The
+mirror of the same omission sat in
+`apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts`, which read the same
+population and asserted `ok(true)`: one control could never pass, the other could
+never fail.
+
+**5b rows are reported, never deleted.** They stay counted in `stale_unknown_count`,
+broken out in `stale_unknown_unclaimable_count`, and their distinct targets are
+named in both the evidence string and `stale_unknown_unclaimable_targets`. They are
+a data-hygiene finding with a separate owner. Deleting them would turn a blocking
+readiness number green by destroying the evidence that the classification behind it
+was wrong.
 
 ---
 
@@ -143,7 +181,7 @@ The incorrect format is ambiguous and misleads readiness scoring.
 
 | Dimension | PASS condition | FAIL condition |
 |---|---|---|
-| `worker_outbox_health` | Bucket 6 count = 0 AND Bucket 5 count ≤ threshold | Bucket 6 count > 0 OR Bucket 5 growing unbounded |
+| `worker_outbox_health` | Bucket 6 count = 0 AND Bucket **5a** (claimable) count = 0 | Bucket 6 count > 0 OR any Bucket 5a row. Bucket 5b (unclaimable) never gates. |
 | `dead_letter_count` | Bucket 6 count = 0 | Bucket 6 count > 0 |
 
 Bucket 1 (governance-hold), Bucket 2 (canary-only), Bucket 3 (deferred), and Bucket 4 (retryable within normal range) do NOT trigger FAIL on either dimension.
