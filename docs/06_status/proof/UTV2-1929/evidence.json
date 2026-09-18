@@ -14,9 +14,23 @@
     "bound_at": "2026-09-18T07:20:00.000Z",
     "ci_sentinels": {
       "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1601 at this head. post-merge-lane-close.yml rebinds merge_sha.",
-      "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
-      "local_lint": { "command": "pnpm lint", "exit_code": 0 },
-      "required_contexts_authority": "PR #1601: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "required_contexts_authority": "PR #1601: verify, Executor Result Validation, Merge Gate, P0 Protocol",
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "ok_lines": 5908,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      }
     }
   },
   "static_proof": {
@@ -24,16 +38,69 @@
     "measured_at": "2026-09-18T07:20:00Z",
     "measured_against_sha": "1794657ff10f614e79c2c80bf09f7d3cd71b39ff",
     "commands": [
-      { "command": "pnpm type-check", "exit_code": 0, "result": "pass", "note": "tsc -b tsconfig.json, no diagnostics" },
-      { "command": "pnpm lint", "exit_code": 0, "result": "pass", "note": "eslint, no output" },
-      { "command": "pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts", "exit_code": 0, "result": "pass", "note": "8 pass / 0 fail, 1 new test" },
-      { "command": "pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts", "exit_code": 0, "result": "pass", "note": "72 pass / 0 fail" },
-      { "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts", "exit_code": 0, "result": "pass", "note": "94 pass / 0 fail, 2 new tests" },
-      { "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "exit_code": 0, "result": "pass", "note": "Verdict PASS; 9 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]" }
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "tsc -b tsconfig.json, no diagnostics"
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "eslint, no output"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "ok_lines": 5908,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "8 pass / 0 fail, 1 new test"
+      },
+      {
+        "command": "pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "72 pass / 0 fail"
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "94 pass / 0 fail, 2 new tests"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 9 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]"
+      }
     ],
     "new_coverage": [
-      { "file": "apps/worker/src/delivery-adapters.test.ts", "tests": 8, "pass": 8, "fail": 0, "new_tests": 1, "mutation_controls": 1 },
-      { "file": "apps/api/src/grading-service.test.ts", "tests": 94, "pass": 94, "fail": 0, "new_tests": 2, "mutation_controls": 1 }
+      {
+        "file": "apps/worker/src/delivery-adapters.test.ts",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0,
+        "new_tests": 1,
+        "mutation_controls": 1
+      },
+      {
+        "file": "apps/api/src/grading-service.test.ts",
+        "tests": 94,
+        "pass": 94,
+        "fail": 0,
+        "new_tests": 2,
+        "mutation_controls": 1
+      }
     ],
     "mutation_controls": [
       {
@@ -50,7 +117,12 @@
         "result": "fails_on_the_named_condition",
         "proves": "the writer control is coupled to the field it names"
       },
-      { "control": "unmutated baseline", "mutation": "none", "observed": "8/8, 72/72, 94/94", "result": "pass" }
+      {
+        "control": "unmutated baseline",
+        "mutation": "none",
+        "observed": "8/8, 72/72, 94/94",
+        "result": "pass"
+      }
     ]
   },
   "runtime_proof": {
@@ -90,17 +162,44 @@
       }
     ],
     "row_counts": [
-      { "name": "governed_picks_total", "value": 7 },
-      { "name": "governed_picks_settled_truthfully", "value": 6 },
-      { "name": "distribution_outbox_rows_total", "value": 5747 },
-      { "name": "distribution_outbox_rows_sent_during_window", "value": 0 },
-      { "name": "delivery_kill_switch_rows_not_killed", "value": 0 }
+      {
+        "name": "governed_picks_total",
+        "value": 7
+      },
+      {
+        "name": "governed_picks_settled_truthfully",
+        "value": 6
+      },
+      {
+        "name": "distribution_outbox_rows_total",
+        "value": 5747
+      },
+      {
+        "name": "distribution_outbox_rows_sent_during_window",
+        "value": 0
+      },
+      {
+        "name": "delivery_kill_switch_rows_not_killed",
+        "value": 0
+      }
     ],
     "observations": [
-      { "what": "the recap leg is structurally broken for every human capper pick", "evidence": "production receipt 653db135 carries a non-numeric receipt.channel and human targets are map-exempt by design" },
-      { "what": "the Command Center could never write to the API", "evidence": "UNIT_TALK_CC_API_KEY absent from every .env.production; live probe 401 before the repair, 200 after" },
-      { "what": "containment held throughout", "evidence": "all four delivery targets killed=true; outbox total and newest row unchanged; 0 rows sent" },
-      { "what": "the deploy of this fix was not dispatched", "evidence": "dispatching a production deployment is reserved decision 8" }
+      {
+        "what": "the recap leg is structurally broken for every human capper pick",
+        "evidence": "production receipt 653db135 carries a non-numeric receipt.channel and human targets are map-exempt by design"
+      },
+      {
+        "what": "the Command Center could never write to the API",
+        "evidence": "UNIT_TALK_CC_API_KEY absent from every .env.production; live probe 401 before the repair, 200 after"
+      },
+      {
+        "what": "containment held throughout",
+        "evidence": "all four delivery targets killed=true; outbox total and newest row unchanged; 0 rows sent"
+      },
+      {
+        "what": "the deploy of this fix was not dispatched",
+        "evidence": "dispatching a production deployment is reserved decision 8"
+      }
     ]
   }
 }

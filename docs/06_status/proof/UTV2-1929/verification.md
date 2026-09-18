@@ -150,7 +150,7 @@ EVIDENCE:
 |---|---|---|
 | `pnpm type-check` | 0 | pass — `tsc -b tsconfig.json`, no diagnostics |
 | `pnpm lint` | 0 | pass — `eslint`, no output |
-| `pnpm test` | — | see the note below |
+| `pnpm test` | 0 | pass — **5,908 `ok` lines, 0 `not ok`**, 104 suite blocks each `# fail 0` |
 | `pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts` | 0 | 8 pass / 0 fail (1 new test) |
 | `pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts` | 0 | 72 pass / 0 fail |
 | `pnpm exec tsx --test apps/api/src/grading-service.test.ts` | 0 | 94 pass / 0 fail (2 new tests) |
