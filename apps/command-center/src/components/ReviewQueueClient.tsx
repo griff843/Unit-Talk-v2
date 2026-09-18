@@ -8,6 +8,7 @@ import { ReviewActions } from '@/components/ReviewActions';
 import { BulkReviewBar } from '@/components/BulkReviewBar';
 import { buildPickIdentity } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
+import { describeSuppression, NO_REASON_RECORDED } from '@/lib/suppression';
 
 interface ReviewPick {
   id: string;
@@ -27,6 +28,8 @@ interface ReviewPick {
   marketTypeDisplayName?: string | null;
   settlementResult?: string | null;
   reviewDecision?: string | null;
+  promotionStatus?: string | null;
+  promotionReason?: string | null;
 }
 
 function formatOdds(odds: number | null): string {
@@ -110,6 +113,7 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
               <Th>Units</Th>
               <Th>Score</Th>
               <Th>Edge</Th>
+              <Th>Routing</Th>
               <Th>Created</Th>
               <Th>Actions</Th>
             </TableHead>
@@ -151,6 +155,41 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Dimension 5: a suppressed pick must show why. A missing reason renders as a stated defect
+ * rather than an em dash — a dash reads as "nothing to say", which is the wrong thing to say
+ * about a pick that was withheld for an unrecorded reason.
+ */
+function SuppressionCell({ pick }: { pick: ReviewPick }) {
+  const { suppressed, reason, missingReason } = describeSuppression(
+    pick.promotionStatus,
+    pick.promotionReason,
+  );
+
+  if (!suppressed) {
+    return reason ? (
+      <span className="text-[11px] text-gray-400" title={reason}>{reason}</span>
+    ) : (
+      <span className="text-gray-600">—</span>
+    );
+  }
+
+  return (
+    <div className="leading-tight">
+      <div className="text-[10px] uppercase tracking-[0.08em] text-gray-500">
+        {(pick.promotionStatus ?? '').replaceAll('_', ' ')}
+      </div>
+      {missingReason ? (
+        <div className="mt-0.5 text-[10px] font-semibold text-rose-400">{NO_REASON_RECORDED}</div>
+      ) : (
+        <div className="mt-0.5 max-w-[22ch] text-[10px] text-amber-300/90" title={reason ?? undefined}>
+          {reason}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -202,6 +241,7 @@ function ReviewRow({
         <Td>
           <span className={`rounded border px-1.5 py-0.5 text-[10px] ${edgeClass}`}>{edgeLabel}</span>
         </Td>
+        <Td><SuppressionCell pick={pick} /></Td>
         <Td><span className="whitespace-nowrap text-gray-400">{formatCreated(pick.created_at)}</span></Td>
         <Td>
           {isSelected ? (
@@ -220,7 +260,7 @@ function ReviewRow({
       </tr>
       {isExpanded && !isSelected && (
         <tr className="border-t border-gray-800/50 bg-white/[0.02]">
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={10} className="px-4 py-3">
             <ReviewActions pickId={pick.id} decisions={['approve', 'deny', 'hold']} />
           </td>
         </tr>
