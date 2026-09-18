@@ -54,8 +54,19 @@ import { isNonExecutableReceipt } from './migration-history-receipt.ts';
 /** Anchored: prose that merely mentions the marker must not count as declaring it. */
 const PRECONDITION_MARKER = /^[ \t]*--[ \t]*FAIL-CLOSED-PRECONDITION:[ \t]*(.+)$/im;
 
-/** SQLSTATE the precondition is required to raise. `42P07` is duplicate_table. */
+/** SQLSTATE a relation guard is required to raise. `42P07` is duplicate_table. */
 export const REQUIRED_SQLSTATE = '42P07';
+
+/**
+ * SQLSTATE a routine guard is required to raise. `42723` is duplicate_function.
+ *
+ * UTV2-1814: a migration whose only object is a function has the same hazard as one
+ * that creates a table -- `CREATE OR REPLACE FUNCTION` silently overwrites a same-named
+ * function created out of band, destroying its definition while reporting success. The
+ * guard is therefore identical in kind, and is drilled identically; only the decoy and
+ * the SQLSTATE differ, because a function cannot raise duplicate_table.
+ */
+export const REQUIRED_ROUTINE_SQLSTATE = '42723';
 
 /** psql prints `ERROR:  42P07: message` under VERBOSITY=verbose. */
 const SQLSTATE_PATTERN = /^(?:psql:[^\n]*?)?ERROR:\s+([0-9A-Z]{5}):/m;
@@ -96,6 +107,17 @@ const SCHEMA_FINGERPRINT_QUERY = `
   SELECT 'rls', n.nspname || '.' || c.relname, c.relrowsecurity::text
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public' AND c.relkind = 'r'
+  UNION ALL
+  -- UTV2-1814: without this the "no DDL ran" assertion is blind to functions, so a
+  -- routine guard that fired only AFTER creating its function would fingerprint as
+  -- identical and be reported as a clean refusal. prosrc is included because a
+  -- CREATE OR REPLACE that overwrites a body changes nothing else about the catalog
+  -- row -- the body IS the object here.
+  SELECT 'routine',
+         n.nspname || '.' || p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')',
+         md5(p.prosrc) || '|' || p.prosecdef::text || '|' || coalesce(array_to_string(p.proconfig, ','), '')
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public'
    ORDER BY 1, 2, 3
 `;
 
@@ -106,16 +128,68 @@ export interface DrillCase {
 }
 
 /**
- * Relations a migration declares its precondition guards. Returns an empty array
+ * A declared guard target. A bare name is a relation; a name carrying an argument
+ * list is a routine. Nothing else distinguishes them, and nothing needs to: the
+ * parenthesis is exactly what makes a routine identity a routine identity.
+ */
+export interface DeclaredTarget {
+  readonly kind: 'relation' | 'routine';
+  /** As written on the marker line, e.g. `public.foo` or `public.foo(jsonb, jsonb)`. */
+  readonly ident: string;
+}
+
+/**
+ * Splits a marker line on commas at parenthesis depth zero.
+ *
+ * UTV2-1814: a naive `split(',')` tears `public.f(jsonb, jsonb)` into two bogus
+ * targets, and the drill would then fail on a guard that is perfectly correct while
+ * reporting a cause that does not exist. Depth tracking is the whole fix.
+ */
+export function splitDeclarationList(declaration: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of declaration) {
+    if (ch === '(') depth += 1;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return parts.map((p) => p.trim()).filter((p) => p.length > 0);
+}
+
+/**
+ * Targets a migration declares its precondition guards. Returns an empty array
  * when the migration does not opt in; the caller decides whether that is fatal.
  */
-export function parseDeclaredRelations(sqlText: string): string[] {
+export function parseDeclaredTargets(sqlText: string): DeclaredTarget[] {
   const match = PRECONDITION_MARKER.exec(sqlText);
   if (!match?.[1]) return [];
-  return match[1]
-    .split(',')
-    .map((r) => r.trim())
-    .filter((r) => r.length > 0);
+  return splitDeclarationList(match[1]).map((ident) => ({
+    kind: ident.includes('(') ? ('routine' as const) : ('relation' as const),
+    ident,
+  }));
+}
+
+/**
+ * Retained as the relation-only view of {@link parseDeclaredTargets}. Routine targets
+ * are deliberately excluded rather than stringified, so a caller that only understands
+ * relations cannot silently treat a routine as one.
+ */
+export function parseDeclaredRelations(sqlText: string): string[] {
+  return parseDeclaredTargets(sqlText)
+    .filter((t) => t.kind === 'relation')
+    .map((t) => t.ident);
+}
+
+/** `public.f(jsonb, jsonb)` -> a decoy body that creates the same callable identity. */
+function decoyRoutineSql(ident: string): string {
+  return `CREATE FUNCTION ${ident} RETURNS jsonb LANGUAGE sql AS $decoy$ SELECT '{}'::jsonb $decoy$`;
 }
 
 /** Extracts the SQLSTATE psql reported, or null if none is present. */
@@ -169,10 +243,10 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
     ];
   }
 
-  const relations = parseDeclaredRelations(sqlText);
+  const targets = parseDeclaredTargets(sqlText);
   const cases: DrillCase[] = [];
 
-  if (relations.length === 0) {
+  if (targets.length === 0) {
     return [
       {
         name: 'declaration',
@@ -186,9 +260,15 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
 
   const baseline = snapshotSchema(dsn);
 
-  // --- Refusal, once per declared relation, independently. -------------------
-  for (const relation of relations) {
-    const seed = psql(dsn, ['-c', `CREATE TABLE ${relation} (id uuid PRIMARY KEY)`]);
+  // --- Refusal, once per declared target, independently. ---------------------
+  for (const target of targets) {
+    const relation = target.ident;
+    const isRoutine = target.kind === 'routine';
+    const requiredSqlstate = isRoutine ? REQUIRED_ROUTINE_SQLSTATE : REQUIRED_SQLSTATE;
+    const seedSql = isRoutine
+      ? decoyRoutineSql(relation)
+      : `CREATE TABLE ${relation} (id uuid PRIMARY KEY)`;
+    const seed = psql(dsn, ['-c', seedSql]);
     if (!seed.ok) throw new Error(`could not seed decoy ${relation}: ${seed.stderr}`);
     const seeded = snapshotSchema(dsn);
 
@@ -202,19 +282,19 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
         status: 'fail',
         detail: 'migration APPLIED despite the relation already existing — the guard did not fire',
       });
-    } else if (sqlstate !== REQUIRED_SQLSTATE) {
+    } else if (sqlstate !== requiredSqlstate) {
       cases.push({
         name: `refuses when ${relation} pre-exists`,
         status: 'fail',
         detail:
-          `migration failed with SQLSTATE ${sqlstate ?? 'unknown'}, expected ${REQUIRED_SQLSTATE}. ` +
+          `migration failed with SQLSTATE ${sqlstate ?? 'unknown'}, expected ${requiredSqlstate}. ` +
           `psql reported: ${extractErrorMessage(attempt.stderr)}`,
       });
     } else {
       cases.push({
         name: `refuses when ${relation} pre-exists`,
         status: 'pass',
-        detail: `raised SQLSTATE ${REQUIRED_SQLSTATE}`,
+        detail: `raised SQLSTATE ${requiredSqlstate}`,
       });
     }
 
@@ -230,7 +310,10 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
           : 'SCHEMA CHANGED during the attempt — DDL ran before the guard',
     });
 
-    const teardown = psql(dsn, ['-c', `DROP TABLE ${relation}`]);
+    const teardown = psql(dsn, [
+      '-c',
+      isRoutine ? `DROP FUNCTION ${relation}` : `DROP TABLE ${relation}`,
+    ]);
     if (!teardown.ok) throw new Error(`could not drop decoy ${relation}: ${teardown.stderr}`);
     const restored = snapshotSchema(dsn);
     cases.push({
@@ -251,8 +334,15 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
         `when no target relation existed. psql reported: ${extractErrorMessage(clean.stderr)}`,
     });
   } else {
-    const missing = relations.filter((relation) => {
-      const check = psql(dsn, ['-At', '-c', `SELECT to_regclass('${relation}') IS NOT NULL`]);
+    const missing = targets.filter((target) => {
+      // to_regprocedure, not to_regclass: a function has no pg_class entry at all, so
+      // the relation probe would report every routine as missing and fail a migration
+      // that had in fact created it.
+      const probe =
+        target.kind === 'routine'
+          ? `SELECT to_regprocedure('${target.ident}') IS NOT NULL`
+          : `SELECT to_regclass('${target.ident}') IS NOT NULL`;
+      const check = psql(dsn, ['-At', '-c', probe]);
       return check.stdout.trim() !== 't';
     });
     cases.push({
@@ -260,8 +350,8 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
       status: missing.length === 0 ? 'pass' : 'fail',
       detail:
         missing.length === 0
-          ? `created all declared relations: ${relations.join(', ')}`
-          : `applied but did not create: ${missing.join(', ')}`,
+          ? `created all declared targets: ${targets.map((t) => t.ident).join(', ')}`
+          : `applied but did not create: ${missing.map((t) => t.ident).join(', ')}`,
     });
   }
 

@@ -82,10 +82,6 @@ const KNOWN_UNGOVERNED_RPCS = new Map<string, string>([
     'list_provider_offer_history_partition_dates',
     'UTV2-1814: call site merged ahead of its migration, and UTV2-1736 defines ..._days not ..._dates',
   ],
-  [
-    'insert_certification_propagation_batch',
-    'UTV2-1814: defined in no migration including the baseline replay root, and in neither live database',
-  ],
 ]);
 
 interface RpcCallSite {
