@@ -6,12 +6,12 @@
   "proof_profile": "app-runtime",
   "status": "pending_merge",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "8731e7e9b11fc2227d908ff2ceb3ae0a8a95d20e",
     "verified_source_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
     "evidence_commit_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
     "current_pr_head_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
-    "sha_type": "branch_head",
-    "bound_at": "2026-09-18T19:40:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T16:15:41.358Z",
     "ci_sentinels": {
       "note": "Pinned to the last non-proof commit on the branch. Commits after it touch only docs/06_status/lanes/ and docs/06_status/proof/, both proof-only prefixes. The authoritative result is the set of required contexts on PR #1610 at the current head; post-merge-lane-close.yml rebinds merge_sha.",
       "local_lint": {

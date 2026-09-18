@@ -1,6 +1,6 @@
 # PROOF: UTV2-1936 Verification
 
-MERGE_SHA: pending merge
+MERGE_SHA: 8731e7e9b11fc2227d908ff2ceb3ae0a8a95d20e
 
 Issue: UTV2-1936
 Tier: T2
@@ -168,7 +168,7 @@ Each box is an assertion a named test or a recorded measurement makes, not a res
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 8731e7e9b11fc2227d908ff2ceb3ae0a8a95d20e
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1610
 Approved PR head: pending merge
 Execution SHA: a27ac381f65d6a31afbe38ad2cec30452c450ab1
