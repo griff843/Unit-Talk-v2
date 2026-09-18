@@ -1,0 +1,147 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1935",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pending_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "09b8396bfe5431a2da00a469aadf5f8b7cf81a6d",
+    "evidence_commit_sha": "09b8396bfe5431a2da00a469aadf5f8b7cf81a6d",
+    "current_pr_head_sha": "9faf271a823812b18c3e00afd4f825decf4da706",
+    "sha_type": "source_sha",
+    "bound_at": "2026-09-18T16:55:00.000Z",
+    "ci_sentinels": {
+      "note": "Pinned to the last non-proof commit on the branch. Commits after it touch only docs/06_status/lanes/ and docs/06_status/proof/, both proof-only prefixes. The authoritative result is the set of required contexts on PR #1608 at the current head; post-merge-lane-close.yml rebinds merge_sha.",
+      "local_lint": { "command": "pnpm lint", "exit_code": 0 },
+      "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "ok_lines": 5939,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      "required_contexts_authority": "PR #1608: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T16:20:00Z",
+    "measured_against_sha": "09b8396bfe5431a2da00a469aadf5f8b7cf81a6d",
+    "commands": [
+      { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "ok_lines": 5939,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/command-center/src/lib/suppression.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "11 tests, 11 pass, 0 fail, 0 skipped"
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 8 changed files; rules matched operator-ui"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "verify:static and verify:commands pass; ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx. The authoritative full-tree result is the required verify context on PR #1608, which passed."
+      }
+    ],
+    "new_coverage": [
+      {
+        "file": "apps/command-center/src/lib/suppression.test.ts",
+        "tests": 11,
+        "pass": 11,
+        "fail": 0,
+        "new_tests": 11,
+        "mutation_controls": 3,
+        "note": "First tests over suppression-reason rendering. The logic previously existed only inline in PicksExplorerClient and was untestable from a client component without pulling in server-only data-client code."
+      }
+    ],
+    "mutation_controls": [
+      {
+        "control": "a whitespace-only reason counts as blank",
+        "mutation": "replace the trim-based blank check with a naive `promotionReason != null`",
+        "observed": "not ok 4 - a whitespace-only reason is blank... and not ok 5 - an empty-string reason is treated the same as a missing one (9 pass / 2 fail)",
+        "result": "fails_on_the_named_condition",
+        "proves": "the exact check a reviewer would write by hand no longer satisfies the contract's non-blank requirement"
+      },
+      {
+        "control": "only a suppressed pick can owe a reason",
+        "mutation": "drop the `suppressed &&` guard from missingReason",
+        "observed": "not ok 6 - a non-suppressed pick owes no reason... and not ok 9 - a missing or non-string status is not silently treated as suppressed (9 pass / 2 fail)",
+        "result": "fails_on_the_named_condition",
+        "proves": "the defect colour means one thing only and cannot spread to unrouted picks"
+      },
+      {
+        "control": "an unreadable status fails open, not closed",
+        "mutation": "invert the status predicate so anything not 'promoted' is suppressed",
+        "observed": "not ok 6, not ok 7, not ok 9 (8 pass / 3 fail)",
+        "result": "fails_on_the_named_condition",
+        "proves": "a failed status load cannot mark every pick in the queue as a data defect"
+      },
+      {
+        "control": "unmutated baseline",
+        "mutation": "none",
+        "observed": "11 pass / 0 fail, source restored from a byte-copy after each mutation",
+        "result": "pass"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T16:50:00Z",
+    "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no containment setting, kill switch or delivery target was read or touched. These are the exact populations the repaired surfaces render.",
+    "queries": [
+      {
+        "name": "half the suppressed population records no reason at all",
+        "method": "read-only SELECT over picks_current_state WHERE status = 'awaiting_approval' OR approval_status = 'pending', partitioned on promotion_status IN ('suppressed','not_eligible') and on whether promotion_reason is null or blank after btrim",
+        "result": "21,870 suppressed rows in approval scope; 10,882 with no usable reason; 10,988 with one",
+        "significance": "This is the measurement that justifies rendering a missing reason as a stated defect rather than an em dash. 49.8% of the suppressed population would have rendered as 'nothing to say here'. The red label does not create this defect; it makes an existing one visible, and its size is why a dash was the wrong choice."
+      },
+      {
+        "name": "the held population is real and had no page of its own",
+        "method": "read-only SELECT over the same approval scope, counting review_decision = 'hold' — the exact predicate getHeldQueue applies",
+        "result": "2,075 held rows out of 21,871 in approval scope",
+        "significance": "getHeldQueue already computed heldBy, ageHours and holdReason for these 2,075 rows and no surface consumed them. The route named after the held queue was a redirect."
+      }
+    ],
+    "row_counts": [
+      { "name": "approval_scope_rows", "value": 21871 },
+      { "name": "suppressed_rows", "value": 21870 },
+      { "name": "suppressed_without_reason", "value": 10882 },
+      { "name": "suppressed_with_reason", "value": 10988 },
+      { "name": "held_rows", "value": 2075 },
+      { "name": "rows_written_updated_or_deleted_by_this_proof", "value": 0 }
+    ],
+    "observations": [
+      {
+        "what": "the repair is presentational; the underlying data is unchanged",
+        "evidence": "0 rows written, updated or deleted. Every file in the diff is under apps/command-center, which reads Supabase directly and writes only through apps/api."
+      },
+      {
+        "what": "provider-dependent capability is deferred, not faked",
+        "evidence": "promotion_reason is written by the scoring path today. This lane makes no claim about CLV, closing lines or automated grading, all of which remain explicitly deferred."
+      },
+      {
+        "what": "containment is untouched",
+        "evidence": "No kill switch, delivery target, runtime flag or containment setting appears in the diff, and none was modified by this proof."
+      }
+    ]
+  }
+}
