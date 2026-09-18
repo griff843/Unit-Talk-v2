@@ -249,7 +249,20 @@ function unmatchedEventName(label: string): string {
 }
 
 function manualCoverageGapPayload(
-  overrides: { distributionMode?: 'track-only' | 'delivery-eligible'; caseLabel?: string } = {},
+  overrides: {
+    distributionMode?: 'track-only' | 'delivery-eligible';
+    caseLabel?: string;
+    /**
+     * UTV2-1938: attach the SERVER-authored human-capper delivery authorization
+     * record. It is written here as a fixture because this file starts at the
+     * controller, one layer below `handlers/submit-pick.ts` — which is where the
+     * real record is authored, and where any client-supplied copy of this exact
+     * field is deleted unconditionally before the server writes its own. A client
+     * cannot put this record on a pick; only the allow-list plus the authenticated
+     * identity can. See `capper-delivery-authorization.ts`.
+     */
+    serverAuthorizedHumanDelivery?: boolean;
+  } = {},
 ): SubmissionPayload {
   // `caseLabel` exists because `computeSubmissionIdempotencyKey`
   // (submission-service.ts:80-90) hashes only source|market|selection|line|odds|eventName --
@@ -291,6 +304,18 @@ function manualCoverageGapPayload(
       distributionMode: overrides.distributionMode ?? 'track-only',
       proof_run: RUN_ID,
       proof_issue: 'UTV2-1842',
+      ...(overrides.serverAuthorizedHumanDelivery
+        ? {
+            deliveryAuthorization: {
+              version: 'human-capper-delivery/v1',
+              decision: 'authorized',
+              capperId: `utv2-1938-proof-${RUN_ID}`,
+              authority: 'server-allowlist',
+              allowlistSource: 'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST',
+              decidedAt: new Date().toISOString(),
+            },
+          }
+        : {}),
       participantResolution: {
         resolution: 'manual',
         sportId: 'NBA',
@@ -463,6 +488,107 @@ test(
       0,
       `a refused delivery-eligible fallback must persist no pick; found ${deliveryEligible.length}`,
     );
+  },
+);
+
+// ===========================================================================
+// UTV2-1938 — the caller UTV2-1842 could not have anticipated.
+// ===========================================================================
+//
+// UTV2-1842 keyed the waiver on `distributionMode === 'track-only'`, and that was
+// correct when it was written: every authenticated capper was server-pinned to
+// `track-only` by `handlers/submit-pick.ts`, so "Track Only" and "a capper using
+// the Smart Form" named the same set of submissions. UTV2-1923 changed the pin —
+// an ALLOW-LISTED capper is now pinned to `delivery-eligible` instead — and the
+// two names came apart. The waiver kept the old name, so the one caller the
+// human-capper path exists to serve fell out of it, and their structured
+// submission naming no canonical event was refused 422 EVENT_NOT_FOUND and
+// persisted nothing. That is the defect this lane repairs.
+//
+// The test below is the live-DB half of the red/green. It cannot be replaced by
+// the unit test: the unit suite runs on the in-memory bundle, whose `events`
+// table starts empty, and the gate is DORMANT on an empty table — so no
+// in-memory test can observe the refusal this repair removes. `armTheGate` here
+// makes the gate real, on a real database, before the submission is made.
+//
+// The negative half is the test immediately above it: the same fallback kind,
+// the same armed gate, delivery-eligible, and NO server authorization record —
+// still refused, still persisting nothing. Both must hold, and the pair is what
+// says the waiver turns on the server's own decision rather than on the
+// distribution mode a caller arrived with.
+
+test(
+  'UTV2-1938 live DB: a SERVER-AUTHORIZED delivery-eligible fallback passes the armed event gate and persists',
+  { skip: skipReason },
+  async () => {
+    await armTheGate('server-authorized');
+
+    const payload = manualCoverageGapPayload({
+      distributionMode: 'delivery-eligible',
+      caseLabel: 'server-authorized',
+      serverAuthorizedHumanDelivery: true,
+    });
+
+    // Before the repair this call threw ApiError 422 EVENT_NOT_FOUND from
+    // submission-service.ts, at the gate, before any row was written.
+    const response = await submitPickController(payload, repositories);
+    assert.equal(
+      response.status,
+      201,
+      `an authorized human capper's fallback submission must be accepted; got ${response.status} ${JSON.stringify(response.body)}`,
+    );
+    assert.ok(response.body.ok);
+    if (!response.body.ok) return;
+    const { pickId, deliveryPosture } = response.body.data;
+
+    // Read the row back over PostgREST rather than trusting the controller's
+    // own return value — the same discipline as test 1. The provenance must be
+    // the honest one: this pick named no canonical event and must not be
+    // laundered into claiming it resolved one.
+    const rows = await restQuery<PickRow>(`picks?select=id,metadata&id=eq.${pickId}`);
+    assert.equal(rows.length, 1, 'the accepted pick must be readable back out of public.picks');
+    const metadata = rows[0]!.metadata ?? {};
+    assert.equal(metadata['distributionMode'], 'delivery-eligible');
+    const resolution = metadata['participantResolution'] as Record<string, unknown> | undefined;
+    assert.ok(resolution, 'the persisted pick must carry its participantResolution');
+    assert.equal(resolution!['resolution'], 'manual');
+    assert.equal(resolution!['reason'], 'canonical-coverage-gap');
+    assert.equal(resolution!['eventId'], null, 'a coverage-gap pick must persist eventId: null');
+
+    // The waiver admits the pick to PERSISTENCE. It grants no delivery, and this
+    // file must not be read as if it did. Delivery is decided further down by
+    // controls this lane does not touch: the registry target gate at submit, and
+    // the database kill switch at the worker. Both outcomes below are correct
+    // system states, so both are asserted on their own terms rather than one
+    // being hardcoded — which would make this test a reading of the proof
+    // environment's target configuration rather than of the repair.
+    assert.notEqual(
+      deliveryPosture,
+      'track-only',
+      'a server-authorized delivery-eligible pick must not report the Track Only posture',
+    );
+    const outbox = await restQuery<{ id: string; target: string; status: string }>(
+      `distribution_outbox?pick_id=eq.${pickId}&select=id,target,status`,
+    );
+    if (deliveryPosture === 'delivery-refused') {
+      assert.equal(
+        outbox.length,
+        0,
+        `a refused delivery must write no outbox row; found ${outbox.length}`,
+      );
+    } else {
+      assert.equal(deliveryPosture, 'delivered', `unexpected delivery posture ${String(deliveryPosture)}`);
+      assert.equal(
+        outbox.length,
+        1,
+        `an authorized release must create exactly one outbox row; found ${outbox.length}`,
+      );
+      assert.equal(
+        outbox[0]!.target,
+        'discord:official-picks',
+        'the only governed human-capper target is official-picks',
+      );
+    }
   },
 );
 

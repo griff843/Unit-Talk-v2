@@ -1,0 +1,48 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1938
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1938
+  objective: "Human cappers cannot submit: the event-existence waiver is
+    unreachable for an allowlisted capper"
+  acceptance_criteria:
+    - An allowlisted human capper submitting through the deployed Smart Form
+      receives 422 EVENT_NOT_FOUND from apps/api/src/submission-service.ts:933.
+      No pick is written, no outbox row is created, no delivery control is
+      reached. Milestone 2 condition 1 cannot hold while this is true. Root
+      cause and required change are in the first comment.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      An allowlisted human capper submitting through the deployed Smart Form
+      receives 422 EVENT_NOT_FOUND from apps/api/src/submission-service.ts:933.
+      No pick is written, no outbox row is created, no delivery control is
+      reached. Milestone 2 condition 1 cannot hold while this is true. Root
+      cause and required change are in the first comment.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1938/human-cappers-cannot-submit-the-event-existence-waiver-is-unreachable
+    title: "Human cappers cannot submit: the event-existence waiver is unreachable
+      for an allowlisted capper"
+    description: An allowlisted human capper submitting through the deployed Smart
+      Form receives 422 EVENT_NOT_FOUND from
+      apps/api/src/submission-service.ts:933. No pick is written, no outbox row
+      is created, no delivery control is reached. Milestone 2 condition 1 cannot
+      hold while this is true. Root cause and required change are in the first
+      comment.
+    captured_at: 2026-09-18T19:26:53.267Z
+    description_sha256: 4a31a0ed757ac54b9d253c1680fcb19feadb44849d3c879904845909a98c2298
+  contract_hash: 22fdfe04098801630f96741fd556829e657f549b7d9c48fdc3a69f47a909a570
