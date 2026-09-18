@@ -387,7 +387,10 @@ export async function getHeldQueue(
     // Base query: awaiting_approval OR pending, filtered to ONLY held (review_decision = 'hold')
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'estimated' })
+      // 'exact', not 'estimated': the held queue is small and an operator acts on
+      // its size. An estimate that silently falls back to the loaded page length
+      // would read as a complete count and is indistinguishable from one.
+      .select(QUEUE_SELECT, { count: 'exact' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending')
       .eq('review_decision', 'hold');
 
@@ -456,7 +459,11 @@ export async function getHeldQueue(
         };
       });
 
-    return { picks, total: count ?? picks.length, degraded: null };
+    return {
+      picks,
+      total: readAuthoritativeCount({ error, count }, 'held queue picks'),
+      degraded: null,
+    };
   } catch (err) {
     console.error('getHeldQueue exception:', err);
     return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
@@ -495,6 +502,9 @@ export async function searchPicks(
       'review_decision',
       'promotion_target',
       'promotion_status',
+      // Dimension 5 requires suppression to be explicit: a suppressed pick that
+      // carries no visible reason is indistinguishable from one suppressed by mistake.
+      'promotion_reason',
     ].join(', ');
 
     let query = client
