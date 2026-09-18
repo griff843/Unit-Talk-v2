@@ -1199,7 +1199,12 @@ test('searchPlayers reads participants once for the players and once for their t
 
 test('UTV2-1842: a canonical event resolution reports canonical-event with its event id', async () => {
   const outcome = await validateSmartFormRelationships(payload(), referenceData());
-  assert.deepEqual(outcome, { kind: 'canonical-event', eventId: event.eventId, distributionMode: 'track-only' });
+  assert.deepEqual(outcome, {
+    kind: 'canonical-event',
+    eventId: event.eventId,
+    distributionMode: 'track-only',
+    serverAuthorizedHumanDelivery: false,
+  });
 });
 
 test('UTV2-1842: a validated manual coverage gap reports manual-coverage-gap', async () => {
@@ -1221,7 +1226,11 @@ test('UTV2-1842: a validated manual coverage gap reports manual-coverage-gap', a
   manual.eventName = 'Fighter A vs Fighter B';
 
   const outcome = await validateSmartFormRelationships(manual, referenceData());
-  assert.deepEqual(outcome, { kind: 'manual-coverage-gap', distributionMode: 'track-only' });
+  assert.deepEqual(outcome, {
+    kind: 'manual-coverage-gap',
+    distributionMode: 'track-only',
+    serverAuthorizedHumanDelivery: false,
+  });
 });
 
 test('UTV2-1842: a search-backed structured team fallback reports structured-team-fallback', async () => {
@@ -1250,7 +1259,11 @@ test('UTV2-1842: a search-backed structured team fallback reports structured-tea
   };
 
   const outcome = await validateSmartFormRelationships(soccer, repository);
-  assert.deepEqual(outcome, { kind: 'structured-team-fallback', distributionMode: 'track-only' });
+  assert.deepEqual(outcome, {
+    kind: 'structured-team-fallback',
+    distributionMode: 'track-only',
+    serverAuthorizedHumanDelivery: false,
+  });
 });
 
 test('UTV2-1842: an unvalidated legacy smart-form shape reports not-smart-form', async () => {
@@ -1346,7 +1359,13 @@ test('UTV2-1842: the outcome reports delivery-eligible when the submission is de
   // submission would be waived — which is finding 1 restored.
   const { soccer, repository } = structuredFallback({ distributionMode: 'delivery-eligible' });
   const outcome = await validateSmartFormRelationships(soccer, repository);
-  assert.deepEqual(outcome, { kind: 'structured-team-fallback', distributionMode: 'delivery-eligible' });
+  assert.deepEqual(outcome, {
+    kind: 'structured-team-fallback',
+    distributionMode: 'delivery-eligible',
+    // UTV2-1938: delivery-eligible without a server authorization record. Unchanged by the
+    // waiver correction -- this caller still does not waive the event-existence gate.
+    serverAuthorizedHumanDelivery: false,
+  });
 });
 
 test('UTV2-1842: a fabricated structured matchup name is refused', async () => {
@@ -1437,7 +1456,7 @@ test('UTV2-1842: the matchup name the Smart Form derives is accepted', async () 
     const outcome = await validateSmartFormRelationships(soccer, repository);
     assert.deepEqual(
       outcome,
-      { kind: 'structured-team-fallback', distributionMode: 'track-only' },
+      { kind: 'structured-team-fallback', distributionMode: 'track-only', serverAuthorizedHumanDelivery: false },
       `${name} must still be accepted`,
     );
   }
@@ -1652,3 +1671,68 @@ test('UTV2-1853: the API bounds have not drifted from the client form schema', a
   assert.ok(schema.includes(`min(${SMART_FORM_CONVICTION_MIN}`), 'conviction min drifted');
   assert.ok(schema.includes(`max(${SMART_FORM_CONVICTION_MAX}`), 'conviction max drifted');
 });
+
+// UTV2-1938 SERVER_AUTHORIZED_HUMAN_DELIVERY_TESTS_START
+// The outcome now carries a second fact besides the distribution mode: whether the SERVER
+// wrote a delivery authorization for this submission. These tests fix where that fact comes
+// from -- `isHumanCapperDeliveryAuthorized` over the pick metadata, and nothing else -- so a
+// later change cannot quietly source it from a client-supplied field.
+
+const authorizedDeliveryRecord = {
+  version: 'human-capper-delivery/v1',
+  decision: 'authorized',
+  capperId: 'griff843',
+  authority: 'server-allowlist',
+  allowlistSource: 'UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST',
+  decidedAt: '2026-09-18T00:00:00.000Z',
+};
+
+test('UTV2-1938: outcome reports no server authorization when metadata carries no record', async () => {
+  const outcome = await validateSmartFormRelationships(payload(), referenceData());
+  assert.equal(outcome.kind, 'canonical-event');
+  assert.equal(
+    (outcome as { serverAuthorizedHumanDelivery: boolean }).serverAuthorizedHumanDelivery,
+    false,
+  );
+});
+
+test('UTV2-1938: outcome reports server authorization when metadata carries an authorized record', async () => {
+  const outcome = await validateSmartFormRelationships(
+    payload({ distributionMode: 'delivery-eligible', deliveryAuthorization: authorizedDeliveryRecord }),
+    referenceData(),
+  );
+  assert.equal(outcome.kind, 'canonical-event');
+  assert.equal((outcome as { distributionMode: string }).distributionMode, 'delivery-eligible');
+  assert.equal(
+    (outcome as { serverAuthorizedHumanDelivery: boolean }).serverAuthorizedHumanDelivery,
+    true,
+  );
+});
+
+test('UTV2-1938: a refused authorization record does not read as authorization', async () => {
+  const outcome = await validateSmartFormRelationships(
+    payload({
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: { ...authorizedDeliveryRecord, decision: 'refused', reason: 'capper_not_allowlisted' },
+    }),
+    referenceData(),
+  );
+  assert.equal(
+    (outcome as { serverAuthorizedHumanDelivery: boolean }).serverAuthorizedHumanDelivery,
+    false,
+  );
+});
+
+test('UTV2-1938: a malformed authorization record does not read as authorization', async () => {
+  // Exactly the shape a client would forge if `handlers/submit-pick.ts` ever stopped deleting
+  // the field: `decision: 'authorized'` and nothing else that the reader requires.
+  const outcome = await validateSmartFormRelationships(
+    payload({ distributionMode: 'delivery-eligible', deliveryAuthorization: { decision: 'authorized' } }),
+    referenceData(),
+  );
+  assert.equal(
+    (outcome as { serverAuthorizedHumanDelivery: boolean }).serverAuthorizedHumanDelivery,
+    false,
+  );
+});
+// UTV2-1938 SERVER_AUTHORIZED_HUMAN_DELIVERY_TESTS_END

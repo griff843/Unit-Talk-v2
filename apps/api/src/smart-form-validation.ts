@@ -1,3 +1,4 @@
+import { isHumanCapperDeliveryAuthorized } from '@unit-talk/contracts';
 import type {
   CanonicalParticipantIdentity,
   SmartFormParticipantResolution,
@@ -22,37 +23,86 @@ const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'SOCC
 // The waiver is therefore gated on server-validated fallback eligibility, never on a bare
 // null eventId.
 //
-// The outcome carries the submission's `distributionMode` because the waiver is only
-// authorized for Track Only. An authenticated capper is server-pinned to `track-only` by
-// handlers/submit-pick.ts, but an operator or service-role caller reaches this same validator
-// with `delivery-eligible` and is *not* pinned, and a qualified delivery-eligible result
-// proceeds to the controller's outbox-enqueue path. Waiving on the fallback kind alone would
-// therefore admit a pick naming no canonical event into member delivery -- the opposite of
-// what this contained repair is for. The mode travels with the outcome rather than being
-// re-read at the gate so the gate cannot disagree with the validator about which submission
-// it is looking at.
+// The outcome carries the submission's `distributionMode` because the waiver must not admit
+// a pick naming no canonical event into member delivery on the strength of its fallback kind
+// alone. An operator or service-role caller reaches this same validator with
+// `delivery-eligible` and is *not* pinned by handlers/submit-pick.ts, and a qualified
+// delivery-eligible result proceeds to the controller's outbox-enqueue path. The mode travels
+// with the outcome rather than being re-read at the gate so the gate cannot disagree with the
+// validator about which submission it is looking at.
+//
+// UTV2-1938 CORRECTION -- this paragraph used to end "the waiver is only authorized for Track
+// Only. An authenticated capper is server-pinned to `track-only` by handlers/submit-pick.ts".
+// That second sentence stopped being true when UTV2-1923 merged: an ALLOW-LISTED capper is now
+// server-pinned to `delivery-eligible` instead, so the Track-Only-only rule silently excluded
+// the one caller this whole path exists to serve. The concern above is real and is preserved;
+// what changed is that the server's own authorization, not the distribution mode, is what now
+// distinguishes the two callers. See `waivesEventExistenceGate`.
 export type SmartFormDistributionMode = 'track-only' | 'delivery-eligible';
 
+// UTV2-1938: the outcome also carries whether the SERVER authorized this pick for human
+// capper delivery. It is a second, independent fact about the same submission, and it is
+// read from the same place -- and by the same predicate -- that the delivery path itself
+// reads it: `isHumanCapperDeliveryAuthorized`. See `waivesEventExistenceGate` below for why
+// this exists at all; see `validateSmartFormRelationships` for why reading it from metadata
+// is not a client-trust hole.
 export type SmartFormValidationOutcome =
   | { kind: 'not-smart-form' }
-  | { kind: 'manual-coverage-gap'; distributionMode: SmartFormDistributionMode }
-  | { kind: 'structured-team-fallback'; distributionMode: SmartFormDistributionMode }
-  | { kind: 'canonical-event'; eventId: string; distributionMode: SmartFormDistributionMode };
+  | {
+      kind: 'manual-coverage-gap';
+      distributionMode: SmartFormDistributionMode;
+      serverAuthorizedHumanDelivery: boolean;
+    }
+  | {
+      kind: 'structured-team-fallback';
+      distributionMode: SmartFormDistributionMode;
+      serverAuthorizedHumanDelivery: boolean;
+    }
+  | {
+      kind: 'canonical-event';
+      eventId: string;
+      distributionMode: SmartFormDistributionMode;
+      serverAuthorizedHumanDelivery: boolean;
+    };
 
 /**
  * The single predicate the event-existence gate consults.
  *
- * Both halves are load-bearing and both are affirmative. The kind must be one of the two
- * paths that were fully server-validated *without* a canonical event, and the submission
- * must be Track Only. An absent outcome is `undefined` and satisfies neither, so the gate
- * stays enforcing by default for every caller that does not pass one.
+ * The kind half is unchanged and still load-bearing: it must be one of the two paths that
+ * were fully server-validated *without* a canonical event. An absent outcome is `undefined`
+ * and satisfies nothing, so the gate stays enforcing by default for every caller that does
+ * not pass one.
+ *
+ * UTV2-1938 corrects the second half. It used to require `distributionMode === 'track-only'`,
+ * and that clause was written as a PROXY for "this pick cannot reach members" -- accurate when
+ * UTV2-1842 landed, because at that time nothing but Track Only could keep a fallback pick out
+ * of the outbox-enqueue path.
+ *
+ * UTV2-1923 then made the server itself decide delivery, from an allow-list the client cannot
+ * reach, and pin `distributionMode` accordingly in `handlers/submit-pick.ts`. From that merge
+ * onward an allow-listed human capper arrived here as `delivery-eligible` ALWAYS -- so the
+ * proxy excluded precisely the capper the human-capper path exists for, and every such
+ * submission was refused 422 EVENT_NOT_FOUND against a catalog containment deliberately keeps
+ * unpopulated. Measured in production 2026-09-18: zero picks persisted, zero outbox rows, and
+ * 178 expired rows in the window that arms the gate.
+ *
+ * So the proxy is replaced by the thing it was standing in for. The question the gate needs
+ * answered is "may this pick reach members, and did anything other than the caller decide
+ * that?", and `serverAuthorizedHumanDelivery` answers it directly.
+ *
+ * What is deliberately NOT relaxed: a `delivery-eligible` submission carrying NO server
+ * authorization -- an operator or service-role caller, which `handlers/submit-pick.ts` does
+ * not pin -- still fails both halves and is still refused. That is the exact case UTV2-1842's
+ * own comment named, and it keeps its live-DB control in
+ * `t1-proof-utv2-1842-fallback-event-gate.test.ts`.
  */
 export function waivesEventExistenceGate(outcome: SmartFormValidationOutcome | undefined): boolean {
   if (!outcome) return false;
   if (outcome.kind !== 'manual-coverage-gap' && outcome.kind !== 'structured-team-fallback') {
     return false;
   }
-  return outcome.distributionMode === 'track-only';
+  if (outcome.distributionMode === 'track-only') return true;
+  return outcome.serverAuthorizedHumanDelivery;
 }
 // UTV2-1842 SMART_FORM_OUTCOME_END
 
@@ -88,6 +138,24 @@ export async function validateSmartFormRelationships(
   }
   const distributionMode: SmartFormDistributionMode = rawDistributionMode;
 
+  // UTV2-1938. Read with `isHumanCapperDeliveryAuthorized`, which is the ONLY predicate any
+  // delivery path is permitted to use for this question (packages/contracts/src/smart-form.ts).
+  // Using it here rather than inventing a second shape is the point: the gate and the delivery
+  // path now answer "is this authorized?" from one implementation, so they cannot drift into
+  // disagreeing about the same pick.
+  //
+  // Reading it off `metadata` is not a client-trust hole, and the reason is mechanical rather
+  // than conventional. `handlers/submit-pick.ts:108` DELETES the authorization key from client
+  // input unconditionally, on every branch including the ones that throw, before any decision
+  // is made -- and re-authors it only from `evaluateCapperDeliveryAuthorization`, which reads
+  // the server allow-list env and the authenticated identity and nothing else. So over HTTP the
+  // record present here is always the server's own, or absent.
+  //
+  // An in-process service-role caller can still construct any metadata it likes, but that was
+  // already true of `distributionMode: 'track-only'`, which has waived this gate since
+  // UTV2-1842. This adds no reachable bypass that the previous predicate did not also have.
+  const serverAuthorizedHumanDelivery = isHumanCapperDeliveryAuthorized(metadata);
+
   const resolution = readResolution(metadata?.['participantResolution']);
   if (!resolution) fail('participantResolution must use the typed canonical or manual contract');
 
@@ -114,7 +182,7 @@ export async function validateSmartFormRelationships(
 
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
-    return { kind: 'manual-coverage-gap', distributionMode };
+    return { kind: 'manual-coverage-gap', distributionMode, serverAuthorizedHumanDelivery };
   }
 
   const eventId = readOptionalString(resolution.eventId);
@@ -124,13 +192,13 @@ export async function validateSmartFormRelationships(
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
     await validateStructuredTeamFallback(payload, resolution, sportId, referenceData);
-    return { kind: 'structured-team-fallback', distributionMode };
+    return { kind: 'structured-team-fallback', distributionMode, serverAuthorizedHumanDelivery };
   }
 
   const event = await referenceData.getEventBrowse(eventId);
   if (!event) fail(`canonical event was not found: ${eventId}`);
   validateCanonicalEvent(payload, resolution, sportId, event);
-  return { kind: 'canonical-event', eventId, distributionMode };
+  return { kind: 'canonical-event', eventId, distributionMode, serverAuthorizedHumanDelivery };
 }
 
 async function validateManualResolution(
