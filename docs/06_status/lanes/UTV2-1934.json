@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1934-startup-context-containment-truth",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1605",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1934.yml",
@@ -19,9 +19,9 @@
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-18T12:54:19.092Z",
-  "heartbeat_at": "2026-09-18T12:54:19.092Z",
+  "heartbeat_at": "2026-09-18T13:06:38.418Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1934-startup-context-containment-truth.json",
