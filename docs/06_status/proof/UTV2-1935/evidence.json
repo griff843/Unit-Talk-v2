@@ -6,12 +6,12 @@
   "proof_profile": "app-runtime",
   "status": "pending_merge",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "e71c455aaef0232fb1c8c94d0f80aa94e6dd6118",
     "verified_source_sha": "09b8396bfe5431a2da00a469aadf5f8b7cf81a6d",
     "evidence_commit_sha": "09b8396bfe5431a2da00a469aadf5f8b7cf81a6d",
     "current_pr_head_sha": "9faf271a823812b18c3e00afd4f825decf4da706",
-    "sha_type": "source_sha",
-    "bound_at": "2026-09-18T16:55:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T15:09:36.461Z",
     "ci_sentinels": {
       "note": "Pinned to the last non-proof commit on the branch. Commits after it touch only docs/06_status/lanes/ and docs/06_status/proof/, both proof-only prefixes. The authoritative result is the set of required contexts on PR #1608 at the current head; post-merge-lane-close.yml rebinds merge_sha.",
       "local_lint": {
@@ -178,7 +178,7 @@
       },
       {
         "what": "Dimension 4 metric 2 is not measurable from this population",
-        "evidence": "'suppression always explicit \u2014 100%' cannot be evaluated against a cohort of 0 governed rows. Recorded as unmeasured, not as pass or fail."
+        "evidence": "'suppression always explicit — 100%' cannot be evaluated against a cohort of 0 governed rows. Recorded as unmeasured, not as pass or fail."
       },
       {
         "what": "provider-dependent capability is deferred, not faked",

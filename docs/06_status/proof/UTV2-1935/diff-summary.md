@@ -1,6 +1,6 @@
 # PROOF: UTV2-1935 Diff Summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: e71c455aaef0232fb1c8c94d0f80aa94e6dd6118
 
 Generated at: 2026-09-18T16:20:00.000Z
 Issue: UTV2-1935
@@ -134,7 +134,7 @@ See `verification.md` in this bundle for the measured command output and the mut
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e71c455aaef0232fb1c8c94d0f80aa94e6dd6118
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1608
 Approved PR head: pending merge
 Execution SHA: 09b8396bfe5431a2da00a469aadf5f8b7cf81a6d
