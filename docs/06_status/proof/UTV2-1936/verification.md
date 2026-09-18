@@ -23,7 +23,7 @@ non-proof commit on the branch and therefore the execution anchor.
 | `pnpm test` | 0 | pass — `ok=5939 not_ok=0 suites=104 failing_blocks=0` |
 | `pnpm lane:check --lane delivery-ui --base 27bddb3ce --head HEAD` | 0 | pass, `files=5` |
 | `pnpm ops:r-level-check --issue UTV2-1936 --head HEAD` | 0 | pass |
-| `pnpm ops:branch-discipline --issue UTV2-1936 --pr 1610` | 0 | `"errors": []` |
+| `pnpm ops:branch-discipline --issue UTV2-1936 --pr 1610 --branch claude/utv2-1936-command-center-fixture-guard` | 0 | `"errors": []` |
 
 `pnpm verify` is **not** quoted as green here, and that is deliberate rather than an omission. Its
 `ci:assert-staging-isolation` step refuses in a local worktree that has no staging credentials — a
