@@ -30,6 +30,8 @@ export interface ReviewPick {
   marketTypeDisplayName?: string | null;
   settlementResult?: string | null;
   reviewDecision?: string | null;
+  promotionStatus?: string | null;
+  promotionReason?: string | null;
 }
 
 export interface HeldPick {
@@ -57,6 +59,8 @@ export interface HeldPick {
   marketTypeDisplayName?: string | null;
   settlementResult?: string | null;
   reviewDecision?: string | null;
+  promotionStatus?: string | null;
+  promotionReason?: string | null;
 }
 
 export interface PickDetail {
@@ -279,6 +283,10 @@ const QUEUE_SELECT = [
   'metadata',
   'promotion_target',
   'promotion_status',
+  // Dimension 5 requires a suppressed pick to carry a visible reason on every queue that
+  // can show it, not only on the picks explorer. Without this column the review queue can
+  // render a suppression it structurally cannot explain.
+  'promotion_reason',
   'sport_display_name',
   'capper_display_name',
   'market_type_display_name',
@@ -318,6 +326,8 @@ function mapReviewPick(row: JsonObject): ReviewPick {
     marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
     settlementResult: asStringOrNull(row['settlement_result']),
     reviewDecision: asStringOrNull(row['review_decision']),
+    promotionStatus: asStringOrNull(row['promotion_status']),
+    promotionReason: asStringOrNull(row['promotion_reason']),
   };
 }
 
@@ -456,6 +466,8 @@ export async function getHeldQueue(
           marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
           settlementResult: asStringOrNull(row['settlement_result']),
           reviewDecision: asStringOrNull(row['review_decision']),
+          promotionStatus: asStringOrNull(row['promotion_status']),
+          promotionReason: asStringOrNull(row['promotion_reason']),
         };
       });
 

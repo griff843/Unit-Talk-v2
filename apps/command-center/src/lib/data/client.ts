@@ -87,11 +87,15 @@ export const OUTBOX_HISTORY_CUTOFF = '2026-03-20T00:00:00.000Z';
 /**
  * Test and proof rows are intentionally retained for auditability, but must
  * never contribute to operator-facing production metrics or queues.
+ *
+ * `testRun` is written by fixture writers as the run identifier string, never
+ * as a boolean, so it is presence-checked like its four siblings. An equality
+ * check against `true` matches no row that any writer produces.
  */
 export function isTestFixturePick(row: Record<string, unknown>): boolean {
   const metadata = asRecord(row['metadata']);
   if (
-    metadata['testRun'] === true ||
+    metadata['testRun'] != null ||
     metadata['proof_issue'] != null ||
     metadata['proof_fixture_id'] != null ||
     metadata['proof_script'] != null ||
