@@ -128,6 +128,30 @@ Success criterion, neither of which requires reading a secret:
 Containment is unaffected either way: this path sets no runtime flag, and an
 `operator-manual-entry` event remains ungradeable by design.
 
+## Catalog coverage the tool can resolve against
+
+Measured read-only against production `zfzdnfwdarxucxtaojxm` on 2026-09-18. This is what
+bounds what an operator can seed today, and it is not a limitation this lane introduces.
+
+| sport | team participants | player participants | all carry `external_id` |
+|---|---|---|---|
+| MLB | 30 | 951 | yes |
+| NBA | 30 | 254 | yes |
+| NFL | 32 | **0** | yes |
+| NHL | 32 | 318 | yes |
+
+Two consequences worth stating plainly:
+
+- **Every** participant row in the live catalog has a non-null `external_id`, so
+  `requireParticipantExternalId` will not refuse against production today. It is a guard
+  against a nullable column, not against current data.
+- Game-line events are seedable for all four leagues. NFL **player props are not**,
+  because NFL has zero player participants. Seeding an NFL player prop would require
+  minting a participant, which this tool refuses by design.
+
+The documented invocation above was checked against the live catalog:
+`BUFFALO_BILLS_NFL` -> "Bills" and `MIAMI_DOLPHINS_NFL` -> "Dolphins" both resolve.
+
 ## Known gaps
 
 - `Live Schema Parity` is red on this PR for an infrastructure reason, not a finding:
