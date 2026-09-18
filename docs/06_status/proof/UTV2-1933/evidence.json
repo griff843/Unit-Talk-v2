@@ -1,0 +1,202 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1933",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "6c6bcd145e8c0f872c145c872777693749da06b4",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-18T14:40:00.000Z",
+    "ci_sentinels": {
+      "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1607 at this head. post-merge-lane-close.yml rebinds merge_sha.",
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "ok_lines": 5927,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      "required_contexts_authority": "PR #1607: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T14:35:00Z",
+    "measured_against_sha": "6c6bcd145e8c0f872c145c872777693749da06b4",
+    "commands": [
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "eslint . --cache, no output"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "pnpm exec tsc -b tsconfig.json, no diagnostics"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "ok_lines": 5927,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/readiness-refresh.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "32 tests, 32 pass, 0 fail, 0 skipped — 5 new tests for the claimable/unclaimable partition"
+      },
+      {
+        "command": "pnpm exec tsx --test apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts",
+        "exit_code": 1,
+        "result": "blocked_by_containment",
+        "note": "2 pass / 3 fail. All three failures are the same network-layer refusal against the containment placeholder SUPABASE_URL: 'distribution_outbox query failed: TypeError: fetch failed', 'distribution_receipts query failed: TypeError: fetch failed', 'system_runs open-circuit query failed: TypeError: fetch failed'. Two of the three are pre-existing LIVE-DB tests this lane never touched, which is what identifies the cause as environmental rather than as a defect in the change. These files are not part of pnpm test; they run under test:t1-proof:live inside the staging-ci environment."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 7 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "verify:static and verify:commands pass; ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx. This is the correct local outcome and is not a defect in this diff. The authoritative full-tree result is the required verify context on PR #1607, which runs inside the staging-ci GitHub environment."
+      }
+    ],
+    "new_coverage": [
+      {
+        "file": "scripts/ops/readiness-refresh.test.ts",
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "new_tests": 5,
+        "mutation_controls": 3
+      },
+      {
+        "file": "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts",
+        "tests": 5,
+        "pass": 2,
+        "fail": 3,
+        "new_tests": 1,
+        "mutation_controls": 0,
+        "note": "The one replaced test converts an assert.ok(true) into a real assertion. It cannot execute outside the staging-ci environment; see the command note above."
+      }
+    ],
+    "mutation_controls": [
+      {
+        "control": "the claimable/unclaimable partition",
+        "mutation": "classify every row as unclaimable in bucketStaleProcessingRows",
+        "observed": "3 of 32 tests fail",
+        "result": "fails_on_the_named_condition",
+        "proves": "the make-the-problem-disappear mutation is caught. A repair that simply exempted everything would not pass this suite."
+      },
+      {
+        "control": "an unreadable target counts as claimable, not exempt",
+        "mutation": "treat a missing or non-string target as unclaimable (fail open)",
+        "observed": "the fail-closed test fails",
+        "result": "fails_on_the_named_condition",
+        "proves": "the fail-closed direction is asserted, not incidental"
+      },
+      {
+        "control": "a read at the limit fails rather than reporting a clean partition",
+        "mutation": "remove the STALE_PROCESSING_READ_LIMIT guard",
+        "observed": "the partial-read test fails",
+        "result": "fails_on_the_named_condition",
+        "proves": "a truncated read cannot be reported as a clean partition"
+      },
+      {
+        "control": "unmutated baseline",
+        "mutation": "none",
+        "observed": "32 pass / 0 fail",
+        "result": "pass"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T14:30:00Z",
+    "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no containment setting, kill switch or delivery target was touched. The 32 unclaimable rows are reported and deliberately NOT removed.",
+    "queries": [
+      {
+        "name": "the stale-processing population, partitioned by target",
+        "method": "read-only SELECT target, count(*), min(updated_at), max(updated_at) FROM distribution_outbox WHERE status = 'processing' AND updated_at < now() - interval '5 minutes' GROUP BY target",
+        "result": "4 targets, 8 rows each, 32 total. All four are synthetic canary targets; every row was written 2026-07-30. Zero rows on any governed delivery target.",
+        "significance": "This is the exact population worker_outbox_health was failing on. Under isGovernedDeliveryTarget() all 32 partition to bucket 5b (unclaimable) and none to 5a (claimable), so the repaired gate passes on today's production shape while still failing on a single genuine stuck row."
+      },
+      {
+        "name": "the claimable bucket is empty in production",
+        "method": "same query, filtered to rows whose target is a member of governedDeliveryTargets",
+        "result": "0 rows",
+        "significance": "The assertion the repaired T1 control makes — claimable.length === 0 — holds against production right now. The control is therefore green for the right reason rather than vacuous."
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "stale_processing_rows_total",
+        "value": 32
+      },
+      {
+        "name": "stale_processing_rows_claimable",
+        "value": 0
+      },
+      {
+        "name": "stale_processing_rows_unclaimable",
+        "value": 32
+      },
+      {
+        "name": "distinct_unclaimable_targets",
+        "value": 4
+      },
+      {
+        "name": "rows_written_updated_or_deleted_by_this_proof",
+        "value": 0
+      }
+    ],
+    "observations": [
+      {
+        "what": "a blocking readiness dimension could never pass",
+        "evidence": "all 32 stale rows sit on targets no worker configuration polls, so reapStaleClaims never sees them and the undifferentiated count can never reach zero"
+      },
+      {
+        "what": "the mirror control could never fail",
+        "evidence": "the T1 Dimension 1 test read the same rows and ended in assert.ok(true)"
+      },
+      {
+        "what": "the repair is a classification change, not a data change",
+        "evidence": "0 rows written, updated or deleted; the 32 rows remain, counted and named in the evidence string and in stale_unknown_unclaimable_targets"
+      },
+      {
+        "what": "containment was not altered",
+        "evidence": "the proof is read-only; no kill switch, delivery target, runtime flag or deploy was touched"
+      }
+    ],
+    "limitations": [
+      {
+        "what": "the repaired LIVE-DB control could not be executed from this checkout",
+        "why": "the local SUPABASE_URL is the containment placeholder, so all three LIVE-DB tests in that file fail identically at the network layer — including two this lane never touched",
+        "where_it_does_execute": "test:t1-proof:live inside the staging-ci GitHub environment, which is the authority for this file"
+      }
+    ]
+  }
+}
