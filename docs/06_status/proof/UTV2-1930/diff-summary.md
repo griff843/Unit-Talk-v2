@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1930-operator-event-seeding
 PR URL: N/A
 Head SHA: 4b7957935c657b82b4394485a1858357d364a5f1
-Merge SHA: N/A
+Merge SHA: 17b3f964fb04faa4060fa43fc095531a4f8e8942
 Diff base: 9fc06ee217de825a41d190f823898529f5ec489c
 Diff target: 4b7957935c657b82b4394485a1858357d364a5f1
 
@@ -35,4 +35,4 @@ A	scripts/ops/seed-operator-event.ts
 
 ## SHA Binding
 Head SHA: 4b7957935c657b82b4394485a1858357d364a5f1
-Merge SHA: N/A
+Merge SHA: 17b3f964fb04faa4060fa43fc095531a4f8e8942

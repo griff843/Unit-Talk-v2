@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1930-operator-event-seeding",
   "branch": "claude/utv2-1930-operator-event-seeding",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "17b3f964fb04faa4060fa43fc095531a4f8e8942",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1602",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,16 +22,25 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1930/diff-summary.md",
-    "docs/06_status/proof/UTV2-1930/verification.md"
+    "docs/06_status/proof/UTV2-1930/verification.md",
+    "docs/06_status/proof/UTV2-1930/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-18T07:37:27.649Z",
-  "heartbeat_at": "2026-09-18T07:40:21.135Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-18T08:43:35.941Z",
+  "closed_at": "2026-09-18T08:43:35.941Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1930-operator-event-seeding.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-18T08:43:33.489Z",
+      "verdict": "pass",
+      "merge_sha": "17b3f964fb04faa4060fa43fc095531a4f8e8942",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
