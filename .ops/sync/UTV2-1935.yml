@@ -1,0 +1,84 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1935
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1935
+  objective: "Command Center Dimension 5, part 2: suppression reason on the review
+    queue and a real held-picks surface"
+  acceptance_criteria:
+    - |-
+      Follow-on to [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator), which closed the picks-list, settlement and pick-detail rows of Dimension 5. Two named requirements of `T1_PRODUCTION_READINESS_CONTRACT.md` remain open, both fully provider-independent.
+
+      **1.** `Review queue | Suppressed picks with suppressionReason rendered (non-null, non-blank)` **(contract** `:116`**) — not closed.**
+
+      [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) added the reason to the *picks explorer* (`:115`), not the review queue. Measured on `origin/main`:
+
+      * `apps/command-center/src/lib/data/queues.ts` `QUEUE_SELECT` does not select `promotion_reason` — it is the one select [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) did not widen.
+      * `apps/command-center/src/components/ReviewQueueClient.tsx` headers are Pick / Odds / Line / Units / Score / Edge / Created / Actions — no reason column.
+      * `ReviewPick` carries no reason field, so `mapReviewPick` has nothing to map.
+
+      **2.** `Held picks queue | Exists and shows picks in held status` **(contract** `:117`**) — only partly closed.**
+
+      `apps/command-center/src/app/held/page.tsx` is still a `redirect()`, now pointed at `/operations/approvals`. That cockpit does merge held rows and shows `heldBy`, and `getHeldQueue` counts `'exact'`, but held rows are keyed on `review_decision = 'hold'` rather than a lifecycle `held` status, and the surface is not dedicated. Decide and implement: either a real `/held` page on the already-built `getHeldQueue`, or record why the approvals cockpit satisfies "exists".
+
+      **Out of scope**, deliberately: the formal operator-surface audit (`:126`, spot-check >= 10 picks per status type) is de facto volume-gated at 3 picks in the window, and the two Dimension 1 metrics with no backing table. No containment flag, kill switch, delivery target or approval path is touched.
+
+      **Acceptance:** both contract rows render non-placeholder values from real data, with tests that fail when the field is absent or blank.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Follow-on to [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator), which closed the picks-list, settlement and pick-detail rows of Dimension 5. Two named requirements of `T1_PRODUCTION_READINESS_CONTRACT.md` remain open, both fully provider-independent.
+
+      **1.** `Review queue | Suppressed picks with suppressionReason rendered (non-null, non-blank)` **(contract** `:116`**) — not closed.**
+
+      [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) added the reason to the *picks explorer* (`:115`), not the review queue. Measured on `origin/main`:
+
+      * `apps/command-center/src/lib/data/queues.ts` `QUEUE_SELECT` does not select `promotion_reason` — it is the one select [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) did not widen.
+      * `apps/command-center/src/components/ReviewQueueClient.tsx` headers are Pick / Odds / Line / Units / Score / Edge / Created / Actions — no reason column.
+      * `ReviewPick` carries no reason field, so `mapReviewPick` has nothing to map.
+
+      **2.** `Held picks queue | Exists and shows picks in held status` **(contract** `:117`**) — only partly closed.**
+
+      `apps/command-center/src/app/held/page.tsx` is still a `redirect()`, now pointed at `/operations/approvals`. That cockpit does merge held rows and shows `heldBy`, and `getHeldQueue` counts `'exact'`, but held rows are keyed on `review_decision = 'hold'` rather than a lifecycle `held` status, and the surface is not dedicated. Decide and implement: either a real `/held` page on the already-built `getHeldQueue`, or record why the approvals cockpit satisfies "exists".
+
+      **Out of scope**, deliberately: the formal operator-surface audit (`:126`, spot-check >= 10 picks per status type) is de facto volume-gated at 3 picks in the window, and the two Dimension 1 metrics with no backing table. No containment flag, kill switch, delivery target or approval path is touched.
+
+      **Acceptance:** both contract rows render non-placeholder values from real data, with tests that fail when the field is absent or blank.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1935/command-center-dimension-5-part-2-suppression-reason-on-the-review
+    title: "Command Center Dimension 5, part 2: suppression reason on the review
+      queue and a real held-picks surface"
+    description: |-
+      Follow-on to [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator), which closed the picks-list, settlement and pick-detail rows of Dimension 5. Two named requirements of `T1_PRODUCTION_READINESS_CONTRACT.md` remain open, both fully provider-independent.
+
+      **1.** `Review queue | Suppressed picks with suppressionReason rendered (non-null, non-blank)` **(contract** `:116`**) — not closed.**
+
+      [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) added the reason to the *picks explorer* (`:115`), not the review queue. Measured on `origin/main`:
+
+      * `apps/command-center/src/lib/data/queues.ts` `QUEUE_SELECT` does not select `promotion_reason` — it is the one select [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) did not widen.
+      * `apps/command-center/src/components/ReviewQueueClient.tsx` headers are Pick / Odds / Line / Units / Score / Edge / Created / Actions — no reason column.
+      * `ReviewPick` carries no reason field, so `mapReviewPick` has nothing to map.
+
+      **2.** `Held picks queue | Exists and shows picks in held status` **(contract** `:117`**) — only partly closed.**
+
+      `apps/command-center/src/app/held/page.tsx` is still a `redirect()`, now pointed at `/operations/approvals`. That cockpit does merge held rows and shows `heldBy`, and `getHeldQueue` counts `'exact'`, but held rows are keyed on `review_decision = 'hold'` rather than a lifecycle `held` status, and the surface is not dedicated. Decide and implement: either a real `/held` page on the already-built `getHeldQueue`, or record why the approvals cockpit satisfies "exists".
+
+      **Out of scope**, deliberately: the formal operator-surface audit (`:126`, spot-check >= 10 picks per status type) is de facto volume-gated at 3 picks in the window, and the two Dimension 1 metrics with no backing table. No containment flag, kill switch, delivery target or approval path is touched.
+
+      **Acceptance:** both contract rows render non-placeholder values from real data, with tests that fail when the field is absent or blank.
+    captured_at: 2026-09-18T14:24:16.832Z
+    description_sha256: b51f093dcb66d7aa0c398a26ad6be1922a26b64a07689c7515f3e2540d984159
+  contract_hash: 55977cc1eae517919d0293177df0c8075c05b1edca639823724d6ecc6fb61693
