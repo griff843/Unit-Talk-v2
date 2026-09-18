@@ -1,0 +1,141 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1936",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pending_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
+    "evidence_commit_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
+    "current_pr_head_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
+    "sha_type": "branch_head",
+    "bound_at": "2026-09-18T19:40:00.000Z",
+    "ci_sentinels": {
+      "note": "Pinned to the last non-proof commit on the branch. Commits after it touch only docs/06_status/lanes/ and docs/06_status/proof/, both proof-only prefixes. The authoritative result is the set of required contexts on PR #1610 at the current head; post-merge-lane-close.yml rebinds merge_sha.",
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "ok_lines": 5939,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      "required_contexts_authority": "PR #1610: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T19:40:00Z",
+    "measured_against_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
+    "commands": [
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "ok_lines": 5939,
+        "not_ok_lines": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      {
+        "command": "pnpm lane:check --lane delivery-ui --base 27bddb3ce --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "files": 5
+      },
+      {
+        "command": "pnpm ops:r-level-check --issue UTV2-1936 --head HEAD",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm ops:branch-discipline --issue UTV2-1936 --pr 1610 --branch claude/utv2-1936-command-center-fixture-guard",
+        "exit_code": 0,
+        "result": "pass"
+      }
+    ],
+    "verify_note": "pnpm verify is not claimed green locally. Its ci:assert-staging-isolation step refuses without staging credentials, which is an environment precondition, not a failing test. Each constituent stage is recorded above; the authoritative verify result is the required check on PR #1610."
+  },
+  "mutation_drill": {
+    "control": "apps/command-center/src/lib/data/client.test.ts asserts the production shape of metadata.testRun",
+    "command": "pnpm exec tsx --test apps/command-center/src/lib/data/client.test.ts",
+    "steps": [
+      {
+        "step": "baseline",
+        "guard": "metadata['testRun'] != null",
+        "pass": 5,
+        "fail": 0
+      },
+      {
+        "step": "revert the fix",
+        "guard": "metadata['testRun'] === true",
+        "pass": 4,
+        "fail": 1
+      },
+      {
+        "step": "restore",
+        "guard": "metadata['testRun'] != null",
+        "pass": 5,
+        "fail": 0
+      }
+    ],
+    "significance": "Under the previous test fixture ({ testRun: true }) the same revert passed 5/5. The corrected fixture makes the regression detectable."
+  },
+  "runtime_verification": {
+    "environment": "production zfzdnfwdarxucxtaojxm",
+    "measured_at": "2026-09-18",
+    "access": "read-only; zero rows written; no containment setting, kill switch, delivery target or runtime flag read or changed",
+    "findings": {
+      "testRun_stored_type": {
+        "string": 60206,
+        "boolean": 0
+      },
+      "repo_wide_picks_rows": 107865,
+      "repo_wide_detected_as_fixture": {
+        "before": 19365,
+        "after": 79571
+      },
+      "approval_scope_rows": 21871,
+      "approval_scope_excluded_as_fixture": {
+        "before": 8716,
+        "after": 19587
+      },
+      "approval_scope_surviving_to_operator": {
+        "before": 10871,
+        "after": 2284
+      },
+      "survivor_characterization": "all 2,284 are source='system-pick-scanner', created 2026-05-12..2026-07-23, carrying none of the five fixture markers",
+      "governed_cohort_in_approval_scope": 0,
+      "governed_picks_repo_wide_carrying_any_fixture_marker": 0
+    },
+    "acceptance_criterion_correction": "The issue's original criterion 4 predicted 0 survivors. Measured: 2,284. The criterion was corrected on the issue with this figure rather than the lane closing against an unmeetable target."
+  },
+  "provider_independence": {
+    "requires_provider_data": false,
+    "note": "Fixture classification reads metadata already on the row. No claim is made about CLV, closing lines or automated grading, which remain explicitly deferred."
+  },
+  "artifacts": {
+    "diff_summary": "docs/06_status/proof/UTV2-1936/diff-summary.md",
+    "verification": "docs/06_status/proof/UTV2-1936/verification.md"
+  }
+}
