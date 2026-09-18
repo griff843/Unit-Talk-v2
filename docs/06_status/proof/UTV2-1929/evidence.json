@@ -4,14 +4,14 @@
   "tier": "T2",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "open",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "7731c80d083fd44760b042c647b31092c5ea6d9a",
     "verified_source_sha": "1794657ff10f614e79c2c80bf09f7d3cd71b39ff",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-18T07:20:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T07:24:27.029Z",
     "ci_sentinels": {
       "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1601 at this head. post-merge-lane-close.yml rebinds merge_sha.",
       "local_type_check": {

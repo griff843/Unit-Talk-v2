@@ -1,6 +1,6 @@
 # PROOF: UTV2-1929 Diff Summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: 7731c80d083fd44760b042c647b31092c5ea6d9a
 
 Generated at: 2026-09-18T07:20:00.000Z
 Issue: UTV2-1929
@@ -146,5 +146,5 @@ Advisory missing artifacts: r4-fault-report [PM-gated]
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `7731c80d083fd44760b042c647b31092c5ea6d9a`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1601
