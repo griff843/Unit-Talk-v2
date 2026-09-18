@@ -264,7 +264,7 @@ function isTestFixturePick(pick: { metadata: unknown; selection: string }): bool
   }
 
   const value = pick.metadata as Record<string, unknown>;
-  return value['testRun'] === true ||
+  return value['testRun'] != null ||
     value['proof_issue'] != null ||
     value['proof_fixture_id'] != null ||
     value['proof_script'] != null ||

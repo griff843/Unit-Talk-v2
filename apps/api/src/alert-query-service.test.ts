@@ -233,7 +233,7 @@ test('getAlertSignalQuality excludes test and proof fixture picks from productio
     settledAt: '2026-04-03T12:00:00.000Z',
     result: 'loss',
     clvPercent: -10,
-    metadata: { testRun: true },
+    metadata: { testRun: 'a1b2c3d4' },
   });
 
   const result = await getAlertSignalQuality(repositories, now);
