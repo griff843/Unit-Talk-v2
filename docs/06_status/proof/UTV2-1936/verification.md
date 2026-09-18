@@ -130,6 +130,42 @@ classification reads metadata already present on the row. This lane makes no cla
 closing lines or automated grading, which remain explicitly deferred under the standing sequencing
 directive.
 
+## ASSERTIONS:
+
+Each box is an assertion a named test or a recorded measurement makes, not a restatement of intent.
+
+- [x] `metadata.testRun` is presence-checked, consistent with its four sibling markers. Production
+      holds **60,206** string-valued `testRun` rows and **0** boolean, so the previous `=== true`
+      matched nothing any writer produces.
+- [x] The corrected test constrains the guard: reverting to `=== true` turns the suite from
+      `# pass 5 # fail 0` into `# pass 4 # fail 1`. Under the old fixture that same revert passed
+      5/5. Drilled at the execution anchor, restore verified.
+- [x] One shared predicate governs seven call sites — `picks.ts:132` and `queues.ts:266` through
+      `isFixtureLikePick`, and `analytics.ts` at `:485`, `:713`, `:1005`.
+- [x] No governed pick becomes invisible. The governed cohort in operator approval scope is
+      **0 rows**, and none of the 7 governed picks repo-wide carries any of the five fixture
+      markers.
+- [x] **Nothing in this diff writes.** No migration, no route handler, no server action, no
+      mutation — the changed function is a pure predicate. No containment setting, kill switch,
+      delivery target or runtime flag is touched.
+- [x] The live measurement was read-only: zero rows written, updated or deleted.
+- [x] No provider-dependent value is manufactured. This lane makes no claim about CLV, closing
+      lines or automated grading, which remain explicitly deferred.
+
+## EVIDENCE:
+
+- `pnpm lint` exit 0; `pnpm type-check` exit 0.
+- `pnpm test` exit 0 — 5,939 `ok`, 0 `not ok`, 104 suite blocks, 0 with failures.
+- `pnpm lane:check --lane delivery-ui` exit 0, `files=5`.
+- `pnpm ops:r-level-check --issue UTV2-1936 --head HEAD` exit 0.
+- `pnpm ops:branch-discipline --issue UTV2-1936 --pr 1610 --branch claude/utv2-1936-command-center-fixture-guard` exit 0, `"errors": []`.
+- Mutation drill on `apps/command-center/src/lib/data/client.test.ts`: 5/0 baseline, 4/1 on revert,
+  5/0 restored — the table above.
+- Read-only production measurement, `zfzdnfwdarxucxtaojxm`, 2026-09-18: the `testRun` type split,
+  the repo-wide and approval-scope recovery figures, the survivor characterization and the governed
+  cohort counts — all in the Runtime Verification section above.
+- Companion artifact: `docs/06_status/proof/UTV2-1936/diff-summary.md`.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge

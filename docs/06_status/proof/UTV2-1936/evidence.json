@@ -6,7 +6,7 @@
   "proof_profile": "app-runtime",
   "status": "pending_merge",
   "sha_binding": {
-    "merge_sha": "pending merge",
+    "merge_sha": null,
     "verified_source_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
     "evidence_commit_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
     "current_pr_head_sha": "a27ac381f65d6a31afbe38ad2cec30452c450ab1",
