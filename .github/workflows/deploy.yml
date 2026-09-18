@@ -519,6 +519,14 @@ jobs:
           # nobody can audit. Unset is the fail-closed default -- the API
           # authorizes nobody for an empty list.
           UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: ${{ vars.UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST }}
+          # UTV2-1929: this key belongs in .env.production as well as
+          # .env.command-center. The Command Center sends it as its bearer, and the
+          # API resolves its own operator key set from its own env
+          # (apps/api/src/auth.ts loadAuthConfig) -- so a key the API never sees is a
+          # bearer it never registered, and every Command Center write (settle,
+          # review, retry-delivery, requeue, kill switch) answers 401. Measured on
+          # the production host 2026-09-18: no .env.production this workflow has
+          # ever written contained this name.
           UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
@@ -671,6 +679,7 @@ jobs:
             "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-0}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
+            "UNIT_TALK_CC_API_KEY=$UNIT_TALK_CC_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
             "SYNDICATE_MACHINE_ENABLED=$SYNDICATE_MACHINE_ENABLED" \
@@ -724,6 +733,14 @@ jobs:
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # UTV2-1929: this key belongs in .env.production as well as
+          # .env.command-center. The Command Center sends it as its bearer, and the
+          # API resolves its own operator key set from its own env
+          # (apps/api/src/auth.ts loadAuthConfig) -- so a key the API never sees is a
+          # bearer it never registered, and every Command Center write (settle,
+          # review, retry-delivery, requeue, kill switch) answers 401. Measured on
+          # the production host 2026-09-18: no .env.production this workflow has
+          # ever written contained this name.
           UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
@@ -1318,6 +1335,14 @@ jobs:
           # nobody can audit. Unset is the fail-closed default -- the API
           # authorizes nobody for an empty list.
           UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: ${{ vars.UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST }}
+          # UTV2-1929: this key belongs in .env.production as well as
+          # .env.command-center. The Command Center sends it as its bearer, and the
+          # API resolves its own operator key set from its own env
+          # (apps/api/src/auth.ts loadAuthConfig) -- so a key the API never sees is a
+          # bearer it never registered, and every Command Center write (settle,
+          # review, retry-delivery, requeue, kill switch) answers 401. Measured on
+          # the production host 2026-09-18: no .env.production this workflow has
+          # ever written contained this name.
           UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
@@ -1470,6 +1495,7 @@ jobs:
             "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-0}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
+            "UNIT_TALK_CC_API_KEY=$UNIT_TALK_CC_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
             "SYNDICATE_MACHINE_ENABLED=$SYNDICATE_MACHINE_ENABLED" \
@@ -1516,6 +1542,14 @@ jobs:
           CC_ENABLED: ${{ vars.UNIT_TALK_COMMAND_CENTER_ENABLED }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # UTV2-1929: this key belongs in .env.production as well as
+          # .env.command-center. The Command Center sends it as its bearer, and the
+          # API resolves its own operator key set from its own env
+          # (apps/api/src/auth.ts loadAuthConfig) -- so a key the API never sees is a
+          # bearer it never registered, and every Command Center write (settle,
+          # review, retry-delivery, requeue, kill switch) answers 401. Measured on
+          # the production host 2026-09-18: no .env.production this workflow has
+          # ever written contained this name.
           UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
           COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
           COMMAND_CENTER_AUTH_USERNAME: ${{ secrets.COMMAND_CENTER_AUTH_USERNAME }}
