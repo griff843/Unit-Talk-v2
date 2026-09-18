@@ -4,18 +4,24 @@
   "tier": "T2",
   "lane_type": "delivery-ui",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "5712b7c8187e93ffc0b3e7b12f9bc11caff7e6bb",
     "verified_source_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
     "evidence_commit_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
     "current_pr_head_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-18T13:45:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T14:03:27.149Z",
     "ci_sentinels": {
       "note": "Pinned to the last non-proof commit on the branch. The authoritative result is the set of required contexts on PR #1606 at this head; post-merge-lane-close.yml rebinds merge_sha.",
-      "local_lint": { "command": "pnpm lint", "exit_code": 0 },
-      "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
       "local_full_suite": {
         "command": "pnpm test",
         "exit_code": 0,
@@ -32,8 +38,16 @@
     "measured_at": "2026-09-18T13:55:00Z",
     "measured_against_sha": "ee665990d6461ad09a8886112b66ea63c5a99ffe",
     "commands": [
-      { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
-      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
       {
         "command": "pnpm test",
         "exit_code": 0,
@@ -115,14 +129,38 @@
       }
     ],
     "row_counts": [
-      { "name": "governed_picks", "value": 7 },
-      { "name": "settlement_rows", "value": 6 },
-      { "name": "settled_rows_with_null_clv", "value": 6 },
-      { "name": "settled_rows_with_clv_value", "value": 0 },
-      { "name": "approval_scope_rows", "value": 21871 },
-      { "name": "held_queue_rows", "value": 2075 },
-      { "name": "review_queue_rows", "value": 19796 },
-      { "name": "rows_written_updated_or_deleted_by_this_proof", "value": 0 }
+      {
+        "name": "governed_picks",
+        "value": 7
+      },
+      {
+        "name": "settlement_rows",
+        "value": 6
+      },
+      {
+        "name": "settled_rows_with_null_clv",
+        "value": 6
+      },
+      {
+        "name": "settled_rows_with_clv_value",
+        "value": 0
+      },
+      {
+        "name": "approval_scope_rows",
+        "value": 21871
+      },
+      {
+        "name": "held_queue_rows",
+        "value": 2075
+      },
+      {
+        "name": "review_queue_rows",
+        "value": 19796
+      },
+      {
+        "name": "rows_written_updated_or_deleted_by_this_proof",
+        "value": 0
+      }
     ],
     "observations": [
       {

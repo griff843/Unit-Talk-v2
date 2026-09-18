@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1932-command-center-dim5-operator-fields",
   "branch": "claude/utv2-1932-command-center-dim5-operator-fields",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "5712b7c8187e93ffc0b3e7b12f9bc11caff7e6bb",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1606",
   "files_changed": [],
   "file_scope_lock": [
@@ -17,14 +17,22 @@
     "docs/06_status/proof/UTV2-1932/diff-summary.md",
     "docs/06_status/proof/UTV2-1932/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-18T12:53:42.999Z",
-  "heartbeat_at": "2026-09-18T13:06:55.518Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-18T14:03:29.637Z",
+  "closed_at": "2026-09-18T14:03:29.637Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1932-command-center-dim5-operator-fields.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-18T14:03:27.154Z",
+      "verdict": "pass",
+      "merge_sha": "5712b7c8187e93ffc0b3e7b12f9bc11caff7e6bb",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
