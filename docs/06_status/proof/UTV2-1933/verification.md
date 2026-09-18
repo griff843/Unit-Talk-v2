@@ -12,9 +12,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1933-stranded-outbox-control
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1607
-Head SHA: 6c6bcd145e8c0f872c145c872777693749da06b4
-Execution SHA: 6c6bcd145e8c0f872c145c872777693749da06b4
-Diff base: 3a07f41b0a09fddb924e964e255e16b6c8e0a80b
+Head SHA: d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8
+Execution SHA: d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8
+Diff base: c79a5bb2a2a9113222459983a0c55c5720a2045a
 result: pass
 
 > One missing predicate made a blocking readiness dimension unable to pass and a T1 control
@@ -140,10 +140,10 @@ EVIDENCE:
 |---|---|---|
 | `pnpm lint` | 0 | pass — `eslint . --cache`, no output |
 | `pnpm type-check` | 0 | pass — `pnpm exec tsc -b tsconfig.json`, no diagnostics |
-| `pnpm test` | 0 | pass — **5,927 `ok` lines, 0 `not ok`**, 104 suite blocks each `# fail 0` |
+| `pnpm test` | 0 | pass — **5,934 `ok` lines, 0 `not ok`**, 104 suite blocks each `# fail 0` |
 | `pnpm exec tsx --test scripts/ops/readiness-refresh.test.ts` | 0 | 32 pass / 0 fail / 0 skipped (5 new tests) |
 | `pnpm exec tsx --test apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts` | 1 | 2 pass / 3 fail — all three are `TypeError: fetch failed`; see below |
-| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | 0 | `Verdict: PASS`, 7 changed files, rules matched `lifecycle-fsm` |
+| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | 0 | `Verdict: PASS`, 10 changed files, rules matched `lifecycle-fsm` |
 | `pnpm verify` | 1 | `verify:static` and `verify:commands` pass; `ci:assert-staging` refuses a non-staging target, by design |
 | `pnpm test:db` | — | not run locally; it is gated behind the same `ci:assert-staging` refusal. Executed in CI by the `Writable DB proof (staging only)` job on PR #1607, **conclusion: success**, which is also what produces the `ci-db-proof-receipt/v2` the required `verify` context validates. |
 
@@ -158,7 +158,7 @@ $ pnpm exec tsx --test scripts/ops/readiness-refresh.test.ts
 ```
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 7
+Changed files: 10
 Rules matched: lifecycle-fsm
 
 Advisory (PM-gated) artifacts missing:
@@ -198,7 +198,7 @@ local outcome. The authoritative full-tree result is the required `verify` conte
 
 Verifier Identity: Claude Opus 5 (1M context), acting as execution orchestrator
 Date: 2026-09-18
-Commit SHA(s): 6c6bcd145e8c0f872c145c872777693749da06b4
+Commit SHA(s): d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8
 Related PRs: https://github.com/griff843/Unit-Talk-v2/pull/1607
 
 Merge authority for this T1 lane is the `t1-approved` label plus a `pm-verdict/v1` APPROVED
@@ -209,4 +209,4 @@ comment. Nothing in this bundle self-certifies Done; the done-gate is `ops:truth
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1607
 Approved PR head: pending merge
-Execution SHA: 6c6bcd145e8c0f872c145c872777693749da06b4
+Execution SHA: d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8

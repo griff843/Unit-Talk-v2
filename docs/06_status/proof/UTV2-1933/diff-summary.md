@@ -8,9 +8,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1933-stranded-outbox-control
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1607
-Head SHA: 6c6bcd145e8c0f872c145c872777693749da06b4
-Execution SHA: 6c6bcd145e8c0f872c145c872777693749da06b4
-Diff base: 3a07f41b0a09fddb924e964e255e16b6c8e0a80b
+Head SHA: d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8
+Execution SHA: d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8
+Diff base: c79a5bb2a2a9113222459983a0c55c5720a2045a
 result: pass
 
 ## Git Diff Stat
@@ -141,4 +141,4 @@ three-mutation drill and its baseline.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1607
 Approved PR head: pending merge
-Execution SHA: 6c6bcd145e8c0f872c145c872777693749da06b4
+Execution SHA: d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8

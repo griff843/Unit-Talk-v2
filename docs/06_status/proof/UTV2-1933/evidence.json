@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "6c6bcd145e8c0f872c145c872777693749da06b4",
+    "verified_source_sha": "d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
@@ -25,7 +25,7 @@
       "local_full_suite": {
         "command": "pnpm test",
         "exit_code": 0,
-        "ok_lines": 5927,
+        "ok_lines": 5934,
         "not_ok_lines": 0,
         "suite_blocks": 104,
         "suite_blocks_with_failures": 0
@@ -35,8 +35,8 @@
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-18T14:35:00Z",
-    "measured_against_sha": "6c6bcd145e8c0f872c145c872777693749da06b4",
+    "measured_at": "2026-09-18T15:10:00Z",
+    "measured_against_sha": "d1940e0b00cf05e45dc6e92cbf9a064f9c570fb8",
     "commands": [
       {
         "command": "pnpm lint",
@@ -54,7 +54,7 @@
         "command": "pnpm test",
         "exit_code": 0,
         "result": "pass",
-        "ok_lines": 5927,
+        "ok_lines": 5934,
         "not_ok_lines": 0,
         "suite_blocks": 104,
         "suite_blocks_with_failures": 0
@@ -75,7 +75,7 @@
         "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
         "exit_code": 0,
         "result": "pass",
-        "note": "Verdict PASS; 7 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]"
+        "note": "Verdict PASS; 10 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]"
       },
       {
         "command": "pnpm verify",
@@ -135,7 +135,7 @@
   },
   "runtime_proof": {
     "status": "pass",
-    "measured_at": "2026-09-18T14:30:00Z",
+    "measured_at": "2026-09-18T15:10:00Z",
     "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no containment setting, kill switch or delivery target was touched. The 32 unclaimable rows are reported and deliberately NOT removed.",
     "queries": [
       {
