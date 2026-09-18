@@ -112,14 +112,27 @@ same shape on **all three**, not just the pilot pick.
 All five required surfaces exist as built pages in `apps/command-center/src/app`:
 `picks` + `picks-list`, `held`, `review`, `settlement`, plus a pick detail route.
 
-**None is deployed.** Measured against `deploy/production/docker-compose.yml`: the production stack
-is `api`, `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`, `web`,
-`smart-form`, `caddy` — **no command-center service** — and `deploy/production/Caddyfile` carries
-**no command-center route**.
+**The reachability grounds recorded on 2026-09-14 are stale as of 2026-09-18.** This section
+originally read: *"None is deployed… no command-center service… no command-center route… An
+operator cannot reach any of the five surfaces in production."* That is no longer true. The
+Command Center is **enabled and deployed** — `UNIT_TALK_COMMAND_CENTER_ENABLED` is `true` and
+`Deploy` run `35289985486` emitted `{"service":"…","event":"command_center.enabled"}` — and
+operators demonstrably wrote through it on 2026-09-18 (six settlements and a kill-switch toggle
+attributed to `operator:command-center:HGkYXQqj`). Enabling it was never a containment change;
+the flag gates only that service's env file, image promotion, compose membership and smoke check.
 
-An operator cannot reach any of the five surfaces in production. The placeholder-violation audit the
-contract requires (≥10 picks per status type across 5 surfaces) is therefore **UNKNOWN and
-unrunnable**, and reachability itself is a definite FAIL.
+**Dimension 5 still measures FAIL, on different and now-substantive grounds.** Reachability is
+satisfied; the surfaces themselves are incomplete. The picks explorer renders no promotion score,
+routing target or edge source; suppressed picks are selected without `promotion_reason`; the held
+queue is built (`getHeldQueue`) but has no page consuming it and counts with
+`{ count: 'estimated' }`; and the settlement surface selects no `payload`, so CLV renders as a
+bare dash rather than an explicit unresolved state. The placeholder-violation audit the contract
+requires (≥10 picks per status type across 5 surfaces) remains **UNKNOWN** — now for want of
+sample volume, not for want of a deployed surface.
+
+This dimension is **fully provider-independent**: every gap above closes without a live provider.
+It is owned by **UTV2-1932**. Re-measure this section against the running system before citing it;
+it has already gone stale once.
 
 ## Dimension 6 — Performance Evidence → **FAIL**
 
