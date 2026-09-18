@@ -3,6 +3,7 @@ import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, Empt
 import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 import { describeOperatorFailure } from '@/lib/describe-error';
+import { renderClvSummary, isClvUnresolved } from '@/lib/clv-summary';
 import { SettlementWorkbench } from '@/components/SettlementWorkbench';
 import { getPickDetail } from '@/lib/data';
 
@@ -18,6 +19,7 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
           <Th>Pick</Th>
           <Th>Status</Th>
           <Th>Result</Th>
+          <Th>CLV</Th>
           <Th>Source</Th>
           <Th>Confidence</Th>
           <Th>Correction of</Th>
@@ -42,7 +44,16 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
                   <InternalLabelBadge label="Settled" />
                 )}
               </Td>
-              <Td>{row.result ?? '—'}</Td>
+              <Td>{row.result ?? <span className="cc-text-muted">unsettled</span>}</Td>
+              <Td>
+                {isClvUnresolved(row) ? (
+                  <span className="cc-text-muted text-xs" title="Closing-line capture requires a live provider, which is deliberately off.">
+                    {renderClvSummary(row)}
+                  </span>
+                ) : (
+                  <span className="cc-num text-xs text-gray-200">{renderClvSummary(row)}</span>
+                )}
+              </Td>
               <Td>{row.source}</Td>
               <Td>{row.confidence}</Td>
               <Td>{row.correctsId ? <span className="font-mono text-xs">{row.correctsId.slice(0, 8)}…</span> : '—'}</Td>

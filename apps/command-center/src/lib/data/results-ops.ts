@@ -21,6 +21,16 @@ export interface SettlementOpsRow {
   correctsId: string | null;
   settledAt: string;
   createdAt: string;
+  /**
+   * CLV fields unpacked from settlement_records.payload. All are null today —
+   * closing-line capture depends on a provider that is deliberately off — and the
+   * surface renders that absence explicitly rather than as a dash.
+   */
+  clvPercent: number | null;
+  beatsClosingLine: boolean | null;
+  isOpeningLineFallback: boolean | null;
+  clvStatus: string | null;
+  clvUnavailableReason: string | null;
 }
 
 export interface StuckPostedPick {
@@ -63,6 +73,29 @@ function mapSettlementRow(row: Record<string, unknown>): SettlementOpsRow {
     correctsId: typeof row['corrects_id'] === 'string' ? row['corrects_id'] : null,
     settledAt: String(row['settled_at'] ?? ''),
     createdAt: String(row['created_at'] ?? ''),
+    ...readClvFields(row['payload']),
+  };
+}
+
+function readClvFields(payload: unknown): Pick<
+  SettlementOpsRow,
+  'clvPercent' | 'beatsClosingLine' | 'isOpeningLineFallback' | 'clvStatus' | 'clvUnavailableReason'
+> {
+  const p =
+    payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+
+  const numOrNull = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const boolOrNull = (v: unknown) => (typeof v === 'boolean' ? v : null);
+  const strOrNull = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null);
+
+  return {
+    clvPercent: numOrNull(p['clvPercent']),
+    beatsClosingLine: boolOrNull(p['beatsClosingLine']),
+    isOpeningLineFallback: boolOrNull(p['isOpeningLineFallback']),
+    clvStatus: strOrNull(p['clvStatus']),
+    clvUnavailableReason: strOrNull(p['clvUnavailableReason']),
   };
 }
 
@@ -72,7 +105,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
   const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
 
   const settlementColumns =
-    'id, pick_id, status, result, source, confidence, review_reason, settled_by, corrects_id, settled_at, created_at';
+    'id, pick_id, status, result, source, confidence, review_reason, settled_by, corrects_id, settled_at, created_at, payload';
 
   const [
     recentResult,

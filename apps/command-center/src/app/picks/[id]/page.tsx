@@ -9,6 +9,7 @@ import { getAllowedActions } from '@/lib/pick-actions';
 import { describeOperatorFailure } from '@/lib/describe-error';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
+import { renderClvSummary } from '@/lib/clv-summary';
 import { getPickDetail } from '@/lib/data';
 import { getPickLineMovement } from '@/lib/data/odds-intel';
 import { LineMovementChart } from '@/components/LineMovementChart';
@@ -212,32 +213,6 @@ function summarizeSettlementContext(detail: PickDetailViewResponse) {
   return latest.result ?? latest.status;
 }
 
-function renderClvSummary(settlement: SettlementRow | undefined) {
-  if (!settlement) {
-    return 'missing';
-  }
-
-  if (settlement.clvPercent != null) {
-    const lineVerdict =
-      settlement.beatsClosingLine == null
-        ? 'CLV present'
-        : settlement.beatsClosingLine
-          ? 'beats line'
-          : 'behind line';
-    const fallbackSuffix = settlement.isOpeningLineFallback ? ' via opening fallback' : '';
-    return `${settlement.clvPercent.toFixed(2)}% (${lineVerdict}${fallbackSuffix})`;
-  }
-
-  if (settlement.clvUnavailableReason) {
-    return `missing (${settlement.clvUnavailableReason})`;
-  }
-
-  if (settlement.clvStatus) {
-    return settlement.clvStatus;
-  }
-
-  return settlement.hasClv ? 'present' : 'missing';
-}
 
 export async function generateMetadata({ params }: PickDetailPageProps) {
   const { id } = await params;

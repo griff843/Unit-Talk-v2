@@ -31,6 +31,8 @@ interface CockpitRow {
   createdAt: string | null;
   ageHours: number | null;
   href: string;
+  /** Held rows only: who placed the hold, so an operator knows whom to ask. */
+  heldBy: string | null;
 }
 
 interface CockpitLoad {
@@ -75,6 +77,7 @@ async function loadCockpitRows(nowMs: number): Promise<CockpitLoad> {
       createdAt: pick.createdAt,
       ageHours: ageHoursFrom(pick.createdAt, nowMs),
       href: `/picks/${pick.id}`,
+      heldBy: null,
     });
   }
 
@@ -104,6 +107,7 @@ async function loadCockpitRows(nowMs: number): Promise<CockpitLoad> {
       createdAt: pick.created_at,
       ageHours: ageHoursFrom(pick.created_at, nowMs),
       href: `/picks/${pick.id}`,
+      heldBy: pick.heldBy,
     });
   }
 
@@ -132,6 +136,7 @@ async function loadCockpitRows(nowMs: number): Promise<CockpitLoad> {
       createdAt: pick.created_at,
       ageHours: ageHoursFrom(pick.created_at, nowMs),
       href: '/review',
+      heldBy: null,
     });
   }
 
@@ -340,7 +345,12 @@ export default async function ApprovalsPage({
                               '—'
                             )}
                           </Td>
-                          <Td>{row.queue}</Td>
+                          <Td>
+                            {row.queue}
+                            {row.queue === 'held' && row.heldBy ? (
+                              <div className="cc-text-muted text-[10px]">by {row.heldBy}</div>
+                            ) : null}
+                          </Td>
                           <Td num align="right">
                             <span className={URGENCY_CLASSES[urgency]} title={row.createdAt ?? undefined}>
                               {humanizeAgeHours(row.ageHours)}
