@@ -1115,7 +1115,8 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
   assert.ok(!fieldNames.includes('State'), 'must NOT show State');
   assert.ok(!fieldNames.includes('Source'), 'must NOT show Source');
   assert.equal(receipt.receiptType, 'discord.message');
-  assert.equal(receipt.channel, outbox.target);
+  // UTV2-1929: the receipt records the resolved destination, not the target.
+  assert.equal(receipt.channel, '1234567890');
   assert.equal(receipt.externalId, 'discord-message-1');
   assert.equal(
     receipt.idempotencyKey,
@@ -1885,7 +1886,8 @@ test('createDiscordDeliveryAdapter classifies 4xx responses as terminal failures
   const result = await adapter(outbox);
 
   assert.equal(result.status, 'terminal-failure');
-  assert.equal(result.channel, outbox.target);
+  // UTV2-1929: the receipt records the resolved destination, not the target.
+  assert.equal(result.channel, '1234567890');
   assert.equal(result.reason, 'HTTP 403: {"message":"Missing Access"}');
 });
 
@@ -1905,7 +1907,8 @@ test('createDiscordDeliveryAdapter classifies 429 responses as retryable failure
   const result = await adapter(outbox);
 
   assert.equal(result.status, 'retryable-failure');
-  assert.equal(result.channel, outbox.target);
+  // UTV2-1929: the receipt records the resolved destination, not the target.
+  assert.equal(result.channel, '1234567890');
   assert.equal(result.reason, 'HTTP 429: {"message":"rate limited"}');
 });
 

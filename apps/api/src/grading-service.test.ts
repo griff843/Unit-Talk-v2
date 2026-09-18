@@ -284,6 +284,149 @@ test('runGradingPass grades a posted over pick and records grading settlement', 
   assert.equal(settlements[0]?.result, 'win');
 });
 
+/**
+ * UTV2-1929: the production receipt shape for a human capper delivery.
+ *
+ * `channel` holds the LOGICAL target, which is what the worker wrote before
+ * this lane and what every `discord.message` receipt in production still
+ * carries. `payload.channelId` holds the numeric destination the adapter
+ * actually POSTed to, resolved from the capper's pinned channel.
+ */
+async function seedHumanCapperDistributionReceipt(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+  logicalTarget: string,
+  resolvedChannelId: string,
+) {
+  const outboxRecord = await repositories.outbox.enqueue({
+    pickId,
+    target: logicalTarget,
+    payload: {},
+    idempotencyKey: `outbox:${pickId}:${logicalTarget}`,
+  });
+  await repositories.outbox.markSent(outboxRecord.id);
+  await repositories.receipts.record({
+    outboxId: outboxRecord.id,
+    receiptType: 'discord.message',
+    status: 'sent',
+    channel: logicalTarget,
+    externalId: `message:${pickId}`,
+    payload: {
+      adapter: 'discord',
+      route: 'capper-pinned',
+      target: logicalTarget,
+      channelId: resolvedChannelId,
+      destinationSource: 'cappers.metadata.discord.picksChannelId',
+    },
+  });
+}
+
+test('UTV2-1929: the settlement recap resolves the pinned channel from the receipt payload', async () => {
+  // Reproduces production outbox 684ba33f-45c4-4a80-adf0-db8286c90815: a human
+  // capper pick delivered to a pinned channel, whose receipt names the logical
+  // target. `normalizeDiscordChannelId` cannot resolve `official-picks` -- it
+  // is not numeric, and UTV2-1923 exempts human delivery targets from the
+  // shared target map -- so before this lane the recap refused with
+  // `no_receipt_channel_or_resolvable_outbox_target` and no human capper pick
+  // could ever be told to members how it finished.
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedHumanCapperDistributionReceipt(
+    repositories,
+    pickId,
+    'discord:official-picks',
+    '1384052464189440120',
+  );
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  let capturedUrl = '';
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async (input) => {
+    capturedUrl = String(input);
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1);
+    assert.equal(
+      capturedUrl,
+      'https://discord.com/api/v10/channels/1384052464189440120/messages',
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+});
+
+test('UTV2-1929: a non-numeric payload channelId is not a destination', async () => {
+  // The payload read must not become a second way to guess a destination. A
+  // channel NAME where an id belongs falls through to the receipt column and
+  // then to the outbox target, both of which also fail to resolve, and the
+  // recap refuses rather than posting somewhere it inferred.
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedHumanCapperDistributionReceipt(
+    repositories,
+    pickId,
+    'discord:official-picks',
+    '#griff-official-picks',
+  );
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  let called = false;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async () => {
+    called = true;
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1);
+    assert.equal(called, false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+});
+
 test('runGradingPass posts a settlement recap embed for a graded pick with CLV', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,

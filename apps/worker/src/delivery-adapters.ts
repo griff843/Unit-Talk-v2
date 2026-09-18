@@ -153,7 +153,11 @@ export function createDiscordDeliveryAdapter(options?: {
           return {
             receiptType: 'discord.message',
             status: isTerminal ? 'terminal-failure' : 'retryable-failure',
-            channel: outbox.target,
+            // UTV2-1929: the channel a receipt records is where the message
+            // actually went, not the logical target that was asked for. See
+            // the success receipt below for why that distinction is
+            // load-bearing.
+            channel: route.channelId,
             reason: `HTTP ${response.status}: ${errorText}`,
             payload: {
               adapter: 'discord',
@@ -171,7 +175,24 @@ export function createDiscordDeliveryAdapter(options?: {
         return {
           receiptType: 'discord.message',
           status: 'sent',
-          channel: outbox.target,
+          // UTV2-1929 RECEIPT_CHANNEL_IS_THE_RESOLVED_DESTINATION.
+          //
+          // This used to record `outbox.target` -- the logical target name,
+          // e.g. `discord:official-picks`. That made the receipt a restatement
+          // of the request rather than a record of the delivery, and it broke
+          // the one consumer that needs to know where a pick actually landed:
+          // `resolveRecapChannel` in apps/api/src/grading-service.ts resolves
+          // the settlement recap's channel from this field, and it requires a
+          // numeric Discord id (or the shared target map, which UTV2-1923
+          // deliberately exempts human capper targets from). A human capper
+          // pick could therefore be delivered and then never receive its
+          // settlement recap -- measured in production on 2026-09-18 against
+          // outbox 684ba33f-45c4-4a80-adf0-db8286c90815.
+          //
+          // `route.channelId` is the destination this request was actually
+          // POSTed to, including the pinned per-capper channel and a DM
+          // channel. The logical target is still recorded, in `payload.target`.
+          channel: route.channelId,
           externalId: body.id,
           idempotencyKey: `${outbox.id}:${outbox.target}:receipt`,
           payload: {

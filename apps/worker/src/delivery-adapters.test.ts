@@ -34,7 +34,8 @@ test('createDiscordDeliveryAdapter routes game-thread target to mapped event thr
   assert.equal(request.url, 'https://discord.com/api/v10/channels/222222222222222222/messages');
   assert.equal(request.method, 'POST');
   assert.equal(result.status, 'sent');
-  assert.equal(result.channel, 'discord:game-threads');
+  // UTV2-1929: the receipt records the channel the message was posted to.
+  assert.equal(result.channel, '222222222222222222');
   assert.equal(result.externalId, 'thread-message-1');
   assert.deepEqual(readPayloadRoute(result.payload), {
     route: 'game-thread',
@@ -102,7 +103,7 @@ test('createDiscordDeliveryAdapter routes strategy-room target through a Discord
   });
   assert.equal(capturedRequests[1]?.url, 'https://discord.com/api/v10/channels/444444444444444444/messages');
   assert.equal(result.status, 'sent');
-  assert.equal(result.channel, 'discord:strategy-room');
+  assert.equal(result.channel, '444444444444444444');
   assert.equal(result.externalId, 'dm-message-1');
   assert.deepEqual(readPayloadRoute(result.payload), {
     route: 'strategy-room-dm',
@@ -174,6 +175,39 @@ test('UTV2-1923: a pinned destination routes to that capper channel, not the sha
     'https://discord.com/api/v10/channels/100000000000000002/messages',
   );
   assert.equal(result.status, 'sent');
+});
+
+test('UTV2-1929: the receipt records the pinned channel, not the logical target', async () => {
+  // The receipt is the only durable record of where a pick actually went, and
+  // `resolveRecapChannel` in apps/api/src/grading-service.ts resolves the
+  // settlement recap from it. Recording `discord:official-picks` here made
+  // every human capper delivery unrecapable: that string is not a numeric id,
+  // and UTV2-1923 exempts human delivery targets from the shared target map,
+  // so neither resolution branch could ever succeed.
+  const outbox = withPinnedDestination(
+    createOutboxRecord('discord:official-picks'),
+    '100000000000000002',
+  );
+  const adapter = createDiscordDeliveryAdapter({
+    dryRun: false,
+    botToken: 'test-bot-token',
+    targetMap: { 'discord:official-picks': '999999999999999999' },
+    fetchImpl: async () => jsonResponse({ id: 'capper-message-1' }),
+  });
+
+  const result = await adapter(outbox);
+
+  assert.equal(result.status, 'sent');
+  assert.equal(result.channel, '100000000000000002');
+  // The logical target is not lost -- it stays on the payload, which is where
+  // a reader asking "which delivery lane was this" should look.
+  assert.equal(
+    (result.payload as Record<string, unknown>)['target'],
+    'discord:official-picks',
+  );
+  // And the idempotency key still keys on the logical target, so this change
+  // cannot resend an already-delivered row.
+  assert.equal(result.idempotencyKey, `${outbox.id}:discord:official-picks:receipt`);
 });
 
 test('UTV2-1923: human delivery with no pinned destination refuses rather than falling back', async () => {

@@ -891,6 +891,20 @@ async function resolveRecapChannel(
     outboxRecord.id,
     'discord.message',
   );
+
+  // UTV2-1929: the delivery adapter records the resolved destination in the
+  // receipt payload as `channelId`, and has done so for every Discord delivery
+  // including the pinned per-capper route. Reading it first repairs the recap
+  // for receipts already written -- at the time this was measured, every
+  // production `discord.message` receipt carried `channel: 'discord:<target>'`,
+  // which no branch below can resolve, while the same row's payload already
+  // held the numeric id the message was posted to. Backfilling those rows to
+  // fix the recap would be rewriting delivery history to repair a reader.
+  const payloadChannelId = readReceiptPayloadChannelId(receipt?.payload);
+  if (payloadChannelId) {
+    return { ok: true, channelId: payloadChannelId };
+  }
+
   if (receipt?.channel) {
     const receiptChannelId = normalizeDiscordChannelId(receipt.channel);
     if (receiptChannelId) {
@@ -1147,6 +1161,26 @@ function normalizeSettlementResult(result: string | null) {
   }
 
   throw new Error(`Unsupported settlement result for recap: ${String(result)}`);
+}
+
+/**
+ * UTV2-1929: the numeric Discord channel a delivery receipt says it posted to.
+ *
+ * Deliberately strict. `payload.channelId` is written by the delivery adapter
+ * from the route it actually used, so a value that is not a bare numeric id is
+ * not a destination this function may guess at -- it returns null and lets the
+ * caller fall through to the receipt column and then refuse.
+ */
+function readReceiptPayloadChannelId(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+  const channelId = (payload as Record<string, unknown>)['channelId'];
+  if (typeof channelId !== 'string') {
+    return null;
+  }
+  const trimmed = channelId.trim();
+  return /^\d+$/.test(trimmed) ? trimmed : null;
 }
 
 function normalizeDiscordChannelId(value: string) {
