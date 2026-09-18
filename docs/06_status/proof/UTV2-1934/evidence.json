@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1934",
+  "tier": "T3",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "bfed688855be2e0fc5d84076811cdc03cd6e6ff8",
+    "evidence_commit_sha": "bfed688855be2e0fc5d84076811cdc03cd6e6ff8",
+    "current_pr_head_sha": "bfed688855be2e0fc5d84076811cdc03cd6e6ff8",
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-18T13:35:00.000Z",
+    "ci_sentinels": {
+      "note": "Pinned to the last non-proof commit on the branch. The authoritative result is the set of required contexts on PR #1605 at this head; post-merge-lane-close.yml rebinds merge_sha.",
+      "local_lint": { "command": "pnpm lint", "exit_code": 0 },
+      "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
+      "local_test": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "suites": 23,
+        "pass": 206,
+        "fail": 0
+      },
+      "required_contexts_authority": "PR #1605: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T13:20:00Z",
+    "measured_against_sha": "bfed688855be2e0fc5d84076811cdc03cd6e6ff8",
+    "commands": [
+      { "command": "pnpm lint", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm test", "exit_code": 0, "result": "pass", "suites": 23, "pass": 206, "fail": 0 },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 5 changed files; no R-level artifacts required for this diff"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "verify:static and verify:commands pass; ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx (host=127.0.0.1 ref=unidentified). This is the correct local outcome and is not a defect in this diff. The authoritative full-tree result is the required verify context on PR #1605, which passed."
+      }
+    ]
+  }
+}
