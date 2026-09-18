@@ -46,7 +46,7 @@ test('service-role data client is available when production auth is configured',
 
 test('test fixture detection covers current and legacy proof markers', () => {
   for (const row of [
-    { metadata: { testRun: true } },
+    { metadata: { testRun: 'a1b2c3d4' } },
     { metadata: { proof_issue: 'UTV2-1396' } },
     { metadata: { proof_fixture_id: 'fixture-1' } },
     { metadata: { proof_script: 'proof.ts' } },
