@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1933",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1933-stranded-outbox-control",
+  "branch": "claude/utv2-1933-stranded-outbox-control",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1933.yml",
+    "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts",
+    "docs/05_operations/QUEUE_READINESS_SEMANTICS.md",
+    "docs/06_status/lanes/UTV2-1933.json",
+    "docs/06_status/proof/UTV2-1933/diff-summary.md",
+    "docs/06_status/proof/UTV2-1933/evidence.json",
+    "docs/06_status/proof/UTV2-1933/verification.md",
+    "scripts/ops/readiness-refresh.test.ts",
+    "scripts/ops/readiness-refresh.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1933/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-09-18T13:01:45.151Z",
+  "heartbeat_at": "2026-09-18T13:01:45.151Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1933-stranded-outbox-control.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1933-stranded-outbox-control",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
