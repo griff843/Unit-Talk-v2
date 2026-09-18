@@ -1,0 +1,54 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1929
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1929
+  objective: "Human Capper V1 post-delivery lifecycle: settlement recap cannot
+    resolve its channel, and the Command Center cannot authenticate to the API"
+  acceptance_criteria:
+    - |-
+      Two production defects measured 2026-09-18 while proving the post-delivery lifecycle for the accepted Human Capper delivery canary (pick 816a84c7-58b8-4585-8e7a-7ad1e036342e).
+
+      Defect 1: settling the delivered canary returned humanCapperRecap posted=false reason=no_receipt_channel_or_resolvable_outbox_target. apps/worker/src/delivery-adapters.ts writes [channel=outbox.target](<http://channel=outbox.target>) on the discord.message receipt, so the stored channel is discord:official-picks, not the numeric channel it actually posted to. normalizeDiscordChannelId in apps/api/src/grading-service.ts requires a numeric id or the shared target map, and [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) exempted human delivery targets from that map. No human capper pick can ever receive its settlement recap.
+
+      Defect 2: .env.production on the production host has never contained UNIT_TALK_CC_API_KEY, so the API never registers the Command Center operator key and every Command Center write returns 401. deploy.yml already loads the secret into the step env and writes it only to .env.command-center.
+
+      Both fixes are repository changes. Deploying them is reserved decision 8.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Two production defects measured 2026-09-18 while proving the post-delivery lifecycle for the accepted Human Capper delivery canary (pick 816a84c7-58b8-4585-8e7a-7ad1e036342e).
+
+      Defect 1: settling the delivered canary returned humanCapperRecap posted=false reason=no_receipt_channel_or_resolvable_outbox_target. apps/worker/src/delivery-adapters.ts writes [channel=outbox.target](<http://channel=outbox.target>) on the discord.message receipt, so the stored channel is discord:official-picks, not the numeric channel it actually posted to. normalizeDiscordChannelId in apps/api/src/grading-service.ts requires a numeric id or the shared target map, and [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) exempted human delivery targets from that map. No human capper pick can ever receive its settlement recap.
+
+      Defect 2: .env.production on the production host has never contained UNIT_TALK_CC_API_KEY, so the API never registers the Command Center operator key and every Command Center write returns 401. deploy.yml already loads the secret into the step env and writes it only to .env.command-center.
+
+      Both fixes are repository changes. Deploying them is reserved decision 8.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1929/human-capper-v1-post-delivery-lifecycle-settlement-recap-cannot
+    title: "Human Capper V1 post-delivery lifecycle: settlement recap cannot resolve
+      its channel, and the Command Center cannot authenticate to the API"
+    description: |-
+      Two production defects measured 2026-09-18 while proving the post-delivery lifecycle for the accepted Human Capper delivery canary (pick 816a84c7-58b8-4585-8e7a-7ad1e036342e).
+
+      Defect 1: settling the delivered canary returned humanCapperRecap posted=false reason=no_receipt_channel_or_resolvable_outbox_target. apps/worker/src/delivery-adapters.ts writes [channel=outbox.target](<http://channel=outbox.target>) on the discord.message receipt, so the stored channel is discord:official-picks, not the numeric channel it actually posted to. normalizeDiscordChannelId in apps/api/src/grading-service.ts requires a numeric id or the shared target map, and [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) exempted human delivery targets from that map. No human capper pick can ever receive its settlement recap.
+
+      Defect 2: .env.production on the production host has never contained UNIT_TALK_CC_API_KEY, so the API never registers the Command Center operator key and every Command Center write returns 401. deploy.yml already loads the secret into the step env and writes it only to .env.command-center.
+
+      Both fixes are repository changes. Deploying them is reserved decision 8.
+    captured_at: 2026-09-18T06:39:55.355Z
+    description_sha256: ccb43f6f869e7c29e9717a09e687df08c4a212dbb50dfdc1f439eb038aae00ed
+  contract_hash: 2f2c74058cee78171ad101342f0bf50461a440a0613d431158be02d0c95e1874
