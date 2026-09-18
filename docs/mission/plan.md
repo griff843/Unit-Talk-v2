@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-18, against `main` `17b3f964f`
+**Last reconciled against live truth:** 2026-09-18, against `main` `3a07f41b0`
 **Archives, read on demand — never at session start:**
 [`plan-lessons.md`](plan-lessons.md) (operating lessons) ·
 [`plan-history-2026-09.md`](plan-history-2026-09.md) (chronological narrative through 2026-09-14)
@@ -18,9 +18,9 @@ Measured 2026-09-18 against `origin/main`, the GitHub API and production `zfzdnf
 
 | Fact | Value |
 |---|---|
-| `main` | `17b3f964f` (UTV2-1930, #1602 — the governed operator event-seeding CLI) |
+| `main` | `3a07f41b0` (a readiness-ledger refresh on top of UTV2-1931, #1604) |
 | Deployed release | `961f17c64` — `Deploy` run `35289985486`, succeeded 2026-09-18T00:09Z |
-| Drift `deployed..main` | **6 commits, 32 files, 1 migration (already applied), 3 deployment-relevant files** |
+| Drift `deployed..main` | **11 commits, 36 files, 1 migration (already applied), 3 deployment-relevant files** — re-measure, never quote |
 | The 3 deployment-relevant files | `apps/api/src/grading-service.ts` and `apps/worker/src/delivery-adapters.ts` (the UTV2-1929 recap channel-resolution repair) and `.github/workflows/deploy.yml` (writes `UNIT_TALK_CC_API_KEY` into `.env.production`). **Merged, not running.** |
 | Governed pick cohort (`metadata ? 'distributionMode'`) | **7** — 6 `track-only`, 1 `delivery-eligible` |
 | Settlement records for that cohort | **6**, every one `source = operator`, `confidence = confirmed`, real ESPN `evidence_ref` |
@@ -32,9 +32,10 @@ Measured 2026-09-18 against `origin/main`, the GitHub API and production `zfzdnf
 | Current-game reference data | **1** event in the last 14 days, `external_id = NULL`, **0** participants — nothing is selectable today |
 | Newest `events` / `game_results` | **2026-06-30** — the results supply is still empty |
 | Grading in production | alive, and deliberately outside containment |
-| `SYNDICATE_MACHINE_MODE` | `parked` — unchanged |
-| Open PRs | **11** |
-| Active lanes | UTV2-1736, UTV2-1827, UTV2-1919 (all parked) · UTV2-1930 (merged, closeout repair in #1603) · UTV2-1931 (this one) |
+| Effective deploy mode | **`human-capper`** — the worker runs; ingestor and syndicate machine stay off. There is no `SYNDICATE_MACHINE_MODE` variable; see §7 |
+| `worker.heartbeat` | **alive** — every ~6s, max gap 9.4s, zero gaps > 10 min. Window starts when the worker came up, so it is *hours*, not 7 days |
+| Open PRs | **10** |
+| Active lanes | **zero on `main`** — every tracked manifest in `docs/06_status/lanes/` is terminal. UTV2-1736, UTV2-1827 and UTV2-1919 were listed as "parked" by the previous edition and have **no manifest at all**; they are Linear state, not lane state. The only live lanes are this session's, whose manifests are still untracked |
 
 **Milestone 1 is complete.** Performed by Griff end to end against the deployed system on
 2026-09-09, verified by governed read-only production observation, containment intact throughout.
@@ -57,9 +58,11 @@ no longer true: three deploys have happened since, the newest is `961f17c64`, an
 moved past it again.
 
 - Deployed release: `961f17c64` — `Deploy` run `35289985486`, succeeded 2026-09-18T00:09Z.
-- Drift `deployed..main` is **6 commits / 32 files / 1 migration, already applied in production**
+- Drift `deployed..main` is **11 commits / 36 files / 1 migration, already applied in production**
   (`insert_certification_propagation_batch` exists with `p_records jsonb, p_events jsonb`).
-- **Three of the 32 change what runs**, and all three are Human Capper V1 work:
+  This number moves every time a lane closes — it was 6/32 six hours before this edition.
+  Re-run `git diff --name-only 961f17c64..origin/main`; do not quote the figure above.
+- **Three of the 36 change what runs**, and all three are Human Capper V1 work:
   `apps/api/src/grading-service.ts` and `apps/worker/src/delivery-adapters.ts` (the UTV2-1929
   recap channel-resolution repair), and `.github/workflows/deploy.yml` (writes
   `UNIT_TALK_CC_API_KEY` into the `.env.production` it regenerates on every deploy).
@@ -74,17 +77,21 @@ reserved action 8 — §5 decision 1.
 | Dimension | Blocking | Status | What it means |
 |---|---|---|---|
 | `deploy_sha_alignment` | yes | fail | **no longer bookkeeping.** Real drift now, and it includes live-path files. |
-| `ingestor_health` | yes | fail | **containment** — `SYNDICATE_MACHINE_MODE=parked` sets `AUTORUN=false`. |
-| `worker_outbox_health` | yes | fail | **containment** — same mechanism. |
+| `ingestor_health` | yes | fail | **containment** — `human-capper` mode sets `_ingestor_autorun=false`, exactly as `parked` does. |
+| `worker_outbox_health` | yes | fail | **not containment, and not a sick worker.** Its own evidence reads `worker.heartbeat … (0m, status succeeded)` and then fails on `32 bucket:stale_unknown rows (processing > 5m)`. All 32 sit on four `utv2-1497-canary-*` targets that no worker can claim or reap — see §9. |
 | `dead_letter_count` | yes | unknown | partial read yields `unknown` rather than a quiet pass |
 | `db_tripwires` | yes | unknown | the observer itself is red, so tripwire state is unproven |
 
 Four non-blocking dimensions (`pnpm_verify`, `scheduled_observer_health`, `proof_coverage`,
 `constitution_convergence`) are `fail`/`unknown` and do not gate.
 
-**Readiness still cannot reach GREEN while containment holds**, because two blocking dimensions
-measure precisely the flags containment sets to `false`. That is unchanged and is not a defect.
-The six-dimension T1 contract measurement is a separate and stricter instrument — see §8.
+**Only one blocking dimension is containment**, not two. The previous edition said "two blocking
+dimensions measure precisely the flags containment sets to `false`" and used that to explain away
+both `ingestor_health` and `worker_outbox_health`. That is now measurably wrong for the second one:
+the worker *is* running under `human-capper` mode, the ledger records its heartbeat as succeeded,
+and the dimension fails on a row-classification defect instead (§9). `ingestor_health` remains
+genuine containment and stays red by design. The six-dimension T1 contract measurement is a
+separate and stricter instrument — see §8.
 
 ---
 
@@ -125,12 +132,21 @@ fixtures with 6 marked `settled`. Identify genuine submissions *positively*.
 | **No current game is selectable** — 1 event in the last 14 days, `external_id = NULL`, 0 participants | Milestone 2 condition 1 | operator: run `scripts/ops/seed-operator-event.ts` with production credentials |
 | **Results supply: no `events`/`game_results` after 2026-06-30** | Milestone 2 condition 3 (automated grading) and condition 4's CLV element | reserved decisions 3/4 — §5 decision 2 |
 | **A second data source cannot be admitted by an agent** | any non-SGO route to schedules or results | `PROVIDER_AUTHORITY_LOCK.md` is an active T1 rule naming SGO Pro as the sole live provider; amending it is PM-owned |
-| **#1592 needs two head-pinned PM artifacts** | the Human Capper foundation | merge authority |
-| **`migration` lane type unavailable** | UTV2-1871 and the Smart Form e2e gate enablement | approving #1484 |
+| **The canonical reference bootstrap is unowned** — #1484 was **closed, not merged** | routine reference-data seeding beyond the operator CLI | nobody. A closed PR nobody replaced is the easiest work to lose; this is a gap, not a resolution. |
 | **`P0 Protocol` is blind to `WORK-###`** | tracker-independence exit condition 1 | reserved (merge authority). #1570 is CLOSED, not merged. |
 
-**No longer a blocker:** the missing worker RPC (`insert_certification_propagation_batch`
-exists in production), and the Command Center being switched off (it is enabled and deployed).
+**No longer a blocker**, each verified against the API rather than inferred:
+
+- the missing worker RPC — `insert_certification_propagation_batch` exists in production;
+- the Command Center being switched off — it is enabled and deployed;
+- **#1592** — **MERGED 2026-09-17T19:53:28Z**. It is UTV2-1923, the PR that introduced
+  `human-capper` mode, so the merge this page listed as awaiting a PM decision is the same merge
+  that made §7's containment claim false. One event, two stale entries;
+- **the `migration` lane type** — and every other singleton type. #1484 closed 2026-09-18T04:00:48Z,
+  and **zero** manifests in `docs/06_status/lanes/` are in a non-terminal state, so `migration`,
+  `runtime`, `modeling` and `data-canonical` are all admissible. **UTV2-1871** and the Smart Form
+  e2e gate are startable; both stay deliberately unstaffed while the single reliability slot is
+  held (§6).
 
 ---
 
@@ -138,19 +154,24 @@ exists in production), and the Command Center being switched off (it is enabled 
 
 | # | Decision | Reserved under | Blocks |
 |---|---|---|---|
-| 1 | **Dispatch `Deploy` at `origin/main`.** Recommended. 6 commits, no unapplied migration; the three deployment-relevant files are the recap channel-resolution repair and the `.env.production` key line. **Non-secret success criterion:** the deployed release SHA equals `origin/main`, and a settlement on a delivered pick then produces a recap outbox row. | reserved action 8 | the post-delivery recap; §5 decision 1a below |
+| 1 | **Dispatch `Deploy` at `origin/main`.** Recommended. 11 commits, no unapplied migration; the three deployment-relevant files are the recap channel-resolution repair and the `.env.production` key line. **Non-secret success criterion:** the deployed release SHA equals `origin/main`, and a settlement on a delivered pick then produces a recap outbox row. | reserved action 8 | the post-delivery recap; §5 decision 1a below |
 | 1a | **Whether to re-open `official-picks` for one bounded recap re-attempt** after that deploy | member-delivery activation (2) | the recap for canary pick `816a84c7` only |
-| 2 | **Confirm whether the production `SGO_API_KEY` is active.** Prepared in `RESULTS_BACKFILL_AUTHORIZATION_PACKET.md`. **Non-secret success criterion:** one authenticated `GET` against the provider's account/usage endpoint returns `isActive: true` and a tier name. If inactive, this becomes a paid-provider commitment. There is no alternative exit in code. | secrets (4) / paid provider (3) | automated grading, CLV, and the routine reference-data supply |
-| 3 | **Approve #1484** (canonical reference bootstrap, `verify` green) | merge authority | reopens the `migration` lane type, and with it UTV2-1871 and the e2e-gate enablement |
-| 4 | **Re-issue `scope-override/v1` on #1592 at head, then `pm-verdict/v1` APPROVED + `t1-approved`** | merge authority (7) | the Human Capper official-picks foundation |
+| 2 | **~~Confirm whether the production `SGO_API_KEY` is active.~~ — OWNER-DEFERRED 2026-09-18.** Griff has decided SGO stays intentionally off, to be activated near the end as a bounded data-input dependency. This is **not** a blocker to resolve or route around, and it is **not to be re-raised** until all meaningful provider-independent work is exhausted. The prepared packet (`RESULTS_BACKFILL_AUTHORIZATION_PACKET.md`) stays valid for that later moment. | secrets (4) / paid provider (3) | automated grading, CLV, provider-fed reference and result supply — all **explicitly deferred, not failed** |
 | 5 | **Verdict on #1589** (UTV2-1919, T1) | merge authority | #1589 only |
 | 6 | **Whether to re-open the `WORK-###` Merge Gate parser work** | merge authority (7) | the tracker workstream only |
 | 7 | **#1491 / #1492 architecture review** | merge authority | those two PRs only |
 | 8 | **#1451** — production DDL, `verify` red | production DDL (1) | #1451 only |
 | 9 | **Direct-`main` prevention control** | branch protection | nothing; the prohibition is already in force |
 
-**Affirmatively not asked for.** No containment change. `SYNDICATE_MACHINE_MODE` stays `parked`.
-No provider activation. No clearing of the canary outbox row.
+**Decisions 3 and 4 of the previous edition are gone because they were already resolved**, not
+because they were dropped: #1592 merged and #1484 closed. Renumbering was avoided — the remaining
+numbers are unchanged so that anything referring to "decision 5" still means #1589.
+
+**Affirmatively not asked for.** No containment change: the effective mode stays `human-capper`,
+and every governed delivery target is `killed = true` at the live switch. No provider activation.
+No clearing of the canary outbox rows — and specifically **not** the 32 stranded `processing`
+rows, whose removal would improve a blocking readiness number by deleting the evidence that the
+classification behind it is wrong (§9).
 
 ---
 
@@ -159,9 +180,27 @@ No provider activation. No clearing of the canary outbox row.
 **Under existing authority, nothing reserved.** A reserved gate blocks only the work that depends on
 it; everything here is independent of §5.
 
-1. **Keep the plan and its archives honest.** This lane (UTV2-1931). Startup context must stay
-   loadable, and this edition exists because the previous one's §1 had gone false in five places at
-   once — cohort size, settlement count, Command Center state, deployed SHA, and newest outbox row.
+**Standing sequencing directive (owner, 2026-09-18): SGO is intentionally off.** The inactive
+provider key is **not** a blocker to route around — it is a deferred, bounded data-input dependency
+to activate near the end. Finish everything that can truthfully be completed *without* provider-fed
+schedules, offers, results or closing lines; mark the rest **explicitly deferred, not failed**.
+Decision 2 in §5 therefore stays surfaced but is **not** to be re-raised or worked around.
+Provider-dependent and so deferred: live automated grading, live CLV/closing-line measurement,
+provider-fed event and result coverage (readiness dimensions 2, 3, 6 and metric 1 of 4).
+Provider-independent and so in scope now: operator decision support (dimension 5), routing-trust
+metric 2, runtime health (dimension 1), delivery, recaps, settlement plumbing, onboarding,
+reliability, restart/recovery, containment and observability.
+
+1. **Keep the plan and its archives honest.** This lane (UTV2-1934). Startup context must stay
+   loadable, and this edition exists because the previous one's §1 and §2 had gone false in six
+   places — `main` SHA, drift size, open-PR count, the active-lane list, the migration-lane
+   blocker, and the claim that *two* blocking readiness dimensions are containment.
+1b. **Command Center operator fields (UTV2-1932).** Readiness dimension 5 is fully
+   provider-independent and is the largest closable block on the board: score / routing target /
+   edge source in the picks explorer, suppression reasons, a real held-queue page on the
+   already-built `getHeldQueue`, and honest CLV rendering in settlement.
+1c. **Repair the mirror-image outbox classification (UTV2-1933).** Fixes a vacuous T1 control and
+   an unpassable blocking readiness dimension in one change — see §9.
 2. **Seed a current event, then submit again through the deployed form** in market shapes not yet
    exercised — a player prop, a total, or a multi-leg slip. The seeding half is now a governed
    one-liner (`scripts/ops/seed-operator-event.ts`, #1602); the submitting half is operator action.
@@ -171,8 +210,9 @@ it; everything here is independent of §5.
    examined 15,000 picks and graded none is byte-identical to one that examined zero. **Owned by
    UTV2-1605**, PM-ratified and routed to Codex. Not unowned; do not re-file.
 4. **Repair `governance.awaiting-approval-drift`'s classification.** Built and proven (7/7 behaviour
-   drill), filed as **UTV2-1871**, blocked only on the `migration` lane type. The repair belongs in
-   the classification, never in the data.
+   drill), filed as **UTV2-1871**. It is **no longer blocked**: #1484 closed and no manifest holds
+   the `migration` singleton, so the lane type is available (§4). The repair belongs in the
+   classification, never in the data.
 5. **Re-home the inadmissible PRs** (#1429, #1491, #1492, #1495, #1496, #1498) through
    `ops:lane-start --readmit-existing-branch` under canonical issues. Renaming an open PR's head
    branch closes it and it will not reopen, so readmission means a replacement PR carrying the same
@@ -181,7 +221,7 @@ it; everything here is independent of §5.
 **Not executable, and why:** the recap (needs the deploy — decision 1); automated grading and CLV
 (need a trusted provider — decision 2, and note the *second* blocker: all six Track Only picks
 carry `eventId: null`, so grading skips them at `event_link_not_found` before results are even
-reached); anything needing a `migration` lane (blocked by #1484); the e2e gate (same).
+reached). Anything needing a `migration` lane is **no longer** in this list — that type is free.
 
 **On the governance slot.** `intent.md`'s ratified debt policy makes the single
 governance/reliability slot a **ceiling, not a quota** — it is staffed only when a defect currently
@@ -198,14 +238,44 @@ canonical issue, and a new occurrence attaches to it as evidence.
 
 **Containment is intact and unchanged, and no change to it is requested.**
 
-- `SYNDICATE_MACHINE_MODE` is `parked`. Provider ingestion, provider activation, system picks and
-  member-facing delivery are all parked. Newest `ingestor.cycle` is 2026-06-30; newest
-  `worker.heartbeat` is 2026-08-17.
-- **Containment is binary.** `deploy.yml` admits `active | parked | exit 1` only. `active`
-  simultaneously sets `_worker_autorun=true`, sets `SYNDICATE_MACHINE_ENABLED=true`, and releases
-  `_enabled_targets` from the forced `none` — and the readiness assertion that delivery is off runs
-  **only in parked mode**. So a request to unpark ingestion *is* a request to activate delivery.
-  There is no bounded unpark.
+- **Containment is not binary, and has not been since #1592 merged.** `deploy.yml` admits four
+  outcomes, not two (`case "$syndicate_machine_mode"`, `:548-567`):
+
+  | mode | `SYNDICATE_MACHINE_ENABLED` | ingestor autorun | worker autorun | delivery targets |
+  |---|---|---|---|---|
+  | `active` | true | true | true | released; `best-bets` fallback |
+  | `parked` | false | false | false | forced `none` |
+  | **`human-capper`** | false | false | **true** | forced literally to `official-picks` |
+  | anything else | — | — | — | `exit 1` |
+
+  `human-capper` (UTV2-1923) is the bounded unpark earlier editions of this page said did not
+  exist: *"parked in every respect except the worker. Provider ingestion, the syndicate machine and
+  system picks all stay off."* The sentence it replaces — "a request to unpark ingestion *is* a
+  request to activate delivery" — was true before that merge and is now false. It was load-bearing:
+  it was the stated reason runtime health could not be measured without a delivery decision.
+- **Read the mode from two variables, never one.** There is **no** `SYNDICATE_MACHINE_MODE`
+  repository variable. The mode is derived from the `SYNDICATE_MACHINE_ENABLED` secret, then a
+  *separate* variable promotes it (`deploy.yml:176-178`):
+
+  ```sh
+  if [ "$syndicate_machine_mode" = "parked" ] && [ "${VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-}" = "true" ]; then
+    syndicate_machine_mode=human-capper
+  ```
+
+  `gh variable list` shows `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=true` (non-secret), so the
+  **effective mode is `human-capper` and the worker is running**. Reading one name tells you
+  nothing; confirm against the newest successful `Deploy` run's
+  `{"event":"syndicate_machine_mode.validated","mode":…}` line.
+- **The worker is up. Dimension 1's uptime metric is on a clock, not blocked.** Heartbeats live in
+  `system_runs` (there is no `system_events` table). `worker.heartbeat` succeeds every ~6s with a
+  **max gap of 9.4s and zero gaps over 10 minutes**. But the window begins when the worker came up,
+  so it is *hours* long, not the 7 days the threshold names — `where started_at >= now() - '7 days'`
+  silently returns whatever exists. Always select `min(started_at)` alongside the aggregate and
+  compare it to the window the threshold names. `T1_PRODUCTION_READINESS_CONTRACT.md:53` still
+  records "BLOCKED. Worker is DOWN as of 2026-04-30"; that is stale, and "blocked" and "waiting"
+  route to different work.
+- **`human-capper` still cannot deliver on its own.** Its one enabled target is independently
+  killed at the live switch, and `isKilled()` is fail-closed for a target with no row.
 - **The Command Center is enabled, and that was never a containment change.**
   `UNIT_TALK_COMMAND_CENTER_ENABLED` is `true` and the service is deployed — `Deploy` run
   `35289985486` emitted `{"service":"…","event":"command_center.enabled"}`. The flag gates only
@@ -274,6 +344,20 @@ The execution and governance system on `main` remains controlling.
 Only the few that alter a decision today. The full set is in
 [`plan-lessons.md`](plan-lessons.md) — read it on demand, not at session start.
 
+- **Two controls over one population can be mirror images of the same missing distinction.**
+  `worker_outbox_health` is red solely on 32 `processing` rows sitting on four
+  `utv2-1497-canary-*` targets — synthetic targets no worker configuration can ever claim, so no
+  worker can reap them either. Two pieces of code look at that same population.
+  `scripts/ops/readiness-refresh.ts` counts every such row as `bucket:stale_unknown` and fails a
+  **blocking** readiness dimension, so the ledger can never pass. The Dimension 1 control in
+  `apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts` counts the same rows, prints them, and
+  then asserts `assert.ok(true)` — so the test can never fail. Neither asks the one question that
+  matters: *could any worker ever claim this row?* One answers no to everything, the other yes to
+  everything, and both are wrong in the same place. `isGovernedDeliveryTarget()`
+  (`packages/contracts/src/promotion.ts:47`) is the config-independent predicate that partitions
+  the population, and one classification repair fixes both. Owned by **UTV2-1933**.
+  **The 32 rows are not to be deleted** — deleting them would turn a blocking readiness number
+  green by destroying the evidence that the classification behind it is wrong.
 - **A merged repair is not a running repair, and the correction expires the same day.** The
   2026-09-17 edition of this page corrected weeks of "merged but not deployed" warnings by saying
   `main` was running — and by 2026-09-18 that sentence was false again, with a live-path repair
