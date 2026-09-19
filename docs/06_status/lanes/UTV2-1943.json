@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "UTV2-1943",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T3",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1943-command-center-product-intent",
