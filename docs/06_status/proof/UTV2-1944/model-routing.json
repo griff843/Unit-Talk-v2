@@ -2,6 +2,7 @@
   "issue_id": "UTV2-1944",
   "tier": "T2",
   "lane_type": "delivery-ui",
+  "override_used": false,
   "model_routing": {
     "profile": "codex-terra-medium",
     "model": "gpt-5.6-terra",
