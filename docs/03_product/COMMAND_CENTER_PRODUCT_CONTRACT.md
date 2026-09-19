@@ -1196,26 +1196,21 @@ satisfied by rendering a plausible number (§5.6, §18.5).
 
 ---
 
-## Appendix D — Product decisions reserved to the owner
+## Appendix D — Owner product decisions resolved in consolidation
 
-Two questions in this corpus are genuine product decisions rather than engineering ones. This
-contract states the position it currently takes, and flags each as changeable only by the owner.
+These two questions required product-owner judgment rather than engineering inference. Griff resolved both during consolidation review. The positions below are ratified product decisions within this contract; changing either requires an explicit owner amendment.
 
-**D1 — Does the four-workspace information architecture survive contact with the shipped route tree?**
+### D1 — Four-workspace information architecture
 
-This contract ratifies the four-workspace IA (§3.1) as intent, because the shipped tree's additional
-top-level entries and duplicated subject matter are drift rather than a recorded decision. Converging
-the tree onto four workspaces is real work with real operator-visible churn. The alternative — accept
-the shipped structure and re-cut the IA around it — is legitimate and cheaper, and would be a
-different product. **Owner decision: retain the four canonical workspaces.** The shipped 24-segment route tree is implementation drift, not the target IA. Convergence should preserve Operations, Decision, Intelligence and Research as the mature structure. An unfinished workspace does not have to appear as an active navigation destination until it contains a usable capability (§3.2). Changing the four-workspace model requires an owner amendment.
+The shipped route tree contains additional top-level entries and duplicated subject matter. That is implementation drift rather than a recorded product decision.
 
-**D2 — Is per-capper and aggregate performance band 1, or band 2?**
+**Owner decision: retain the four canonical workspaces — Operations, Decision, Intelligence and Research.** Convergence should target that mature structure rather than re-cutting the product around the current route tree. An unfinished workspace does not have to appear as an active navigation destination until it contains a usable capability (§3.2).
 
-This contract places record, units and ROI over the governed cohort in band 1 (§14.3, §15.1), on the
-reasoning that a performance history no operator can read is a history the product cannot later claim
-to a member. A narrower reading — that launch needs the *lifecycle* to work and performance can
-follow — would make it band 2 and shorten the launch path. **Position taken: band 1.** Changing it is
-an owner decision.
+### D2 — Basic performance at launch
 
-Neither question blocks any other part of this contract, and work proceeds on the stated positions
-unless the owner changes them.
+Record, units and ROI over the governed cohort remain part of launch because Unit Talk cannot credibly operate a transparent performance product if its own operator surface cannot reconcile the underlying history.
+
+**Owner decision: keep basic per-capper and aggregate performance in band 1.** Deeper segmentation, calibration, comparison and market-relative intelligence remain later bands (§14, §15).
+
+Neither decision is an open implementation question. Changing either requires an owner amendment to this contract.
+
