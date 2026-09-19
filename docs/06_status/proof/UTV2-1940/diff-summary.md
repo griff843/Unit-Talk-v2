@@ -1,11 +1,13 @@
 # UTV2-1940 Diff Summary
 
+MERGE_SHA: pending merge
+
 Generated at: 2026-09-19T00:40:54.865Z
 Issue: UTV2-1940
 Tier: T2
 Lane type: delivery-ui
 Branch: claude/utv2-1940-command-center-settlement-state-truth
-PR URL: N/A
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1613
 Head SHA: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
 Merge SHA: N/A
 Diff base: f338294a73cd927b5df2b4b53903785b9aac8a17
