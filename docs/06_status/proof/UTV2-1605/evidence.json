@@ -1,0 +1,180 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1605",
+  "pr_number": 1621,
+  "source_sha": "b5b1329d51249c120fdea9bdece2791f1c6aa6d7",
+  "reviewed_head_sha": "b5b1329d51249c120fdea9bdece2791f1c6aa6d7",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "gate_results": [
+    {
+      "gate": "verify:static",
+      "verdict": "PASS",
+      "detail": "Historical pre-correction result at 465fe4e0a4c948f8e3f5e86440cda60d3bf6918a: exit 0; 6,808 tests, 6,808 pass, 0 fail, 0 skipped. lint, type-check, build, test, Smart Form verification and command/migration checks all passed."
+    },
+    {
+      "gate": "test:db",
+      "verdict": "SKIP",
+      "detail": "Refused locally before any write by scripts/ci/assert-staging-target.ts: host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. database-smoke.test.ts never executed; no row written, updated or deleted. The PR's staging-only Writable DB proof job is the authority for the T1 database proof."
+    },
+    {
+      "gate": "independent-review",
+      "verdict": "SKIP",
+      "detail": "Pending Opus 5 exact-head review."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-09-19T20:17:10Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b5b1329d51249c120fdea9bdece2791f1c6aa6d7",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "head_sha": "pending \u2014 set by CI at the PR head",
+      "verify": {
+        "conclusion": "pending"
+      },
+      "writable_db_proof_staging_only": {
+        "conclusion": "pending"
+      }
+    },
+    "note": "Source includes bounded PM corrections and conflict-free main refresh. Exact final HEAD CI and renewed external scope override are required; historical local evidence is not relabelled as a new-head live proof."
+  },
+  "scope": {
+    "implementation_files": [
+      "apps/api/src/grading-cron.test.ts",
+      "apps/api/src/grading-cron.ts",
+      "apps/api/src/grading-service.test.ts",
+      "apps/api/src/grading-service.ts",
+      "packages/db/src/repositories.ts",
+      "packages/db/src/runtime-repositories.ts",
+      "scripts/ops/readiness-refresh.ts"
+    ],
+    "migrations": "none",
+    "system_runs_status_constraint_changed": false
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 6806,
+        "pass": 6806,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "focused_grading": {
+      "command": "pnpm exec tsx --test 'apps/api/src/grading-cron.test.ts' 'apps/api/src/grading-service.test.ts'",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 109,
+        "pass": 109,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "readiness_regression": {
+      "command": "pnpm exec tsx --test scripts/ops/readiness-refresh.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "ingestor_repository_surface": {
+      "command": "pnpm exec tsx --test apps/ingestor/src/ingestor.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 93,
+        "pass": 93,
+        "fail": 0,
+        "skipped": 0
+      },
+      "note": "The grading-only repository subtype keeps the new freshness read out of the ingestor's separately governed method surface."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 14,
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+    "command": "pnpm test:db",
+    "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
+    "local_result": "REFUSED before any writable test executed",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. The local guard observed host=127.0.0.1, ref=unidentified and exited 1 before database-smoke.test.ts started.",
+    "queries": [
+      {
+        "name": "staging-only writable smoke",
+        "result": "not executed locally; ci:assert-staging refused the unidentified local target before writes"
+      },
+      {
+        "name": "production settlement evidence hygiene predicate",
+        "query": "SELECT * FROM settlement_records WHERE source = 'grading' AND settled_by = 'grading-service' AND evidence_ref LIKE 'game-result:%'",
+        "result": "predicate is asserted by unit coverage; source='grading' alone is explicitly demonstrated to include test artifacts and is forbidden as proof"
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "rows written, updated, or deleted by local DB proof",
+        "value": 0
+      },
+      {
+        "name": "writable DB assertions executed locally",
+        "value": 0
+      }
+    ]
+  },
+  "acceptance_coverage": [
+    "fresh empty input is no_op_no_input",
+    "stale data-dependent skips are degraded_stale_input with failed system status",
+    "fresh completed-game work is succeeded_with_work",
+    "zero-graded and skips-only runs cannot claim succeeded_with_work",
+    "existing grading and settlement correctness tests remain green",
+    "readiness consumes outcome_class and input freshness",
+    "alerts open, deduplicate, and clear on fresh successful work",
+    "production proof predicates distinguish real grader evidence from test artifacts"
+  ],
+  "deployment_warning": "The grading readiness dimension may turn RED on first correct deployment when existing stale/dead ingestion is finally exposed. That is visibility of an existing incident, not a regression introduced by this change.",
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "independent_review": "pending Opus 5 exact-head review"
+  },
+  "pm_correction": {
+    "reviewed_head": "5c6714fd8d5e1aeebb003298075258594f20e6d6",
+    "outcome_classes": [
+      "succeeded_with_work",
+      "no_op_nothing_gradeable",
+      "no_op_no_input",
+      "degraded_stale_input",
+      "failed"
+    ],
+    "scope_authorization": "https://github.com/griff843/Unit-Talk-v2/pull/1621#issuecomment-5745534305",
+    "live_proof_path": "apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts",
+    "focused_tests": "112 pass, 0 fail",
+    "type_check": "PASS",
+    "lint_changed_files": "PASS",
+    "r_level": "PASS",
+    "exact_head_ci": "PENDING",
+    "final_head_scope_override": "PENDING",
+    "local_verify": "Static stages passed (6816 tests, 0 fail), then staging-target refusal before local DB writes. Latest proof assertion adjustment separately type-checked/linted; exact-head CI required.",
+    "first_ci_attempt": "35471673081 failed one new proof assertion; live freshness query passed; corrected expected outcome to nothing-gradeable because rows_scanned is measured before candidate restriction."
+  }
+}

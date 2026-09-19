@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import type { RepositoryBundle } from '@unit-talk/db';
+import type { RepositoryBundle, SystemRunRecord } from '@unit-talk/db';
 import { createApiRuntimeDependencies } from './server.js';
 import {
   runGradingPass,
@@ -34,7 +34,7 @@ export interface GradingCronRunnerOptions {
   sleep?: (ms: number) => Promise<void>;
   logger?: Pick<Console, 'error' | 'info' | 'warn'>;
   runGradingPass?: typeof runGradingPass;
-  /** Called with the staleness message when gap > GRADING_STALE_WARN_MS. Wire to Discord in production. */
+  /** Called for grading health open/clear transitions. Wire to Discord in production. */
   onStalenessAlert?: (message: string) => Promise<void>;
 }
 
@@ -88,6 +88,7 @@ export async function startGradingCronLoop(
   const runPass = options.runGradingPass ?? runGradingPass;
   const retryState: GradingRetryState = new Map();
   let cycle = 0;
+  let runGapAlertOpen = false;
 
   while (true) {
     cycle += 1;
@@ -119,21 +120,109 @@ export async function startGradingCronLoop(
     });
 
     // Staleness check: warn if grading.run gap exceeds threshold
-    const recentRuns = await options.repositories.runs.listByType('grading.run', 1);
+    const recentRuns = await options.repositories.runs.listByType('grading.run', 20);
     if (recentRuns.length > 0) {
       const lastRunAt = new Date(recentRuns[0]!.created_at).getTime();
       const gapMs = Date.now() - lastRunAt;
-      if (gapMs > GRADING_STALE_WARN_MS) {
+      if (gapMs > GRADING_STALE_WARN_MS && !runGapAlertOpen) {
+        runGapAlertOpen = true;
         const stalenessMsg = `[grading-cron] STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last grading.run — picks may be accumulating ungraded`;
         options.logger?.error?.(stalenessMsg);
         if (options.onStalenessAlert) {
           void options.onStalenessAlert(stalenessMsg).catch(() => {/* fire-and-forget */});
         }
+      } else if (gapMs <= GRADING_STALE_WARN_MS && runGapAlertOpen) {
+        runGapAlertOpen = false;
+        const clearMessage = '[grading-cron] RECOVERY: grading.run recency returned within threshold';
+        options.logger?.info?.(clearMessage);
+        if (options.onStalenessAlert) {
+          void options.onStalenessAlert(clearMessage).catch(() => {/* fire-and-forget */});
+        }
+      }
+    }
+
+    const outcomeTransition = evaluateGradingHealthAlertTransition(recentRuns);
+    if (outcomeTransition) {
+      if (outcomeTransition.kind === 'open') {
+        options.logger?.error?.(outcomeTransition.message);
+      } else {
+        options.logger?.info?.(outcomeTransition.message);
+      }
+      if (options.onStalenessAlert) {
+        void options.onStalenessAlert(outcomeTransition.message).catch(() => {/* fire-and-forget */});
       }
     }
 
     await sleep(pollIntervalMs);
   }
+}
+
+export interface GradingHealthAlertTransition {
+  kind: 'open' | 'clear';
+  message: string;
+}
+
+function readOutcomeClass(run: SystemRunRecord | undefined): string | null {
+  const details = run?.details;
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) {
+    return null;
+  }
+  const outcomeClass = (details as Record<string, unknown>)['outcome_class'];
+  return typeof outcomeClass === 'string' ? outcomeClass : null;
+}
+
+/**
+ * Emits only durable health transitions. Repeated unhealthy runs deduplicate,
+ * no-op runs neither open nor clear an incident, and fresh successful work
+ * clears the most recent failed/stale-input state even if no-ops occurred in
+ * between.
+ */
+export function evaluateGradingHealthAlertTransition(
+  runs: readonly SystemRunRecord[],
+): GradingHealthAlertTransition | null {
+  const latest = runs[0];
+  const latestOutcome = readOutcomeClass(latest);
+  const isUnhealthy = (outcome: string | null) =>
+    outcome === 'degraded_stale_input' || outcome === 'failed';
+  const isDecisive = (outcome: string | null) =>
+    outcome === 'succeeded_with_work' || isUnhealthy(outcome);
+
+  if (!isDecisive(latestOutcome)) {
+    return null;
+  }
+
+  const previousDecisive = runs
+    .slice(1)
+    .map(readOutcomeClass)
+    .find(isDecisive) ?? null;
+
+  if (isUnhealthy(latestOutcome)) {
+    if (isUnhealthy(previousDecisive)) {
+      return null;
+    }
+    const details = latest?.details as Record<string, unknown>;
+    const freshness = details['input_freshness'] as Record<string, unknown> | undefined;
+    const reasons = details['skipped_reasons'];
+    return {
+      kind: 'open',
+      message:
+        `[grading-cron] ALERT OPEN: grading outcome=${latestOutcome}; ` +
+        `input=${String(freshness?.['status'] ?? 'unknown')}; ` +
+        `newest_result=${String(details['newest_game_result_sourced_at'] ?? 'none')}; ` +
+        `skips=${JSON.stringify(reasons ?? {})}. Check results ingestion and grading dependencies.`,
+    };
+  }
+
+  if (latestOutcome === 'succeeded_with_work' && isUnhealthy(previousDecisive)) {
+    return {
+      kind: 'clear',
+      message:
+        `[grading-cron] ALERT CLEARED: fresh grading work succeeded ` +
+        `(graded=${String((latest?.details as Record<string, unknown>)['graded_count'] ?? 'unknown')}).`,
+    };
+  }
+
+  return null;
 }
 
 export function createGradingCronRuntimeDependencies(): GradingCronRuntimeDependencies {

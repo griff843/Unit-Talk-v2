@@ -1,0 +1,369 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1605
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1605/evidence.json
+    - docs/06_status/proof/UTV2-1605/model-routing.json
+    - docs/06_status/proof/UTV2-1605/verification.md
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1605
+  objective: Grading observability must report no-op/stale-input instead of success
+  acceptance_criteria:
+    - |-
+      ## Approved T1 implementation plan
+
+      Fix grading observability without widening the live `system_runs.status` database constraint.
+
+      ## Schema decision
+
+      Keep existing status values:
+
+      * `running`
+      * `succeeded`
+      * `failed`
+      * `cancelled`
+
+      Do not introduce a migration in this lane.
+
+      Add a required machine-readable `details.outcome_class` for every `grading.run`:
+
+      * `succeeded_with_work`
+      * `no_op_nothing_gradeable` — rows examined but none gradeable; PM-ratified fifth state (2026-09-19)
+      * `no_op_no_input`
+      * `degraded_stale_input`
+      * `failed`
+
+      Recommended status mapping:
+
+      * `succeeded_with_work` → `succeeded`
+      * legitimate fresh empty slate `no_op_no_input` → `succeeded`, but machine-distinct in details
+      * `degraded_stale_input` → `failed`
+      * execution/invariant error `failed` → `failed`
+
+      ## Freshness and classification
+
+      * Record rows scanned, gradeable rows, graded count, skipped count/reasons, error count, newest relevant `game_results` timestamp, threshold and outcome class.
+      * Add/query latest input freshness in the grading repository.
+      * A zero-processed run may not report `succeeded_with_work`.
+      * Distinguish a legitimate fresh empty slate from dead/stale ingestion.
+      * Trigger stale-input failure when at least one pick is skipped for a data-dependent reason and newest required result data exceeds the approved threshold.
+      * Initial threshold: 6 hours, colocated with existing grading freshness configuration and tested.
+      * Cron recency alone is not health.
+
+      ## Readiness and alerts
+
+      * Readiness consumes `outcome_class` and input freshness.
+      * `degraded_stale_input` is internally RED/failed.
+      * `no_op_no_input` is not an incident when the slate is genuinely fresh/empty.
+      * Alerts are actionable, deduplicated and clear automatically when fresh successful work returns.
+      * Verification must warn that dashboards may turn red on first correct deployment; that is exposure of an existing incident, not a regression.
+
+      ## Data-proof hygiene
+
+      Production settlement evidence must exclude test artifacts using authoritative predicates such as production grader identity plus real `game-result:` evidence linkage. `source='grading'` alone is insufficient.
+
+      ## Tests
+
+      1. Fresh empty input returns `no_op_no_input`, not successful work.
+      2. Stale data-dependent skips return `degraded_stale_input` and status failed.
+      3. Fresh valid completed games return `succeeded_with_work`.
+      4. Skips-only cannot hide as successful work.
+      5. Existing settlement correctness guards and outcomes remain unchanged.
+      6. Readiness consumes the new outcome.
+      7. Alert opens/clears correctly.
+      8. Test and production rows are distinguishable in proof queries.
+      9. Full grading/API/worker/readiness tests, DB smoke and exact-head T1 proof pass.
+
+      ## Routing
+
+      Codex Sol high implements from the approved Opus 5 invariant plan. Opus 5 performs exact-head independent review. Griff approves plan and merge.
+
+      No direct-main or admin bypass.
+
+      ---
+
+      ## Dispatch preparation — 2026-09-01 (PM-ratified Ready — QUEUED, do not start yet)
+
+      Reverified against live Linear and `main` @ `e48106fc` before promotion. The issue itself is sound; the block is a concurrency control, not a defect.
+
+      ### Do not dispatch while [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) is executing
+
+      `detectTierCConflict` hard-fails on **any two concurrently executing Tier C lanes**, even with disjoint files — it is a non-suppressible safety property with no grant path. This lane is Tier C (`grading-service.ts` and `readiness-service.ts` via the `-service.ts` pattern; `packages/db/src/repositories.ts` by exact match), and [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) is executing with `scripts/ops/lane-maximizer.ts` in scope, which matches the Tier C pattern `scripts/ops/(lane|merge|tier)-*.ts`. **Ready here means dispatch-eligible inventory, not authorization to start** — pick this up when 1699 clears.
+
+      ### Nothing was implemented during the earlier Ready period
+
+      This sat `Ready for Codex` for roughly a month before being demoted Backlog → architected → identified on 2026-08-29. Verified: `outcome_class` **appears nowhere in** `apps/` **or** `packages/` **on main.** No partial implementation exists, so there is no duplication risk and no salvage step — start clean.
+
+      ### Mechanical classification
+
+      * **Tier:** declared T1, `mechanical_minimum: T1`, `derived_tier: T1`, `escalated: false`. Correct as labelled.
+      * **Lane type:** `runtime` — admits the whole plausible file set (`apps/api/**`, `packages/db/src/**`, `apps/worker/**`). Clean, and the plan's explicit prohibition on a migration is what keeps it out of the `migration` lane.
+      * **Concurrency: **`runtime` is a **singleton**, and `[runtime, runtime]` and `[migration, runtime]` are forbidden combinations. **Tier C: YES.**
+      * **File conflict:** shares `apps/api/src/grading-service.ts` with [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to). Those two are permanently mutually exclusive regardless of Tier C — they can never run concurrently.
+      * **Dependencies: **`blockedBy: []`. Blocks its parent [UTV2-1601](https://linear.app/unit-talk-v2/issue/UTV2-1601/p0-delivery-restoration-command-deploy-current-main-reconcile-queues).
+
+      ### Acceptance criteria — no work needed
+
+      The strongest AC set of the seven ratified candidates: 9 numbered tests, an explicit 6h threshold, and a named anti-fabrication predicate for the proof queries. Dispatch as written.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Approved T1 implementation plan
+
+      Fix grading observability without widening the live `system_runs.status`
+      database constraint.
+    - >-
+      Schema decision
+
+      Keep existing status values:
+
+
+      * `running`
+
+      * `succeeded`
+
+      * `failed`
+
+      * `cancelled`
+
+
+      Do not introduce a migration in this lane.
+
+
+      Add a required machine-readable `details.outcome_class` for every
+      `grading.run`:
+
+
+      * `succeeded_with_work`
+
+      * `no_op_nothing_gradeable` — rows examined but none gradeable; PM-ratified fifth state (2026-09-19)
+
+      * `no_op_no_input`
+
+      * `degraded_stale_input`
+
+      * `failed`
+
+
+      Recommended status mapping:
+
+
+      * `succeeded_with_work` → `succeeded`
+
+      * legitimate fresh empty slate `no_op_no_input` → `succeeded`, but
+      machine-distinct in details
+
+      * `degraded_stale_input` → `failed`
+
+      * execution/invariant error `failed` → `failed`
+    - >-
+      Freshness and classification
+
+      * Record rows scanned, gradeable rows, graded count, skipped
+      count/reasons, error count, newest relevant `game_results` timestamp,
+      threshold and outcome class.
+
+      * Add/query latest input freshness in the grading repository.
+
+      * A zero-processed run may not report `succeeded_with_work`.
+
+      * Distinguish a legitimate fresh empty slate from dead/stale ingestion.
+
+      * Trigger stale-input failure when at least one pick is skipped for a
+      data-dependent reason and newest required result data exceeds the approved
+      threshold.
+
+      * Initial threshold: 6 hours, colocated with existing grading freshness
+      configuration and tested.
+
+      * Cron recency alone is not health.
+    - >-
+      Readiness and alerts
+
+      * Readiness consumes `outcome_class` and input freshness.
+
+      * `degraded_stale_input` is internally RED/failed.
+
+      * `no_op_no_input` is not an incident when the slate is genuinely
+      fresh/empty.
+
+      * Alerts are actionable, deduplicated and clear automatically when fresh
+      successful work returns.
+
+      * Verification must warn that dashboards may turn red on first correct
+      deployment; that is exposure of an existing incident, not a regression.
+    - >-
+      Data-proof hygiene
+
+      Production settlement evidence must exclude test artifacts using
+      authoritative predicates such as production grader identity plus real
+      `game-result:` evidence linkage. `source='grading'` alone is insufficient.
+    - >-
+      Tests
+
+      1. Fresh empty input returns `no_op_no_input`, not successful work.
+
+      2. Stale data-dependent skips return `degraded_stale_input` and status
+      failed.
+
+      3. Fresh valid completed games return `succeeded_with_work`.
+
+      4. Skips-only cannot hide as successful work.
+
+      5. Existing settlement correctness guards and outcomes remain unchanged.
+
+      6. Readiness consumes the new outcome.
+
+      7. Alert opens/clears correctly.
+
+      8. Test and production rows are distinguishable in proof queries.
+
+      9. Full grading/API/worker/readiness tests, DB smoke and exact-head T1
+      proof pass.
+    - >-
+      Routing
+
+      Codex Sol high implements from the approved Opus 5 invariant plan. Opus 5
+      performs exact-head independent review. Griff approves plan and merge.
+
+
+      No direct-main or admin bypass.
+
+
+      ---
+    - |-
+      Dispatch preparation — 2026-09-01 (PM-ratified Ready — QUEUED, do not start yet)
+      Reverified against live Linear and `main` @ `e48106fc` before promotion. The issue itself is sound; the block is a concurrency control, not a defect.
+
+      ### Do not dispatch while [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) is executing
+
+      `detectTierCConflict` hard-fails on **any two concurrently executing Tier C lanes**, even with disjoint files — it is a non-suppressible safety property with no grant path. This lane is Tier C (`grading-service.ts` and `readiness-service.ts` via the `-service.ts` pattern; `packages/db/src/repositories.ts` by exact match), and [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) is executing with `scripts/ops/lane-maximizer.ts` in scope, which matches the Tier C pattern `scripts/ops/(lane|merge|tier)-*.ts`. **Ready here means dispatch-eligible inventory, not authorization to start** — pick this up when 1699 clears.
+
+      ### Nothing was implemented during the earlier Ready period
+
+      This sat `Ready for Codex` for roughly a month before being demoted Backlog → architected → identified on 2026-08-29. Verified: `outcome_class` **appears nowhere in** `apps/` **or** `packages/` **on main.** No partial implementation exists, so there is no duplication risk and no salvage step — start clean.
+
+      ### Mechanical classification
+
+      * **Tier:** declared T1, `mechanical_minimum: T1`, `derived_tier: T1`, `escalated: false`. Correct as labelled.
+      * **Lane type:** `runtime` — admits the whole plausible file set (`apps/api/**`, `packages/db/src/**`, `apps/worker/**`). Clean, and the plan's explicit prohibition on a migration is what keeps it out of the `migration` lane.
+      * **Concurrency: **`runtime` is a **singleton**, and `[runtime, runtime]` and `[migration, runtime]` are forbidden combinations. **Tier C: YES.**
+      * **File conflict:** shares `apps/api/src/grading-service.ts` with [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to). Those two are permanently mutually exclusive regardless of Tier C — they can never run concurrently.
+      * **Dependencies: **`blockedBy: []`. Blocks its parent [UTV2-1601](https://linear.app/unit-talk-v2/issue/UTV2-1601/p0-delivery-restoration-command-deploy-current-main-reconcile-queues).
+
+      ### Acceptance criteria — no work needed
+
+      The strongest AC set of the seven ratified candidates: 9 numbered tests, an explicit 6h threshold, and a named anti-fabrication predicate for the proof queries. Dispatch as written.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success
+    title: Grading observability must report no-op/stale-input instead of success
+    description: |-
+      ## Approved T1 implementation plan
+
+      Fix grading observability without widening the live `system_runs.status` database constraint.
+
+      ## Schema decision
+
+      Keep existing status values:
+
+      * `running`
+      * `succeeded`
+      * `failed`
+      * `cancelled`
+
+      Do not introduce a migration in this lane.
+
+      Add a required machine-readable `details.outcome_class` for every `grading.run`:
+
+      * `succeeded_with_work`
+      * `no_op_nothing_gradeable` — rows examined but none gradeable; PM-ratified fifth state (2026-09-19)
+      * `no_op_no_input`
+      * `degraded_stale_input`
+      * `failed`
+
+      Recommended status mapping:
+
+      * `succeeded_with_work` → `succeeded`
+      * legitimate fresh empty slate `no_op_no_input` → `succeeded`, but machine-distinct in details
+      * `degraded_stale_input` → `failed`
+      * execution/invariant error `failed` → `failed`
+
+      ## Freshness and classification
+
+      * Record rows scanned, gradeable rows, graded count, skipped count/reasons, error count, newest relevant `game_results` timestamp, threshold and outcome class.
+      * Add/query latest input freshness in the grading repository.
+      * A zero-processed run may not report `succeeded_with_work`.
+      * Distinguish a legitimate fresh empty slate from dead/stale ingestion.
+      * Trigger stale-input failure when at least one pick is skipped for a data-dependent reason and newest required result data exceeds the approved threshold.
+      * Initial threshold: 6 hours, colocated with existing grading freshness configuration and tested.
+      * Cron recency alone is not health.
+
+      ## Readiness and alerts
+
+      * Readiness consumes `outcome_class` and input freshness.
+      * `degraded_stale_input` is internally RED/failed.
+      * `no_op_no_input` is not an incident when the slate is genuinely fresh/empty.
+      * Alerts are actionable, deduplicated and clear automatically when fresh successful work returns.
+      * Verification must warn that dashboards may turn red on first correct deployment; that is exposure of an existing incident, not a regression.
+
+      ## Data-proof hygiene
+
+      Production settlement evidence must exclude test artifacts using authoritative predicates such as production grader identity plus real `game-result:` evidence linkage. `source='grading'` alone is insufficient.
+
+      ## Tests
+
+      1. Fresh empty input returns `no_op_no_input`, not successful work.
+      2. Stale data-dependent skips return `degraded_stale_input` and status failed.
+      3. Fresh valid completed games return `succeeded_with_work`.
+      4. Skips-only cannot hide as successful work.
+      5. Existing settlement correctness guards and outcomes remain unchanged.
+      6. Readiness consumes the new outcome.
+      7. Alert opens/clears correctly.
+      8. Test and production rows are distinguishable in proof queries.
+      9. Full grading/API/worker/readiness tests, DB smoke and exact-head T1 proof pass.
+
+      ## Routing
+
+      Codex Sol high implements from the approved Opus 5 invariant plan. Opus 5 performs exact-head independent review. Griff approves plan and merge.
+
+      No direct-main or admin bypass.
+
+      ---
+
+      ## Dispatch preparation — 2026-09-01 (PM-ratified Ready — QUEUED, do not start yet)
+
+      Reverified against live Linear and `main` @ `e48106fc` before promotion. The issue itself is sound; the block is a concurrency control, not a defect.
+
+      ### Do not dispatch while [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) is executing
+
+      `detectTierCConflict` hard-fails on **any two concurrently executing Tier C lanes**, even with disjoint files — it is a non-suppressible safety property with no grant path. This lane is Tier C (`grading-service.ts` and `readiness-service.ts` via the `-service.ts` pattern; `packages/db/src/repositories.ts` by exact match), and [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) is executing with `scripts/ops/lane-maximizer.ts` in scope, which matches the Tier C pattern `scripts/ops/(lane|merge|tier)-*.ts`. **Ready here means dispatch-eligible inventory, not authorization to start** — pick this up when 1699 clears.
+
+      ### Nothing was implemented during the earlier Ready period
+
+      This sat `Ready for Codex` for roughly a month before being demoted Backlog → architected → identified on 2026-08-29. Verified: `outcome_class` **appears nowhere in** `apps/` **or** `packages/` **on main.** No partial implementation exists, so there is no duplication risk and no salvage step — start clean.
+
+      ### Mechanical classification
+
+      * **Tier:** declared T1, `mechanical_minimum: T1`, `derived_tier: T1`, `escalated: false`. Correct as labelled.
+      * **Lane type:** `runtime` — admits the whole plausible file set (`apps/api/**`, `packages/db/src/**`, `apps/worker/**`). Clean, and the plan's explicit prohibition on a migration is what keeps it out of the `migration` lane.
+      * **Concurrency: **`runtime` is a **singleton**, and `[runtime, runtime]` and `[migration, runtime]` are forbidden combinations. **Tier C: YES.**
+      * **File conflict:** shares `apps/api/src/grading-service.ts` with [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to). Those two are permanently mutually exclusive regardless of Tier C — they can never run concurrently.
+      * **Dependencies: **`blockedBy: []`. Blocks its parent [UTV2-1601](https://linear.app/unit-talk-v2/issue/UTV2-1601/p0-delivery-restoration-command-deploy-current-main-reconcile-queues).
+
+      ### Acceptance criteria — no work needed
+
+      The strongest AC set of the seven ratified candidates: 9 numbered tests, an explicit 6h threshold, and a named anti-fabrication predicate for the proof queries. Dispatch as written.
+    captured_at: 2026-09-19T19:37:44.323Z
+    description_sha256: 3808a1617d6cb2aa3943f46fcac897b4172da4d76bb31122abcb13e0fd1a54ca
+  contract_hash: befb1ee22f066d242915ebc6a2db0d72104d9c813dc9c29ef3e3ba2a57c215ee

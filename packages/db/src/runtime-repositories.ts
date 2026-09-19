@@ -42,6 +42,7 @@ import type {
   GradeResultInsertInput,
   GradeResultLookupCriteria,
   GradeResultRepository,
+  GradingResultRepository,
   HedgeOpportunityCreateInput,
   HedgeOpportunityCooldownQuery,
   HedgeOpportunityNotificationUpdateInput,
@@ -1425,7 +1426,7 @@ export class InMemoryReceiptRepository implements ReceiptRepository {
 }
 
 export class InMemoryGradeResultRepository implements GradeResultRepository {
-  private readonly records: GradeResultRecord[] = [];
+  protected readonly records: GradeResultRecord[] = [];
 
   async insert(input: GradeResultInsertInput): Promise<GradeResultRecord> {
     const duplicate = this.records.find(
@@ -1470,6 +1471,20 @@ export class InMemoryGradeResultRepository implements GradeResultRepository {
 
   async listByEvent(eventId: string): Promise<GradeResultRecord[]> {
     return this.records.filter((record) => record.event_id === eventId);
+  }
+
+}
+
+export class InMemoryGradingResultRepository
+  extends InMemoryGradeResultRepository
+  implements GradingResultRepository
+{
+  async findLatestSourcedAt(): Promise<string | null> {
+    return (
+      this.records
+        .map((record) => record.sourced_at)
+        .sort((left, right) => right.localeCompare(left))[0] ?? null
+    );
   }
 }
 
@@ -4819,7 +4834,7 @@ export class DatabaseSettlementRepository implements SettlementRepository {
 }
 
 export class DatabaseGradeResultRepository implements GradeResultRepository {
-  private readonly client: UnitTalkSupabaseClient;
+  protected readonly client: UnitTalkSupabaseClient;
 
   constructor(connection: DatabaseConnectionConfig) {
     this.client = createDatabaseClientFromConnection(connection);
@@ -4907,6 +4922,27 @@ export class DatabaseGradeResultRepository implements GradeResultRepository {
     }
 
     return data ?? [];
+  }
+
+}
+
+export class DatabaseGradingResultRepository
+  extends DatabaseGradeResultRepository
+  implements GradingResultRepository
+{
+  async findLatestSourcedAt(): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('game_results')
+      .select('sourced_at')
+      .order('sourced_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load latest game result timestamp: ${error.message}`);
+    }
+
+    return data?.sourced_at ?? null;
   }
 }
 
@@ -9160,7 +9196,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     participants,
     events,
     eventParticipants,
-    gradeResults: new InMemoryGradeResultRepository(),
+    gradeResults: new InMemoryGradingResultRepository(),
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
     referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
@@ -9196,7 +9232,7 @@ export function createDatabaseRepositoryBundle(
     participants: new DatabaseParticipantRepository(connection),
     events: new DatabaseEventRepository(connection),
     eventParticipants: new DatabaseEventParticipantRepository(connection),
-    gradeResults: new DatabaseGradeResultRepository(connection),
+    gradeResults: new DatabaseGradingResultRepository(connection),
     runs: new DatabaseSystemRunRepository(connection),
     audit: new DatabaseAuditLogRepository(connection),
     referenceData: new DatabaseReferenceDataRepository(connection),
