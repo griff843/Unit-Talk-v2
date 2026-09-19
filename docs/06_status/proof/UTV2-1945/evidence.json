@@ -12,7 +12,7 @@
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
-    "status": "partial",
+    "status": "static_pass_live_ci_pending",
     "documentation_check": {
       "result": "PASS",
       "execution_sha": "fe41f38f0c15af9775bad8cb03024d549e44b6ab",
@@ -68,11 +68,21 @@
       "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35464411547",
       "scope": "pnpm test:db via ci:db-smoke only; does not execute test:t1-proof:live"
     },
-    "remaining_blocker": "Full pnpm verify remains unpassed: local writable suites require approved staging credentials; manual staging workflow covers DB smoke only. Existing full staging live-suite coverage is PR-triggered CI, while supplied AGENTS requires green verification before opening any PR. No policy exemption inferred."
+    "remaining_blocker": null
   },
   "limitations": [
     "Documentation-only proof; production migration and acceptance not executed.",
     "Four voice channel IDs and all role IDs require capture before future migration.",
     "Model-routing sidecar records manifest policy routing; actual desktop runtime model/effort is not independently attested."
-  ]
+  ],
+  "pm_disposition": {
+    "date": "2026-09-19",
+    "authority": "Direct PM instruction in UTV2-1945 task",
+    "decision": "Local pnpm verify staging-target refusal is not a blocker to opening this docs-only T2 governance PR; full live verification delegated to required PR-triggered CI at exact PR HEAD.",
+    "policy_reference": "docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1619",
+    "full_verification_claim": "pending required verify context; local full pnpm verify is not represented as green",
+    "merge_authorized": false,
+    "lane_record_update": "Existing resumeLaneManifest transition and validated writeManifest writer applied the PM-cleared blocker; ops:lane-link-pr bound PR 1619. The convenience lane:resume attempt failed control-checkout/admission checks and is not claimed as a new preflight PASS."
+  }
 }

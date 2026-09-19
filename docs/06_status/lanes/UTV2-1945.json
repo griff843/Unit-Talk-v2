@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1945-discord-architecture",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1619",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1945.yml",
@@ -23,13 +23,11 @@
     "docs/06_status/proof/UTV2-1945/verification.md",
     "docs/06_status/proof/UTV2-1945/model-routing.json"
   ],
-  "status": "blocked",
+  "status": "in_review",
   "started_at": "2026-09-19T19:11:22.669Z",
-  "heartbeat_at": "2026-09-19T19:31:02.820Z",
+  "heartbeat_at": "2026-09-19T19:42:52.641Z",
   "closed_at": null,
-  "blocked_by": [
-    "Full-verify-staging-unavailable-locally; manual-staging-smoke-PASS-35464411547; remaining-live-suites-PR-only; AGENTS-requires-green-before-PR"
-  ],
+  "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1945-discord-architecture.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
