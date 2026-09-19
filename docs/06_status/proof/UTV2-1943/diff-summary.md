@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1943-command-center-product-contract
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1616
 Head SHA: 8f35a2abc31c982c8769195d303b64d4ba26dbb7
-Merge SHA: N/A
+Merge SHA: 3dbf94416b578cee3747415c6e1fe3ab869865d1
 Diff base: 39dc4ff695e63117e5ec309f2ed2e088a5ce2a5f
 Diff target: 8f35a2abc31c982c8769195d303b64d4ba26dbb7
 
@@ -143,4 +143,4 @@ A	docs/archive/command-center/T1_COMMAND_CENTER_BURNIN_TRUTH_CONTRACT.md
 
 ## SHA Binding
 Head SHA: 8f35a2abc31c982c8769195d303b64d4ba26dbb7
-Merge SHA: N/A
+Merge SHA: 3dbf94416b578cee3747415c6e1fe3ab869865d1
