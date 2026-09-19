@@ -828,6 +828,15 @@ export interface GradeResultRepository {
   listByEvent(eventId: string): Promise<GradeResultRecord[]>;
 }
 
+export interface GradingResultRepository extends GradeResultRepository {
+  /**
+   * Returns the newest provider-observed result timestamp. Grading uses the
+   * source timestamp rather than row creation time so delayed inserts cannot
+   * make old input look fresh.
+   */
+  findLatestSourcedAt(): Promise<string | null>;
+}
+
 // ---------------------------------------------------------------------------
 // Raw Provider Payload Archive (UTV2-1084)
 // ---------------------------------------------------------------------------
@@ -1159,7 +1168,7 @@ export interface RepositoryBundle {
   participants: ParticipantRepository;
   events: EventRepository;
   eventParticipants: EventParticipantRepository;
-  gradeResults: GradeResultRepository;
+  gradeResults: GradingResultRepository;
   runs: SystemRunRepository;
   audit: AuditLogRepository;
   referenceData: ReferenceDataRepository;

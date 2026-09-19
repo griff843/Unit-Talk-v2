@@ -34,6 +34,22 @@ export interface GradingPassResult {
   skipped: number;
   errors: number;
   details: GradingPickResult[];
+  /** Present for real grading runs; optional so injected test runners remain source-compatible. */
+  outcomeClass?: GradingOutcomeClass;
+  inputFreshness?: GradingInputFreshness;
+}
+
+export type GradingOutcomeClass =
+  | 'succeeded_with_work'
+  | 'no_op_no_input'
+  | 'degraded_stale_input'
+  | 'failed';
+
+export interface GradingInputFreshness {
+  status: 'fresh' | 'stale' | 'missing';
+  newestSourcedAt: string | null;
+  ageMs: number | null;
+  thresholdMs: number;
 }
 
 export interface RunGradingPassOptions {
@@ -52,6 +68,10 @@ export interface RunGradingPassOptions {
    * cannot admit a pick the population read did not already return.
    */
   restrictToPickIds?: ReadonlySet<string>;
+  /** Test seam for deterministic freshness classification. */
+  now?: () => Date;
+  /** Defaults to the approved six-hour result-input freshness threshold. */
+  inputFreshnessThresholdMs?: number;
 }
 
 export type GradingRetryState = Map<
@@ -101,6 +121,30 @@ const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
 ]);
 const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
 const GRADING_FETCH_PAGE_SIZE = 500;
+export const GRADING_INPUT_FRESHNESS_THRESHOLD_MS = 6 * 60 * 60 * 1000;
+
+const DATA_DEPENDENT_SKIP_REASONS = new Set([
+  'event_link_not_found',
+  'event_not_completed',
+  'event_provenance_missing_external_id',
+  'event_provenance_untrusted_provider',
+  'event_provenance_missing_ingestion_cycle',
+  'event_provenance_invalid_ingestion_cycle',
+  'event_provenance_historical_mismatch',
+  'game_result_not_found',
+  'game_result_retry_pending',
+  'game_result_retry_scheduled',
+  'grade_skipped_final',
+  'game_result_actual_value_invalid',
+  'moneyline_result_market_key_unsupported',
+  'moneyline_result_value_invalid',
+  'spread_result_market_key_unsupported',
+]);
+
+interface GradingPassExecution extends GradingPassResult {
+  rowsScanned: number;
+  gradeableRows: number;
+}
 
 export async function fetchAllByLifecycleState(
   picks: RepositoryBundle['picks'],
@@ -153,6 +197,142 @@ export async function runGradingPass(
   >,
   options: RunGradingPassOptions = {},
 ): Promise<GradingPassResult> {
+  const thresholdMs =
+    options.inputFreshnessThresholdMs ?? GRADING_INPUT_FRESHNESS_THRESHOLD_MS;
+  const readNow = options.now ?? (() => new Date());
+  const runRecord = await repositories.runs.startRun({
+    runType: 'grading.run',
+    actor: 'grading-service',
+    // Fail closed while the run is incomplete. If the process dies before
+    // completeRun, the row cannot be mistaken for successful work.
+    details: buildGradingRunDetails({
+      outcomeClass: 'failed',
+      rowsScanned: 0,
+      gradeableRows: 0,
+      graded: 0,
+      skipped: 0,
+      skipReasons: {},
+      dataDependentSkipped: 0,
+      errors: 0,
+      errorDetails: [],
+      inputFreshness: classifyInputFreshness(null, readNow(), thresholdMs),
+    }),
+  });
+
+  let newestGameResultSourcedAt: string | null = null;
+  try {
+    if (typeof repositories.gradeResults.findLatestSourcedAt !== 'function') {
+      throw new Error(
+        'Grading result repository does not expose input freshness',
+      );
+    }
+    newestGameResultSourcedAt =
+      await repositories.gradeResults.findLatestSourcedAt();
+    const execution = await executeGradingPass(repositories, options);
+    const inputFreshness = classifyInputFreshness(
+      newestGameResultSourcedAt,
+      readNow(),
+      thresholdMs,
+    );
+    const skipReasons = countSkipReasons(execution.details);
+    const dataDependentSkipped = countDataDependentSkips(execution.details);
+    const outcomeClass = classifyGradingOutcome({
+      graded: execution.graded,
+      errors: execution.errors,
+      dataDependentSkipped,
+      inputFreshness,
+    });
+    const errorDetails = execution.details
+      .filter((detail) => detail.outcome === 'error')
+      .map((detail) => ({
+        pickId: detail.pickId,
+        reason: detail.reason ?? 'unknown grading error',
+      }));
+
+    await repositories.runs.completeRun({
+      runId: runRecord.id,
+      status:
+        outcomeClass === 'degraded_stale_input' || outcomeClass === 'failed'
+          ? 'failed'
+          : 'succeeded',
+      details: buildGradingRunDetails({
+        outcomeClass,
+        rowsScanned: execution.rowsScanned,
+        gradeableRows: execution.gradeableRows,
+        graded: execution.graded,
+        skipped: execution.skipped,
+        skipReasons,
+        dataDependentSkipped,
+        errors: execution.errors,
+        errorDetails,
+        inputFreshness,
+      }),
+    });
+
+    return {
+      attempted: execution.attempted,
+      graded: execution.graded,
+      skipped: execution.skipped,
+      errors: execution.errors,
+      details: execution.details,
+      outcomeClass,
+      inputFreshness,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown grading error';
+    const inputFreshness = classifyInputFreshness(
+      newestGameResultSourcedAt,
+      readNow(),
+      thresholdMs,
+    );
+    try {
+      await repositories.runs.completeRun({
+        runId: runRecord.id,
+        status: 'failed',
+        details: buildGradingRunDetails({
+          outcomeClass: 'failed',
+          rowsScanned: 0,
+          gradeableRows: 0,
+          graded: 0,
+          skipped: 0,
+          skipReasons: {},
+          dataDependentSkipped: 0,
+          errors: 1,
+          errorDetails: [{ reason: message }],
+          inputFreshness,
+        }),
+      });
+    } catch (completionError) {
+      options.logger?.error?.(
+        `Failed to persist grading.run failure: ${
+          completionError instanceof Error
+            ? completionError.message
+            : 'unknown completion error'
+        }`,
+      );
+    }
+    throw error;
+  }
+}
+
+async function executeGradingPass(
+  repositories: Pick<
+    RepositoryBundle,
+    | 'picks'
+    | 'settlements'
+    | 'audit'
+    | 'gradeResults'
+    | 'providerOffers'
+    | 'participants'
+    | 'events'
+    | 'eventParticipants'
+    | 'marketUniverse'
+    | 'outbox'
+    | 'receipts'
+    | 'runs'
+  >,
+  options: RunGradingPassOptions,
+): Promise<GradingPassExecution> {
   // Evidence plane: also process awaiting_approval picks so outcome data
   // accumulates without requiring public delivery approval. Per UTV2-1253.
   // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
@@ -195,6 +375,7 @@ export async function runGradingPass(
 
   const details: GradingPickResult[] = [];
   const retryState = options.retryState;
+  let gradeableRows = 0;
 
   for (const pick of picks) {
     try {
@@ -443,6 +624,7 @@ export async function runGradingPass(
         eventId: gameResult.event_id,
         gameResultId: gameResult.id,
       };
+      gradeableRows += 1;
 
       let settlementResult;
       if (isEvidencePlanePick(pick)) {
@@ -516,31 +698,123 @@ export async function runGradingPass(
     (detail) => detail.outcome === 'error',
   ).length;
 
-  const errorDetails = details
-    .filter((d) => d.outcome === 'error')
-    .map((d) => ({ pickId: d.pickId, reason: d.reason }));
-
-  const runRecord = await repositories.runs.startRun({
-    runType: 'grading.run',
-    actor: 'grading-service',
-    details: { picksGraded: gradedCount, failed: errorCount },
-  });
-  await repositories.runs.completeRun({
-    runId: runRecord.id,
-    status: errorCount > 0 ? 'failed' : 'succeeded',
-    details: {
-      picksGraded: gradedCount,
-      failed: errorCount,
-      ...(errorCount > 0 ? { errors: errorDetails } : {}),
-    },
-  });
-
   return {
     attempted: picks.length,
     graded: gradedCount,
     skipped: details.filter((detail) => detail.outcome === 'skipped').length,
     errors: errorCount,
     details,
+    rowsScanned: population.length,
+    gradeableRows,
+  };
+}
+
+export function classifyInputFreshness(
+  newestSourcedAt: string | null,
+  now: Date,
+  thresholdMs: number = GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+): GradingInputFreshness {
+  const sourcedAtMs = newestSourcedAt === null
+    ? Number.NaN
+    : new Date(newestSourcedAt).getTime();
+  if (!Number.isFinite(sourcedAtMs)) {
+    return {
+      status: 'missing',
+      newestSourcedAt,
+      ageMs: null,
+      thresholdMs,
+    };
+  }
+
+  const ageMs = Math.max(0, now.getTime() - sourcedAtMs);
+  return {
+    status: ageMs > thresholdMs ? 'stale' : 'fresh',
+    newestSourcedAt,
+    ageMs,
+    thresholdMs,
+  };
+}
+
+export function classifyGradingOutcome(input: {
+  graded: number;
+  errors: number;
+  dataDependentSkipped: number;
+  inputFreshness: GradingInputFreshness;
+}): GradingOutcomeClass {
+  if (input.errors > 0) {
+    return 'failed';
+  }
+  if (
+    input.dataDependentSkipped > 0 &&
+    input.inputFreshness.status !== 'fresh'
+  ) {
+    return 'degraded_stale_input';
+  }
+  if (input.graded > 0) {
+    return 'succeeded_with_work';
+  }
+  return 'no_op_no_input';
+}
+
+function normalizeSkipReason(reason: string | undefined): string {
+  return (reason ?? 'unspecified').split(':', 1)[0]!.trim();
+}
+
+function countSkipReasons(
+  details: readonly GradingPickResult[],
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const detail of details) {
+    if (detail.outcome !== 'skipped') continue;
+    const reason = normalizeSkipReason(detail.reason);
+    counts[reason] = (counts[reason] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function countDataDependentSkips(details: readonly GradingPickResult[]): number {
+  return details.filter(
+    (detail) =>
+      detail.outcome === 'skipped' &&
+      DATA_DEPENDENT_SKIP_REASONS.has(normalizeSkipReason(detail.reason)),
+  ).length;
+}
+
+function buildGradingRunDetails(input: {
+  outcomeClass: GradingOutcomeClass;
+  rowsScanned: number;
+  gradeableRows: number;
+  graded: number;
+  skipped: number;
+  skipReasons: Record<string, number>;
+  dataDependentSkipped: number;
+  errors: number;
+  errorDetails: Array<{ pickId?: string; reason?: string }>;
+  inputFreshness: GradingInputFreshness;
+}): Record<string, unknown> {
+  return {
+    outcome_class: input.outcomeClass,
+    rows_scanned: input.rowsScanned,
+    gradeable_rows: input.gradeableRows,
+    graded_count: input.graded,
+    skipped_count: input.skipped,
+    skipped_reasons: input.skipReasons,
+    data_dependent_skipped_count: input.dataDependentSkipped,
+    error_count: input.errors,
+    newest_game_result_sourced_at: input.inputFreshness.newestSourcedAt,
+    input_freshness: {
+      status: input.inputFreshness.status,
+      age_ms: input.inputFreshness.ageMs,
+      threshold_ms: input.inputFreshness.thresholdMs,
+      threshold_hours: input.inputFreshness.thresholdMs / (60 * 60 * 1000),
+    },
+    freshness_threshold_ms: input.inputFreshness.thresholdMs,
+    freshness_threshold_hours:
+      input.inputFreshness.thresholdMs / (60 * 60 * 1000),
+    // Preserve the two legacy keys while consumers move to the explicit fields.
+    picksGraded: input.graded,
+    failed: input.errors,
+    ...(input.errorDetails.length > 0 ? { errors: input.errorDetails } : {}),
   };
 }
 
