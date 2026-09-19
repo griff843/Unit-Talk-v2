@@ -484,6 +484,64 @@ export async function getHeldQueue(
 
 // ── searchPicks ───────────────────────────────────────────────────────────────
 
+/**
+ * Columns `picks_current_state` derives from a join rather than from its
+ * `picks` base row.
+ *
+ * Three of the joins are correlated laterals (`pick_promotion_history`,
+ * `settlement_records`, `pick_reviews`), and running them is what made an
+ * unfiltered `count` on the view cost 8,979ms against 47ms on `picks`.
+ * `searchPicks` therefore counts `picks` -- which is only sound while none of
+ * its filters reads a column in this set. `observed-runs.test.ts`' sibling
+ * guard in `queues-count-relation.test.ts` enforces that.
+ */
+export const VIEW_DERIVED_COLUMNS = [
+  'capper_display_name',
+  'sport_display_name',
+  'market_type_display_name',
+  'promotion_status_current',
+  'promotion_target_current',
+  'promotion_score_current',
+  'promotion_decided_at_current',
+  'settlement_result',
+  'settlement_status',
+  'settlement_source',
+  'settlement_recorded_at',
+  'review_decision',
+  'review_decided_by',
+  'review_decided_at',
+] as const;
+
+/**
+ * `searchPicks`' filters, as (query param -> column, operator).
+ *
+ * This table is the single definition: `applyFilters` below is built from it,
+ * and `SEARCH_PICKS_FILTER_COLUMNS` is derived from it. A filter added here
+ * therefore cannot escape the guard in `queues-count-relation.test.ts`, and a
+ * filter added anywhere else is not applied at all.
+ */
+const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source'] as const;
+
+const SEARCH_PICKS_EQ_FILTERS = [
+  { param: 'source', column: 'source' },
+  { param: 'status', column: 'status' },
+  { param: 'approval', column: 'approval_status' },
+] as const;
+
+const SEARCH_PICKS_RANGE_FILTERS = [
+  { param: 'dateFrom', column: 'created_at', op: 'gte' },
+  { param: 'dateTo', column: 'created_at', op: 'lte' },
+] as const;
+
+/** Every column `searchPicks` filters on. Must stay disjoint from the set above. */
+export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
+  new Set<string>([
+    ...SEARCH_PICKS_TEXT_COLUMNS,
+    ...SEARCH_PICKS_EQ_FILTERS.map((f) => f.column),
+    ...SEARCH_PICKS_RANGE_FILTERS.map((f) => f.column),
+  ]),
+);
+
 export async function searchPicks(
   params: Record<string, string>,
 ): Promise<{ picks: Array<Record<string, unknown>>; total: number; limit: number; offset: number }> {
@@ -519,47 +577,75 @@ export async function searchPicks(
       'promotion_reason',
     ].join(', ');
 
-    let query = client
-      .from('picks_current_state')
-      .select(selectCols, { count: 'exact' });
-
-    // Full-text / substring search on market + selection + source
     const q = params['q']?.trim();
-    if (q) {
-      query = query.or(
-        `market.ilike.%${q}%,selection.ilike.%${q}%,source.ilike.%${q}%`,
-      );
-    }
 
-    // Source filter
-    const source = params['source']?.trim();
-    if (source) query = query.eq('source', source);
+    /**
+     * Apply the caller's filters to a query, driven by the tables above.
+     *
+     * Every predicate here is on a column `picks_current_state` takes straight
+     * from its `picks` base row -- none reads a column the view's three lateral
+     * joins produce. That is what makes the count split below sound, and
+     * `queues-count-relation.test.ts` is what keeps it true.
+     */
+    const applyFilters = <T extends {
+      or: (f: string) => T;
+      eq: (c: string, v: string) => T;
+      gte: (c: string, v: string) => T;
+      lte: (c: string, v: string) => T;
+    }>(base: T): T => {
+      let next = base;
+      if (q) {
+        next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.%${q}%`).join(','));
+      }
+      for (const filter of SEARCH_PICKS_EQ_FILTERS) {
+        const value = params[filter.param]?.trim();
+        if (value) next = next.eq(filter.column, value);
+      }
+      for (const filter of SEARCH_PICKS_RANGE_FILTERS) {
+        const value = params[filter.param]?.trim();
+        if (!value) continue;
+        next = filter.op === 'gte' ? next.gte(filter.column, value) : next.lte(filter.column, value);
+      }
+      return next;
+    };
 
-    // Lifecycle status filter
-    const status = params['status']?.trim();
-    if (status) query = query.eq('status', status);
-
-    // Approval status filter
-    const approval = params['approval']?.trim();
-    if (approval) query = query.eq('approval_status', approval);
-
-    // Date range
-    const dateFrom = params['dateFrom']?.trim();
-    if (dateFrom) query = query.gte('created_at', dateFrom);
-
-    const dateTo = params['dateTo']?.trim();
-    if (dateTo) query = query.lte('created_at', dateTo);
-
-    // Sort
     const sortCol = params['sort'] ?? 'created_at';
     const sortAsc = params['sortDir'] === 'asc';
-    query = query
+
+    const rowQuery = applyFilters(client.from('picks_current_state').select(selectCols))
       .order(sortCol, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
+    // The count is taken against `picks`, not `picks_current_state`.
+    //
+    // Counting the view makes Postgres run its three correlated lateral joins
+    // once per candidate row purely to discard every joined column -- 107,866
+    // times for an unfiltered explorer load. Measured against production that
+    // is 8,979ms, past the 8s `authenticated` statement timeout, so /picks
+    // rendered a raw "canceling statement due to statement timeout" instead of
+    // any data. The identical count on `picks` is an index-only scan: 47ms.
+    //
+    // This is still an exact count, not an estimate -- same predicate, same
+    // rows, same number. Only the relation it is counted over changes. That
+    // equality is structural, not a coincidence to re-check: every join in the
+    // view is a LEFT JOIN (LATERAL ... ON true for the three correlated ones),
+    // so no join can drop a `picks` row or multiply one. Verified against
+    // production on three predicates -- unfiltered 107866/107866,
+    // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
+    const countQuery = applyFilters(
+      client.from('picks').select('id', { count: 'exact', head: true }),
+    );
+
+    const [
+      { data, error },
+      { count, error: countError },
+    ] = await Promise.all([
+      awaitWithTimeoutRetry(() => rowQuery),
+      awaitWithTimeoutRetry(() => countQuery),
+    ]);
 
     assertQuerySucceeded({ error }, 'searchPicks');
+    assertQuerySucceeded({ error: countError }, 'searchPicks count');
 
     const rows = (data ?? []) as JsonObject[];
 
@@ -576,7 +662,7 @@ export async function searchPicks(
 
     return {
       picks,
-      total: readAuthoritativeCount({ error, count }, 'active picks'),
+      total: readAuthoritativeCount({ error: countError, count }, 'active picks'),
       limit,
       offset,
     };
