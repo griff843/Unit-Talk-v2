@@ -11,7 +11,7 @@ Tier: T2
 Lane type: delivery-ui
 Branch: claude/utv2-1939-command-center-human-capper-lifecycle
 PR URL: PR_URL_ROW
-Head SHA: HEAD_SHA_ROW
+Head SHA: 6c33db296c3c6fdbf199866eb1f2956024a9a0fe
 
 ## ASSERTIONS:
 
@@ -124,4 +124,4 @@ was due.
 Merge SHA: pending merge
 PR: PR_URL_ROW
 Approved PR head: pending merge
-Execution SHA: HEAD_SHA_ROW
+Execution SHA: 6c33db296c3c6fdbf199866eb1f2956024a9a0fe
