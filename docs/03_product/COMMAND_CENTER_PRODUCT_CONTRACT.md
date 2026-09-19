@@ -53,8 +53,8 @@ architecture or the product intent that the mature platform needs (§2.4).
 
 | User | Description | What they need from it |
 |---|---|---|
-| **Operator** | An internal Unit Talk person running the live system, including the owner acting as operator | Everything in bands 1 and 2. This is the only role the product recognises at launch. |
-| **Analyst / researcher** | The same person wearing a different hat: evaluating markets, players, lines and past performance before deciding | Bands 2 and 3. |
+| **Operator** | An internal Unit Talk person running the live system, including the owner acting as operator | Every band-1 capability, and each band-2 capability as it ships. This is the only role the product recognises at launch. |
+| **Analyst / researcher** | The same person wearing a different hat: evaluating markets, players, lines and past performance before deciding | Band-2 analysis, and the band-3 Research workspace as it is built. |
 | **Engineer on call** | Diagnosing a failure in the pipeline | §17 system health, §16 exceptions, §8 lifecycle trace. |
 
 There is no member role, no capper self-service role and no read-only guest role in Command Center at
@@ -103,14 +103,21 @@ Command Center requirement.
 
 ### 2.2 Band assignment rules
 
-1. **A band-4 capability keeps its band-1/2/3 identity underneath.** "Blocked" describes why it
-   cannot ship now, not how important it is. When the dependency resolves, it reverts to its
-   underlying band and is scheduled accordingly.
-2. **A capability is band 4 only when the blocker is data, not effort.** "Nobody has built it" is
+1. **Exactly one current band, never two.** Every atomic capability in this contract carries one
+   band and one only: 1, 2, 3 or 4. A compound assignment — "2 and 3", "3, partly 4", "4 (1 for the
+   metric, 3 for the analysis)" — is not a band, it is an unresolved classification, and it makes
+   launch-blocking status a matter of interpretation. Where a row genuinely described two different
+   capabilities, the row is split so that each has its own band.
+2. **A band-4 capability records its underlying priority as metadata, not as a second band.** Its
+   current band is 4. What it becomes when the blocker clears is recorded in a separate **When
+   unblocked** column, and that column is scheduling information — it never makes the capability
+   launch-blocking today. A band-4 capability whose underlying priority is 1 is still not band 1:
+   it cannot ship, and launch is not held for it.
+3. **A capability is band 4 only when the blocker is data, not effort.** "Nobody has built it" is
    band 2 or 3. "The rows do not exist" is band 4.
-3. **Band 1 is a ceiling, not a wish list.** A capability enters band 1 only if an operator running
+4. **Band 1 is a ceiling, not a wish list.** A capability enters band 1 only if an operator running
    the live product cannot do their job without it.
-4. **No band may be satisfied by a placeholder.** A cell rendering `—`, `N/A`, `0` or blank where
+5. **No band may be satisfied by a placeholder.** A cell rendering `—`, `N/A`, `0` or blank where
    real data belongs is a failure of that capability, not a partial pass (§5.4).
 
 ### 2.3 Explicit launch scope (band 1 summary)
@@ -140,18 +147,20 @@ The following are **not** band 1. Each row states its real band, because "non-go
 been read in the past as "not part of the product", and that reading is what produced the document
 sprawl this contract replaces.
 
-| Not at launch | Real band | Note |
-|---|---|---|
-| Research workspace (props explorer, player/team cards, matchups, line shopping) | 2 and 3 | Core to the mature product. §4.5. |
-| Trend and split analysis, hit-rate histories | 3, partly 4 | Needs a historical stat store that does not exist. §4.5.3. |
-| Multi-book market comparison, arbitrage, middling, hedging, correlation and exposure | 3, currently 4 | Needs multi-book provider data. §4.6. |
-| Closing-line and CLV intelligence | 4 (underlying band 1 for the metric, 3 for the analysis) | Needs closing lines. §5.6. |
-| Model/score calibration and weight-effectiveness analysis | 2, gated on sample size | §4.7, §5.3. |
-| LLM-generated commentary anywhere | 2 | Permitted only under §20 when it exists at all. |
-| System-pick approval workflow | 2 | Approval is for system-generated picks; it is reserved and parked. §16.4. |
-| Capper and member administration | 2 | |
-| Agent / lane / proof control surfaces | Out of product | Not a Command Center product function at any band. |
-| Member-facing anything | Out of product | |
+| Not at launch | Band | When unblocked | Note |
+|---|---|---|---|
+| Research workspace as a whole | 3 | — | Core to the mature product. Its individual surfaces are catalogued and banded one by one in §4.5, and several of them are currently band 4. |
+| Trend and split analysis, hit-rate histories | 4 | 3 | Needs a per-player, per-game historical stat store that does not exist. §4.5. |
+| Multi-book market comparison, arbitrage, middling and line shopping | 4 | 3 | Needs multi-book provider data. §4.5, §4.6. |
+| Portfolio, exposure and correlation intelligence | 3 | — | Not data-blocked; not built. §4.6. |
+| Closing-line value, as a metric on a pick or a capper | 4 | 1 | Needs closing lines. Its underlying priority is 1 — it is part of the performance record the product will eventually claim — but it is blocked, so it does not block launch. §5.6, §14.3. |
+| CLV distribution and comparative analysis | 4 | 3 | Needs closing lines, and is mature-platform analysis rather than a record field. §4.6. |
+| Model/score calibration and weight-effectiveness analysis | 2 | — | Not data-blocked. It renders an insufficient-sample state until the gate in §5.3 is met; the gate governs what it may claim, not which band it is in. §4.6. |
+| LLM-generated commentary anywhere | 2 | — | Permitted only under §20 when it exists at all. |
+| System-pick approval workflow | 2 | — | Approval is for system-generated picks; it is reserved and parked. §16.4. |
+| Capper and member administration | 2 | — | |
+| Agent / lane / proof control surfaces | Out of product | — | Not a Command Center product function at any band. |
+| Member-facing anything | Out of product | — | |
 
 **The rule this table encodes:** a launch non-goal is a *scheduling* decision. It never authorises
 removing an abstraction, a data field, a route namespace or a state model that a band-2 or band-3
@@ -212,9 +221,11 @@ This is the authoritative list of what Command Center contains. A route that is 
 retired product or an undeclared addition; either way it needs reconciling against this section
 rather than being left to accumulate.
 
-**How to read the band column.** `1` must exist and work at launch. `2` is scheduled product. `3` is
-the mature platform. `4` is blocked on data; the parenthesised band is what it reverts to when the
-data arrives.
+**How to read the band column.** Every row carries exactly one band. `1` must exist and work at
+launch. `2` is scheduled product. `3` is the mature platform. `4` is blocked on data. Where a table
+contains band-4 rows it also carries a **When unblocked** column: that is the priority the capability
+takes on once its data dependency resolves. It is metadata about scheduling, not a second band, and a
+band-4 row is never launch-blocking however its underlying priority reads (§2.2 rules 1–2).
 
 ### 4.1 Cross-cutting
 
@@ -246,15 +257,15 @@ data arrives.
 
 ### 4.3 Decision workspace
 
-| Surface | Purpose | Band |
-|---|---|---|
-| Score breakdown | The engine's promotion score for a pick, component by component, with the weights that produced it (§5.3) | 2 |
-| Suppression and qualification reasons | Why a pick was suppressed, not eligible, expired or qualified — in operator words, not enum values | 2 |
-| Promotion preview | What the engine would decide for a pick right now, deterministically | 2 |
-| Routing and board view | Which target a qualified pick is bound for, and the board it would join | 2 |
-| Board queue | The composed board awaiting release | 2 |
-| Decision overlays: middling, hedging, board fit | Positional decision support across a board | 4 (3) |
-| Approval workflow for system-generated picks | Operator accept/reject of machine picks | 2, and parked (§16.4) |
+| Surface | Purpose | Band | When unblocked |
+|---|---|---|---|
+| Score breakdown | The engine's promotion score for a pick, component by component, with the weights that produced it (§5.3) | 2 | — |
+| Suppression and qualification reasons | Why a pick was suppressed, not eligible, expired or qualified — in operator words, not enum values | 2 | — |
+| Promotion preview | What the engine would decide for a pick right now, deterministically | 2 | — |
+| Routing and board view | Which target a qualified pick is bound for, and the board it would join | 2 | — |
+| Board queue | The composed board awaiting release | 2 | — |
+| Decision overlays: middling, hedging, board fit | Positional decision support across a board | 4 | 3 |
+| Approval workflow for system-generated picks | Operator accept/reject of machine picks. Parked under §16.4 — parked is an activation state, not a band. | 2 | — |
 
 ### 4.4 Execution surfaces — retired
 
@@ -267,33 +278,36 @@ intervene — are not pick composition and are band 1. They live in Operations.
 
 ### 4.5 Research workspace
 
-| Surface | Purpose | Band |
-|---|---|---|
-| Prop and offer explorer | Browse the available market — offers, lines, books | 3, currently 4 |
-| Player card: identity and current lines | Who a player is and what is currently offered on them | 3, currently 4 |
-| Player card: historical performance and hit rates | How a player has actually performed against lines | 4 (3) — needs a per-player, per-game stat history that does not exist |
-| Matchup: event identity and context | The game, its participants, its situation | 3 |
-| Matchup: comparative and situational stats | Team and matchup analytics | 4 (3) |
-| Trend and split filters | Home/away, rest, pace, opponent-adjusted splits | 4 (3) |
-| Line shopping and book comparison | The same market across books, with a sharp reference | 4 (3) — needs multi-book data |
-| Saved research, watchlists and notes | An operator's own working set | 3 |
+| Surface | Purpose | Band | When unblocked |
+|---|---|---|---|
+| Prop and offer explorer | Browse the available market — offers, lines, books. Needs provider-fed offers. | 4 | 3 |
+| Player card: identity and current lines | Who a player is and what is currently offered on them. Needs provider-fed offers. | 4 | 3 |
+| Player card: historical performance and hit rates | How a player has actually performed against lines. Needs a per-player, per-game stat history that does not exist. | 4 | 3 |
+| Matchup: event identity and context | The game, its participants, its situation | 3 | — |
+| Matchup: comparative and situational stats | Team and matchup analytics. Needs a historical stat store. | 4 | 3 |
+| Trend and split filters | Home/away, rest, pace, opponent-adjusted splits. Needs a historical stat store. | 4 | 3 |
+| Line shopping and book comparison | The same market across books, with a sharp reference. Needs multi-book data. | 4 | 3 |
+| Saved research, watchlists and notes | An operator's own working set | 3 | — |
 
 **Research is band 3, not "cancelled".** Its data dependencies are named in band 4 precisely so that
 when provider data arrives the work is specified rather than restarted.
 
 ### 4.6 Intelligence workspace
 
-| Surface | Purpose | Band |
-|---|---|---|
-| Performance by window | Record, units, ROI over selectable windows, computed from the settlement plane (§15) | 2, partly 1 — see §15.1 |
-| Capper analytics | Per-capper record, units, ROI, volume, and the volume gate on each (§14) | 2, partly 1 |
-| Segment analysis | Performance by sport, market, source, distribution mode, score band | 2 |
-| Score-to-outcome calibration | Whether the engine's scores predict outcomes, with an explicit confidence level | 2, gated on sample (§5.3) |
-| Attribution | Which decisions and which components produced the result | 2 |
-| CLV and closing-line intelligence | Closing-line value, per capper, per market, distribution | 4 (1 for the metric, 3 for the analysis) |
-| Market and line-movement intelligence | Steam, sharp action, movement classification | 4 (3) |
-| Portfolio, exposure and correlation | Concentration and correlated risk across open positions | 3 |
-| Alerts and signal feed | Operator-configurable notification on any of the above | 3 |
+| Surface | Purpose | Band | When unblocked |
+|---|---|---|---|
+| Aggregate performance record | Unit Talk record, units staked and returned, and flat-bet ROI over the governed cohort, computed from the settlement plane (§15.1) | 1 | — |
+| Per-capper performance record | Per-capper record, units, ROI and volume, each carrying its volume gate (§14) | 1 | — |
+| Performance by selectable window | The same measures over arbitrary operator-chosen windows, and comparison between windows (§15.1) | 2 | — |
+| Per-capper segmentation and comparison | One capper broken down by sport, market and window, and cappers compared against each other (§14.3) | 2 | — |
+| Segment analysis | Performance by sport, market, source, distribution mode, score band | 2 | — |
+| Score-to-outcome calibration | Whether the engine's scores predict outcomes, with an explicit confidence level. Renders an insufficient-sample state until the §5.3 gate is met. | 2 | — |
+| Attribution | Which decisions and which components produced the result | 2 | — |
+| Closing-line value metric | CLV on a pick and on a capper, as a field of the performance record. Needs closing lines. | 4 | 1 |
+| CLV distribution and comparative analysis | CLV by capper, by market and as a distribution. Needs closing lines. | 4 | 3 |
+| Market and line-movement intelligence | Steam, sharp action, movement classification. Needs multi-book provider data. | 4 | 3 |
+| Portfolio, exposure and correlation | Concentration and correlated risk across open positions | 3 | — |
+| Alerts and signal feed | Operator-configurable notification on any of the above | 3 | — |
 
 ### 4.7 Route-namespace rule
 
@@ -750,7 +764,7 @@ rows:
 - Volume and submission cadence
 - Distribution-mode split
 - Segmentation by sport, market and time window
-- Closing-line value — band 4 (§5.6)
+- Closing-line value
 
 ### 14.2 Rules
 
@@ -761,11 +775,25 @@ rows:
 - Statistics are read from the settlement plane, not recomputed ad hoc per surface. Two surfaces
   showing two different records for the same capper is a defect regardless of which is right.
 
-### 14.3 Band
+### 14.3 Bands
 
-Per-capper record, units and ROI: band 1 for the Human Capper path, because a performance history no
-operator can read is a history the product cannot later claim. Deeper segmentation and comparison:
-band 2. CLV: band 4.
+Capper performance is not one capability, and it does not carry one band. Each measure above is
+banded on its own:
+
+| Capability | Band | When unblocked |
+|---|---|---|
+| Record — wins, losses, pushes, voids, unsettled count | 1 | — |
+| Units staked, units returned, flat-bet ROI | 1 | — |
+| Volume, submission cadence, and the volume gate on every rate (§5.5) | 1 | — |
+| Distribution-mode split | 1 | — |
+| Segmentation by sport, market and time window | 2 | — |
+| Comparison of one capper against another | 2 | — |
+| Closing-line value on a capper | 4 | 1 |
+
+The first four are band 1 for the Human Capper path, because a performance history no operator can
+read is a history the product cannot later claim. Closing-line value belongs to that same record —
+that is why its underlying priority is 1 — but it is blocked on closing lines, so its current band is
+4 and launch does not wait for it (§5.6, §2.2 rule 2).
 
 ---
 
@@ -780,8 +808,18 @@ The same measures as §14, across the whole governed population rather than one 
 - Comparison of engine-qualified versus operator-decided outcomes
 - Trend over time
 
-Aggregate record, units and ROI over the governed cohort are band 1 for the same reason as §14.3.
-Segment and comparison analysis is band 2. Market-relative measures are band 4.
+Banded one capability at a time, on the same rule as §14.3:
+
+| Capability | Band | When unblocked |
+|---|---|---|
+| Aggregate record, units staked and returned, flat-bet ROI over the governed cohort | 1 | — |
+| Performance by distribution mode, source, sport, market and score band | 2 | — |
+| Performance over selectable windows, and comparison between windows | 2 | — |
+| Engine-qualified versus operator-decided outcome comparison | 2 | — |
+| Trend over time | 2 | — |
+| Market-relative measures — CLV and closing-line-derived aggregates | 4 | 3 |
+
+The first row is band 1 for the same reason as §14.3. Nothing else here is.
 
 ### 15.2 Rules
 
@@ -1110,7 +1148,7 @@ once said "canonical".
 |---|---|---|
 | 1 | Three documents specified Command Center as a UI consuming a separate generic read-only backend service's endpoints; a fourth declared that backend decommissioned. Current code reads persisted business data directly through its own server-side data layer, while live runtime truth/health uses narrow authenticated readers against canonical API/runtime endpoints. | **The generic read-backend architecture is retired; the runtime exception is preserved.** §6.2: business reads are direct to the canonical database, while runtime/process truth may use approved authenticated runtime/API readers because the database does not own that truth. The old operator-web endpoint architecture remains void. |
 | 2 | One contract stated "Command Center is NOT a direct database writer — all writes go through API", which was widely read as forbidding direct reads as well. | **The boundary is now explicit.** §6.1: persisted business reads use the server-side data layer; live runtime truth may use the narrow approved runtime/API readers; writes never go directly to the database. The original prohibition was about writes and remains fully in force. |
-| 3 | The launch contract listed research tools and filtering as non-goals; a ratified IA document established a Research workspace; a later phase contract mandated filtering. | **The four bands resolve it** (§2). Filtering is band 1 (§8.1) because finding a pick is a launch requirement. Research is bands 2–3. "Non-goal at launch" is a scheduling statement and never a deletion (§2.4). |
+| 3 | The launch contract listed research tools and filtering as non-goals; a ratified IA document established a Research workspace; a later phase contract mandated filtering. | **The four bands resolve it** (§2). Filtering is band 1 (§8.1) because finding a pick is a launch requirement. Research is band 3 (§4.5), and several of its surfaces are currently band 4 on provider data. "Non-goal at launch" is a scheduling statement and never a deletion (§2.4). |
 | 4 | A phase contract listed "a full Outlier-style research terminal" as an explicit non-goal. The current product direction names replacing dependence on exactly those external tools as the long-term goal. | **The current product direction wins.** It becomes band 3 (§4.5, §4.6). Not launch-scoped, and explicitly not cancelled. |
 | 5 | One "contract" carried a status of ready-for-implementation and no body — its content lived only in a conversation that no longer exists. | **Void.** A document that cannot be complied with governs nothing. Nothing was carried forward from it, because there is nothing to carry. |
 | 6 | A Command Center document defined its own merge and approval policy, competing with the repository's mechanical merge authority. | **Out of product scope entirely.** Merge authority is defined mechanically by the merge gate and is reserved to PM. A product contract does not set merge policy, and this one does not. |
@@ -1184,20 +1222,44 @@ The dated `HUMAN_CAPPER_V1_LIFECYCLE_HANDOFF.md` is also moved into the same arc
 A single place to look up any capability's band. Where a section governs it, that section is
 authoritative; this index is navigation.
 
-**Band 1 — Launch Required.** Global health, jump-to-pick, operator identity (§4.1). Operations home, picks list and search, pick detail lifecycle trace, exceptions, delivery and Discord operations, settlement, corrections, recaps, system and runtime health, intervention and audit log (§4.2). Human Capper lifecycle visibility in full (§9). Per-capper and aggregate record / units / ROI over the governed cohort (§14.3, §15.1). Every data-truth rule (§5). Every state design (§18). Canonical language (§19). Phone-usable subset (§21.2).
+Every entry appears in exactly one band. A capability listed under band 4 is **not** also listed
+under its underlying priority; that priority is recorded in the band-4 list as *when unblocked*
+metadata and nowhere else (§2.2 rules 1–2).
 
-**Band 2 — Post-Launch Core.** Review queue, held queue, score breakdown and suppression/qualification analysis (§4.2, §4.3). Promotion preview, routing and board views, board queue (§4.3). Scheduled-run visibility, readiness scorecard, capper and member administration (§4.2). Segment analysis, calibration, attribution (§4.6). Differentiated internal roles (§7.4). Scheduled recap visibility (§12.3). Approval workflow for system picks, parked (§16.4). LLM commentary (§20).
+**Band 1 — Launch Required.** Global health, jump-to-pick, operator identity (§4.1). Operations home,
+picks list and search, pick detail lifecycle trace, exceptions, delivery and Discord operations,
+settlement, corrections, recaps, system and runtime health, intervention and audit log (§4.2). Human
+Capper lifecycle visibility in full (§9). Per-capper record / units / ROI / volume with its volume
+gate, and the distribution-mode split (§14.3). Aggregate record / units / ROI over the governed
+cohort (§15.1). Every data-truth rule (§5). Every state design (§18). Canonical language (§19).
+Phone-usable subset (§21.2).
 
-**Band 3 — Future Intelligence Platform.** The Research workspace (§4.5). Portfolio, exposure and
-correlation intelligence; operator alerting and signal feeds; saved research and watchlists (§4.6).
-Decision overlays — middling, hedging, board fit (§4.3). The market-comparison and value-analysis
-capabilities that displace external research tools.
+**Band 2 — Post-Launch Core.** Review queue and held queue (§16.1, §16.2). Score breakdown and
+suppression/qualification analysis, promotion preview, routing and board views, board queue (§4.3).
+Scheduled-run visibility, readiness scorecard, capper and member administration (§4.2). Per-capper
+segmentation and capper-to-capper comparison (§14.3). Performance by selectable window, segment
+analysis, engine-versus-operator comparison, trend over time (§15.1). Score-to-outcome calibration
+and attribution (§4.6). Differentiated internal roles (§7.4). Scheduled recap visibility (§12.3).
+Approval workflow for system picks, parked (§16.4). LLM commentary (§20).
 
-**Band 4 — Data- or Provider-Blocked.** Closing-line value and every CLV-derived analysis. Multi-book
-comparison, line shopping, arbitrage and middling. Line-movement and sharp-action intelligence.
-Player and matchup historical statistics, trends and splits. Provider-fed offer and event coverage.
-Each reverts to its underlying band when its data dependency resolves; none is failed, and none is
-satisfied by rendering a plausible number (§5.6, §18.5).
+**Band 3 — Future Intelligence Platform.** Matchup event identity and context; saved research,
+watchlists and notes (§4.5). Portfolio, exposure and correlation intelligence; operator alerting and
+signal feeds (§4.6). The Research workspace as a whole (§4.5) — its individual surfaces are banded
+one by one there, and most are currently band 4.
+
+**Band 4 — Data- or Provider-Blocked.** Each entry's current band is 4; the band in brackets is what
+it becomes when its data dependency resolves, and it is scheduling metadata, never a second band.
+None is failed, none is silently demoted, and none is satisfied by rendering a plausible number
+(§5.6, §18.5).
+
+- Closing-line value as a metric on a pick or capper — *when unblocked: 1* (§14.3, §15.1)
+- CLV distribution and comparative analysis — *when unblocked: 3* (§4.6)
+- Market-relative aggregate measures — *when unblocked: 3* (§15.1)
+- Prop and offer explorer; player card identity and current lines — *when unblocked: 3* (§4.5)
+- Player and matchup historical statistics, trends and splits — *when unblocked: 3* (§4.5)
+- Line shopping and multi-book comparison; arbitrage and middling — *when unblocked: 3* (§4.5)
+- Line-movement and sharp-action intelligence — *when unblocked: 3* (§4.6)
+- Decision overlays: middling, hedging, board fit — *when unblocked: 3* (§4.3)
 
 ---
 
