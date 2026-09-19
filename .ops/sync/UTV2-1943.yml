@@ -1,0 +1,161 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1943
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1943
+  objective: "Command Center product intent: disposition 21 documents, measure
+    current state, and state the ordered plan"
+  acceptance_criteria:
+    - |-
+      `CLAUDE.md` reserves a product-intent slot for the Command Center with the note *"written when that product is next worked."* That is now — [UTV2-1942](https://linear.app/unit-talk-v2/issue/UTV2-1942/command-center-is-operationally-unusable-the-root-layout-runs-an-115s) and its successors are active Command Center work, and the surface is the operator's only sanctioned window into production.
+
+      The problem is not a missing plan. It is **twenty-one** Command Center documents, the newest substantive one from April, with no single current one:
+
+      * `COMMAND_CENTER_REDESIGN_CONTRACT.md` — FINAL/approved, the destination
+      * `COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md` — 2026-03-25, the E2E minimum
+      * `COMMAND_CENTER_PHASE_2_CONTRACT.md` — DRAFT, not in force
+      * `COMMAND_CENTER_WAVE_3_CONTRACT.md` — **a hollow stub.** Its ten-line body reads *"Full contract text in conversation context. See conversation for sections 1-13."* That conversation no longer exists, so it governs nothing and cannot be complied with.
+      * `CC_*.md` × 14, each tied to a UTV2-4xx issue from April; two declare themselves blocked on live provider data
+      * plus the April audit, the burn-in truth contract, and the review-queue contract
+
+      ## Scope
+
+      Docs only. Write `docs/03_product/command-center/intent.md`, matching the shape of `docs/03_product/smart-form/intent.md`, and point `CLAUDE.md`'s product-intent table at it.
+
+      It introduces no threshold, no required check, no approval artifact and no new lane type. It extends nothing and replaces nothing — where a canonical contract governs a behaviour it points at the contract.
+
+      ## What the measurement found (2026-09-19, production `zfzdnfwdarxucxtaojxm`)
+
+      **The control surface has never been used.** The complete production write history attributable to `operator:command-center:*` is two kill-switch toggles 1.9 seconds apart on 2026-09-18. Every real settlement was written by `operator:claude-agent` through the API directly; `pick_reviews` has no Command Center actor ever.
+
+      So redesign-contract acceptance criteria 1, 3 and 6 are failed today — *"a pick can be tracked from submission to settlement entirely in Command Center"*, *"manual settlement works reliably"*, *"no external tools are required"*. The settle path is not known-broken; it is **unexercised**.
+
+      **The review queue misreports its own size by 8.7×** — 19,796 shown against a 2,284-row population — because it counts with `count: 'exact'` and then drops fixture rows in JavaScript. The same bug is its latency: 205,504 shared buffers, spilling to disk, so `/review` times out on 2 of 6 probes.
+
+      **56 route files, 12 of them redirect stubs** → 44 distinct pages. A sweep that counts routes over-counts defects.
+
+      ## Acceptance
+
+      * `docs/03_product/command-center/intent.md` exists and dispositions all 21 documents by name
+      * Current state is measured with its query or command, not recalled
+      * The plan is ordered by what unblocks what, and marks provider-dependent work explicitly deferred rather than failed
+      * `CLAUDE.md`'s product-intent table points at it
+      * No contract is shadowed or restated
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      `CLAUDE.md` reserves a product-intent slot for the Command Center with the note *"written when that product is next worked."* That is now — [UTV2-1942](https://linear.app/unit-talk-v2/issue/UTV2-1942/command-center-is-operationally-unusable-the-root-layout-runs-an-115s) and its successors are active Command Center work, and the surface is the operator's only sanctioned window into production.
+
+      The problem is not a missing plan. It is **twenty-one** Command Center documents, the newest substantive one from April, with no single current one:
+
+      * `COMMAND_CENTER_REDESIGN_CONTRACT.md` — FINAL/approved, the destination
+      * `COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md` — 2026-03-25, the E2E minimum
+      * `COMMAND_CENTER_PHASE_2_CONTRACT.md` — DRAFT, not in force
+      * `COMMAND_CENTER_WAVE_3_CONTRACT.md` — **a hollow stub.** Its ten-line body reads *"Full contract text in conversation context. See conversation for sections 1-13."* That conversation no longer exists, so it governs nothing and cannot be complied with.
+      * `CC_*.md` × 14, each tied to a UTV2-4xx issue from April; two declare themselves blocked on live provider data
+      * plus the April audit, the burn-in truth contract, and the review-queue contract
+    - >-
+      Scope
+
+      Docs only. Write `docs/03_product/command-center/intent.md`, matching the
+      shape of `docs/03_product/smart-form/intent.md`, and point `CLAUDE.md`'s
+      product-intent table at it.
+
+
+      It introduces no threshold, no required check, no approval artifact and no
+      new lane type. It extends nothing and replaces nothing — where a canonical
+      contract governs a behaviour it points at the contract.
+    - >-
+      What the measurement found (2026-09-19, production `zfzdnfwdarxucxtaojxm`)
+
+      **The control surface has never been used.** The complete production write
+      history attributable to `operator:command-center:*` is two kill-switch
+      toggles 1.9 seconds apart on 2026-09-18. Every real settlement was written
+      by `operator:claude-agent` through the API directly; `pick_reviews` has no
+      Command Center actor ever.
+
+
+      So redesign-contract acceptance criteria 1, 3 and 6 are failed today — *"a
+      pick can be tracked from submission to settlement entirely in Command
+      Center"*, *"manual settlement works reliably"*, *"no external tools are
+      required"*. The settle path is not known-broken; it is **unexercised**.
+
+
+      **The review queue misreports its own size by 8.7×** — 19,796 shown
+      against a 2,284-row population — because it counts with `count: 'exact'`
+      and then drops fixture rows in JavaScript. The same bug is its latency:
+      205,504 shared buffers, spilling to disk, so `/review` times out on 2 of 6
+      probes.
+
+
+      **56 route files, 12 of them redirect stubs** → 44 distinct pages. A sweep
+      that counts routes over-counts defects.
+    - >-
+      Acceptance
+
+      * `docs/03_product/command-center/intent.md` exists and dispositions all
+      21 documents by name
+
+      * Current state is measured with its query or command, not recalled
+
+      * The plan is ordered by what unblocks what, and marks provider-dependent
+      work explicitly deferred rather than failed
+
+      * `CLAUDE.md`'s product-intent table points at it
+
+      * No contract is shadowed or restated
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1943/command-center-product-intent-disposition-21-documents-measure-current
+    title: "Command Center product intent: disposition 21 documents, measure current
+      state, and state the ordered plan"
+    description: |-
+      `CLAUDE.md` reserves a product-intent slot for the Command Center with the note *"written when that product is next worked."* That is now — [UTV2-1942](https://linear.app/unit-talk-v2/issue/UTV2-1942/command-center-is-operationally-unusable-the-root-layout-runs-an-115s) and its successors are active Command Center work, and the surface is the operator's only sanctioned window into production.
+
+      The problem is not a missing plan. It is **twenty-one** Command Center documents, the newest substantive one from April, with no single current one:
+
+      * `COMMAND_CENTER_REDESIGN_CONTRACT.md` — FINAL/approved, the destination
+      * `COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md` — 2026-03-25, the E2E minimum
+      * `COMMAND_CENTER_PHASE_2_CONTRACT.md` — DRAFT, not in force
+      * `COMMAND_CENTER_WAVE_3_CONTRACT.md` — **a hollow stub.** Its ten-line body reads *"Full contract text in conversation context. See conversation for sections 1-13."* That conversation no longer exists, so it governs nothing and cannot be complied with.
+      * `CC_*.md` × 14, each tied to a UTV2-4xx issue from April; two declare themselves blocked on live provider data
+      * plus the April audit, the burn-in truth contract, and the review-queue contract
+
+      ## Scope
+
+      Docs only. Write `docs/03_product/command-center/intent.md`, matching the shape of `docs/03_product/smart-form/intent.md`, and point `CLAUDE.md`'s product-intent table at it.
+
+      It introduces no threshold, no required check, no approval artifact and no new lane type. It extends nothing and replaces nothing — where a canonical contract governs a behaviour it points at the contract.
+
+      ## What the measurement found (2026-09-19, production `zfzdnfwdarxucxtaojxm`)
+
+      **The control surface has never been used.** The complete production write history attributable to `operator:command-center:*` is two kill-switch toggles 1.9 seconds apart on 2026-09-18. Every real settlement was written by `operator:claude-agent` through the API directly; `pick_reviews` has no Command Center actor ever.
+
+      So redesign-contract acceptance criteria 1, 3 and 6 are failed today — *"a pick can be tracked from submission to settlement entirely in Command Center"*, *"manual settlement works reliably"*, *"no external tools are required"*. The settle path is not known-broken; it is **unexercised**.
+
+      **The review queue misreports its own size by 8.7×** — 19,796 shown against a 2,284-row population — because it counts with `count: 'exact'` and then drops fixture rows in JavaScript. The same bug is its latency: 205,504 shared buffers, spilling to disk, so `/review` times out on 2 of 6 probes.
+
+      **56 route files, 12 of them redirect stubs** → 44 distinct pages. A sweep that counts routes over-counts defects.
+
+      ## Acceptance
+
+      * `docs/03_product/command-center/intent.md` exists and dispositions all 21 documents by name
+      * Current state is measured with its query or command, not recalled
+      * The plan is ordered by what unblocks what, and marks provider-dependent work explicitly deferred rather than failed
+      * `CLAUDE.md`'s product-intent table points at it
+      * No contract is shadowed or restated
+    captured_at: 2026-09-19T11:21:44.642Z
+    description_sha256: 56be15e9f527eeba29bc2dcac57f18c59cc272ba9947ddaeaf7805a710b0b155
+  contract_hash: 14443e23b94581af5515500bafed50731b0844a0ab790e7bef92976da5f9564a
