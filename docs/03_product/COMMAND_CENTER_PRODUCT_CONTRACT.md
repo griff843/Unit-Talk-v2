@@ -35,10 +35,7 @@ It has two horizons, and both are real:
 - **At launch** it must be a reliable operator control plane for the complete pick lifecycle — pick
   visibility, capper visibility, Discord delivery truth, settlement and corrections, recaps,
   performance, exceptions and system health.
-- **At maturity** it is intended to consolidate the capabilities for which Unit Talk operators would
-  otherwise depend on external sports-betting research and analytics products. The product should
-  progressively reduce the need for an operator to leave Unit Talk in order to research, evaluate,
-  submit, monitor, settle, analyse or improve a betting decision.
+- **At maturity** it is explicitly intended to replace Unit Talk operator dependence on external betting-research platforms in the **Props.Cash / Outlier class** by combining market research, line comparison, player and matchup intelligence, historical analysis, decision support, Unit Talk proprietary capper/system intelligence and complete operational control in one product. The product should progressively reduce the need for an operator to leave Unit Talk in order to research, evaluate, submit, monitor, settle, analyse or improve a betting decision.
 
 The second horizon is product intent, not decoration. Launch simplification must not remove the
 architecture or the product intent that the mature platform needs (§2.4).
@@ -134,7 +131,7 @@ Supabase access, log files, terminal commands, an AI agent or a hand-constructed
    every governed target (§13).
 9. See per-capper performance computed from the persisted history (§14).
 10. See Unit Talk aggregate performance computed from the same history (§15).
-11. Work the review, held and exception queues to resolution (§16).
+11. Work operational exceptions to resolution (§16.3).
 12. Understand every one of the above states from the words on screen, unambiguously (§19).
 
 ### 2.4 Non-goals at launch — and what that does and does not mean
@@ -174,18 +171,15 @@ deliberately.
 | Workspace | The question it answers | Primary band |
 |---|---|---|
 | **Operations** | *Is the system working, and what needs my hand right now?* | 1 |
-| **Decision** | *Should this pick go out, and why did the engine decide what it decided?* | 1–2 |
+| **Decision** | *Should this pick go out, and why did the engine decide what it decided?* | 2 |
 | **Intelligence** | *How well are we actually doing, and is our scoring telling the truth?* | 2 |
 | **Research** | *What should we be betting, and where is the value?* | 3 |
 
-Operations is the launch workspace. Decision is partly band 1 because promotion and suppression
-reasons are operator-facing at launch. Intelligence and Research are where the mature product grows.
+Operations is the launch workspace. Decision begins in band 2 for the Human Capper-first launch; its information may still appear on a pick detail page when it exists, but a dedicated Decision workflow does not block launch. Intelligence and Research are where the mature product grows.
 
 ### 3.2 Navigation rules
 
-1. **Exactly four top-level navigation items.** A new capability joins a workspace; it does not
-   become a fifth top-level item. If it genuinely fits none of the four, that is an amendment to
-   this section, not a new nav entry.
+1. **Exactly four canonical workspaces.** A new capability joins a workspace; it does not create a fifth workspace. A workspace does not have to appear as an active navigation destination until it contains at least one usable capability. Before that point it may be absent from navigation or clearly marked as future/unavailable, but it must never lead to a broken or fake surface. If a capability genuinely fits none of the four, that is an amendment to this section, not an ad-hoc nav entry.
 2. **A persistent left sidebar workspace switcher**, visible on every page, with the product name
    anchored above it and the authenticated operator identity anchored below it. Primary navigation
    is never hidden behind a menu.
@@ -237,8 +231,8 @@ data arrives.
 | Operations home | The blink-of-an-eye view: health signals, what is stuck, what is waiting on a human, recent lifecycle activity | 1 |
 | Picks list | Find picks by identity, capper, source, distribution mode, lifecycle state, date, market, sport | 1 |
 | Pick detail | The complete lifecycle trace for one pick (§8.3) | 1 |
-| Review queue | Picks awaiting an operator review decision, with the reason each is there (§16.1) | 1 |
-| Held queue | Picks an operator has held, with what it would take to release each (§16.2) | 1 |
+| Review queue | Picks awaiting an operator review decision, with the reason each is there (§16.1) | 2 |
+| Held queue | Picks an operator has held, with what it would take to release each (§16.2) | 2 |
 | Exceptions | Failures needing a human: delivery failures, dead letters, stalled lifecycle, orphaned rows (§16.3) | 1 |
 | Delivery and Discord operations | Outbox, receipts, per-target delivery state, kill-switch state (§13) | 1 |
 | Settlement | Manual settlement and correction entry points (§10, §11) | 1 |
@@ -254,8 +248,8 @@ data arrives.
 
 | Surface | Purpose | Band |
 |---|---|---|
-| Score breakdown | The engine's promotion score for a pick, component by component, with the weights that produced it (§5.3) | 1 |
-| Suppression and qualification reasons | Why a pick was suppressed, not eligible, expired or qualified — in operator words, not enum values | 1 |
+| Score breakdown | The engine's promotion score for a pick, component by component, with the weights that produced it (§5.3) | 2 |
+| Suppression and qualification reasons | Why a pick was suppressed, not eligible, expired or qualified — in operator words, not enum values | 2 |
 | Promotion preview | What the engine would decide for a pick right now, deterministically | 2 |
 | Routing and board view | Which target a qualified pick is bound for, and the board it would join | 2 |
 | Board queue | The composed board awaiting release | 2 |
@@ -319,12 +313,20 @@ real page.
 These rules apply to every band and every surface. They are the reason the product is trustworthy;
 violating one is a correctness defect, not a polish item.
 
-### 5.1 Everything displayed comes from the system of record
+### 5.1 Everything displayed comes from the correct canonical authority
 
-Every number, status, name, timestamp, score and record rendered in Command Center originates from
-the database. Nothing is hardcoded, sampled, simulated, estimated, remembered from a previous render,
-or generated. There are no demo values, no seeded examples and no "representative" figures anywhere
-in the product, including in surfaces that are not yet finished.
+Nothing is hardcoded, sampled, simulated, estimated, remembered from a previous render, or generated. There are no demo values, no seeded examples and no "representative" figures anywhere in the product, including in surfaces that are not yet finished.
+
+| Truth being displayed | Canonical authority |
+|---|---|
+| Picks, cappers, settlements, delivery records, audit records and persisted performance | Canonical production database |
+| Runtime process health and component liveness | Direct runtime / health evidence from the running system |
+| Runtime configuration and containment posture | Running deployment / process configuration evidence |
+| Deployment and release identity | Deployment metadata corroborated by the running release |
+| Provider / market / research facts | Canonically ingested provider data with provenance |
+| Operator mutations and their result | Canonical API response plus persisted write / audit evidence |
+
+A surface reads each fact from the authority that actually owns it. Forcing runtime truth through Postgres is as incorrect as inventing a pick state in the UI.
 
 ### 5.2 A displayed value carries its provenance when provenance is contestable
 
@@ -405,11 +407,9 @@ settled.
 
 ### 6.1 The rule
 
-**Command Center reads the database directly. Command Center never writes to the database directly.
-Every write goes through the API, which is the single canonical writer.**
+**Command Center reads persisted business truth through its server-side data layer, may read live runtime truth through explicitly approved authenticated runtime/API readers, and never writes to the database directly. Every write goes through the API, which is the single canonical writer.**
 
-Both halves are load-bearing, and stating only the second half — as an earlier contract did — has
-caused repeated confusion about whether direct reads are permitted. They are.
+The boundary is load-bearing: persisted business reads use the canonical data layer; runtime truth uses the running system where the database is not authoritative; browser code receives neither privileged database credentials nor operator API credentials; and every mutation crosses the canonical API writer.
 
 ### 6.2 Reads
 
@@ -418,9 +418,9 @@ caused repeated confusion about whether direct reads are permitted. They are.
 - Read credentials are server-side only and never reach the client.
 - The data layer is the single place a Command Center read may be added. A new read extends it; it
   does not bypass it.
-- Command Center does not call other internal applications over HTTP to read. There is no read
-  backend service between Command Center and the database, and any documentation describing one is
-  retired (Appendix A, contradiction 1).
+- Persisted business-data reads do not go through a generic internal read-backend service. They read the canonical database through the Command Center server-side data layer.
+- Runtime truth and health are the explicit exception: where the running process or deployment is the authority, Command Center may use approved authenticated server-side readers against the canonical runtime/API endpoints. These reads remain inside the sanctioned data/runtime layer and never expose privileged credentials to the browser.
+- `apps/operator-web` is not a Command Center backend and is not reintroduced by this exception; Appendix A contradiction 1 remains retired as an architecture.
 
 ### 6.3 Writes
 
@@ -790,7 +790,7 @@ Segment and comparison analysis is band 2. Market-relative measures are band 4.
 
 ## 16. Review, held and exception workflows
 
-### 16.1 Review queue
+### 16.1 Review queue — Band 2
 
 The review queue holds picks awaiting an operator decision. Each row states **why it is there** — the
 suppression or hold reason in operator words, not an enum — so the queue is actionable without
@@ -804,7 +804,7 @@ Rules:
 - Bulk action is permitted only where the reason applies identically to every selected row, and the
   operator sees exactly what will change before confirming.
 
-### 16.2 Held queue
+### 16.2 Held queue — Band 2
 
 Held picks are picks an operator deliberately parked. The surface shows, per pick, who held it, when,
 why, and what would release it — a held pick with no release condition is a pick that will be
@@ -812,7 +812,7 @@ forgotten.
 
 Held is an operator state. It is not a lifecycle state and not a delivery state (§5.9).
 
-### 16.3 Exceptions
+### 16.3 Exceptions — Band 1
 
 Exceptions are conditions that need a human and will not resolve themselves. At launch, at minimum:
 
@@ -1077,11 +1077,11 @@ Each criterion is demonstrated against real data, not asserted from tests.
 | **A8** | **Settle a pick.** A real outcome is recorded through Command Center with source, confidence, evidence reference and the authenticated actor — and the resulting record is visible on the pick, attributed to the Command Center operator identity. |
 | **A9** | **Correct a settlement.** The correction supersedes without destroying the original, the chain is visible, and the statistics move accordingly. |
 | **A10** | **See recap truth.** Every settled delivered pick shows posted / not posted with a reason / not applicable. No blanks. |
-| **A11** | **Work a queue.** A pick in the review queue is decided with a reason, and the decision appears in its review history and in the audit log. |
+| **A11** | **Read an exception queue.** A real operational exception is discoverable without a hand-constructed URL, and the row explains the condition, elapsed time and available action. |
 | **A12** | **Resolve an exception.** An exception is opened, understood from the row alone, acted on, and observed to leave the queue. |
 | **A13** | **Read capper performance.** Per-capper record, units and ROI reconcile against the underlying settlement rows, each rate carries its sample size, and blocked metrics read as blocked rather than as zero. |
 | **A14** | **Read aggregate performance.** The aggregate reconciles against the sum of its parts over the governed population, with fixtures excluded. |
-| **A15** | **Meet every state.** Loading, empty, degraded, blocked and error states are each reached at least once and each behaves per §18. No raw engine error is ever rendered. |
+| **A15** | **Meet every state safely.** Normal and naturally occurring loading, empty, degraded, blocked and error states are demonstrated against production where safe. Any state that would require intentionally degrading or damaging production is demonstrated in controlled staging/browser verification instead. Every state behaves per §18 and no raw engine error is ever rendered. |
 | **A16** | **Survive the phone test.** Every §21.2 surface is usable at phone width. |
 | **A17** | **No placeholder anywhere.** No band-1 surface renders `—`, `N/A`, `0` or blank where the system holds a value (§5.4). |
 | **A18** | **Nothing member-facing was activated to achieve any of the above.** |
@@ -1102,13 +1102,13 @@ once said "canonical".
 
 | # | The contradiction | Resolution |
 |---|---|---|
-| 1 | Three documents specified Command Center as a UI consuming a separate read-only backend service's endpoints; a fourth declared that backend decommissioned. The code reads the database directly through its own server-side data layer and calls no such service. | **The code and the decommissioning notice win.** §6.2: reads are direct, through the app's own data layer, with no intermediate read service. Every endpoint-shaped specification in the corpus is void — not merely stale, because the endpoints it names do not exist. |
+| 1 | Three documents specified Command Center as a UI consuming a separate generic read-only backend service's endpoints; a fourth declared that backend decommissioned. Current code reads persisted business data directly through its own server-side data layer, while live runtime truth/health uses narrow authenticated readers against canonical API/runtime endpoints. | **The generic read-backend architecture is retired; the runtime exception is preserved.** §6.2: business reads are direct to the canonical database, while runtime/process truth may use approved authenticated runtime/API readers because the database does not own that truth. The old operator-web endpoint architecture remains void. | **The code and the decommissioning notice win.** §6.2: reads are direct, through the app's own data layer, with no intermediate read service. Every endpoint-shaped specification in the corpus is void — not merely stale, because the endpoints it names do not exist. |
 | 2 | One contract stated "Command Center is NOT a direct database writer — all writes go through API", which was widely read as forbidding direct reads as well. | **Both halves stated explicitly.** §6.1: reads are direct, writes never are. The original rule was about writes and remains in force for writes. |
 | 3 | The launch contract listed research tools and filtering as non-goals; a ratified IA document established a Research workspace; a later phase contract mandated filtering. | **The four bands resolve it** (§2). Filtering is band 1 (§8.1) because finding a pick is a launch requirement. Research is bands 2–3. "Non-goal at launch" is a scheduling statement and never a deletion (§2.4). |
 | 4 | A phase contract listed "a full Outlier-style research terminal" as an explicit non-goal. The current product direction names replacing dependence on exactly those external tools as the long-term goal. | **The current product direction wins.** It becomes band 3 (§4.5, §4.6). Not launch-scoped, and explicitly not cancelled. |
 | 5 | One "contract" carried a status of ready-for-implementation and no body — its content lived only in a conversation that no longer exists. | **Void.** A document that cannot be complied with governs nothing. Nothing was carried forward from it, because there is nothing to carry. |
 | 6 | A Command Center document defined its own merge and approval policy, competing with the repository's mechanical merge authority. | **Out of product scope entirely.** Merge authority is defined mechanically by the merge gate and is reserved to PM. A product contract does not set merge policy, and this one does not. |
-| 7 | A ratified language guide described a two-package architecture in which Command Center consumes a separate backend's APIs. | **Void by the same evidence as 1.** The guide's *naming* rules survive and are restated in §19.1; its architecture note does not. |
+| 7 | A ratified language guide described a two-package architecture in which Command Center consumes a separate generic backend's APIs for product data. | **Void by the same evidence as 1.** The guide's naming rules survive and are restated in §19.1; its old read-backend architecture does not. This does not prohibit the narrow runtime/health readers explicitly allowed by §6.2. |
 | 8 | At least four documents each claimed independent gating authority over overlapping scope: an IA ratification gating a phase, a metrics register forbidding any metric without an entry, a module-pattern spec requiring divergent pages to be corrected before merge, and an LLM contract forbidding LLM work without it. | **Consolidated into this contract, which is the only Command Center product authority.** The substance survives as rules — §5.5 volume gates, §5.3 engine-decision display, §18 state design, §20 LLM restrictions — enforced as product requirements. None of them is a separate gate, and none adds a check, an approval artifact or a lane type. |
 | 9 | A legacy operator pick-composition surface exists and posts to the submission endpoint without the governed payload, producing picks invisible to every governed surface — while the current product direction states that pick creation belongs to Smart Form. | **The product direction wins.** §1.4 and §4.4: Command Center has no pick-composition surface, the legacy one is retired product, and it is not a specification for a future one. |
 | 10 | A status document recorded the live settlements as attributed to a Command Center operator identity. Measured against production, every one of them carries an agent actor; the Command Center settle path has no production write attributed to it. | **Runtime evidence wins.** The settle path is **unexercised**, which is not the same as broken. Acceptance criterion A8 exists precisely to exercise it, and the status claim is corrected where it was made rather than repeated here. |
@@ -1128,11 +1128,9 @@ Appendix D.
 
 ## Appendix B — Retired documents
 
-Each of the following is moved to `docs/archive/command-center/`, with a deprecated pointer stub left
-at its original path so existing references — including references inside sealed proof bundles and
-closed lane manifests — continue to resolve. **None of them is product or operations authority for
-Command Center any longer.** They are historical evidence: read them to understand why a decision was
-once made, never to determine what to build.
+Each of the following is moved to `docs/archive/command-center/`, with a deprecated pointer stub left at its original path so existing references — including references inside sealed proof bundles and closed lane manifests — continue to resolve. **None of them is product or operations authority for Command Center any longer.** They are historical evidence: read them to understand why a decision was once made, never to determine what to build.
+
+The dated `HUMAN_CAPPER_V1_LIFECYCLE_HANDOFF.md` is also moved into the same archive with a pointer stub. It was not one of the competing Command Center product contracts, but it contains timestamped runtime conclusions and implementation assumptions and therefore belongs with historical evidence rather than active operational guidance.
 
 **From `docs/03_product/`**
 
@@ -1161,6 +1159,7 @@ once made, never to determine what to build.
 - `CC_COMPETITOR_BENCHMARK.md`
 - `DECISION_WORKSPACE_MVP.md`
 - `RESEARCH_WORKSPACE_MVP.md`
+- `HUMAN_CAPPER_V1_LIFECYCLE_HANDOFF.md`
 
 **From `docs/02_architecture/contracts/`**
 
@@ -1171,7 +1170,7 @@ once made, never to determine what to build.
 | Document | Status |
 |---|---|
 | `apps/command-center/CLAUDE.md` | Remains, as an **engineering instruction file only**. It describes how to work in the package — stack, boundaries, test runner, schema invariants — and points at this contract for product behaviour. It defines no product requirement. |
-| `docs/05_operations/HUMAN_CAPPER_V1_LIFECYCLE_HANDOFF.md` | Remains. It is a dated measurement record and an owner-decision handoff for the Human Capper lifecycle, not a Command Center product document. |
+
 | Proof bundles referencing any retired document | Remain untouched. A proof bundle is sealed evidence bound to a merge; it is never edited to follow a document move. |
 
 ---
@@ -1181,18 +1180,9 @@ once made, never to determine what to build.
 A single place to look up any capability's band. Where a section governs it, that section is
 authoritative; this index is navigation.
 
-**Band 1 — Launch Required.** Global health, jump-to-pick, operator identity (§4.1). Operations home,
-picks list and search, pick detail lifecycle trace, review queue, held queue, exceptions, delivery
-and Discord operations, settlement, corrections, recaps, system and runtime health, intervention and
-audit log (§4.2). Score breakdown and suppression/qualification reasons (§4.3). Human Capper
-lifecycle visibility in full (§9). Per-capper and aggregate record / units / ROI over the governed
-cohort (§14.3, §15.1). Every data-truth rule (§5). Every state design (§18). Canonical language
-(§19). Phone-usable subset (§21.2).
+**Band 1 — Launch Required.** Global health, jump-to-pick, operator identity (§4.1). Operations home, picks list and search, pick detail lifecycle trace, exceptions, delivery and Discord operations, settlement, corrections, recaps, system and runtime health, intervention and audit log (§4.2). Human Capper lifecycle visibility in full (§9). Per-capper and aggregate record / units / ROI over the governed cohort (§14.3, §15.1). Every data-truth rule (§5). Every state design (§18). Canonical language (§19). Phone-usable subset (§21.2).
 
-**Band 2 — Post-Launch Core.** Promotion preview, routing and board views, board queue (§4.3).
-Scheduled-run visibility, readiness scorecard, capper and member administration (§4.2). Segment
-analysis, calibration, attribution (§4.6). Differentiated internal roles (§7.4). Scheduled recap
-visibility (§12.3). Approval workflow for system picks, parked (§16.4). LLM commentary (§20).
+**Band 2 — Post-Launch Core.** Review queue, held queue, score breakdown and suppression/qualification analysis (§4.2, §4.3). Promotion preview, routing and board views, board queue (§4.3). Scheduled-run visibility, readiness scorecard, capper and member administration (§4.2). Segment analysis, calibration, attribution (§4.6). Differentiated internal roles (§7.4). Scheduled recap visibility (§12.3). Approval workflow for system picks, parked (§16.4). LLM commentary (§20).
 
 **Band 3 — Future Intelligence Platform.** The Research workspace (§4.5). Portfolio, exposure and
 correlation intelligence; operator alerting and signal feeds; saved research and watchlists (§4.6).
