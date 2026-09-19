@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1944-governed-population-predicate",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1618",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/package.json",
@@ -25,9 +25,9 @@
     "docs/06_status/proof/UTV2-1944/verification.md",
     "docs/06_status/proof/UTV2-1944/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-19T18:24:44.928Z",
-  "heartbeat_at": "2026-09-19T18:24:44.928Z",
+  "heartbeat_at": "2026-09-19T18:38:00.975Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1944-governed-population-predicate.json",
