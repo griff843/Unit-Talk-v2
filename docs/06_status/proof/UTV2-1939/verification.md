@@ -1,10 +1,13 @@
 # PROOF: UTV2-1939
 
-MERGE_SHA: pending merge
+MERGE_SHA: 6c33db296c3c6fdbf199866eb1f2956024a9a0fe
 
-> Pre-merge the merge row is intentionally the placeholder value; the Execution SHA row
-> below carries the verified implementation identity. `post-merge-lane-close.yml` rebinds
-> merge authority only after GitHub supplies the merged-PR attestation.
+> This bundle declares no schema-v2 `sha_binding` block, so the **legacy anchor** contract
+> applies: the row must be a real ancestor commit, and pre-merge it is the provenance
+> anchor rather than a merge identity. `6c33db296` is the implementation commit — the last
+> non-proof commit on this branch, and the commit the evidence below was measured on.
+> `post-merge-lane-close.yml` rebinds this row to the squash SHA at closeout, which is when
+> it first acquires its merge meaning.
 
 Issue: UTV2-1939
 Tier: T2
