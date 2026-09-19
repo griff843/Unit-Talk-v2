@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1945-discord-architecture",
   "branch": "codex/utv2-1945-discord-architecture",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "813683b5cb8cc0b1d6c5aee6ab5e0b83cb08499f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1619",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,22 @@
     "docs/06_status/proof/UTV2-1945/verification.md",
     "docs/06_status/proof/UTV2-1945/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-19T19:11:22.669Z",
-  "heartbeat_at": "2026-09-19T19:42:52.641Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-19T20:41:09.970Z",
+  "closed_at": "2026-09-19T20:41:09.970Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1945-discord-architecture.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-19T20:41:07.519Z",
+      "verdict": "pass",
+      "merge_sha": "813683b5cb8cc0b1d6c5aee6ab5e0b83cb08499f",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

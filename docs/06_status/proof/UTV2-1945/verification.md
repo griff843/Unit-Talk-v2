@@ -1,6 +1,6 @@
 # PROOF: UTV2-1945
 
-MERGE_SHA: pending merge
+MERGE_SHA: 813683b5cb8cc0b1d6c5aee6ab5e0b83cb08499f
 
 Issue: UTV2-1945
 Tier: T2
@@ -83,7 +83,7 @@ The model-routing sidecar records manifest policy selection, with actual desktop
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 813683b5cb8cc0b1d6c5aee6ab5e0b83cb08499f
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1619
-Approved PR head: pending merge
+Approved PR head: 83a96b7d6658e51836d85ebb77f3b444aa4efb86
 Execution SHA: 25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a
