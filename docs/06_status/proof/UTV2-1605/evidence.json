@@ -2,8 +2,8 @@
   "schema_version": 2,
   "issue_id": "UTV2-1605",
   "pr_number": 1621,
-  "source_sha": "5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3",
-  "reviewed_head_sha": "5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3",
+  "source_sha": "aff20122a832fffd0260f6b73e3846607bc9219c",
+  "reviewed_head_sha": "aff20122a832fffd0260f6b73e3846607bc9219c",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "gate_results": [
@@ -32,7 +32,7 @@
   "generated_at": "2026-09-19T20:17:10Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3",
+    "verified_source_sha": "aff20122a832fffd0260f6b73e3846607bc9219c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {

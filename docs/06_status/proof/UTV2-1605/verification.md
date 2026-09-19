@@ -6,7 +6,7 @@ MERGE_SHA: pending merge
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1621
-Execution/source SHA: `5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3`
+Execution/source SHA: `aff20122a832fffd0260f6b73e3846607bc9219c`
 
 ## Assertions
 
