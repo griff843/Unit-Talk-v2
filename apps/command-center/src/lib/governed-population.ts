@@ -34,3 +34,17 @@ export function applyPickPopulation<T extends PopulationQuery<T>>(query: T, popu
     ? query.not(GOVERNED_POPULATION_METADATA_PATH, 'is', null)
     : query.is(GOVERNED_POPULATION_METADATA_PATH, null);
 }
+
+/**
+ * Resolves a settlement row's pick against a governed-only map.
+ *
+ * The map is built from a query that already carries {@link applyPickPopulation},
+ * so an absent id means the settlement belongs to the fixture corpus. Returning
+ * `null` here is what keeps governed membership the *driving* predicate: the
+ * alternative — substituting an empty object — silently admits the settlement
+ * with an `unknown` source and null stake/odds, which distorts every units and
+ * ROI figure computed from it.
+ */
+export function resolveGovernedPick<T>(picksById: Map<string, T>, pickId: string): T | null {
+  return picksById.get(pickId) ?? null;
+}

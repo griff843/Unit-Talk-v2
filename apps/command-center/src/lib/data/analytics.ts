@@ -2,7 +2,7 @@
 import { americanToDecimal, isValidAmericanOdds } from '@unit-talk/contracts';
 
 import { getDataClient, isTestFixturePick } from './client';
-import { applyPickPopulation } from '../governed-population';
+import { applyPickPopulation, resolveGovernedPick } from '../governed-population';
 
 type Client = any;
 type Row = Record<string, unknown>;
@@ -482,7 +482,12 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
 
     const enriched: EnrichedRow[] = settlementRows.flatMap((sr) => {
       const pickId = asString(sr['pick_id']) ?? '';
-      const pick = picksMap.get(pickId) ?? {};
+      // Governed membership is the driving predicate, not a join enrichment.
+      // picksMap holds only governed rows, so a settlement whose pick is absent
+      // belongs to the fixture corpus and is dropped -- never carried forward as
+      // an `unknown` source with null units, which would silently distort ROI.
+      const pick = resolveGovernedPick(picksMap, pickId);
+      if (pick === null) return [];
       if (isTestFixturePick(pick)) return [];
       const pcs = pcsMap.get(pickId) ?? {};
       const metadata = asRecord(pick['metadata']);
@@ -710,7 +715,10 @@ export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
 
     for (const sr of settlementRows) {
       const pickId = asString(sr['pick_id']) ?? '';
-      const pick = picksMap.get(pickId) ?? {};
+      // Same driving predicate as getPerformanceData: picksMap is governed-only,
+      // so an absent pick is a fixture settlement and produces no board row.
+      const pick = resolveGovernedPick(picksMap, pickId);
+      if (pick === null) continue;
       if (isTestFixturePick(pick)) continue;
       if (isTrackOnlyPick(pick)) continue;
       const capperId = resolveCapperId(pick);
@@ -966,10 +974,10 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
 
     if (pickIds.length > 0) {
       const [picksResult, pcsResult] = await Promise.all([
-        client
+        applyPickPopulation(client
           .from('picks')
           .select('id, source, capper_id, odds, stake_units, metadata, promotion_score')
-          .in('id', pickIds),
+          .in('id', pickIds), 'governed'),
         client
           .from('picks_current_state')
           .select('id, review_decision, settlement_result')
@@ -1002,7 +1010,12 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
 
     const enriched: IntelRow[] = settlementRows.flatMap((sr) => {
       const pickId = asString(sr['pick_id']) ?? '';
-      const pick = picksMap.get(pickId) ?? {};
+      // Governed membership is the driving predicate, not a join enrichment.
+      // picksMap holds only governed rows, so a settlement whose pick is absent
+      // belongs to the fixture corpus and is dropped -- never carried forward as
+      // an `unknown` source with null units, which would silently distort ROI.
+      const pick = resolveGovernedPick(picksMap, pickId);
+      if (pick === null) return [];
       if (isTestFixturePick(pick)) return [];
       const pcs = pcsMap.get(pickId) ?? {};
       const metadata = asRecord(pick['metadata']);
