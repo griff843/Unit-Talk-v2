@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1939-command-center-human-capper-lifecycle",
   "branch": "claude/utv2-1939-command-center-human-capper-lifecycle",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "745dcc69dc183b200a08a11cd1874d802ba3e9ca",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1612",
   "files_changed": [],
   "file_scope_lock": [
@@ -17,14 +17,22 @@
     "docs/06_status/proof/UTV2-1939/diff-summary.md",
     "docs/06_status/proof/UTV2-1939/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-18T23:52:10.158Z",
-  "heartbeat_at": "2026-09-19T00:05:27.725Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-19T00:24:43.398Z",
+  "closed_at": "2026-09-19T00:24:43.398Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1939-command-center-human-capper-lifecycle.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-19T00:24:40.705Z",
+      "verdict": "pass",
+      "merge_sha": "745dcc69dc183b200a08a11cd1874d802ba3e9ca",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

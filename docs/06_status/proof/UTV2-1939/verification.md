@@ -1,6 +1,6 @@
 # PROOF: UTV2-1939
 
-MERGE_SHA: 6c33db296c3c6fdbf199866eb1f2956024a9a0fe
+MERGE_SHA: 745dcc69dc183b200a08a11cd1874d802ba3e9ca
 
 > This bundle declares no schema-v2 `sha_binding` block, so the **legacy anchor** contract
 > applies: the row must be a real ancestor commit, and pre-merge it is the provenance
@@ -124,7 +124,7 @@ was due.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 745dcc69dc183b200a08a11cd1874d802ba3e9ca
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1612
 Approved PR head: pending merge
 Execution SHA: 6c33db296c3c6fdbf199866eb1f2956024a9a0fe

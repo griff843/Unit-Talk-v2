@@ -1,6 +1,6 @@
 # Diff Summary — UTV2-1939
 
-MERGE_SHA: pending merge
+MERGE_SHA: 745dcc69dc183b200a08a11cd1874d802ba3e9ca
 
 > Plain anchor on purpose: CEP-E5 line-matches `MERGE_SHA:` at the start of a line, so a
 > bolded or table-row form would not be rebindable after merge.
