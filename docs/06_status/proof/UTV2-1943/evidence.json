@@ -7,9 +7,9 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "ec1584cac32f59cc978a4dd5860afc90d0a7b632",
+    "verified_source_sha": "8f35a2abc31c982c8769195d303b64d4ba26dbb7",
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-19T17:30:00.000Z",
+    "bound_at": "2026-09-19T18:05:00.000Z",
     "ci_sentinels": {
       "note": "Pinned to the last non-proof commit on the branch. Every later commit touches only docs/06_status/proof/UTV2-1943/. The authoritative result is the set of required contexts on PR #1616 at the current head; post-merge-lane-close.yml rebinds merge_sha.",
       "local_type_check": { "command": "pnpm type-check", "exit_code": 0 },
@@ -20,14 +20,14 @@
   "static_proof": {
     "status": "pass",
     "measured_at": "2026-09-19T17:05:00Z",
-    "measured_against_sha": "ec1584cac32f59cc978a4dd5860afc90d0a7b632",
+    "measured_against_sha": "8f35a2abc31c982c8769195d303b64d4ba26dbb7",
     "commands": [
       { "command": "pnpm type-check", "exit_code": 0, "result": "pass", "note": "run inside pnpm verify:static" },
       { "command": "pnpm test", "exit_code": 0, "result": "pass", "pass": 206, "fail": 0, "note": "run inside pnpm verify:static" },
       { "command": "pnpm lane:check --lane governance --base origin/main --head HEAD", "exit_code": 0, "result": "pass", "note": "PASS lane=governance files=58" },
-      { "command": "npx tsx scripts/ci/r-level-check.ts --base 618712315 --head ec1584cac32f59cc978a4dd5860afc90d0a7b632", "exit_code": 0, "result": "pass", "note": "Verdict PASS; 58 changed files; rules matched operator-ui" },
+      { "command": "npx tsx scripts/ci/r-level-check.ts --base 39dc4ff695e63117e5ec309f2ed2e088a5ce2a5f --head 8f35a2abc31c982c8769195d303b64d4ba26dbb7", "exit_code": 0, "result": "pass", "note": "Verdict PASS; 59 changed files; rules matched operator-ui" },
       { "command": "pnpm exec tsx scripts/ops/proof-auditor-gate.ts --proof-dir docs/06_status/proof/UTV2-1943 --sha <head> --require-executed-command \"pnpm test:db\" --json", "exit_code": 0, "result": "pass", "note": "verdict PASS, failures []" },
-      { "command": "pnpm verify", "exit_code": 1, "result": "refused_by_staging_isolation", "note": "ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx; local.env pins SUPABASE_URL=http://127.0.0.1:1. Correct local outcome, not a defect in this diff. The authoritative full-tree result is the required verify context on PR #1616, which passed at head 80a7b89709b3ed641de1764339c9ecef384c2129." }
+      { "command": "pnpm verify", "exit_code": 1, "result": "refused_by_staging_isolation", "note": "ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx; local.env pins SUPABASE_URL=http://127.0.0.1:1. Correct local outcome, not a defect in this diff. The authoritative full-tree result is the required verify context on PR #1616, which is re-run on the branch head carrying this bundle; the authoritative reading is that context at the current PR head." }
     ]
   }
 }

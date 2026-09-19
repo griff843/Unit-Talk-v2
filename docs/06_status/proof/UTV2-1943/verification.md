@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-19T14:10:00.000Z
+Generated at: 2026-09-19T18:05:00.000Z
 Issue: UTV2-1943
 Tier: T2
 Lane type: governance
 Branch: claude/utv2-1943-command-center-product-contract
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1616
-Head SHA: ec1584cac32f59cc978a4dd5860afc90d0a7b632
+Head SHA: 8f35a2abc31c982c8769195d303b64d4ba26dbb7
 result: pass
 
 ## ASSERTIONS:
@@ -172,7 +172,7 @@ resolved to `<repo-root>/03_product/...` and was corrected before it ran.
 
 ```
 $ pnpm lane:check --lane governance --base origin/main --head HEAD
-lane:check PASS lane=governance files=58   # content commit, PM revisions included
+lane:check PASS lane=governance files=59   # content commit, PM revisions + band correction
 ```
 
 Run after the allowlist entry was added, which is the only reason it passes for
@@ -182,9 +182,9 @@ the PR body so it is reviewed as a policy change rather than absorbed as a detai
 ### 8. R-level
 
 ```
-$ npx tsx scripts/ci/r-level-check.ts --base 618712315 --head <head>
+$ npx tsx scripts/ci/r-level-check.ts --base 39dc4ff69 --head <head>
 Verdict: PASS
-Changed files: 58
+Changed files: 59
 Rules matched: operator-ui
 ```
 
@@ -235,6 +235,36 @@ Neither repair changes a band assignment, a workspace, an authority claim or an 
 criterion. A full table scan across all five changed files reports no remaining ragged or
 header-less table.
 
+### 10. The band model is now mechanically checkable, not readable
+
+PM returned the PR CHANGES REQUIRED on one acceptance defect: the contract still carried compound
+band assignments, so whether a capability blocked launch depended on how its cell was read.
+
+Every atomic capability now carries exactly one current band. A band-4 capability records what it
+becomes when its blocker clears in a separate **When unblocked** column — metadata, not a second
+band. Four rows described two capabilities each and were split so both halves could be banded.
+
+The invariant is enforced by a scan over every table in the file rather than by reading:
+
+```
+every band cell is one of 1, 2, 3, 4, "Out of product"   -> 88 cells, 0 violations
+every band-4 row carries an underlying priority          -> 0 violations
+no non-band-4 row carries an unblock value               -> 0 violations
+every table with a band-4 row has a When unblocked column-> 0 violations
+no ragged or header-less table anywhere in the file      -> 0 violations
+every §N.N cross-reference resolves to a real heading    -> 0 dangling
+```
+
+The only compound forms left in the file are the three quoted inside §2.2 rule 1 as examples of what
+is no longer permitted.
+
+**No product decision moved.** Basic per-capper and aggregate record / units / ROI remain band 1;
+deeper segmentation and comparison remain band 2; the dedicated review and held workflows remain
+band 2; exceptions remain band 1; Research and Intelligence remain part of the long-term product;
+every provider-blocked capability remains explicitly blocked rather than demoted or removed.
+Closing-line value is the case the old notation was hiding: its underlying priority genuinely is 1,
+and it is still band 4 today, so it does not hold launch.
+
 ## Verification
 - [x] `pnpm type-check`: exit 0 — run inside `pnpm verify:static`
 - [x] `pnpm test`: exit 0 — 206 tests, 206 pass, 0 fail, 0 skipped, run inside
@@ -242,9 +272,9 @@ header-less table.
 - [x] `pnpm verify:static`: exit 0 — lint + type-check + build + full test suite + smart-form
       verify + verify:commands + migration lint (135 files, no findings) + discord command
       manifest (14 definitions)
-- [x] `pnpm lane:check --lane governance --base origin/main --head HEAD`: PASS — files=58 at
-      the content commit, with the PM revision delta and the two review repairs included
-- [x] `npx tsx scripts/ci/r-level-check.ts --base 618712315 --head <head>`: Verdict PASS,
+- [x] `pnpm lane:check --lane governance --base origin/main --head HEAD`: PASS — files=59 at
+      the content commit, matching the 59 files the PR API reports
+- [x] `npx tsx scripts/ci/r-level-check.ts --base 39dc4ff69 --head <head>`: Verdict PASS,
       rules matched `operator-ui`
 - [x] Stub link resolution: every archived path's two relative links resolve on disk
 - [ ] `pnpm verify`: cannot exit 0 from this containment-isolated checkout. Its
@@ -272,5 +302,5 @@ claimed and none is required at T2 for a change with no write path.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1616
-Approved PR head: ec1584cac32f59cc978a4dd5860afc90d0a7b632
-Execution SHA: ec1584cac32f59cc978a4dd5860afc90d0a7b632
+Approved PR head: 8f35a2abc31c982c8769195d303b64d4ba26dbb7
+Execution SHA: 8f35a2abc31c982c8769195d303b64d4ba26dbb7
