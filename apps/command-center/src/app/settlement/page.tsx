@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
-import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow } from '@/lib/data/results-ops';
+import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 import { describeOperatorFailure } from '@/lib/describe-error';
 import { renderClvSummary, isClvUnresolved } from '@/lib/clv-summary';
 import { SettlementWorkbench } from '@/components/SettlementWorkbench';
 import { getPickDetail } from '@/lib/data';
+import { getDeliveryKillSwitchStatuses } from '@/lib/data/discord-ops';
+import { predictRecapDelivery } from '@/lib/human-capper-recap';
 
 export const metadata = { title: 'Settlement — Unit Talk Command Center' };
 
@@ -81,6 +83,53 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
   );
 }
 
+function DeliveredAwaitingTable({ rows, nowMs }: { rows: DeliveredAwaitingSettlementRow[]; nowMs: number }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHead>
+          <Th>Pick</Th>
+          <Th>Capper</Th>
+          <Th>Sport</Th>
+          <Th>Market / Selection</Th>
+          <Th>Odds</Th>
+          <Th>Units</Th>
+          <Th>Delivered</Th>
+          <Th>Action</Th>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-b border-gray-800/60">
+              <Td>
+                <Link href={`/picks/${row.id}`} className="font-mono text-xs text-blue-400 hover:underline">
+                  {row.id.slice(0, 8)}…
+                </Link>
+              </Td>
+              <Td>{row.capperId ?? '—'}</Td>
+              <Td>{row.sportDisplayName ?? '—'}</Td>
+              <Td>
+                {row.market ?? '—'}
+                {row.selection ? <span className="cc-text-muted"> · {row.selection}</span> : null}
+              </Td>
+              <Td><span className="cc-num">{row.odds ?? '—'}</span></Td>
+              <Td><span className="cc-num">{row.stakeUnits ?? '—'}</span></Td>
+              <Td>{formatRelativeAge(row.postedAt, nowMs) ?? '—'}</Td>
+              <Td>
+                <Link
+                  href={`/settlement?pickId=${row.id}`}
+                  className="text-xs font-medium text-blue-400 hover:underline"
+                >
+                  Settle
+                </Link>
+              </Td>
+            </tr>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export default async function SettlementPage({
   searchParams: searchParamsPromise,
 }: {
@@ -99,6 +148,21 @@ export default async function SettlementPage({
     snapshot = await getResultsOpsSnapshot();
   } catch (error) {
     loadError = describeOperatorFailure(error, 'Settlement truth could not be loaded.');
+  }
+
+  // UTV2-1939: the per-pick recap posts by direct fetch rather than through the
+  // outbox, so `settle-pick-controller.ts` consults the kill switch itself and
+  // silently declines. Reading the switch here lets the operator see that
+  // consequence BEFORE settling instead of discovering it afterwards. A failed
+  // read stays null, and `predictRecapDelivery` fails closed on null -- it
+  // reports the outcome as unknown rather than promising a recap.
+  let officialPicksKilled: boolean | null = null;
+  try {
+    const switches = await getDeliveryKillSwitchStatuses();
+    const official = switches.find((entry) => entry.target === 'official-picks');
+    officialPicksKilled = official ? official.killed : null;
+  } catch {
+    officialPicksKilled = null;
   }
 
   let isAlreadySettled: boolean | null = null;
@@ -145,6 +209,10 @@ export default async function SettlementPage({
             <StatCard label="Manual Review Open" value={snapshot.counts.manualReviewOpen} />
             <StatCard label="Corrections" value={snapshot.counts.corrections} />
             <StatCard label="Stuck Posted" value={snapshot.counts.stuckPosted} />
+            <StatCard
+              label="Delivered — Awaiting Settlement"
+              value={snapshot.counts.deliveredAwaitingSettlement}
+            />
             <div className="cc-surface p-5">
               <p className="text-xs font-semibold uppercase tracking-wide cc-text-secondary">Game Results Freshness</p>
               <p className="mt-1 text-lg font-bold text-gray-100">
@@ -154,6 +222,44 @@ export default async function SettlementPage({
                 {snapshot.gameResults.count24h} rows sourced in 24h
               </p>
             </div>
+          </div>
+
+          <div className="cc-surface p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
+              Delivered — Awaiting Settlement ({snapshot.deliveredAwaitingSettlement.length})
+            </h2>
+            <p className="mb-3 text-xs cc-text-muted">
+              Human-capper picks that carry a server delivery authorization, reached members, and have no
+              settlement record yet. No age threshold applies — a pick delivered today appears here as soon
+              as it is delivered, because the per-pick recap is part of the same transaction.
+            </p>
+            {snapshot.deliveredAwaitingSettlement.length > 0 && (() => {
+              // `hasSentDelivery: true` is sound for this list specifically: the query
+              // filters `status = 'posted'`, and `posted` is the lifecycle state written
+              // only once downstream delivery is confirmed. It is not an assumption about
+              // picks in general.
+              const prediction = predictRecapDelivery({
+                isHumanCapperDelivery: true,
+                officialPicksKilled,
+                hasSentDelivery: true,
+              });
+              return (
+                <p
+                  className={`mb-3 rounded-md border px-3 py-2 text-xs ${
+                    prediction.willPost
+                      ? 'border-emerald-700 bg-emerald-950/50 text-emerald-300'
+                      : 'border-amber-600 bg-amber-950/40 text-amber-200'
+                  }`}
+                >
+                  {prediction.summary}
+                </p>
+              );
+            })()}
+            {snapshot.deliveredAwaitingSettlement.length === 0 ? (
+              <EmptyState message="No delivered picks are awaiting settlement." />
+            ) : (
+              <DeliveredAwaitingTable rows={snapshot.deliveredAwaitingSettlement} nowMs={nowMs} />
+            )}
           </div>
 
           <div className="cc-surface p-5">
