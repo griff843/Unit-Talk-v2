@@ -1,7 +1,10 @@
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded } from '../query-result';
 import {
+  applyPickPopulation,
   filterDeliveryTargetPopulation,
+  governedOutboxTargetListLiteral,
+  governedOutboxTargets,
   isHistoricalDeadLetter,
 } from '../governed-population';
 
@@ -193,16 +196,22 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
   const client: Client = await getDataClient();
   const includeFixtures = filter?.includeFixtures ?? false;
 
+  // The pick-based exception queues are partitioned by the same positive
+  // predicate the picks explorer uses (UTV2-1944), applied in the query so the
+  // row limit selects from the governed cohort rather than from the ~107k
+  // fixture corpus. `isFixtureLikePick` is a heuristic blocklist and is kept
+  // only as defence in depth on the enrichment map — it is not the partition.
+  const pickPopulation = includeFixtures ? 'fixtures' : 'governed';
   const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const awaitingApprovalStaleMs = 4 * 60 * 60 * 1000;
 
   const [failedResult, deadLetterResult, manualReviewResult, stalePicksResult, awaitingApprovalResult, rerunCandidatesResult, providerOffersResult, bookAliasesResult, marketAliasesResult] = await Promise.all([
-    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'failed').order('updated_at', { ascending: false }),
-    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'dead_letter').order('updated_at', { ascending: false }),
+    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'failed').in('target', governedOutboxTargets).order('updated_at', { ascending: false }),
+    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'dead_letter').in('target', governedOutboxTargets).order('updated_at', { ascending: false }),
     client.from('settlement_records').select('id, pick_id, result, status, review_reason, settled_by, created_at').eq('status', 'manual_review').order('created_at', { ascending: false }).limit(50),
-    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold).order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval').order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, promotion_reason, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']).order('created_at', { ascending: false }).limit(50),
+    applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold), pickPopulation).order('created_at', { ascending: true }).limit(50),
+    applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval'), pickPopulation).order('created_at', { ascending: true }).limit(50),
+    applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, promotion_reason, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']), pickPopulation).order('created_at', { ascending: false }).limit(50),
     client.from('provider_offer_current').select('provider_key, provider_market_key, created_at'),
     client.from('provider_book_aliases').select('provider, provider_book_key'),
     client.from('provider_market_aliases').select('provider, provider_market_key, sport_id'),
@@ -380,6 +389,7 @@ export async function getNonGovernedDeliveryRows(): Promise<NonGovernedDeliveryR
   const result = await client
     .from('distribution_outbox')
     .select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at')
+    .not('target', 'in', governedOutboxTargetListLiteral())
     .order('updated_at', { ascending: false });
   assertQuerySucceeded(result, 'getNonGovernedDeliveryRows outbox');
 

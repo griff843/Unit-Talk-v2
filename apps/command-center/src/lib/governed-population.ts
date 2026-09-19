@@ -1,4 +1,4 @@
-import { isGovernedDeliveryTarget } from '@unit-talk/contracts';
+import { governedDeliveryTargets, isGovernedDeliveryTarget } from '@unit-talk/contracts';
 
 /**
  * The one positive definition of a pick that belongs to the operator-governed
@@ -51,6 +51,8 @@ export function resolveGovernedPick<T>(picksById: Map<string, T>, pickId: string
   return picksById.get(pickId) ?? null;
 }
 
+const OUTBOX_TARGET_TRANSPORT_PREFIX = 'discord:';
+
 export type DeliveryTargetPopulation = 'governed' | 'non-governed';
 
 /**
@@ -61,8 +63,25 @@ export type DeliveryTargetPopulation = 'governed' | 'non-governed';
  */
 export function isGovernedOutboxTarget(target: unknown): boolean {
   if (typeof target !== 'string') return false;
-  const deliveryTarget = target.startsWith('discord:') ? target.slice('discord:'.length) : target;
+  const deliveryTarget = target.startsWith(OUTBOX_TARGET_TRANSPORT_PREFIX)
+    ? target.slice(OUTBOX_TARGET_TRANSPORT_PREFIX.length)
+    : target;
   return isGovernedDeliveryTarget(deliveryTarget);
+}
+
+/**
+ * The same membership, enumerated as the literal `target` values the outbox
+ * stores, so the partition can be pushed into the query instead of being
+ * applied after an unbounded read. Derived from the contracts registry — adding
+ * a governed destination there extends this automatically.
+ */
+export const governedOutboxTargets: readonly string[] = governedDeliveryTargets.map(
+  (target) => `${OUTBOX_TARGET_TRANSPORT_PREFIX}${target}`,
+);
+
+/** PostgREST list literal for `.not('target', 'in', ...)` — the complement. */
+export function governedOutboxTargetListLiteral(): string {
+  return `(${governedOutboxTargets.map((target) => `"${target}"`).join(',')})`;
 }
 
 export function filterDeliveryTargetPopulation<T extends { target: unknown }>(

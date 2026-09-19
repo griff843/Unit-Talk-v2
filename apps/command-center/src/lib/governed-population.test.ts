@@ -8,6 +8,8 @@ import {
   applyPickPopulation,
   filterDeliveryTargetPopulation,
   GOVERNED_POPULATION_METADATA_PATH,
+  governedOutboxTargetListLiteral,
+  governedOutboxTargets,
   hasGovernedPopulationMetadata,
   isGovernedOutboxTarget,
   isHistoricalDeadLetter,
@@ -127,4 +129,66 @@ test('exceptions data and UI keep governed operations separate from diagnostic r
   assert.match(exceptionsPage, /Show non-governed delivery rows/);
   assert.match(exceptionsPage, /Non-governed delivery rows — diagnostic only/);
   assert.match(exceptionsPage, /No live governed delivery exceptions\. This is an empty queue/);
+});
+
+test('the governed outbox target list is derived from the contracts registry, not re-typed', () => {
+  assert.deepEqual([...governedOutboxTargets].sort(), [
+    'discord:best-bets',
+    'discord:exclusive-insights',
+    'discord:official-picks',
+    'discord:trader-insights',
+  ].sort());
+  // Every enumerated literal must satisfy the predicate, and the predicate must
+  // reject everything outside it — otherwise the query partition and the
+  // in-memory partition could disagree on the same row.
+  for (const target of governedOutboxTargets) assert.equal(isGovernedOutboxTarget(target), true);
+  const literal = governedOutboxTargetListLiteral();
+  for (const target of governedOutboxTargets) assert.ok(literal.includes(`"${target}"`));
+});
+
+test('negative control: synthetic and canary residue cannot enter the governed delivery population', () => {
+  // The exact target values measured in production 2026-09-19 on the 3,984
+  // non-governed rows, including the four stranded `utv2-1497-canary-*`
+  // processing rows that must be preserved as evidence and must never appear
+  // as an operator exception.
+  const residue = [
+    { target: 'discord:canary' },
+    { target: 'discord:recaps' },
+    { target: 'discord:1384052464189440120' },
+    { target: 'utv2-1497-canary-a' },
+    { target: 'utv2-1497-canary-b' },
+    { target: 'utv2-1497-canary-c' },
+    { target: 'utv2-1497-canary-d' },
+  ];
+  assert.deepEqual(filterDeliveryTargetPopulation(residue, 'governed'), []);
+  assert.equal(filterDeliveryTargetPopulation(residue, 'non-governed').length, residue.length);
+  // The two populations partition the input: no row is in both, none is lost.
+  const mixed = [...residue, { target: 'discord:official-picks' }];
+  assert.equal(
+    filterDeliveryTargetPopulation(mixed, 'governed').length +
+      filterDeliveryTargetPopulation(mixed, 'non-governed').length,
+    mixed.length,
+  );
+});
+
+test('negative control: a fixture pick is outside the governed exception population', () => {
+  // `isTestFixturePick` is a heuristic blocklist of five metadata keys plus a
+  // /proof/i match on `selection`. A fixture carrying none of them passes it,
+  // which is why membership must be decided positively instead.
+  const undetectableFixture = { metadata: { note: 'ci row' }, selection: 'Lakers -3.5' };
+  assert.equal(hasGovernedPopulationMetadata(undetectableFixture), false);
+  assert.equal(hasGovernedPopulationMetadata({ metadata: { distributionMode: 'track-only' } }), true);
+});
+
+test('every picks read in the exceptions data layer carries the population predicate', () => {
+  const picks = readFileSync(join(LIB_DIR, 'data/picks.ts'), 'utf8');
+  const body = picks.slice(picks.indexOf('export async function getExceptionQueues'));
+  const exceptionQueueReads = body.match(/client\.from\('picks'\)\.select\('id, submission_id, participant_id, status,/g) ?? [];
+  const governedReads = body.match(/applyPickPopulation\(client\.from\('picks'\)/g) ?? [];
+  assert.equal(exceptionQueueReads.length, 3);
+  assert.equal(governedReads.length, exceptionQueueReads.length,
+    `${exceptionQueueReads.length} exception-queue picks reads but ${governedReads.length} governed predicates`);
+  // Both outbox reads partition in the query, not only after the fact.
+  const governedOutboxReads = body.match(/\.in\('target', governedOutboxTargets\)/g) ?? [];
+  assert.equal(governedOutboxReads.length, 2);
 });
