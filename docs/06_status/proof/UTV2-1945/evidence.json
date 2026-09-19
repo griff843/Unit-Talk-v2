@@ -54,7 +54,21 @@
       "blocker": "ci:assert-staging refuses local 127.0.0.1; required CI_SUPABASE_* staging credentials are absent locally.",
       "log_path": "/tmp/utv2-1945-verify.log",
       "log_sha256": "f35593238d925f91006c4a4964f02bdbff38be6f75aef85e781c733fcd7c3c44"
-    }
+    },
+    "staging_db_smoke": {
+      "result": "PASS",
+      "run": 35464411547,
+      "head_sha": "3ec6c7532f8bcfe8eb68e31639cbfce7329f1ad4",
+      "producer_job": 105953968247,
+      "auditor_job": 105954061443,
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35464411547",
+      "scope": "pnpm test:db via ci:db-smoke only; does not execute test:t1-proof:live"
+    },
+    "remaining_blocker": "Full pnpm verify remains unpassed: local writable suites require approved staging credentials; manual staging workflow covers DB smoke only. Existing full staging live-suite coverage is PR-triggered CI, while supplied AGENTS requires green verification before opening any PR. No policy exemption inferred."
   },
   "limitations": [
     "Documentation-only proof; production migration and acceptance not executed.",

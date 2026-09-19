@@ -52,6 +52,14 @@ Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 
 ## Runtime Verification
 
+Manual sanctioned [Staging DB Proof run 35464411547](https://github.com/griff843/Unit-Talk-v2/actions/runs/35464411547)
+passed on head 3ec6c7532f8bcfe8eb68e31639cbfce7329f1ad4: seven DB smoke tests,
+zero failures/skips; independent receipt auditor PASS (producer job 105953968247,
+auditor job 105954061443). This workflow runs DB smoke only, not test:t1-proof:live.
+Full pnpm verify therefore remains unpassed. Full staging live suites are in
+PR-triggered CI; the supplied AGENTS pre-PR checklist requires green verification
+before opening any PR. No exception, governance edit or false green claim is made.
+
 Not performed against Discord. All production acceptance boxes remain unchecked.
 The local DB guard refused before writable tests; no guard or environment was weakened.
 The model-routing sidecar records manifest policy selection, with actual desktop runtime identity explicitly unattested.
