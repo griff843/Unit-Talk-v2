@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-19T11:45:56.671Z
+Generated at: 2026-09-19T14:10:00.000Z
 Issue: UTV2-1943
 Tier: T2
 Lane type: governance
 Branch: claude/utv2-1943-command-center-product-contract
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1616
-Head SHA: f99d9bd6657013fcf1e217afad8f166ec159b033
+Head SHA: ec1584cac32f59cc978a4dd5860afc90d0a7b632
 result: pass
 
 ## ASSERTIONS:
@@ -23,7 +23,7 @@ result: pass
       the acceptance test is mechanical: `grep -rl` for a live reference returns only the
       contract, the pointer stubs, and `apps/command-center/CLAUDE.md`, which explicitly defines
       no product behaviour.
-- [x] **All 23 predecessor documents are archived, none deleted.** Each moved to
+- [x] **All 24 predecessor documents are archived, none deleted.** Each moved to
       `docs/archive/command-center/` with `git mv`, so the original text is preserved verbatim
       and its history follows it. A deprecated pointer stub remains at every original path.
 - [x] **Every stub's two relative links resolve from the stub's own directory.** Checked by
@@ -68,16 +68,22 @@ result: pass
 
 ### 1. The corpus, and why it could not be reconciled by reading
 
-Twenty-three Command Center documents on `main` at `618712315`, across three directories:
+Twenty-four Command Center documents on `main` at `618712315`, across three directories:
 
 ```
 docs/03_product/                     4   REDESIGN_CONTRACT, PHASE_2_CONTRACT,
                                          WAVE_3_CONTRACT, LIFECYCLE_MINIMUM_SPEC
-docs/05_operations/                 18   T1_COMMAND_CENTER_BURNIN_TRUTH_CONTRACT,
+docs/05_operations/                 19   T1_COMMAND_CENTER_BURNIN_TRUTH_CONTRACT,
                                          COMMAND_CENTER_AUDIT, CC_* (14),
-                                         DECISION_WORKSPACE_MVP, RESEARCH_WORKSPACE_MVP
+                                         DECISION_WORKSPACE_MVP, RESEARCH_WORKSPACE_MVP,
+                                         HUMAN_CAPPER_V1_LIFECYCLE_HANDOFF
 docs/02_architecture/contracts/       1   CC_OPERATIONS_IA
 ```
+
+The twenty-fourth, `HUMAN_CAPPER_V1_LIFECYCLE_HANDOFF.md`, was added to the corpus by the owner
+during review. It is a dated measurement snapshot whose figures were already stale, and it was
+being read as current Command Center and Human Capper authority. It is archived on the same terms
+as the other twenty-three, with a pointer stub at its original path.
 
 Four declared independent gating authority over overlapping scope. The defect is structural: an
 engineer reading any one of them got a self-consistent answer, and the answers disagreed.
@@ -150,7 +156,7 @@ worked here: the diff contains no file under `apps/command-center/src/`.
 
 ### 6. Stub links resolve
 
-Each stub carries two relative links, and the 23 stubs sit at three directory depths. Resolved
+Each stub carries two relative links, and the stubs sit at three directory depths. Resolved
 against the filesystem rather than read:
 
 ```
@@ -166,8 +172,7 @@ resolved to `<repo-root>/03_product/...` and was corrected before it ran.
 
 ```
 $ pnpm lane:check --lane governance --base origin/main --head HEAD
-lane:check PASS lane=governance files=54   # content commit
-lane:check PASS lane=governance files=56   # with this proof bundle
+lane:check PASS lane=governance files=58   # content commit, PM revisions included
 ```
 
 Run after the allowlist entry was added, which is the only reason it passes for
@@ -179,13 +184,56 @@ the PR body so it is reviewed as a policy change rather than absorbed as a detai
 ```
 $ npx tsx scripts/ci/r-level-check.ts --base 618712315 --head <head>
 Verdict: PASS
-Changed files: 54
+Changed files: 58
 Rules matched: operator-ui
 ```
 
 Run with explicit SHAs. `scripts/ci/r-level-check.ts` resolves its repo root from its own file
 location and runs `git diff` with `cwd: repoRoot`, so `--head HEAD` from a lane worktree silently
 resolves in the root checkout instead.
+
+### 9. The owner revision delta was reviewed, not re-derived
+
+The owner revised the contract in seven commits (`4d703774c`..`3ab092f5d`, 5 files, +274/-280) and
+asked for a review of that delta rather than a redesign. Every claim the revision makes that could
+be checked against something other than itself was checked:
+
+- **The runtime-read correction is corroborated by shipped code, not accepted on assertion.**
+  `apps/command-center/src/lib/data/runtime-truth.ts` exists and gates both readers behind
+  `assertPrivilegedRequestAuthenticated()`; `src/lib/server-api.ts` attaches the operator bearer
+  credential server-side only. `apps/command-center/package.json` depends on `@unit-talk/config`,
+  `@unit-talk/contracts`, `@unit-talk/db`, `@unit-talk/domain` and `@unit-talk/observability`. The
+  previous text of `apps/command-center/CLAUDE.md` — "Calls no other internal application to read"
+  and "no `@unit-talk/*` packages — frontend only" — was therefore factually false at the prior
+  head. The correction is right, and it does not reintroduce `apps/operator-web`: nothing in the
+  diff references it as a backend.
+- **Archive integrity holds at the new count.** `docs/archive/command-center/` holds 24 files;
+  Appendix B lists 24; every original path carries a stub, and every stub follows the same
+  ARCHIVED / "Not authority" template.
+- **One authority, still.** A live-reference sweep returns only the contract itself, the pointer
+  stubs, and `apps/command-center/CLAUDE.md`, which defines no product behaviour. The four
+  authority references — root `CLAUDE.md`, `docs_authority_map.md`, `PLATFORM_SURFACES_AUTHORITY.md`
+  and `apps/command-center/CLAUDE.md` — all name the contract and agree with each other.
+- **No unresolved-decision residue.** Appendix D's two owner questions are now stated as ratified
+  decisions, and no "open question", "position taken" or "reserved to the owner" phrasing survives
+  anywhere it would reopen them.
+
+Two defects were found and repaired in this lane, both inside the contract and both introduced by
+the revision:
+
+1. Appendix B's "Not retired, and why" table lost a row. Removing the handoff row left a blank line
+   inside the table body, terminating the table and orphaning the "Proof bundles referencing any
+   retired document" row into literal text. Confirmed with `cat -A` before and after; the table is
+   contiguous again.
+2. §8.3 keeps "Scoring and promotion" and "Review history" at band 1 on pick detail while §4.3 and
+   §16 move the score breakdown, suppression analysis, review queue and held queue to band 2. The
+   owner decision sanctions exactly that split — a fact may appear on pick detail while the
+   dedicated workflow around it waits — but the contract never wrote it down, so the two readings
+   stood as a contradiction. One paragraph after the §8.3 table now states the distinction.
+
+Neither repair changes a band assignment, a workspace, an authority claim or an acceptance
+criterion. A full table scan across all five changed files reports no remaining ragged or
+header-less table.
 
 ## Verification
 - [x] `pnpm type-check`: exit 0 — run inside `pnpm verify:static`
@@ -194,8 +242,8 @@ resolves in the root checkout instead.
 - [x] `pnpm verify:static`: exit 0 — lint + type-check + build + full test suite + smart-form
       verify + verify:commands + migration lint (135 files, no findings) + discord command
       manifest (14 definitions)
-- [x] `pnpm lane:check --lane governance --base origin/main --head HEAD`: PASS — files=54 at
-      the content commit, files=56 once this proof bundle is added
+- [x] `pnpm lane:check --lane governance --base origin/main --head HEAD`: PASS — files=58 at
+      the content commit, with the PM revision delta and the two review repairs included
 - [x] `npx tsx scripts/ci/r-level-check.ts --base 618712315 --head <head>`: Verdict PASS,
       rules matched `operator-ui`
 - [x] Stub link resolution: every archived path's two relative links resolve on disk
@@ -224,5 +272,5 @@ claimed and none is required at T2 for a change with no write path.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1616
-Approved PR head: f99d9bd6657013fcf1e217afad8f166ec159b033
-Execution SHA: f99d9bd6657013fcf1e217afad8f166ec159b033
+Approved PR head: ec1584cac32f59cc978a4dd5860afc90d0a7b632
+Execution SHA: ec1584cac32f59cc978a4dd5860afc90d0a7b632
