@@ -37,6 +37,11 @@ result: pass
       retention and any new index are reserved decision 1 and are untouched.
 - [x] No change to delivery authority, containment, the kill switch, grading, settlement
       semantics, or any write path. The diff is entirely under `apps/command-center/`.
+- [x] The route sweep's own findings were re-measured before being recorded. Five of its
+      twelve failures were harness artifacts — a 2.5s hydration window shorter than the
+      client bundle's load time, and one route that failed only by run position — and are
+      recorded as corrections rather than as defects. Four of those five are
+      `redirect('/api-health')` stubs, so they were never four findings.
 - [x] Mutation drill: reverting `fetchObservedRuns` to the pre-fix global read fails 3 of its
       5 tests. The 2 that stay green are properties the old code also had — recorded rather
       than hidden, because a suite that went 5/5 red would mean the tests were measuring the
@@ -215,41 +220,103 @@ Two properties of the method, both of which correct earlier mistakes:
 It also asserts **hydration** rather than clicking everything: it walks the DOM for a React
 fiber, which answers "would any button work here" without invoking one.
 
-**Result: 55 routes, 43 passed, 12 failed, 21.0m wall clock, 1 worker.**
+**First reading: 55 routes, 43 passed, 12 failed, 21.0m wall clock, 1 worker.** That
+reading was then re-measured, and **five of the twelve failures were artifacts of this
+harness, not defects in the app.** What follows records both, because the correction is
+the more useful half.
 
-Each route asserted three things: HTTP status < 400, no failure marker in the rendered
-DOM, and React hydration (a fiber attached to the document). The twelve failures split
-cleanly into three causes, and the split is the finding:
+### The seven real failures: a rendered database statement timeout
 
-| Cause | Routes | What the operator sees |
-|---|---|---|
-| **Rendered a database statement timeout** (7) | `/decisions` 26.6s · `/held` 22.9s · `/intelligence/attribution` 21.9s · `/operations/approvals` 22.9s · `/picks` 22.7s · `/picks-list` 28.8s · `/review` 23.1s | The page loads and paints. Where the data should be, it prints `canceling statement due to statement timeout`. The controls on it have nothing to act on. |
-| **React never hydrated** (4) | `/agents` 25.1s · `/api-health` 19.6s · `/ops` 23.2s · `/runtime-dashboard` 24.5s | Server-rendered HTML paints and then stays inert. **This is the reported symptom exactly: buttons that are visible and do nothing when clicked.** No fiber ever attached, so no handler is bound to any control on the page. |
-| **Never finished loading** (1) | `/burn-in` — 120.0s timeout on `page.goto` | Not slow. It did not respond within two minutes. |
+`/decisions` 26.6s · `/held` 22.9s · `/intelligence/attribution` 21.9s ·
+`/operations/approvals` 22.9s · `/picks` 22.7s · `/picks-list` 28.8s · `/review` 23.1s
 
-Six of the seven timeout routes printed both `canceling statement due to statement
-timeout` and `statement timeout`; `/held` printed only the latter.
+Each loads and paints, and where the data should be prints
+`canceling statement due to statement timeout`. Six printed both that string and
+`statement timeout`; `/held` printed only the latter. This is the §3 defect measured
+from the browser: the count against `picks_current_state` was 8,979ms against the 8s
+`authenticated` timeout, and `/picks` and `/picks-list` are named in both places.
 
-**What this does and does not attribute.** The seven statement-timeout routes are the
-defect §3 measures — `/picks` and `/picks-list` are named there specifically, and the
-count against `picks_current_state` was measured at 8,979ms against an 8s
-`authenticated` timeout. The four hydration failures are **not** attributed to anything
-in this change and are not claimed to be fixed by it. They are a separate defect, they
-are the one the operator actually reported, and they are recorded here so that the
-post-deploy re-run can tell the two apart: if a hydration route is still inert after the
-deploy, the cause was never latency.
+### The five that were not failures
 
-**On the absolute numbers.** Every route, passing or failing, took at least 16.6s
-(`/execution/pick-builder`, `/research/trends`) and the slowest passing route was
-`/interventions` at 32.6s. Those figures include the operator SSH bridge and the spec's
-own network-settle wait, so they are **not** a measurement of server render time and must
-not be quoted as one. What is load-bearing here is the pass/fail classification and the
-relative ordering, both of which are taken under identical conditions.
+`/agents` · `/api-health` · `/ops` · `/runtime-dashboard` · `/burn-in`
 
-**One artifact did not survive.** `results/audit.json` recorded only the last route
-(`/settlement`), because Playwright restarts its worker process after each failure and
-that reset the spec's module-level accumulator. The per-route detail above is recovered
-from the run log, which is the authoritative record of this sweep; the JSON is not.
+The first reading classified four of these as *"React never hydrated"* and the fifth as
+a 120s timeout. Both classifications were wrong, and neither was a close call:
+
+- **Four of the five are `redirect('/api-health')` stubs**, six lines long, with no
+  controls of their own (`src/app/{agents,ops,runtime-dashboard,burn-in}/page.tsx`). They
+  are not four independent findings; they are one page, reached four ways.
+- **All five hydrate.** The first reading probed for a React fiber 2.5s after
+  `domcontentloaded`. Re-measured with `waitUntil: 'load'` and a 30s poll, every one
+  attached: `/` at 9.7s, `/api-health` at 9.6s, `/agents` at 14.6s, `/ops` at 14.4s,
+  `/runtime-dashboard` at 14.7s, `/burn-in` at 14.2s — all with zero page errors. The
+  2.5s window was shorter than the bundle's download-and-execute time over the operator
+  SSH bridge, so the assertion was measuring the window.
+- **`/burn-in`'s timeout was run position, not the route.** Run alone it passed three
+  times out of three (14.1s, 14.1s, 14.4s). It timed out only as a later route inside a
+  longer serial run. `curl` puts it at a 307 to `/api-health` in 6.9s, identical to
+  `/agents`.
+
+**The correction does not soften the operator's report — it relocates it.** "Buttons
+don't work" is real, and the re-measurement shows why: React attaches **9.6 to 14.7
+seconds** after navigation begins. Every click before that lands on server-rendered HTML
+with no handler bound and is silently dropped. That is latency, which is what §1–§3
+measure and what this change removes, plus §4's boundary so the wait is at least visible.
+It is not an inert client bundle, and a fix aimed at hydration would have been aimed at
+nothing.
+
+### What the sweep does and does not establish
+
+It ran against the deployed release, which does not contain this branch, so it measures
+the **pre-fix** system. It cannot confirm that this change fixes anything. That gap is
+bounded and not closable from here: `getDataClient()` opens its connection with the
+**service-role** key, so a local server against real data would need the production
+service-role secret — reserved decision 4. It was not obtained and not worked around.
+
+**Smallest operator action that closes it:** deploy `main` once this merges (reserved
+action 8), then re-run the same spec and diff it against this baseline.
+**Non-secret success criterion:** the seven routes above render data instead of
+`canceling statement due to statement timeout`, a request to a nonexistent path returns
+in well under one second rather than 5.49s, and the hydration probe reports attachment
+materially earlier than 9.6–14.7s.
+
+### Two method properties, both of which correct earlier mistakes of mine
+
+- **1 worker, `fullyParallel: false`.** A parallel sweep of this app measures the
+  database's queue depth under N concurrent operators, not the app's latency. A 4-worker
+  run on 2026-09-18 produced a false *"6 routes never load (90s timeout)"* reading; all
+  six are the `redirect()` stubs above.
+- **It never clicks an operator mutation.** Settle, approve, deny, retry, requeue, rerun
+  and override are all one click away on these pages. The spec matches a mutation
+  vocabulary first and skips anything it matches, and interacts only with an explicit
+  safe allowlist. A control matching neither list is skipped — the allowlist is the
+  decision, not the denylist.
+
+**And a third, learned here: an assertion whose threshold is shorter than the thing it
+measures reports a defect that does not exist.** Five of twelve failures came from a
+2.5s constant and a serial run position. The absolute durations below include the SSH
+bridge and the spec's own settle waits, so they are **not** server render times and must
+not be quoted as such; only the classifications and the relative ordering are
+load-bearing. Every route, passing or failing, took at least 16.6s in the sweep, with
+`/interventions` slowest at 32.6s.
+
+**One artifact did not survive.** `results/audit.json` recorded only the last route,
+because Playwright restarts its worker process after each failure and that reset the
+spec's module-level accumulator. The per-route detail above is recovered from the run
+log, which is the authoritative record of the sweep; the JSON is not.
+
+### R-level
+
+```
+$ npx tsx scripts/ci/r-level-check.ts --base 45fcbc207 --head <head>
+Verdict: PASS
+Changed files: 14
+Rules matched: operator-ui
+```
+
+Run with explicit SHAs, never `--head HEAD`: `scripts/ci/r-level-check.ts` resolves its
+repo root from its own file location and runs `git diff` with `cwd: repoRoot`, so from a
+lane worktree `HEAD` silently resolves in the root checkout instead.
 
 ## Verification
 - [x] `pnpm type-check`: exit 0
