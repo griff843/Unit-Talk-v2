@@ -63,9 +63,7 @@ The Worker does not write picks or settlement data. It is a delivery executor on
 | Port | 4300 |
 | **Product authority** | **`docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — the sole authority for what Command Center is and must do.** This registry entry describes the *surface*; it does not define product behaviour, and it must not be extended to do so. |
 
-Next.js application. **Reads the database directly** through its own server-side data layer; **writes
-only through `apps/api`**, over authenticated HTTP from server actions. It calls no other internal
-application to read.
+Next.js application. **Reads persisted business truth from the database** through its own server-side data layer; **reads live runtime truth/health through the narrow approved authenticated runtime/API readers**; and **writes only through `apps/api`**, over authenticated HTTP from server actions. There is no generic internal read-backend service.
 
 Every route requires credentials. The public path set is a literal allowlist covering Next build
 output and an unauthenticated health endpoint; path shape is never an authentication boundary.
