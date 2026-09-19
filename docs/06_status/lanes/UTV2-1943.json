@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1943-command-center-product-contract",
   "branch": "claude/utv2-1943-command-center-product-contract",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "3dbf94416b578cee3747415c6e1fe3ab869865d1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1616",
   "files_changed": [],
   "file_scope_lock": [
@@ -49,9 +49,9 @@
     "docs/06_status/proof/UTV2-1943/diff-summary.md",
     "docs/06_status/proof/UTV2-1943/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-09-19T11:45:00.544Z",
-  "heartbeat_at": "2026-09-19T11:46:14.661Z",
+  "heartbeat_at": "2026-09-19T18:22:46.493Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1943-command-center-product-contract.json",

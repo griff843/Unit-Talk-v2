@@ -8,6 +8,8 @@
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "8f35a2abc31c982c8769195d303b64d4ba26dbb7",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
     "bound_at": "2026-09-19T18:05:00.000Z",
     "ci_sentinels": {
