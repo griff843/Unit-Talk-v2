@@ -30,7 +30,13 @@ result: pass
       instead of `picks_current_state`. Not an estimate, not a page-length fallback.
 - [x] `getReviewQueue` and `getHeldQueue` are deliberately unchanged. Both filter on
       `review_decision`, which the view produces from its `pick_reviews` lateral, so their
-      counts cannot move off the view without changing what they count.
+      counts cannot move off the view without changing what they count. They are **still
+      broken**: `/review` timed out on 2 of 6 consecutive probes. That is recorded as an
+      open defect this lane does not close, not as collateral coverage.
+- [x] The seven timing-out routes are **not** one defect, and this change fixes two of
+      them. The first reading of the sweep filed all seven under the `searchPicks` count;
+      re-measuring per route showed four distinct causes, one of which is a redirect stub
+      and two of which this lane does not touch. Recorded in EVIDENCE §7.
 - [x] Every route now has a transition boundary. `src/app/loading.tsx` covers the ~53 routes
       that declared none; the two that declared their own still take precedence.
 - [x] No DDL, no migration, no index, no retention change, no data deleted. `system_runs`
@@ -225,16 +231,54 @@ reading was then re-measured, and **five of the twelve failures were artifacts o
 harness, not defects in the app.** What follows records both, because the correction is
 the more useful half.
 
-### The seven real failures: a rendered database statement timeout
+### The seven real failures are four different defects, and this change fixes one
 
-`/decisions` 26.6s · `/held` 22.9s · `/intelligence/attribution` 21.9s ·
-`/operations/approvals` 22.9s · `/picks` 22.7s · `/picks-list` 28.8s · `/review` 23.1s
+A second correction, and the more important one: the first reading filed all seven
+timeout routes under §3. Re-measured per route against production, they are not one
+defect and **this change does not fix five of them.** The seven are also not seven
+pages — `/decisions` is a `redirect('/review')` stub.
 
-Each loads and paints, and where the data should be prints
-`canceling statement due to statement timeout`. Six printed both that string and
-`statement timeout`; `/held` printed only the latter. This is the §3 defect measured
-from the browser: the count against `picks_current_state` was 8,979ms against the 8s
-`authenticated` timeout, and `/picks` and `/picks-list` are named in both places.
+| Route(s) | Reads | Fixed here? |
+|---|---|---|
+| `/picks`, `/picks-list` | `searchPicks` | **Yes** — §3. The count moves to `picks`: 8,979ms → 47ms, same exact number. |
+| `/review`, `/decisions` (a redirect to it), `/held`, `/operations/approvals` | `getReviewQueue`, `getHeldQueue`, `getAwaitingApprovalPicks` | **No — deliberately unchanged, and still intermittently broken.** |
+| `/intelligence/attribution` | `getBoardPerformance` | **No — a separate defect.** |
+
+**The queue pages.** Six consecutive requests to `/review` produced the marker **twice**:
+`getReviewQueue: canceling statement due to statement timeout` at 12.2s and 11.6s, with
+four clean renders at 7.0–7.5s in between. It is cache-dependent, not constant. The plan
+explains why: warm, the statement runs in **639ms** — but it touches **205,504 shared
+buffers**, because PostgREST's `count: 'exact'` becomes `count(*) over ()`, which forces
+all **21,871** matching rows through the view's three correlated laterals in order to
+return a page of 50. Cold, that buffer traffic crosses the 8s `authenticated` budget.
+
+That is the *same defect class* as §3 — an exact count over a lateral view — but not the
+same repair. `searchPicks` could move its count to `picks` because no filter of its reads
+a joined column; these three filter on `review_decision`, which only `pick_reviews`
+supplies, so the count cannot follow. Leaving them on the view is correct for this lane
+and wrong for the product; it needs its own lane and its own measurement, and this proof
+should not be read as having addressed it.
+
+**`/intelligence/attribution` is unrelated to all of the above.** `getBoardPerformance()`
+reads `v_governed_pick_performance` with **no bound at all** — `select *` ordered by
+`board_rank`, no limit, no `board_run_id`. That view is
+`picks JOIN pick_candidates JOIN syndicate_board`, so a pick appears once per board run
+that contained it:
+
+```
+select count(*), count(distinct board_run_id), count(distinct pick_id)
+from v_governed_pick_performance;
+-- 270,507 rows | 29,164 board runs | 1,114 picks
+
+explain (analyze) select * from v_governed_pick_performance order by board_rank asc;
+-- 10,688 ms, external merge sort, temp read 78,930 / written 79,046 (147MB + 168MB)
+```
+
+Even if it returned, ordering `board_rank` across 29,164 independent runs puts 29,164
+different rank-1 rows adjacent, so the page would be unreadable rather than merely slow.
+The function already accepts a `boardRunId` the page never passes, and the newest run is
+**8 rows**. The repair belongs in the query layer — changing the view is production DDL,
+reserved decision 1. Out of scope here and recorded in this PR's executor result.
 
 ### The five that were not failures
 
@@ -275,10 +319,13 @@ service-role secret — reserved decision 4. It was not obtained and not worked 
 
 **Smallest operator action that closes it:** deploy `main` once this merges (reserved
 action 8), then re-run the same spec and diff it against this baseline.
-**Non-secret success criterion:** the seven routes above render data instead of
-`canceling statement due to statement timeout`, a request to a nonexistent path returns
-in well under one second rather than 5.49s, and the hydration probe reports attachment
-materially earlier than 9.6–14.7s.
+**Non-secret success criterion**, stated only over what this change actually repairs:
+`/picks` and `/picks-list` render data instead of `canceling statement due to statement
+timeout`, a request to a nonexistent path returns in well under one second rather than
+5.49s, and the hydration probe reports attachment materially earlier than 9.6–14.7s.
+`/review`, `/held`, `/operations/approvals` and `/intelligence/attribution` are **expected
+to still fail** after that deploy — they are not repaired here, and a deploy that appeared
+to fix them would mean the measurement above was wrong, not that the lane over-delivered.
 
 ### Two method properties, both of which correct earlier mistakes of mine
 
