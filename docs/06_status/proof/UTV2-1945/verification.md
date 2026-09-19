@@ -6,7 +6,7 @@ Issue: UTV2-1945
 Tier: T2
 Lane type: governance
 Branch: codex/utv2-1945-discord-architecture
-Execution SHA: fe41f38f0c15af9775bad8cb03024d549e44b6ab
+Execution SHA: 25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a
 result: STATIC PASS — full live verification delegated to required PR CI by explicit PM disposition
 
 ## ASSERTIONS:
@@ -37,6 +37,14 @@ Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 ```
 
 ## Verification
+
+Main refreshed through the merge-mutex wrapper on 2026-09-19. The three architecture
+documents retain their recorded hashes; 65-row audit reconciliation and R-level checks
+passed again at 25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a. Local static results below remain
+historical at fe41f38f0c15af9775bad8cb03024d549e44b6ab. Prior PR CI run 35465227141
+passed full verification on 15e9ac55d16504c86353b6fc7ffb4666242ecc8a.
+The refreshed PR requires fresh exact-HEAD CI before merge; no old run is relabeled.
+User subsequently authorized merge, still conditional on the required checks.
 
 - `pnpm type-check`: PASS within pnpm verify.
 - `pnpm test`: PASS within pnpm verify; no test decrease or new runtime behavior.
@@ -78,4 +86,4 @@ The model-routing sidecar records manifest policy selection, with actual desktop
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1619
 Approved PR head: pending merge
-Execution SHA: fe41f38f0c15af9775bad8cb03024d549e44b6ab
+Execution SHA: 25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a

@@ -7,15 +7,15 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "fe41f38f0c15af9775bad8cb03024d549e44b6ab",
+    "verified_source_sha": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
-    "status": "static_pass_live_ci_pending",
+    "status": "documentation_checks_pass_refreshed_head_ci_pending",
     "documentation_check": {
       "result": "PASS",
-      "execution_sha": "fe41f38f0c15af9775bad8cb03024d549e44b6ab",
+      "execution_sha": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a",
       "audit_inventory_sha256": "2a6cd653ab4f667fe1945324c5c6e7d18effb04049b36aad0859fe277855e2e9",
       "channels": 65,
       "known_ids": 61,
@@ -32,11 +32,13 @@
     },
     "r_level": {
       "result": "PASS",
-      "rules_matched": []
+      "rules_matched": [],
+      "execution_sha": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a"
     },
     "preflight": {
       "result": "PASS",
-      "waivers": []
+      "waivers": [],
+      "scope": "Original lane admission; not rerun on refreshed merge head"
     },
     "execution_state": {
       "result": "PASS",
@@ -53,7 +55,8 @@
       "tap_skipped": 0,
       "blocker": "ci:assert-staging refuses local 127.0.0.1; required CI_SUPABASE_* staging credentials are absent locally.",
       "log_path": "/tmp/utv2-1945-verify.log",
-      "log_sha256": "f35593238d925f91006c4a4964f02bdbff38be6f75aef85e781c733fcd7c3c44"
+      "log_sha256": "f35593238d925f91006c4a4964f02bdbff38be6f75aef85e781c733fcd7c3c44",
+      "execution_sha": "fe41f38f0c15af9775bad8cb03024d549e44b6ab"
     },
     "staging_db_smoke": {
       "result": "PASS",
@@ -68,7 +71,13 @@
       "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35464411547",
       "scope": "pnpm test:db via ci:db-smoke only; does not execute test:t1-proof:live"
     },
-    "remaining_blocker": null
+    "remaining_blocker": null,
+    "prior_pr_ci": {
+      "head_sha": "15e9ac55d16504c86353b6fc7ffb4666242ecc8a",
+      "run": 35465227141,
+      "result": "PASS",
+      "scope": "Historical pre-refresh required verify; full static, staging live suites and same-run receipt passed. New HEAD requires its own CI."
+    }
   },
   "limitations": [
     "Documentation-only proof; production migration and acceptance not executed.",
@@ -82,7 +91,15 @@
     "policy_reference": "docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md",
     "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1619",
     "full_verification_claim": "pending required verify context; local full pnpm verify is not represented as green",
-    "merge_authorized": false,
-    "lane_record_update": "Existing resumeLaneManifest transition and validated writeManifest writer applied the PM-cleared blocker; ops:lane-link-pr bound PR 1619. The convenience lane:resume attempt failed control-checkout/admission checks and is not claimed as a new preflight PASS."
+    "merge_authorized": true,
+    "lane_record_update": "Existing resumeLaneManifest transition and validated writeManifest writer applied the PM-cleared blocker; ops:lane-link-pr bound PR 1619. The convenience lane:resume attempt failed control-checkout/admission checks and is not claimed as a new preflight PASS.",
+    "merge_authorization": "User explicitly instructed merge on 2026-09-19; required checks remain mandatory after main refresh."
+  },
+  "refresh": {
+    "method": "ops:merge-wrapper git-merge-main",
+    "source_head": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a",
+    "base_main": "63f63167d",
+    "documentation_hashes_unchanged": true,
+    "full_verification": "Delegated to required PR CI on final HEAD; historical local static results are not relabeled as newly executed."
   }
 }
