@@ -1,14 +1,14 @@
 # PROOF: UTV2-1942
 
-MERGE_SHA: pending merge
+MERGE_SHA: 4d63cafac098001d997fed4cc467eb235b7ce43e
 
 Generated at: 2026-09-19T04:05:00.000Z
 Issue: UTV2-1942
 Tier: T2
 Lane type: delivery-ui
 Branch: claude/utv2-1942-command-center-operator-latency
-PR URL: PENDING
-Head SHA: PENDING
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1614
+Head SHA: 4d63cafac098001d997fed4cc467eb235b7ce43e
 result: pass
 
 ## ASSERTIONS:
@@ -352,7 +352,7 @@ action 8.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: PENDING
-Approved PR head: PENDING
-Execution SHA: 04cdcf451b9ed776c3224e12036cc4aaa5084df3
+Merge SHA: 4d63cafac098001d997fed4cc467eb235b7ce43e
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1614
+Approved PR head: 4d63cafac098001d997fed4cc467eb235b7ce43e
+Execution SHA: 4d63cafac098001d997fed4cc467eb235b7ce43e
