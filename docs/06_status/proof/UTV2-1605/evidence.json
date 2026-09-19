@@ -2,20 +2,20 @@
   "schema_version": 2,
   "issue_id": "UTV2-1605",
   "pr_number": 1621,
-  "source_sha": "aff20122a832fffd0260f6b73e3846607bc9219c",
-  "reviewed_head_sha": "aff20122a832fffd0260f6b73e3846607bc9219c",
+  "source_sha": "465fe4e0a4c948f8e3f5e86440cda60d3bf6918a",
+  "reviewed_head_sha": "465fe4e0a4c948f8e3f5e86440cda60d3bf6918a",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "gate_results": [
     {
       "gate": "verify:static",
       "verdict": "PASS",
-      "detail": "6,806 tests passed; lint, type-check, build, test, Smart Form verification, and command/migration checks passed."
+      "detail": "exit 0; 6,808 tests, 6,808 pass, 0 fail, 0 skipped. lint, type-check, build, test, Smart Form verification and command/migration checks all passed."
     },
     {
       "gate": "test:db",
       "verdict": "SKIP",
-      "detail": "Local target refused before writes; staging-ci must execute against xskgrzbteyqdufktjrjx."
+      "detail": "Refused locally before any write by scripts/ci/assert-staging-target.ts: host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. database-smoke.test.ts never executed; no row written, updated or deleted. The PR's staging-only Writable DB proof job is the authority for the T1 database proof."
     },
     {
       "gate": "independent-review",
@@ -32,11 +32,11 @@
   "generated_at": "2026-09-19T20:17:10Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "aff20122a832fffd0260f6b73e3846607bc9219c",
+    "verified_source_sha": "465fe4e0a4c948f8e3f5e86440cda60d3bf6918a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "head_sha": "pending — set by CI at the PR head",
+      "head_sha": "pending \u2014 set by CI at the PR head",
       "verify": {
         "conclusion": "pending"
       },
