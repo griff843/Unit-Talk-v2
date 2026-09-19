@@ -10,6 +10,8 @@ Execution/source SHA: `5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3`
 
 ## Assertions
 
+ASSERTIONS:
+
 - Every created `grading.run` carries a machine-readable `details.outcome_class` while preserving the existing `system_runs.status` values.
 - A run with graded work reports `succeeded_with_work`; a fresh empty/legitimate skips-only pass reports `no_op_no_input`; stale result-dependent skips report `degraded_stale_input` and DB status `failed`; execution errors report `failed`.
 - Run details record rows scanned, gradeable rows, graded/skipped/error counts, skip histogram, latest provider `game_results.sourced_at`, and the six-hour freshness threshold.
@@ -17,6 +19,8 @@ Execution/source SHA: `5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3`
 - Production settlement proof requires all three predicates: `source = 'grading'`, `settled_by = 'grading-service'`, and `evidence_ref LIKE 'game-result:%'`.
 
 ## Verification
+
+EVIDENCE:
 
 | Command | Result |
 |---|---|

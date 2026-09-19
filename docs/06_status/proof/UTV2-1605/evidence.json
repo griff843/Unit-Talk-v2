@@ -6,7 +6,6 @@
   "reviewed_head_sha": "5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3",
   "evidence_commit_sha": null,
   "current_head_sha": null,
-  "merge_sha": null,
   "gate_results": [
     {
       "gate": "verify:static",
