@@ -247,13 +247,19 @@ band. Four rows described two capabilities each and were split so both halves co
 The invariant is enforced by a scan over every table in the file rather than by reading:
 
 ```
-every band cell is one of 1, 2, 3, 4, "Out of product"   -> 88 cells, 0 violations
-every band-4 row carries an underlying priority          -> 0 violations
-no non-band-4 row carries an unblock value               -> 0 violations
-every table with a band-4 row has a When unblocked column-> 0 violations
-no ragged or header-less table anywhere in the file      -> 0 violations
-every §N.N cross-reference resolves to a real heading    -> 0 dangling
+band cells=92 violations=0 band4_rows=17 band4_missing_col=1 unblock_on_non4=0 ragged=0
+dangling refs: none
 ```
+
+Read as: 92 cells sit under a `Band` header, and every one of them is exactly `1`, `2`, `3`, `4`,
+`Out of product` or an explicit dash — no compound value survives. All 17 band-4 rows carry an
+underlying priority in a **When unblocked** column, no row outside band 4 carries one, no table in
+the file is ragged or header-less, and every `§N.N` reference resolves to a real heading.
+
+`band4_missing_col=1` is the scan reporting the band *legend* in §2.1, which lists the four bands as
+its rows and therefore has no **When unblocked** column by construction. It is not a capability
+catalog and has no capability to schedule. Every catalog table that carries a band-4 row does carry
+the column.
 
 The only compound forms left in the file are the three quoted inside §2.2 rule 1 as examples of what
 is no longer permitted.
