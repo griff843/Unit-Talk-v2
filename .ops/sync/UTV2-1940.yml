@@ -1,0 +1,290 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1940
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1940
+  objective: "Command Center: pick detail claims an already-settled pick is unsettled"
+  acceptance_criteria:
+    - >-
+      `apps/command-center/src/app/picks/[id]/page.tsx:345` passes
+      `isAlreadySettled={false}` as a literal, while the sibling entry point
+      `app/settlement/page.tsx:176` derives the same fact:
+
+
+      ```ts
+
+      isAlreadySettled = detail.pick.status === 'settled' ||
+      detail.settlements.length > 0;
+
+      ```
+
+
+      `detail.settlements` is already in scope on the pick detail page — it is
+      read three lines earlier at `:302` for `settlementSummary`. The two
+      surfaces have drifted, and the detail page is the one that lies.
+
+
+      ## This is not an edge case — it is the normal internal case
+
+
+      Measured read-only against production `zfzdnfwdarxucxtaojxm`, governed
+      cohort `metadata ? 'distributionMode'`:
+
+
+      | pick | `picks.status` | `picks_current_state.settlement_result` |
+      settlement row |
+
+      | -- | -- | -- | -- |
+
+      | b534ba0d | **validated** | win | win |
+
+      | 29da425a | **validated** | loss | loss |
+
+      | 04174f12 | **validated** | win | win |
+
+      | 5c527e5e | **validated** | win | win |
+
+      | b7b34a7f | **validated** | loss | loss |
+
+      | 816a84c7 | settled | loss | loss |
+
+
+      **5 of 6 settled governed picks sit at** `validated`**.** The cause is
+      structural, not a settlement bug: `apps/api/src/settlement-service.ts:155`
+      requires `pick.status === 'posted' || 'settled'` to advance the lifecycle,
+      and a Track Only pick is *never* posted — non-delivery is enforced at
+      eight independent chokepoints. So the `posted → settled` transition can
+      never fire for a Track Only pick. The settlement plane is the truth;
+      `picks.status` stays `validated` permanently and correctly.
+
+
+      Consequence: `getAllowedActions('validated')` returns `['settle',
+      'void']`, so the detail page renders `SettlementForm` with
+      `isAlreadySettled={false}` — heading **"Settle Pick"**, and the warning
+      *"Pick is already settled. Submitting again will create a correction
+      record."* suppressed. For every Track Only pick that has already settled,
+      forever.
+
+
+      An operator arriving from the picks list rather than `/settlement` is told
+      a settled pick is unsettled, and a second submission silently writes a
+      correction record.
+
+
+      ## Acceptance
+
+
+      1. The pick detail page derives settlement state from settlement evidence,
+      not from a literal.
+
+      2. `/settlement` and `/picks/[id]` cannot disagree about whether a pick is
+      settled — the predicate has one definition, not two.
+
+      3. A pick whose lifecycle status is `validated` but which carries a
+      settlement record is reported as settled on both surfaces.
+
+      4. No change to delivery authority, containment, the kill switch, grading,
+      settlement semantics, or `getAllowedActions`' lifecycle mapping. This
+      makes an existing fact visible; it grants no new action.
+
+
+      ## Not in scope
+
+
+      Advancing `picks.status` for Track Only picks — that is a
+      lifecycle-contract question, not a UI one, and the settlement plane is
+      already the authority. CLV or any provider-dependent value.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `apps/command-center/src/app/picks/[id]/page.tsx:345` passes
+      `isAlreadySettled={false}` as a literal, while the sibling entry point
+      `app/settlement/page.tsx:176` derives the same fact:
+
+
+      ```ts
+
+      isAlreadySettled = detail.pick.status === 'settled' ||
+      detail.settlements.length > 0;
+
+      ```
+
+
+      `detail.settlements` is already in scope on the pick detail page — it is
+      read three lines earlier at `:302` for `settlementSummary`. The two
+      surfaces have drifted, and the detail page is the one that lies.
+    - >-
+      This is not an edge case — it is the normal internal case
+
+      Measured read-only against production `zfzdnfwdarxucxtaojxm`, governed
+      cohort `metadata ? 'distributionMode'`:
+
+
+      | pick | `picks.status` | `picks_current_state.settlement_result` |
+      settlement row |
+
+      | -- | -- | -- | -- |
+
+      | b534ba0d | **validated** | win | win |
+
+      | 29da425a | **validated** | loss | loss |
+
+      | 04174f12 | **validated** | win | win |
+
+      | 5c527e5e | **validated** | win | win |
+
+      | b7b34a7f | **validated** | loss | loss |
+
+      | 816a84c7 | settled | loss | loss |
+
+
+      **5 of 6 settled governed picks sit at** `validated`**.** The cause is
+      structural, not a settlement bug: `apps/api/src/settlement-service.ts:155`
+      requires `pick.status === 'posted' || 'settled'` to advance the lifecycle,
+      and a Track Only pick is *never* posted — non-delivery is enforced at
+      eight independent chokepoints. So the `posted → settled` transition can
+      never fire for a Track Only pick. The settlement plane is the truth;
+      `picks.status` stays `validated` permanently and correctly.
+
+
+      Consequence: `getAllowedActions('validated')` returns `['settle',
+      'void']`, so the detail page renders `SettlementForm` with
+      `isAlreadySettled={false}` — heading **"Settle Pick"**, and the warning
+      *"Pick is already settled. Submitting again will create a correction
+      record."* suppressed. For every Track Only pick that has already settled,
+      forever.
+
+
+      An operator arriving from the picks list rather than `/settlement` is told
+      a settled pick is unsettled, and a second submission silently writes a
+      correction record.
+    - >-
+      Acceptance
+
+      1. The pick detail page derives settlement state from settlement evidence,
+      not from a literal.
+
+      2. `/settlement` and `/picks/[id]` cannot disagree about whether a pick is
+      settled — the predicate has one definition, not two.
+
+      3. A pick whose lifecycle status is `validated` but which carries a
+      settlement record is reported as settled on both surfaces.
+
+      4. No change to delivery authority, containment, the kill switch, grading,
+      settlement semantics, or `getAllowedActions`' lifecycle mapping. This
+      makes an existing fact visible; it grants no new action.
+    - >-
+      Not in scope
+
+      Advancing `picks.status` for Track Only picks — that is a
+      lifecycle-contract question, not a UI one, and the settlement plane is
+      already the authority. CLV or any provider-dependent value.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1940/command-center-pick-detail-claims-an-already-settled-pick-is-unsettled
+    title: "Command Center: pick detail claims an already-settled pick is unsettled"
+    description: >-
+      `apps/command-center/src/app/picks/[id]/page.tsx:345` passes
+      `isAlreadySettled={false}` as a literal, while the sibling entry point
+      `app/settlement/page.tsx:176` derives the same fact:
+
+
+      ```ts
+
+      isAlreadySettled = detail.pick.status === 'settled' ||
+      detail.settlements.length > 0;
+
+      ```
+
+
+      `detail.settlements` is already in scope on the pick detail page — it is
+      read three lines earlier at `:302` for `settlementSummary`. The two
+      surfaces have drifted, and the detail page is the one that lies.
+
+
+      ## This is not an edge case — it is the normal internal case
+
+
+      Measured read-only against production `zfzdnfwdarxucxtaojxm`, governed
+      cohort `metadata ? 'distributionMode'`:
+
+
+      | pick | `picks.status` | `picks_current_state.settlement_result` |
+      settlement row |
+
+      | -- | -- | -- | -- |
+
+      | b534ba0d | **validated** | win | win |
+
+      | 29da425a | **validated** | loss | loss |
+
+      | 04174f12 | **validated** | win | win |
+
+      | 5c527e5e | **validated** | win | win |
+
+      | b7b34a7f | **validated** | loss | loss |
+
+      | 816a84c7 | settled | loss | loss |
+
+
+      **5 of 6 settled governed picks sit at** `validated`**.** The cause is
+      structural, not a settlement bug: `apps/api/src/settlement-service.ts:155`
+      requires `pick.status === 'posted' || 'settled'` to advance the lifecycle,
+      and a Track Only pick is *never* posted — non-delivery is enforced at
+      eight independent chokepoints. So the `posted → settled` transition can
+      never fire for a Track Only pick. The settlement plane is the truth;
+      `picks.status` stays `validated` permanently and correctly.
+
+
+      Consequence: `getAllowedActions('validated')` returns `['settle',
+      'void']`, so the detail page renders `SettlementForm` with
+      `isAlreadySettled={false}` — heading **"Settle Pick"**, and the warning
+      *"Pick is already settled. Submitting again will create a correction
+      record."* suppressed. For every Track Only pick that has already settled,
+      forever.
+
+
+      An operator arriving from the picks list rather than `/settlement` is told
+      a settled pick is unsettled, and a second submission silently writes a
+      correction record.
+
+
+      ## Acceptance
+
+
+      1. The pick detail page derives settlement state from settlement evidence,
+      not from a literal.
+
+      2. `/settlement` and `/picks/[id]` cannot disagree about whether a pick is
+      settled — the predicate has one definition, not two.
+
+      3. A pick whose lifecycle status is `validated` but which carries a
+      settlement record is reported as settled on both surfaces.
+
+      4. No change to delivery authority, containment, the kill switch, grading,
+      settlement semantics, or `getAllowedActions`' lifecycle mapping. This
+      makes an existing fact visible; it grants no new action.
+
+
+      ## Not in scope
+
+
+      Advancing `picks.status` for Track Only picks — that is a
+      lifecycle-contract question, not a UI one, and the settlement plane is
+      already the authority. CLV or any provider-dependent value.
+    captured_at: 2026-09-19T00:30:36.163Z
+    description_sha256: 0a30149814c70e500fb013a861d52d81feaba798714173b35f0410ab4cbbc9ac
+  contract_hash: 3ff440176ff94b81887b62223656460e31cd05d500f9e33056a7d69aaf19c001
