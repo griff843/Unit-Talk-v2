@@ -49,14 +49,22 @@
     "docs/06_status/proof/UTV2-1943/diff-summary.md",
     "docs/06_status/proof/UTV2-1943/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-09-19T11:45:00.544Z",
-  "heartbeat_at": "2026-09-19T18:22:46.493Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-19T18:45:32.497Z",
+  "closed_at": "2026-09-19T18:45:32.497Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1943-command-center-product-contract.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-19T18:45:29.843Z",
+      "verdict": "pass",
+      "merge_sha": "3dbf94416b578cee3747415c6e1fe3ab869865d1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
