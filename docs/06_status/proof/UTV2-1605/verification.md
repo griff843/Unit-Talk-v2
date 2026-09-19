@@ -6,7 +6,7 @@ MERGE_SHA: pending merge
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1621
-Execution/source SHA: `465fe4e0a4c948f8e3f5e86440cda60d3bf6918a`
+Execution/source SHA: `8fc8067d67f09d55cd664179dae4aca7f11eabec`
 
 ## Assertions
 
@@ -27,6 +27,8 @@ ASSERTIONS:
 - [x] Production settlement proof requires all three predicates: `source = 'grading'`, `settled_by = 'grading-service'`, and `evidence_ref LIKE 'game-result:%'`.
 
 ## Verification
+
+The table below retains historical pre-correction local evidence. Current correction results: focused grading tests 112/112 PASS, changed proof/tests type-check and lint PASS, R-level PASS. Exact final-HEAD staging/verify CI is pending and must pass before re-review readiness is claimed.
 
 EVIDENCE:
 

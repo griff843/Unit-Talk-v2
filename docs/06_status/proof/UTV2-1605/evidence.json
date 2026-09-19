@@ -2,15 +2,15 @@
   "schema_version": 2,
   "issue_id": "UTV2-1605",
   "pr_number": 1621,
-  "source_sha": "465fe4e0a4c948f8e3f5e86440cda60d3bf6918a",
-  "reviewed_head_sha": "465fe4e0a4c948f8e3f5e86440cda60d3bf6918a",
+  "source_sha": "8fc8067d67f09d55cd664179dae4aca7f11eabec",
+  "reviewed_head_sha": "8fc8067d67f09d55cd664179dae4aca7f11eabec",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "gate_results": [
     {
       "gate": "verify:static",
       "verdict": "PASS",
-      "detail": "exit 0; 6,808 tests, 6,808 pass, 0 fail, 0 skipped. lint, type-check, build, test, Smart Form verification and command/migration checks all passed."
+      "detail": "Historical pre-correction result at 465fe4e0a4c948f8e3f5e86440cda60d3bf6918a: exit 0; 6,808 tests, 6,808 pass, 0 fail, 0 skipped. lint, type-check, build, test, Smart Form verification and command/migration checks all passed."
     },
     {
       "gate": "test:db",
@@ -32,7 +32,7 @@
   "generated_at": "2026-09-19T20:17:10Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "465fe4e0a4c948f8e3f5e86440cda60d3bf6918a",
+    "verified_source_sha": "8fc8067d67f09d55cd664179dae4aca7f11eabec",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -44,7 +44,7 @@
         "conclusion": "pending"
       }
     },
-    "note": "The verified source is the last non-proof commit and contains the complete runtime implementation rebased onto origin/main. CI resolves the proof/head sentinels and supplies the staging-only writable DB receipt."
+    "note": "Source includes bounded PM corrections and conflict-free main refresh. Exact final HEAD CI and renewed external scope override are required; historical local evidence is not relabelled as a new-head live proof."
   },
   "scope": {
     "implementation_files": [
@@ -156,5 +156,23 @@
     "self_certified_done": false,
     "pm_approval_self_applied": false,
     "independent_review": "pending Opus 5 exact-head review"
+  },
+  "pm_correction": {
+    "reviewed_head": "5c6714fd8d5e1aeebb003298075258594f20e6d6",
+    "outcome_classes": [
+      "succeeded_with_work",
+      "no_op_nothing_gradeable",
+      "no_op_no_input",
+      "degraded_stale_input",
+      "failed"
+    ],
+    "scope_authorization": "https://github.com/griff843/Unit-Talk-v2/pull/1621#issuecomment-5745534305",
+    "live_proof_path": "apps/api/src/t1-proof-utv2-1886-settlement-batch.test.ts",
+    "focused_tests": "112 pass, 0 fail",
+    "type_check": "PASS",
+    "lint_changed_files": "PASS",
+    "r_level": "PASS",
+    "exact_head_ci": "PENDING",
+    "final_head_scope_override": "PENDING"
   }
 }
