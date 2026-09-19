@@ -95,6 +95,13 @@ allowed_path_globs:
   # this admits no glob over apps/**.
   - apps/api/CLAUDE.md
   - apps/smart-form/CLAUDE.md
+  # UTV2-1943: the third app-root instruction file, added in the identical
+  # shape and for the identical reason. The Command Center product-authority
+  # consolidation must repoint apps/command-center/CLAUDE.md at the single
+  # canonical product contract; leaving it out would strand the one app
+  # instruction file that currently defines product behaviour of its own.
+  # Bounded to this one named file; this admits no glob over apps/**.
+  - apps/command-center/CLAUDE.md
   # UTV2-1843: product-intent documents. docs/mission/** (UTV2-1829) admits the
   # mission layer and docs/05_operations/** admits the canonical contracts, but
   # the product-intent layer that sits between them -- what a surface is for,

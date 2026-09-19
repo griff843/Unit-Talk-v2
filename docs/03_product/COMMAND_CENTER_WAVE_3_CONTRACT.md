@@ -1,10 +1,18 @@
-# COMMAND CENTER WAVE 3 CONTRACT
+# COMMAND_CENTER_WAVE_3_CONTRACT — ARCHIVED
 
-## Status
+**Status:** Archived. **Not authority.** Historical evidence only.
 
-DRAFT — READY FOR IMPLEMENTATION
+This document is no longer product or operations authority for Command Center. It has been
+superseded in full by the single canonical Command Center product authority:
 
----
+**[`docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`](../../docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md)**
 
-Saved from user prompt. Full contract text in conversation context.
-See conversation for sections 1-13.
+The original text is preserved verbatim at
+[`docs/archive/command-center/COMMAND_CENTER_WAVE_3_CONTRACT.md`](../../docs/archive/command-center/COMMAND_CENTER_WAVE_3_CONTRACT.md). Read it to understand why a
+decision was once made — never to determine what to build. Where it and the contract disagree, the
+contract is correct and this document is history.
+
+Appendix A of the contract records which of this document's claims were reconciled, and how.
+
+This stub exists only so that existing references — including references inside sealed proof bundles
+and closed lane manifests, which are never edited — continue to resolve. It carries no requirement.

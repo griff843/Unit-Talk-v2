@@ -1,0 +1,194 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1943
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1943
+  objective: >-
+    Create **one** canonical Command Center product authority at
+    `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — sole authority for
+    what Command Center is, what it must do, operator workflows, IA,
+    pages/surfaces, data and write boundaries, UX behaviour and launch
+    acceptance.
+
+    Not another phase plan, redesign document, wave contract or parallel spec.
+  acceptance_criteria:
+    - |-
+      Supersedes this issue's original "product intent" framing, which PM corrected on 2026-09-19: a `docs/03_product/command-center/intent.md` would have been a 22nd Command Center document, not a consolidation. PR [griff843/Unit-Talk-v2#1615](https://linear.app/unit-talk-v2/review/utv2-1943-command-center-product-intent-458161fcbcce) was closed unmerged for that reason.
+
+      ## The defect
+
+      `main` carries **23** Command Center-specific documents — 4 under `docs/03_product/`, 18 under `docs/05_operations/`, 1 under `docs/02_architecture/contracts/`. Several independently declare themselves canonical, ratified, governing or implementation-gating over overlapping scope. Command Center cannot be built against multiple competing product definitions.
+
+      ## Objective
+
+      Create **one** canonical Command Center product authority at `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — sole authority for what Command Center is, what it must do, operator workflows, IA, pages/surfaces, data and write boundaries, UX behaviour and launch acceptance.
+
+      Not another phase plan, redesign document, wave contract or parallel spec.
+
+      ## Capability bands (PM-stated)
+
+      The contract classifies every capability into exactly one of:
+
+      1. Launch Required
+      2. Post-Launch Core
+      3. Future Intelligence Platform
+      4. Data- or Provider-Blocked
+
+      Launch must not be delayed to reach band 3, and launch simplification must not remove architecture or product intent that band 3 needs. The long-term Command Center is Unit Talk's internal betting research / intelligence / decision-support platform, intended to reduce dependence on external tools such as [Props.Cash](<http://Props.Cash>) and Outlier — it is **not** being reduced to an operations dashboard.
+
+      ## Product correction carried into the contract
+
+      Smart Form is the canonical Human Capper pick-submission surface. Command Center operates and observes the resulting pick lifecycle. Smart Form behaviour is not rebuilt inside Command Center because the legacy Pick Builder exists (see [UTV2-1941](https://linear.app/unit-talk-v2/issue/UTV2-1941/command-center-pick-builder-creates-ungoverned-picks-and-claims-an)).
+
+      ## Retirement
+
+      All 23 documents move to `docs/archive/command-center/` with a minimal deprecated pointer stub left at each original path, so inbound references from proof bundles and closed lane manifests keep resolving and no stub carries a product requirement. `apps/command-center/CLAUDE.md` stays as an engineering instruction file and points at the contract instead of defining product behaviour.
+
+      Authority references updated: `docs/05_operations/docs_authority_map.md`, `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md`, root `CLAUDE.md`.
+
+      ## Deliverables
+
+      * the canonical contract (22 required sections + the four bands)
+      * a contradiction ledger recording what was reconciled and how
+      * the archived/superseded document list
+      * the updated authority references
+      * a gap comparison of current `apps/command-center` against the ratified contract — **recorded, not implemented**
+      * any product decisions that genuinely require Griff
+
+      ## Lane note
+
+      `.lane/lanes/governance.yml` admits `apps/api/CLAUDE.md` and `apps/smart-form/CLAUDE.md` ([UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds)) but not `apps/command-center/CLAUDE.md`. This lane adds that one named file in the identical shape and flags it explicitly; it admits no glob over `apps/**`.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Supersedes this issue's original "product intent" framing, which PM corrected on 2026-09-19: a `docs/03_product/command-center/intent.md` would have been a 22nd Command Center document, not a consolidation. PR [griff843/Unit-Talk-v2#1615](https://linear.app/unit-talk-v2/review/utv2-1943-command-center-product-intent-458161fcbcce) was closed unmerged for that reason.
+    - >-
+      The defect
+
+      `main` carries **23** Command Center-specific documents — 4 under
+      `docs/03_product/`, 18 under `docs/05_operations/`, 1 under
+      `docs/02_architecture/contracts/`. Several independently declare
+      themselves canonical, ratified, governing or implementation-gating over
+      overlapping scope. Command Center cannot be built against multiple
+      competing product definitions.
+    - >-
+      Capability bands (PM-stated)
+
+      The contract classifies every capability into exactly one of:
+
+
+      1. Launch Required
+
+      2. Post-Launch Core
+
+      3. Future Intelligence Platform
+
+      4. Data- or Provider-Blocked
+
+
+      Launch must not be delayed to reach band 3, and launch simplification must
+      not remove architecture or product intent that band 3 needs. The long-term
+      Command Center is Unit Talk's internal betting research / intelligence /
+      decision-support platform, intended to reduce dependence on external tools
+      such as [Props.Cash](<http://Props.Cash>) and Outlier — it is **not**
+      being reduced to an operations dashboard.
+    - |-
+      Product correction carried into the contract
+      Smart Form is the canonical Human Capper pick-submission surface. Command Center operates and observes the resulting pick lifecycle. Smart Form behaviour is not rebuilt inside Command Center because the legacy Pick Builder exists (see [UTV2-1941](https://linear.app/unit-talk-v2/issue/UTV2-1941/command-center-pick-builder-creates-ungoverned-picks-and-claims-an)).
+    - >-
+      Retirement
+
+      All 23 documents move to `docs/archive/command-center/` with a minimal
+      deprecated pointer stub left at each original path, so inbound references
+      from proof bundles and closed lane manifests keep resolving and no stub
+      carries a product requirement. `apps/command-center/CLAUDE.md` stays as an
+      engineering instruction file and points at the contract instead of
+      defining product behaviour.
+
+
+      Authority references updated: `docs/05_operations/docs_authority_map.md`,
+      `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md`, root `CLAUDE.md`.
+    - >-
+      Deliverables
+
+      * the canonical contract (22 required sections + the four bands)
+
+      * a contradiction ledger recording what was reconciled and how
+
+      * the archived/superseded document list
+
+      * the updated authority references
+
+      * a gap comparison of current `apps/command-center` against the ratified
+      contract — **recorded, not implemented**
+
+      * any product decisions that genuinely require Griff
+    - |-
+      Lane note
+      `.lane/lanes/governance.yml` admits `apps/api/CLAUDE.md` and `apps/smart-form/CLAUDE.md` ([UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds)) but not `apps/command-center/CLAUDE.md`. This lane adds that one named file in the identical shape and flags it explicitly; it admits no glob over `apps/**`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1943/command-center-product-authority-consolidation-one-canonical-product
+    title: "Command Center product-authority consolidation: one canonical product
+      contract, 23 documents retired"
+    description: |-
+      Supersedes this issue's original "product intent" framing, which PM corrected on 2026-09-19: a `docs/03_product/command-center/intent.md` would have been a 22nd Command Center document, not a consolidation. PR [griff843/Unit-Talk-v2#1615](https://linear.app/unit-talk-v2/review/utv2-1943-command-center-product-intent-458161fcbcce) was closed unmerged for that reason.
+
+      ## The defect
+
+      `main` carries **23** Command Center-specific documents — 4 under `docs/03_product/`, 18 under `docs/05_operations/`, 1 under `docs/02_architecture/contracts/`. Several independently declare themselves canonical, ratified, governing or implementation-gating over overlapping scope. Command Center cannot be built against multiple competing product definitions.
+
+      ## Objective
+
+      Create **one** canonical Command Center product authority at `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — sole authority for what Command Center is, what it must do, operator workflows, IA, pages/surfaces, data and write boundaries, UX behaviour and launch acceptance.
+
+      Not another phase plan, redesign document, wave contract or parallel spec.
+
+      ## Capability bands (PM-stated)
+
+      The contract classifies every capability into exactly one of:
+
+      1. Launch Required
+      2. Post-Launch Core
+      3. Future Intelligence Platform
+      4. Data- or Provider-Blocked
+
+      Launch must not be delayed to reach band 3, and launch simplification must not remove architecture or product intent that band 3 needs. The long-term Command Center is Unit Talk's internal betting research / intelligence / decision-support platform, intended to reduce dependence on external tools such as [Props.Cash](<http://Props.Cash>) and Outlier — it is **not** being reduced to an operations dashboard.
+
+      ## Product correction carried into the contract
+
+      Smart Form is the canonical Human Capper pick-submission surface. Command Center operates and observes the resulting pick lifecycle. Smart Form behaviour is not rebuilt inside Command Center because the legacy Pick Builder exists (see [UTV2-1941](https://linear.app/unit-talk-v2/issue/UTV2-1941/command-center-pick-builder-creates-ungoverned-picks-and-claims-an)).
+
+      ## Retirement
+
+      All 23 documents move to `docs/archive/command-center/` with a minimal deprecated pointer stub left at each original path, so inbound references from proof bundles and closed lane manifests keep resolving and no stub carries a product requirement. `apps/command-center/CLAUDE.md` stays as an engineering instruction file and points at the contract instead of defining product behaviour.
+
+      Authority references updated: `docs/05_operations/docs_authority_map.md`, `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md`, root `CLAUDE.md`.
+
+      ## Deliverables
+
+      * the canonical contract (22 required sections + the four bands)
+      * a contradiction ledger recording what was reconciled and how
+      * the archived/superseded document list
+      * the updated authority references
+      * a gap comparison of current `apps/command-center` against the ratified contract — **recorded, not implemented**
+      * any product decisions that genuinely require Griff
+
+      ## Lane note
+
+      `.lane/lanes/governance.yml` admits `apps/api/CLAUDE.md` and `apps/smart-form/CLAUDE.md` ([UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds)) but not `apps/command-center/CLAUDE.md`. This lane adds that one named file in the identical shape and flags it explicitly; it admits no glob over `apps/**`.
+    captured_at: 2026-09-19T11:44:48.314Z
+    description_sha256: ec031db5205408e5c31df23ff15cc8fcee5947af7f475af552bceb39947a4762
+  contract_hash: a74b142fe027acf224eb613c5807cb2c1228cb6a8f0de127c4c7d77906f1dced
