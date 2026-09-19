@@ -6,8 +6,11 @@ import test from 'node:test';
 
 import {
   applyPickPopulation,
+  filterDeliveryTargetPopulation,
   GOVERNED_POPULATION_METADATA_PATH,
   hasGovernedPopulationMetadata,
+  isGovernedOutboxTarget,
+  isHistoricalDeadLetter,
   readPickPopulation,
   resolveGovernedPick,
 } from './governed-population.js';
@@ -88,4 +91,40 @@ test('every picks read on a presented analytics surface carries the population p
   assert.equal(picksReads.length, governedReads.length,
     `${picksReads.length} picks reads but ${governedReads.length} governed predicates`);
   assert.equal(analytics.includes("picksMap.get(pickId) ?? {}"), false);
+});
+
+test('outbox membership delegates to the shared governed delivery predicate', () => {
+  assert.equal(isGovernedOutboxTarget('discord:best-bets'), true);
+  assert.equal(isGovernedOutboxTarget('discord:official-picks'), true);
+  assert.equal(isGovernedOutboxTarget('discord:trader-insights'), true);
+  assert.equal(isGovernedOutboxTarget('discord:canary'), false);
+  assert.equal(isGovernedOutboxTarget('discord:123456'), false);
+  assert.equal(isGovernedOutboxTarget(null), false);
+
+  const rows = [
+    { target: 'discord:best-bets' },
+    { target: 'discord:canary' },
+    { target: 'discord:official-picks' },
+  ];
+  assert.deepEqual(filterDeliveryTargetPopulation(rows, 'governed'), [rows[0], rows[2]]);
+  assert.deepEqual(filterDeliveryTargetPopulation(rows, 'non-governed'), [rows[1]]);
+});
+
+test('only recent dead letters remain live delivery exceptions', () => {
+  const nowMs = Date.parse('2026-09-19T20:00:00.000Z');
+  assert.equal(isHistoricalDeadLetter({ status: 'dead_letter', updated_at: '2026-07-30T12:00:00.000Z' }, nowMs), true);
+  assert.equal(isHistoricalDeadLetter({ status: 'dead_letter', updated_at: '2026-09-19T19:30:00.000Z' }, nowMs), false);
+  assert.equal(isHistoricalDeadLetter({ status: 'failed', updated_at: '2026-07-30T12:00:00.000Z' }, nowMs), false);
+});
+
+test('exceptions data and UI keep governed operations separate from diagnostic rows', () => {
+  const picks = readFileSync(join(LIB_DIR, 'data/picks.ts'), 'utf8');
+  const exceptionsPage = readFileSync(join(LIB_DIR, '../app/exceptions/page.tsx'), 'utf8');
+
+  assert.match(picks, /filterDeliveryTargetPopulation\([^\n]*'governed'/);
+  assert.match(picks, /historicalDeadLetter/);
+  assert.match(picks, /getNonGovernedDeliveryRows/);
+  assert.match(exceptionsPage, /Show non-governed delivery rows/);
+  assert.match(exceptionsPage, /Non-governed delivery rows — diagnostic only/);
+  assert.match(exceptionsPage, /No live governed delivery exceptions\. This is an empty queue/);
 });

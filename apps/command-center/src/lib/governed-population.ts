@@ -1,3 +1,5 @@
+import { isGovernedDeliveryTarget } from '@unit-talk/contracts';
+
 /**
  * The one positive definition of a pick that belongs to the operator-governed
  * cohort. The metadata contract requires every governed submission to carry a
@@ -47,4 +49,35 @@ export function applyPickPopulation<T extends PopulationQuery<T>>(query: T, popu
  */
 export function resolveGovernedPick<T>(picksById: Map<string, T>, pickId: string): T | null {
   return picksById.get(pickId) ?? null;
+}
+
+export type DeliveryTargetPopulation = 'governed' | 'non-governed';
+
+/**
+ * Outbox targets are transport addresses (`discord:best-bets`), while the
+ * contracts registry owns the destination name (`best-bets`). Keep that
+ * transport normalization here and delegate membership to the shared
+ * contracts predicate; Command Center must not maintain its own target list.
+ */
+export function isGovernedOutboxTarget(target: unknown): boolean {
+  if (typeof target !== 'string') return false;
+  const deliveryTarget = target.startsWith('discord:') ? target.slice('discord:'.length) : target;
+  return isGovernedDeliveryTarget(deliveryTarget);
+}
+
+export function filterDeliveryTargetPopulation<T extends { target: unknown }>(
+  rows: T[],
+  population: DeliveryTargetPopulation,
+): T[] {
+  return rows.filter((row) => isGovernedOutboxTarget(row.target) === (population === 'governed'));
+}
+
+/** Dead letters older than one day are retained as history, never live fires. */
+export function isHistoricalDeadLetter(
+  row: { status: unknown; updated_at: unknown },
+  nowMs: number,
+): boolean {
+  if (row.status !== 'dead_letter' || typeof row.updated_at !== 'string') return false;
+  const updatedAtMs = Date.parse(row.updated_at);
+  return Number.isFinite(updatedAtMs) && nowMs - updatedAtMs >= 24 * 60 * 60 * 1000;
 }
