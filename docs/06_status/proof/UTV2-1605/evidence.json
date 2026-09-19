@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1605",
+  "pr_number": 1621,
+  "source_sha": "5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3",
+  "reviewed_head_sha": "5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "gate_results": [
+    {
+      "gate": "verify:static",
+      "verdict": "PASS",
+      "detail": "6,806 tests passed; lint, type-check, build, test, Smart Form verification, and command/migration checks passed."
+    },
+    {
+      "gate": "test:db",
+      "verdict": "SKIP",
+      "detail": "Local target refused before writes; staging-ci must execute against xskgrzbteyqdufktjrjx."
+    },
+    {
+      "gate": "independent-review",
+      "verdict": "SKIP",
+      "detail": "Pending Opus 5 exact-head review."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-09-19T20:17:10Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "head_sha": "pending — set by CI at the PR head",
+      "verify": {
+        "conclusion": "pending"
+      },
+      "writable_db_proof_staging_only": {
+        "conclusion": "pending"
+      }
+    },
+    "note": "The verified source is the last non-proof commit and contains the complete runtime implementation rebased onto origin/main. CI resolves the proof/head sentinels and supplies the staging-only writable DB receipt."
+  },
+  "scope": {
+    "implementation_files": [
+      "apps/api/src/grading-cron.test.ts",
+      "apps/api/src/grading-cron.ts",
+      "apps/api/src/grading-service.test.ts",
+      "apps/api/src/grading-service.ts",
+      "packages/db/src/repositories.ts",
+      "packages/db/src/runtime-repositories.ts",
+      "scripts/ops/readiness-refresh.ts"
+    ],
+    "migrations": "none",
+    "system_runs_status_constraint_changed": false
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 6806,
+        "pass": 6806,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "focused_grading": {
+      "command": "pnpm exec tsx --test 'apps/api/src/grading-cron.test.ts' 'apps/api/src/grading-service.test.ts'",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 109,
+        "pass": 109,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "readiness_regression": {
+      "command": "pnpm exec tsx --test scripts/ops/readiness-refresh.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "ingestor_repository_surface": {
+      "command": "pnpm exec tsx --test apps/ingestor/src/ingestor.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 93,
+        "pass": 93,
+        "fail": 0,
+        "skipped": 0
+      },
+      "note": "The grading-only repository subtype keeps the new freshness read out of the ingestor's separately governed method surface."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "pending final proof commit",
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+    "command": "pnpm test:db",
+    "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
+    "local_result": "REFUSED before any writable test executed",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. The local guard observed host=127.0.0.1, ref=unidentified and exited 1 before database-smoke.test.ts started.",
+    "queries": [
+      {
+        "name": "staging-only writable smoke",
+        "result": "not executed locally; ci:assert-staging refused the unidentified local target before writes"
+      },
+      {
+        "name": "production settlement evidence hygiene predicate",
+        "query": "SELECT * FROM settlement_records WHERE source = 'grading' AND settled_by = 'grading-service' AND evidence_ref LIKE 'game-result:%'",
+        "result": "predicate is asserted by unit coverage; source='grading' alone is explicitly demonstrated to include test artifacts and is forbidden as proof"
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "rows written, updated, or deleted by local DB proof",
+        "value": 0
+      },
+      {
+        "name": "writable DB assertions executed locally",
+        "value": 0
+      }
+    ]
+  },
+  "acceptance_coverage": [
+    "fresh empty input is no_op_no_input",
+    "stale data-dependent skips are degraded_stale_input with failed system status",
+    "fresh completed-game work is succeeded_with_work",
+    "zero-graded and skips-only runs cannot claim succeeded_with_work",
+    "existing grading and settlement correctness tests remain green",
+    "readiness consumes outcome_class and input freshness",
+    "alerts open, deduplicate, and clear on fresh successful work",
+    "production proof predicates distinguish real grader evidence from test artifacts"
+  ],
+  "deployment_warning": "The grading readiness dimension may turn RED on first correct deployment when existing stale/dead ingestion is finally exposed. That is visibility of an existing incident, not a regression introduced by this change.",
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "independent_review": "pending Opus 5 exact-head review"
+  }
+}

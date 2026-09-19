@@ -7,7 +7,10 @@ entities:
     - UTV2-1605
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-1605/evidence.json
+    - docs/06_status/proof/UTV2-1605/model-routing.json
+    - docs/06_status/proof/UTV2-1605/verification.md
 task_contract:
   schema_version: 1
   issue_id: UTV2-1605

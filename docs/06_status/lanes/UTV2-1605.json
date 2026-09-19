@@ -26,7 +26,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1605/evidence.json",
-    "docs/06_status/proof/UTV2-1605/model-routing.json"
+    "docs/06_status/proof/UTV2-1605/model-routing.json",
+    "docs/06_status/proof/UTV2-1605/verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-09-19T19:38:08.259Z",
