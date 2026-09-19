@@ -539,6 +539,12 @@ on one page, in lifecycle order:
 A section with no data shows an honest empty state (§18.4) — it is never omitted silently, because
 the absence of a section reads as "this stage did not apply" when it may mean "this stage failed".
 
+**Band 1 here is not in tension with band 2 in §4.3 and §16.** A fact belongs on pick detail at launch
+whenever the system already holds it; the *dedicated workflow* built around that fact — the Decision
+workspace's score breakdown and suppression analysis, the review queue, the held queue — is band 2 and
+does not block launch. Showing a recorded scoring outcome or review decision on the pick is display of
+existing truth, not the workflow.
+
 ### 8.4 The invisibility test
 
 A pick's page passes when an operator, reading only that page, can answer: where is this pick in its
@@ -1169,7 +1175,6 @@ The dated `HUMAN_CAPPER_V1_LIFECYCLE_HANDOFF.md` is also moved into the same arc
 | Document | Status |
 |---|---|
 | `apps/command-center/CLAUDE.md` | Remains, as an **engineering instruction file only**. It describes how to work in the package — stack, boundaries, test runner, schema invariants — and points at this contract for product behaviour. It defines no product requirement. |
-
 | Proof bundles referencing any retired document | Remain untouched. A proof bundle is sealed evidence bound to a merge; it is never edited to follow a document move. |
 
 ---
