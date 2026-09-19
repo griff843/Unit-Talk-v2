@@ -1,5 +1,10 @@
 # Diff Summary — UTV2-1939
 
+MERGE_SHA: pending merge
+
+> Plain anchor on purpose: CEP-E5 line-matches `MERGE_SHA:` at the start of a line, so a
+> bolded or table-row form would not be rebindable after merge.
+
 **Lane:** UTV2-1939 · T2 · `delivery-ui` · branch `claude/utv2-1939-command-center-human-capper-lifecycle`
 **Scope:** `apps/command-center/**` (plus this lane's own control-plane files)
 
