@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
+import { applyPickPopulation, readPickPopulation } from '../governed-population';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -548,6 +549,7 @@ export async function searchPicks(
   const DEFAULT_LIMIT = 25;
   const limit = Math.min(Math.max(Number(params['limit'] ?? DEFAULT_LIMIT), 1), 200);
   const offset = Math.max(Number(params['offset'] ?? 0), 0);
+  const population = readPickPopulation(params['population']);
 
   try {
     const client: Client = await getDataClient();
@@ -612,7 +614,7 @@ export async function searchPicks(
     const sortCol = params['sort'] ?? 'created_at';
     const sortAsc = params['sortDir'] === 'asc';
 
-    const rowQuery = applyFilters(client.from('picks_current_state').select(selectCols))
+    const rowQuery = applyPickPopulation(applyFilters(client.from('picks_current_state').select(selectCols)), population)
       .order(sortCol, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
@@ -632,8 +634,9 @@ export async function searchPicks(
     // so no join can drop a `picks` row or multiply one. Verified against
     // production on three predicates -- unfiltered 107866/107866,
     // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
-    const countQuery = applyFilters(
-      client.from('picks').select('id', { count: 'exact', head: true }),
+    const countQuery = applyPickPopulation(
+      applyFilters(client.from('picks').select('id', { count: 'exact', head: true })),
+      population,
     );
 
     const [
@@ -651,7 +654,6 @@ export async function searchPicks(
 
     // Remap snake_case columns to camelCase expected by PickResultRow
     const picks: Array<Record<string, unknown>> = rows
-      .filter((row) => !isFixtureLikePick(row))
       .map((row) => ({
         ...row,
         matchup: eventFieldsFromRow(row).eventName,
