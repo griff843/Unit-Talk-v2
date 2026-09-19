@@ -1,7 +1,7 @@
 # PROOF: UTV2-1946
 
 Execution SHA: `cb8e405828dfb80e64475889a1fc4b425a6b3097`
-MERGE_SHA: pending
+MERGE_SHA: pending merge
 
 ## ASSERTIONS:
 
@@ -108,3 +108,12 @@ No write was performed. Both measurements above are read-only `select` statement
 `zfzdnfwdarxucxtaojxm` — which is the population this change governs, and the only place the 107,866
 row fixture corpus and the 32 stranded canary rows actually exist. A staging count could not have
 answered either question.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1620
+
+Execution identity is `sha_binding.verified_source_sha` in the sibling `evidence.json`
+(`cb8e405828dfb80e64475889a1fc4b425a6b3097`), the last commit on this branch carrying code.
+`post-merge-lane-close.yml` rebinds `sha_binding.merge_sha` and this row after merge.

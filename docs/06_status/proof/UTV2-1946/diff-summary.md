@@ -1,7 +1,7 @@
 # UTV2-1946 Diff Summary
 
 Execution SHA: `cb8e405828dfb80e64475889a1fc4b425a6b3097`
-MERGE_SHA: pending
+MERGE_SHA: pending merge
 
 - Imports the contracts-owned `isGovernedDeliveryTarget()` predicate through the Command Center governed-population helper, normalizing only the `discord:` transport prefix.
 - Filters the default Exceptions outbox population to governed targets before both rows and counts are produced. It separates dead letters older than 24 hours into delivery history.
