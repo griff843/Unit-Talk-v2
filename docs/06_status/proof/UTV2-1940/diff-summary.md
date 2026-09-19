@@ -1,6 +1,6 @@
 # UTV2-1940 Diff Summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: bebe71065011f1a22a369c4b30864a4391c99dd8
 
 Generated at: 2026-09-19T00:40:54.865Z
 Issue: UTV2-1940
@@ -9,7 +9,7 @@ Lane type: delivery-ui
 Branch: claude/utv2-1940-command-center-settlement-state-truth
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1613
 Head SHA: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
-Merge SHA: N/A
+Merge SHA: bebe71065011f1a22a369c4b30864a4391c99dd8
 Diff base: f338294a73cd927b5df2b4b53903785b9aac8a17
 Diff target: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
 
@@ -41,4 +41,4 @@ A	docs/06_status/proof/UTV2-1940/.gitkeep
 
 ## SHA Binding
 Head SHA: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
-Merge SHA: N/A
+Merge SHA: bebe71065011f1a22a369c4b30864a4391c99dd8

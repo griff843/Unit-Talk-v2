@@ -1,6 +1,6 @@
 # PROOF: UTV2-1940
 
-MERGE_SHA: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
+MERGE_SHA: bebe71065011f1a22a369c4b30864a4391c99dd8
 
 Generated at: 2026-09-19T00:41:00.000Z
 Issue: UTV2-1940
@@ -146,7 +146,7 @@ which were executed rather than asserted.
 
 ## Merge SHA Binding
 
-Merge SHA: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
+Merge SHA: bebe71065011f1a22a369c4b30864a4391c99dd8
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1613
 Approved PR head: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
 Execution SHA: 6547e2e6f9aaa68e80e49a16eaac76bdf097ec88
