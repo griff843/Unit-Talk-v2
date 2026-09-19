@@ -152,6 +152,63 @@ function summarizeCanaryLane(outboxRows: OutboxRecord[], receiptRows: ReceiptRec
   return { ...summary, target: 'discord:canary' as const, graduationReady: blockers.length === 0, blockers };
 }
 
+/**
+ * The `run_type` values anything downstream of `getSnapshotData` actually reads.
+ *
+ * `system_runs` is not a uniform population. `worker.heartbeat` writes a row
+ * every ~6 seconds and, measured in production, is 3,429,120 of 3,516,347 rows
+ * -- 97.5%. So "the most recent N runs" is, in practice, "the last N heartbeats"
+ * and nothing else: a global `order by created_at desc limit 26` returns 26
+ * heartbeat rows, every time. Every consumer below that filters for some other
+ * run_type -- the distribution run, the ingestor cycle, grading, recaps, alerts,
+ * provider quota -- was therefore reading an empty list and reporting null.
+ *
+ * Reading per type instead is both correct and far cheaper. No index serves a
+ * bare `ORDER BY` on this table, so the global form is a full parallel seq scan
+ * (11,501ms measured); per type it rides `system_runs_run_type_started_at_idx`
+ * and the whole fan-out measured 98.8ms while returning every type, not one.
+ */
+const OBSERVED_RUN_TYPES = [
+  'distribution.process',
+  'ingestor.cycle',
+  'worker.heartbeat',
+  'alert.detection',
+  'alert.notification',
+  'grading.run',
+  'grading.cron.heartbeat',
+  'recap.post',
+] as const;
+
+/**
+ * Read the most recent `perTypeLimit` runs of each observed type, in parallel,
+ * and return them merged and sorted newest-first so callers see the same shape
+ * the single global query used to produce.
+ *
+ * Returns a `{ data, error }` pair deliberately: the caller checks `.error`
+ * alongside every other Supabase result, and the first failure is surfaced
+ * rather than silently yielding a short list that would read as "no such runs".
+ */
+export async function fetchObservedRuns(
+  client: Client,
+  since: string | undefined,
+  perTypeLimit: number,
+): Promise<{ data: SystemRunRecord[] | null; error: unknown }> {
+  const results = await Promise.all(
+    OBSERVED_RUN_TYPES.map((runType) => {
+      let q = client.from('system_runs').select('*').eq('run_type', runType);
+      if (since) q = q.gte('created_at', since);
+      return q.order('started_at', { ascending: false }).limit(perTypeLimit);
+    }),
+  );
+
+  const failed = results.find((result) => result.error);
+  if (failed) return { data: null, error: failed.error };
+
+  const merged = results.flatMap((result) => (result.data ?? []) as SystemRunRecord[]);
+  merged.sort((a, b) => String(b.started_at ?? '').localeCompare(String(a.started_at ?? '')));
+  return { data: merged, error: null };
+}
+
 interface WorkerRuntimeSummary {
   drainState: 'idle' | 'draining' | 'stalled' | 'blocked';
   detail: string;
@@ -441,11 +498,7 @@ export async function getSnapshotData(filter?: OutboxFilter): Promise<unknown> {
     })(),
     client.from('distribution_receipts').select('*').order('recorded_at', { ascending: false }).limit(fetchLimit),
     client.from('settlement_records').select('*').order('created_at', { ascending: false }).limit(fetchLimit),
-    (() => {
-      let q = client.from('system_runs').select('*');
-      if (filter?.since) q = q.gte('created_at', filter.since);
-      return q.order('created_at', { ascending: false }).limit(fetchLimit);
-    })(),
+    fetchObservedRuns(client, filter?.since, fetchLimit),
     (() => {
       let q = client.from('picks').select('*');
       if (filter?.lifecycleState) q = q.eq('status', filter.lifecycleState);

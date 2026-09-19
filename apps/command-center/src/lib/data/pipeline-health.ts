@@ -9,6 +9,7 @@ import type {
 import { createDatabaseConnectionConfig } from './client';
 
 import { getDataClient } from './client';
+import { fetchObservedRuns } from './snapshot';
 import {
   createPipelineLiveConfig,
   derivePipelineHealthSnapshot,
@@ -27,7 +28,10 @@ export async function getPipelineHealthSnapshot(): Promise<PipelineHealthSnapsho
     client.from('picks').select('status, promotion_status, promotion_score, created_at, updated_at').order('updated_at', { ascending: false }).limit(250),
     client.from('distribution_outbox').select('status, created_at, updated_at, claimed_at').order('updated_at', { ascending: false }).limit(250),
     client.from('distribution_receipts').select('recorded_at').order('recorded_at', { ascending: false }).limit(250),
-    client.from('system_runs').select('run_type, status, started_at, finished_at').order('started_at', { ascending: false }).limit(100),
+    // Per run_type, not a global "latest 100". `worker.heartbeat` is 97.5% of
+    // this table, so a global ordering returns 100 heartbeats and this snapshot
+    // saw no other run type at all. See `fetchObservedRuns`.
+    fetchObservedRuns(client, undefined, 25),
   ]);
 
   for (const result of [submissionsResult, picksResult, outboxResult, receiptsResult, runsResult]) {

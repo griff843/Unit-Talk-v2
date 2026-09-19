@@ -1,4 +1,5 @@
 import { getDataClient } from './client';
+import { fetchObservedRuns } from './snapshot';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -129,7 +130,11 @@ export async function getProviderHealth(): Promise<{ ok: true; data: unknown }> 
 
   const [offersResult, runsResult, latestOfferResult] = await Promise.all([
     client.from('provider_offer_current').select('provider_key, created_at, snapshot_at, provider_event_id'),
-    client.from('system_runs').select('*').order('created_at', { ascending: false }).limit(50),
+    // Per run_type. Provider quota is recorded on `details.quota` of ingestor
+    // runs, and a global "latest 50" on this table returns 50 `worker.heartbeat`
+    // rows -- which carry no quota -- so this summary was always empty. See
+    // `fetchObservedRuns`.
+    fetchObservedRuns(client, undefined, 25),
     client.from('provider_offer_current').select('snapshot_at').order('snapshot_at', { ascending: false }).limit(1),
   ]);
 
