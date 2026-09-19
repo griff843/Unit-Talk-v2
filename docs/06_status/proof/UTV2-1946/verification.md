@@ -1,7 +1,7 @@
 # PROOF: UTV2-1946
 
 Execution SHA: `cb8e405828dfb80e64475889a1fc4b425a6b3097`
-MERGE_SHA: pending merge
+MERGE_SHA: 4cc955f643c0231742784513dad171e9ff62d5df
 
 ## ASSERTIONS:
 
@@ -111,7 +111,7 @@ answered either question.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 4cc955f643c0231742784513dad171e9ff62d5df
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1620
 
 Execution identity is `sha_binding.verified_source_sha` in the sibling `evidence.json`
