@@ -164,7 +164,7 @@ in the UI and keep the structure.
 
 ### 3.1 The four workspaces
 
-Command Center is organised into exactly four top-level workspaces. They are distinct working
+Command Center is organised into exactly four canonical workspaces. They are distinct working
 contexts, not steps in a flow: an operator stays inside one for an extended period and switches
 deliberately.
 
@@ -1102,8 +1102,8 @@ once said "canonical".
 
 | # | The contradiction | Resolution |
 |---|---|---|
-| 1 | Three documents specified Command Center as a UI consuming a separate generic read-only backend service's endpoints; a fourth declared that backend decommissioned. Current code reads persisted business data directly through its own server-side data layer, while live runtime truth/health uses narrow authenticated readers against canonical API/runtime endpoints. | **The generic read-backend architecture is retired; the runtime exception is preserved.** §6.2: business reads are direct to the canonical database, while runtime/process truth may use approved authenticated runtime/API readers because the database does not own that truth. The old operator-web endpoint architecture remains void. | **The code and the decommissioning notice win.** §6.2: reads are direct, through the app's own data layer, with no intermediate read service. Every endpoint-shaped specification in the corpus is void — not merely stale, because the endpoints it names do not exist. |
-| 2 | One contract stated "Command Center is NOT a direct database writer — all writes go through API", which was widely read as forbidding direct reads as well. | **Both halves stated explicitly.** §6.1: reads are direct, writes never are. The original rule was about writes and remains in force for writes. |
+| 1 | Three documents specified Command Center as a UI consuming a separate generic read-only backend service's endpoints; a fourth declared that backend decommissioned. Current code reads persisted business data directly through its own server-side data layer, while live runtime truth/health uses narrow authenticated readers against canonical API/runtime endpoints. | **The generic read-backend architecture is retired; the runtime exception is preserved.** §6.2: business reads are direct to the canonical database, while runtime/process truth may use approved authenticated runtime/API readers because the database does not own that truth. The old operator-web endpoint architecture remains void. |
+| 2 | One contract stated "Command Center is NOT a direct database writer — all writes go through API", which was widely read as forbidding direct reads as well. | **The boundary is now explicit.** §6.1: persisted business reads use the server-side data layer; live runtime truth may use the narrow approved runtime/API readers; writes never go directly to the database. The original prohibition was about writes and remains fully in force. |
 | 3 | The launch contract listed research tools and filtering as non-goals; a ratified IA document established a Research workspace; a later phase contract mandated filtering. | **The four bands resolve it** (§2). Filtering is band 1 (§8.1) because finding a pick is a launch requirement. Research is bands 2–3. "Non-goal at launch" is a scheduling statement and never a deletion (§2.4). |
 | 4 | A phase contract listed "a full Outlier-style research terminal" as an explicit non-goal. The current product direction names replacing dependence on exactly those external tools as the long-term goal. | **The current product direction wins.** It becomes band 3 (§4.5, §4.6). Not launch-scoped, and explicitly not cancelled. |
 | 5 | One "contract" carried a status of ready-for-implementation and no body — its content lived only in a conversation that no longer exists. | **Void.** A document that cannot be complied with governs nothing. Nothing was carried forward from it, because there is nothing to carry. |
@@ -1119,10 +1119,9 @@ once said "canonical".
 | 15 | A blocked-capability taxonomy existed in one document (shippable / shell-only / blocked by provider, multi-book, historical backfill, or closing-line data) with no relationship to launch priority, so "blocked" and "unimportant" were indistinguishable. | **Band 4 replaces it** (§2.1, §2.2). A band-4 capability keeps its underlying band, so blocked never silently demotes a requirement. |
 | 16 | A metrics register conditioned a class of metrics on a specific historical issue being closed. | **Replaced by a data condition, not an issue reference.** §5.6: a metric renders when its input exists. Tying product behaviour to a ticket number makes the contract stale the moment the ticket moves. |
 
-### Contradictions this contract does **not** resolve
+### Owner-resolved product decisions
 
-Two are genuine product decisions and are surfaced to the owner rather than decided here — see
-Appendix D.
+Two contradictions required product-owner judgment rather than engineering inference. They were resolved during this consolidation review and are recorded in Appendix D. They are no longer open questions.
 
 ---
 
@@ -1208,7 +1207,7 @@ This contract ratifies the four-workspace IA (§3.1) as intent, because the ship
 top-level entries and duplicated subject matter are drift rather than a recorded decision. Converging
 the tree onto four workspaces is real work with real operator-visible churn. The alternative — accept
 the shipped structure and re-cut the IA around it — is legitimate and cheaper, and would be a
-different product. **Position taken: the four-workspace IA.** Changing it is an owner decision.
+different product. **Owner decision: retain the four canonical workspaces.** The shipped 24-segment route tree is implementation drift, not the target IA. Convergence should preserve Operations, Decision, Intelligence and Research as the mature structure. An unfinished workspace does not have to appear as an active navigation destination until it contains a usable capability (§3.2). Changing the four-workspace model requires an owner amendment.
 
 **D2 — Is per-capper and aggregate performance band 1, or band 2?**
 
