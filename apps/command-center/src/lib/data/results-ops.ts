@@ -43,13 +43,40 @@ export interface StuckPostedPick {
   ageHours: number | null;
 }
 
+/**
+ * UTV2-1939: a delivered human-capper pick whose result is not in yet.
+ *
+ * This is deliberately NOT the "stuck posted" list. That one keys off a 24h age
+ * proxy, so a pick delivered today whose game finishes tonight appears in it
+ * only tomorrow -- and by then the recap window has passed. Until this list
+ * existed the only route to such a pick was hand-constructing
+ * `/settlement?pickId=<uuid>` from a database read, which is exactly the
+ * per-submission engineering intervention Milestone 2 condition 1 forbids.
+ *
+ * The predicate is positive identification, never absence: a pick is here
+ * because it carries an `authorized` server delivery authorization, not because
+ * it merely lacks something.
+ */
+export interface DeliveredAwaitingSettlementRow {
+  id: string;
+  capperId: string | null;
+  market: string | null;
+  selection: string | null;
+  odds: number | null;
+  stakeUnits: number | null;
+  sportDisplayName: string | null;
+  postedAt: string | null;
+}
+
 export interface ResultsOpsSnapshot {
   counts: {
     settled24h: number;
     manualReviewOpen: number;
     corrections: number;
     stuckPosted: number;
+    deliveredAwaitingSettlement: number;
   };
+  deliveredAwaitingSettlement: DeliveredAwaitingSettlementRow[];
   recentSettlements: SettlementOpsRow[];
   manualReview: SettlementOpsRow[];
   corrections: SettlementOpsRow[];
@@ -116,6 +143,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     settled24hResult,
     stuckResult,
     stuckCountResult,
+    deliveredAwaitingResult,
     gameLatestResult,
     game24hResult,
   ] =
@@ -161,6 +189,18 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
         .select('id', { count: 'exact', head: true })
         .eq('status', 'posted')
         .lte('created_at', dayAgo),
+      // UTV2-1939: delivered human-capper picks awaiting their result.
+      // Predicate validated against production 2026-09-18 -- returns exactly the
+      // one live delivered pick and nothing else. No age filter: the 24h delay
+      // on `stuckPosted` above is the defect this list exists to avoid.
+      client
+        .from('picks_current_state')
+        .select('id, capper_id, market, selection, odds, stake_units, sport_display_name, posted_at')
+        .eq('status', 'posted')
+        .is('settlement_recorded_at', null)
+        .eq('metadata->deliveryAuthorization->>decision', 'authorized')
+        .order('posted_at', { ascending: true })
+        .limit(50),
       client.from('game_results').select('sourced_at').order('sourced_at', { ascending: false }).limit(1),
       client.from('game_results').select('id', { count: 'exact', head: true }).gte('sourced_at', dayAgo),
     ]);
@@ -170,6 +210,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     manualResult,
     correctionsResult,
     stuckResult,
+    deliveredAwaitingResult,
     gameLatestResult,
   ]) {
     if (result.error) throw result.error;
@@ -199,6 +240,31 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     };
   });
 
+  const deliveredAwaitingSettlement: DeliveredAwaitingSettlementRow[] = (
+    (deliveredAwaitingResult.data ?? []) as Array<Record<string, unknown>>
+  ).map((row) => {
+    // Number(null) is 0 and 0 is finite, so a null column would render as a real
+    // zero price or a real zero stake. Both are lies an operator could act on.
+    const toNumber = (value: unknown): number | null => {
+      if (value === null || value === undefined || value === '') return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+    const odds = toNumber(row['odds']);
+    const stake = toNumber(row['stake_units']);
+    return {
+      id: String(row['id'] ?? ''),
+      capperId: typeof row['capper_id'] === 'string' ? row['capper_id'] : null,
+      market: typeof row['market'] === 'string' ? row['market'] : null,
+      selection: typeof row['selection'] === 'string' ? row['selection'] : null,
+      odds,
+      stakeUnits: stake,
+      sportDisplayName:
+        typeof row['sport_display_name'] === 'string' ? row['sport_display_name'] : null,
+      postedAt: typeof row['posted_at'] === 'string' ? row['posted_at'] : null,
+    };
+  });
+
   const latestGameRow = ((gameLatestResult.data ?? []) as Array<Record<string, unknown>>)[0];
 
   return {
@@ -207,7 +273,9 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
       manualReviewOpen,
       corrections: correctionCount,
       stuckPosted: stuckPostedCount,
+      deliveredAwaitingSettlement: deliveredAwaitingSettlement.length,
     },
+    deliveredAwaitingSettlement,
     recentSettlements: ((recentResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow),
     manualReview,
     corrections,
