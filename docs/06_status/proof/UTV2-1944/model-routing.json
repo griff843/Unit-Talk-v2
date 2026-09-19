@@ -1,15 +1,14 @@
 {
   "issue_id": "UTV2-1944",
-  "tier": "T2",
-  "lane_type": "delivery-ui",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-terra-medium",
+  "model": "gpt-5.6-terra",
+  "reasoning_effort": "medium",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.153.3",
+  "legacy_compatibility_used": false,
   "override_used": false,
-  "model_routing": {
-    "profile": "codex-terra-medium",
-    "model": "gpt-5.6-terra",
-    "reasoning_effort": "medium",
-    "selected_by": "three-brain",
-    "policy_version": "1.0.0",
-    "override_used": false
-  },
-  "execution_sha": "81683c655b1ba018fef1f7579230b2ab4d020484"
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "generated_at": "2026-09-19T18:41:53.683Z"
 }
