@@ -456,3 +456,38 @@ test('readiness treats a genuine empty no-op as healthy, not an incident', () =>
   assert.equal(dimension.status, 'pass');
   assert.match(dimension.evidence, /no_op_no_input/);
 });
+
+test('readiness accepts a nothing-gradeable pass and refuses a no-input claim that examined rows', () => {
+  const examinedAndSkipped = {
+    outcome_class: 'no_op_nothing_gradeable',
+    rows_scanned: 15_000,
+    gradeable_rows: 0,
+    graded_count: 0,
+    skipped_count: 15_000,
+    skipped_reasons: { settlement_already_exists: 15_000 },
+    data_dependent_skipped_count: 0,
+    error_count: 0,
+    input_freshness: { status: 'fresh', age_ms: 60_000, threshold_hours: 6 },
+  };
+
+  const honest = runGradingReadinessProbe({
+    status: 'succeeded',
+    started_at: '2026-09-19T12:00:00.000Z',
+    finished_at: '2026-09-19T12:00:01.000Z',
+    details: examinedAndSkipped,
+  });
+  assert.equal(honest.status, 'pass');
+  assert.match(honest.evidence, /no_op_nothing_gradeable/);
+
+  // Mutation control. The same 15,000-row pass mislabelled as no_op_no_input is
+  // the defect this lane removes: it positively asserts there was no input. The
+  // probe must refuse it rather than pass it as a healthy quiet run.
+  const mislabelled = runGradingReadinessProbe({
+    status: 'succeeded',
+    started_at: '2026-09-19T12:00:00.000Z',
+    finished_at: '2026-09-19T12:00:01.000Z',
+    details: { ...examinedAndSkipped, outcome_class: 'no_op_no_input' },
+  });
+  assert.equal(mislabelled.status, 'fail');
+  assert.match(mislabelled.evidence, /examined 15000 rows/);
+});

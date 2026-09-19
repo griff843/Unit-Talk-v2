@@ -41,6 +41,9 @@ export interface GradingPassResult {
 
 export type GradingOutcomeClass =
   | 'succeeded_with_work'
+  /** Rows were examined and none could be graded -- not the same as no work. */
+  | 'no_op_nothing_gradeable'
+  /** Nothing was examined at all: the population read returned no rows. */
   | 'no_op_no_input'
   | 'degraded_stale_input'
   | 'failed';
@@ -239,6 +242,8 @@ export async function runGradingPass(
     const outcomeClass = classifyGradingOutcome({
       graded: execution.graded,
       errors: execution.errors,
+      rowsScanned: execution.rowsScanned,
+      skipped: execution.skipped,
       dataDependentSkipped,
       inputFreshness,
     });
@@ -738,6 +743,8 @@ export function classifyInputFreshness(
 export function classifyGradingOutcome(input: {
   graded: number;
   errors: number;
+  rowsScanned: number;
+  skipped: number;
   dataDependentSkipped: number;
   inputFreshness: GradingInputFreshness;
 }): GradingOutcomeClass {
@@ -752,6 +759,13 @@ export function classifyGradingOutcome(input: {
   }
   if (input.graded > 0) {
     return 'succeeded_with_work';
+  }
+  // The whole point of this lane: a pass that examined 15,000 picks and graded
+  // none must not be byte-identical to one that examined zero. `no_op_no_input`
+  // positively asserts there was no input, so it is reachable only when nothing
+  // was read.
+  if (input.rowsScanned > 0 || input.skipped > 0) {
+    return 'no_op_nothing_gradeable';
   }
   return 'no_op_no_input';
 }

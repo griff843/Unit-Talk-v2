@@ -506,6 +506,10 @@ export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDi
       typeof details?.['data_dependent_skipped_count'] === 'number'
         ? details['data_dependent_skipped_count']
         : null;
+    const rowsScanned =
+      typeof details?.['rows_scanned'] === 'number' ? details['rows_scanned'] : null;
+    const skippedCount =
+      typeof details?.['skipped_count'] === 'number' ? details['skipped_count'] : null;
 
     const failures: string[] = [];
     if (!outcomeClass) {
@@ -518,8 +522,22 @@ export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDi
       if (runStatus !== 'succeeded') failures.push(`succeeded_with_work has status ${runStatus ?? 'missing'}`);
       if (gradedCount === null || gradedCount <= 0)
         failures.push('succeeded_with_work does not report a positive graded_count');
+    } else if (outcomeClass === 'no_op_nothing_gradeable') {
+      if (runStatus !== 'succeeded')
+        failures.push(`no_op_nothing_gradeable has status ${runStatus ?? 'missing'}`);
+      // Rows were examined and none graded. That is a legitimate outcome, but it
+      // must not be recorded as `no_op_no_input`, which positively asserts the
+      // population was empty.
+      if (rowsScanned === 0 && skippedCount === 0)
+        failures.push('no_op_nothing_gradeable examined nothing; that is no_op_no_input');
     } else if (outcomeClass === 'no_op_no_input') {
       if (runStatus !== 'succeeded') failures.push(`no_op_no_input has status ${runStatus ?? 'missing'}`);
+      // The conflation this lane exists to remove: a pass that examined rows and
+      // graded none must never be recorded as having had no input.
+      if ((rowsScanned ?? 0) > 0 || (skippedCount ?? 0) > 0)
+        failures.push(
+          `no_op_no_input examined ${rowsScanned ?? 0} rows and skipped ${skippedCount ?? 0}; that is no_op_nothing_gradeable`,
+        );
       if ((dataDependentSkipped ?? 0) > 0 && freshnessStatus !== 'fresh')
         failures.push(
           `no_op_no_input has ${dataDependentSkipped} data-dependent skips with ${freshnessStatus ?? 'missing'} input`,
@@ -541,7 +559,7 @@ export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDi
       started_at: run['started_at'] ?? null,
       finished_at: run['finished_at'] ?? null,
       outcome_class: outcomeClass,
-      rows_scanned: details?.['rows_scanned'] ?? null,
+      rows_scanned: rowsScanned,
       gradeable_rows: details?.['gradeable_rows'] ?? null,
       graded_count: gradedCount,
       skipped_count: details?.['skipped_count'] ?? null,

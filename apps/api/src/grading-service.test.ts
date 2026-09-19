@@ -10,6 +10,7 @@ import {
   readEventStartTime,
   postSettlementRecapIfPossible,
   classifyMarketFamilyForGrading,
+  classifyGradingOutcome,
   GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
   type GradingRetryState,
 } from './grading-service.js';
@@ -1844,7 +1845,7 @@ test('stale data-dependent skips produce degraded_stale_input and failed status'
   );
 });
 
-test('skips-only pass cannot report succeeded_with_work', async () => {
+test('a skips-only pass is nothing-gradeable, never succeeded_with_work and never no-input', async () => {
   const { repositories } = await createPostedPickFixture({
     market: 'unsupported-proof-market',
   });
@@ -1853,12 +1854,74 @@ test('skips-only pass cannot report succeeded_with_work', async () => {
     now: () => new Date('2026-09-19T12:00:00.000Z'),
   });
   const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
 
   assert.equal(result.graded, 0);
   assert.equal(result.skipped, 1);
-  assert.equal(result.outcomeClass, 'no_op_no_input');
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
   assert.notEqual(result.outcomeClass, 'succeeded_with_work');
+  // This is the whole point of the lane. A pass that examined rows and graded
+  // none must not be recorded with a class that positively asserts there was no
+  // input -- otherwise it is byte-identical to a pass that examined zero.
+  assert.notEqual(result.outcomeClass, 'no_op_no_input');
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.ok((details['rows_scanned'] as number) > 0);
   assert.equal(run?.status, 'succeeded');
+});
+
+test('examined-and-skipped and examined-nothing are distinguishable at the class, not only in the histogram', () => {
+  const fresh = {
+    status: 'fresh' as const,
+    newestSourcedAt: '2026-09-19T11:00:00.000Z',
+    ageMs: 60 * 60 * 1000,
+    thresholdMs: GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+  };
+
+  const examinedManySkippedAll = classifyGradingOutcome({
+    graded: 0,
+    errors: 0,
+    rowsScanned: 15_000,
+    skipped: 15_000,
+    dataDependentSkipped: 0,
+    inputFreshness: fresh,
+  });
+  const examinedNothing = classifyGradingOutcome({
+    graded: 0,
+    errors: 0,
+    rowsScanned: 0,
+    skipped: 0,
+    dataDependentSkipped: 0,
+    inputFreshness: fresh,
+  });
+
+  assert.equal(examinedManySkippedAll, 'no_op_nothing_gradeable');
+  assert.equal(examinedNothing, 'no_op_no_input');
+  assert.notEqual(examinedManySkippedAll, examinedNothing);
+
+  // A data-dependent skip on stale input still outranks both, and errors
+  // outrank everything.
+  assert.equal(
+    classifyGradingOutcome({
+      graded: 0,
+      errors: 0,
+      rowsScanned: 10,
+      skipped: 10,
+      dataDependentSkipped: 10,
+      inputFreshness: { ...fresh, status: 'stale' },
+    }),
+    'degraded_stale_input',
+  );
+  assert.equal(
+    classifyGradingOutcome({
+      graded: 5,
+      errors: 1,
+      rowsScanned: 10,
+      skipped: 4,
+      dataDependentSkipped: 0,
+      inputFreshness: fresh,
+    }),
+    'failed',
+  );
 });
 
 test("production grading proof requires grader identity and game-result linkage, not source='grading' alone", () => {
