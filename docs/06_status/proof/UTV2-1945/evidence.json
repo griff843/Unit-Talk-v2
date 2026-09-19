@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1945",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "documentation_checks_pass_refreshed_head_ci_pending",
+    "documentation_check": {
+      "result": "PASS",
+      "execution_sha": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a",
+      "audit_inventory_sha256": "2a6cd653ab4f667fe1945324c5c6e7d18effb04049b36aad0859fe277855e2e9",
+      "channels": 65,
+      "known_ids": 61,
+      "unknown_voice_ids": 4,
+      "target_surfaces": 25,
+      "role_names_checked": 85,
+      "relative_links_missing": [],
+      "production_checkboxes_checked": 0,
+      "document_sha256": {
+        "docs/03_product/DISCORD_SERVER_ARCHITECTURE_CONTRACT.md": "11cd3f24264e04372e434bdf388d3a108efcdd893cc9c4e84cd13efad1adf3e2",
+        "docs/05_operations/DISCORD_SERVER_MIGRATION_PLAN.md": "7d1841bd2836601efe24ca24673f627a7f5906944d83e5203e54a52476d030e8",
+        "docs/05_operations/docs_authority_map.md": "3d005f85a808197c4641ca610dc9303ca2607ad9949a052a1f91f513d61ad18f"
+      }
+    },
+    "r_level": {
+      "result": "PASS",
+      "rules_matched": [],
+      "execution_sha": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a"
+    },
+    "preflight": {
+      "result": "PASS",
+      "waivers": [],
+      "scope": "Original lane admission; not rerun on refreshed merge head"
+    },
+    "execution_state": {
+      "result": "PASS",
+      "observed_at": "2026-09-19T19:19:19.204Z",
+      "source_population": "canonical_active_lane_union",
+      "scope_conflicts": []
+    },
+    "pnpm_verify": {
+      "status": "blocked",
+      "exit_code": 1,
+      "static_phase": "PASS",
+      "tap_pass": 6790,
+      "tap_fail": 0,
+      "tap_skipped": 0,
+      "blocker": "ci:assert-staging refuses local 127.0.0.1; required CI_SUPABASE_* staging credentials are absent locally.",
+      "log_path": "/tmp/utv2-1945-verify.log",
+      "log_sha256": "f35593238d925f91006c4a4964f02bdbff38be6f75aef85e781c733fcd7c3c44",
+      "execution_sha": "fe41f38f0c15af9775bad8cb03024d549e44b6ab"
+    },
+    "staging_db_smoke": {
+      "result": "PASS",
+      "run": 35464411547,
+      "head_sha": "3ec6c7532f8bcfe8eb68e31639cbfce7329f1ad4",
+      "producer_job": 105953968247,
+      "auditor_job": 105954061443,
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35464411547",
+      "scope": "pnpm test:db via ci:db-smoke only; does not execute test:t1-proof:live"
+    },
+    "remaining_blocker": null,
+    "prior_pr_ci": {
+      "head_sha": "15e9ac55d16504c86353b6fc7ffb4666242ecc8a",
+      "run": 35465227141,
+      "result": "PASS",
+      "scope": "Historical pre-refresh required verify; full static, staging live suites and same-run receipt passed. New HEAD requires its own CI."
+    }
+  },
+  "limitations": [
+    "Documentation-only proof; production migration and acceptance not executed.",
+    "Four voice channel IDs and all role IDs require capture before future migration.",
+    "Model-routing sidecar records manifest policy routing; actual desktop runtime model/effort is not independently attested."
+  ],
+  "pm_disposition": {
+    "date": "2026-09-19",
+    "authority": "Direct PM instruction in UTV2-1945 task",
+    "decision": "Local pnpm verify staging-target refusal is not a blocker to opening this docs-only T2 governance PR; full live verification delegated to required PR-triggered CI at exact PR HEAD.",
+    "policy_reference": "docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1619",
+    "full_verification_claim": "pending required verify context; local full pnpm verify is not represented as green",
+    "merge_authorized": true,
+    "lane_record_update": "Existing resumeLaneManifest transition and validated writeManifest writer applied the PM-cleared blocker; ops:lane-link-pr bound PR 1619. The convenience lane:resume attempt failed control-checkout/admission checks and is not claimed as a new preflight PASS.",
+    "merge_authorization": "User explicitly instructed merge on 2026-09-19; required checks remain mandatory after main refresh."
+  },
+  "refresh": {
+    "method": "ops:merge-wrapper git-merge-main",
+    "source_head": "25e779b9d3936a5e0fce6a3ef3ae3e54c3c6104a",
+    "base_main": "63f63167d",
+    "documentation_hashes_unchanged": true,
+    "full_verification": "Delegated to required PR CI on final HEAD; historical local static results are not relabeled as newly executed."
+  }
+}
