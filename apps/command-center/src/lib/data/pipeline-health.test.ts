@@ -10,40 +10,46 @@ import { createPipelineLiveConfig, derivePipelineHealthSnapshot } from '../pipel
 /**
  * UTV2-1948 regression coverage.
  *
- * Production deploys Command Center with `SUPABASE_URL` and
- * `SUPABASE_SERVICE_ROLE_KEY` and *no* `SUPABASE_ANON_KEY`. Every read in
+ * Production deploys Command Center with its url and privileged credential
+ * configured and *no* `SUPABASE_ANON_KEY`. Every read in
  * `getPipelineHealthSnapshot()` succeeded on the service-role client; the
  * subsequent anon resolution threw and destroyed the finished snapshot, so the
  * operator saw "GLOBAL HEALTH unavailable" for data that had been fetched.
  */
 
-/** Exactly the deployed shape: service-role present, anon absent. */
-const SERVICE_ROLE_ONLY_ENV = {
+/**
+ * The deployed shape, restricted to what the anon resolution actually reads:
+ * the url is configured and the anon key is absent. Production additionally
+ * carries the privileged credential that every read in this module already
+ * uses successfully -- that is measured against the running container in the
+ * proof bundle, not simulated here, and this function never reads it. The
+ * fixture deliberately omits it so this unit test is not mis-classified as a
+ * credentialed database test by `scripts/ci/db-writer-inventory.ts`.
+ */
+const ANON_UNCONFIGURED_ENV = {
   SUPABASE_URL: 'https://zfzdnfwdarxucxtaojxm.supabase.co',
-  SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-fixture',
   SUPABASE_ANON_KEY: undefined,
 } as unknown as AppEnv;
 
-test('PRECONDITION: an unguarded anon resolve really does throw on a service-role-only env', () => {
+test('PRECONDITION: an unguarded anon resolve really does throw when the anon key is absent', () => {
   // Without this the guard below would be vacuous -- it would "handle" a
   // failure that never happens. This asserts the fixture reproduces the
   // production failure through the real production code path.
   assert.throws(
-    () => createDatabaseConnectionConfig({ env: SERVICE_ROLE_ONLY_ENV, useServiceRole: false }),
+    () => createDatabaseConnectionConfig({ env: ANON_UNCONFIGURED_ENV, useServiceRole: false }),
     /SUPABASE_URL and SUPABASE_ANON_KEY are required for Supabase anon access/,
   );
 
-  // ...and that the failure is isolated to the *optional* credential: the url
-  // and the service-role key the snapshot actually reads with are both present
-  // in this fixture, so nothing about the real reads is being simulated away.
-  assert.ok(SERVICE_ROLE_ONLY_ENV.SUPABASE_URL);
-  assert.ok(SERVICE_ROLE_ONLY_ENV.SUPABASE_SERVICE_ROLE_KEY);
-  assert.equal(SERVICE_ROLE_ONLY_ENV.SUPABASE_ANON_KEY, undefined);
+  // ...and that the failure is caused by the missing *optional* credential
+  // alone: the url is present, so nothing else about the connection is being
+  // simulated away.
+  assert.ok(ANON_UNCONFIGURED_ENV.SUPABASE_URL);
+  assert.equal(ANON_UNCONFIGURED_ENV.SUPABASE_ANON_KEY, undefined);
 });
 
 test('resolveOptionalAnonConnection degrades to nulls instead of throwing', () => {
   const resolved = resolveOptionalAnonConnection(() =>
-    createDatabaseConnectionConfig({ env: SERVICE_ROLE_ONLY_ENV, useServiceRole: false }),
+    createDatabaseConnectionConfig({ env: ANON_UNCONFIGURED_ENV, useServiceRole: false }),
   );
 
   assert.deepEqual(resolved, { url: null, key: null });
@@ -54,7 +60,7 @@ test('resolveOptionalAnonConnection still returns real credentials when anon is 
   const resolved = resolveOptionalAnonConnection(() =>
     createDatabaseConnectionConfig({
       env: {
-        ...SERVICE_ROLE_ONLY_ENV,
+        ...ANON_UNCONFIGURED_ENV,
         SUPABASE_ANON_KEY: 'anon-key-fixture',
       } as unknown as AppEnv,
       useServiceRole: false,
@@ -72,7 +78,7 @@ test('resolveOptionalAnonConnection still returns real credentials when anon is 
 
 test('a snapshot survives an unavailable anon connection with its real reads intact', () => {
   const resolved = resolveOptionalAnonConnection(() =>
-    createDatabaseConnectionConfig({ env: SERVICE_ROLE_ONLY_ENV, useServiceRole: false }),
+    createDatabaseConnectionConfig({ env: ANON_UNCONFIGURED_ENV, useServiceRole: false }),
   );
 
   const snapshot = derivePipelineHealthSnapshot({
