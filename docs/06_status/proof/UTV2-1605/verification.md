@@ -1,10 +1,10 @@
 # PROOF: UTV2-1605 — grading outcome and input-freshness observability
 
-MERGE_SHA: pending merge
+MERGE_SHA: f4318e87d9c8e722d81f7394680c6a2f24f8f84d
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: f4318e87d9c8e722d81f7394680c6a2f24f8f84d
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1621
 Execution/source SHA: `b5b1329d51249c120fdea9bdece2791f1c6aa6d7`
 

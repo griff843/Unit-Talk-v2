@@ -31,12 +31,12 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-09-19T20:17:10Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "f4318e87d9c8e722d81f7394680c6a2f24f8f84d",
     "verified_source_sha": "b5b1329d51249c120fdea9bdece2791f1c6aa6d7",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "head_sha": "pending \u2014 set by CI at the PR head",
+      "head_sha": "pending — set by CI at the PR head",
       "verify": {
         "conclusion": "pending"
       },
@@ -44,7 +44,9 @@
         "conclusion": "pending"
       }
     },
-    "note": "Source includes bounded PM corrections and conflict-free main refresh. Exact final HEAD CI and renewed external scope override are required; historical local evidence is not relabelled as a new-head live proof."
+    "note": "Source includes bounded PM corrections and conflict-free main refresh. Exact final HEAD CI and renewed external scope override are required; historical local evidence is not relabelled as a new-head live proof.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-19T22:55:20.191Z"
   },
   "scope": {
     "implementation_files": [
