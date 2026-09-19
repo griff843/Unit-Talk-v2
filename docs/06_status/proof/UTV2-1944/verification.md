@@ -78,10 +78,21 @@ carry the predicate at all and now does.
 ## Verification
 
 - `pnpm type-check` — PASS
+- `pnpm test` — PASS, exit 0, **6592/6592** across every package, zero `not ok` lines
 - `pnpm exec tsx --test apps/command-center/src/lib/governed-population.test.ts` — PASS (6/6)
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; matched `operator-ui`
   with no required artifacts.
 - `pnpm verify` — read from this PR's `verify` check on the branch head carrying this bundle.
+
+### A control whose verdict depended on which command started it
+
+The first run of `pnpm test` failed on two tests — Codex's original code-shape assertion and one of
+mine — and CI's `verify` failed on the same two (`not ok 178`, `not ok 180`, run `35462241236`).
+Both resolved their target with `readFileSync(join(process.cwd(), 'apps/command-center/src/lib/...'))`.
+The package's own `test` script runs with cwd = `apps/command-center`, so the path did not resolve
+there, while a repo-root invocation resolved it fine. A control that reads a different file — or
+none — depending on the command that started it is not a control. Both now resolve from
+`dirname(fileURLToPath(import.meta.url))`, and the suite passes from either directory.
 
 Two of the six tests are new and cover the repair above: one asserts that a settlement whose pick is
 outside the governed map resolves to `null` and is dropped rather than defaulted, and one asserts

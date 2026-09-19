@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
@@ -45,8 +46,14 @@ test('one helper emits matching positive and fixture-complement query predicates
   assert.deepEqual(calls, [[GOVERNED_POPULATION_METADATA_PATH, null]]);
 });
 
+// Resolve from this file, never from process.cwd(): the package test script runs
+// with cwd = apps/command-center while a repo-root run has cwd = the repo root, so
+// a cwd-relative path silently reads a different file -- or none -- depending on
+// which command invoked the suite.
+const LIB_DIR = dirname(fileURLToPath(import.meta.url));
+
 test('discovery and performance import the shared predicate instead of re-expressing it', () => {
-  const root = join(process.cwd(), 'apps/command-center/src/lib');
+  const root = LIB_DIR;
   const queues = readFileSync(join(root, 'data/queues.ts'), 'utf8');
   const analytics = readFileSync(join(root, 'data/analytics.ts'), 'utf8');
 
@@ -75,7 +82,7 @@ test('a settlement whose pick is outside the governed map is dropped, not defaul
 });
 
 test('every picks read on a presented analytics surface carries the population predicate', () => {
-  const analytics = readFileSync(join(process.cwd(), 'apps/command-center/src/lib/data/analytics.ts'), 'utf8');
+  const analytics = readFileSync(join(LIB_DIR, 'data/analytics.ts'), 'utf8');
   const picksReads = analytics.match(/\.from\('picks'\)/g) ?? [];
   const governedReads = analytics.match(/applyPickPopulation\(/g) ?? [];
   assert.equal(picksReads.length, governedReads.length,
