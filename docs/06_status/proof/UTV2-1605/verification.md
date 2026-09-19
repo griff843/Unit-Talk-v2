@@ -12,19 +12,19 @@ Execution/source SHA: `465fe4e0a4c948f8e3f5e86440cda60d3bf6918a`
 
 ASSERTIONS:
 
-- Every created `grading.run` carries a machine-readable `details.outcome_class` while preserving the existing `system_runs.status` values.
-- The four states PM required are distinguishable **at the class, not only in the histogram**. A run
+- [x] Every created `grading.run` carries a machine-readable `details.outcome_class` while preserving the existing `system_runs.status` values.
+- [x] The four states PM required are distinguishable **at the class, not only in the histogram**. A run
   with graded work reports `succeeded_with_work`; a pass that **examined rows and graded none**
   reports `no_op_nothing_gradeable`; a pass that **examined nothing at all** reports
   `no_op_no_input`; stale result-dependent skips report `degraded_stale_input` and DB status
   `failed`; execution errors report `failed`.
-- `no_op_no_input` is a positive assertion that there was no input, and is reachable only when
+- [x] `no_op_no_input` is a positive assertion that there was no input, and is reachable only when
   `rowsScanned == 0 && skipped == 0`. The readiness probe carries the inverse guard: a run labelled
   `no_op_no_input` that records scanned or skipped rows is a **failure**, not a pass. A mutation
   control in `grading-cron.test.ts` proves the probe refuses a mislabelled 15,000-row run.
-- Run details record rows scanned, gradeable rows, graded/skipped/error counts, skip histogram, latest provider `game_results.sourced_at`, and the six-hour freshness threshold.
-- Readiness evaluates grading outcome/input health independently of cron recency. Alerts open with actionable context, deduplicate while unhealthy, and clear after fresh successful work.
-- Production settlement proof requires all three predicates: `source = 'grading'`, `settled_by = 'grading-service'`, and `evidence_ref LIKE 'game-result:%'`.
+- [x] Run details record rows scanned, gradeable rows, graded/skipped/error counts, skip histogram, latest provider `game_results.sourced_at`, and the six-hour freshness threshold.
+- [x] Readiness evaluates grading outcome/input health independently of cron recency. Alerts open with actionable context, deduplicate while unhealthy, and clear after fresh successful work.
+- [x] Production settlement proof requires all three predicates: `source = 'grading'`, `settled_by = 'grading-service'`, and `evidence_ref LIKE 'game-result:%'`.
 
 ## Verification
 
