@@ -311,3 +311,88 @@ test(
     }
   },
 );
+
+
+// UTV2-1605: this suite already runs behind ci:assert-staging in
+// test:t1-proof:live. These cases prove the new repository method and its
+// consumption/persistence by the real grader, not generic DB connectivity.
+test('UTV2-1605: grading freshness equals the live maximum sourced_at', { skip: skipReason }, async () => {
+  const db = createDatabaseClientFromConnection(
+    createServiceRoleDatabaseConnectionConfig(loadEnvironment()),
+  );
+  // Independent oracle: scan source timestamps in ID order and reduce in JS.
+  // Bracket it with repository reads to tolerate concurrent staging inserts.
+  const before = await repositories.gradeResults.findLatestSourcedAt();
+  let maximum: number | null = null;
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await db.from('game_results')
+      .select('id,sourced_at').order('id').range(offset, offset + 499);
+    assert.equal(error, null);
+    for (const row of data ?? []) {
+      const timestamp = Date.parse(row.sourced_at);
+      assert.ok(Number.isFinite(timestamp));
+      maximum = maximum === null ? timestamp : Math.max(maximum, timestamp);
+    }
+    if ((data ?? []).length < 500) break;
+  }
+  const after = await repositories.gradeResults.findLatestSourcedAt();
+  // Earlier live suites seed game_results. Refuse an empty/vacuous proof.
+  assert.notEqual(maximum, null, 'staging must contain result fixtures');
+  assert.ok(before !== null && after !== null);
+  assert.ok(Date.parse(before) <= maximum!);
+  assert.ok(Date.parse(after) >= maximum!);
+  if (before === after) assert.equal(Date.parse(after), maximum);
+});
+
+test('UTV2-1605: real grading run persists the live input-freshness read', { skip: skipReason }, async () => {
+  const { runGradingPass, classifyInputFreshness } = await import('./grading-service.js');
+  const db = createDatabaseClientFromConnection(
+    createServiceRoleDatabaseConnectionConfig(loadEnvironment()),
+  );
+  let runId: string | null = null;
+  let observedTimestamp: string | null = null;
+  let reads = 0;
+  const now = new Date();
+  const result = await runGradingPass({
+    ...repositories,
+    gradeResults: {
+      insert: (input) => repositories.gradeResults.insert(input),
+      findResult: (criteria) => repositories.gradeResults.findResult(criteria),
+      listByEvent: (eventId) => repositories.gradeResults.listByEvent(eventId),
+      findLatestSourcedAt: async () => {
+        reads += 1;
+        observedTimestamp = await repositories.gradeResults.findLatestSourcedAt();
+        return observedTimestamp;
+      },
+    },
+    runs: {
+      startRun: async (input) => {
+        const row = await repositories.runs.startRun(input);
+        runId = row.id;
+        return row;
+      },
+      completeRun: (input) => repositories.runs.completeRun(input),
+      listByType: (runType, limit) => repositories.runs.listByType(runType, limit),
+      reapStaleRuns: (input) => repositories.runs.reapStaleRuns(input),
+    },
+  }, {
+    // Real repository reads, deliberately no candidate settlement or delivery.
+    restrictToPickIds: new Set<string>(),
+    now: () => now,
+  });
+  assert.equal(reads, 1, 'the runtime must call the new live repository capability');
+  assert.ok(runId);
+  assert.deepEqual(result.inputFreshness, classifyInputFreshness(observedTimestamp, now));
+  assert.equal(result.outcomeClass, 'no_op_no_input');
+  const { data: row, error } = await db.from('system_runs').select('*').eq('id', runId).single();
+  assert.equal(error, null);
+  assert.ok(row);
+  assert.equal(row.status, 'succeeded');
+  const details = row.details as Record<string, unknown>;
+  assert.equal(details['outcome_class'], 'no_op_no_input');
+  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['graded_count'], 0);
+  assert.equal(details['error_count'], 0);
+  assert.equal(details['newest_game_result_sourced_at'], observedTimestamp);
+  assert.equal(details['freshness_threshold_ms'], 6 * 60 * 60 * 1000);
+});

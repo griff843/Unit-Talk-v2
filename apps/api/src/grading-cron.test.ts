@@ -491,3 +491,34 @@ test('readiness accepts a nothing-gradeable pass and refuses a no-input claim th
   assert.equal(mislabelled.status, 'fail');
   assert.match(mislabelled.evidence, /examined 15000 rows/);
 });
+
+
+test('PM-ratified five-value grading model is understood by readiness', () => {
+  const cases = [
+    ['succeeded_with_work', 'succeeded', 1, 1, 0, 0, 'fresh', 'pass'],
+    ['no_op_no_input', 'succeeded', 0, 0, 0, 0, 'fresh', 'pass'],
+    ['no_op_nothing_gradeable', 'succeeded', 1, 0, 1, 0, 'fresh', 'pass'],
+    ['degraded_stale_input', 'failed', 1, 0, 1, 0, 'stale', 'fail'],
+    ['failed', 'failed', 1, 0, 0, 1, 'fresh', 'fail'],
+    ['unknown_outcome', 'succeeded', 0, 0, 0, 0, 'fresh', 'fail'],
+  ] as const;
+  for (const [outcome, status, scanned, graded, skipped, errors, freshness, expected] of cases) {
+    const result = runGradingReadinessProbe({
+      status,
+      started_at: '2026-09-19T12:00:00.000Z',
+      finished_at: '2026-09-19T12:00:01.000Z',
+      details: {
+        outcome_class: outcome,
+        rows_scanned: scanned,
+        gradeable_rows: graded,
+        graded_count: graded,
+        skipped_count: skipped,
+        skipped_reasons: skipped ? { settlement_already_exists: skipped } : {},
+        data_dependent_skipped_count: freshness === 'stale' ? 1 : 0,
+        error_count: errors,
+        input_freshness: { status: freshness, age_ms: freshness === 'stale' ? 86_400_000 : 60_000, threshold_hours: 6 },
+      },
+    });
+    assert.equal(result.status, expected, outcome);
+  }
+});

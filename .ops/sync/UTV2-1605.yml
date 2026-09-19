@@ -35,6 +35,7 @@ task_contract:
       Add a required machine-readable `details.outcome_class` for every `grading.run`:
 
       * `succeeded_with_work`
+      * `no_op_nothing_gradeable` — rows examined but none gradeable; PM-ratified fifth state (2026-09-19)
       * `no_op_no_input`
       * `degraded_stale_input`
       * `failed`
@@ -144,6 +145,8 @@ task_contract:
 
 
       * `succeeded_with_work`
+
+      * `no_op_nothing_gradeable` — rows examined but none gradeable; PM-ratified fifth state (2026-09-19)
 
       * `no_op_no_input`
 
@@ -284,6 +287,7 @@ task_contract:
       Add a required machine-readable `details.outcome_class` for every `grading.run`:
 
       * `succeeded_with_work`
+      * `no_op_nothing_gradeable` — rows examined but none gradeable; PM-ratified fifth state (2026-09-19)
       * `no_op_no_input`
       * `degraded_stale_input`
       * `failed`

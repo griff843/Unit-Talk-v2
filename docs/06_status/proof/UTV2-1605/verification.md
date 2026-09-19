@@ -13,7 +13,7 @@ Execution/source SHA: `465fe4e0a4c948f8e3f5e86440cda60d3bf6918a`
 ASSERTIONS:
 
 - [x] Every created `grading.run` carries a machine-readable `details.outcome_class` while preserving the existing `system_runs.status` values.
-- [x] The four states PM required are distinguishable **at the class, not only in the histogram**. A run
+- [x] The five outcome classes explicitly ratified by PM on 2026-09-19 are distinguishable **at the class, not only in the histogram**. A run
   with graded work reports `succeeded_with_work`; a pass that **examined rows and graded none**
   reports `no_op_nothing_gradeable`; a pass that **examined nothing at all** reports
   `no_op_no_input`; stale result-dependent skips report `degraded_stale_input` and DB status
@@ -69,3 +69,18 @@ Dashboards may turn RED on the first correct deployment if the result feed is al
 - No settlement outcome or lifecycle rule changed.
 - No production write was performed during local proof.
 - Exact-head independent Opus 5 review and Griff approval remain external merge gates.
+
+## PM correction: five-value acceptance model
+
+PM review: https://github.com/griff843/Unit-Talk-v2/pull/1621#issuecomment-5745491341
+The follow-up instruction explicitly accepts the fifth state; this records that decision, not a new runtime design.
+
+| outcome_class | Meaning | system_runs.status | Readiness |
+| --- | --- | --- | --- |
+| succeeded_with_work | At least one pick graded, no degrading input/error condition | succeeded | pass when counters/freshness are consistent |
+| no_op_no_input | No rows examined and no skips | succeeded | pass for genuine no-input run |
+| no_op_nothing_gradeable | Rows examined or skipped but none graded | succeeded | pass only with consistent counters and healthy relevant inputs |
+| degraded_stale_input | Data-dependent skips and stale/missing inputs | failed | fail |
+| failed | Execution/invariant error | failed | fail |
+
+Unknown classes fail closed. The database status enum is unchanged. Generic DB smoke is not proof of the new freshness query. PM authorized the single-file staging proof addition through an external scope-override/v1 comment on reviewed HEAD 5c6714fd8d5e1aeebb003298075258594f20e6d6. The override must be renewed at the final HEAD. The added cases in t1-proof-utv2-1886-settlement-batch.test.ts independently reduce live source timestamps and exercise the real grading freshness read and persisted no-input run. An empty candidate restriction prevents settlement or delivery. These cases must pass in the approved staging live suite before this correction is review-ready.
