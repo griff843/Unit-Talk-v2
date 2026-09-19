@@ -1,0 +1,158 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1944
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1944
+  objective: |-
+    One shared, tested predicate for the governed cohort, defined once and imported — not re-expressed per call site.
+    Pick discovery defaults to the governed cohort. The fixture corpus stays reachable, but only behind an explicit, labelled control, and a fixture row is never rendered as a real pick (§8.2).
+    The explorer's row query and its count query apply the same predicate, so the count is true of what is shown. The `picks` vs `picks_current_state` count split from [UTV2-1942](https://linear.app/unit-talk-v2/issue/UTV2-1942/command-center-is-operationally-unusable-the-root-layout-runs-an-115s) must stay intact — it is what keeps the page inside the 8s statement timeout.
+    Performance and leaderboard apply the same predicate rather than relying on the 30-day window.
+    Volume gates (§5.5) still render on every rate.
+  acceptance_criteria:
+    - |-
+      Band 1 defect against `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` §5.8 ("Identify governed populations positively"), §8.1 (Discovery) and §8.2 ("Fixture and test data are never presented as real").
+
+      ## Measured, production `zfzdnfwdarxucxtaojxm`, 2026-09-19
+
+      ```sql
+      select count(*) as all_picks,
+             count(*) filter (where metadata ? 'distributionMode') as governed
+      from picks;
+      -- all_picks = 107866, governed = 8
+      ```
+
+      `searchPicks` (`apps/command-center/src/lib/data/queues.ts:545`) applies **no** governed-population predicate. It selects from `picks_current_state` with only caller-supplied filters, and counts `picks` unfiltered. So the picks explorer's default view is 107,866 rows of which 8 are real operator submissions, and nothing on the row distinguishes the two. An operator looking for a Human Capper pick cannot find one by browsing.
+
+      This is the same population problem recorded in `docs/mission/plan.md` §3: `v_governed_pick_performance` filters `source = 'board-construction'` and structurally cannot contain an operator submission, and `capper_id = 'griff843' AND source = 'smart-form'` returns 13 rows of which 12 are 2026-05-29 proof fixtures. **Identify the cohort positively; do not subtract fixtures by heuristic.**
+
+      ## Second, latent instance — performance
+
+      `getPerformanceData` / `getLeaderboard` (`apps/command-center/src/lib/data/analytics.ts:408,666`) read `settlement_records` filtered only by `status = 'settled'` and a rolling 30-day window, then join `picks`. Today that happens to be clean — measured 6 settled rows in 30 days, 6 of them governed — but it is clean by accident of the window, not by predicate. The moment a fixture settles inside the window the aggregate silently absorbs it, and §14/§15 require these figures to reconcile against the persisted settlement population.
+
+      ## Required outcome
+
+      1. One shared, tested predicate for the governed cohort, defined once and imported — not re-expressed per call site.
+      2. Pick discovery defaults to the governed cohort. The fixture corpus stays reachable, but only behind an explicit, labelled control, and a fixture row is never rendered as a real pick (§8.2).
+      3. The explorer's row query and its count query apply the same predicate, so the count is true of what is shown. The `picks` vs `picks_current_state` count split from [UTV2-1942](https://linear.app/unit-talk-v2/issue/UTV2-1942/command-center-is-operationally-unusable-the-root-layout-runs-an-115s) must stay intact — it is what keeps the page inside the 8s statement timeout.
+      4. Performance and leaderboard apply the same predicate rather than relying on the 30-day window.
+      5. Volume gates (§5.5) still render on every rate.
+
+      ## Out of scope
+
+      No schema change, no migration, no write path, no Smart Form change, no new page. Read-path predicate only.
+
+      ## Acceptance
+
+      Not "the page renders". Prove against production read-only that the default explorer population equals the governed cohort measured by the SQL above, and that per-capper and aggregate performance reconcile against `settlement_records` for that same cohort.
+  guardrails: []
+  non_goals:
+    - No schema change, no migration, no write path, no Smart Form change, no
+      new page. Read-path predicate only.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Band 1 defect against `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`
+      §5.8 ("Identify governed populations positively"), §8.1 (Discovery) and
+      §8.2 ("Fixture and test data are never presented as real").
+    - >-
+      Measured, production `zfzdnfwdarxucxtaojxm`, 2026-09-19
+
+      ```sql
+
+      select count(*) as all_picks,
+             count(*) filter (where metadata ? 'distributionMode') as governed
+      from picks;
+
+      -- all_picks = 107866, governed = 8
+
+      ```
+
+
+      `searchPicks` (`apps/command-center/src/lib/data/queues.ts:545`) applies
+      **no** governed-population predicate. It selects from
+      `picks_current_state` with only caller-supplied filters, and counts
+      `picks` unfiltered. So the picks explorer's default view is 107,866 rows
+      of which 8 are real operator submissions, and nothing on the row
+      distinguishes the two. An operator looking for a Human Capper pick cannot
+      find one by browsing.
+
+
+      This is the same population problem recorded in `docs/mission/plan.md` §3:
+      `v_governed_pick_performance` filters `source = 'board-construction'` and
+      structurally cannot contain an operator submission, and `capper_id =
+      'griff843' AND source = 'smart-form'` returns 13 rows of which 12 are
+      2026-05-29 proof fixtures. **Identify the cohort positively; do not
+      subtract fixtures by heuristic.**
+    - >-
+      Second, latent instance — performance
+
+      `getPerformanceData` / `getLeaderboard`
+      (`apps/command-center/src/lib/data/analytics.ts:408,666`) read
+      `settlement_records` filtered only by `status = 'settled'` and a rolling
+      30-day window, then join `picks`. Today that happens to be clean —
+      measured 6 settled rows in 30 days, 6 of them governed — but it is clean
+      by accident of the window, not by predicate. The moment a fixture settles
+      inside the window the aggregate silently absorbs it, and §14/§15 require
+      these figures to reconcile against the persisted settlement population.
+    - >-
+      Acceptance
+
+      Not "the page renders". Prove against production read-only that the
+      default explorer population equals the governed cohort measured by the SQL
+      above, and that per-capper and aggregate performance reconcile against
+      `settlement_records` for that same cohort.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1944/command-center-presents-107866-ci-fixtures-as-real-picks-pick
+    title: Command Center presents 107,866 CI fixtures as real picks — pick
+      discovery has no governed-population predicate
+    description: |-
+      Band 1 defect against `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` §5.8 ("Identify governed populations positively"), §8.1 (Discovery) and §8.2 ("Fixture and test data are never presented as real").
+
+      ## Measured, production `zfzdnfwdarxucxtaojxm`, 2026-09-19
+
+      ```sql
+      select count(*) as all_picks,
+             count(*) filter (where metadata ? 'distributionMode') as governed
+      from picks;
+      -- all_picks = 107866, governed = 8
+      ```
+
+      `searchPicks` (`apps/command-center/src/lib/data/queues.ts:545`) applies **no** governed-population predicate. It selects from `picks_current_state` with only caller-supplied filters, and counts `picks` unfiltered. So the picks explorer's default view is 107,866 rows of which 8 are real operator submissions, and nothing on the row distinguishes the two. An operator looking for a Human Capper pick cannot find one by browsing.
+
+      This is the same population problem recorded in `docs/mission/plan.md` §3: `v_governed_pick_performance` filters `source = 'board-construction'` and structurally cannot contain an operator submission, and `capper_id = 'griff843' AND source = 'smart-form'` returns 13 rows of which 12 are 2026-05-29 proof fixtures. **Identify the cohort positively; do not subtract fixtures by heuristic.**
+
+      ## Second, latent instance — performance
+
+      `getPerformanceData` / `getLeaderboard` (`apps/command-center/src/lib/data/analytics.ts:408,666`) read `settlement_records` filtered only by `status = 'settled'` and a rolling 30-day window, then join `picks`. Today that happens to be clean — measured 6 settled rows in 30 days, 6 of them governed — but it is clean by accident of the window, not by predicate. The moment a fixture settles inside the window the aggregate silently absorbs it, and §14/§15 require these figures to reconcile against the persisted settlement population.
+
+      ## Required outcome
+
+      1. One shared, tested predicate for the governed cohort, defined once and imported — not re-expressed per call site.
+      2. Pick discovery defaults to the governed cohort. The fixture corpus stays reachable, but only behind an explicit, labelled control, and a fixture row is never rendered as a real pick (§8.2).
+      3. The explorer's row query and its count query apply the same predicate, so the count is true of what is shown. The `picks` vs `picks_current_state` count split from [UTV2-1942](https://linear.app/unit-talk-v2/issue/UTV2-1942/command-center-is-operationally-unusable-the-root-layout-runs-an-115s) must stay intact — it is what keeps the page inside the 8s statement timeout.
+      4. Performance and leaderboard apply the same predicate rather than relying on the 30-day window.
+      5. Volume gates (§5.5) still render on every rate.
+
+      ## Out of scope
+
+      No schema change, no migration, no write path, no Smart Form change, no new page. Read-path predicate only.
+
+      ## Acceptance
+
+      Not "the page renders". Prove against production read-only that the default explorer population equals the governed cohort measured by the SQL above, and that per-capper and aggregate performance reconcile against `settlement_records` for that same cohort.
+    captured_at: 2026-09-19T18:24:30.744Z
+    description_sha256: adad91457fd66d5ae16341172ab727d4d4253e0fc82e9abe99a279d5563a3e6b
+  contract_hash: 7ad8808bf67ae64a8cfb6edad712f841c998465cf7a8a4a575b3498744e9f3f0
