@@ -108,7 +108,8 @@
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "verdict": "pending final proof commit",
+      "verdict": "PASS",
+      "changed_files": 14,
       "rules_matched": []
     }
   },

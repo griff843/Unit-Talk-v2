@@ -26,6 +26,7 @@ Execution/source SHA: `5f3d818a1aeea4e1c99cc6483ca5655d0b266dd3`
 | `pnpm exec tsx --test 'apps/api/src/grading-cron.test.ts' 'apps/api/src/grading-service.test.ts'` | PASS — 109/109 |
 | `pnpm exec tsx --test scripts/ops/readiness-refresh.test.ts` | PASS — 32/32 |
 | `pnpm exec tsx --test apps/ingestor/src/ingestor.test.ts` | PASS — 93/93 |
+| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS — 14 changed files, no rules matched |
 | `pnpm test:db` | BLOCKED/DEFERRED before writes by staging identity guard |
 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
