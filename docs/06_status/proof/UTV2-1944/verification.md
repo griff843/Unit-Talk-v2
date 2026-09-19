@@ -1,7 +1,7 @@
 # PROOF: UTV2-1944
 
 Execution SHA: `9c46f975632f5229d158cdabcde9fa814a10a3a8`
-MERGE_SHA: pending merge
+MERGE_SHA: eb8a4ca34dc25898f40ecce85308729b2ea9e2b8
 
 ## ASSERTIONS:
 
@@ -108,7 +108,7 @@ answered the question, because the 107,866-row fixture corpus is a production ar
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: eb8a4ca34dc25898f40ecce85308729b2ea9e2b8
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1618
 
 Execution identity is `sha_binding.verified_source_sha` in the sibling `evidence.json`

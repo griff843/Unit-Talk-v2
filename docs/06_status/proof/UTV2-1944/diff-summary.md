@@ -1,7 +1,7 @@
 # UTV2-1944 Diff Summary
 
 Execution SHA: `9c46f975632f5229d158cdabcde9fa814a10a3a8`
-MERGE_SHA: pending merge
+MERGE_SHA: eb8a4ca34dc25898f40ecce85308729b2ea9e2b8
 
 - Adds one Command Center-owned governed-population predicate: positive presence of `metadata.distributionMode`.
 - Applies that predicate to both `picks_current_state` rows and the exact `picks` count, preserving the fast count relation.
