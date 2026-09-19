@@ -2,6 +2,7 @@
 import { americanToDecimal, isValidAmericanOdds } from '@unit-talk/contracts';
 
 import { getDataClient, isTestFixturePick } from './client';
+import { applyPickPopulation } from '../governed-population';
 
 type Client = any;
 type Row = Record<string, unknown>;
@@ -439,10 +440,10 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
 
     const picksMap = new Map<string, Row>();
     if (pickIds.length > 0) {
-      const picksResult = await client
+      const picksResult = await applyPickPopulation(client
         .from('picks')
         .select('id, source, capper_id, market, selection, odds, stake_units, promotion_score, metadata, status, created_at')
-        .in('id', pickIds);
+        .in('id', pickIds), 'governed');
       if (!picksResult.error) {
         for (const row of (picksResult.data ?? []) as Row[]) {
           const id = asString(row['id']);
@@ -685,10 +686,10 @@ export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
     const CHUNK = 100;
     for (let i = 0; i < pickIds.length; i += CHUNK) {
       const chunk = pickIds.slice(i, i + CHUNK);
-      const picksResult = await client
+      const picksResult = await applyPickPopulation(client
         .from('picks')
         .select('id, source, capper_id, odds, stake_units, metadata')
-        .in('id', chunk);
+        .in('id', chunk), 'governed');
 
       if (picksResult.error) {
         console.error('[analytics] getLeaderboard picks query error:', picksResult.error);
