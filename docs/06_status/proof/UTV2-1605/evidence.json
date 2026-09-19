@@ -2,8 +2,8 @@
   "schema_version": 2,
   "issue_id": "UTV2-1605",
   "pr_number": 1621,
-  "source_sha": "8fc8067d67f09d55cd664179dae4aca7f11eabec",
-  "reviewed_head_sha": "8fc8067d67f09d55cd664179dae4aca7f11eabec",
+  "source_sha": "b5b1329d51249c120fdea9bdece2791f1c6aa6d7",
+  "reviewed_head_sha": "b5b1329d51249c120fdea9bdece2791f1c6aa6d7",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "gate_results": [
@@ -32,7 +32,7 @@
   "generated_at": "2026-09-19T20:17:10Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "8fc8067d67f09d55cd664179dae4aca7f11eabec",
+    "verified_source_sha": "b5b1329d51249c120fdea9bdece2791f1c6aa6d7",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -173,6 +173,8 @@
     "lint_changed_files": "PASS",
     "r_level": "PASS",
     "exact_head_ci": "PENDING",
-    "final_head_scope_override": "PENDING"
+    "final_head_scope_override": "PENDING",
+    "local_verify": "Static stages passed (6816 tests, 0 fail), then staging-target refusal before local DB writes. Latest proof assertion adjustment separately type-checked/linted; exact-head CI required.",
+    "first_ci_attempt": "35471673081 failed one new proof assertion; live freshness query passed; corrected expected outcome to nothing-gradeable because rows_scanned is measured before candidate restriction."
   }
 }

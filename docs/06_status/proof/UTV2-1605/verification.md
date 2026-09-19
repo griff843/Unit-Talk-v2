@@ -6,7 +6,7 @@ MERGE_SHA: pending merge
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1621
-Execution/source SHA: `8fc8067d67f09d55cd664179dae4aca7f11eabec`
+Execution/source SHA: `b5b1329d51249c120fdea9bdece2791f1c6aa6d7`
 
 ## Assertions
 
@@ -88,3 +88,5 @@ The follow-up instruction explicitly accepts the fifth state; this records that 
 Unknown classes fail closed. The database status enum is unchanged. Generic DB smoke is not proof of the new freshness query. PM authorized the single-file staging proof addition through an external scope-override/v1 comment on reviewed HEAD 5c6714fd8d5e1aeebb003298075258594f20e6d6. The override must be renewed at the final HEAD. The added cases in t1-proof-utv2-1886-settlement-batch.test.ts independently reduce live source timestamps and exercise the real grading freshness read and persisted no-input run. An empty candidate restriction prevents settlement or delivery. These cases must pass in the approved staging live suite before this correction is review-ready.
 
 The first correction CI run (35471673081) passed the live freshness oracle but caught an incorrect test expectation: candidate restriction does not erase rows_scanned. The persistence proof now explicitly requires positive rows_scanned, zero attempted/graded, and no_op_nothing_gradeable. Runtime semantics are unchanged.
+
+Local correction verification: pnpm verify passed static stages (6,816 tests, 6,816 pass, 0 fail, 0 skipped), then refused 127.0.0.1 at the staging-target guard before writes. The final live assertion adjustment passed separate type-check and lint. Exact-HEAD CI remains required; local full verify is not green.
