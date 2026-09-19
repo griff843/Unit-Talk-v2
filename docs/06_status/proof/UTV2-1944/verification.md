@@ -5,12 +5,12 @@ MERGE_SHA: pending merge
 
 ## ASSERTIONS:
 
-- Pick discovery selects the governed cohort by one positive predicate applied to **both** the row
+- [x] Pick discovery selects the governed cohort by one positive predicate applied to **both** the row
   read and the count read, so the explorer's total and its rows describe the same population.
-- Every `picks` read on a presented analytics surface — performance, leaderboard, intelligence —
+- [x] Every `picks` read on a presented analytics surface — performance, leaderboard, intelligence —
   carries that same predicate, and governed membership is the **driving** predicate for the
   settlement join rather than a join enrichment that a missing row can silently default.
-- The fixture corpus is reachable only under an explicit, labelled mode, and every row it shows is
+- [x] The fixture corpus is reachable only under an explicit, labelled mode, and every row it shows is
   marked as a fixture.
 
 ## EVIDENCE:
@@ -105,3 +105,12 @@ and that the literal `picksMap.get(pickId) ?? {}` form does not reappear.
 No write was performed. Both measurements above are read-only `select` statements against production
 `zfzdnfwdarxucxtaojxm`, which is the population this change governs; a staging count would not have
 answered the question, because the 107,866-row fixture corpus is a production artifact.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1618
+
+Execution identity is `sha_binding.verified_source_sha` in the sibling `evidence.json`
+(`9c46f975632f5229d158cdabcde9fa814a10a3a8`), the last commit on this branch carrying code.
+`post-merge-lane-close.yml` rebinds `sha_binding.merge_sha` and this row after merge.
