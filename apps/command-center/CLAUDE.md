@@ -22,16 +22,13 @@ here. If the two ever disagree, the contract wins and this file is stale — fix
 - Runtime: Next.js app (port 4300), deployed as the `command-center` service
 - Maturity: active development
 
-Reads directly from Supabase via `src/lib/data/`. Writes through `apps/api` via server actions with
-Bearer token auth. Calls no other internal application to read — there is no intermediate read
-backend, and `apps/operator-web` is not one.
+Reads persisted business data from Supabase via `src/lib/data/`. Live runtime truth/health may use the approved authenticated server-side readers already exposed through `src/lib/data/runtime-truth.ts` and `src/lib/server-api.ts`. Writes go through `apps/api` via server actions with Bearer token auth. There is no generic intermediate read backend, and `apps/operator-web` is not one.
 
 ## Role in Dependency Graph
 
-**Imports:** `next`, `react`, `tailwindcss` (no `@unit-talk/*` packages — frontend only)
+**Imports:** `next`, `react`, `tailwindcss`, plus sanctioned shared workspace types/runtime support where already used. Product/business behaviour remains owned by the canonical API/domain layers.
 
-**Calls:** `apps/api` (POST mutations via server actions). All reads go direct to Supabase via
-`src/lib/data/`.
+**Calls:** `apps/api` for mutations and the narrow approved runtime-truth/health reads. Persisted business-data reads go direct to Supabase via `src/lib/data/`.
 
 ## What Lives Here
 
@@ -57,7 +54,7 @@ header. A development bypass is logged as an unauthenticated request, never as a
 
 ## Rules
 
-- Reads via `src/lib/data/` (direct Supabase), writes through `apps/api`
+- Persisted business reads via `src/lib/data/`; approved runtime truth/health reads may use the canonical API/runtime reader; writes through `apps/api`
 - All mutations must include an `Authorization` header and an authenticated actor
 - No business logic duplication — UI only
 - Every new route inherits authentication by default; path shape is never an auth boundary
@@ -68,7 +65,7 @@ header. A development bypass is logged as an unauthenticated request, never as a
 - Do not add business logic (scoring, promotion, settlement, delivery-eligibility logic)
 - Do not bypass API auth for mutations
 - Do not add a write surface without a corresponding API endpoint
-- Do not introduce HTTP calls to other internal apps
+- Do not introduce a generic internal read-backend or arbitrary cross-app HTTP calls; the existing approved runtime truth/health readers are the narrow exception
 - Do not build a pick-composition surface here — Smart Form is the canonical submission surface
   (contract §1.4, §4.4)
 - Do not define product requirements in this file
