@@ -383,14 +383,17 @@ test('UTV2-1605: real grading run persists the live input-freshness read', { ski
   assert.equal(reads, 1, 'the runtime must call the new live repository capability');
   assert.ok(runId);
   assert.deepEqual(result.inputFreshness, classifyInputFreshness(observedTimestamp, now));
-  assert.equal(result.outcomeClass, 'no_op_no_input');
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
+  assert.equal(result.attempted, 0);
+  assert.equal(result.graded, 0);
   const { data: row, error } = await db.from('system_runs').select('*').eq('id', runId).single();
   assert.equal(error, null);
   assert.ok(row);
   assert.equal(row.status, 'succeeded');
   const details = row.details as Record<string, unknown>;
-  assert.equal(details['outcome_class'], 'no_op_no_input');
-  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.ok(typeof details['rows_scanned'] === 'number' && details['rows_scanned'] > 0,
+    'candidate restriction must not erase the rows the real repository scanned');
   assert.equal(details['graded_count'], 0);
   assert.equal(details['error_count'], 0);
   assert.equal(details['newest_game_result_sourced_at'], observedTimestamp);
