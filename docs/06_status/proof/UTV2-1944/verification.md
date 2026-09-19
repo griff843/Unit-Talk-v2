@@ -1,7 +1,15 @@
 # PROOF: UTV2-1944
 
 Execution SHA: `81683c655b1ba018fef1f7579230b2ab4d020484`
-Merge SHA: pending merge
+MERGE_SHA: pending merge
+
+## ASSERTIONS:
+
+- Discovery uses the shared positive `metadata.distributionMode` predicate for both rows and count.
+- Performance and leaderboard load only governed picks before aggregation.
+- Fixture mode is explicit and every fixture row is labelled as a fixture.
+
+## EVIDENCE:
 
 ## Verification
 
