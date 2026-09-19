@@ -45,6 +45,7 @@ If a status doc says something is green but a live command fails, the live comma
 | File                                              | Purpose                                       | Owner        |
 | ------------------------------------------------- | --------------------------------------------- | ------------ |
 | `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md`  | Primary platform surface registry             | Product      |
+| `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`  | **Sole product authority for Command Center** — purpose, users, launch scope and non-goals, information architecture, page catalog, data-truth rules, read/write boundaries, auth expectations, operator workflows, state terminology, UX behaviour, launch acceptance. No other Command Center document is product or operations authority. | Product      |
 | `docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md` | Primary member tier and role access authority | Product      |
 | `docs/03_product/DISCORD_COMMAND_CATALOG.md`      | Live Discord command registry                 | Product      |
 | `docs/03_product/*CONTRACT.md`                    | Product-surface contracts                     | Product      |
@@ -53,6 +54,25 @@ If a status doc says something is green but a live command fails, the live comma
 | `docs/03_contracts/*.md`                          | Domain consumer contracts                     | Architecture |
 
 Removed historical product files are intentionally absent from this checkout. Do not cite old filenames such as `program_surfaces.md`, `ROLE_ACCESS_MATRIX.md`, or `command_center_truth_surface_prd.md` as active references.
+
+### Command Center — one authority, and only one
+
+Command Center previously accumulated more than twenty documents across `docs/03_product/`,
+`docs/05_operations/` and `docs/02_architecture/contracts/`, several of which independently declared
+themselves canonical, ratified or implementation-gating over overlapping scope.
+
+All of them are now archived under `docs/archive/command-center/`, each with a deprecated pointer
+stub left at its original path so that references inside sealed proof bundles and closed lane
+manifests keep resolving. **A stub is not authority, and neither is the archived original.**
+
+The single authority is `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`. Do not cite
+`COMMAND_CENTER_REDESIGN_CONTRACT.md`, `COMMAND_CENTER_PHASE_2_CONTRACT.md`,
+`COMMAND_CENTER_WAVE_3_CONTRACT.md`, `COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md`,
+`T1_COMMAND_CENTER_BURNIN_TRUTH_CONTRACT.md`, `CC_IA_RATIFICATION.md`, `CC_OPERATIONS_IA.md`, or any
+other `CC_*` or `*_WORKSPACE_MVP` document as an active reference.
+
+`apps/command-center/CLAUDE.md` remains as an engineering instruction file for that package. It
+defines no product behaviour and points at the contract.
 
 ## Agent Onboarding
 

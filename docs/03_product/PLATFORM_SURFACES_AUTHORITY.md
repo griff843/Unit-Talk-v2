@@ -52,63 +52,27 @@ The Worker does not write picks or settlement data. It is a delivery executor on
 
 ---
 
-### Command Center — Operator Intelligence Dashboard (Data Backend)
-
-| Field | Value |
-|-------|-------|
-| App | `apps/operator-web` |
-| State | **LIVE** |
-| Role | Internal read-only data backend for Command Center |
-| Access | Operator / Admin only |
-
-Read-only. No write surfaces. Provides real-time operational health, outbox state, pick pipeline status, and settlement summary. All endpoints are consumed by the Command Center UI (`apps/command-center`).
-
-Key endpoints:
-- `GET /` — operator HTML dashboard
-- `GET /health` — component health signals
-- `GET /api/operator/snapshot` — full `OperatorSnapshot` (filterable)
-- `GET /api/operator/picks-pipeline` — picks pipeline summary
-- `GET /api/operator/stats` — capper win rate / ROI / avgClvPct
-- `GET /api/operator/leaderboard` — ranked capper leaderboard
-- `GET /api/operator/participants` — player/team search
-- `GET /api/operator/events` — upcoming events
-- `GET /api/operator/recap` — settlement summary via domain
-- `GET /api/operator/performance` — comparative performance (time windows, source/sport/decision splits, CLV%, insights)
-- `GET /api/operator/intelligence` — intelligence layer (recent form, score bands, decision quality, feedback loop, warnings)
-- `GET /api/operator/exception-queues` — exception queue counts and rows
-- `GET /api/operator/review-history` — review decision history
-- `GET /api/operator/review-queue` — picks pending review
-- `GET /api/operator/held-queue` — held picks
-- `GET /api/operator/pick-search` — pick search with filters
-- `GET /api/operator/picks/:id` — full pick detail (8-section lifecycle trace)
-
----
-
-### Command Center — Operator Intelligence Dashboard
+### Command Center — Operator Control Plane and Intelligence Platform
 
 | Field | Value |
 |-------|-------|
 | App | `apps/command-center` |
 | State | **LIVE** |
-| Role | Operator intelligence, decision-quality analysis, and pick lifecycle management |
+| Role | Internal operator control plane for the pick lifecycle, and Unit Talk's betting research / intelligence / decision-support platform |
 | Access | Operator / Admin only |
 | Port | 4300 |
+| **Product authority** | **`docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — the sole authority for what Command Center is and must do.** This registry entry describes the *surface*; it does not define product behaviour, and it must not be extended to do so. |
 
-Next.js 14 application that reads from operator-web and writes through the API. No direct DB access. Provides operator-grade intelligence surfaces for evaluating edge, decision quality, and performance trends.
+Next.js application. **Reads the database directly** through its own server-side data layer; **writes
+only through `apps/api`**, over authenticated HTTP from server actions. It calls no other internal
+application to read.
 
-Pages:
-- `/` — dashboard with health signals, exceptions, stats summary, pick lifecycle table
-- `/picks-list` — filterable pick search with pagination
-- `/review` — review queue (approve/deny/hold decisions with reason)
-- `/held` — held picks queue with return/resolve actions
-- `/exceptions` — 5 exception categories with intervention actions
-- `/performance` — comparative performance: capper vs system, decision outcomes, by sport/source, CLV%, insights, leaderboard
-- `/intelligence` — score quality (band segmentation, correlation), decision quality (approved vs denied accuracy), recent form (last 5/10/20), feedback loop
-- `/decisions` — decision audit with filter tabs
-- `/interventions` — intervention audit log
-- `/picks/[id]` — 8-section pick lifecycle trace with settlement/correction forms
+Every route requires credentials. The public path set is a literal allowlist covering Next build
+output and an unauthenticated health endpoint; path shape is never an authentication boundary.
 
-188 Playwright e2e tests verify all surfaces.
+The page catalog is **not** duplicated here — it lives in the product contract §4, so that the
+catalog and the requirements cannot drift apart. `apps/operator-web` is not a Command Center
+component: it is present in the repository, is in no deploy path, and is called by nothing.
 
 ---
 
