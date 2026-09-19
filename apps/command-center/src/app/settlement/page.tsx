@@ -8,6 +8,7 @@ import { SettlementWorkbench } from '@/components/SettlementWorkbench';
 import { getPickDetail } from '@/lib/data';
 import { getDeliveryKillSwitchStatuses } from '@/lib/data/discord-ops';
 import { predictRecapDelivery } from '@/lib/human-capper-recap';
+import { isPickAlreadySettled } from '@/lib/settlement-state';
 
 export const metadata = { title: 'Settlement — Unit Talk Command Center' };
 
@@ -173,7 +174,7 @@ export default async function SettlementPage({
       if (!detail) {
         pickLoadError = 'Canonical pick was not found.';
       } else {
-        isAlreadySettled = detail.pick.status === 'settled' || detail.settlements.length > 0;
+        isAlreadySettled = isPickAlreadySettled(detail.pick.status, detail.settlements.length);
       }
     } catch (error) {
       pickLoadError = describeOperatorFailure(error, 'Canonical pick state could not be loaded.');

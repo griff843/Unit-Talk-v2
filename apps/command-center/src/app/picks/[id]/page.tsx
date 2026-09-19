@@ -6,6 +6,7 @@ import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
+import { isPickAlreadySettled } from '@/lib/settlement-state';
 import { describeOperatorFailure } from '@/lib/describe-error';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
@@ -242,6 +243,12 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const { pick } = detail;
   const allowedActions = getAllowedActions(pick.status);
   const corrections = detail.settlements.filter((settlement) => settlement.correctsId != null);
+  // Read from the settlement plane, not from the lifecycle status. A Track Only
+  // pick is never `posted`, so it can never be advanced to `settled` and stays
+  // `validated` while carrying a real settlement record — the normal internal
+  // case, not an edge case. `/settlement` has always derived this; this page
+  // passed a literal `false` and told the operator a settled pick was unsettled.
+  const alreadySettled = isPickAlreadySettled(pick.status, detail.settlements.length);
   const promotionScores = readObject(pick.metadata['promotionScores']);
   const domainAnalysis = readObject(pick.metadata['domainAnalysis']);
   const deviggingResult = readObject(pick.metadata['deviggingResult']);
@@ -342,7 +349,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         ) : allowedActions.includes('correct') ? (
           <CorrectionForm pickId={pickId} />
         ) : allowedActions.includes('settle') ? (
-          <SettlementForm pickId={pickId} isAlreadySettled={false} />
+          <SettlementForm pickId={pickId} isAlreadySettled={alreadySettled} />
         ) : (
           <p className="text-sm text-gray-400">No actions available for this pick.</p>
         )}
