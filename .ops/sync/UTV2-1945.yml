@@ -1,0 +1,173 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1945
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1945
+  objective: Documentation-only finalization of Griff's PM-approved Discord
+    architecture using the completed production audit of 2026-09-19 (65
+    channels, 10 categories, 7 forums, 11 visible capper spaces, 84 named roles
+    plus everyone). This is an explicitly approved bounded Codex lane; no
+    redesign or new discovery audit.
+  acceptance_criteria:
+    - Canonical architecture contract defines metadata, authority, exact PM
+      category/channel tree, every channel's
+      purpose/type/audience/permissions/posting authority/automation/failure
+      state.
+    - Complete current-to-target migration matrix accounts for all 65 audit
+      channels exactly once, preserving known IDs/history and recording
+      disposition, dependencies, risks and action prerequisites.
+    - "Relevant role migration matrix and entitlement reconciliation
+      requirements: Trial equals full VIP, excludes VIP+; Best Bets and
+      Education Vault are VIP; Trader Insights and Strategy Lab are VIP+; Capper
+      is a separate professional function; trial expiry must revoke paid Discord
+      access."
+    - Preserve capper-specific Official Picks and Q&A, distinct consolidated
+      team Official Picks, selective traceable Best Bets; Results is the
+      complete settled ledger and Recaps are aggregates.
+    - Preserve Free Daily Picks, Game Day Live, universal Help Center, general
+      support, paid priority support and separate Suggestions.
+    - Automation ownership matrix records source, truth, producer, mapping,
+      failure visibility and evidence-qualified activation state.
+    - Define non-executed migration waves, rollback and acceptance checklist for
+      real personas and full settlement/correction transparency.
+    - Reconcile older conflicting documents by explicit authority references,
+      without erasing runtime truth. Update authority map minimally.
+    - Preserve canonical vip-plus identifier; VIP Edge rename not independently
+      ratified. Black Label remains FUTURE/PARKED, not active or purchasable. No
+      invented prices or unproven live claims.
+    - Refresh main, canonical lane discovery and scope check; pass pnpm verify
+      and applicable documentation/static/R-level checks; open bounded T2 PR for
+      PM review, do not merge.
+  guardrails: []
+  non_goals:
+    - No Discord mutations, channel/role/permission changes, posting/commands,
+      bot/runtime/config changes, Whop or commerce changes, membership-contract
+      changes, WORK-identity governance, preflight/Merge Gate/P0
+      Protocol/Executor Result Validation changes, redesign, reopened locked
+      decisions, or Black Label activation. Do not interfere with Human Capper
+      E2E work. No unrelated governance cleanup.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Allowed files
+
+      * docs/03_product/DISCORD_SERVER_ARCHITECTURE_CONTRACT.md
+
+      * docs/05_operations/DISCORD_SERVER_MIGRATION_PLAN.md
+
+      * docs/05_operations/docs_authority_map.md
+
+      * The lane's own generated manifest, sync metadata and required proof
+      bundle only.
+    - >-
+      Exact PM blueprint
+
+      START HERE: start-here, announcements, membership, self-roles,
+      rules-responsible-play.
+
+      RESULTS & PROOF: results, recaps, member-tools.
+
+      FREE VALUE: free-daily-picks.
+
+      COMMUNITY: general, sports-talk (forum), suggestions (forum).
+
+      HELP & SUPPORT: help-center, support, priority-support.
+
+      VIP • OFFICIAL PICKS: cappers-space (forum), official-picks, best-bets,
+      vip-lounge, game-day-live, education-vault.
+
+      VIP+ / VIP EDGE: trader-insights, strategy-lab.
+
+      BLACK LABEL \[PARKED/FUTURE\]: black-label-desk, syndicate-room.
+
+      Preserve the exact emojis and names supplied in the original PM blueprint.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1945/ratify-the-canonical-discord-server-architecture-contract-and
+    title: Ratify the canonical Discord server architecture contract and production
+      migration plan
+    description: >-
+      ## Objective
+
+
+      Documentation-only finalization of Griff's PM-approved Discord
+      architecture using the completed production audit of 2026-09-19 (65
+      channels, 10 categories, 7 forums, 11 visible capper spaces, 84 named
+      roles plus everyone). This is an explicitly approved bounded Codex lane;
+      no redesign or new discovery audit.
+
+
+      ## Allowed files
+
+
+      * docs/03_product/DISCORD_SERVER_ARCHITECTURE_CONTRACT.md
+
+      * docs/05_operations/DISCORD_SERVER_MIGRATION_PLAN.md
+
+      * docs/05_operations/docs_authority_map.md
+
+      * The lane's own generated manifest, sync metadata and required proof
+      bundle only.
+
+
+      ## Acceptance criteria
+
+       1. Canonical architecture contract defines metadata, authority, exact PM category/channel tree, every channel's purpose/type/audience/permissions/posting authority/automation/failure state.
+       2. Complete current-to-target migration matrix accounts for all 65 audit channels exactly once, preserving known IDs/history and recording disposition, dependencies, risks and action prerequisites.
+       3. Relevant role migration matrix and entitlement reconciliation requirements: Trial equals full VIP, excludes VIP+; Best Bets and Education Vault are VIP; Trader Insights and Strategy Lab are VIP+; Capper is a separate professional function; trial expiry must revoke paid Discord access.
+       4. Preserve capper-specific Official Picks and Q&A, distinct consolidated team Official Picks, selective traceable Best Bets; Results is the complete settled ledger and Recaps are aggregates.
+       5. Preserve Free Daily Picks, Game Day Live, universal Help Center, general support, paid priority support and separate Suggestions.
+       6. Automation ownership matrix records source, truth, producer, mapping, failure visibility and evidence-qualified activation state.
+       7. Define non-executed migration waves, rollback and acceptance checklist for real personas and full settlement/correction transparency.
+       8. Reconcile older conflicting documents by explicit authority references, without erasing runtime truth. Update authority map minimally.
+       9. Preserve canonical vip-plus identifier; VIP Edge rename not independently ratified. Black Label remains FUTURE/PARKED, not active or purchasable. No invented prices or unproven live claims.
+      10. Refresh main, canonical lane discovery and scope check; pass pnpm
+      verify and applicable documentation/static/R-level checks; open bounded T2
+      PR for PM review, do not merge.
+
+
+      ## Exact PM blueprint
+
+
+      START HERE: start-here, announcements, membership, self-roles,
+      rules-responsible-play.
+
+      RESULTS & PROOF: results, recaps, member-tools.
+
+      FREE VALUE: free-daily-picks.
+
+      COMMUNITY: general, sports-talk (forum), suggestions (forum).
+
+      HELP & SUPPORT: help-center, support, priority-support.
+
+      VIP • OFFICIAL PICKS: cappers-space (forum), official-picks, best-bets,
+      vip-lounge, game-day-live, education-vault.
+
+      VIP+ / VIP EDGE: trader-insights, strategy-lab.
+
+      BLACK LABEL \[PARKED/FUTURE\]: black-label-desk, syndicate-room.
+
+      Preserve the exact emojis and names supplied in the original PM blueprint.
+
+
+      ## Non-goals
+
+
+      No Discord mutations, channel/role/permission changes, posting/commands,
+      bot/runtime/config changes, Whop or commerce changes, membership-contract
+      changes, WORK-identity governance, preflight/Merge Gate/P0
+      Protocol/Executor Result Validation changes, redesign, reopened locked
+      decisions, or Black Label activation. Do not interfere with Human Capper
+      E2E work. No unrelated governance cleanup.
+    captured_at: 2026-09-19T19:11:09.944Z
+    description_sha256: 6d4f20fe09f3385e7437bf3fc409139cf520ec0efdcd3815177be0525863ae2e
+  contract_hash: e400d1739bb7ffb8a14706c5e4852ba2b900909a472e2eca1d2572b71f738ad2
