@@ -13,7 +13,7 @@ Lane type: hygiene
 Branch: claude/utv2-1949-tmp-workspace-leak
 PR URL: N/A
 Head SHA: 14d88b67d3bd74a54c18607d3c92466184c1d70b
-result: pass
+result: pass (lane work) / BLOCKED (required `verify` red — see the `pnpm verify` row below)
 
 ## ASSERTIONS:
 
@@ -70,7 +70,15 @@ lane:check PASS lane=hygiene files=26
 - [x] `pnpm lint`: pass — no findings
 - [x] `pnpm test`: pass — exit 0, zero `not ok` lines
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — `ingestor-provider` matched; its required artifacts are present.
-- [ ] `pnpm verify`: not run locally. `ci:assert-staging` cannot exit 0 outside CI, so branch `verify` is measured by CI on the PR head rather than claimed here.
+- [ ] `pnpm verify`: **RED on the PR head, and not claimed.** `ci:assert-staging` cannot exit 0 outside CI,
+      so branch `verify` is measured by CI. CI measured it on `7f6837ea9` (run `35480165032`) and it
+      **failed**, at `verify:static` → `ops:automation-coverage-check` → `executable-wiring`:
+      `WIRING_TEST_UNWIRED_NEW` on both new test files. This is the same unwired-guard gap recorded
+      under "Outstanding" below, escalated from advisory to a required check. The lane is not
+      mergeable until the requested `scope-override/v1` adds `package.json` to `file_scope_lock`.
+      The baseline-ledger alternative the guard also offers is closed twice over:
+      `docs/05_operations/executable-wiring-baseline.json` is outside `hygiene`'s allowed paths, and
+      that ledger is already at its cap (`tests.max_entries = 119`, entries = 119).
 
 ## Runtime Verification
 
