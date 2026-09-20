@@ -7,7 +7,6 @@ import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
 import { isPickAlreadySettled } from '@/lib/settlement-state';
-import { describeOperatorFailure } from '@/lib/describe-error';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { renderClvSummary } from '@/lib/clv-summary';
@@ -226,11 +225,12 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   try {
     detail = await getPickDetail(pickId) as PickDetailViewResponse | null;
   } catch (error) {
+    console.error('Pick detail unavailable', error);
     return (
       <DegradedState
         severity="critical"
         title="Pick detail unavailable"
-        causes={[describeOperatorFailure(error, 'Canonical pick history could not be loaded. Governed actions are disabled.')]}
+        causes={['Canonical pick history could not be loaded. Try again shortly. Governed actions are disabled.']}
         action={{ label: 'Active Picks', href: '/picks' }}
       />
     );
@@ -341,6 +341,23 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card title="Distribution mode">
+        <p className="text-sm text-gray-100">
+          {pick.metadata['distributionMode'] === 'track-only'
+            ? 'Track Only'
+            : pick.metadata['distributionMode'] === 'delivery-eligible'
+              ? 'Delivery eligible'
+              : 'Distribution mode not recorded'}
+        </p>
+        {pick.metadata['distributionMode'] === 'track-only' && (
+          <p className="mt-2 text-sm text-gray-400">
+            {detail.outboxRows.length === 0 && detail.receipts.length === 0
+              ? 'Verified: no outbox row, no receipt, no delivery attempt.'
+              : 'Unexpected delivery records exist for this Track Only pick. Inspect the delivery history below.'}
+          </p>
+        )}
       </Card>
 
       <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">

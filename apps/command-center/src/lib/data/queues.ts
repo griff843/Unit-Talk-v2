@@ -685,6 +685,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
       .from('picks_current_state')
       .select([
         'id',
+        'submission_id',
         'source',
         'market',
         'selection',
@@ -729,7 +730,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 
       client
         .from('pick_promotion_history')
-        .select('id, pick_id, promotion_target, status, score, policy_version, decided_at, decided_by, override_action, reason')
+        .select('id, pick_id, target, status, score, version, decided_at, decided_by, override_action, reason')
         .eq('pick_id', pickId)
         .order('decided_at', { ascending: false }),
 
@@ -774,12 +775,13 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         .eq('entity_ref', pickId)
         .order('created_at', { ascending: false }),
 
-      client
-        .from('submissions')
-        .select('id, pick_id, payload, created_at')
-        .eq('pick_id', pickId)
-        .limit(1)
-        .maybeSingle(),
+      typeof pickRow['submission_id'] === 'string'
+        ? client
+          .from('submissions')
+          .select('id, payload, created_at')
+          .eq('id', pickRow['submission_id'])
+          .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     assertQuerySucceeded(receiptsResult, 'getPickDetail distribution receipts');
@@ -829,10 +831,8 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     // Resolve confidence
     const confidence = asNumberOrNull(metadata['confidence']);
 
-    // Resolve submissionId from pick_id column on submission row
-    const submissionId = submissionRow
-      ? asStringOrNull(submissionRow['id'])
-      : null;
+    // Preserve the canonical submission link even if its row is unavailable.
+    const submissionId = asStringOrNull(pickRow['submission_id']);
 
     const pick: PickDetail = {
       id: asString(pickRow['id']),
@@ -873,14 +873,13 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     }));
 
     // ── Map promotion history ─────────────────────────────────────────────────
-    // promotion_target → target, policy_version → version
 
     const promotionHistory: PromotionHistoryRow[] = promotionHistRows.map((row) => ({
       id: asString(row['id']),
-      target: asString(row['promotion_target']),
+      target: asString(row['target']),
       status: asString(row['status']),
       score: asNumberOrNull(row['score']),
-      version: asString(row['policy_version']),
+      version: asString(row['version']),
       decidedAt: asString(row['decided_at']),
       decidedBy: asString(row['decided_by']),
       overrideAction: asStringOrNull(row['override_action']),

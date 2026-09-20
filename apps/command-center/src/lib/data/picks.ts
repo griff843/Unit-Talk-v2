@@ -1,5 +1,6 @@
 import { getDataClient, isTestFixturePick } from './client';
-import { assertQuerySucceeded } from '../query-result';
+import { OUTBOX_STATUSES } from './outbox';
+import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import {
   applyPickPopulation,
   filterDeliveryTargetPopulation,
@@ -386,11 +387,21 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
  */
 export async function getNonGovernedDeliveryRows(): Promise<NonGovernedDeliveryRows> {
   const client: Client = await getDataClient();
-  const result = await client
-    .from('distribution_outbox')
-    .select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at')
-    .not('target', 'in', governedOutboxTargetListLiteral())
-    .order('updated_at', { ascending: false });
+  // Count the complete population at the database; the display sample is
+  // deliberately bounded and cannot supply a total or status histogram.
+  const [result, countResults] = await Promise.all([
+    client
+      .from('distribution_outbox')
+      .select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at')
+      .not('target', 'in', governedOutboxTargetListLiteral())
+      .order('updated_at', { ascending: false })
+      .limit(50),
+    Promise.all(OUTBOX_STATUSES.map((status) => client
+      .from('distribution_outbox')
+      .select('id', { count: 'exact', head: true })
+      .not('target', 'in', governedOutboxTargetListLiteral())
+      .eq('status', status))),
+  ]);
   assertQuerySucceeded(result, 'getNonGovernedDeliveryRows outbox');
 
   const rows = filterDeliveryTargetPopulation(
@@ -398,7 +409,15 @@ export async function getNonGovernedDeliveryRows(): Promise<NonGovernedDeliveryR
     'non-governed',
   );
   const statusCounts: Record<string, number> = {};
-  for (const row of rows) statusCounts[row.status] = (statusCounts[row.status] ?? 0) + 1;
+  for (const [index, status] of OUTBOX_STATUSES.entries()) {
+    statusCounts[status] = readAuthoritativeCount(
+      countResults[index], `getNonGovernedDeliveryRows ${status}`,
+    );
+  }
 
-  return { total: rows.length, statusCounts, rows: rows.slice(0, 50) };
+  return {
+    total: Object.values(statusCounts).reduce((sum, count) => sum + count, 0),
+    statusCounts,
+    rows,
+  };
 }

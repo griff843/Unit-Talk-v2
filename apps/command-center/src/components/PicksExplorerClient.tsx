@@ -217,7 +217,7 @@ export function PicksExplorerClient({ picks, sourceTotal }: PicksExplorerClientP
                     {result ? <StatusBadge status={result} /> : <span className="text-gray-600">pending</span>}
                   </td>
                   <td className="px-4 py-2 text-xs text-gray-500">
-                    {pick['created_at'] ? new Date(String(pick['created_at'])).toLocaleString() : '—'}
+                    {pick['created_at'] ? new Date(String(pick['created_at'])).toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }) : '—'}
                   </td>
                 </tr>
               );
