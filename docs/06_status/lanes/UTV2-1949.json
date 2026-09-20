@@ -15,6 +15,7 @@
     "apps/ingestor/src/provider-offer-replay.test.ts",
     "docs/06_status/lanes/UTV2-1949.json",
     "docs/06_status/proof/UTV2-1949/diff-summary.md",
+    "docs/06_status/proof/UTV2-1949/evidence.json",
     "docs/06_status/proof/UTV2-1949/verification.md",
     "package.json",
     "scripts/audits/utv2-1382-scoring-validation.test.ts",
@@ -41,6 +42,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1949/diff-summary.md",
+    "docs/06_status/proof/UTV2-1949/evidence.json",
     "docs/06_status/proof/UTV2-1949/verification.md"
   ],
   "status": "in_review",

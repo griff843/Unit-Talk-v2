@@ -12,7 +12,7 @@ Tier: T2
 Lane type: hygiene
 Branch: claude/utv2-1949-tmp-workspace-leak
 PR URL: N/A
-Head SHA: 07569a3395814f15d3358a5b40d04b89c58b60fe
+Head SHA: 7e7f06b761c09eeb95b2ee26a9aaaf89b11aa0f1
 result: pass
 
 ## ASSERTIONS:
@@ -267,6 +267,35 @@ any allocation flowing into a released binding as released. Both choices err tow
 *not* failing the build, which is the right direction for a required check and means the
 28 is a floor, not a ceiling.
 
+## Branch update against main (second time)
+
+After PM approval at `357a19da4`, `main` moved again — this time because **PR #1622
+itself merged** (`01a941df4`, 2026-09-20T06:00:58Z). That put this PR BEHIND, and with
+`strict: true` on `main` a BEHIND PR cannot merge normally. Merging it anyway would have
+been the `enforce_admins: false` exemption firing, not policy permitting it, so the
+sanctioned `pnpm ops:merge-wrapper pr-update-branch` was used instead, producing merge
+commit `7e7f06b76`.
+
+The imported delta is entirely #1622's own merged content. `git diff 357a19da4
+7e7f06b76 -- scripts/ package.json docs/06_status/proof/UTV2-1949/` is **empty**: nothing
+this lane owns changed. The execution anchor moves to `7e7f06b76` because that merge
+commit touches non-proof paths, and `evidence.json` declares it as
+`sha_binding.verified_source_sha`.
+
+`evidence.json` was added at this point because `Executor Result Validation` is a required
+check and was absent. Without a schema-v2 `sha_binding` block the validator applies the
+legacy contract, under which the `MERGE_SHA:` row itself must be a real commit — which is
+unsatisfiable before the merge exists. Measured directly rather than guessed:
+
+```
+$ pnpm exec tsx scripts/ops/proof-schema.ts proof-identity --phase pre-merge \
+    --verification docs/06_status/proof/UTV2-1949/verification.md
+{"mode":"legacy-anchor","failures":[{"code":"merge_row_not_git_sha", ...}],"provenanceAnchorSha":null}
+
+$ ... same command --evidence docs/06_status/proof/UTV2-1949/evidence.json
+{"mode":"schema-v2","phase":"pre-merge","failures":[],"provenanceAnchorSha":"7e7f06b76..."}
+```
+
 ## Branch resync
 
 `origin/main` moved to `0876367a3` (a scheduled readiness-ledger refresh) while this PR
@@ -287,4 +316,4 @@ because that merge commit touches a non-proof path.
 Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
-Execution SHA: 07569a3395814f15d3358a5b40d04b89c58b60fe
+Execution SHA: 7e7f06b761c09eeb95b2ee26a9aaaf89b11aa0f1
