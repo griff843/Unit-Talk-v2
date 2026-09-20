@@ -176,4 +176,4 @@ two screenshot artifacts that `.lane/lanes/delivery-ui.yml` requires.
 Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
-Execution SHA: 630aa9d5cd5d4f0f18066ae58b04f8bfe2f34c70
+Execution SHA: 8f0e8f53826de67b60412a223b05d2391c207df9
