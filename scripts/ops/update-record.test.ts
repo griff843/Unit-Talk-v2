@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './shared.js';
+import { createTempWorkspace } from './temp-workspace.js';
 
 function runUpdateRecord(args: string[]) {
   return spawnSync(
@@ -19,7 +19,7 @@ function runUpdateRecord(args: string[]) {
 }
 
 function withNote(contents: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ut-update-record-'));
+  const dir = createTempWorkspace('ut-update-record-');
   const filePath = path.join(dir, 'note.md');
   fs.writeFileSync(filePath, contents, 'utf8');
   return filePath;

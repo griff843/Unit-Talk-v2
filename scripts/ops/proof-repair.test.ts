@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -11,6 +10,7 @@ import {
   mergeRuntimeProofIntoEvidence,
   type RuntimeProofFile,
 } from './proof-repair.js';
+import { createTempWorkspace } from './temp-workspace.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MERGE_SHA = '8ca5acf38a31fc1492961a0951a6af10029bc6c0';
@@ -46,7 +46,7 @@ function boundEvidence(overrides: Record<string, unknown> = {}): Record<string, 
 }
 
 function makeTmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'proof-repair-test-'));
+  return createTempWorkspace('proof-repair-test-');
 }
 
 // ── scaffold: routes through a governed PR, never main directly ───────────────

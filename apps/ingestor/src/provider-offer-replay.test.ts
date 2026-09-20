@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -13,10 +13,13 @@ import {
   runProviderOfferReplay,
 } from './provider-offer-replay.js';
 
-test('provider offer replay capture writes a real pack and replay reproduces zero-offer failure taxonomy', async () => {
+test('provider offer replay capture writes a real pack and replay reproduces zero-offer failure taxonomy', async (t) => {
   const captureRepositories = createInMemoryIngestorRepositoryBundle();
   const replayRepositories = createInMemoryIngestorRepositoryBundle();
   const rootDir = mkdtempSync(path.join(os.tmpdir(), 'provider-offer-replay-'));
+  // UTV2-1949: release the workspace even when the test throws, so a failing run
+  // does not permanently consume a /tmp inode.
+  t.after(() => rmSync(rootDir, { recursive: true, force: true }));
 
   const fetchImpl: typeof fetch = async () =>
     new Response(JSON.stringify({ data: [] }), {
@@ -82,10 +85,13 @@ test('provider offer replay capture writes a real pack and replay reproduces zer
   );
 });
 
-test('provider offer replay 2x compresses request timing instead of duplicating payloads', async () => {
+test('provider offer replay 2x compresses request timing instead of duplicating payloads', async (t) => {
   const captureRepositories = createInMemoryIngestorRepositoryBundle();
   const replayRepositories = createInMemoryIngestorRepositoryBundle();
   const rootDir = mkdtempSync(path.join(os.tmpdir(), 'provider-offer-replay-2x-'));
+  // UTV2-1949: release the workspace even when the test throws, so a failing run
+  // does not permanently consume a /tmp inode.
+  t.after(() => rmSync(rootDir, { recursive: true, force: true }));
 
   let requestCount = 0;
   const fetchImpl: typeof fetch = async () => {

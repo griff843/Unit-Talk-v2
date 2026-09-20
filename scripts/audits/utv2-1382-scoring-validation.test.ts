@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
 import { runScoringValidationAudit } from './utv2-1382-scoring-validation.js';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 function baseRow(overrides: Record<string, unknown>) {
   return {
@@ -29,7 +27,7 @@ function baseRow(overrides: Record<string, unknown>) {
 
 test('UTV2-1382: excludes metadata.testRun and legacy proof-tagged rows from the production denominator', async () => {
   const now = new Date('2026-07-02T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scoring-validation-'));
+  const outDir = createTempWorkspace('scoring-validation-');
 
   const summary = await runScoringValidationAudit({
     now,
@@ -51,7 +49,7 @@ test('UTV2-1382: excludes metadata.testRun and legacy proof-tagged rows from the
 
 test('UTV2-1382: band/edgeSourceQuality/fallbackReason classification matches promotion-service semantics', async () => {
   const now = new Date('2026-07-02T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scoring-validation-'));
+  const outDir = createTempWorkspace('scoring-validation-');
 
   const summary = await runScoringValidationAudit({
     now,
@@ -94,7 +92,7 @@ test('UTV2-1382: band/edgeSourceQuality/fallbackReason classification matches pr
 
 test('UTV2-1382: flags a fully test/proof-saturated source as unmeasurable in the verdict', async () => {
   const now = new Date('2026-07-02T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scoring-validation-'));
+  const outDir = createTempWorkspace('scoring-validation-');
 
   const summary = await runScoringValidationAudit({
     now,
@@ -114,7 +112,7 @@ test('UTV2-1382: flags a fully test/proof-saturated source as unmeasurable in th
 
 test('UTV2-1382: a promoted pick carrying band=SUPPRESS is reported as leakage', async () => {
   const now = new Date('2026-07-02T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scoring-validation-'));
+  const outDir = createTempWorkspace('scoring-validation-');
 
   const summary = await runScoringValidationAudit({
     now,
