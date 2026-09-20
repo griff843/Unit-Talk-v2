@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1948-cc-health-anon-fallback",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1622",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1948.yml",
@@ -23,9 +23,9 @@
     "docs/06_status/proof/UTV2-1948/screenshot-mobile.png",
     "docs/06_status/proof/UTV2-1948/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-19T23:03:50.369Z",
-  "heartbeat_at": "2026-09-19T23:03:50.369Z",
+  "heartbeat_at": "2026-09-19T23:26:55.630Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1948-cc-health-anon-fallback.json",
