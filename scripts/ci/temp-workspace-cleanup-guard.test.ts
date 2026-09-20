@@ -2,114 +2,209 @@
  * UTV2-1949 — mechanical guard for the temporary-workspace leak class.
  *
  * Core invariant 11: if a rule can be enforced mechanically, it must not live only
- * in prose. Repairing the 45 leaking call sites does nothing to stop the 46th, so
- * this guard fails the build when a test file creates a temporary directory with no
- * way to release it.
+ * in prose. Repairing the leaking call sites does nothing to stop the next one, so
+ * this guard fails the build when a test allocates a temporary directory that
+ * nothing can release.
  *
- * A file satisfies the guard by either using `createTempWorkspace` from
- * `scripts/ops/temp-workspace.ts`, or performing its own removal (`rmSync`, `rm(`,
- * or an `after`/`afterEach` hook). It does not prescribe which.
+ * **The question is asked per allocation, not per file.** An earlier draft of this
+ * guard asked only whether a cleanup token appeared anywhere in the same file. That
+ * was reviewed and rejected, correctly: `scripts/ops/execution-packet.test.ts`
+ * allocates roots at lines 164 and 188 with no teardown, and unrelated `fs.rmSync`
+ * calls 2,700 lines later made the whole file read as clean. The heuristic reported
+ * green while `/tmp` kept growing. It also under-counted the population by more than
+ * half — 10 files by the old token test, 14 files and 28 allocations by this one.
+ *
+ * Classification lives in `temp-workspace-allocations.ts` and is syntactic (TypeScript
+ * AST, no type-checker), so it runs inside `pnpm test` without a build.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { analyzeFile, analyzeSource, collectTestFiles } from './temp-workspace-allocations.ts';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** Directories this guard governs. Deliberately bounded to the lane's scope. */
 const SCANNED_ROOTS = ['scripts', 'apps'] as const;
 
-const CREATES_TEMP_DIR = /\bmkdtemp(Sync)?\s*\(/;
-const HAS_GOVERNED_HELPER = /createTempWorkspace/;
-const HAS_OWN_CLEANUP = /\brmSync\s*\(|\bfs\.rm\s*\(|\brm\s*\(\s*[A-Za-z_]|\bafterEach\s*\(|\bafter\s*\(/;
-
 /**
- * Leaks that exist on `main` and are outside UTV2-1949's pinned `file_scope_lock`,
- * which cannot be widened after lane-start. They are recorded here rather than
- * silently excluded, and this list is a **ratchet**: a file not on it that leaks
- * fails the guard, and a file on it that has been repaired also fails the guard, so
- * the list can only shrink and can never quietly go stale.
+ * Unreleased allocations that exist on `main` and are outside UTV2-1949's pinned
+ * `file_scope_lock`, which cannot be widened after lane-start.
  *
- * Measured 2026-09-20. Together these account for roughly 15% of the observed /tmp
- * residue; the bulk of it is repaired by this lane.
+ * The value is the **exact count** of unreleased allocations in that file, so this is
+ * a ratchet in both directions: adding a new leak to an already-listed file fails the
+ * guard, and repairing one without updating the ledger also fails it. A file absent
+ * from this map must have zero. The counts can only be lowered, never raised, without
+ * a deliberate edit that a reviewer will see.
+ *
+ * Measured 2026-09-20 at 28 unreleased allocations across 14 files, out of 248 total
+ * allocations in 370 scanned test files (189 released, 31 transferred to a caller).
  */
-const KNOWN_REMAINDER: readonly string[] = [
-  'apps/command-center/src/app/api/governance/lanes/route.test.ts',
-  'scripts/audits/utv2-1397-evidence-flow-observation.test.ts',
-  'scripts/evidence-truthworthiness/run-scoring.test.ts',
-  'scripts/lane-contract.test.ts',
-  'scripts/model-registry/run-registry-report.test.ts',
-  'scripts/ops/fix-sync-yml.test.ts',
-  'scripts/ops/readiness-refresh.test.ts',
-  'scripts/ops/workflow-hardening.test.ts',
-  'scripts/provenance/run-provenance-report.test.ts',
-  'scripts/source-ledger/run-source-ledger-report.test.ts',
-];
+const KNOWN_REMAINDER: Readonly<Record<string, number>> = {
+  'apps/command-center/src/app/api/governance/lanes/route.test.ts': 1,
+  'scripts/audits/utv2-1397-evidence-flow-observation.test.ts': 4,
+  'scripts/evidence-truthworthiness/run-scoring.test.ts': 1,
+  'scripts/lane-contract.test.ts': 2,
+  'scripts/model-registry/run-registry-report.test.ts': 1,
+  'scripts/ops/execution-packet.test.ts': 7,
+  'scripts/ops/fix-sync-yml.test.ts': 1,
+  'scripts/ops/lane-close.test.ts': 2,
+  'scripts/ops/readiness-refresh.test.ts': 1,
+  'scripts/ops/t2-proof-bundle.test.ts': 2,
+  'scripts/ops/verify-semaphore.test.ts': 1,
+  'scripts/ops/workflow-hardening.test.ts': 3,
+  'scripts/provenance/run-provenance-report.test.ts': 1,
+  'scripts/source-ledger/run-source-ledger-report.test.ts': 1,
+};
 
-function collectTestFiles(dir: string, out: string[]): void {
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (entry.name === 'node_modules' || entry.name === '.next' || entry.name === 'dist') continue;
-      collectTestFiles(full, out);
-    } else if (entry.isFile() && entry.name.endsWith('.test.ts')) {
-      out.push(full);
-    }
-  }
-}
-
-test('every governed test file that creates a temp directory can also release it', () => {
+test('every temp-directory allocation in a governed test can be released', () => {
   const files: string[] = [];
   for (const root of SCANNED_ROOTS) {
     collectTestFiles(path.join(REPO_ROOT, root), files);
   }
   assert.ok(files.length > 0, 'the scan found no test files at all — the guard would be vacuous');
 
-  const leaking = new Set<string>();
-  let governed = 0;
+  const unreleasedByFile = new Map<string, { count: number; detail: string[] }>();
+  let totalAllocations = 0;
 
   for (const file of files) {
-    const source = fs.readFileSync(file, 'utf8');
-    const rel = path.relative(REPO_ROOT, file).split(path.sep).join('/');
-    if (!CREATES_TEMP_DIR.test(source)) continue;
-    governed += 1;
-    if (HAS_GOVERNED_HELPER.test(source) || HAS_OWN_CLEANUP.test(source)) continue;
-    leaking.add(rel);
+    for (const allocation of analyzeFile(REPO_ROOT, file)) {
+      totalAllocations += 1;
+      if (allocation.verdict !== 'unreleased') continue;
+      const entry = unreleasedByFile.get(allocation.file) ?? { count: 0, detail: [] };
+      entry.count += 1;
+      entry.detail.push(`${allocation.file}:${allocation.line} — ${allocation.reason}`);
+      unreleasedByFile.set(allocation.file, entry);
+    }
   }
 
-  // Membership in KNOWN_REMAINDER is evaluated against the whole scanned population,
-  // not only against files that still create temp directories. A file that has been
-  // fully repaired no longer matches CREATES_TEMP_DIR at all, so checking the ratchet
-  // inside that loop would never fire for the exact case it exists to catch.
-  const offenders = [...leaking].filter((rel) => !KNOWN_REMAINDER.includes(rel)).sort();
-  const repairedRemainder = KNOWN_REMAINDER.filter((rel) => !leaking.has(rel)).sort();
-
   assert.ok(
-    governed > 0,
-    'no scanned test file creates a temp directory — the guard is not looking at the right population',
+    totalAllocations > 0,
+    'no scanned test file allocates a temp directory — the guard is not looking at the right population',
   );
 
-  assert.deepEqual(
-    offenders,
-    [],
-    `test files create temporary directories with no cleanup path (UTV2-1949). ` +
-      `Use createTempWorkspace() from scripts/ops/temp-workspace.ts, or remove the ` +
-      `directory yourself:\n  ${offenders.join('\n  ')}`,
-  );
+  // New or worsened leaks: anything above the number this file records for that path.
+  const regressions: string[] = [];
+  for (const [file, entry] of [...unreleasedByFile].sort()) {
+    const allowed = KNOWN_REMAINDER[file] ?? 0;
+    if (entry.count > allowed) {
+      regressions.push(
+        `${file}: ${entry.count} unreleased allocation(s), ledger allows ${allowed}\n    ` +
+          entry.detail.join('\n    '),
+      );
+    }
+  }
 
   assert.deepEqual(
-    repairedRemainder,
+    regressions,
     [],
-    `these files are listed in KNOWN_REMAINDER but no longer leak. Remove them from ` +
-      `the list — it is a shrink-only ratchet and a stale entry hides a real ` +
-      `regression:\n  ${repairedRemainder.join('\n  ')}`,
+    `temporary directories are allocated with no way to release them (UTV2-1949).\n` +
+      `Bind the result and remove it in the same scope, or use createTempWorkspace() ` +
+      `from scripts/ops/temp-workspace.ts:\n\n  ${regressions.join('\n\n  ')}`,
   );
+
+  // Stale ledger entries: a path that has been repaired, or improved, below its
+  // recorded count. The ledger must shrink with the debt or it stops meaning anything.
+  const stale: string[] = [];
+  for (const [file, allowed] of Object.entries(KNOWN_REMAINDER).sort()) {
+    const actual = unreleasedByFile.get(file)?.count ?? 0;
+    if (actual < allowed) {
+      stale.push(`${file}: ledger says ${allowed}, actual ${actual}`);
+    }
+  }
+
+  assert.deepEqual(
+    stale,
+    [],
+    `KNOWN_REMAINDER is stale. These paths now leak less than the ledger records — ` +
+      `lower the count (or delete the entry at zero) so a later regression cannot hide ` +
+      `underneath it:\n  ${stale.join('\n  ')}`,
+  );
+});
+
+/**
+ * Classification tests. These pin the behaviour the file-wide token heuristic got
+ * wrong, so it cannot be reintroduced: a cleanup somewhere else in the file must not
+ * absolve an allocation that has none.
+ */
+const verdicts = (source: string): string[] =>
+  analyzeSource('fixture.test.ts', source).map((a) => `${a.line}:${a.verdict}`);
+
+test('REGRESSION: a cleanup elsewhere in the file does not absolve an untorn-down allocation', () => {
+  // This is the shape of scripts/ops/execution-packet.test.ts, which the previous
+  // file-wide heuristic passed: an allocation with no teardown, and a later,
+  // unrelated allocation that does clean up after itself. The two share a variable
+  // name on purpose — that is precisely the case a file-wide scan cannot tell apart,
+  // and mutating the analyser back to a file-wide scope must fail this test.
+  const source = [
+    "test('leaks', () => {",
+    "  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'a-'));",
+    '  use(root);',
+    '});',
+    "test('clean', () => {",
+    "  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'b-'));",
+    '  try { use(root); } finally { fs.rmSync(root, { recursive: true, force: true }); }',
+    '});',
+  ].join('\n');
+
+  assert.deepEqual(verdicts(source), ['2:unreleased', '6:released']);
+});
+
+test('an allocation released in its own scope is clean', () => {
+  const source = [
+    "test('x', (t) => {",
+    "  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'a-'));",
+    '  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));',
+    '});',
+  ].join('\n');
+
+  assert.deepEqual(verdicts(source), ['2:released']);
+});
+
+test('an allocation returned to a caller transfers ownership rather than leaking', () => {
+  const source = [
+    'function makeRepo() {',
+    "  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'a-'));",
+    '  return { repoRoot };',
+    '}',
+  ].join('\n');
+
+  assert.deepEqual(verdicts(source), ['2:escapes']);
+});
+
+test('an allocation assigned to an outer binding is released by a sibling hook', () => {
+  const source = [
+    'let tmpDir;',
+    "before(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'a-')); });",
+    'after(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });',
+  ].join('\n');
+
+  assert.deepEqual(verdicts(source), ['2:released']);
+});
+
+test('an allocation wrapped before binding is owned by the binding it flows into', () => {
+  const source = [
+    'function withTempFile(run) {',
+    "  const filePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'a-')), 'q.md');",
+    '  try { run(filePath); } finally { fs.rmSync(path.dirname(filePath), { recursive: true, force: true }); }',
+    '}',
+  ].join('\n');
+
+  assert.deepEqual(verdicts(source), ['2:released']);
+});
+
+test('an allocation passed inline into a consumer is unreleased', () => {
+  const source = [
+    "test('x', () => {",
+    "  const result = generate(input(), { root: fs.mkdtempSync(path.join(os.tmpdir(), 'a-')) });",
+    '  assert.ok(result);',
+    '});',
+  ].join('\n');
+
+  assert.deepEqual(verdicts(source), ['2:unreleased']);
+});
+
+test('a directory from the governed helper is not a raw allocation at all', () => {
+  assert.deepEqual(verdicts("const dir = createTempWorkspace('a-');"), []);
 });
