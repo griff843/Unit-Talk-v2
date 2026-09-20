@@ -6,7 +6,7 @@ import type {
   SubmissionRecord,
   SystemRunRecord,
 } from '../../../../../packages/db/dist/types.js';
-import { createDatabaseConnectionConfig } from './client';
+import { createDatabaseConnectionConfig, type DatabaseConnectionConfig } from './client';
 
 import { getDataClient } from './client';
 import { fetchObservedRuns } from './snapshot';
@@ -38,8 +38,7 @@ export async function getPipelineHealthSnapshot(): Promise<PipelineHealthSnapsho
     if (result.error) throw result.error;
   }
 
-  const env = loadEnvironment();
-  const anonConnection = createDatabaseConnectionConfig({ env, useServiceRole: false });
+  const anonConnection = resolveOptionalAnonConnection();
 
   return derivePipelineHealthSnapshot({
     observedAt,
@@ -50,4 +49,36 @@ export async function getPipelineHealthSnapshot(): Promise<PipelineHealthSnapsho
     runs: (runsResult.data ?? []) as SystemRunRecord[],
     liveConfig: createPipelineLiveConfig(anonConnection.url, anonConnection.key),
   });
+}
+
+/**
+ * Resolve the anon credentials used *only* to build the optional realtime
+ * subscription config.
+ *
+ * UTV2-1948: `createPipelineLiveConfig` is already written to return `null`
+ * when either credential is absent -- the live config has always been
+ * optional. But resolving the anon connection threw before that graceful path
+ * could be reached, and the throw propagated out of
+ * `getPipelineHealthSnapshot()` *after* every real read had already succeeded.
+ * On a service-role-only deployment (production has `SUPABASE_URL` and
+ * `SUPABASE_SERVICE_ROLE_KEY` but no `SUPABASE_ANON_KEY`) that discarded a
+ * complete, healthy snapshot and rendered "GLOBAL HEALTH unavailable" /
+ * "API HEALTH Down" across every page carrying the global header.
+ *
+ * Degrading here is the whole point: an unavailable *optional* dependency must
+ * cost the live subscription and nothing else.
+ *
+ * `resolve` is injectable so the degradation is testable directly, without
+ * mocking the module graph or mutating process env.
+ */
+export function resolveOptionalAnonConnection(
+  resolve: () => DatabaseConnectionConfig = () =>
+    createDatabaseConnectionConfig({ env: loadEnvironment(), useServiceRole: false }),
+): { url: string | null; key: string | null } {
+  try {
+    const connection = resolve();
+    return { url: connection.url ?? null, key: connection.key ?? null };
+  } catch {
+    return { url: null, key: null };
+  }
 }
