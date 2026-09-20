@@ -20,7 +20,7 @@ result: pass
 - [x] The leak is measured, not inferred: 157 directories survived a run of the 18 affected suites before the repair, and 0 survive after it, with the same 312 tests passing both ways.
 - [x] A failing test also releases its workspace — proven by a child process that throws after creating one.
 - [x] The helper can only delete directories it created itself; it is not a `/tmp` sweeper.
-- [x] The defect class is enforced mechanically, so the 46th call site cannot reintroduce it.
+- [ ] **The defect class is NOT yet enforced in CI.** The guard exists and passes, but `pnpm test` enumerates test files explicitly in `package.json` → `test:ops`, and `package.json` is outside this lane's pinned `file_scope_lock`. Until it is wired, the guard runs only when invoked directly. See "Outstanding: the guard is not wired" below. This box is left unchecked rather than asserted.
 - [x] The out-of-scope remainder is recorded as a shrink-only ratchet, not silently excluded.
 - [x] Four mutation controls prove each assertion above is load-bearing.
 - [x] No production code, migration, workflow, containment setting or delivery path was touched. No test assertion or fixture was changed.
@@ -55,12 +55,21 @@ ok 1 - every governed test file that creates a temp directory can also release i
 # tests 1
 # pass 1
 # fail 0
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 26
+Rules matched: ingestor-provider
+
+$ npx tsx scripts/lane-check.ts --lane hygiene --base origin/main --head HEAD
+lane:check PASS lane=hygiene files=26
 ```
 
 ## Verification
 - [x] `pnpm type-check`: pass — `tsc -b tsconfig.json`, no diagnostics
 - [x] `pnpm lint`: pass — no findings
 - [x] `pnpm test`: pass — exit 0, zero `not ok` lines
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — `ingestor-provider` matched; its required artifacts are present.
 - [ ] `pnpm verify`: not run locally. `ci:assert-staging` cannot exit 0 outside CI, so branch `verify` is measured by CI on the PR head rather than claimed here.
 
 ## Runtime Verification
@@ -123,6 +132,34 @@ a control that conveys no information. The guard now computes the leaking set ov
 whole scanned population first and compares the list against it. Mutant 3 fails as it
 should. This is recorded rather than quietly fixed because the vacuous version would
 have shipped looking green.
+
+## Outstanding: the guard is not wired into `pnpm test`
+
+`scripts/ci/temp-workspace-cleanup-guard.test.ts` and `scripts/ops/temp-workspace.test.ts`
+pass when run directly, but **neither executes during `pnpm test`**. The root `test`
+script composes named scripts, and `test:ops` enumerates its 136 files literally rather
+than globbing. A new test file is therefore invisible to CI until it is added to that
+list.
+
+`package.json` is not in this lane's `file_scope_lock`. It was deliberately left out at
+lane-start because it is a singleton-only path, and `file_scope_lock` cannot be widened
+afterwards. That was the wrong call: the wiring is what makes the guard load-bearing, and
+without it this lane would ship a control that never runs — the exact failure mode the
+mission lessons name.
+
+The required change is two entries appended to `test:ops`:
+
+```
+tsx --test scripts/ops/temp-workspace.test.ts scripts/ci/temp-workspace-cleanup-guard.test.ts
+```
+
+The `Return review packet` check reports this correctly and independently:
+`test_wiring FAIL — new test files missing package script wiring`. It is a non-required
+check, so it does not block the merge; it is recorded here so the merge is not taken as
+evidence that the gap closed.
+
+Until that lands, the repair of the 44 call sites stands on its own measured evidence
+above; only the *recurrence* guard is unenforced.
 
 ## Scope boundary — the recorded remainder
 

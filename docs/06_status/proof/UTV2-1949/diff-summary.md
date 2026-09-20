@@ -1,5 +1,7 @@
 # DIFF SUMMARY: UTV2-1949
 
+MERGE_SHA: pending merge
+
 Execution SHA: 14d88b67d3bd74a54c18607d3c92466184c1d70b
 Lane type: hygiene
 Tier: T2
