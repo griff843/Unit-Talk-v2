@@ -1,0 +1,229 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1949
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1949
+  objective: Test temp-workspace leak exhausts /tmp inodes and blocks every test,
+    preflight and lane
+  acceptance_criteria:
+    - |-
+      ## Defect
+
+      Test suites create temporary workspaces with `fs.mkdtemp`/`mkdtempSync` and do not remove them. They accumulate across every `pnpm test` run until the `/tmp` tmpfs **inode table** is exhausted, at which point unrelated suites fail with ENOSPC.
+
+      This is a production-blocking reliability defect, not cosmetic debt: while it is active, **no lane can start** — `pnpm test` fails inside `ops:preflight` gate PB2, and `pnpm verify` fails on every branch, for reasons unrelated to any code change.
+
+      ## Measured evidence (2026-09-19, dev workstation)
+
+      ```
+      Filesystem      Inodes   IUsed IFree IUse% Mounted on
+      tmpfs          1048576 1048576     0  100% /tmp     <-- zero free inodes
+      tmpfs             7.9G  3.7G  4.2G   48% /tmp       <-- 4.2 GB still "free"
+      ```
+
+      * **34,936** directories directly in `/tmp`; **24,915** matched leaked test-fixture prefixes.
+      * Each leaked dir is a synthetic mini-workspace containing `package.json`, `pnpm-workspace.yaml`, `src`.
+      * Observed leaked prefixes map directly to suites: `utv2-*`, `proof-repair-test-*`, `evidence-flow-*`, `lane-*`, `ops-*`, `kindred-*`.
+
+      **The failure is deceptive in two ways**, and both cost diagnosis time here:
+
+      1. `df -h` reports gigabytes free while every write fails — the exhausted resource is inodes, not bytes. A diagnosis that checks only `df -h` will wrongly rule out disk.
+      2. The failure is non-deterministic in *which* tests fail (observed 9 failures, then 6, on identical code) because the run fails wherever it happens to be when it can no longer create a file. Every suite passes in isolation, which makes it read as flake.
+
+      ## Leak surface
+
+      * **79** files create temp workspaces (**337** `mkdtemp` call sites).
+      * **26** of those files contain no cleanup construct at all (no `rm`, `rmSync`, `after(`, or `finally`).
+
+      Examples with zero cleanup: `scripts/lane-contract.test.ts`, `scripts/ci/ops-api-diagnose-workflow.test.ts`, `scripts/ops/workflow-hardening.test.ts`, `scripts/audits/utv2-1397-evidence-flow-observation.test.ts`, `scripts/ops/proof-repair.test.ts`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/automation-coverage-check.test.ts`, `scripts/ci/ops-p0-containment-workflow.test.ts`.
+
+      The full list is reproducible with:
+
+      ```sh
+      for f in $(grep -rl "mkdtemp" --include=*.ts scripts apps packages | grep -v node_modules); do
+        [ "$(grep -cE 'rm\(|rmSync|after\(|finally' "$f")" = "0" ] && echo "$f"
+      done
+      ```
+
+      ## Required repair (PM-specified)
+
+      1. Identify **every** affected test-workspace creator — all 79 files, not only the 26 with no cleanup at all; a file containing `finally` elsewhere may still leak at a specific call site.
+      2. Remove the temporary directory in `finally`/teardown **on both success and failure paths**.
+      3. Add regression coverage proving repeated runs do not leak workspaces.
+      4. **Do not** solve this with an indiscriminate global `/tmp` sweeper.
+      5. Keep this repair **independent from** [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection).
+
+      ## Acceptance
+
+      * Running the affected suites N times leaves a bounded, non-growing number of `/tmp` entries.
+      * A regression test fails if a creator is added without teardown.
+      * No global sweeper is introduced.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Defect
+
+      Test suites create temporary workspaces with `fs.mkdtemp`/`mkdtempSync`
+      and do not remove them. They accumulate across every `pnpm test` run until
+      the `/tmp` tmpfs **inode table** is exhausted, at which point unrelated
+      suites fail with ENOSPC.
+
+
+      This is a production-blocking reliability defect, not cosmetic debt: while
+      it is active, **no lane can start** — `pnpm test` fails inside
+      `ops:preflight` gate PB2, and `pnpm verify` fails on every branch, for
+      reasons unrelated to any code change.
+    - >-
+      Measured evidence (2026-09-19, dev workstation)
+
+      ```
+
+      Filesystem      Inodes   IUsed IFree IUse% Mounted on
+
+      tmpfs          1048576 1048576     0  100% /tmp     <-- zero free inodes
+
+      tmpfs             7.9G  3.7G  4.2G   48% /tmp       <-- 4.2 GB still
+      "free"
+
+      ```
+
+
+      * **34,936** directories directly in `/tmp`; **24,915** matched leaked
+      test-fixture prefixes.
+
+      * Each leaked dir is a synthetic mini-workspace containing `package.json`,
+      `pnpm-workspace.yaml`, `src`.
+
+      * Observed leaked prefixes map directly to suites: `utv2-*`,
+      `proof-repair-test-*`, `evidence-flow-*`, `lane-*`, `ops-*`, `kindred-*`.
+
+
+      **The failure is deceptive in two ways**, and both cost diagnosis time
+      here:
+
+
+      1. `df -h` reports gigabytes free while every write fails — the exhausted
+      resource is inodes, not bytes. A diagnosis that checks only `df -h` will
+      wrongly rule out disk.
+
+      2. The failure is non-deterministic in *which* tests fail (observed 9
+      failures, then 6, on identical code) because the run fails wherever it
+      happens to be when it can no longer create a file. Every suite passes in
+      isolation, which makes it read as flake.
+    - >-
+      Leak surface
+
+      * **79** files create temp workspaces (**337** `mkdtemp` call sites).
+
+      * **26** of those files contain no cleanup construct at all (no `rm`,
+      `rmSync`, `after(`, or `finally`).
+
+
+      Examples with zero cleanup: `scripts/lane-contract.test.ts`,
+      `scripts/ci/ops-api-diagnose-workflow.test.ts`,
+      `scripts/ops/workflow-hardening.test.ts`,
+      `scripts/audits/utv2-1397-evidence-flow-observation.test.ts`,
+      `scripts/ops/proof-repair.test.ts`,
+      `scripts/ops/readiness-refresh.test.ts`,
+      `scripts/ops/automation-coverage-check.test.ts`,
+      `scripts/ci/ops-p0-containment-workflow.test.ts`.
+
+
+      The full list is reproducible with:
+
+
+      ```sh
+
+      for f in $(grep -rl "mkdtemp" --include=*.ts scripts apps packages | grep
+      -v node_modules); do
+        [ "$(grep -cE 'rm\(|rmSync|after\(|finally' "$f")" = "0" ] && echo "$f"
+      done
+
+      ```
+    - |-
+      Required repair (PM-specified)
+      1. Identify **every** affected test-workspace creator — all 79 files, not only the 26 with no cleanup at all; a file containing `finally` elsewhere may still leak at a specific call site.
+      2. Remove the temporary directory in `finally`/teardown **on both success and failure paths**.
+      3. Add regression coverage proving repeated runs do not leak workspaces.
+      4. **Do not** solve this with an indiscriminate global `/tmp` sweeper.
+      5. Keep this repair **independent from** [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection).
+    - >-
+      Acceptance
+
+      * Running the affected suites N times leaves a bounded, non-growing number
+      of `/tmp` entries.
+
+      * A regression test fails if a creator is added without teardown.
+
+      * No global sweeper is introduced.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1949/test-temp-workspace-leak-exhausts-tmp-inodes-and-blocks-every-test
+    title: Test temp-workspace leak exhausts /tmp inodes and blocks every test,
+      preflight and lane
+    description: |-
+      ## Defect
+
+      Test suites create temporary workspaces with `fs.mkdtemp`/`mkdtempSync` and do not remove them. They accumulate across every `pnpm test` run until the `/tmp` tmpfs **inode table** is exhausted, at which point unrelated suites fail with ENOSPC.
+
+      This is a production-blocking reliability defect, not cosmetic debt: while it is active, **no lane can start** — `pnpm test` fails inside `ops:preflight` gate PB2, and `pnpm verify` fails on every branch, for reasons unrelated to any code change.
+
+      ## Measured evidence (2026-09-19, dev workstation)
+
+      ```
+      Filesystem      Inodes   IUsed IFree IUse% Mounted on
+      tmpfs          1048576 1048576     0  100% /tmp     <-- zero free inodes
+      tmpfs             7.9G  3.7G  4.2G   48% /tmp       <-- 4.2 GB still "free"
+      ```
+
+      * **34,936** directories directly in `/tmp`; **24,915** matched leaked test-fixture prefixes.
+      * Each leaked dir is a synthetic mini-workspace containing `package.json`, `pnpm-workspace.yaml`, `src`.
+      * Observed leaked prefixes map directly to suites: `utv2-*`, `proof-repair-test-*`, `evidence-flow-*`, `lane-*`, `ops-*`, `kindred-*`.
+
+      **The failure is deceptive in two ways**, and both cost diagnosis time here:
+
+      1. `df -h` reports gigabytes free while every write fails — the exhausted resource is inodes, not bytes. A diagnosis that checks only `df -h` will wrongly rule out disk.
+      2. The failure is non-deterministic in *which* tests fail (observed 9 failures, then 6, on identical code) because the run fails wherever it happens to be when it can no longer create a file. Every suite passes in isolation, which makes it read as flake.
+
+      ## Leak surface
+
+      * **79** files create temp workspaces (**337** `mkdtemp` call sites).
+      * **26** of those files contain no cleanup construct at all (no `rm`, `rmSync`, `after(`, or `finally`).
+
+      Examples with zero cleanup: `scripts/lane-contract.test.ts`, `scripts/ci/ops-api-diagnose-workflow.test.ts`, `scripts/ops/workflow-hardening.test.ts`, `scripts/audits/utv2-1397-evidence-flow-observation.test.ts`, `scripts/ops/proof-repair.test.ts`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/automation-coverage-check.test.ts`, `scripts/ci/ops-p0-containment-workflow.test.ts`.
+
+      The full list is reproducible with:
+
+      ```sh
+      for f in $(grep -rl "mkdtemp" --include=*.ts scripts apps packages | grep -v node_modules); do
+        [ "$(grep -cE 'rm\(|rmSync|after\(|finally' "$f")" = "0" ] && echo "$f"
+      done
+      ```
+
+      ## Required repair (PM-specified)
+
+      1. Identify **every** affected test-workspace creator — all 79 files, not only the 26 with no cleanup at all; a file containing `finally` elsewhere may still leak at a specific call site.
+      2. Remove the temporary directory in `finally`/teardown **on both success and failure paths**.
+      3. Add regression coverage proving repeated runs do not leak workspaces.
+      4. **Do not** solve this with an indiscriminate global `/tmp` sweeper.
+      5. Keep this repair **independent from** [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection).
+
+      ## Acceptance
+
+      * Running the affected suites N times leaves a bounded, non-growing number of `/tmp` entries.
+      * A regression test fails if a creator is added without teardown.
+      * No global sweeper is introduced.
+    captured_at: 2026-09-20T00:41:40.704Z
+    description_sha256: 740be6ea797d4b835c7be9e24c33ab3600a730986a98b0b011e022c549687e5f
+  contract_hash: b57d110595d4e047290f8d107c1a44e7b9a6c68b44bc7ae7d7e886455225d3ed
