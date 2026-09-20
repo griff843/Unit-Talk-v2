@@ -1,6 +1,6 @@
 # DIFF SUMMARY: UTV2-1949
 
-MERGE_SHA: pending merge
+MERGE_SHA: 47868a7e701b6bf294a37d152fdb5b883b2e4506
 
 Execution SHA: recorded at the head this bundle is bound to; see verification.md
 Lane type: hygiene
