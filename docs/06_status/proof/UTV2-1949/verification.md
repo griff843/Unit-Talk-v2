@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > carries the verified implementation identity. `post-merge-lane-close.yml` rebinds
 > merge authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-20T05:55:00.000Z
+Generated at: 2026-09-20T06:10:00.000Z
 Issue: UTV2-1949
 Tier: T2
 Lane type: hygiene
 Branch: claude/utv2-1949-tmp-workspace-leak
 PR URL: N/A
-Head SHA: 32d291b15a12a89676721d750f0aada7aacbb6f2
+Head SHA: 07569a3395814f15d3358a5b40d04b89c58b60fe
 result: pass
 
 ## ASSERTIONS:
@@ -40,8 +40,10 @@ $ pnpm lint
 $ pnpm test
 exit=0
 grep -c "^not ok" over the full run log: 0
-/tmp entries before=12897 after=12962 delta=65
-(both newly wired suites appear in the run output)
+/tmp delta=65 and 72 on two runs (the residual comes from the 14 ledgered files)
+ok 438  - every temp-directory allocation in a governed test can be released
+ok 2667 - BEHAVIOUR: a child process that throws still releases its workspace
+(both newly wired suites execute inside the aggregate run, not just standalone)
 
 $ npx tsx --test scripts/ops/temp-workspace.test.ts
 ok 1 - createTempWorkspace makes a real directory under the OS temp dir
@@ -74,11 +76,11 @@ $ pnpm ops:automation-coverage-check
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 27
+Changed files: 28
 Rules matched: ingestor-provider
 
 $ npx tsx scripts/lane-check.ts --lane hygiene --base origin/main --head HEAD
-lane:check PASS lane=hygiene files=26
+lane:check PASS lane=hygiene files=28
 ```
 
 ## Verification
@@ -86,7 +88,7 @@ lane:check PASS lane=hygiene files=26
 - [x] `pnpm lint`: pass — no findings
 - [x] `pnpm test`: pass — exit 0, zero `not ok` lines
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — `ingestor-provider` matched; its required artifacts are present.
-- [x] `pnpm exec tsx scripts/lane-check.ts --lane hygiene --base origin/main --head HEAD`: `lane:check PASS lane=hygiene files=26`
+- [x] `pnpm exec tsx scripts/lane-check.ts --lane hygiene --base origin/main --head HEAD`: `lane:check PASS lane=hygiene files=28`
 - [x] `pnpm ops:automation-coverage-check`: `verdict=PASS fail=0`, `executable-wiring verdict=PASS ... tests new=0 capabilities new=0`
 - [ ] `pnpm verify`: not runnable locally — `ci:assert-staging` cannot exit 0 outside CI, so branch `verify`
       is measured by CI on the PR head and is not claimed here. Its previously red step is the one this
@@ -118,7 +120,7 @@ Whole-suite context, measured the same way:
 | `/tmp` inode usage at the start of this lane | 208,503 of 1,048,576 (20%) |
 | Accumulated leaked directories found on this machine | 1,473 matching the known prefixes, ~12,000 entries in `/tmp` overall |
 | Largest single contributor | `delegation-state-test-` — 1,956 directories from one test file |
-| Full `pnpm test` `/tmp` delta after the repair | 65 — all of it from the 14 files in `KNOWN_REMAINDER` |
+| Full `pnpm test` `/tmp` delta after the repair | 65 and 72 on two runs — all of it from the 14 files in `KNOWN_REMAINDER` |
 
 ## Mutation control
 
@@ -265,9 +267,24 @@ any allocation flowing into a released binding as released. Both choices err tow
 *not* failing the build, which is the right direction for a required check and means the
 28 is a floor, not a ceiling.
 
+## Branch resync
+
+`origin/main` moved to `0876367a3` (a scheduled readiness-ledger refresh) while this PR
+was open, which put the branch BEHIND and turned `Lane authority` red on files the lane
+never touched — `docs/06_status/readiness/readiness-score.json`. The three-dot diff
+`origin/main...HEAD` did not contain it; the two-dot diff did. That check is invoked
+merge-base-to-merge-ref, so a BEHIND branch is blamed for whatever `main` merged since it
+diverged.
+
+Resynced with `pnpm ops:merge-wrapper git-merge-main`, producing merge commit
+`07569a339`. The imported delta is exactly one file — the readiness ledger — and no lane
+file, scope declaration or source file changed. Every receipt above was re-executed on the
+merged head rather than carried forward, and the execution anchor moved to `07569a339`
+because that merge commit touches a non-proof path.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
-Execution SHA: 32d291b15a12a89676721d750f0aada7aacbb6f2
+Execution SHA: 07569a3395814f15d3358a5b40d04b89c58b60fe
