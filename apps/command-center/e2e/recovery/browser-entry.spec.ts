@@ -34,12 +34,24 @@ test('visible sign-in, deep link, reload, navigation, phone and sign-out', async
   await expect(page).toHaveURL(/\/exceptions$/);
   await expect(page.locator('main')).toContainText('Exceptions');
 
+  const primary = page.getByRole('navigation', { name: 'Primary', exact: true });
+  await primary.getByRole('link', { name: 'Intelligence', exact: true }).click();
+  await expect(page).toHaveURL(/\/performance$/);
+  await expect(page.getByRole('heading', { name: 'Performance', exact: true })).toBeVisible();
+  await expect(page.locator('[data-route-classification="deferred"]')).toHaveCount(0);
+  await primary.getByRole('link', { name: 'Operations', exact: true }).click();
+  await primary.getByRole('link', { name: 'Delivery', exact: true }).click();
+  await expect(page).toHaveURL(/\/operations\/discord$/);
+  await expect(page.getByRole('heading', { name: 'Delivery', exact: true })).toBeVisible();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/picks');
   await expect(page.locator('main')).toContainText('Active Picks');
   const sidebar = await page.locator('aside.cc-sidebar').boundingBox();
   expect(sidebar ? sidebar.x + sidebar.width : 0).toBeLessThanOrEqual(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true }).getByRole('link', { name: 'Operations', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Workspaces', exact: true }).getByText('Research · Future')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('picks-phone.png'), fullPage: true });
 
   await page.setViewportSize({ width: 1440, height: 1000 });

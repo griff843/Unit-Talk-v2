@@ -3,7 +3,6 @@ import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, Empt
 import type { InternalLabel } from '@/components/ui';
 import { getOutboxOverview, OUTBOX_STATUSES, type OutboxOverview } from '@/lib/data/outbox';
 import { formatRelativeAge } from '@/lib/fire-board-model';
-import { describeThrown } from '@/lib/describe-error';
 
 export const metadata = { title: 'Dispatch / Outbox — Unit Talk Command Center' };
 
@@ -61,14 +60,15 @@ export default async function OutboxOpsPage({
   try {
     overview = await getOutboxOverview({ status, target });
   } catch (error) {
-    loadError = describeThrown(error);
+    console.error('Delivery data unavailable', error);
+    loadError = 'Delivery records could not be loaded. Refresh to retry; counts are unavailable until the read succeeds.';
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
         <p className="text-sm cc-text-muted">
-          Are paid members receiving what they paid for? distribution_outbox + distribution_receipts, observed {observedAt}.
+          Governed operator delivery attempts and receipts; proof fixtures excluded. Observed {observedAt}.
         </p>
       </div>
 

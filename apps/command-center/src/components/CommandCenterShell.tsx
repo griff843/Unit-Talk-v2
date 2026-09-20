@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
 import { TopBar } from '@/components/TopBar';
@@ -14,6 +15,8 @@ import {
   getPrimaryCommandCenterRoutes,
   getPrimaryRouteForPath,
   getRouteMeta,
+  COMMAND_CENTER_WORKSPACES,
+  getActiveWorkspace,
   type CommandCenterPrimaryIcon,
   type CommandCenterRoute,
 } from '@/lib/command-center-nav';
@@ -42,12 +45,20 @@ const PRIMARY_ICONS: Record<CommandCenterPrimaryIcon, React.ReactNode> = {
   health: icon(<path d="M3 12h4l3-9 4 18 3-9h4" />),
 };
 
-function buildNavigation(): { groups: SidebarNavGroup[]; commands: CommandEntry[] } {
+function buildNavigation(pathname: string): { groups: SidebarNavGroup[]; commands: CommandEntry[] } {
   const routes = getPrimaryCommandCenterRoutes();
+  const activeWorkspace = getActiveWorkspace(pathname);
   return {
     groups: [{
-      label: 'Operator workflow',
-      items: routes.map((routeEntry) => ({
+      label: 'Workspaces',
+      items: COMMAND_CENTER_WORKSPACES.map((workspace) => ({
+        href: workspace.href, label: workspace.label, workspace: true,
+        icon: PRIMARY_ICONS[workspace.id === 'operations' ? 'overview' : workspace.id === 'intelligence' ? 'health' : 'review'],
+        active: activeWorkspace === workspace.id, unavailable: !workspace.available,
+      })),
+    }, {
+      label: COMMAND_CENTER_WORKSPACES.find((workspace) => workspace.id === activeWorkspace)!.label,
+      items: routes.filter((route) => route.workspace === activeWorkspace).map((routeEntry) => ({
         href: routeEntry.href,
         label: routeEntry.label,
         icon: PRIMARY_ICONS[routeEntry.primaryIcon!],
@@ -56,7 +67,7 @@ function buildNavigation(): { groups: SidebarNavGroup[]; commands: CommandEntry[
     commands: routes.map((routeEntry) => ({
       href: routeEntry.href,
       label: routeEntry.label,
-      group: 'Operator workflow',
+      group: routeEntry.workspace === 'intelligence' ? 'Intelligence' : 'Operations',
       keywords: [routeEntry.description],
     })),
   };
@@ -142,7 +153,7 @@ export function CommandCenterShell({ children, initialHealth, actor, canSignOut 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const navigation = useMemo(buildNavigation, []);
+  const navigation = useMemo(() => buildNavigation(pathname), [pathname]);
   const routeEntry = getRouteMeta(pathname);
   const chrome = resolveChrome(pathname, routeEntry);
   const health = useGlobalHealth(initialHealth);
@@ -178,6 +189,16 @@ export function CommandCenterShell({ children, initialHealth, actor, canSignOut 
         onCloseMobile={() => setMobileOpen(false)}
       />
       <main id="main-content" className="min-w-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
+        <nav aria-label="Workspaces" className="mb-4 grid grid-cols-2 gap-2 md:hidden">
+          {COMMAND_CENTER_WORKSPACES.map((workspace) => workspace.available ? (
+            <Link key={workspace.id} href={workspace.href} aria-current={getActiveWorkspace(pathname) === workspace.id ? 'location' : undefined}
+              className={`rounded-lg border px-3 py-2 text-sm ${getActiveWorkspace(pathname) === workspace.id ? 'border-blue-400 bg-blue-500/10 text-blue-100' : 'border-gray-700 text-gray-300'}`}>
+              {workspace.label}
+            </Link>
+          ) : (
+            <span key={workspace.id} aria-disabled="true" className="rounded-lg border border-gray-800 px-3 py-2 text-sm text-gray-500">{workspace.label} · Future</span>
+          ))}
+        </nav>
         <TopBar
           title={chrome.title}
           breadcrumb={chrome.breadcrumb}

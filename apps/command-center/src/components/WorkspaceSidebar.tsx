@@ -9,6 +9,9 @@ export type SidebarNavItem = {
   icon: React.ReactNode;
   match?: string[];
   unreadCount?: number;
+  active?: boolean;
+  unavailable?: boolean;
+  workspace?: boolean;
 };
 
 export type SidebarNavGroup = {
@@ -178,9 +181,15 @@ export function WorkspaceSidebar({
           )}
         <ul className="space-y-0.5">
           {group.items.map((item) => {
-            const isActive = activeRoute === item.href;
+            const isActive = item.active ?? activeRoute === item.href;
             return (
               <li key={item.href}>
+                {item.unavailable ? (
+                  <span aria-disabled="true" className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm text-[var(--cc-text-muted)]" title={`${item.label} is planned; this workspace is not yet available.`}>
+                    <NavItemIcon>{item.icon}</NavItemIcon>
+                    {!collapsed && <><span className="flex-1">{item.label}</span><span className="text-[10px]">Future</span></>}
+                  </span>
+                ) : (
                 <Link
                   href={item.href}
                   className={cx(
@@ -190,7 +199,7 @@ export function WorkspaceSidebar({
                       ? 'bg-[color-mix(in_srgb,var(--cc-accent)_14%,transparent)] text-[var(--cc-text-primary)]'
                       : 'text-[var(--cc-text-secondary)] hover:bg-[var(--cc-bg-surface-hover)] hover:text-[var(--cc-text-primary)]',
                   )}
-                  aria-current={isActive ? 'page' : undefined}
+                  aria-current={isActive ? item.workspace ? 'location' : 'page' : undefined}
                   title={collapsed ? item.label : undefined}
                 >
                   <span
@@ -206,6 +215,7 @@ export function WorkspaceSidebar({
                     <span className="cc-badge rounded-full px-2 py-0.5 text-[10px]">{item.unreadCount}</span>
                   )}
                 </Link>
+                )}
               </li>
             );
           })}

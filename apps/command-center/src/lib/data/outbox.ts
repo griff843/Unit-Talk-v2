@@ -3,9 +3,11 @@
 // verified against packages/db/src/database.types.ts).
 
 import { getDataClient } from './client';
+import { applyOperatorPickPopulation, governedOutboxTargets } from '../governed-population';
+import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Client = any;
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../../../../../packages/db/src/database.types.js';
 
 export const OUTBOX_STATUSES = ['pending', 'processing', 'sent', 'failed', 'dead_letter'] as const;
 export type OutboxStatus = (typeof OUTBOX_STATUSES)[number];
@@ -52,41 +54,46 @@ function isRetryEligible(status: string, attemptCount: number): boolean {
 }
 
 export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<OutboxOverview> {
-  const client: Client = await getDataClient();
+  const client = (await getDataClient()) as SupabaseClient<Database>;
 
   const countQueries = OUTBOX_STATUSES.map((status) =>
-    client.from('distribution_outbox').select('id', { count: 'exact', head: true }).eq('status', status),
+    applyOperatorPickPopulation(client.from('distribution_outbox').select('id,pick:picks!inner(id)', { count: 'exact', head: true }), 'pick').in('target', governedOutboxTargets).eq('status', status),
   );
 
-  let rowQuery = client
+  let rowQuery = applyOperatorPickPopulation(client
     .from('distribution_outbox')
-    .select('id, pick_id, status, target, attempt_count, last_error, next_attempt_at, claimed_at, created_at, updated_at')
+    .select('id, pick_id, status, target, attempt_count, last_error, next_attempt_at, claimed_at, created_at, updated_at,pick:picks!inner(id)'), 'pick')
+    .in('target', governedOutboxTargets)
     .order('updated_at', { ascending: false })
     .limit(100);
   if (filter.status) rowQuery = rowQuery.eq('status', filter.status);
   if (filter.target) rowQuery = rowQuery.eq('target', filter.target);
 
-  const [countResults, rowsResult, oldestUnsentResult, targetsResult, receiptsResult] = await Promise.all([
+  const [countResults, rowsResult, oldestUnsentResult, receiptsResult] = await Promise.all([
     Promise.all(countQueries),
     rowQuery,
-    client
+    applyOperatorPickPopulation(client
       .from('distribution_outbox')
-      .select('created_at')
+      .select('created_at,pick:picks!inner(id)'), 'pick').in('target', governedOutboxTargets)
       .in('status', ['pending', 'processing', 'failed'])
       .order('created_at', { ascending: true })
       .limit(1),
-    client.from('distribution_outbox').select('target').order('created_at', { ascending: false }).limit(500),
-    client
+
+    applyOperatorPickPopulation(client
       .from('distribution_receipts')
-      .select('id, outbox_id, channel, status, receipt_type, recorded_at')
+      .select('id, outbox_id, channel, status, receipt_type, recorded_at,outbox:distribution_outbox!inner(target,pick:picks!inner(id))'), 'outbox.pick').in('outbox.target', governedOutboxTargets)
       .order('recorded_at', { ascending: false })
       .limit(50),
   ]);
 
   const counts = {} as Record<OutboxStatus, number>;
   OUTBOX_STATUSES.forEach((status, index) => {
-    counts[status] = countResults[index]?.count ?? 0;
+    counts[status] = readAuthoritativeCount(countResults[index], `outbox ${status}`);
   });
+
+  assertQuerySucceeded(rowsResult, 'outbox rows');
+  assertQuerySucceeded(oldestUnsentResult, 'oldest unsent');
+  assertQuerySucceeded(receiptsResult, 'delivery receipts');
 
   const rows: OutboxOverviewRow[] = ((rowsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => {
     const status = String(row['status'] ?? '');
@@ -106,13 +113,7 @@ export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<Outb
     };
   });
 
-  const targets = [
-    ...new Set(
-      ((targetsResult.data ?? []) as Array<Record<string, unknown>>)
-        .map((row) => row['target'])
-        .filter((v): v is string => typeof v === 'string' && v.length > 0),
-    ),
-  ].sort();
+  const targets = [...governedOutboxTargets].sort();
 
   const oldestRow = ((oldestUnsentResult.data ?? []) as Array<Record<string, unknown>>)[0];
 

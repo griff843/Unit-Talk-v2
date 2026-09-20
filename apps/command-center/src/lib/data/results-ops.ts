@@ -3,11 +3,12 @@
 // and game_results (freshness). Columns verified against
 // packages/db/src/database.types.ts.
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../../../../../packages/db/src/database.types.js';
 import { getDataClient } from './client';
+import { applyOperatorPickPopulation } from '../governed-population';
 import { readAuthoritativeCount } from '../query-result';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Client = any;
 
 export interface SettlementOpsRow {
   id: string;
@@ -83,7 +84,8 @@ export interface ResultsOpsSnapshot {
   stuckPosted: StuckPostedPick[];
   gameResults: {
     latestSourcedAt: string | null;
-    count24h: number;
+    count24h: number | null;
+    unavailable?: boolean;
   };
 }
 
@@ -127,7 +129,7 @@ function readClvFields(payload: unknown): Pick<
 }
 
 export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
-  const client: Client = await getDataClient();
+  const client = await getDataClient() as SupabaseClient<Database>;
   const nowMs = Date.now();
   const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
 
@@ -144,63 +146,68 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     stuckResult,
     stuckCountResult,
     deliveredAwaitingResult,
+    deliveredAwaitingCountResult,
     gameLatestResult,
     game24hResult,
   ] =
     await Promise.all([
-      client.from('settlement_records').select(settlementColumns).order('settled_at', { ascending: false }).limit(50),
-      client
+      applyOperatorPickPopulation(client.from('settlement_records').select(`${settlementColumns}, pick:picks!inner(id)`), 'pick').order('settled_at', { ascending: false }).limit(50),
+      applyOperatorPickPopulation(client
         .from('settlement_records')
-        .select(settlementColumns)
+        .select(`${settlementColumns}, pick:picks!inner(id)`), 'pick')
         .eq('status', 'manual_review')
         .order('created_at', { ascending: false })
         .limit(50),
-      client
+      applyOperatorPickPopulation(client
         .from('settlement_records')
-        .select('id', { count: 'exact', head: true })
+        .select('id, pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
         .eq('status', 'manual_review'),
-      client
+      applyOperatorPickPopulation(client
         .from('settlement_records')
-        .select(settlementColumns)
+        .select(`${settlementColumns}, pick:picks!inner(id)`), 'pick')
         .not('corrects_id', 'is', null)
         .order('created_at', { ascending: false })
         .limit(50),
-      client
+      applyOperatorPickPopulation(client
         .from('settlement_records')
-        .select('id', { count: 'exact', head: true })
+        .select('id, pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
         .not('corrects_id', 'is', null),
-      client
+      applyOperatorPickPopulation(client
         .from('settlement_records')
-        .select('id', { count: 'exact', head: true })
+        .select('id, pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
         .gte('settled_at', dayAgo),
       // Picks still lifecycle "posted" more than 24h after posting — age-based
       // proxy for "event started but never settled".
       // TODO(data-contract): join events (via pick metadata eventId) so stuck
       // detection keys off actual event start time rather than posted age.
-      client
+      applyOperatorPickPopulation(client
         .from('picks_current_state')
-        .select('id, market, selection, sport_display_name, posted_at, created_at')
+        .select('id, market, selection, sport_display_name, posted_at, created_at'))
         .eq('status', 'posted')
-        .lte('created_at', dayAgo)
-        .order('created_at', { ascending: true })
+        .lte('posted_at', dayAgo)
+        .order('posted_at', { ascending: true })
         .limit(50),
-      client
+      applyOperatorPickPopulation(client
         .from('picks_current_state')
-        .select('id', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true }))
         .eq('status', 'posted')
-        .lte('created_at', dayAgo),
+        .lte('posted_at', dayAgo),
       // UTV2-1939: delivered human-capper picks awaiting their result.
       // Predicate validated against production 2026-09-18 -- returns exactly the
       // one live delivered pick and nothing else. No age filter: the 24h delay
       // on `stuckPosted` above is the defect this list exists to avoid.
-      client
+      applyOperatorPickPopulation(client
         .from('picks_current_state')
-        .select('id, capper_id, market, selection, odds, stake_units, sport_display_name, posted_at')
+        .select('id, capper_id, market, selection, odds, stake_units, sport_display_name, posted_at'))
         .eq('status', 'posted')
         .is('settlement_recorded_at', null)
         .eq('metadata->deliveryAuthorization->>decision', 'authorized')
         .order('posted_at', { ascending: true })
         .limit(50),
+      applyOperatorPickPopulation(client.from('picks_current_state').select('id', { count: 'exact', head: true }))
+        .eq('status', 'posted')
+        .is('settlement_recorded_at', null)
+        .eq('metadata->deliveryAuthorization->>decision', 'authorized'),
       client.from('game_results').select('sourced_at').order('sourced_at', { ascending: false }).limit(1),
       client.from('game_results').select('id', { count: 'exact', head: true }).gte('sourced_at', dayAgo),
     ]);
@@ -211,7 +218,6 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     correctionsResult,
     stuckResult,
     deliveredAwaitingResult,
-    gameLatestResult,
   ]) {
     if (result.error) throw result.error;
   }
@@ -220,22 +226,26 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
   const manualReviewOpen = readAuthoritativeCount(manualCountResult, 'manual review settlements');
   const correctionCount = readAuthoritativeCount(correctionsCountResult, 'settlement corrections');
   const stuckPostedCount = readAuthoritativeCount(stuckCountResult, 'stuck posted picks');
-  const gameResults24h = readAuthoritativeCount(game24hResult, 'game results in 24h');
+  // Results-feed availability is independent of operator settlement. A provider
+  // read failure must not remove the operator's own history and controls.
+  const gameUnavailable = Boolean(gameLatestResult.error || game24hResult.error || game24hResult.count == null);
+  const gameResults24h = gameUnavailable ? null : readAuthoritativeCount(game24hResult, 'game results in 24h');
 
   const manualReview = ((manualResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow);
   const corrections = ((correctionsResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow);
 
   const stuckPosted: StuckPostedPick[] = ((stuckResult.data ?? []) as Array<Record<string, unknown>>).map((row) => {
     const createdAt = typeof row['created_at'] === 'string' ? row['created_at'] : null;
+    const postedAt = typeof row['posted_at'] === 'string' ? row['posted_at'] : null;
     return {
       id: String(row['id'] ?? ''),
       market: typeof row['market'] === 'string' ? row['market'] : null,
       selection: typeof row['selection'] === 'string' ? row['selection'] : null,
       sportDisplayName: typeof row['sport_display_name'] === 'string' ? row['sport_display_name'] : null,
-      postedAt: typeof row['posted_at'] === 'string' ? row['posted_at'] : null,
+      postedAt,
       createdAt,
-      ageHours: createdAt && Number.isFinite(Date.parse(createdAt))
-        ? Math.max(0, Math.floor((nowMs - Date.parse(createdAt)) / 3_600_000))
+      ageHours: postedAt && Number.isFinite(Date.parse(postedAt))
+        ? Math.max(0, Math.floor((nowMs - Date.parse(postedAt)) / 3_600_000))
         : null,
     };
   });
@@ -273,7 +283,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
       manualReviewOpen,
       corrections: correctionCount,
       stuckPosted: stuckPostedCount,
-      deliveredAwaitingSettlement: deliveredAwaitingSettlement.length,
+      deliveredAwaitingSettlement: readAuthoritativeCount(deliveredAwaitingCountResult, 'delivered awaiting settlement'),
     },
     deliveredAwaitingSettlement,
     recentSettlements: ((recentResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow),
@@ -281,8 +291,9 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     corrections,
     stuckPosted,
     gameResults: {
-      latestSourcedAt: typeof latestGameRow?.['sourced_at'] === 'string' ? latestGameRow['sourced_at'] : null,
+      latestSourcedAt: !gameUnavailable && typeof latestGameRow?.['sourced_at'] === 'string' ? latestGameRow['sourced_at'] : null,
       count24h: gameResults24h,
+      unavailable: gameUnavailable,
     },
   };
 }
