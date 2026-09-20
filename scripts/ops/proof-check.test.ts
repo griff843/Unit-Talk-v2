@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateProofSchema, isProofStale, PROOF_SCHEMA_VERSION } from './proof-schema.js';
 import type { ProofSchemaV2 } from './proof-schema.js';
+import { createTempWorkspace } from './temp-workspace.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,7 +69,7 @@ function commitFixture(repo: string, message: string): void {
 }
 
 function initGitFixture(): string {
-  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'pre-proof-hook-test-'));
+  const repo = createTempWorkspace('pre-proof-hook-test-');
   runGit(repo, ['init', '--initial-branch=main']);
   runGit(repo, ['config', 'user.name', 'Unit Talk Test']);
   runGit(repo, ['config', 'user.email', 'unit-talk-test@example.invalid']);
@@ -116,7 +117,7 @@ function runPreProofHook(
  * TMPDIR, so this reproduces ENOSPC without needing to fill a filesystem.
  */
 function unwritableTmpdir(): { env: NodeJS.ProcessEnv; cleanup: () => void } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'no-alloc-'));
+  const dir = createTempWorkspace('no-alloc-');
   const denied = path.join(dir, 'denied');
   fs.mkdirSync(denied);
   fs.chmodSync(denied, 0o500);
@@ -303,7 +304,7 @@ describe('proof-check file resolution', () => {
   let tmpDir: string;
 
   before(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-check-test-'));
+    tmpDir = createTempWorkspace('proof-check-test-');
   });
 
   after(() => {

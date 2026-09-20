@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { runEdgeFallbackReport } from './run-edge-fallback-report.js';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 function fixtureRows(nowIso: string) {
   const createdAt = new Date(new Date(nowIso).getTime() - 60_000).toISOString();
@@ -80,7 +80,7 @@ function fixtureRows(nowIso: string) {
 
 test('UTV2-1379: classifies each fallback category correctly from metadata', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+  const outDir = createTempWorkspace('edge-fallback-report-');
 
   const summary = await runEdgeFallbackReport({
     now,
@@ -103,7 +103,7 @@ test('UTV2-1379: classifies each fallback category correctly from metadata', asy
 
 test('UTV2-1379: real market-backed edge always wins over any recorded fallbackReason', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+  const outDir = createTempWorkspace('edge-fallback-report-');
 
   const summary = await runEdgeFallbackReport({
     now,
@@ -129,7 +129,7 @@ test('UTV2-1379: real market-backed edge always wins over any recorded fallbackR
 
 test('UTV2-1379: non-production sources are separately bucketed, not silently dropped', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+  const outDir = createTempWorkspace('edge-fallback-report-');
 
   const summary = await runEdgeFallbackReport({
     now,
@@ -145,7 +145,7 @@ test('UTV2-1379: non-production sources are separately bucketed, not silently dr
 
 test('UTV2-1379B: productionOnly excludes non-production sources entirely from totals', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+  const outDir = createTempWorkspace('edge-fallback-report-');
 
   const summary = await runEdgeFallbackReport({
     now,
@@ -164,7 +164,7 @@ test('UTV2-1379B: productionOnly excludes non-production sources entirely from t
 
 test('UTV2-1394: productionOnly excludes metadata.testRun rows even under a real production source', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+  const outDir = createTempWorkspace('edge-fallback-report-');
 
   const rows = [
     ...fixtureRows(now.toISOString()),
@@ -200,7 +200,7 @@ test('UTV2-1394: productionOnly excludes metadata.testRun rows even under a real
 
 test('UTV2-1394: non-productionOnly runs still include testRun rows (no silent exclusion outside production-only mode)', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+  const outDir = createTempWorkspace('edge-fallback-report-');
 
   const rows = [
     {
@@ -219,7 +219,7 @@ test('UTV2-1394: non-productionOnly runs still include testRun rows (no silent e
 
 test('UTV2-1379: writes required output files', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
-  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+  const outDir = createTempWorkspace('edge-fallback-report-');
 
   await runEdgeFallbackReport({ now, outDir, rows: fixtureRows(now.toISOString()) });
 

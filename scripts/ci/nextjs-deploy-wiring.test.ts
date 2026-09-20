@@ -15,11 +15,11 @@
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { parse as parseYaml } from 'yaml';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 const ROOT = process.cwd();
 const DEPLOY_WORKFLOW_PATH = resolve(ROOT, '.github/workflows/deploy.yml');
@@ -1337,7 +1337,7 @@ interface PromoteOutcome {
 }
 
 function runPromote(mode: string, profile = ''): PromoteOutcome {
-  const dir = mkdtempSync(join(tmpdir(), 'utv2-1922-'));
+  const dir = createTempWorkspace('utv2-1922-');
   const bin = join(dir, 'bin');
   mkdirSync(bin);
   const dockerPath = join(bin, 'docker');
@@ -1577,7 +1577,7 @@ const CC_AUTH_CASES: AuthCase[] = [
 ];
 
 function runAuthContract(fragment: string, env: Record<string, string>): { exitCode: number; output: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'utv2-1922-auth-'));
+  const dir = createTempWorkspace('utv2-1922-auth-');
   const scriptPath = join(dir, 'auth.sh');
   writeFileSync(scriptPath, `set -eu\n${fragment}\necho ACCEPTED\n`);
   try {
@@ -1686,7 +1686,7 @@ exit 0
  */
 function runRollback(options: { commandCenterFlag: boolean; snapshotPresent: boolean }): RollbackOutcome {
   const tag = 'cccccccccccccccccccccccccccccccccccccccc';
-  const dir = mkdtempSync(join(tmpdir(), 'utv2-1922-rb-'));
+  const dir = createTempWorkspace('utv2-1922-rb-');
   const bin = join(dir, 'bin');
   mkdirSync(bin);
   writeFileSync(join(bin, 'docker'), ROLLBACK_STUB, { mode: 0o755 });

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { runPhaseClose } from './commands/phase-close.js';
@@ -11,6 +10,7 @@ import { runPhaseVerify } from './commands/phase-verify.js';
 import { loadMetadata } from './lib/metadata.js';
 import { evaluateScope } from './lib/scope.js';
 import type { CommandContext, ShellAdapter, ShellResult } from './types.js';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 class FakeShell implements ShellAdapter {
   private readonly handlers = new Map<string, ShellResult>();
@@ -40,7 +40,7 @@ function writeText(filePath: string, value: string): void {
 }
 
 function createFixtureRepo(): string {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ut-cli-'));
+  const repoRoot = createTempWorkspace('ut-cli-');
   writeText(
     path.join(repoRoot, '.ut-issues', 'UTV2-491.yaml'),
     `id: UTV2-491
@@ -92,7 +92,7 @@ function buildContext(repoRoot: string, shell: ShellAdapter): CommandContext {
 }
 
 test('metadata validation blocks unknown fields', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ut-cli-meta-'));
+  const repoRoot = createTempWorkspace('ut-cli-meta-');
   writeText(
     path.join(repoRoot, '.ut-issues', 'UTV2-999.yaml'),
     `id: UTV2-999

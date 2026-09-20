@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { validateProofBundle } from './proof-check.js';
+import { createTempWorkspace } from './ops/temp-workspace.js';
 
 function writeLane(repoRoot: string, lane: string, artifacts: string[]): void {
   const laneDir = path.join(repoRoot, '.lane', 'lanes');
@@ -30,7 +30,7 @@ function writeLane(repoRoot: string, lane: string, artifacts: string[]): void {
 }
 
 test('proof bundle validator reports missing artifacts for a lane', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-check-'));
+  const repoRoot = createTempWorkspace('proof-check-');
   writeLane(repoRoot, 'verification', ['diff-summary.md', 'verification.md']);
   fs.mkdirSync(path.join(repoRoot, 'proof', 'UTV2-959'), { recursive: true });
   fs.writeFileSync(path.join(repoRoot, 'proof', 'UTV2-959', 'diff-summary.md'), 'ok\n', 'utf8');
@@ -42,7 +42,7 @@ test('proof bundle validator reports missing artifacts for a lane', () => {
 });
 
 test('proof bundle validator passes when all lane artifacts exist', () => {
-  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-check-'));
+  const repoRoot = createTempWorkspace('proof-check-');
   writeLane(repoRoot, 'hygiene', ['diff-summary.md', 'verification.md']);
   const proofDir = path.join(repoRoot, 'proof', 'UTV2-956');
   fs.mkdirSync(proofDir, { recursive: true });

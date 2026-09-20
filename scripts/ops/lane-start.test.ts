@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
@@ -29,6 +28,7 @@ import {
   resolveReadmissionContract,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
+import { createTempWorkspace } from './temp-workspace.js';
 
 test('lane-start captures Linear truth without exposing its token in process arguments', () => {
   const token = 'token-fixture';
@@ -55,7 +55,7 @@ test('lane-start captures Linear truth without exposing its token in process arg
 });
 
 test('a sanctioned executor dispatch captures, persists, and renders a legacy lane contract', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-legacy-lane-contract-'));
+  const root = createTempWorkspace('utv2-legacy-lane-contract-');
   const laneRoot = path.join(root, 'lane-worktree');
   const syncDir = path.join(root, '.ops', 'sync');
   fs.mkdirSync(syncDir, { recursive: true });
@@ -91,7 +91,7 @@ test('a sanctioned executor dispatch captures, persists, and renders a legacy la
 });
 
 test('lane-start reuses a valid contract and fails closed on an invalid one', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-existing-contract-'));
+  const root = createTempWorkspace('utv2-existing-contract-');
   const syncDir = path.join(root, '.ops', 'sync');
   fs.mkdirSync(syncDir, { recursive: true });
   const contract = buildTaskContract({
@@ -668,7 +668,7 @@ test('readmission 24: lane-start independently re-fetches and rejects a non-main
 });
 
 test('readmission 18: post-worktree failures release lease, remove worktree, and restore root metadata', () => {
-  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'readmission-token-'));
+  const testRoot = createTempWorkspace('readmission-token-');
   const sourceToken = path.join(testRoot, 'source.json');
   const worktree = path.join(testRoot, 'worktree');
   fs.writeFileSync(sourceToken, '{"status":"pass"}\n', 'utf8');
@@ -837,7 +837,7 @@ interface LaneFixture {
 }
 
 function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): LaneFixture {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-lanestart-'));
+  const dir = createTempWorkspace('utv2-1747-lanestart-');
   const root = path.join(dir, 'repo');
   const slug = issueId.toLowerCase();
   const branch = `claude/${slug}-fixture`;
@@ -1125,7 +1125,7 @@ test('F5: readmission resolves the branch contract instead of overwriting it wit
 
 test('F5b: persisting a contract merges against each destination record rather than overwriting it', () => {
   const issueId = 'UTV2-999908';
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-f5b-'));
+  const base = createTempWorkspace('utv2-1747-f5b-');
   const rootA = path.join(base, 'control');
   const rootB = path.join(base, 'worktree');
   for (const dir of [rootA, rootB]) {
@@ -1206,7 +1206,7 @@ function seedContractRoots(issueId: string): {
   worktree: string;
   branchContract: TaskContract;
 } {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-readmit-'));
+  const base = createTempWorkspace('utv2-1752-readmit-');
   const control = path.join(base, 'control');
   const worktree = path.join(base, 'worktree');
   for (const dir of [control, worktree]) {
@@ -1464,7 +1464,7 @@ function seedReadmissionFixture(
     branchDescription: string | null;
   },
 ): ReadmissionFixture {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-readmit-e2e-'));
+  const dir = createTempWorkspace('utv2-1752-readmit-e2e-');
   const root = path.join(dir, 'repo');
   const originPath = path.join(dir, 'origin.git');
   const slug = issueId.toLowerCase();
@@ -1661,7 +1661,7 @@ function showAtRef(root: string, ref: string, repoRelativePath: string): string 
  */
 function contractRootFromRef(root: string, ref: string, issueId: string): string {
   const content = showAtRef(root, ref, `.ops/sync/${issueId}.yml`);
-  const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-atref-'));
+  const dest = createTempWorkspace('utv2-1752-atref-');
   fs.mkdirSync(path.join(dest, '.ops', 'sync'), { recursive: true });
   fs.writeFileSync(path.join(dest, '.ops', 'sync', `${issueId}.yml`), content);
   return dest;
@@ -1833,7 +1833,7 @@ test('G23: a capture reports linear-capture and fetched:true -- the two other va
   // G20/G21 only ever observe `lane-worktree`/`false`, so hardcoding either
   // field to that constant survived the round-4 battery (R9, R10). A control
   // that can only ever see one value of a field does not pin the field.
-  const emptyWorktree = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-capture-'));
+  const emptyWorktree = createTempWorkspace('utv2-1752-capture-');
   const issueId = 'UTV2-999963';
   let called = 0;
   const runner = ((_command, _args, options) => {
