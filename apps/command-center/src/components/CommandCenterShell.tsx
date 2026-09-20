@@ -21,6 +21,8 @@ import {
 type CommandCenterShellProps = {
   children: React.ReactNode;
   initialHealth: GlobalHealth | null;
+  actor?: string;
+  canSignOut?: boolean;
 };
 
 function icon(path: React.ReactNode) {
@@ -135,7 +137,7 @@ function RouteDispositionNotice({ routeEntry }: { routeEntry: CommandCenterRoute
   );
 }
 
-export function CommandCenterShell({ children, initialHealth }: CommandCenterShellProps) {
+export function CommandCenterShell({ children, initialHealth, actor, canSignOut }: CommandCenterShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -164,6 +166,8 @@ export function CommandCenterShell({ children, initialHealth }: CommandCenterShe
   return (
     <>
       <WorkspaceSidebar
+        actor={actor}
+        canSignOut={canSignOut}
         navGroups={navigation.groups}
         activeRoute={chrome.activeRoute}
         healthStatus={health.status}

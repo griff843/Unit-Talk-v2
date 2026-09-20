@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 
 export type SidebarNavItem = {
   href: string;
@@ -18,6 +19,8 @@ export type SidebarNavGroup = {
 export type SidebarHealthStatus = 'healthy' | 'warning' | 'critical';
 
 type WorkspaceSidebarProps = {
+  actor?: string;
+  canSignOut?: boolean;
   navGroups: SidebarNavGroup[];
   activeRoute: string;
   healthStatus: SidebarHealthStatus;
@@ -68,7 +71,21 @@ function NavItemIcon({ children }: { children: React.ReactNode }) {
   return <span className="flex h-5 w-5 items-center justify-center">{children}</span>;
 }
 
-function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
+function BoundaryBadge({ collapsed, actor, canSignOut }: { collapsed: boolean; actor?: string; canSignOut?: boolean }) {
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  async function signOut() {
+    setPending(true);
+    setError('');
+    try {
+      const response = await fetch('/api/session', { method: 'DELETE' });
+      if (!response.ok) throw new Error('Sign-out refused');
+      window.location.reload();
+    } catch {
+      setError('Could not sign out. Please try again.');
+      setPending(false);
+    }
+  }
   return (
     <div
       className={cx(
@@ -81,10 +98,12 @@ function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
       </div>
       {!collapsed && (
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-[var(--cc-text-primary)]">Internal operator</div>
+          <div className="break-all text-sm font-medium text-[var(--cc-text-primary)]" data-testid="operator-identity">{actor ?? 'Identity unavailable'}</div>
           <div className="mt-1 inline-flex items-center rounded-full border border-[var(--cc-border-strong)] px-2 py-0.5 text-[10px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">
-            Access restricted
+            {actor === 'command-center:dev-bypass' ? 'Unauthenticated development' : actor ? 'Authenticated operator' : 'Identity unavailable'}
           </div>
+          {canSignOut && <button type="button" disabled={pending} onClick={signOut} className="mt-2 block rounded px-1 py-2 text-xs text-[var(--cc-text-secondary)] hover:text-white">{pending ? 'Signing out…' : 'Sign out'}</button>}
+          {error && <p role="alert" className="mt-1 text-xs text-red-300">{error}</p>}
         </div>
       )}
     </div>
@@ -92,6 +111,8 @@ function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
 }
 
 export function WorkspaceSidebar({
+  actor,
+  canSignOut,
   navGroups,
   activeRoute,
   healthStatus,
@@ -193,7 +214,7 @@ export function WorkspaceSidebar({
         ))}
       </nav>
 
-      <BoundaryBadge collapsed={collapsed} />
+      <BoundaryBadge collapsed={collapsed} actor={actor} canSignOut={canSignOut} />
       </aside>
     </>
   );

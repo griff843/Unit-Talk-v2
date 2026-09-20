@@ -16,7 +16,7 @@ export function createHealthHandler(
   let cache: { at: number; body: GlobalHealth } | null = null;
 
   return async function health(request: Request) {
-    const auth = authenticateHeaderBag(request.headers);
+    const auth = await authenticateHeaderBag(request.headers);
     if (!auth.ok) {
       return NextResponse.json(
         { ok: true, service: 'command-center' },

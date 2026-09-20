@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { createEventsHandler } from '../app/api/events/route';
 import { createGovernanceLanesHandler } from '../app/api/governance/lanes/route';
+import { POST as createSession } from '../app/api/session/route';
 import { APP, SRC, isTestFile, walkSource as walk } from './test-support/source-walk';
 
 /**
@@ -16,6 +17,17 @@ import { APP, SRC, isTestFile, walkSource as walk } from './test-support/source-
 const ROUTE_GUARD = /authenticateHeaderBag|assertPrivilegedRequestAuthenticated/;
 
 const ROUTES = [
+  {
+    name: 'operator session',
+    path: '/api/session',
+    create: (onRead: () => void) => async (request: Request) => {
+      const headers = new Headers(request.headers);
+      headers.set('origin', new URL(request.url).origin);
+      const response = await createSession(new Request(request.url, { method: 'POST', headers }));
+      if (response.ok) onRead();
+      return response;
+    },
+  },
   {
     name: 'events',
     path: '/api/events',
