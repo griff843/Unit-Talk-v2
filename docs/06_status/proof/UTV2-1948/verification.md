@@ -9,7 +9,7 @@ MERGE_SHA: pending merge
 Generated at: 2026-09-19T23:26:18.000Z
 Issue: UTV2-1948
 Tier: T2
-Lane type: runtime
+Lane type: delivery-ui
 Branch: claude/utv2-1948-cc-health-anon-fallback
 PR URL: N/A
 Head SHA: 630aa9d5cd5d4f0f18066ae58b04f8bfe2f34c70
@@ -122,6 +122,54 @@ corresponding assertion box above is left unchecked.
 What this bundle establishes is the boundary it can establish: the repair, its regression
 coverage, its mutation control, and the measured production precondition. The
 after-state is confirmable only after a deploy, and belongs to that step.
+
+## UI verification evidence (delivery-ui lane artifacts)
+
+`screenshot-desktop.png` (1440x900, full page) and `screenshot-mobile.png` (390x844)
+were captured through the authenticated operator path against the **deployed** Command
+Center at release `92a7e5d32`, at 2x device scale.
+
+**Read them as before-state defect evidence, not as proof the repair renders.** They show
+exactly what this lane removes, at both viewports:
+
+| Element | What the screenshots show |
+|---|---|
+| Sidebar `GLOBAL HEALTH` | `down` |
+| Overview `API HEALTH` tile | `Down` |
+| `WORKER STATE` tile | `Blocked` |
+| `PENDING OUTBOX AGE` | `73739m — Needs attention` |
+
+The after-state — the same two viewports showing a real health state and no
+pipeline-health `PARTIAL DATA` banner — requires this repair to be **running**, and
+dispatching a production deployment is reserved action 8. It is therefore not in this
+bundle and is not claimed anywhere in it. That acceptance belongs to the deploy
+checkpoint.
+
+### Lane reclassification (PM finding, exact head `ddac75b7`)
+
+This lane was opened with `lane_type: runtime`, which was wrong: `apps/command-center/**`
+is admitted by `delivery-ui`, and `runtime`'s allowlist does not contain it. The cause was
+an incorrect `--lane-type claude` at lane-start — `claude` is a legacy *executor* alias, so
+the canonical type fell through to `runtime`. The correct form is
+`--lane-type delivery-ui --executor claude`.
+
+Corrected per `LANE_MANIFEST_SPEC.md` §14, which treats a mis-typed lane as a manifest
+correction rather than a lane teardown. Measured both ways locally:
+
+```
+$ npx tsx scripts/lane-check.ts --lane delivery-ui --base origin/main --head HEAD
+lane:check PASS lane=delivery-ui files=7
+
+$ npx tsx scripts/lane-check.ts --lane runtime --base origin/main --head HEAD
+lane:check FAIL lane=runtime
+- outside_allowed_paths: apps/command-center/src/lib/data/pipeline-health.test.ts ...
+- outside_allowed_paths: apps/command-center/src/lib/data/pipeline-health.ts ...
+```
+
+`file_scope_lock` was **not** widened — every path it already held is inside
+`delivery-ui`'s allowlist (`apps/command-center/**`, `.ops/sync/**`,
+`docs/06_status/lanes/**`, `docs/06_status/proof/**`). `expected_proof_paths` gained the
+two screenshot artifacts that `.lane/lanes/delivery-ui.yml` requires.
 
 ## Merge SHA Binding
 
