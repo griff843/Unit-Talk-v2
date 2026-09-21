@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1950-command-center-recovery",
   "branch": "codex/utv2-1950-command-center-recovery",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "81db253d5cf649be721753c1e8df70d4b2a1f70e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1624",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/**"
@@ -17,9 +17,9 @@
     "docs/06_status/proof/UTV2-1950/diff-summary.md",
     "docs/06_status/proof/UTV2-1950/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-09-21T02:37:01.444Z",
-  "heartbeat_at": "2026-09-21T02:37:01.444Z",
+  "heartbeat_at": "2026-09-21T02:54:49.335Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1950-command-center-recovery.json",
