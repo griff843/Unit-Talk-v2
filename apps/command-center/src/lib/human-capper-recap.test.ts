@@ -80,16 +80,16 @@ test('prediction mirrors the controller: authorization, delivery, then kill swit
     officialPicksKilled: true,
     hasSentDelivery: true,
   });
-  assert.equal(killed.willPost, false);
+  assert.equal(killed.willAttempt, false);
   assert.match(killed.summary, /kill switch is engaged/);
   assert.match(killed.summary, /Settlement will still be recorded/);
 
-  const willPost = predictRecapDelivery({
+  const willAttempt = predictRecapDelivery({
     isHumanCapperDelivery: true,
     officialPicksKilled: false,
     hasSentDelivery: true,
   });
-  assert.equal(willPost.willPost, true);
+  assert.equal(willAttempt.willAttempt, true);
 });
 
 test('an unreadable kill switch fails closed — it never promises a recap', () => {
@@ -100,7 +100,15 @@ test('an unreadable kill switch fails closed — it never promises a recap', () 
     officialPicksKilled: null,
     hasSentDelivery: true,
   });
-  assert.equal(verdict.willPost, false);
+  assert.equal(verdict.willAttempt, false);
   assert.equal(verdict.kind, 'unknown');
   assert.match(verdict.summary, /could not be read/);
+});
+
+test('a lost recap response never claims members were not told', () => {
+  const verdict = describeRecapOutcome({ posted: false, reason: 'recap_request_outcome_unknown' });
+  assert.equal(verdict.kind, 'unresolved');
+  if (verdict.kind !== 'unresolved') return;
+  assert.match(verdict.detail, /may already have received/);
+  assert.doesNotMatch(verdict.headline, /NOT posted|members were not told/);
 });

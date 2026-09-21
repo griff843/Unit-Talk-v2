@@ -30,7 +30,7 @@ export interface HumanCapperRecapResult {
 export type RecapVerdict =
   | { kind: 'not-applicable' }
   | { kind: 'posted'; headline: string }
-  | { kind: 'suppressed'; headline: string; detail: string; reason: string };
+  | { kind: 'suppressed' | 'unresolved'; headline: string; detail: string; reason: string };
 
 /**
  * Known refusal reasons, explained in operator terms. An unknown reason is
@@ -59,6 +59,10 @@ export function describeRecapOutcome(
   }
 
   const reason = recap.reason?.trim() ? recap.reason.trim() : 'unspecified';
+  if (reason === 'recap_request_outcome_unknown') return {
+    kind: 'unresolved', headline: 'Recap outcome unresolved',
+    detail: 'The request lost its confirmed outcome. Check Discord before retrying; members may already have received the recap.', reason,
+  };
   return {
     kind: 'suppressed',
     headline: 'Recap NOT posted — members were not told.',
@@ -80,15 +84,15 @@ export interface RecapPredictionInput {
 }
 
 export type RecapPrediction =
-  | { willPost: false; kind: 'not-applicable'; summary: string }
-  | { willPost: false; kind: 'blocked'; summary: string }
-  | { willPost: false; kind: 'unknown'; summary: string }
-  | { willPost: true; kind: 'will-post'; summary: string };
+  | { willAttempt: false; kind: 'not-applicable'; summary: string }
+  | { willAttempt: false; kind: 'blocked'; summary: string }
+  | { willAttempt: false; kind: 'unknown'; summary: string }
+  | { willAttempt: true; kind: 'will-attempt'; summary: string };
 
 export function predictRecapDelivery(input: RecapPredictionInput): RecapPrediction {
   if (!input.isHumanCapperDelivery) {
     return {
-      willPost: false,
+      willAttempt: false,
       kind: 'not-applicable',
       summary: 'No recap applies — this pick carries no human-capper delivery authorization.',
     };
@@ -96,7 +100,7 @@ export function predictRecapDelivery(input: RecapPredictionInput): RecapPredicti
 
   if (!input.hasSentDelivery) {
     return {
-      willPost: false,
+      willAttempt: false,
       kind: 'blocked',
       summary: 'No recap will post — this pick has no confirmed delivery to recap to.',
     };
@@ -106,7 +110,7 @@ export function predictRecapDelivery(input: RecapPredictionInput): RecapPredicti
   // switch state is unknown is the one error that reads as a promise.
   if (input.officialPicksKilled === null) {
     return {
-      willPost: false,
+      willAttempt: false,
       kind: 'unknown',
       summary: 'Recap outcome unknown — the official-picks kill switch state could not be read.',
     };
@@ -114,7 +118,7 @@ export function predictRecapDelivery(input: RecapPredictionInput): RecapPredicti
 
   if (input.officialPicksKilled) {
     return {
-      willPost: false,
+      willAttempt: false,
       kind: 'blocked',
       summary:
         'No recap will post — the official-picks kill switch is engaged. Settlement will still be recorded.',
@@ -122,8 +126,8 @@ export function predictRecapDelivery(input: RecapPredictionInput): RecapPredicti
   }
 
   return {
-    willPost: true,
-    kind: 'will-post',
-    summary: 'A recap will post to members when this pick is settled.',
+    willAttempt: true,
+    kind: 'will-attempt',
+    summary: 'Settlement will attempt a recap while delivery controls remain open. Check the recorded outcome to confirm publication.',
   };
 }

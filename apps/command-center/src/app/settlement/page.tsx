@@ -248,8 +248,8 @@ export default async function SettlementPage({
               return (
                 <p
                   className={`mb-3 rounded-md border px-3 py-2 text-xs ${
-                    prediction.willPost
-                      ? 'border-emerald-700 bg-emerald-950/50 text-emerald-300'
+                    prediction.willAttempt
+                      ? 'border-blue-700 bg-blue-950/50 text-blue-200'
                       : 'border-amber-600 bg-amber-950/40 text-amber-200'
                   }`}
                 >

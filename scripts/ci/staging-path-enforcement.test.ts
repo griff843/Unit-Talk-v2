@@ -361,3 +361,15 @@ test('manual staging proof executes the complete gate before credentials are scr
   assert.match(step, /CI_REQUIRE_DB_SMOKE: 'true'/);
   assert.doesNotMatch(step, /continue-on-error|secrets\.SUPABASE_/);
 });
+
+test('operator browser writes stay in the staging-only job before credential scrub', () => {
+  const source = readRepo('.github/workflows/staging-db-proof.yml');
+  const proof = source.indexOf('      - name: Run staging operator browser proof');
+  assert.ok(proof > source.indexOf('      - name: Run complete repository verification against staging'));
+  assert.ok(proof < source.indexOf('      - name: Scrub credentials'));
+  assert.match(source.slice(proof, source.indexOf('      - name: Scrub credentials')), /run: pnpm proof:command-center-staging/);
+  const runner = readRepo('scripts/ops/command-center/staging-operator-proof.ts');
+  assert.ok(runner.indexOf('assert.equal(isApprovedStagingTarget') < runner.indexOf('const api = createApiServer'));
+  assert.match(runner, /distributionMode: 'track-only'/);
+  assert.doesNotMatch(runner, /setKilled|createWorker|runGradingPass/);
+});
