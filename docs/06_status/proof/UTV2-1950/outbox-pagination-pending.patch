@@ -1,0 +1,288 @@
+diff --git a/apps/command-center/e2e/recovery/delivery-truth.spec.ts b/apps/command-center/e2e/recovery/delivery-truth.spec.ts
+index 83681d77b..e89bedbd8 100644
+--- a/apps/command-center/e2e/recovery/delivery-truth.spec.ts
++++ b/apps/command-center/e2e/recovery/delivery-truth.spec.ts
+@@ -7,8 +7,19 @@ test('delivery shows scoped persisted records and every governed control', async
+   const errors: string[] = [];
+   page.on('pageerror', (error) => errors.push(error.message));
+   await page.goto('/operations/outbox');
+-  await expect(page.getByRole('heading', { name: `Outbox Rows (${Math.min(Number(attempts), 100)})`, exact: true })).toBeVisible();
++  await expect(page.getByRole('heading', { name: `Outbox Rows (${Math.min(Number(attempts), 25)} shown of ${Number(attempts).toLocaleString('en-US')})`, exact: true })).toBeVisible();
+   await expect(page.locator('main')).not.toContainText('Load Failed');
++  await expect(page.getByRole('navigation', { name: 'Outbox pages' })).toContainText(`${Number(attempts).toLocaleString('en-US')} records`);
++  await expect(page.getByRole('navigation', { name: 'Receipt pages' })).toContainText(`${Number(receipts).toLocaleString('en-US')} records`);
++  await page.goto('/operations/outbox?page=10000&receiptPage=10000&status=sent');
++  await expect(page.getByText('No outbox rows match this filter.', { exact: true })).toBeVisible();
++  await page.getByRole('navigation', { name: 'Outbox pages' }).getByRole('link', { name: 'Previous page' }).click();
++  await expect(page).toHaveURL(/status=sent/);
++  await expect(page.getByRole('heading', { name:  /Outbox Rows \(.*shown of/ })).toBeVisible();
++  await page.getByRole('navigation', { name: 'Receipt pages' }).getByRole('link', { name: 'Previous page' }).click();
++  await expect(page.getByRole('navigation', { name: 'Receipt pages' })).toContainText('Page 1');
++  await page.setViewportSize({ width: 390, height: 844 });
++  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+   await page.goto('/operations/discord');
+   const panel = page.locator('div.cc-surface').filter({ has: page.getByRole('heading', { name: 'Delivery Kill Switch', exact: true }) });
+   for (const target of ['official-picks', 'best-bets', 'trader-insights', 'exclusive-insights']) {
+diff --git a/apps/command-center/src/app/operations/outbox/page.tsx b/apps/command-center/src/app/operations/outbox/page.tsx
+index 79b62bc25..2335411d2 100644
+--- a/apps/command-center/src/app/operations/outbox/page.tsx
++++ b/apps/command-center/src/app/operations/outbox/page.tsx
+@@ -21,14 +21,25 @@ function readParam(searchParams: Record<string, string | string[] | undefined> |
+   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+ }
+ 
+-function pillHref(status?: string, target?: string) {
++function pillHref(status?: string, target?: string, page = 1, receiptPage = 1) {
+   const params = new URLSearchParams();
+   if (status) params.set('status', status);
+   if (target) params.set('target', target);
++  if (page > 1) params.set('page', String(page));
++  if (receiptPage > 1) params.set('receiptPage', String(receiptPage));
+   const query = params.toString();
+   return query ? `/operations/outbox?${query}` : '/operations/outbox';
+ }
+ 
++function HistoryPages({ label, page, total, pageSize, href }: { label: string; page: number; total: number; pageSize: number; href: (page: number) => string }) {
++  const lastPage = Math.max(1, Math.ceil(total / pageSize));
++  return <nav aria-label={label} className="mt-4 flex flex-wrap items-center gap-4 text-sm">
++    <span>Page {page} of {lastPage} · {total.toLocaleString('en-US')} records</span>
++    {page > 1 ? <Link className="text-blue-400 hover:underline" href={href(Math.min(page - 1, lastPage))}>Previous page</Link> : null}
++    {page < lastPage ? <Link className="text-blue-400 hover:underline" href={href(page + 1)}>Next page</Link> : null}
++  </nav>;
++}
++
+ function FilterPill({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+   return (
+     <Link
+@@ -58,7 +69,7 @@ export default async function OutboxOpsPage({
+   let overview: OutboxOverview | null = null;
+   let loadError: string | null = null;
+   try {
+-    overview = await getOutboxOverview({ status, target });
++    overview = await getOutboxOverview({ status, target, page: Number(readParam(searchParams, 'page')), receiptPage: Number(readParam(searchParams, 'receiptPage')) });
+   } catch (error) {
+     console.error('Delivery data unavailable', error);
+     loadError = 'Delivery records could not be loaded. Refresh to retry; counts are unavailable until the read succeeds.';
+@@ -101,6 +112,7 @@ export default async function OutboxOpsPage({
+ 
+           <div className="cc-surface p-5">
+             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">Filters</h2>
++            <p className="mb-3 text-xs cc-text-muted">Filters apply to attempts. Summary counts and receipts cover all governed delivery records.</p>
+             <div className="flex flex-wrap items-center gap-2">
+               <span className="text-xs cc-text-muted">Status:</span>
+               <FilterPill href={pillHref(undefined, target)} active={!status}>All</FilterPill>
+@@ -121,12 +133,12 @@ export default async function OutboxOpsPage({
+ 
+           <div className="cc-surface p-5">
+             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
+-              Outbox Rows ({overview.rows.length}{status || target ? ' filtered' : ''})
++              Outbox Rows ({overview.rows.length} shown of {overview.totalRows.toLocaleString('en-US')})
+             </h2>
+             {overview.rows.length === 0 ? (
+               <EmptyState
+                 message="No outbox rows match this filter."
+-                detail="Adjust the status/target pills above."
++                detail="Adjust the status/target filters or return to an earlier page."
+               />
+             ) : (
+               <div className="overflow-x-auto">
+@@ -176,12 +188,14 @@ export default async function OutboxOpsPage({
+             )}
+           </div>
+ 
++          <HistoryPages label="Outbox pages" page={overview.page} total={overview.totalRows} pageSize={overview.pageSize} href={(page) => pillHref(status, target, page, overview.receiptPage)} />
++
+           <div className="cc-surface p-5">
+             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
+-              Recent Receipts ({overview.recentReceipts.length})
++              Delivery Receipts ({overview.recentReceipts.length} shown of {overview.totalReceipts.toLocaleString('en-US')})
+             </h2>
+             {overview.recentReceipts.length === 0 ? (
+-              <EmptyState message="No delivery receipts recorded yet." />
++              <EmptyState message="No delivery receipts on this page." />
+             ) : (
+               <div className="overflow-x-auto">
+                 <Table>
+@@ -209,6 +223,7 @@ export default async function OutboxOpsPage({
+               </div>
+             )}
+           </div>
++          <HistoryPages label="Receipt pages" page={overview.receiptPage} total={overview.totalReceipts} pageSize={overview.pageSize} href={(page) => pillHref(status, target, overview.page, page)} />
+         </>
+       ) : null}
+     </div>
+diff --git a/apps/command-center/src/lib/data/delivery-population.test.ts b/apps/command-center/src/lib/data/delivery-population.test.ts
+index e39e2f1c2..0f003209e 100644
+--- a/apps/command-center/src/lib/data/delivery-population.test.ts
++++ b/apps/command-center/src/lib/data/delivery-population.test.ts
+@@ -11,11 +11,13 @@ test('delivery readers scope every count, attempt and receipt to operator picks'
+   const { getOutboxOverview } = await import('./outbox');
+   const { getDiscordOpsSnapshot } = await import('./discord-ops');
+   const originalFetch = globalThis.fetch;
+-  let failure: 'none' | 'count' | 'receipt' = 'none';
++  const requests: URL[] = [];
++  let failure: 'none' | 'count' | 'receipt' | 'range' = 'none';
+   const run = () => withRequestContext({ authorization: 'Bearer delivery-reader-test' }, getOutboxOverview);
+   globalThis.fetch = async (input, init) => {
+     const request = new Request(input, init);
+     const url = new URL(request.url);
++    requests.push(url);
+     const receipts = url.pathname.endsWith('/distribution_receipts');
+     const prefix = receipts ? 'outbox.pick.' : 'pick.';
+     const params = url.searchParams;
+@@ -26,16 +28,18 @@ test('delivery readers scope every count, attempt and receipt to operator picks'
+     assert.equal(params.get(`${prefix}or`), '(selection.is.null,selection.not.ilike.*proof*)');
+     assert.match(params.get(receipts ? 'outbox.target' : 'target') ?? '', /discord:official-picks/);
+     assert.match(params.get('select') ?? '', /pick:picks!inner/);
++    if (failure === 'range' && request.method !== 'HEAD' && params.has('offset')) return Response.json({ code: 'PGRST103', message: 'Requested range not satisfiable' }, { status: 416 });
+     if (receipts) {
+       assert.match(params.get('select') ?? '', /outbox:distribution_outbox!inner/);
+       if (failure === 'receipt') return Response.json({ message: 'private query failure' }, { status: 503 });
+-      return Response.json([{ id: 'receipt-1', outbox_id: 'outbox-1', channel: 'official', status: 'sent', receipt_type: 'discord', recorded_at: '2026-09-20T00:00:00Z' }]);
++      if (request.method === 'HEAD') return new Response(null, { headers: { 'content-range': '*/1250' } });
++      return Response.json([{ id: 'receipt-1', outbox_id: 'outbox-1', channel: 'official', status: 'sent', receipt_type: 'discord', recorded_at: '2026-09-20T00:00:00Z' }], { headers: { 'content-range': '0-0/1250' } });
+     }
+     if (request.method === 'HEAD') {
+       assert.match(request.headers.get('prefer') ?? '', /count=exact/);
+       return new Response(null, { headers: failure === 'count' ? {} : { 'content-range': '*/1250' } });
+     }
+-    return Response.json([{ id: 'outbox-1', pick_id: 'pick-1', target: 'discord:official-picks', status: 'sent', attempt_count: 1, created_at: '2026-09-20T00:00:00Z', updated_at: '2026-09-20T00:00:00Z' }]);
++    return Response.json([{ id: 'outbox-1', pick_id: 'pick-1', target: 'discord:official-picks', status: 'sent', attempt_count: 1, created_at: '2026-09-20T00:00:00Z', updated_at: '2026-09-20T00:00:00Z' }], { headers: { 'content-range': '0-0/1250' } });
+   };
+   try {
+     await t.test('exact counts are independent of displayed samples', async () => {
+@@ -48,6 +52,34 @@ test('delivery readers scope every count, attempt and receipt to operator picks'
+       assert.equal(delivery.receiptsSampled, 1);
+       assert.equal(delivery.channelStats[0]?.successCount, 1);
+     });
++    await t.test('later pages retain database filters and deterministic ordering for attempts and receipts', async () => {
++      requests.length = 0;
++      const result = await withRequestContext({ authorization: 'Bearer delivery-reader-test' }, () => getOutboxOverview({ status: 'sent', target: 'discord:official-picks', page: 3, receiptPage: 2 }));
++      assert.equal(result.totalRows, 1250);
++      assert.equal(result.totalReceipts, 1250);
++      assert.equal(result.page, 3);
++      assert.equal(result.receiptPage, 2);
++      const attempts = requests.find((url) => url.searchParams.get('select')?.includes('attempt_count'))!;
++      assert.equal(attempts.searchParams.get('offset'), '50');
++      assert.equal(attempts.searchParams.get('limit'), '25');
++      assert.equal(attempts.searchParams.get('order'), 'updated_at.desc,id.desc');
++      assert.equal(attempts.searchParams.get('status'), 'eq.sent');
++      assert.ok(attempts.searchParams.getAll('target').includes('eq.discord:official-picks'));
++      const receipts = requests.find((url) => url.pathname.endsWith('/distribution_receipts'))!;
++      assert.equal(receipts.searchParams.get('offset'), '25');
++      assert.equal(receipts.searchParams.get('limit'), '25');
++      assert.equal(receipts.searchParams.get('order'), 'recorded_at.desc,id.desc');
++      assert.equal(receipts.searchParams.has('outbox.status'), false, 'receipt history is independent of the attempt filter');
++    });
++    await t.test('out-of-range pages keep verified totals and an empty page instead of reporting a backend outage', async () => {
++      failure = 'range';
++      const result = await withRequestContext({ authorization: 'Bearer delivery-reader-test' }, () => getOutboxOverview({ page: 10000, receiptPage: 10000 }));
++      assert.equal(result.totalRows, 1250);
++      assert.equal(result.totalReceipts, 1250);
++      assert.equal(result.rows.length, 0);
++      assert.equal(result.recentReceipts.length, 0);
++      failure = 'none';
++    });
+     await t.test('missing counts cannot appear as zero', async () => {
+       failure = 'count';
+       await assert.rejects(run(), /authoritative count unavailable/);
+diff --git a/apps/command-center/src/lib/data/outbox.ts b/apps/command-center/src/lib/data/outbox.ts
+index 804c39c85..fdeae41bc 100644
+--- a/apps/command-center/src/lib/data/outbox.ts
++++ b/apps/command-center/src/lib/data/outbox.ts
+@@ -31,6 +31,11 @@ export interface OutboxOverview {
+   oldestUnsentCreatedAt: string | null;
+   targets: string[];
+   rows: OutboxOverviewRow[];
++  page: number;
++  receiptPage: number;
++  pageSize: number;
++  totalRows: number;
++  totalReceipts: number;
+   recentReceipts: Array<{
+     id: string;
+     outboxId: string;
+@@ -44,6 +49,8 @@ export interface OutboxOverview {
+ export interface OutboxFilter {
+   status?: string | undefined;
+   target?: string | undefined;
++  page?: number | undefined;
++  receiptPage?: number | undefined;
+ }
+ 
+ function isRetryEligible(status: string, attemptCount: number): boolean {
+@@ -72,28 +79,57 @@ export async function getOutboxSummary(): Promise<Pick<OutboxOverview, 'counts'
+   return { counts, oldestUnsentCreatedAt: oldestUnsentResult.data?.[0]?.created_at ?? null };
+ }
+ 
++export function normalizeOutboxPage(value: unknown): number {
++  const page = Number(value);
++  return Number.isInteger(page) && page > 0 ? Math.min(page, 10_000) : 1;
++}
++
+ export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<OutboxOverview> {
+   const client = (await getDataClient()) as SupabaseClient<Database>;
+ 
++  const signal = AbortSignal.timeout(8_000);
++  const page = normalizeOutboxPage(filter.page);
++  const receiptPage = normalizeOutboxPage(filter.receiptPage);
++  const pageSize = 25;
+   let rowQuery = applyOperatorPickPopulation(client
+     .from('distribution_outbox')
+-    .select('id, pick_id, status, target, attempt_count, last_error, next_attempt_at, claimed_at, created_at, updated_at,pick:picks!inner(id)'), 'pick')
++    .select('id, pick_id, status, target, attempt_count, last_error, next_attempt_at, claimed_at, created_at, updated_at,pick:picks!inner(id)', { count: 'exact' }), 'pick')
+     .in('target', governedOutboxTargets)
+-    .order('updated_at', { ascending: false })
+-    .limit(100);
++    .order('updated_at', { ascending: false }).order('id', { ascending: false })
++    .range((page - 1) * pageSize, page * pageSize - 1).abortSignal(signal);
+   if (filter.status) rowQuery = rowQuery.eq('status', filter.status);
+   if (filter.target) rowQuery = rowQuery.eq('target', filter.target);
+ 
+-  const [summary, rowsResult, receiptsResult] = await Promise.all([
++  const [summary, initialRowsResult, initialReceiptsResult] = await Promise.all([
+     getOutboxSummary(),
+     rowQuery,
+     applyOperatorPickPopulation(client
+       .from('distribution_receipts')
+-      .select('id, outbox_id, channel, status, receipt_type, recorded_at,outbox:distribution_outbox!inner(target,pick:picks!inner(id))'), 'outbox.pick').in('outbox.target', governedOutboxTargets)
+-      .order('recorded_at', { ascending: false })
+-      .limit(50),
++      .select('id, outbox_id, channel, status, receipt_type, recorded_at,outbox:distribution_outbox!inner(target,pick:picks!inner(id))', { count: 'exact' }), 'outbox.pick').in('outbox.target', governedOutboxTargets)
++      .order('recorded_at', { ascending: false }).order('id', { ascending: false })
++      .range((receiptPage - 1) * pageSize, receiptPage * pageSize - 1).abortSignal(signal),
+   ]);
+ 
++  // PostgREST reports a valid empty page beyond the end as 416/PGRST103.
++  // Re-read its exact scoped count; unrelated errors must still fail visibly.
++  let rowsResult = initialRowsResult;
++  if (rowsResult.error?.code === 'PGRST103') {
++    let countQuery = applyOperatorPickPopulation(client.from('distribution_outbox').select('id,pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
++      .in('target', governedOutboxTargets).abortSignal(signal);
++    if (filter.status) countQuery = countQuery.eq('status', filter.status);
++    if (filter.target) countQuery = countQuery.eq('target', filter.target);
++    const count = readAuthoritativeCount(await countQuery, 'matching outbox rows');
++    rowsResult = { ...rowsResult, error: null, data: [], count, status: 200, statusText: 'OK' };
++  }
++  let receiptsResult = initialReceiptsResult;
++  if (receiptsResult.error?.code === 'PGRST103') {
++    const result = await applyOperatorPickPopulation(client.from('distribution_receipts')
++      .select('id,outbox:distribution_outbox!inner(target,pick:picks!inner(id))', { count: 'exact', head: true }), 'outbox.pick')
++      .in('outbox.target', governedOutboxTargets).abortSignal(signal);
++    const count = readAuthoritativeCount(result, 'governed delivery receipts');
++    receiptsResult = { ...receiptsResult, error: null, data: [], count, status: 200, statusText: 'OK' };
++  }
++
+   assertQuerySucceeded(rowsResult, 'outbox rows');
+   assertQuerySucceeded(receiptsResult, 'delivery receipts');
+ 
+@@ -121,6 +157,9 @@ export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<Outb
+     ...summary,
+     targets,
+     rows,
++    page, receiptPage, pageSize,
++    totalRows: readAuthoritativeCount(rowsResult, 'matching outbox rows'),
++    totalReceipts: readAuthoritativeCount(receiptsResult, 'governed delivery receipts'),
+     recentReceipts: ((receiptsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+       id: String(row['id'] ?? ''),
+       outboxId: String(row['outbox_id'] ?? ''),
