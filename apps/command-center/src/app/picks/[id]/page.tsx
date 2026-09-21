@@ -365,7 +365,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
       <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
         {allowedActions.length === 0 ? (
           <p className="text-sm text-gray-400">Pick is {pick.status}; no further action available.</p>
-        ) : allowedActions.includes('correct') ? (
+        ) : allowedActions.includes('correct') || (alreadySettled && allowedActions.includes('settle')) ? (
           <CorrectionForm pickId={pickId} />
         ) : allowedActions.includes('settle') ? (
           <SettlementForm pickId={pickId} isAlreadySettled={alreadySettled} />

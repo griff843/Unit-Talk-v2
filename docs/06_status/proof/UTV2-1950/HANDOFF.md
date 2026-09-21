@@ -17,7 +17,7 @@ Ordinary browser sign-in/session/actor/logout; schema-correct pick details; trut
 - c3da26c2b: 657 Command Center unit tests, type check, selected lint and Next production build pass; 12/12 Playwright recovery cases pass.
 - Local read-only production-build p95: Picks666ms, Overview1898ms, Performance874ms, Settlement1046ms, Delivery400ms, Outbox514ms; latest System Health1387ms (20 warm samples). These are local diagnostic-proxy measurements, not deployed acceptance.
 - Complete pnpm verify passed on 09e128882 in run35550274115. Later browser stage failed because Next bundle was not built. c3da26c2b explicitly adds the missing build.
-- Complete pnpm verify step passed on c3da26c2b; its later browser proof is still running. Authoritative run: https://github.com/griff843/Unit-Talk-v2/actions/runs/35551270130 . Inspect terminal result before claiming fully green.
+- Complete pnpm verify step passed on c3da26c2b; its later browser proof persisted the original settlement and actor but found a missing Track Only correction form. A focused UI correction follows; rerun required. Authoritative run: https://github.com/griff843/Unit-Talk-v2/actions/runs/35551270130 . Inspect terminal result before claiming fully green.
 - R-level check against origin/main: PASS; operator-ui; QA artifact recognized. 120 changed files.
 
 ## Runtime

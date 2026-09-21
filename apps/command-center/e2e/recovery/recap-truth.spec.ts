@@ -8,6 +8,7 @@ test('recap panel distinguishes verified Track Only absence from missing legacy 
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`/picks/${trackOnly}`);
   const panel = page.getByTestId('settlement-recap');
+  await expect(page.getByRole('heading', { name: 'Correct Settlement', exact: true })).toBeVisible();
   await expect(panel.getByText('Not applicable', { exact: true })).toBeVisible();
   await expect(panel).toContainText('No delivery record, receipt or attempt exists');
   await page.goto(`/picks/${delivered}`);
