@@ -1,0 +1,114 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092101",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6787,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "r_level": "PASS; 34 changed files; no R-level artifacts required",
+    "warehouse_battery": {
+      "suites": [
+        "scripts/warehouse/config.test.ts",
+        "scripts/warehouse/conveyor-workflow.test.ts",
+        "scripts/warehouse/conveyor.test.ts",
+        "scripts/warehouse/db-audit.test.ts",
+        "scripts/warehouse/export-partition.test.ts",
+        "scripts/warehouse/manifest.test.ts",
+        "scripts/warehouse/object-layout.test.ts",
+        "scripts/warehouse/object-store.test.ts",
+        "scripts/warehouse/query.test.ts",
+        "scripts/warehouse/verify-archive.test.ts"
+      ],
+      "pass": 102,
+      "fail": 0,
+      "note": "All ten files are wired into pnpm test:ops, so they run inside pnpm verify rather than only on demand."
+    },
+    "destructive_reachability_mutation_drill": {
+      "control": "scripts/warehouse/conveyor-workflow.test.ts :: nothing reachable from the schedule can delete production data",
+      "mutation": "appended a real 'run: pnpm warehouse prune --yes' step to .github/workflows/warehouse-archive-conveyor.yml",
+      "result": "fail 1 on mutation ('the conveyor workflow must not execute prune'), 8/8 on restore"
+    },
+    "full_pnpm_verify": {
+      "result": "verify:static pass; test:live-db deferred to CI",
+      "note": "pnpm verify cannot exit 0 locally: scripts/ci/assert-staging-target.ts refuses any target it cannot identify as the staging project (host=127.0.0.1). CI is the authority and no green local verify is claimed. The lane manifest records t1_live_db_precondition: deferred_to_ci."
+    }
+  },
+  "runtime_proof": {
+    "profile": "object-store-and-duckdb",
+    "note": "No production credential was used and no production statement was issued. Production Supabase was RESTORING for the whole of this lane.",
+    "parquet_export": {
+      "suite": "scripts/warehouse/export-partition.test.ts",
+      "asserted": [
+        "a real 720-row window is written to a zstd Parquet file and its row count, byte size and SHA256 are measured back off the written file",
+        "an empty window still produces a readable object",
+        "a window above the row bound is refused before anything is written",
+        "re-exporting the same window overwrites rather than appends"
+      ]
+    },
+    "fail_closed_verification": {
+      "suite": "scripts/warehouse/verify-archive.test.ts",
+      "pass": 12,
+      "fail": 0,
+      "method": "archive one real 720-row partition into a LocalObjectStore, then break exactly one property per case and assert both the named check fails and decidePrune(...).eligible === false",
+      "cases_broken": [
+        "one flipped byte with the size unchanged -> checksum_match only",
+        "the object deleted -> object_exists",
+        "a short but valid Parquet with size and hash corrected -> row_count_match only",
+        "non-Parquet bytes with a matching checksum -> parquet_readable",
+        "the source drifted after export -> sample_readback_match",
+        "the source unreadable -> a failure, never a skip",
+        "an empty sample on a non-empty partition -> not eligible",
+        "a manifest hand-edited to claim success -> counts_disagree"
+      ]
+    },
+    "duckdb_read_path": {
+      "suite": "scripts/warehouse/query.test.ts",
+      "asserted": [
+        "four partitions (two days x two sports) are written, then read by a separate connection constructed with an empty NodeJS.ProcessEnv",
+        "used_production_database === false",
+        "row_count 4, offer_rows 720 per partition, 2880 rows total, 7 events, 3 markets, 2 books",
+        "the representative query mentions none of clv, roi, edge, units or profit"
+      ]
+    },
+    "conveyor": {
+      "suite": "scripts/warehouse/conveyor.test.ts",
+      "pass": 10,
+      "fail": 0,
+      "asserted": [
+        "a full run archives every planned window and writes the manifest last",
+        "a second run over the same windows reports skipped=2, creates no new object and rewrites none",
+        "an interruption after upload leaves zero orphan manifests, keeps the data objects, records heartbeat_error, and the retry completes",
+        "a corrupting store produces 2 .failed.json and 0 accepted manifests",
+        "the heartbeat is written even when every window fails",
+        "a missing, stale or unparseable heartbeat reads as stale, never as unknown"
+      ]
+    },
+    "read_only_db_audit": {
+      "suite": "scripts/warehouse/db-audit.test.ts",
+      "pass": 12,
+      "fail": 0,
+      "asserted": [
+        "the session is pinned read-only before anything is read and no statement the audit issues can write",
+        "the report states mutated: false",
+        "a restored database reports reset statistics rather than zero bloat",
+        "an assessment never concludes that a relation is safe to prune, including for a 6.8 GB, 8.19M-row, zero-FK relation"
+      ],
+      "not_run_against_production": "Production Supabase was RESTORING. The procedure was rehearsed against staging (517 MB, all relations 0 live / 0 dead, which the audit reports as reset statistics). docs/05_operations/PRODUCTION_DB_SIZING_AUDIT.md section 6 lists the ten outputs that remain unmeasured."
+    },
+    "destructive_actions_taken": "none - no production delete, no partition drop, no prune execution, no provider activation, no containment change"
+  }
+}
