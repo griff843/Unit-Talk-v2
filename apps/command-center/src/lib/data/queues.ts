@@ -355,6 +355,13 @@ export async function getReviewQueue(
     // Exclude held picks (review_decision = 'hold')
     query = query.or('review_decision.is.null,review_decision.neq.hold');
 
+    // The governed/fixture partition belongs in the query, not after the page.
+    // Filtering a `.range()` window in memory makes `count: 'exact'` count the
+    // fixture corpus while the rendered list counts what survived, so the page
+    // reports "19,796 matching rows" above "0 candidates loaded" and an
+    // operator cannot tell an empty queue from a truncated read.
+    query = applyOperatorPickPopulation(query);
+
     if (source) query = query.eq('source', source);
 
     query = query
@@ -404,6 +411,10 @@ export async function getHeldQueue(
       .select(QUEUE_SELECT, { count: 'exact' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending')
       .eq('review_decision', 'hold');
+
+    // Same push-down as the review queue: the exact count must describe the
+    // same population the operator is shown.
+    query = applyOperatorPickPopulation(query);
 
     if (source) query = query.eq('source', source);
 
