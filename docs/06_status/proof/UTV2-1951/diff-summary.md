@@ -1,5 +1,7 @@
 # DIFF SUMMARY: UTV2-1951
 
+MERGE_SHA: pending merge
+
 Lane type `runtime`, tier T2, executor claude.
 Branch `claude/utv2-1951-settlement-recap-provenance`, cut from `origin/main` and
 synced forward across the UTV2-1950 merge (`81db253d5`, PR #1624).

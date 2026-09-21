@@ -27,6 +27,7 @@ pnpm lint: exit 0
 pnpm build: exit 0
 scripts/ci/deploy-config-rollback.test.ts (docker shim on PATH): 19 pass, 0 fail
 scripts/ci/staging-path-enforcement.test.ts: 31 pass, 0 fail
+scripts/ci/r-level-check.ts --head HEAD: Verdict PASS, 19 changed files, no R-level artifacts required
 Substitution guard mutation drill: not ok 31 on mutation, 31/31 on restore
 Stub-docker substitution drill: 1 invocation before, 0 after
 ```
