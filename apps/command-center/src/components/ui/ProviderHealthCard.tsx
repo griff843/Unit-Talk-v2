@@ -11,6 +11,10 @@ export interface ProviderHealthCardProps {
   callsToday: number | null;
   lastCheckedAt: string | null;
   sparkline?: number[];
+  statusLabel?: string;
+  callsLabel?: string;
+  responseLabel?: string;
+  trendLabel?: string;
 }
 
 export function resolveQuotaTone(quotaPct: number) {
@@ -27,7 +31,7 @@ function resolveStatusTone(status: ProviderHealthCardProps['status']) {
 }
 
 function formatCheckedAt(value: string | null) {
-  return value ? new Date(value).toLocaleString() : 'No recent check';
+  return value ? new Date(value).toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'short' }) : 'Observation unavailable';
 }
 
 export function ProviderHealthCard({
@@ -38,6 +42,7 @@ export function ProviderHealthCard({
   callsToday,
   lastCheckedAt,
   sparkline = [],
+  statusLabel, callsLabel = 'Calls Today', responseLabel = 'Response', trendLabel = '24h Response Trend',
 }: ProviderHealthCardProps) {
   return (
     <article className="cc-surface p-5">
@@ -55,24 +60,24 @@ export function ProviderHealthCard({
       <div className="mt-5 grid grid-cols-2 gap-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">Status</p>
-          <p className="mt-1 text-sm capitalize text-[var(--cc-text-secondary)]">{status}</p>
+          <p className="mt-1 text-sm capitalize text-[var(--cc-text-secondary)]">{statusLabel ?? status}</p>
         </div>
         <div>
-          <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">Response</p>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">{responseLabel}</p>
           <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">{responseMs == null ? 'Unavailable' : `${responseMs}ms`}</p>
         </div>
         <div>
-          <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">Calls Today</p>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">{callsLabel}</p>
           <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">{callsToday == null ? 'Unavailable' : callsToday.toLocaleString()}</p>
         </div>
       </div>
 
       <div className="mt-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">24h Response Trend</div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">{trendLabel}</div>
           <div className="text-[11px] text-[var(--cc-text-muted)]">{formatCheckedAt(lastCheckedAt)}</div>
         </div>
-        <Sparkline points={sparkline} label={`${provider} response time trend`} />
+        <Sparkline points={sparkline} label={`${provider} ${trendLabel.toLowerCase()}`} />
       </div>
 
       <div className="mt-5">

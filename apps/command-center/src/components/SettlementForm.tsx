@@ -111,7 +111,7 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
           </div>
         )}
 
-        {recapVerdict.kind === 'suppressed' && (
+        {(recapVerdict.kind === 'suppressed' || recapVerdict.kind === 'unresolved') && (
           <div className="rounded-md border border-amber-600 bg-amber-950/60 p-4">
             <p className="text-sm font-medium text-amber-200">{recapVerdict.headline}</p>
             <p className="mt-1 text-xs text-amber-300/90">{recapVerdict.detail}</p>

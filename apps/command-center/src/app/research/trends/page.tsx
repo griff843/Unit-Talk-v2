@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 export const metadata = { title: 'Trend Explorer — Unit Talk Command Center' };
 

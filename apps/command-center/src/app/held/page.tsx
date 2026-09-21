@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 import { Table, TableHead, TableBody, Td, Th, EmptyState, DegradedState } from '@/components/ui';
 import { getHeldQueue } from '@/lib/data/queues';

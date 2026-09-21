@@ -1,6 +1,7 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
+import { useState } from 'react';
 
 export type SidebarNavItem = {
   href: string;
@@ -8,6 +9,9 @@ export type SidebarNavItem = {
   icon: React.ReactNode;
   match?: string[];
   unreadCount?: number;
+  active?: boolean;
+  unavailable?: boolean;
+  workspace?: boolean;
 };
 
 export type SidebarNavGroup = {
@@ -18,6 +22,8 @@ export type SidebarNavGroup = {
 export type SidebarHealthStatus = 'healthy' | 'warning' | 'critical';
 
 type WorkspaceSidebarProps = {
+  actor?: string;
+  canSignOut?: boolean;
   navGroups: SidebarNavGroup[];
   activeRoute: string;
   healthStatus: SidebarHealthStatus;
@@ -68,7 +74,21 @@ function NavItemIcon({ children }: { children: React.ReactNode }) {
   return <span className="flex h-5 w-5 items-center justify-center">{children}</span>;
 }
 
-function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
+function BoundaryBadge({ collapsed, actor, canSignOut }: { collapsed: boolean; actor?: string; canSignOut?: boolean }) {
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState(false);
+  async function signOut() {
+    setPending(true);
+    setError('');
+    try {
+      const response = await fetch('/api/session', { method: 'DELETE' });
+      if (!response.ok) throw new Error('Sign-out refused');
+      window.location.reload();
+    } catch {
+      setError('Could not sign out. Please try again.');
+      setPending(false);
+    }
+  }
   return (
     <div
       className={cx(
@@ -81,10 +101,12 @@ function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
       </div>
       {!collapsed && (
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-[var(--cc-text-primary)]">Internal operator</div>
+          <div className="break-all text-sm font-medium text-[var(--cc-text-primary)]" data-testid="operator-identity">{actor ?? 'Identity unavailable'}</div>
           <div className="mt-1 inline-flex items-center rounded-full border border-[var(--cc-border-strong)] px-2 py-0.5 text-[10px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">
-            Access restricted
+            {actor === 'command-center:dev-bypass' ? 'Unauthenticated development' : actor ? 'Authenticated operator' : 'Identity unavailable'}
           </div>
+          {canSignOut && <button type="button" disabled={pending} onClick={signOut} className="mt-2 block rounded px-1 py-2 text-xs text-[var(--cc-text-secondary)] hover:text-white">{pending ? 'Signing out…' : 'Sign out'}</button>}
+          {error && <p role="alert" className="mt-1 text-xs text-red-300">{error}</p>}
         </div>
       )}
     </div>
@@ -92,6 +114,8 @@ function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
 }
 
 export function WorkspaceSidebar({
+  actor,
+  canSignOut,
   navGroups,
   activeRoute,
   healthStatus,
@@ -141,7 +165,7 @@ export function WorkspaceSidebar({
         <HealthPulse status={healthStatus} />
         {!collapsed && (
           <div className="ml-3 min-w-0">
-            <div className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Global Health</div>
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">API Health</div>
             <div className="text-sm text-[var(--cc-text-primary)]">{healthLabel ?? healthStatus}</div>
           </div>
         )}
@@ -157,9 +181,15 @@ export function WorkspaceSidebar({
           )}
         <ul className="space-y-0.5">
           {group.items.map((item) => {
-            const isActive = activeRoute === item.href;
+            const isActive = item.active ?? activeRoute === item.href;
             return (
               <li key={item.href}>
+                {item.unavailable ? (
+                  <span aria-disabled="true" className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm text-[var(--cc-text-muted)]" title={`${item.label} is planned; this workspace is not yet available.`}>
+                    <NavItemIcon>{item.icon}</NavItemIcon>
+                    {!collapsed && <><span className="flex-1">{item.label}</span><span className="text-[10px]">Future</span></>}
+                  </span>
+                ) : (
                 <Link
                   href={item.href}
                   className={cx(
@@ -169,7 +199,7 @@ export function WorkspaceSidebar({
                       ? 'bg-[color-mix(in_srgb,var(--cc-accent)_14%,transparent)] text-[var(--cc-text-primary)]'
                       : 'text-[var(--cc-text-secondary)] hover:bg-[var(--cc-bg-surface-hover)] hover:text-[var(--cc-text-primary)]',
                   )}
-                  aria-current={isActive ? 'page' : undefined}
+                  aria-current={isActive ? item.workspace ? 'location' : 'page' : undefined}
                   title={collapsed ? item.label : undefined}
                 >
                   <span
@@ -185,6 +215,7 @@ export function WorkspaceSidebar({
                     <span className="cc-badge rounded-full px-2 py-0.5 text-[10px]">{item.unreadCount}</span>
                   )}
                 </Link>
+                )}
               </li>
             );
           })}
@@ -193,7 +224,7 @@ export function WorkspaceSidebar({
         ))}
       </nav>
 
-      <BoundaryBadge collapsed={collapsed} />
+      <BoundaryBadge collapsed={collapsed} actor={actor} canSignOut={canSignOut} />
       </aside>
     </>
   );

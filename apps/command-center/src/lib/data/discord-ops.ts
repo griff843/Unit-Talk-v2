@@ -4,9 +4,10 @@
 // source here; see src/lib/discord-ops-contract.ts.
 
 import { getDataClient } from './client';
+import { applyOperatorPickPopulation, governedOutboxTargets } from '../governed-population';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Client = any;
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '../../../../../packages/db/src/database.types.js';
 
 const SUCCESS_RECEIPT_STATUSES = new Set(['sent', 'delivered', 'success', 'ok']);
 
@@ -35,17 +36,17 @@ export interface DiscordOpsSnapshot {
 }
 
 export async function getDiscordOpsSnapshot(): Promise<DiscordOpsSnapshot> {
-  const client: Client = await getDataClient();
+  const client = (await getDataClient()) as SupabaseClient<Database>;
 
   const [receiptsResult, failedResult] = await Promise.all([
-    client
+    applyOperatorPickPopulation(client
       .from('distribution_receipts')
-      .select('channel, status, recorded_at')
+      .select('channel, status, recorded_at,outbox:distribution_outbox!inner(target,pick:picks!inner(id))'), 'outbox.pick').in('outbox.target', governedOutboxTargets)
       .order('recorded_at', { ascending: false })
       .limit(500),
-    client
+    applyOperatorPickPopulation(client
       .from('distribution_outbox')
-      .select('id, pick_id, target, status, attempt_count, last_error, updated_at')
+      .select('id, pick_id, target, status, attempt_count, last_error, updated_at,pick:picks!inner(id)'), 'pick').in('target', governedOutboxTargets)
       .in('status', ['failed', 'dead_letter'])
       .order('updated_at', { ascending: false })
       .limit(50),
@@ -111,7 +112,7 @@ export interface DeliveryKillSwitchStatus {
 }
 
 export async function getDeliveryKillSwitchStatuses(): Promise<DeliveryKillSwitchStatus[]> {
-  const client: Client = await getDataClient();
+  const client = (await getDataClient()) as SupabaseClient<Database>;
   const { data, error } = await client.from('delivery_kill_switch').select('*');
   if (error) throw error;
   return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({

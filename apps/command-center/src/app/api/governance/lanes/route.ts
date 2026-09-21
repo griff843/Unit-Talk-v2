@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export function createGovernanceLanesHandler(readSnapshot = getGovernanceBoardSnapshot) {
   return async function governanceLanes(request: Request) {
-    const auth = authenticateHeaderBag(request.headers);
+    const auth = await authenticateHeaderBag(request.headers);
     if (!auth.ok) {
       return NextResponse.json(
         {

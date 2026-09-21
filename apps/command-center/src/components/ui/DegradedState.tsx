@@ -7,7 +7,7 @@
  * per-page banners. Empty states stay on <EmptyState>; this component
  * is specifically for degraded/failed sources.
  */
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import React from 'react';
 
 export interface DegradedStateProps {

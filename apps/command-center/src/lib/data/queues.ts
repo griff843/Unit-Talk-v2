@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
-import { applyPickPopulation, readPickPopulation } from '../governed-population';
+import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -355,6 +355,13 @@ export async function getReviewQueue(
     // Exclude held picks (review_decision = 'hold')
     query = query.or('review_decision.is.null,review_decision.neq.hold');
 
+    // The governed/fixture partition belongs in the query, not after the page.
+    // Filtering a `.range()` window in memory makes `count: 'exact'` count the
+    // fixture corpus while the rendered list counts what survived, so the page
+    // reports "19,796 matching rows" above "0 candidates loaded" and an
+    // operator cannot tell an empty queue from a truncated read.
+    query = applyOperatorPickPopulation(query);
+
     if (source) query = query.eq('source', source);
 
     query = query
@@ -404,6 +411,10 @@ export async function getHeldQueue(
       .select(QUEUE_SELECT, { count: 'exact' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending')
       .eq('review_decision', 'hold');
+
+    // Same push-down as the review queue: the exact count must describe the
+    // same population the operator is shown.
+    query = applyOperatorPickPopulation(query);
 
     if (source) query = query.eq('source', source);
 
@@ -547,8 +558,10 @@ export async function searchPicks(
   params: Record<string, string>,
 ): Promise<{ picks: Array<Record<string, unknown>>; total: number; limit: number; offset: number }> {
   const DEFAULT_LIMIT = 25;
-  const limit = Math.min(Math.max(Number(params['limit'] ?? DEFAULT_LIMIT), 1), 200);
-  const offset = Math.max(Number(params['offset'] ?? 0), 0);
+  const rawLimit = Number(params['limit'] ?? DEFAULT_LIMIT);
+  const rawOffset = Number(params['offset'] ?? 0);
+  const limit = Number.isSafeInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : DEFAULT_LIMIT;
+  const offset = Number.isSafeInteger(rawOffset) ? Math.max(rawOffset, 0) : 0;
   const population = readPickPopulation(params['population']);
 
   try {
@@ -597,7 +610,7 @@ export async function searchPicks(
     }>(base: T): T => {
       let next = base;
       if (q) {
-        next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.%${q}%`).join(','));
+        next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.${JSON.stringify(`%${q}%`)}`).join(','));
       }
       for (const filter of SEARCH_PICKS_EQ_FILTERS) {
         const value = params[filter.param]?.trim();
@@ -611,12 +624,16 @@ export async function searchPicks(
       return next;
     };
 
-    const sortCol = params['sort'] ?? 'created_at';
+    const requestedSort = params['sort'] ?? 'created_at';
+    const sortCol = ['created_at', 'id', 'selection', 'status'].includes(requestedSort) ? requestedSort : 'created_at';
     const sortAsc = params['sortDir'] === 'asc';
 
-    const rowQuery = applyPickPopulation(applyFilters(client.from('picks_current_state').select(selectCols)), population)
+    const rowBase = applyFilters(client.from('picks_current_state').select(selectCols));
+    const rowQuery = (population === 'governed' ? applyOperatorPickPopulation(rowBase) : applyPickPopulation(rowBase, population))
       .order(sortCol, { ascending: sortAsc })
-      .range(offset, offset + limit - 1);
+      .order('id', { ascending: sortAsc })
+      .range(offset, offset + limit - 1)
+      .abortSignal(AbortSignal.timeout(8_000));
 
     // The count is taken against `picks`, not `picks_current_state`.
     //
@@ -634,10 +651,8 @@ export async function searchPicks(
     // so no join can drop a `picks` row or multiply one. Verified against
     // production on three predicates -- unfiltered 107866/107866,
     // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
-    const countQuery = applyPickPopulation(
-      applyFilters(client.from('picks').select('id', { count: 'exact', head: true })),
-      population,
-    );
+    const countBase = applyFilters(client.from('picks').select('id', { count: 'exact', head: true }));
+    const countQuery = (population === 'governed' ? applyOperatorPickPopulation(countBase) : applyPickPopulation(countBase, population)).abortSignal(AbortSignal.timeout(8_000));
 
     const [
       { data, error },
@@ -685,6 +700,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
       .from('picks_current_state')
       .select([
         'id',
+        'submission_id',
         'source',
         'market',
         'selection',
@@ -729,7 +745,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 
       client
         .from('pick_promotion_history')
-        .select('id, pick_id, promotion_target, status, score, policy_version, decided_at, decided_by, override_action, reason')
+        .select('id, pick_id, target, status, score, version, decided_at, decided_by, override_action, reason')
         .eq('pick_id', pickId)
         .order('decided_at', { ascending: false }),
 
@@ -774,12 +790,13 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         .eq('entity_ref', pickId)
         .order('created_at', { ascending: false }),
 
-      client
-        .from('submissions')
-        .select('id, pick_id, payload, created_at')
-        .eq('pick_id', pickId)
-        .limit(1)
-        .maybeSingle(),
+      typeof pickRow['submission_id'] === 'string'
+        ? client
+          .from('submissions')
+          .select('id, payload, created_at')
+          .eq('id', pickRow['submission_id'])
+          .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     assertQuerySucceeded(receiptsResult, 'getPickDetail distribution receipts');
@@ -829,10 +846,8 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     // Resolve confidence
     const confidence = asNumberOrNull(metadata['confidence']);
 
-    // Resolve submissionId from pick_id column on submission row
-    const submissionId = submissionRow
-      ? asStringOrNull(submissionRow['id'])
-      : null;
+    // Preserve the canonical submission link even if its row is unavailable.
+    const submissionId = asStringOrNull(pickRow['submission_id']);
 
     const pick: PickDetail = {
       id: asString(pickRow['id']),
@@ -873,14 +888,13 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     }));
 
     // ── Map promotion history ─────────────────────────────────────────────────
-    // promotion_target → target, policy_version → version
 
     const promotionHistory: PromotionHistoryRow[] = promotionHistRows.map((row) => ({
       id: asString(row['id']),
-      target: asString(row['promotion_target']),
+      target: asString(row['target']),
       status: asString(row['status']),
       score: asNumberOrNull(row['score']),
-      version: asString(row['policy_version']),
+      version: asString(row['version']),
       decidedAt: asString(row['decided_at']),
       decidedBy: asString(row['decided_by']),
       overrideAction: asStringOrNull(row['override_action']),

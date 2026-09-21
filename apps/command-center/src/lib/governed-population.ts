@@ -37,6 +37,24 @@ export function applyPickPopulation<T extends PopulationQuery<T>>(query: T, popu
     : query.is(GOVERNED_POPULATION_METADATA_PATH, null);
 }
 
+type OperatorPopulationQuery<T> = PopulationQuery<T> & {
+  or: (filters: string, options?: { referencedTable?: string }) => T;
+};
+
+/**
+ * Scope operator rows AND exact counts before pagination. Matches the existing
+ * fixture exclusion in client.ts, including fixtures carrying distributionMode.
+ * A relation alias lets settlement queries filter their joined canonical pick.
+ */
+export function applyOperatorPickPopulation<T extends OperatorPopulationQuery<T>>(query: T, relation?: string): T {
+  const prefix = relation ? `${relation}.` : '';
+  let scoped = query.not(`${prefix}${GOVERNED_POPULATION_METADATA_PATH}`, 'is', null);
+  for (const key of ['testRun', 'proof_issue', 'proof_fixture_id', 'proof_script', 'test_key']) {
+    scoped = scoped.is(`${prefix}metadata->>${key}`, null);
+  }
+  return scoped.or('selection.is.null,selection.not.ilike.*proof*', relation ? { referencedTable: relation } : undefined);
+}
+
 /**
  * Resolves a settlement row's pick against a governed-only map.
  *

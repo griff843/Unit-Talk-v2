@@ -1,5 +1,5 @@
 import { Card, EmptyState } from '@/components/ui';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { getResearchPlayers } from '@/lib/data';
 
 export const metadata = { title: 'Player Research — Unit Talk Command Center' };

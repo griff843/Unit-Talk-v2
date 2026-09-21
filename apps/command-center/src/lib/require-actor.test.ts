@@ -23,14 +23,14 @@ function bag(values: Record<string, string>) {
   };
 }
 
-test('a forged middleware actor header without credentials is refused', () => {
-  withAuthEnv(
+test('a forged middleware actor header without credentials is refused', async () => {
+  await withAuthEnv(
     {
       UNIT_TALK_APP_ENV: 'production',
       COMMAND_CENTER_AUTH_TOKEN: 'real-token',
     },
-    () => {
-      const result = authenticateHeaderBag(
+    async () => {
+      const result = await authenticateHeaderBag(
         bag({
           'x-command-center-actor': 'attacker',
           'x-command-center-role': 'operator',
@@ -43,15 +43,15 @@ test('a forged middleware actor header without credentials is refused', () => {
   );
 });
 
-test('valid bearer credentials are accepted without an actor header', () => {
-  withAuthEnv(
+test('valid bearer credentials are accepted without an actor header', async () => {
+  await withAuthEnv(
     {
       UNIT_TALK_APP_ENV: 'production',
       COMMAND_CENTER_AUTH_TOKEN: 'real-token',
       COMMAND_CENTER_OPERATOR_IDENTITY: 'griff843',
     },
-    () => {
-      const result = authenticateHeaderBag(bag({ authorization: 'Bearer real-token' }));
+    async () => {
+      const result = await authenticateHeaderBag(bag({ authorization: 'Bearer real-token' }));
 
       assert.deepEqual(result, {
         ok: true,
@@ -63,17 +63,17 @@ test('valid bearer credentials are accepted without an actor header', () => {
   );
 });
 
-test('valid basic credentials are accepted without an actor header', () => {
-  withAuthEnv(
+test('valid basic credentials are accepted without an actor header', async () => {
+  await withAuthEnv(
     {
       UNIT_TALK_APP_ENV: 'production',
       COMMAND_CENTER_AUTH_USERNAME: 'operator',
       COMMAND_CENTER_AUTH_PASSWORD: 'secret',
       COMMAND_CENTER_OPERATOR_IDENTITY: 'griff843',
     },
-    () => {
+    async () => {
       const credentials = Buffer.from('operator:secret').toString('base64');
-      const result = authenticateHeaderBag(bag({ authorization: `Basic ${credentials}` }));
+      const result = await authenticateHeaderBag(bag({ authorization: `Basic ${credentials}` }));
 
       assert.deepEqual(result, {
         ok: true,
@@ -85,14 +85,14 @@ test('valid basic credentials are accepted without an actor header', () => {
   );
 });
 
-test('development bypass is preserved and explicitly identified', () => {
-  withAuthEnv(
+test('development bypass is preserved and explicitly identified', async () => {
+  await withAuthEnv(
     {
       NODE_ENV: 'development',
       COMMAND_CENTER_AUTH_MODE: 'disabled',
     },
-    () => {
-      assert.deepEqual(authenticateHeaderBag(bag({})), {
+    async () => {
+      assert.deepEqual(await authenticateHeaderBag(bag({})), {
         ok: true,
         actor: 'command-center:dev-bypass',
         role: 'operator',
@@ -113,7 +113,7 @@ test('privileged assertion fails closed without a Next request context', async (
   );
 });
 
-function withAuthEnv(values: Record<string, string>, fn: () => void): void {
+async function withAuthEnv(values: Record<string, string>, fn: () => Promise<void>): Promise<void> {
   const keys = [
     'NODE_ENV',
     'UNIT_TALK_APP_ENV',
@@ -134,7 +134,7 @@ function withAuthEnv(values: Record<string, string>, fn: () => void): void {
   Object.assign(process.env, values);
 
   try {
-    fn();
+    await fn();
   } finally {
     for (const [key, value] of previous) {
       if (value === undefined) delete process.env[key];

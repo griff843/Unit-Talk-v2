@@ -5,6 +5,7 @@ import { getDataClient } from './client.js';
 import { getProviderCycleHealth } from './provider-cycle-health.js';
 import { getStorageHealth } from './storage-health.js';
 import { readAuthoritativeCount } from '../query-result.js';
+import { applyOperatorPickPopulation } from '../governed-population';
 import type {
   DashboardData,
   DashboardRuntimeData,
@@ -859,9 +860,9 @@ export async function getDailyPickCounts(days = 7): Promise<DailyPickCount[] | n
     const windows = buildUtcDayWindows(days);
 
     return await Promise.all(windows.map(async (window) => {
-      const result = await client
+      const result = await applyOperatorPickPopulation(client
         .from('picks')
-        .select('id', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true }))
         .gte('created_at', window.startIso)
         .lt('created_at', window.endIso);
 

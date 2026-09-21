@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { authenticateCommandCenterRequest } from './server-api';
+import { authenticateSessionOrHeader } from './session-auth';
 
 export interface ReadonlyHeaderBag {
   get(name: string): string | null | undefined;
@@ -10,7 +10,7 @@ export type RequestAuthResult =
       ok: true;
       actor: string;
       role: string;
-      method: 'bearer' | 'basic' | 'dev_bypass';
+      method: 'bearer' | 'basic' | 'session' | 'dev_bypass';
     }
   | { ok: false; status: number; code: string; message: string };
 
@@ -27,10 +27,8 @@ export class PrivilegedAccessDeniedError extends Error {
 }
 
 /** Authenticate credentials carried by this request, never derived identity headers. */
-export function authenticateHeaderBag(headerBag: ReadonlyHeaderBag): RequestAuthResult {
-  const result = authenticateCommandCenterRequest({
-    headers: { get: (name) => headerBag.get(name) ?? null },
-  });
+export async function authenticateHeaderBag(headerBag: ReadonlyHeaderBag): Promise<RequestAuthResult> {
+  const result = await authenticateSessionOrHeader(headerBag);
   if (!result.ok) {
     return {
       ok: false,
@@ -51,7 +49,7 @@ export function authenticateHeaderBag(headerBag: ReadonlyHeaderBag): RequestAuth
 /** Authenticate the current Next request and fail closed outside request scope. */
 export async function authenticateCurrentRequest(): Promise<RequestAuthResult> {
   try {
-    return authenticateHeaderBag(await headers());
+    return await authenticateHeaderBag(await headers());
   } catch {
     return {
       ok: false,
