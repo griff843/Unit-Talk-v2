@@ -35,7 +35,7 @@ export default async function PicksPage({
     const filters = (
       <form action="/picks" method="get" key={`${query.q}:${query.status}:${query.limit}`} className="flex flex-wrap items-end gap-3">
         {fixtureMode ? <input type="hidden" name="population" value="fixtures" /> : null}
-        <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">Search picks
+        <label className="flex w-full flex-col gap-1 text-sm sm:w-auto sm:min-w-[220px] sm:flex-1">Search picks
           <input name="q" defaultValue={query.q} maxLength={200} placeholder="Selection, market or source" className="cc-input min-w-0" />
         </label>
         <label className="flex flex-col gap-1 text-sm">Lifecycle status

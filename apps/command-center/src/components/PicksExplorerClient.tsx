@@ -114,6 +114,7 @@ export function PicksExplorerClient({ picks, sourceTotal, offset = 0 }: PicksExp
       <p role="status" className="text-sm text-gray-400">
         {picks.length ? `Showing ${offset + 1}–${offset + picks.length} of ${sourceTotal} matching governed picks` : `No picks on this page · ${sourceTotal} matching governed picks`}
       </p>
+      <p className="text-xs text-gray-400 sm:hidden">Scroll the table horizontally for routing, odds, results and dates.</p>
       <div className="cc-surface overflow-x-auto">
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead>

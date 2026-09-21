@@ -34,5 +34,7 @@ test('pick explorer paginates all operator picks and searches beyond a loaded pa
   await expect(page.getByText('Active picks unavailable', { exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const searchBox = await page.getByRole('textbox', { name: 'Search picks', exact: true }).boundingBox();
+  expect(searchBox?.width).toBeGreaterThan(280);
   expect(errors).toEqual([]);
 });
