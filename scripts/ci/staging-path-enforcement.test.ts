@@ -347,3 +347,17 @@ test('no writable-path script guards its CLI entrypoint by filename', () => {
     );
   }
 });
+
+
+test('manual staging proof executes the complete gate before credentials are scrubbed', () => {
+  const source = readRepo('.github/workflows/staging-db-proof.yml');
+  const fullGate = source.indexOf('      - name: Run complete repository verification against staging');
+  const scrub = source.indexOf('      - name: Scrub credentials');
+  assert.ok(fullGate > source.indexOf('      - name: Run writable DB proof against staging'));
+  assert.ok(scrub > fullGate, 'the complete gate must run while the staging-only environment exists');
+  const step = source.slice(fullGate, scrub);
+  assert.match(step, /run: pnpm verify/);
+  assert.match(step, /CI_FIXTURE_RUN_ID: full-verify-/);
+  assert.match(step, /CI_REQUIRE_DB_SMOKE: 'true'/);
+  assert.doesNotMatch(step, /continue-on-error|secrets\.SUPABASE_/);
+});
