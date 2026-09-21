@@ -1,6 +1,6 @@
 # Command Center recovery handoff
 
-MERGE_SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
+MERGE_SHA: pending merge
 
 Owner requested stopping scope expansion and landing the current recovery checkpoint on main for Claude.
 

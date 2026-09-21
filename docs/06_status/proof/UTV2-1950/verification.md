@@ -1,6 +1,6 @@
 # PROOF: UTV2-1950
 
-MERGE_SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
+MERGE_SHA: pending merge
 Execution SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
 
 Re-anchored after merge. The verification below was executed at `522ef1cc1` on
@@ -46,5 +46,5 @@ Command Center goal remains incomplete; HANDOFF.md lists the concrete continuati
 
 ## Merge SHA Binding
 
-Merge SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
+Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1624

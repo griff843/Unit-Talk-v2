@@ -5,7 +5,7 @@
   "proof_profile": "app-runtime",
   "status": "handoff-checkpoint",
   "sha_binding": {
-    "merge_sha": "81db253d5cf649be721753c1e8df70d4b2a1f70e",
+    "merge_sha": null,
     "verified_source_sha": "81db253d5cf649be721753c1e8df70d4b2a1f70e",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
