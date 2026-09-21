@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092101-historical-data-warehouse",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1627",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/warehouse-archive-conveyor.yml",
@@ -46,9 +46,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026092101/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-21T15:06:51.895Z",
-  "heartbeat_at": "2026-09-21T15:06:51.895Z",
+  "heartbeat_at": "2026-09-21T15:29:18.901Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026092101-historical-data-warehouse.json",
