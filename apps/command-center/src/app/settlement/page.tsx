@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';

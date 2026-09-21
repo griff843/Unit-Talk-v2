@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { useEffect, useMemo, useState } from 'react';
 import { CommandPalette } from '@/components/CommandPalette';
 import { TopBar } from '@/components/TopBar';

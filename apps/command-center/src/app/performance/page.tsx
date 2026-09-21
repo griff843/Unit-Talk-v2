@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
 import { getOperatorPerformance, type OperatorPerformanceStats } from '@/lib/data/operator-performance';

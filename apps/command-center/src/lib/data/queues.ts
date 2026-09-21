@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
-import { applyPickPopulation, readPickPopulation } from '../governed-population';
+import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -614,7 +614,8 @@ export async function searchPicks(
     const sortCol = params['sort'] ?? 'created_at';
     const sortAsc = params['sortDir'] === 'asc';
 
-    const rowQuery = applyPickPopulation(applyFilters(client.from('picks_current_state').select(selectCols)), population)
+    const rowBase = applyFilters(client.from('picks_current_state').select(selectCols));
+    const rowQuery = (population === 'governed' ? applyOperatorPickPopulation(rowBase) : applyPickPopulation(rowBase, population))
       .order(sortCol, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
@@ -634,10 +635,8 @@ export async function searchPicks(
     // so no join can drop a `picks` row or multiply one. Verified against
     // production on three predicates -- unfiltered 107866/107866,
     // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
-    const countQuery = applyPickPopulation(
-      applyFilters(client.from('picks').select('id', { count: 'exact', head: true })),
-      population,
-    );
+    const countBase = applyFilters(client.from('picks').select('id', { count: 'exact', head: true }));
+    const countQuery = population === 'governed' ? applyOperatorPickPopulation(countBase) : applyPickPopulation(countBase, population);
 
     const [
       { data, error },

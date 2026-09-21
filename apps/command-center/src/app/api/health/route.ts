@@ -8,7 +8,7 @@ const CACHE_MS = 30_000;
 
 /**
  * Public callers receive liveness only. Authenticated callers receive the
- * lifecycle-derived operator health used by the shell.
+ * runtime API health used by the shell.
  */
 export function createHealthHandler(
   readHealth: () => Promise<GlobalHealth> = getPrivilegedGlobalHealth,

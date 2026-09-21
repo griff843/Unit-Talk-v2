@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { governedDeliveryTargets } from '@unit-talk/contracts';
 import { InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import {

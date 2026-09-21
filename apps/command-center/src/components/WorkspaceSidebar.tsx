@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { useState } from 'react';
 
 export type SidebarNavItem = {
@@ -165,7 +165,7 @@ export function WorkspaceSidebar({
         <HealthPulse status={healthStatus} />
         {!collapsed && (
           <div className="ml-3 min-w-0">
-            <div className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Global Health</div>
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">API Health</div>
             <div className="text-sm text-[var(--cc-text-primary)]">{healthLabel ?? healthStatus}</div>
           </div>
         )}

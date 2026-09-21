@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import type { InternalLabel } from '@/components/ui';
 import { getOutboxOverview, OUTBOX_STATUSES, type OutboxOverview } from '@/lib/data/outbox';

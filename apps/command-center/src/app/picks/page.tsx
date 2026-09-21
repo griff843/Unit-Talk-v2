@@ -2,7 +2,7 @@ import { PicksExplorerClient } from '@/components/PicksExplorerClient';
 import { DegradedState } from '@/components/ui';
 import { searchPicks } from '@/lib/data';
 import { describeOperatorFailure } from '@/lib/describe-error';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 export const metadata = { title: 'Picks Explorer — Unit Talk Command Center' };
 

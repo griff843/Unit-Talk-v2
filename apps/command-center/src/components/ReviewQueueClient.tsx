@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { Card } from '@/components/ui/Card';
 import { Table, TableBody, TableHead, Td, Th } from '@/components/ui/Table';
 import { ReviewActions } from '@/components/ReviewActions';

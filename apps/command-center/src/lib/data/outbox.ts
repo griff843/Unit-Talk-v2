@@ -53,12 +53,27 @@ function isRetryEligible(status: string, attemptCount: number): boolean {
   return status === 'failed' && attemptCount < 5;
 }
 
+export async function getOutboxSummary(): Promise<Pick<OutboxOverview, 'counts' | 'oldestUnsentCreatedAt'>> {
+  const client = (await getDataClient()) as SupabaseClient<Database>;
+  const signal = AbortSignal.timeout(8_000);
+  const [countResults, oldestUnsentResult] = await Promise.all([
+    Promise.all(OUTBOX_STATUSES.map((status) =>
+      applyOperatorPickPopulation(client.from('distribution_outbox').select('id,pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
+        .in('target', governedOutboxTargets).eq('status', status).abortSignal(signal))),
+    applyOperatorPickPopulation(client.from('distribution_outbox').select('created_at,pick:picks!inner(id)'), 'pick')
+      .in('target', governedOutboxTargets).in('status', ['pending', 'processing', 'failed'])
+      .order('created_at', { ascending: true }).limit(1).abortSignal(signal),
+  ]);
+  const counts = {} as Record<OutboxStatus, number>;
+  OUTBOX_STATUSES.forEach((status, index) => {
+    counts[status] = readAuthoritativeCount(countResults[index]!, `outbox ${status}`);
+  });
+  assertQuerySucceeded(oldestUnsentResult, 'oldest unsent');
+  return { counts, oldestUnsentCreatedAt: oldestUnsentResult.data?.[0]?.created_at ?? null };
+}
+
 export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<OutboxOverview> {
   const client = (await getDataClient()) as SupabaseClient<Database>;
-
-  const countQueries = OUTBOX_STATUSES.map((status) =>
-    applyOperatorPickPopulation(client.from('distribution_outbox').select('id,pick:picks!inner(id)', { count: 'exact', head: true }), 'pick').in('target', governedOutboxTargets).eq('status', status),
-  );
 
   let rowQuery = applyOperatorPickPopulation(client
     .from('distribution_outbox')
@@ -69,16 +84,9 @@ export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<Outb
   if (filter.status) rowQuery = rowQuery.eq('status', filter.status);
   if (filter.target) rowQuery = rowQuery.eq('target', filter.target);
 
-  const [countResults, rowsResult, oldestUnsentResult, receiptsResult] = await Promise.all([
-    Promise.all(countQueries),
+  const [summary, rowsResult, receiptsResult] = await Promise.all([
+    getOutboxSummary(),
     rowQuery,
-    applyOperatorPickPopulation(client
-      .from('distribution_outbox')
-      .select('created_at,pick:picks!inner(id)'), 'pick').in('target', governedOutboxTargets)
-      .in('status', ['pending', 'processing', 'failed'])
-      .order('created_at', { ascending: true })
-      .limit(1),
-
     applyOperatorPickPopulation(client
       .from('distribution_receipts')
       .select('id, outbox_id, channel, status, receipt_type, recorded_at,outbox:distribution_outbox!inner(target,pick:picks!inner(id))'), 'outbox.pick').in('outbox.target', governedOutboxTargets)
@@ -86,13 +94,7 @@ export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<Outb
       .limit(50),
   ]);
 
-  const counts = {} as Record<OutboxStatus, number>;
-  OUTBOX_STATUSES.forEach((status, index) => {
-    counts[status] = readAuthoritativeCount(countResults[index], `outbox ${status}`);
-  });
-
   assertQuerySucceeded(rowsResult, 'outbox rows');
-  assertQuerySucceeded(oldestUnsentResult, 'oldest unsent');
   assertQuerySucceeded(receiptsResult, 'delivery receipts');
 
   const rows: OutboxOverviewRow[] = ((rowsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => {
@@ -115,11 +117,8 @@ export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<Outb
 
   const targets = [...governedOutboxTargets].sort();
 
-  const oldestRow = ((oldestUnsentResult.data ?? []) as Array<Record<string, unknown>>)[0];
-
   return {
-    counts,
-    oldestUnsentCreatedAt: typeof oldestRow?.['created_at'] === 'string' ? oldestRow['created_at'] : null,
+    ...summary,
     targets,
     rows,
     recentReceipts: ((receiptsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({

@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import type { LifecycleSignal } from '@/lib/types';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 const SIGNAL_LABELS: Record<LifecycleSignal['signal'], string> = {
   submission: 'Submission',
