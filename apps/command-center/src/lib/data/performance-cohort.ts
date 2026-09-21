@@ -3,7 +3,7 @@ import type { Database } from '../../../../../packages/db/src/database.types.js'
 import { resolveEffectiveSettlement, type SettlementInput } from '../../../../../packages/domain/dist/outcomes/settlement-downstream.js';
 import { getDataClient } from './client';
 import { applyOperatorPickPopulation } from '../governed-population';
-import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
+import { readAllQueryPages } from '../query-result';
 
 type PickState = Database['public']['Views']['picks_current_state']['Row'];
 type Settlement = Database['public']['Tables']['settlement_records']['Row'];
@@ -17,28 +17,6 @@ export interface PerformanceCohort {
   correctionCounts: Map<string, number>;
 }
 
-/** Never mistake PostgREST's response cap for the end of an aggregate. */
-async function readAllPages<T>(
-  label: string,
-  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; count?: number | null }>,
-): Promise<T[]> {
-  const rows: T[] = [];
-  let expected: number | null = null;
-  do {
-    const result = await query(rows.length, rows.length + 499);
-    assertQuerySucceeded(result, label);
-    const count = readAuthoritativeCount(result, label);
-    if (expected !== null && count !== expected) throw new Error(`${label}: population changed during the read; retry`);
-    expected = count;
-    const page = result.data ?? [];
-    rows.push(...page);
-    if (rows.length > count || (page.length === 0 && rows.length < count)) {
-      throw new Error(`${label}: incomplete aggregate; retry`);
-    }
-  } while (rows.length < expected!);
-  return rows;
-}
-
 /**
  * Every read authenticates through getDataClient; no shared result cache.
  * Read the complete governed cohort for an all-time aggregate, in bounded pages.
@@ -48,7 +26,7 @@ export async function getPerformanceCohort(): Promise<PerformanceCohort> {
   const client = await getDataClient() as SupabaseClient<Database>;
   const observedAt = new Date().toISOString();
   const signal = AbortSignal.timeout(8_000);
-  const picks = await readAllPages<PerformancePick>('performance picks', (from, to) =>
+  const picks = await readAllQueryPages<PerformancePick>('performance picks', (from, to) =>
     applyOperatorPickPopulation(client.from('picks_current_state')
       .select('id,source,capper_id,capper_display_name,market,selection,odds,stake_units,promotion_score,metadata,status,created_at,review_decision,sport_display_name', { count: 'exact' }))
       .lte('created_at', observedAt).order('id').range(from, to).abortSignal(signal));
@@ -56,7 +34,7 @@ export async function getPerformanceCohort(): Promise<PerformanceCohort> {
   const histories: Settlement[] = [];
   for (let start = 0; start < ids.length; start += 100) {
     const chunk = ids.slice(start, start + 100);
-    histories.push(...await readAllPages<Settlement>('performance settlement history', (from, to) =>
+    histories.push(...await readAllQueryPages<Settlement>('performance settlement history', (from, to) =>
       client.from('settlement_records').select('*', { count: 'exact' })
         .in('pick_id', chunk).lte('created_at', observedAt)
         .order('created_at').order('id').range(from, to).abortSignal(signal)));

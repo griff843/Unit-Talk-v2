@@ -26,3 +26,25 @@ export function readAuthoritativeCount(result: QueryResultLike, label: string): 
   }
   return result.count;
 }
+
+/** Never mistake PostgREST's response cap for the end of an aggregate. */
+export async function readAllQueryPages<T>(
+  label: string,
+  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; count?: number | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let expected: number | null = null;
+  do {
+    const result = await query(rows.length, rows.length + 499);
+    assertQuerySucceeded(result, label);
+    const count = readAuthoritativeCount(result, label);
+    if (expected !== null && count !== expected) throw new Error(`${label}: population changed during the read; retry`);
+    expected = count;
+    const page = result.data ?? [];
+    rows.push(...page);
+    if (rows.length > count || (page.length === 0 && rows.length < count)) {
+      throw new Error(`${label}: incomplete aggregate; retry`);
+    }
+  } while (rows.length < expected!);
+  return rows;
+}

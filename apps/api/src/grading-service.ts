@@ -13,6 +13,7 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
+import { observeSettlementRecap, type SettlementRecapOutcome } from './settlement-recap-observation.js';
 import {
   isEvidencePlanePick,
   recordGradedSettlement,
@@ -1070,9 +1071,7 @@ function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
  * A skip is a legitimate outcome here, not an error, so it is reported rather
  * than thrown.
  */
-export type SettlementRecapOutcome =
-  | { posted: true }
-  | { posted: false; reason: string };
+export type { SettlementRecapOutcome } from './settlement-recap-observation.js';
 
 export async function postSettlementRecapIfPossible(
   pick: PickRecord,
@@ -1080,88 +1079,81 @@ export async function postSettlementRecapIfPossible(
   repositories: Pick<RepositoryBundle, 'outbox' | 'receipts' | 'runs'>,
   options: RunGradingPassOptions,
 ): Promise<SettlementRecapOutcome> {
-  const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
-  if (!botToken) {
-    return { posted: false, reason: 'no_discord_bot_token' };
-  }
+  return observeSettlementRecap(pick.id, settlementRecord.id, repositories.runs, async () => {
+    const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+    if (!botToken) {
+      return { posted: false, reason: 'no_discord_bot_token' };
+    }
 
-  const resolution = await resolveRecapChannel(pick.id, repositories);
-  if (!resolution.ok) {
-    options.logger?.warn?.(
-      `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
+    const resolution = await resolveRecapChannel(pick.id, repositories);
+    if (!resolution.ok) {
+      options.logger?.warn?.(
+        `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
+      );
+      return { posted: false, reason: resolution.reason };
+    }
+
+    // UTV2-1815: fail closed on an unknown stake. The recap renders a
+    // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
+    // non-nullable number -- so publishing here with an unknown stake is exactly
+    // the "emit a value indistinguishable from an observed one" failure. Refuse
+    // to publish and say why, rather than substituting a stake of 1. Changing how
+    // the embed RENDERS an unknown stake is deliberately not in this scope.
+    const stakeResolution = readStakeUnitsResolution(pick);
+    const profitLossUnits = computeProfitLossUnits(
+      normalizeSettlementResult(settlementRecord.result),
+      stakeResolution.stake_units,
+      pick.odds,
     );
-    return { posted: false, reason: resolution.reason };
-  }
+    if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
+      options.logger?.warn?.(
+        `Skipping recap for pick ${pick.id}: stake_units is ` +
+          `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
+          'computed against an assumed stake',
+      );
+      return { posted: false, reason: `stake_units_${stakeResolution.status}` };
+    }
 
-  // UTV2-1815: fail closed on an unknown stake. The recap renders a
-  // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
-  // non-nullable number -- so publishing here with an unknown stake is exactly
-  // the "emit a value indistinguishable from an observed one" failure. Refuse
-  // to publish and say why, rather than substituting a stake of 1. Changing how
-  // the embed RENDERS an unknown stake is deliberately not in this scope.
-  const stakeResolution = readStakeUnitsResolution(pick);
-  const profitLossUnits = computeProfitLossUnits(
-    normalizeSettlementResult(settlementRecord.result),
-    stakeResolution.stake_units,
-    pick.odds,
-  );
-  if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
-    options.logger?.warn?.(
-      `Skipping recap for pick ${pick.id}: stake_units is ` +
-        `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
-        'computed against an assumed stake',
-    );
-    return { posted: false, reason: `stake_units_${stakeResolution.status}` };
-  }
-
-  const response = await fetch(
-    `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bot ${botToken}`,
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
+      {
+        method: 'POST',
+        signal: AbortSignal.timeout(8_000),
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          embeds: [
+            buildRecapEmbedData({
+              market: pick.market,
+              selection: pick.selection,
+              result: normalizeSettlementResult(settlementRecord.result),
+              stakeUnits: stakeResolution.stake_units,
+              profitLossUnits,
+              clvPercent: readClvPercent(settlementRecord.payload),
+              submittedBy: readSubmittedBy(pick),
+            }),
+          ],
+        }),
       },
-      body: JSON.stringify({
-        embeds: [
-          buildRecapEmbedData({
-            market: pick.market,
-            selection: pick.selection,
-            result: normalizeSettlementResult(settlementRecord.result),
-            stakeUnits: stakeResolution.stake_units,
-            profitLossUnits,
-            clvPercent: readClvPercent(settlementRecord.payload),
-            submittedBy: readSubmittedBy(pick),
-          }),
-        ],
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    options.logger?.warn?.(
-      `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
     );
-    return { posted: false, reason: `discord_post_failed_${response.status}` };
-  }
 
-  try {
-    const runRecord = await repositories.runs.startRun({
-      runType: 'recap.post',
-      actor: 'grading-service',
-      details: { channel: resolution.channelId, pickCount: 1 },
-    });
-    await repositories.runs.completeRun({
-      runId: runRecord.id,
-      status: 'succeeded',
-      details: { channel: resolution.channelId, pickCount: 1 },
-    });
-  } catch {
-    // recap.post observability is best-effort; don't fail the recap
-  }
+    if (!response.ok) {
+      const errorText = await response.text();
+      options.logger?.warn?.(
+        `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
+      );
+      return { posted: false, reason: `discord_post_failed_${response.status}`, channel: resolution.channelId, failed: true };
+    }
 
-  return { posted: true };
+    let messageId: string | undefined;
+    try {
+      const body: unknown = await response.json();
+      if (body && typeof body === 'object' && 'id' in body && typeof body.id === 'string') messageId = body.id;
+    } catch { /* Destination and the successful response remain recorded even without a message ID. */ }
+    return { posted: true, channel: resolution.channelId, ...(messageId ? { messageId } : {}) };
+  }, (message) => options.logger?.warn?.(message));
 }
 
 async function resolveRecapChannel(

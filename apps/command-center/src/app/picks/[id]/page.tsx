@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { RecapStatusPanel } from '@/components/RecapStatusPanel';
 import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
@@ -536,6 +538,10 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </div>
         </div>
       </Card>
+
+      <Suspense fallback={<Card title="Settlement recap"><p>Loading recap evidence…</p></Card>}>
+        <RecapStatusPanel pickId={pick.id} settlements={detail.settlements} verifiedNoDelivery={detail.outboxRows.length === 0 && detail.receipts.length === 0} />
+      </Suspense>
 
       <Card title="Score + Metadata">
         <div className="flex flex-col gap-1">
