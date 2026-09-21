@@ -1,8 +1,7 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
-import { describeOperatorFailure } from '@/lib/describe-error';
 import { renderClvSummary, isClvUnresolved } from '@/lib/clv-summary';
 import { SettlementWorkbench } from '@/components/SettlementWorkbench';
 import { getPickDetail } from '@/lib/data';
@@ -73,7 +72,7 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
                     Settle
                   </Link>
                 ) : (
-                  '—'
+                  <Link href={`/settlement?pickId=${row.pickId}`} className="text-xs text-blue-400 hover:underline">Correct settlement</Link>
                 )}
               </Td>
             </tr>
@@ -148,7 +147,8 @@ export default async function SettlementPage({
   try {
     snapshot = await getResultsOpsSnapshot();
   } catch (error) {
-    loadError = describeOperatorFailure(error, 'Settlement truth could not be loaded.');
+    console.error('command_center.settlement_read_failed', error);
+    loadError = 'Settlement history is temporarily unavailable. Refresh to try again or check System Health.';
   }
 
   // UTV2-1939: the per-pick recap posts by direct fetch rather than through the
@@ -177,7 +177,8 @@ export default async function SettlementPage({
         isAlreadySettled = isPickAlreadySettled(detail.pick.status, detail.settlements.length);
       }
     } catch (error) {
-      pickLoadError = describeOperatorFailure(error, 'Canonical pick state could not be loaded.');
+      console.error('command_center.settlement_pick_read_failed', error);
+      pickLoadError = 'This pick could not be loaded. Refresh to try again.';
     }
   }
 
@@ -185,7 +186,7 @@ export default async function SettlementPage({
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
         <p className="text-sm cc-text-muted">
-          Internal settlement truth: throughput, manual-review blockers, corrections, and picks stuck in posted.
+          Settlement history, manual review, corrections, and delivered picks awaiting outcomes. Only governed operator picks are included; test fixtures are excluded.
           Observed {observedAt}.
         </p>
       </div>
@@ -206,7 +207,7 @@ export default async function SettlementPage({
             pickLoadError={pickLoadError}
           />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <StatCard label="Settled (24h)" value={snapshot.counts.settled24h} />
+            <StatCard label="Settlement Records (24h)" value={snapshot.counts.settled24h} />
             <StatCard label="Manual Review Open" value={snapshot.counts.manualReviewOpen} />
             <StatCard label="Corrections" value={snapshot.counts.corrections} />
             <StatCard label="Stuck Posted" value={snapshot.counts.stuckPosted} />
@@ -217,17 +218,17 @@ export default async function SettlementPage({
             <div className="cc-surface p-5">
               <p className="text-xs font-semibold uppercase tracking-wide cc-text-secondary">Game Results Freshness</p>
               <p className="mt-1 text-lg font-bold text-gray-100">
-                {formatRelativeAge(snapshot.gameResults.latestSourcedAt, nowMs) ?? '—'}
+                {snapshot.gameResults.unavailable ? 'Unavailable' : formatRelativeAge(snapshot.gameResults.latestSourcedAt, nowMs) ?? 'No results recorded'}
               </p>
               <p className="text-xs cc-text-muted" title={snapshot.gameResults.latestSourcedAt ?? undefined}>
-                {snapshot.gameResults.count24h} rows sourced in 24h
+                {snapshot.gameResults.unavailable ? 'Results-feed evidence could not be read. Settlement history is still available.' : `${snapshot.gameResults.count24h} results received in the last 24 hours`}
               </p>
             </div>
           </div>
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Delivered — Awaiting Settlement ({snapshot.deliveredAwaitingSettlement.length})
+              Delivered — Awaiting Settlement ({snapshot.counts.deliveredAwaitingSettlement})
             </h2>
             <p className="mb-3 text-xs cc-text-muted">
               Human-capper picks that carry a server delivery authorization, reached members, and have no
@@ -247,8 +248,8 @@ export default async function SettlementPage({
               return (
                 <p
                   className={`mb-3 rounded-md border px-3 py-2 text-xs ${
-                    prediction.willPost
-                      ? 'border-emerald-700 bg-emerald-950/50 text-emerald-300'
+                    prediction.willAttempt
+                      ? 'border-blue-700 bg-blue-950/50 text-blue-200'
                       : 'border-amber-600 bg-amber-950/40 text-amber-200'
                   }`}
                 >
@@ -265,7 +266,7 @@ export default async function SettlementPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Manual Review ({snapshot.manualReview.length})
+              Manual Review ({snapshot.counts.manualReviewOpen})
             </h2>
             {snapshot.manualReview.length === 0 ? (
               <EmptyState message="No settlements pending manual review." />
@@ -276,11 +277,11 @@ export default async function SettlementPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Stuck in Posted ({snapshot.stuckPosted.length})
+              Posted for More Than 24 Hours ({snapshot.counts.stuckPosted})
             </h2>
             <p className="mb-3 text-xs cc-text-muted">
-              Picks in lifecycle status posted for more than 24h. Age-based proxy — event-start join is a pending
-              data-contract improvement (see src/lib/data/results-ops.ts).
+              Picks still in the posted lifecycle state more than 24 hours after posting.
+              This measures time since posting, not time since the game ended. Showing up to 50 oldest picks.
             </p>
             {snapshot.stuckPosted.length === 0 ? (
               <EmptyState message="No picks stuck in posted." />
@@ -323,10 +324,10 @@ export default async function SettlementPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Corrections ({snapshot.corrections.length})
+              Corrections ({snapshot.counts.corrections})
             </h2>
             <p className="mb-3 text-xs cc-text-muted">
-              Settlement records with corrects_id set — originals are never mutated.
+              Corrections preserve the original settlement and record who changed the outcome. Showing up to 50 most recent corrections.
             </p>
             {snapshot.corrections.length === 0 ? (
               <EmptyState message="No correction records." />
@@ -337,7 +338,7 @@ export default async function SettlementPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Recent Settlements ({snapshot.recentSettlements.length})
+              Recent Settlement Records ({snapshot.recentSettlements.length} shown)
             </h2>
             {snapshot.recentSettlements.length === 0 ? (
               <EmptyState message="No settlement records yet." />

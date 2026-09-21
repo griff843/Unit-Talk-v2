@@ -57,7 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to main content
         </a>
-        <CommandCenterShell initialHealth={null}>{children}</CommandCenterShell>
+        <CommandCenterShell initialHealth={null} actor={actorResolution.actor} canSignOut={actorResolution.method === 'session'}>{children}</CommandCenterShell>
       </body>
     </html>
   );

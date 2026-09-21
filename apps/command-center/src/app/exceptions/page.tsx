@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { StatCard, SeverityBadge, Table, TableHead, TableBody, Th, Td, DegradedState } from '@/components/ui';
 import { getExceptionQueues, getNonGovernedDeliveryRows, type DeliveryOutboxRow, type ExceptionQueues, type NonGovernedDeliveryRows } from '@/lib/data/picks';
 import { getProviderCycleHealth } from '@/lib/data/provider-cycle-health';

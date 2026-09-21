@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Td, EmptyState, SeverityBadge, DegradedState } from '@/components/ui';
 import { getReviewQueue, getHeldQueue } from '@/lib/data/queues';
 import { getAwaitingApprovalPicks } from '@/lib/data/approvals-ops';

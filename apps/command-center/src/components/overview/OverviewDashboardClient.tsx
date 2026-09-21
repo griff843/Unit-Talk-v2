@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import type { OverviewAlertItem, OverviewDashboardModel, OverviewPipelineStage, OverviewStatCard, OverviewTone } from '@/lib/overview-model';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 const toneClasses: Record<OverviewTone, string> = {
   healthy: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100',

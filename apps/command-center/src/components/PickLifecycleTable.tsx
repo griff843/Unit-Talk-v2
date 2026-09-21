@@ -1,5 +1,5 @@
 import type { PickRow } from '@/lib/types';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 const promotionLabels: Record<string, { text: string; color: string }> = {
   qualified: { text: 'qualified', color: 'text-green-400' },

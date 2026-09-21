@@ -60,7 +60,9 @@ export default async function ReviewQueuePage({
         <div className="space-y-1">
           <span className="text-sm text-gray-400">{picks.length} review candidate{picks.length !== 1 ? 's' : ''} loaded</span>
           <p className="text-xs text-gray-500">
-            Source query reported {total} matching row{total !== 1 ? 's' : ''} before local fixture exclusion.
+            {total} governed pick{total !== 1 ? 's' : ''} await an operator decision. Fixtures and
+            non-governed rows are excluded by the query, so this total describes exactly the rows listed
+            rather than a larger population they were filtered out of.
             Lifecycle and approval state are shown per row; no full-queue split is inferred from this page.
           </p>
         </div>

@@ -3,6 +3,7 @@ import { americanToDecimal, isValidAmericanOdds } from '@unit-talk/contracts';
 
 import { getDataClient, isTestFixturePick } from './client';
 import { applyPickPopulation, resolveGovernedPick } from '../governed-population';
+import { getPerformanceCohort } from './performance-cohort';
 
 type Client = any;
 type Row = Record<string, unknown>;
@@ -403,68 +404,18 @@ function namedInsightFromMap(
 
 export async function getPerformanceData(): Promise<PerformanceData | null> {
   try {
-    const client: Client = await getDataClient();
-
-    // Fetch canonical settled records joined with picks (last 30 days is the widest window)
-    // We always fetch the widest window and filter in-memory for sub-windows.
+    const cohort = await getPerformanceCohort();
     const cutoff30d = daysAgoIso(30);
     const todayStart = todayUtcStart();
     const cutoff7d = daysAgoIso(7);
     const mtdStart = monthStartUtc();
-
-    const [settlementResult, heldCountResult] = await Promise.all([
-      client
-        .from('settlement_records')
-        .select('id, pick_id, result, status, payload, created_at, settled_at')
-        .is('corrects_id', null)
-        .eq('status', 'settled')
-        .gte('created_at', cutoff30d),
-      client
-        .from('picks_current_state')
-        .select('id', { count: 'exact', head: true })
-        .eq('review_decision', 'hold')
-        .neq('status', 'settled')
-        .neq('status', 'voided'),
-    ]);
-
-    if (settlementResult.error) {
-      console.error('[analytics] getPerformanceData settlement query error:', settlementResult.error);
-      return null;
-    }
-
-    const settlementRows = (settlementResult.data ?? []) as Row[];
-    const heldCount = heldCountResult.count ?? 0;
-
-    // Collect pick IDs to fetch associated picks data
-    const pickIds = [...new Set(settlementRows.map((r) => asString(r['pick_id'])).filter(Boolean))] as string[];
-
+    const widestStart = cutoff30d < mtdStart ? cutoff30d : mtdStart;
+    const settlementRows: Row[] = cohort.settlements.filter((row) => row.status === 'settled' && row.settled_at >= widestStart);
+    const heldCount = cohort.picks.filter((pick) => pick.review_decision === 'hold' && pick.status !== 'settled' && pick.status !== 'voided').length;
     const picksMap = new Map<string, Row>();
-    if (pickIds.length > 0) {
-      const picksResult = await applyPickPopulation(client
-        .from('picks')
-        .select('id, source, capper_id, market, selection, odds, stake_units, promotion_score, metadata, status, created_at')
-        .in('id', pickIds), 'governed');
-      if (!picksResult.error) {
-        for (const row of (picksResult.data ?? []) as Row[]) {
-          const id = asString(row['id']);
-          if (id) picksMap.set(id, row);
-        }
-      }
-    }
-
-    // Fetch picks_current_state for review_decision grouping
     const pcsMap = new Map<string, Row>();
-    if (pickIds.length > 0) {
-      const pcsResult = await client
-        .from('picks_current_state')
-        .select('id, review_decision, settlement_result')
-        .in('id', pickIds);
-      if (!pcsResult.error) {
-        for (const row of (pcsResult.data ?? []) as Row[]) {
-          const id = asString(row['id']);
-          if (id) pcsMap.set(id, row);
-        }
-      }
+    for (const pick of cohort.picks) {
+      if (pick.id) { picksMap.set(pick.id, pick); pcsMap.set(pick.id, pick); }
     }
 
     // Enrich settlement rows with pick data
@@ -521,13 +472,13 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
 
     // Time-window partitioning
     function inWindow(row: EnrichedRow, from: string): boolean {
-      const ts = safeString(row['created_at']);
+      const ts = row._settledAt ?? '';
       return ts >= from;
     }
 
     const rowsToday = published.filter((r) => inWindow(r, todayStart));
     const rows7d = published.filter((r) => inWindow(r, cutoff7d));
-    const rows30d = published; // already filtered to 30d
+    const rows30d = published.filter((r) => inWindow(r, cutoff30d));
     const rowsMtd = published.filter((r) => inWindow(r, mtdStart));
 
     // bySource grouping
@@ -665,47 +616,11 @@ export interface LeaderboardResult {
 
 export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
   try {
-    const client: Client = await getDataClient();
+    const cohort = await getPerformanceCohort();
     const cutoff = daysAgoIso(days);
-
-    const settlementResult = await client
-      .from('settlement_records')
-      .select('id, pick_id, result, payload, created_at')
-      .is('corrects_id', null)
-      .eq('status', 'settled')
-      .gte('created_at', cutoff);
-
-    if (settlementResult.error) {
-      console.error('[analytics] getLeaderboard settlement query error:', settlementResult.error);
-      return { rows: [], error: `settlement query failed: ${asString(settlementResult.error.message) ?? 'unknown'}` };
-    }
-
-    const settlementRows = (settlementResult.data ?? []) as Row[];
-    const pickIds = [...new Set(settlementRows.map((r) => asString(r['pick_id'])).filter(Boolean))] as string[];
-
-    if (pickIds.length === 0) return { rows: [], error: null };
-
-    // Chunk the id list — an unbounded .in() blows the PostgREST URL length
-    // once the settled-pick set grows past a few hundred ids.
+    const settlementRows: Row[] = cohort.settlements.filter((row) => row.status === 'settled' && row.settled_at >= cutoff);
     const picksMap = new Map<string, Row>();
-    const CHUNK = 100;
-    for (let i = 0; i < pickIds.length; i += CHUNK) {
-      const chunk = pickIds.slice(i, i + CHUNK);
-      const picksResult = await applyPickPopulation(client
-        .from('picks')
-        .select('id, source, capper_id, odds, stake_units, metadata')
-        .in('id', chunk), 'governed');
-
-      if (picksResult.error) {
-        console.error('[analytics] getLeaderboard picks query error:', picksResult.error);
-        return { rows: [], error: `picks query failed: ${asString(picksResult.error.message) ?? 'unknown'}` };
-      }
-
-      for (const row of (picksResult.data ?? []) as Row[]) {
-        const id = asString(row['id']);
-        if (id) picksMap.set(id, row);
-      }
-    }
+    for (const pick of cohort.picks) if (pick.id) picksMap.set(pick.id, pick);
 
     // Group by the canonical capper_id. A pick with no capper_id has no capper,
     // so it produces no leaderboard row at all -- it is not filed under a made-up
@@ -761,7 +676,7 @@ export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
     return { rows: result, error: null };
   } catch (err) {
     console.error('[analytics] getLeaderboard error:', err);
-    return { rows: [], error: err instanceof Error ? err.message : String(err) };
+    return { rows: [], error: 'Performance records could not be reconciled. Refresh to retry.' };
   }
 }
 

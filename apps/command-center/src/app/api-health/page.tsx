@@ -1,8 +1,8 @@
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
-import { ProviderHealthCard, Card } from '@/components/ui';
-import { getProviderHealth, getSnapshotData } from '@/lib/data';
-import { getProviderCycleLatencySamples } from '@/lib/data/provider-cycle-health';
-import { buildApiHealthPageData } from '@/lib/command-center-page-data';
+import { Card } from '@/components/ui';
+import React, { Suspense } from 'react';
+import { resolveActorOrRefusal } from '@/lib/require-actor';
+import { SystemProviderTelemetry } from '@/components/SystemProviderTelemetry';
 import { getRuntimeTruth } from '@/lib/data/runtime-truth';
 import { describeOperatorFailure } from '@/lib/describe-error';
 import type { RuntimeTruthReport } from '@unit-talk/observability';
@@ -10,90 +10,21 @@ import type { RuntimeTruthReport } from '@unit-talk/observability';
 export const metadata = { title: 'System Health — Unit Talk Command Center' };
 
 export default async function ApiHealthPage() {
-  // Fail closed but never 500: a transient telemetry-store timeout degrades
-  // to an explicit banner rather than crashing the whole surface.
-  const failures: string[] = [];
-  const degrade = <T,>(promise: Promise<T>, label: string, fallback: T): Promise<T> =>
-    promise.catch((error: unknown) => {
-      failures.push(`${label}: ${describeOperatorFailure(error)}`);
-      return fallback;
-    });
-
-  const [providerHealth, snapshot, latencySamples, runtimeTruthState] = await Promise.all([
-    degrade(getProviderHealth(), 'provider health', null),
-    degrade(getSnapshotData(), 'snapshot', null),
-    degrade(getProviderCycleLatencySamples(), 'cycle latency', []),
-    getRuntimeTruth()
-      .then((runtimeTruth) => ({ runtimeTruth, error: null as string | null }))
-      .catch((error: unknown) => ({
-        runtimeTruth: null,
-        error: describeOperatorFailure(error),
-      })),
-  ]);
-
-  const cards = buildApiHealthPageData(providerHealth, snapshot, latencySamples);
+  if (!(await resolveActorOrRefusal()).ok) return <Card title="System Health unavailable"><p>Command Center authentication is required.</p></Card>;
   const observedAt = new Date().toISOString();
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-1">
-          <p className="text-sm text-gray-500">
-            External provider freshness, quota pressure, and ingestion latency from current runtime telemetry.
-          </p>
-        </div>
-        <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={30_000} className="lg:min-w-[360px]" />
-      </div>
-
-      {failures.length > 0 && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-          <div className="font-semibold">Telemetry partially unavailable</div>
-          <ul className="mt-1 list-disc pl-5 text-xs opacity-85">
-            {failures.map((failure) => (
-              <li key={failure}>{failure}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        {cards.map((card) => (
-          <ProviderHealthCard
-            key={card.provider}
-            provider={card.provider}
-            status={card.status}
-            responseMs={card.responseMs}
-            quotaPct={card.quotaPct}
-            callsToday={card.callsToday}
-            lastCheckedAt={card.lastCheckedAt}
-            sparkline={card.sparkline}
-          />
-        ))}
-      </div>
-
-      {cards.length === 0 ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-          No provider telemetry was returned. Provider health is unknown; no zero or healthy state was inferred.
-        </div>
-      ) : null}
-
-      <RuntimeTruthPanel
-        runtimeTruth={runtimeTruthState.runtimeTruth}
-        error={runtimeTruthState.error}
-      />
-
-      <Card title="Provider Notes">
-        <div className="grid gap-3 xl:grid-cols-2">
-          {cards.map((card) => (
-            <div key={`${card.provider}-note`} className="rounded-2xl border border-[var(--cc-border-subtle)] bg-white/[0.02] p-4">
-              <div className="text-sm font-semibold text-[var(--cc-text-primary)]">{card.provider}</div>
-              <div className="mt-2 text-sm text-[var(--cc-text-secondary)]">{card.detail}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
+  return <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <p className="text-sm text-gray-500">Recorded provider observations and independently verified runtime status.</p>
+      <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={30_000} className="lg:min-w-[360px]" />
     </div>
-  );
+    <Suspense fallback={<Card title="Provider telemetry"><p>Loading provider observations…</p></Card>}><SystemProviderTelemetry /></Suspense>
+    <Suspense fallback={<Card title="Runtime Truth"><p>Loading runtime status…</p></Card>}><RuntimeTruthSection /></Suspense>
+  </div>;
+}
+
+async function RuntimeTruthSection() {
+  try { return <RuntimeTruthPanel runtimeTruth={await getRuntimeTruth()} error={null} />; }
+  catch (error) { return <RuntimeTruthPanel runtimeTruth={null} error={describeOperatorFailure(error)} />; }
 }
 
 function RuntimeTruthPanel({

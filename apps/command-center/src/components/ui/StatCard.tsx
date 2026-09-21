@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CounterAnimation } from './CounterAnimation';
 import { MicroSparkline } from './MicroSparkline';
 
 export interface StatCardProps {
@@ -81,12 +80,9 @@ export function StatCard({ label, value, delta, unit, liveUpdate = false, sparkl
             —
           </span>
         ) : (
-          <CounterAnimation
-            value={value}
-            duration={300}
-            format={(nextValue) => formatPrimary(nextValue, unit)}
-            className="text-4xl font-semibold tracking-[-0.05em] text-[var(--cc-text-primary)]"
-          />
+          <span className="text-4xl font-semibold tracking-[-0.05em] text-[var(--cc-text-primary)]">
+            {formatPrimary(value, unit)}
+          </span>
         )}
         {deltaMeta ? (
           <span

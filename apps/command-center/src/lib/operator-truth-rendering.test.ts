@@ -30,6 +30,6 @@ test('provider cards render unknown measurements as unavailable', () => {
 
   assert.match(html, /unknown/);
   assert.match(html, /Unavailable/);
-  assert.match(html, /No recent check/);
+  assert.match(html, /Observation unavailable/);
   assert.doesNotMatch(html, /0%/);
 });

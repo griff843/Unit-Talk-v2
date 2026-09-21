@@ -1,6 +1,6 @@
 import { Card } from '@/components/ui/Card';
 import type { OperationalException } from '@/lib/types';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 const severityStyles: Record<string, string> = {
   critical: 'border-red-600 bg-red-950 text-red-300',

@@ -266,3 +266,16 @@ test('fetchRuntimeHealth returns null queue health when field is absent', async 
 function createBasicAuthHeader(username: string, password: string): string {
   return `Basic ${Buffer.from(`${username}:${password}`, 'utf8').toString('base64')}`;
 }
+
+
+test('runtime health rejects a missing or invented status instead of calling it down', async () => {
+  for (const status of [undefined, 'fine', 200]) {
+    await assert.rejects(() => fetchRuntimeHealth({
+      env: createEnv({ API_BASE_URL: 'http://api.test' }),
+      fetchImpl: async (_input, init) => {
+        assert.ok(init?.signal, 'runtime dependency reads must have a timeout');
+        return Response.json({ status });
+      },
+    }), /recognized status/);
+  }
+});

@@ -33,7 +33,7 @@ export default function Loading() {
       data-testid="route-loading"
       className="animate-pulse space-y-4"
     >
-      <span className="sr-only">Loading page…</span>
+      <span className="text-sm font-medium">Loading page…</span>
 
       {/* Page heading */}
       <div className="h-6 w-56 rounded bg-white/[0.06]" />
