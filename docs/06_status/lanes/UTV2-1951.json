@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1951-settlement-recap-provenance",
   "branch": "claude/utv2-1951-settlement-recap-provenance",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d5f976a6f9fbab425d5370eac51c7c4d6c516741",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1626",
   "files_changed": [],
   "file_scope_lock": [
@@ -30,14 +30,22 @@
     "docs/06_status/proof/UTV2-1951/diff-summary.md",
     "docs/06_status/proof/UTV2-1951/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-21T02:48:52.709Z",
-  "heartbeat_at": "2026-09-21T02:57:07.272Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-21T04:04:53.527Z",
+  "closed_at": "2026-09-21T04:04:53.527Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1951-settlement-recap-provenance.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-21T04:04:51.061Z",
+      "verdict": "pass",
+      "merge_sha": "d5f976a6f9fbab425d5370eac51c7c4d6c516741",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

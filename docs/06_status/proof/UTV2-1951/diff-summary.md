@@ -1,6 +1,6 @@
 # DIFF SUMMARY: UTV2-1951
 
-MERGE_SHA: pending merge
+MERGE_SHA: d5f976a6f9fbab425d5370eac51c7c4d6c516741
 
 Lane type `runtime`, tier T2, executor claude.
 Branch `claude/utv2-1951-settlement-recap-provenance`, cut from `origin/main` and

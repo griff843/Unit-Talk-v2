@@ -5,10 +5,12 @@
   "proof_profile": "app-runtime",
   "status": "pre-merge",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "d5f976a6f9fbab425d5370eac51c7c4d6c516741",
     "verified_source_sha": "61e75a2176de5fb65833d307b98e3f438fb83778",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-21T04:04:49.945Z"
   },
   "static_proof": {
     "unit_tests": {

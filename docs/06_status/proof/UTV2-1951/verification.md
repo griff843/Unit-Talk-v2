@@ -1,6 +1,6 @@
 # PROOF: UTV2-1951
 
-MERGE_SHA: pending merge
+MERGE_SHA: d5f976a6f9fbab425d5370eac51c7c4d6c516741
 Execution SHA: 513fddf8d01b2b5c03fc5474d7648a0de03343ea
 
 Settlement-recap provenance, grading extraction, and the `deploy/rollback.sh`
@@ -57,5 +57,5 @@ member-facing delivery was performed by this lane.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `d5f976a6f9fbab425d5370eac51c7c4d6c516741`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1626
