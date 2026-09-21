@@ -159,6 +159,11 @@
       "execution": ["pnpm test:t1-proof:live"]
     },
     {
+      "path": "apps/api/src/t1-proof-utv2-1951-settlement-recap-provenance.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
       "path": "apps/api/src/t1-proof-utv2-1380-kelly-sizing-promotion-metadata.test.ts",
       "owner": "api",
       "execution": [

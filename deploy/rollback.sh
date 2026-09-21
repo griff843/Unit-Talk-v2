@@ -143,7 +143,7 @@ COMPOSE_PROFILES="\$ROLLBACK_PROFILES" UNIT_TALK_IMAGE_TAG='$TAG' docker compose
 COMPOSE_PROFILES="\$ROLLBACK_PROFILES" UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
 # UTV2-1922: the release record is advanced only after the rollback has
 # actually activated. It used to be the FIRST thing written, so a rollback that
-# failed at `docker compose up` left the host naming a release it had not
+# failed at \`docker compose up\` left the host naming a release it had not
 # started -- the same false-advance that made the 2026-09-16 outage unreadable
 # from the host's own metadata.
 printf '%s\n' '$TAG' > .unit-talk-release

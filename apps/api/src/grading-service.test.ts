@@ -365,6 +365,9 @@ test('UTV2-1929: the settlement recap resolves the pinned channel from the recei
   try {
     const result = await runGradingPass(repositories);
     assert.equal(result.graded, 1);
+    const [recapRun] = await repositories.runs.listByType('recap.post');
+    assert.equal(recapRun?.status, 'succeeded');
+    assert.deepEqual(recapRun?.details, { recapKind: 'settlement-pick', pickId, settlementRecordId: (await repositories.settlements.listByPick(pickId))[0]?.id, pickCount: 1, posted: true, channel: '1384052464189440120', messageId: 'message-1' });
     assert.equal(
       capturedUrl,
       'https://discord.com/api/v10/channels/1384052464189440120/messages',
@@ -3131,7 +3134,7 @@ function recapHarness(stakeUnits: unknown) {
       findLatestByPick: async () => ({ id: 'outbox-1', target: '123456789012345678' }),
     },
     receipts: { findLatestByOutboxId: async () => null },
-    runs: {},
+    runs: createInMemoryRepositoryBundle().runs,
   } as unknown as Parameters<typeof postSettlementRecapIfPossible>[2];
 
   const warnings: string[] = [];

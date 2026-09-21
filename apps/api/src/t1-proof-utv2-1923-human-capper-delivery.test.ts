@@ -781,6 +781,9 @@ test('UTV2-1923: a manually settled human pick settles, and its recap is gated b
   // the recap about the pick.
   assert.equal(response.body.data.humanCapperRecap?.posted, false);
   assert.equal(response.body.data.humanCapperRecap?.reason, 'kill-switch-engaged');
+  const [recapRun] = await repositories.runs.listByType('recap.post');
+  assert.equal(recapRun?.status, 'cancelled');
+  assert.deepEqual(recapRun?.details, { recapKind: 'settlement-pick', pickId, settlementRecordId: response.body.data.settlementRecordId, pickCount: 1, posted: false, reason: 'kill-switch-engaged' });
 });
 
 test('UTV2-1923: with the target released, the recap is attempted and reports why it did not post', async () => {
