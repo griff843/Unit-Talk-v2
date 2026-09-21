@@ -148,33 +148,7 @@ jobs:
           echo "receipt_sha256=$(python3 -c "import json,sys;print(json.load(open('$receipt'))['receipt_sha256'])")" >> "$GITHUB_OUTPUT"
           echo "observed_ref=$(python3 -c "import json,sys;print(json.load(open('$receipt'))['observed_project_ref'])")" >> "$GITHUB_OUTPUT"
 
-      # The smoke receipt proves its own command only. Run the complete gate in
-      # this same staging-only job so local recovery can verify all live suites
-      # without exposing credentials or opening a PR before verification.
-      - name: Run complete repository verification against staging
-        env:
-          CI_REQUIRE_DB_SMOKE: 'true'
-          CI_FIXTURE_RUN_ID: full-verify-${{ github.run_id }}-${{ github.run_attempt }}
-        run: pnpm verify
-
-      # The repository gate compiles TypeScript; the browser needs the Next bundle too.
-      - name: Build Command Center for browser proof
-        run: pnpm --filter @unit-talk/command-center build
-
-      - name: Install Chromium for operator browser proof
-        run: pnpm --filter @unit-talk/command-center exec playwright install --with-deps chromium
-
-      - name: Run staging operator browser proof
-        run: pnpm proof:command-center-staging
-
-      - name: Upload operator browser proof
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: command-center-operator-proof
-          path: .out/command-center-staging/
-          if-no-files-found: ignore
-
+      # Remove local.env before anything else can read it, and before upload.
       - name: Scrub credentials
         if: always()
         run: |

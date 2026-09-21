@@ -9,7 +9,6 @@ import { successResponse } from '../http.js';
 import { isEvidencePlanePick, recordPickSettlement } from '../settlement-service.js';
 import { postSettlementRecapIfPossible } from '../grading-service.js';
 import { loadEnvironment } from '@unit-talk/config';
-import { observeSettlementRecap } from '../settlement-recap-observation.js';
 
 export interface SettlePickControllerResult {
   pickId: string;
@@ -87,10 +86,7 @@ export async function settlePickController(
       ? await repositories.killSwitch.isKilled(humanDeliveryTargets[0])
       : true;
     if (killed) {
-      humanCapperRecap = await observeSettlementRecap(
-        result.pickRecord.id, result.settlementRecord.id, repositories.runs,
-        async () => ({ posted: false, reason: 'kill-switch-engaged' }),
-      );
+      humanCapperRecap = { posted: false, reason: 'kill-switch-engaged' };
     } else {
       try {
         const recap = await postSettlementRecapIfPossible(
