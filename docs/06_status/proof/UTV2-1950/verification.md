@@ -1,7 +1,12 @@
 # PROOF: UTV2-1950
 
-MERGE_SHA: pending merge
-Execution SHA: 522ef1cc14e94ff282ab1297679483eaf789ac7e
+MERGE_SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
+Execution SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
+
+Re-anchored after merge. The verification below was executed at `522ef1cc1` on
+`codex/utv2-1950-command-center-recovery`; #1624 squash-merged that branch, so
+`522ef1cc1` is in no history and a validator comparing it to any current ref
+reports `diverged`. `81db253d5` is the squash commit and carries the same tree.
 
 Command Center recovery, readmitted as a `delivery-ui` T2 lane scoped to
 `apps/command-center/**`. This is a recovery checkpoint plus the review/held queue
@@ -27,6 +32,7 @@ pnpm build: exit 0
 Review queue partition mutation drill: 2 fail on removal, 2 pass on restore
 Production reconciliation: governed_total=8, governed_in_review=0, governed_held=0
 Route latency: /review 9.9s -> 0.56s, /held 10.0s -> 0.48s
+scripts/ci/r-level-check.ts --head 81db253d5 --base 81db253d5^: Verdict PASS, 115 changed files, rules matched operator-ui
 ```
 
 The route latencies and the production reconciliation are local read-only measurements
@@ -40,5 +46,5 @@ Command Center goal remains incomplete; HANDOFF.md lists the concrete continuati
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1624

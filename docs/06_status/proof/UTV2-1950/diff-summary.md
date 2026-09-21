@@ -1,5 +1,7 @@
 # Diff summary — UTV2-1950
 
+MERGE_SHA: 81db253d5cf649be721753c1e8df70d4b2a1f70e
+
 Scope: `apps/command-center/**` (delivery-ui, T2). 114 files, +3461 / -902 against `main`.
 
 ## What changed, by area
