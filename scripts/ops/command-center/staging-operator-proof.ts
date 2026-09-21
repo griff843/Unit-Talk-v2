@@ -61,7 +61,7 @@ async function main() {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     assert.equal(ready, true, 'Staging UI did not expose its ordinary sign-in entry');
-    const browser = spawn('pnpm', ['--filter', '@unit-talk/command-center', 'exec', 'playwright', 'test', '--config', 'playwright.staging.config.ts'],
+    const browser = spawn('pnpm', ['--filter', '@unit-talk/command-center', 'test:e2e:staging'],
       { env: childEnv, stdio: 'inherit' });
     assert.equal(await exitCode(browser), 0, 'Staging operator browser proof failed');
   } finally {
