@@ -547,8 +547,10 @@ export async function searchPicks(
   params: Record<string, string>,
 ): Promise<{ picks: Array<Record<string, unknown>>; total: number; limit: number; offset: number }> {
   const DEFAULT_LIMIT = 25;
-  const limit = Math.min(Math.max(Number(params['limit'] ?? DEFAULT_LIMIT), 1), 200);
-  const offset = Math.max(Number(params['offset'] ?? 0), 0);
+  const rawLimit = Number(params['limit'] ?? DEFAULT_LIMIT);
+  const rawOffset = Number(params['offset'] ?? 0);
+  const limit = Number.isSafeInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : DEFAULT_LIMIT;
+  const offset = Number.isSafeInteger(rawOffset) ? Math.max(rawOffset, 0) : 0;
   const population = readPickPopulation(params['population']);
 
   try {
@@ -597,7 +599,7 @@ export async function searchPicks(
     }>(base: T): T => {
       let next = base;
       if (q) {
-        next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.%${q}%`).join(','));
+        next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.${JSON.stringify(`%${q}%`)}`).join(','));
       }
       for (const filter of SEARCH_PICKS_EQ_FILTERS) {
         const value = params[filter.param]?.trim();
@@ -611,13 +613,16 @@ export async function searchPicks(
       return next;
     };
 
-    const sortCol = params['sort'] ?? 'created_at';
+    const requestedSort = params['sort'] ?? 'created_at';
+    const sortCol = ['created_at', 'id', 'selection', 'status'].includes(requestedSort) ? requestedSort : 'created_at';
     const sortAsc = params['sortDir'] === 'asc';
 
     const rowBase = applyFilters(client.from('picks_current_state').select(selectCols));
     const rowQuery = (population === 'governed' ? applyOperatorPickPopulation(rowBase) : applyPickPopulation(rowBase, population))
       .order(sortCol, { ascending: sortAsc })
-      .range(offset, offset + limit - 1);
+      .order('id', { ascending: sortAsc })
+      .range(offset, offset + limit - 1)
+      .abortSignal(AbortSignal.timeout(8_000));
 
     // The count is taken against `picks`, not `picks_current_state`.
     //
@@ -636,7 +641,7 @@ export async function searchPicks(
     // production on three predicates -- unfiltered 107866/107866,
     // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
     const countBase = applyFilters(client.from('picks').select('id', { count: 'exact', head: true }));
-    const countQuery = population === 'governed' ? applyOperatorPickPopulation(countBase) : applyPickPopulation(countBase, population);
+    const countQuery = (population === 'governed' ? applyOperatorPickPopulation(countBase) : applyPickPopulation(countBase, population)).abortSignal(AbortSignal.timeout(8_000));
 
     const [
       { data, error },

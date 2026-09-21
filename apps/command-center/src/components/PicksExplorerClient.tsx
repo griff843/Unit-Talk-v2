@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
 import Link from '@/components/OperatorLink';
 
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 
 interface PicksExplorerClientProps {
   picks: Array<Record<string, unknown>>;
-  /** Exact source-query count before local proof-fixture exclusion. */
+  /** Exact matching operator count after all database predicates. */
   sourceTotal: number;
+  offset?: number;
   /** Retained for call-site compatibility; the shell TopBar owns the timestamp. */
   observedAt?: string;
 }
@@ -108,47 +108,12 @@ function RoutingCell({
   );
 }
 
-export function PicksExplorerClient({ picks, sourceTotal }: PicksExplorerClientProps) {
-  const [statusFilter, setStatusFilter] = useState('all');
-
-  const statuses = useMemo(() => {
-    const set = new Set<string>();
-    for (const pick of picks) {
-      const status = str(pick['status']);
-      if (status) set.add(status);
-    }
-    return [...set].sort();
-  }, [picks]);
-
-  const visible = useMemo(
-    () => (statusFilter === 'all' ? picks : picks.filter((pick) => str(pick['status']) === statusFilter)),
-    [picks, statusFilter],
-  );
-
+export function PicksExplorerClient({ picks, sourceTotal, offset = 0 }: PicksExplorerClientProps) {
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-gray-500">
-          {visible.length} of {picks.length} loaded picks · source query count {sourceTotal} before fixture exclusion
-        </p>
-        <select
-          value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
-          className="cc-select text-xs"
-          aria-label="Filter by status"
-        >
-          <option value="all">All statuses</option>
-          {statuses.map((status) => (
-            <option key={status} value={status}>{status}</option>
-          ))}
-        </select>
-      </div>
-      {sourceTotal > picks.length ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-          This view loaded the first {picks.length} non-fixture rows from a {sourceTotal}-row source query.
-          Additional canonical picks exist; no complete-index total is inferred from the loaded window.
-        </div>
-      ) : null}
+      <p role="status" className="text-sm text-gray-400">
+        {picks.length ? `Showing ${offset + 1}–${offset + picks.length} of ${sourceTotal} matching governed picks` : `No picks on this page · ${sourceTotal} matching governed picks`}
+      </p>
       <div className="cc-surface overflow-x-auto">
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead>
@@ -167,14 +132,14 @@ export function PicksExplorerClient({ picks, sourceTotal }: PicksExplorerClientP
             </tr>
           </thead>
           <tbody>
-            {visible.length === 0 && (
+            {picks.length === 0 && (
               <tr>
                 <td colSpan={11} className="px-4 py-6 text-center text-xs text-gray-500">
                   No picks match this filter.
                 </td>
               </tr>
             )}
-            {visible.map((pick, i) => {
+            {picks.map((pick, i) => {
               const id = str(pick['id']) ?? String(i);
               const matchup = str(pick['matchup']);
               const result = str(pick['settlement_result']);

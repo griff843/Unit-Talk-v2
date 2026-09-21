@@ -45,6 +45,8 @@ test('operations home counts real operator states and reads bounded lifecycle ac
     }
     assert.equal(params.get('limit'), '10');
     assert.equal(params.get('offset'), '10');
+    assert.equal(params.get('order'), 'created_at.desc,id.desc');
+    assert.ok(request.signal, 'pick reads have a bounded cancellation signal');
     assert.ok(params.getAll('or').some((filter) => filter.includes('Lions')), 'search and fixture filters both survive');
     return Response.json([{ id: 'pick-1', selection: 'Lions', metadata: { distributionMode: 'track-only' } }]);
   };
