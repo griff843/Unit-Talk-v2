@@ -1,0 +1,66 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1951",
+  "tier": "T2",
+  "proof_profile": "app-runtime",
+  "status": "pre-merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "61e75a2176de5fb65833d307b98e3f438fb83778",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6841,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "r_level": "PASS; 19 changed files; no R-level artifacts required",
+    "rollback_config_tests": {
+      "pass": 19,
+      "fail": 0,
+      "note": "scripts/ci/deploy-config-rollback.test.ts, run with a stub docker still on PATH; 5 of these failed before the fix"
+    },
+    "substitution_guard": {
+      "suite": "scripts/ci/staging-path-enforcement.test.ts",
+      "pass": 31,
+      "fail": 0,
+      "mutation_drill": "not ok 31 on mutation, 31/31 on restore"
+    },
+    "full_pnpm_verify": {
+      "result": "pass",
+      "run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35556092575",
+      "step": "verify",
+      "note": "pnpm verify cannot exit 0 locally: ci:assert-staging refuses any target it cannot identify as the staging project. CI is the authority and no green local verify is claimed."
+    }
+  },
+  "runtime_proof": {
+    "substitution_drill": {
+      "stub_docker_invocations_before": 1,
+      "stub_docker_invocations_after": 0,
+      "generated_comment_before": "# failed at The stub docker printed this to stdout left the host naming a release it had not",
+      "generated_comment_after": "# failed at `docker compose up` left the host naming a release it had not"
+    },
+    "live_db_proof": {
+      "suite": "apps/api/src/t1-proof-utv2-1951-settlement-recap-provenance.test.ts",
+      "job": "Writable DB proof (staging only)",
+      "run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35556092575",
+      "result": "pass",
+      "target": "approved staging project only; registered in test:t1-proof:live and db-writer-classification.json",
+      "note": "No Discord message is sent: every recap outcome is simulated in-process and the posted case returns a synthetic receipt."
+    },
+    "asserted": [
+      "the recap.post run row exists and is 'running' before the delivery attempt is made",
+      "the three persisted statuses are succeeded, cancelled and failed, with exact details deep-equality",
+      "a provenance write failure refuses the recap rather than delivering unrecorded"
+    ]
+  },
+  "limitations": [
+    "Nothing on this branch is deployed; the recap provenance takes effect only after a deploy, which is reserved action 8.",
+    "The live proof runs against staging, never production.",
+    "No production write, deployment, ingestion activation, kill-switch change or member-facing delivery was performed by this lane."
+  ]
+}

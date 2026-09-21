@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1951",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1951-settlement-recap-provenance",
+  "branch": "claude/utv2-1951-settlement-recap-provenance",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1626",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".env.example",
+    ".github/workflows/staging-db-proof.yml",
+    "apps/api/src/controllers/settle-pick-controller.ts",
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/settlement-recap-observation.test.ts",
+    "apps/api/src/settlement-recap-observation.ts",
+    "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
+    "apps/api/src/t1-proof-utv2-1951-settlement-recap-provenance.test.ts",
+    "deploy/rollback.sh",
+    "docs/05_operations/db-writer-classification.json",
+    "package.json",
+    "scripts/ci/staging-path-enforcement.test.ts",
+    "scripts/ops/command-center/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1951/diff-summary.md",
+    "docs/06_status/proof/UTV2-1951/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-21T02:48:52.709Z",
+  "heartbeat_at": "2026-09-21T02:57:07.272Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1951-settlement-recap-provenance.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1951-settlement-recap-provenance",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

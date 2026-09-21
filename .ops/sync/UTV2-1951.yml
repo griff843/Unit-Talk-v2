@@ -1,0 +1,353 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1951
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1951
+  objective: Settlement recap provenance + grading extraction + disaster-recovery
+    rollback substitution defect
+  acceptance_criteria:
+    - |-
+      Sibling runtime lane carved out of [UTV2-1950](https://linear.app/unit-talk-v2/issue/UTV2-1950/command-center-operator-checkpoint-correctness-truthful-non-governed). The Command Center recovery branch (`codex/utv2-1950-command-center-recovery`) carried 13 files outside `apps/command-center/**`. No lane type admits `apps/command-center/**` + `apps/api/**` + `deploy/**` together (`deriveDeliveryUiApp` in `scripts/ops/shared.ts:933` returns `null` unless every `file_scope_lock` entry sits under exactly one of four app roots), so they were reverted on that branch at `b09afe0b1` and preserved verbatim for this lane rather than forcing one PR through with a mistyped lane.
+
+      ## Scope — 13 files, +366 / -82
+
+      ```
+      .env.example                                              +3  -0
+      .github/workflows/staging-db-proof.yml                   +27  -1
+      apps/api/src/controllers/settle-pick-controller.ts        +5  -1
+      apps/api/src/grading-service.test.ts                      +4  -1
+      apps/api/src/grading-service.ts                          +69 -77
+      apps/api/src/settlement-recap-observation.test.ts        +61  -0  (new)
+      apps/api/src/settlement-recap-observation.ts             +48  -0  (new)
+      apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts  +43 -0
+      apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts          +3 -0
+      deploy/rollback.sh                                        +1  -1
+      package.json                                              +2  -1
+      scripts/ci/staging-path-enforcement.test.ts              +26  -0
+      scripts/ops/command-center/staging-operator-proof.ts     +74  -0  (new)
+      ```
+
+      ---
+
+      ## Defect 1 — `deploy/rollback.sh` executes a comment during disaster recovery
+
+      `deploy/rollback.sh:95` opens the remote command with an **unquoted** heredoc:
+
+      ```sh
+      REMOTE_COMMAND=$(cat <<EOF
+      ```
+
+      so the body is expanded, including backticks. Line 129 escapes its backticks correctly; **line 146 does not**:
+
+      ```sh
+      # failed at `docker compose up` left the host naming a release it had not
+      ```
+
+      The generated script therefore runs `docker compose up` on the rollback host and splices its **stdout** into the script text as a command. Proven with a stub `docker` on `PATH`:
+
+      ```
+      STUB-DOCKER-WAS-INVOKED args=compose up
+      ----- GENERATED SCRIPT -----
+      # failed at The stub docker printed this to stdout left the host naming a release it had not
+      ```
+
+      This is on the **disaster-recovery path**: the substitution runs at the moment rollback is being invoked, and it also starts containers as a side effect of building the command string.
+
+      **Why CI is green and this is still real.** GitHub runners have no `docker` binary on `PATH`, so the substitution yields empty and `scripts/ci/deploy-config-rollback.test.ts` passes. On a host where `docker` exists it does not. On this WSL host `docker ps -a` prints `The command 'docker' could not be found in this WSL 2 distro.` to stdout, producing `bash: line 50: The: command not found` and 5 local test failures. `main` is not red; it is red only where a `docker` binary answers.
+
+      Fix: escape the backticks, matching line 129.
+
+      ---
+
+      ## Defect 2 — recap attempts have no durable per-pick provenance
+
+      `grading-service.ts` attempted the settlement recap inline. A network exception was indistinguishable from a confirmed refusal, and nothing durable recorded whether a recap was attempted at all for a given pick — so historical records cannot answer "did this pick's recap post?".
+
+      `settlement-recap-observation.ts` extracts the attempt behind a `recap.post` run record written **before** the attempt, and preserves the three-valued outcome honestly:
+
+      * `succeeded` — posted
+      * `failed` — the attempt threw; recorded as `recap_request_outcome_unknown`, explicitly **not** a confirmed non-post
+      * `cancelled` — a known refusal with a reason
+
+      If provenance cannot be written, the recap is **not attempted** (`recap_provenance_unavailable`) rather than posted unobserved. If the terminal write fails, the run deliberately stays unresolved rather than relabelling an accepted Discord post as failed.
+
+      ---
+
+      ## Also in scope
+
+      * `staging-operator-proof.ts` + `staging-path-enforcement.test.ts` + the `staging-db-proof.yml` wiring — the governed staging operator proof runner and the guard that keeps it on staging paths.
+      * `settle-pick-controller.ts` and the two T1 proof tests move with the extraction.
+
+      ## Out of scope
+
+      No migration, no containment change, no delivery activation, no secrets, no Command Center changes (those land in [UTV2-1950](https://linear.app/unit-talk-v2/issue/UTV2-1950/command-center-operator-checkpoint-correctness-truthful-non-governed) / [griff843/Unit-Talk-v2#1624](https://linear.app/unit-talk-v2/review/utv2-1950-command-center-operator-checkpoint-recovery-42843f5ca452)).
+
+      ## Acceptance
+
+      1. `pnpm verify` green.
+      2. The generated rollback script contains the literal text `` `docker compose up` `` and invokes no docker binary while being built — proven with a stub `docker` on `PATH`.
+      3. A recap attempt that throws records `status = failed` with reason `recap_request_outcome_unknown`, and a known refusal records `status = cancelled` — mutation-tested, not asserted.
+      4. A `recap.post` run row exists for every settlement that attempted a recap.
+  guardrails: []
+  non_goals:
+    - No migration, no containment change, no delivery activation, no secrets,
+      no Command Center changes (those land in
+      [UTV2-1950](https://linear.app/unit-talk-v2/issue/UTV2-1950/command-center-operator-checkpoint-correctness-truthful-non-governed)
+      /
+      [griff843/Unit-Talk-v2#1624](https://linear.app/unit-talk-v2/review/utv2-1950-command-center-operator-checkpoint-recovery-42843f5ca452)).
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Sibling runtime lane carved out of [UTV2-1950](https://linear.app/unit-talk-v2/issue/UTV2-1950/command-center-operator-checkpoint-correctness-truthful-non-governed). The Command Center recovery branch (`codex/utv2-1950-command-center-recovery`) carried 13 files outside `apps/command-center/**`. No lane type admits `apps/command-center/**` + `apps/api/**` + `deploy/**` together (`deriveDeliveryUiApp` in `scripts/ops/shared.ts:933` returns `null` unless every `file_scope_lock` entry sits under exactly one of four app roots), so they were reverted on that branch at `b09afe0b1` and preserved verbatim for this lane rather than forcing one PR through with a mistyped lane.
+    - >-
+      Scope — 13 files, +366 / -82
+
+      ```
+
+      .env.example                                              +3  -0
+
+      .github/workflows/staging-db-proof.yml                   +27  -1
+
+      apps/api/src/controllers/settle-pick-controller.ts        +5  -1
+
+      apps/api/src/grading-service.test.ts                      +4  -1
+
+      apps/api/src/grading-service.ts                          +69 -77
+
+      apps/api/src/settlement-recap-observation.test.ts        +61  -0  (new)
+
+      apps/api/src/settlement-recap-observation.ts             +48  -0  (new)
+
+      apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts  +43
+      -0
+
+      apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts          +3
+      -0
+
+      deploy/rollback.sh                                        +1  -1
+
+      package.json                                              +2  -1
+
+      scripts/ci/staging-path-enforcement.test.ts              +26  -0
+
+      scripts/ops/command-center/staging-operator-proof.ts     +74  -0  (new)
+
+      ```
+
+
+      ---
+    - >-
+      Defect 1 — `deploy/rollback.sh` executes a comment during disaster
+      recovery
+
+      `deploy/rollback.sh:95` opens the remote command with an **unquoted**
+      heredoc:
+
+
+      ```sh
+
+      REMOTE_COMMAND=$(cat <<EOF
+
+      ```
+
+
+      so the body is expanded, including backticks. Line 129 escapes its
+      backticks correctly; **line 146 does not**:
+
+
+      ```sh
+
+      # failed at `docker compose up` left the host naming a release it had not
+
+      ```
+
+
+      The generated script therefore runs `docker compose up` on the rollback
+      host and splices its **stdout** into the script text as a command. Proven
+      with a stub `docker` on `PATH`:
+
+
+      ```
+
+      STUB-DOCKER-WAS-INVOKED args=compose up
+
+      ----- GENERATED SCRIPT -----
+
+      # failed at The stub docker printed this to stdout left the host naming a
+      release it had not
+
+      ```
+
+
+      This is on the **disaster-recovery path**: the substitution runs at the
+      moment rollback is being invoked, and it also starts containers as a side
+      effect of building the command string.
+
+
+      **Why CI is green and this is still real.** GitHub runners have no
+      `docker` binary on `PATH`, so the substitution yields empty and
+      `scripts/ci/deploy-config-rollback.test.ts` passes. On a host where
+      `docker` exists it does not. On this WSL host `docker ps -a` prints `The
+      command 'docker' could not be found in this WSL 2 distro.` to stdout,
+      producing `bash: line 50: The: command not found` and 5 local test
+      failures. `main` is not red; it is red only where a `docker` binary
+      answers.
+
+
+      Fix: escape the backticks, matching line 129.
+
+
+      ---
+    - >-
+      Defect 2 — recap attempts have no durable per-pick provenance
+
+      `grading-service.ts` attempted the settlement recap inline. A network
+      exception was indistinguishable from a confirmed refusal, and nothing
+      durable recorded whether a recap was attempted at all for a given pick —
+      so historical records cannot answer "did this pick's recap post?".
+
+
+      `settlement-recap-observation.ts` extracts the attempt behind a
+      `recap.post` run record written **before** the attempt, and preserves the
+      three-valued outcome honestly:
+
+
+      * `succeeded` — posted
+
+      * `failed` — the attempt threw; recorded as
+      `recap_request_outcome_unknown`, explicitly **not** a confirmed non-post
+
+      * `cancelled` — a known refusal with a reason
+
+
+      If provenance cannot be written, the recap is **not attempted**
+      (`recap_provenance_unavailable`) rather than posted unobserved. If the
+      terminal write fails, the run deliberately stays unresolved rather than
+      relabelling an accepted Discord post as failed.
+
+
+      ---
+    - >-
+      Also in scope
+
+      * `staging-operator-proof.ts` + `staging-path-enforcement.test.ts` + the
+      `staging-db-proof.yml` wiring — the governed staging operator proof runner
+      and the guard that keeps it on staging paths.
+
+      * `settle-pick-controller.ts` and the two T1 proof tests move with the
+      extraction.
+    - >-
+      Acceptance
+
+      1. `pnpm verify` green.
+
+      2. The generated rollback script contains the literal text `` `docker
+      compose up` `` and invokes no docker binary while being built — proven
+      with a stub `docker` on `PATH`.
+
+      3. A recap attempt that throws records `status = failed` with reason
+      `recap_request_outcome_unknown`, and a known refusal records `status =
+      cancelled` — mutation-tested, not asserted.
+
+      4. A `recap.post` run row exists for every settlement that attempted a
+      recap.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1951/settlement-recap-provenance-grading-extraction-disaster-recovery
+    title: Settlement recap provenance + grading extraction + disaster-recovery
+      rollback substitution defect
+    description: |-
+      Sibling runtime lane carved out of [UTV2-1950](https://linear.app/unit-talk-v2/issue/UTV2-1950/command-center-operator-checkpoint-correctness-truthful-non-governed). The Command Center recovery branch (`codex/utv2-1950-command-center-recovery`) carried 13 files outside `apps/command-center/**`. No lane type admits `apps/command-center/**` + `apps/api/**` + `deploy/**` together (`deriveDeliveryUiApp` in `scripts/ops/shared.ts:933` returns `null` unless every `file_scope_lock` entry sits under exactly one of four app roots), so they were reverted on that branch at `b09afe0b1` and preserved verbatim for this lane rather than forcing one PR through with a mistyped lane.
+
+      ## Scope — 13 files, +366 / -82
+
+      ```
+      .env.example                                              +3  -0
+      .github/workflows/staging-db-proof.yml                   +27  -1
+      apps/api/src/controllers/settle-pick-controller.ts        +5  -1
+      apps/api/src/grading-service.test.ts                      +4  -1
+      apps/api/src/grading-service.ts                          +69 -77
+      apps/api/src/settlement-recap-observation.test.ts        +61  -0  (new)
+      apps/api/src/settlement-recap-observation.ts             +48  -0  (new)
+      apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts  +43 -0
+      apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts          +3 -0
+      deploy/rollback.sh                                        +1  -1
+      package.json                                              +2  -1
+      scripts/ci/staging-path-enforcement.test.ts              +26  -0
+      scripts/ops/command-center/staging-operator-proof.ts     +74  -0  (new)
+      ```
+
+      ---
+
+      ## Defect 1 — `deploy/rollback.sh` executes a comment during disaster recovery
+
+      `deploy/rollback.sh:95` opens the remote command with an **unquoted** heredoc:
+
+      ```sh
+      REMOTE_COMMAND=$(cat <<EOF
+      ```
+
+      so the body is expanded, including backticks. Line 129 escapes its backticks correctly; **line 146 does not**:
+
+      ```sh
+      # failed at `docker compose up` left the host naming a release it had not
+      ```
+
+      The generated script therefore runs `docker compose up` on the rollback host and splices its **stdout** into the script text as a command. Proven with a stub `docker` on `PATH`:
+
+      ```
+      STUB-DOCKER-WAS-INVOKED args=compose up
+      ----- GENERATED SCRIPT -----
+      # failed at The stub docker printed this to stdout left the host naming a release it had not
+      ```
+
+      This is on the **disaster-recovery path**: the substitution runs at the moment rollback is being invoked, and it also starts containers as a side effect of building the command string.
+
+      **Why CI is green and this is still real.** GitHub runners have no `docker` binary on `PATH`, so the substitution yields empty and `scripts/ci/deploy-config-rollback.test.ts` passes. On a host where `docker` exists it does not. On this WSL host `docker ps -a` prints `The command 'docker' could not be found in this WSL 2 distro.` to stdout, producing `bash: line 50: The: command not found` and 5 local test failures. `main` is not red; it is red only where a `docker` binary answers.
+
+      Fix: escape the backticks, matching line 129.
+
+      ---
+
+      ## Defect 2 — recap attempts have no durable per-pick provenance
+
+      `grading-service.ts` attempted the settlement recap inline. A network exception was indistinguishable from a confirmed refusal, and nothing durable recorded whether a recap was attempted at all for a given pick — so historical records cannot answer "did this pick's recap post?".
+
+      `settlement-recap-observation.ts` extracts the attempt behind a `recap.post` run record written **before** the attempt, and preserves the three-valued outcome honestly:
+
+      * `succeeded` — posted
+      * `failed` — the attempt threw; recorded as `recap_request_outcome_unknown`, explicitly **not** a confirmed non-post
+      * `cancelled` — a known refusal with a reason
+
+      If provenance cannot be written, the recap is **not attempted** (`recap_provenance_unavailable`) rather than posted unobserved. If the terminal write fails, the run deliberately stays unresolved rather than relabelling an accepted Discord post as failed.
+
+      ---
+
+      ## Also in scope
+
+      * `staging-operator-proof.ts` + `staging-path-enforcement.test.ts` + the `staging-db-proof.yml` wiring — the governed staging operator proof runner and the guard that keeps it on staging paths.
+      * `settle-pick-controller.ts` and the two T1 proof tests move with the extraction.
+
+      ## Out of scope
+
+      No migration, no containment change, no delivery activation, no secrets, no Command Center changes (those land in [UTV2-1950](https://linear.app/unit-talk-v2/issue/UTV2-1950/command-center-operator-checkpoint-correctness-truthful-non-governed) / [griff843/Unit-Talk-v2#1624](https://linear.app/unit-talk-v2/review/utv2-1950-command-center-operator-checkpoint-recovery-42843f5ca452)).
+
+      ## Acceptance
+
+      1. `pnpm verify` green.
+      2. The generated rollback script contains the literal text `` `docker compose up` `` and invokes no docker binary while being built — proven with a stub `docker` on `PATH`.
+      3. A recap attempt that throws records `status = failed` with reason `recap_request_outcome_unknown`, and a known refusal records `status = cancelled` — mutation-tested, not asserted.
+      4. A `recap.post` run row exists for every settlement that attempted a recap.
+    captured_at: 2026-09-21T02:48:43.996Z
+    description_sha256: fc6eded8fe826511fbcad0532cd74f7a99391b4df384dc661333b9030c9c3b4a
+  contract_hash: 612b946b1ea03de1cc8e0742b15e504af4fd70b65cb7dcf6763aae3e346c569e
