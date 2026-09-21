@@ -157,7 +157,10 @@ jobs:
           CI_FIXTURE_RUN_ID: full-verify-${{ github.run_id }}-${{ github.run_attempt }}
         run: pnpm verify
 
-      # Remove local.env before anything else can read it, and before upload.
+      # The repository gate compiles TypeScript; the browser needs the Next bundle too.
+      - name: Build Command Center for browser proof
+        run: pnpm --filter @unit-talk/command-center build
+
       - name: Install Chromium for operator browser proof
         run: pnpm --filter @unit-talk/command-center exec playwright install --with-deps chromium
 
