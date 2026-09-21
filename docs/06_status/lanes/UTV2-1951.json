@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1951-settlement-recap-provenance",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1626",
   "files_changed": [],
   "file_scope_lock": [
     ".env.example",
@@ -30,9 +30,9 @@
     "docs/06_status/proof/UTV2-1951/diff-summary.md",
     "docs/06_status/proof/UTV2-1951/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-21T02:48:52.709Z",
-  "heartbeat_at": "2026-09-21T02:48:52.709Z",
+  "heartbeat_at": "2026-09-21T02:57:07.272Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1951-settlement-recap-provenance.json",
