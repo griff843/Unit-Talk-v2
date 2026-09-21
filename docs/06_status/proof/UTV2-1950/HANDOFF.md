@@ -1,5 +1,7 @@
 # Command Center recovery handoff
 
+MERGE_SHA: pending merge
+
 Owner requested stopping scope expansion and landing the current recovery checkpoint on main for Claude.
 
 ## Checkpoint

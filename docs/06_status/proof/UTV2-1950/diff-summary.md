@@ -1,5 +1,7 @@
 # Diff summary — UTV2-1950
 
+MERGE_SHA: pending merge
+
 Scope: `apps/command-center/**` (delivery-ui, T2). 114 files, +3461 / -902 against `main`.
 
 ## What changed, by area
