@@ -1,15 +1,15 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-21T11:49:10.424Z",
+  "generated_at": "2026-09-21T17:44:23.901Z",
   "observation_window": {
-    "started_at": "2026-09-21T11:49:02.945Z",
-    "completed_at": "2026-09-21T11:49:10.424Z"
+    "started_at": "2026-09-21T17:44:10.844Z",
+    "completed_at": "2026-09-21T17:44:23.901Z"
   },
   "generator": {
     "script": "scripts/ops/readiness-refresh.ts",
     "generator_version": "1.1.0",
-    "git_head_sha": "e23a1d6ba46f91cd8737e50518db3424af0ed18a",
-    "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35596032878"
+    "git_head_sha": "28c0c79aff4d5a18e84328a3171ff5ffbb3d8c9b",
+    "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35633850775"
   },
   "freshness": {
     "max_age_hours": 24,
@@ -20,7 +20,7 @@
     "expected_production_project_ref": "zfzdnfwdarxucxtaojxm",
     "production_target_confirmed": true
   },
-  "main_sha": "e23a1d6ba46f91cd8737e50518db3424af0ed18a",
+  "main_sha": "28c0c79aff4d5a18e84328a3171ff5ffbb3d8c9b",
   "deployed_sha": "01a941df443902cce9c8e9e51f78a30e52c48a35",
   "verdict": "RED",
   "observability": "degraded",
@@ -35,15 +35,15 @@
         "query": "latest successful run of deploy.yml on main (head_sha) vs commits/main (sha); compare base...head for commit distance"
       },
       "status": "fail",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "Last successful deploy (https://github.com/griff843/Unit-Talk-v2/actions/runs/35493158982, 2026-09-20T12:31:09Z, 23.3h ago) shipped 01a941df443902cce9c8e9e51f78a30e52c48a35; main HEAD is e23a1d6ba46f91cd8737e50518db3424af0ed18a, 11 commits ahead.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "Last successful deploy (https://github.com/griff843/Unit-Talk-v2/actions/runs/35493158982, 2026-09-20T12:31:09Z, 29.2h ago) shipped 01a941df443902cce9c8e9e51f78a30e52c48a35; main HEAD is 28c0c79aff4d5a18e84328a3171ff5ffbb3d8c9b, 12 commits ahead.",
       "measured": {
-        "main_sha": "e23a1d6ba46f91cd8737e50518db3424af0ed18a",
+        "main_sha": "28c0c79aff4d5a18e84328a3171ff5ffbb3d8c9b",
         "deployed_sha": "01a941df443902cce9c8e9e51f78a30e52c48a35",
         "deploy_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35493158982",
         "deploy_run_completed_at": "2026-09-20T12:31:09Z",
-        "deploy_age_hours": 23.3,
-        "commits_ahead": 11
+        "deploy_age_hours": 29.2,
+        "commits_ahead": 12
       },
       "unreadable_reason": null
     },
@@ -57,10 +57,10 @@
         "query": "system_runs where run_type='ingestor.cycle' order by started_at desc limit 1; provider_cycle_status where stage_status='merged' order by updated_at desc limit 1; game_results order by created_at desc limit 1"
       },
       "status": "unknown",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "UNREADABLE at 2026-09-21T11:49:02.945Z: provider_cycle_status read failed: TypeError: fetch failed. Not scored as passing.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "UNREADABLE at 2026-09-21T17:44:10.844Z: game_results read failed: Could not query the database for the schema cache. Retrying.. Not scored as passing.",
       "measured": null,
-      "unreadable_reason": "provider_cycle_status read failed: TypeError: fetch failed"
+      "unreadable_reason": "game_results read failed: Could not query the database for the schema cache. Retrying."
     },
     {
       "id": "grading_health",
@@ -72,10 +72,10 @@
         "query": "system_runs where run_type='grading.run' and status!='running' order by started_at desc limit 1; inspect details.outcome_class and details.input_freshness"
       },
       "status": "unknown",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "UNREADABLE at 2026-09-21T11:49:02.945Z: system_runs read failed: TypeError: fetch failed. Not scored as passing.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "UNREADABLE at 2026-09-21T17:44:10.844Z: system_runs read failed: Could not query the database for the schema cache. Retrying.. Not scored as passing.",
       "measured": null,
-      "unreadable_reason": "system_runs read failed: TypeError: fetch failed"
+      "unreadable_reason": "system_runs read failed: Could not query the database for the schema cache. Retrying."
     },
     {
       "id": "worker_outbox_health",
@@ -87,10 +87,10 @@
         "query": "system_runs where run_type='worker.heartbeat' order by started_at desc limit 1; select target from distribution_outbox where status='processing' and updated_at < now-5m, partitioned by isGovernedDeliveryTarget(target); count distribution_outbox where status='pending' and attempt_count>0 and updated_at < now-30m; count distribution_outbox where status in ('pending','processing')"
       },
       "status": "unknown",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "UNREADABLE at 2026-09-21T11:49:02.945Z: distribution_outbox count failed: TypeError: fetch failed. Not scored as passing.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "UNREADABLE at 2026-09-21T17:44:10.844Z: distribution_outbox read failed: Could not query the database for the schema cache. Retrying.. Not scored as passing.",
       "measured": null,
-      "unreadable_reason": "distribution_outbox count failed: TypeError: fetch failed"
+      "unreadable_reason": "distribution_outbox read failed: Could not query the database for the schema cache. Retrying."
     },
     {
       "id": "dead_letter_count",
@@ -102,10 +102,10 @@
         "query": "count distribution_outbox where status='dead_letter'; select attempt_count, last_error from distribution_outbox where status='dead_letter', bucketed by classifyDeadLetter(last_error) x attempt_count>0"
       },
       "status": "unknown",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "UNREADABLE at 2026-09-21T11:49:02.945Z: distribution_outbox read failed: TypeError: fetch failed. Not scored as passing.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "UNREADABLE at 2026-09-21T17:44:10.844Z: distribution_outbox read failed: Could not query the database for the schema cache. Retrying.. Not scored as passing.",
       "measured": null,
-      "unreadable_reason": "distribution_outbox read failed: TypeError: fetch failed"
+      "unreadable_reason": "distribution_outbox read failed: Could not query the database for the schema cache. Retrying."
     },
     {
       "id": "db_tripwires",
@@ -117,10 +117,10 @@
         "query": "latest completed run of db-health-tripwire.yml (conclusion, completed_at)"
       },
       "status": "unknown",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "UNREADABLE at 2026-09-21T11:49:02.945Z: db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/35593489535 concluded \"failure\" (failed step(s): Run DB health checks, Prove the checks executed) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven. Not scored as passing.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "UNREADABLE at 2026-09-21T17:44:10.844Z: db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/35631357051 concluded \"failure\" (failed step(s): Run DB health checks, Prove the checks executed) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven. Not scored as passing.",
       "measured": null,
-      "unreadable_reason": "db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/35593489535 concluded \"failure\" (failed step(s): Run DB health checks, Prove the checks executed) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven"
+      "unreadable_reason": "db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/35631357051 concluded \"failure\" (failed step(s): Run DB health checks, Prove the checks executed) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven"
     },
     {
       "id": "pnpm_verify",
@@ -132,10 +132,10 @@
         "query": "latest completed run of ci.yml on main (head_sha, conclusion) vs commits/main"
       },
       "status": "fail",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "ci.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/35559434314 on d5f976a6f9fbab425d5370eac51c7c4d6c516741 concluded \"success\" at 2026-09-21T04:11:31Z (7.6h ago). main HEAD is e23a1d6ba46f91cd8737e50518db3424af0ed18a, so main HEAD itself has no completed CI result.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "ci.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/35559434314 on d5f976a6f9fbab425d5370eac51c7c4d6c516741 concluded \"success\" at 2026-09-21T04:11:31Z (13.5h ago). main HEAD is 28c0c79aff4d5a18e84328a3171ff5ffbb3d8c9b, so main HEAD itself has no completed CI result.",
       "measured": {
-        "main_sha": "e23a1d6ba46f91cd8737e50518db3424af0ed18a",
+        "main_sha": "28c0c79aff4d5a18e84328a3171ff5ffbb3d8c9b",
         "run_head_sha": "d5f976a6f9fbab425d5370eac51c7c4d6c516741",
         "conclusion": "success",
         "completed_at": "2026-09-21T04:11:31Z",
@@ -153,26 +153,27 @@
         "query": "latest run of each of: ingestor-staleness-alert.yml, grading-staleness-check.yml, pipeline-health-monitor.yml, db-health-tripwire.yml, reconcile-stale-lanes.yml"
       },
       "status": "fail",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "Observer problems (these are observer failures, not by themselves product failures): ingestor-staleness-alert.yml concluded \"failure\" (failed step: Check ingestion and alert-system freshness); grading-staleness-check.yml concluded \"failure\" (failed step: Check grading staleness); pipeline-health-monitor.yml concluded \"failure\" (failed step: Generate pipeline health report); db-health-tripwire.yml concluded \"failure\" (failed step: Run DB health checks, Prove the checks executed).",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "Observer problems (these are observer failures, not by themselves product failures): ingestor-staleness-alert.yml concluded \"failure\" (failed step: Run one alerting pass, Check ingestion and alert-system freshness); grading-staleness-check.yml concluded \"failure\" (failed step: Check grading staleness); pipeline-health-monitor.yml concluded \"failure\" (failed step: Generate pipeline health report); db-health-tripwire.yml concluded \"failure\" (failed step: Run DB health checks, Prove the checks executed).",
       "measured": {
         "observers": [
           {
             "workflow": "ingestor-staleness-alert.yml",
             "conclusion": "failure",
-            "completed_at": "2026-09-21T07:15:36Z",
-            "age_hours": 4.6,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35572037658",
+            "completed_at": "2026-09-21T14:17:02Z",
+            "age_hours": 3.5,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35611010762",
             "failed_steps": [
+              "Run one alerting pass",
               "Check ingestion and alert-system freshness"
             ]
           },
           {
             "workflow": "grading-staleness-check.yml",
             "conclusion": "failure",
-            "completed_at": "2026-09-20T10:52:47Z",
-            "age_hours": 24.9,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35506266127",
+            "completed_at": "2026-09-21T12:17:40Z",
+            "age_hours": 5.4,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35598663171",
             "failed_steps": [
               "Check grading staleness"
             ]
@@ -180,9 +181,9 @@
           {
             "workflow": "pipeline-health-monitor.yml",
             "conclusion": "failure",
-            "completed_at": "2026-09-20T14:03:21Z",
-            "age_hours": 21.8,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35515283141",
+            "completed_at": "2026-09-21T16:21:28Z",
+            "age_hours": 1.4,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35625024035",
             "failed_steps": [
               "Generate pipeline health report"
             ]
@@ -190,9 +191,9 @@
           {
             "workflow": "db-health-tripwire.yml",
             "conclusion": "failure",
-            "completed_at": "2026-09-21T11:20:30Z",
-            "age_hours": 0.5,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35593489535",
+            "completed_at": "2026-09-21T17:20:53Z",
+            "age_hours": 0.4,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35631357051",
             "failed_steps": [
               "Run DB health checks",
               "Prove the checks executed"
@@ -201,9 +202,9 @@
           {
             "workflow": "reconcile-stale-lanes.yml",
             "conclusion": "success",
-            "completed_at": "2026-09-21T11:12:50Z",
-            "age_hours": 0.6,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35592828780",
+            "completed_at": "2026-09-21T17:15:34Z",
+            "age_hours": 0.5,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35630818970",
             "failed_steps": []
           }
         ]
@@ -220,7 +221,7 @@
         "query": "manifests with status=done and closed_at within 30d; verification.md must contain a merge SHA"
       },
       "status": "fail",
-      "observed_at": "2026-09-21T11:49:02.945Z",
+      "observed_at": "2026-09-21T17:44:10.844Z",
       "evidence": "113/136 lanes closed in the window carry a merge-SHA binding in verification.md; unbound: UTV2-1708, UTV2-1822, UTV2-1849, UTV2-1855, UTV2-1857, UTV2-1858, UTV2-1860, UTV2-1862, UTV2-1864, UTV2-1870, UTV2-1875, UTV2-1880, UTV2-1881, UTV2-1883, UTV2-1885, UTV2-1888, UTV2-1890, UTV2-1891, UTV2-1893, UTV2-1899, UTV2-1901, UTV2-1921, UTV2-1931.",
       "measured": {
         "considered": 136,
@@ -263,8 +264,8 @@
         "query": "no mechanical convergence measurement exists; constitution:check proves artifact preservation and structure only"
       },
       "status": "unknown",
-      "observed_at": "2026-09-21T11:49:02.945Z",
-      "evidence": "UNREADABLE at 2026-09-21T11:49:02.945Z: convergence percentage has no generator in this repo — previous ledgers carried a hand-entered \"~68%\", which this generator refuses to reproduce as a measurement. Not scored as passing.",
+      "observed_at": "2026-09-21T17:44:10.844Z",
+      "evidence": "UNREADABLE at 2026-09-21T17:44:10.844Z: convergence percentage has no generator in this repo — previous ledgers carried a hand-entered \"~68%\", which this generator refuses to reproduce as a measurement. Not scored as passing.",
       "measured": null,
       "unreadable_reason": "convergence percentage has no generator in this repo — previous ledgers carried a hand-entered \"~68%\", which this generator refuses to reproduce as a measurement"
     }
