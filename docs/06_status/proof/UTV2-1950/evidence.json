@@ -6,7 +6,7 @@
   "status": "handoff-checkpoint",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "c3da26c2b24eb59ec80fa6c9a701314471f26d1c",
+    "verified_source_sha": "81db253d5cf649be721753c1e8df70d4b2a1f70e",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
