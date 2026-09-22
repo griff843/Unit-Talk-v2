@@ -1,15 +1,15 @@
 # UTV2-1892 Diff Summary
 
-Generated at: 2026-09-22T14:10:00.000Z
+Generated at: 2026-09-22T17:10:00.000Z
 Issue: UTV2-1892
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1892-merge-gate-work-identity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1570
-Head SHA: fc8b7d09f
+Head SHA: 1d661dec9
 Merge SHA: pending merge
-Diff base: 96c990286932112a73ddb4108b0148b8894ca296 (origin/main after the second branch refresh)
-Diff target: fc8b7d09f
+Diff base: 3af0379f646ccf16399acec8cd2d42eb1931b6f0 (origin/main after the third branch refresh)
+Diff target: 1d661dec9
 
 ## Git Diff Stat
 ```
@@ -18,12 +18,12 @@ Diff target: fc8b7d09f
  docs/06_status/lanes/UTV2-1892.json            |  41 ++++
  docs/06_status/proof/UTV2-1892/diff-summary.md |  77 +++++++
  docs/06_status/proof/UTV2-1892/evidence.json   | 282 +++++++++++++++++++++++++
- docs/06_status/proof/UTV2-1892/verification.md | 219 +++++++++++++++++++
+ docs/06_status/proof/UTV2-1892/verification.md | 221 +++++++++++++++++++
  scripts/ci/file-scope-guard.test.ts            | 217 +++++++++++++++++++
  scripts/ci/file-scope-guard.ts                 |  18 +-
  scripts/ops/merge-gate-verdict.cjs             |   2 +-
  scripts/ops/merge-gate-verdict.test.ts         | 102 +++++++++
- 10 files changed, 1064 insertions(+), 7 deletions(-)
+ 10 files changed, 1066 insertions(+), 7 deletions(-)
 ```
 
 ## Git Name Status
@@ -72,6 +72,6 @@ consults or produces a tracker ref. The file-scope grant stays EXACT-LANE -- no
 `docs/06_status/lanes/**` or `.ops/sync/**` directory exemption was introduced.
 
 ## SHA Binding
-Head SHA: fc8b7d09f
+Head SHA: 1d661dec9
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1570
