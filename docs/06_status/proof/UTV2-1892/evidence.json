@@ -7,11 +7,11 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "d9d5a533bbdc61888b368677d8a8e5efd73d2a12",
+    "verified_source_sha": "3379b4b66c775612528d000b8efa6ab565d07853",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "note": "d9d5a533bbdc61888b368677d8a8e5efd73d2a12 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/; it is the lane-pr-binding workflow's own commit, which wrote pr_url into docs/06_status/lanes/UTV2-1892.json once PR #1570 was reopened. PR #1570 was closed on 2026-09-14 to release its locks on the two parser files so the canonical-`Bounce:` repair (UTV2-1926) could take them; that repair has landed, and the PR was reopened on 2026-09-21 under the same UTV2-1892 authority -- no new tracker issue was minted. The lane was readmitted with `ops:lane-start --readmit-existing-branch --singleton-approved`, which re-pinned file_scope_lock to the five files this bundle measures, and the branch was reconciled onto origin/main 6846fe19fb83158aa1735c47c922e6d5c582d234 by merge commit 71c7fa65a. That merge had exactly one conflict, in scripts/ops/merge-gate-verdict.test.ts, where this lane and UTV2-1926 had both appended tests to the end of the same file; both sets are kept and 38/38 pass. Every measurement in this bundle was taken at this anchor, not carried forward from the pre-closure edition. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "note": "3379b4b66c775612528d000b8efa6ab565d07853 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/. It is the branch-refresh merge commit produced by `ops:merge-wrapper pr-update-branch`, which reconciled the lane onto origin/main b0731adc969e7588490d58a3e0ef60dcd0bed6a7 after the automated readiness-ledger refresh put the PR BEHIND under branch protection's strict:true. The anchor moved to it because scripts/ci/proof-binding-validator.ts rule 4 compares trees (git diff --name-only <anchor>..HEAD), so that ledger commit would read as non-proof drift against any earlier anchor. The refresh introduced exactly one file, docs/06_status/readiness/readiness-score.json; every implementation, lane and proof path is byte-identical across it. The superseded previous anchor d9d5a533bbdc61888b368677d8a8e5efd73d2a12 was the lane-pr-binding workflow's own commit, which wrote pr_url into docs/06_status/lanes/UTV2-1892.json once PR #1570 was reopened. PR #1570 was closed on 2026-09-14 to release its locks on the two parser files so the canonical-`Bounce:` repair (UTV2-1926) could take them; that repair has landed, and the PR was reopened on 2026-09-21 under the same UTV2-1892 authority -- no new tracker issue was minted. The lane was readmitted with `ops:lane-start --readmit-existing-branch --singleton-approved`, which re-pinned file_scope_lock to the five files this bundle measures, and was first reconciled onto origin/main 6846fe19fb83158aa1735c47c922e6d5c582d234 by merge commit 71c7fa65a. That merge had exactly one conflict, in scripts/ops/merge-gate-verdict.test.ts, where this lane and UTV2-1926 had both appended tests to the end of the same file; both sets are kept and 38/38 pass. Every measurement in this bundle was taken at the current anchor, not carried forward from an earlier edition. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
     "bound_at": "2026-09-22T00:40:00Z"
   },
   "static_proof": {
@@ -64,7 +64,7 @@
         "pass": 6902,
         "fail": 0
       },
-      "note": "Run to completion in the lane worktree at db3249992ea8c2ff133b596a3788b762f0611da3, and re-run by CI at the anchor d9d5a533bbdc61888b368677d8a8e5efd73d2a12 inside run 35671709911's `verify` job, which reported the identical 6902/6902. The two commits differ only in docs/06_status/lanes/UTV2-1892.json, which no test reads. verify:static is the whole of pnpm verify except test:live-db; see the verify row below for why the live-DB half cannot run on a workstation."
+      "note": "Run to completion in the lane worktree at db3249992ea8c2ff133b596a3788b762f0611da3, and re-run by CI at the anchor 3379b4b66c775612528d000b8efa6ab565d07853 inside run 35685090342's `verify` job, which reported the identical 6902/6902 (plus Command Center tests 659/659). The commits differ only in docs/06_status/lanes/UTV2-1892.json and docs/06_status/readiness/readiness-score.json, neither of which any test reads. verify:static is the whole of pnpm verify except test:live-db; see the verify row below for why the live-DB half cannot run on a workstation."
     },
     "type_check": {
       "command": "pnpm type-check (inside pnpm verify:static)",
@@ -82,12 +82,12 @@
       "note": "Not runnable on the workstation by design: verify ends at test:live-db, where ci:assert-staging refuses any target that is not staging xskgrzbteyqdufktjrjx. The CI verify job on this PR is the authoritative run and is recorded under runtime_proof."
     },
     "r_level": {
-      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head d9d5a533bbdc61888b368677d8a8e5efd73d2a12",
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head 3379b4b66c775612528d000b8efa6ab565d07853",
       "verdict": "PASS",
       "changed_files": 10,
       "rules_matched": [],
       "advisory_missing": [],
-      "note": "No R-level rule matches a merge-gate workflow, a CI guard script or an ops-script diff. Re-anchored to d9d5a533bbdc61888b368677d8a8e5efd73d2a12; the R-Level Compliance Check in run 35671709911 passed at that head, and the 10 changed files are unchanged between the two commits apart from the lane manifest."
+      "note": "No R-level rule matches a merge-gate workflow, a CI guard script or an ops-script diff. Re-anchored to 3379b4b66c775612528d000b8efa6ab565d07853 after the branch refresh; the check was re-run at that head (Verdict: PASS, 10 changed files, no rule matched) and the R-Level Compliance Check in run 35685090342 concluded success at the same head. The 10 changed files are identical across the refresh."
     },
     "reviewer_probe": {
       "command": "node -e 'require(\"./scripts/ops/merge-gate-verdict.cjs\").parseVerdict(<exact-head APPROVED body for PR 1556 at ecb7daeaff2fc4a346855e73bd5669e7644e3faf>)'",
@@ -208,18 +208,18 @@
   "runtime_proof": {
     "profile": "hosted_live_db",
     "status": "RECEIPTED",
-    "executed_at": "2026-09-22T00:23:53Z/2026-09-22T00:34:21Z",
+    "executed_at": "2026-09-22T03:58:14Z/2026-09-22T04:07:26Z",
     "target": "staging Supabase project xskgrzbteyqdufktjrjx via the run-scoped credentials ci.yml materializes. Never production. assert-staging-target.ts ran first in each credentialed invocation and printed \"[assert-staging] OK: target is the approved staging project\" before any test executed (the project ref itself is masked by GitHub secret redaction in the log; the verify job's receipt auditor printed it unmasked as Observed project: xskgrzbteyqdufktjrjx / Expected staging: xskgrzbteyqdufktjrjx). Production zfzdnfwdarxucxtaojxm was neither read nor written, and is in any case RESTORE_FAILED as of 2026-09-21.",
-    "command": "job \"Writable DB proof (staging only)\", run 35671709911 attempt 1, job 106569598536, at head d9d5a533bbdc61888b368677d8a8e5efd73d2a12. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 24 t1-proof suites wired in package.json at this head. Run conclusion SUCCESS; `verify` (job 106570818744) is green in the same run. Every value in this block was read out of that run's job logs rather than written from recollection; the previous edition of this block named run 34746934490 at head 92f34932f and is superseded because the anchor moved.",
-    "receipt": "CI run 35671709911 attempt 1. Job 106569598536 \"Writable DB proof (staging only)\" succeeded (00:23:53Z-00:29:23Z) and job 106570818744 \"verify\" succeeded (00:29:25Z-00:34:21Z), both at head d9d5a533bbdc61888b368677d8a8e5efd73d2a12. pnpm test:db -> database-smoke.test.ts 7/7 pass, 0 fail, 0 skipped, 17325.7ms. pnpm test:t1-proof:live -> 24 suites, 140/140 pass, 0 fail, 0 skipped summed over the 24 TAP blocks. Receipt artifact utv2-1630-db-proof-receipt-35671709911-1 (id 10671492278), ci-db-proof-receipt.json sha256 55e371fda801a9c48dcac6550285fd3040151f47b4c128ffc242d0623a979f5a, uploaded-zip sha256 a32e6620f9036571870f8c060269ff6927159c1d1a2dedce46e031ad83a5e42f. The same-run, attempt-scoped auditor scripts/ci/verify-db-proof-receipt.ts returned Verdict: PASS -- \"DB proof verified: run 35671709911 attempt 1 @ 21ca73df97438068a0440db736035fc1d513894d, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0\" (21ca73df... is the pull_request merge ref CI executed, whose second parent is the anchor d9d5a533bbdc61888b368677d8a8e5efd73d2a12).",
-    "note": "Admitted under the route B deferral (manifest t1_live_db_precondition: deferred_to_ci). This lane changes CI parsers and a CI guard, not application or database code: `git diff --name-only 6846fe19f d9d5a533bbdc61888b368677d8a8e5efd73d2a12 -- apps packages supabase` is empty. Its real runtime is the Merge Gate workflow, whose trusted copy runs from pull_request.base.sha and therefore cannot exercise the repaired parser until this PR merges. The live-DB obligation is the standard staging proof, discharged here from ONE concluded run at the anchor d9d5a533bbdc61888b368677d8a8e5efd73d2a12 rather than a byte-identical neighbour. Closeout G6 separately requires verify and Writable DB proof green on the MERGE SHA. The run at db3249992 (35671433656) was cancelled by concurrency when the lane-pr-binding workflow pushed the anchor commit, and is superseded rather than withdrawn.",
+    "command": "job \"Writable DB proof (staging only)\", run 35685090342 attempt 1, job 106610098741, at head 3379b4b66c775612528d000b8efa6ab565d07853. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 24 t1-proof suites wired in package.json at this head. Run conclusion SUCCESS; `verify` (job 106610997324) is green in the same run. Every value in this block was read out of that run's job logs rather than written from recollection. The previous edition named run 35671709911 at head d9d5a533bbdc61888b368677d8a8e5efd73d2a12 and is superseded because the branch refresh moved the anchor; the edition before that named run 34746934490 at 92f34932f.",
+    "receipt": "CI run 35685090342 attempt 1. Job 106610098741 \"Writable DB proof (staging only)\" succeeded (03:58:14Z-04:03:07Z) and job 106610997324 \"verify\" succeeded (04:03:10Z-04:07:26Z), both at head 3379b4b66c775612528d000b8efa6ab565d07853. pnpm test:db -> database-smoke.test.ts 7/7 pass, 0 fail, 0 skipped, 16286.5ms. pnpm test:t1-proof:live -> 24 suites, 140/140 pass, 0 fail, 0 skipped, 241080ms summed over the 24 TAP blocks. Receipt artifact utv2-1630-db-proof-receipt-35685090342-1 (id 10676127910), ci-db-proof-receipt.json sha256 07a6c8c8cc667df04aecdd3ef12e5ac77074c9f8ec33035b5ffd281e5c468730, uploaded-zip sha256 e4ca44404818d1c517a14971498d7b2000e173219e3e9da95f54b5e80a1d283c. The same-run, attempt-scoped auditor scripts/ci/verify-db-proof-receipt.ts returned Verdict: PASS -- \"DB proof verified: run 35685090342 attempt 1 @ 71a73eae67c49b11718892eebba2019b9144b927, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0\" (71a73eae... is the pull_request merge ref CI executed, whose second parent is the anchor 3379b4b66c775612528d000b8efa6ab565d07853).",
+    "note": "Admitted under the route B deferral (manifest t1_live_db_precondition: deferred_to_ci). This lane changes CI parsers and a CI guard, not application or database code: `git diff --name-only b0731adc9 3379b4b66c775612528d000b8efa6ab565d07853 -- apps packages supabase` is empty. Its real runtime is the Merge Gate workflow, whose trusted copy runs from pull_request.base.sha and therefore cannot exercise the repaired parser until this PR merges. The live-DB obligation is the standard staging proof, discharged here from ONE concluded run at the anchor 3379b4b66c775612528d000b8efa6ab565d07853 rather than a byte-identical neighbour. Closeout G6 separately requires verify and Writable DB proof green on the MERGE SHA. Two earlier runs are superseded rather than withdrawn: 35671433656 at db3249992, cancelled by concurrency when the lane-pr-binding workflow pushed its commit, and 35671709911 at d9d5a533bbdc61888b368677d8a8e5efd73d2a12, which was green but is no longer the anchor after the branch refresh.",
     "queries": [
       {
         "label": "[assert-staging] target guard ran before any test in each credentialed invocation and reported \"OK: target is the approved staging project\"; the verify job's receipt auditor independently printed Observed project: xskgrzbteyqdufktjrjx == Expected staging",
         "result": "ok -- staging confirmed, production never contacted"
       },
       {
-        "label": "staging fixtures seeded before either step: [seed-staging] retained by design: settlement_records, picks, submissions ; reset distribution_receipts: 1 row(s) deleted ; reset distribution_outbox: 11 row(s) deleted ; reset system_runs: 2 row(s) deleted ; sports: 9 upserted ; cappers: 1 upserted ; market_families: 6 upserted ; selection_types: 3 upserted ; market_types: 133 upserted",
+        "label": "staging fixtures seeded before either step: [seed-staging] retained by design: settlement_records, picks, submissions ; reset distribution_receipts: 1 row(s) deleted ; reset distribution_outbox: 12 row(s) deleted ; reset system_runs: 9 row(s) deleted ; sports: 9 upserted ; cappers: 1 upserted ; market_families: 6 upserted ; selection_types: 3 upserted ; market_types: 133 upserted",
         "result": "ok -- mutable tables reset, reference data re-seeded"
       },
       {
@@ -257,8 +257,8 @@
         "count": 25
       },
       {
-        "label": "staging rows reset by the seed step (distribution_receipts 1 + distribution_outbox 11 + system_runs 2)",
-        "count": 14
+        "label": "staging rows reset by the seed step (distribution_receipts 1 + distribution_outbox 12 + system_runs 9)",
+        "count": 22
       },
       {
         "label": "production database connections opened by this job",
@@ -268,14 +268,14 @@
     "skipped": 0,
     "binding": {
       "pr": 1570,
-      "run_head_sha": "d9d5a533bbdc61888b368677d8a8e5efd73d2a12",
-      "run_id": 35671709911,
+      "run_head_sha": "3379b4b66c775612528d000b8efa6ab565d07853",
+      "run_id": 35685090342,
       "attempt": 1,
-      "db_proof_job_id": 106569598536,
-      "verify_job_id": 106570818744,
+      "db_proof_job_id": 106610098741,
+      "verify_job_id": 106610997324,
       "workflow": "CI",
       "conclusion": "success",
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35671709911"
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35685090342"
     },
     "known_non_blocking": "The `Audit production dependencies` step's own outcome is failure and the step is continue-on-error, so the run's CI truth summary prints `audit: failure` while the `verify` job concludes success. That is the pre-existing `pnpm audit --prod` advisory condition affecting every PR on main; it is not introduced by this lane, and it is recorded here rather than omitted."
   }

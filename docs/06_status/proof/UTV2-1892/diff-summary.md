@@ -1,29 +1,29 @@
 # UTV2-1892 Diff Summary
 
-Generated at: 2026-09-22T00:35:00.000Z
+Generated at: 2026-09-22T04:20:00.000Z
 Issue: UTV2-1892
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1892-merge-gate-work-identity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1570
-Head SHA: d9d5a533b
+Head SHA: 3379b4b66
 Merge SHA: pending merge
-Diff base: 6846fe19fb83158aa1735c47c922e6d5c582d234 (origin/main at readmission)
-Diff target: d9d5a533b
+Diff base: b0731adc969e7588490d58a3e0ef60dcd0bed6a7 (origin/main after the branch refresh)
+Diff target: 3379b4b66
 
 ## Git Diff Stat
 ```
  .github/workflows/merge-gate.yml               |  10 +-
- .ops/sync/UTV2-1892.yml                        | 103 +++++++++++
- docs/06_status/lanes/UTV2-1892.json            |  41 +++++
- docs/06_status/proof/UTV2-1892/diff-summary.md |  51 ++++++
- docs/06_status/proof/UTV2-1892/evidence.json   | 239 +++++++++++++++++++++++++
- docs/06_status/proof/UTV2-1892/verification.md | 144 +++++++++++++++
- scripts/ci/file-scope-guard.test.ts            | 217 ++++++++++++++++++++++
+ .ops/sync/UTV2-1892.yml                        | 103 +++++++++
+ docs/06_status/lanes/UTV2-1892.json            |  41 ++++
+ docs/06_status/proof/UTV2-1892/diff-summary.md |  77 +++++++
+ docs/06_status/proof/UTV2-1892/evidence.json   | 282 +++++++++++++++++++++++++
+ docs/06_status/proof/UTV2-1892/verification.md | 212 +++++++++++++++++++
+ scripts/ci/file-scope-guard.test.ts            | 217 +++++++++++++++++++
  scripts/ci/file-scope-guard.ts                 |  18 +-
  scripts/ops/merge-gate-verdict.cjs             |   2 +-
- scripts/ops/merge-gate-verdict.test.ts         | 102 +++++++++++
- 10 files changed, 920 insertions(+), 7 deletions(-)
+ scripts/ops/merge-gate-verdict.test.ts         | 102 +++++++++
+ 10 files changed, 1057 insertions(+), 7 deletions(-)
 ```
 
 ## Git Name Status
@@ -72,6 +72,6 @@ consults or produces a tracker ref. The file-scope grant stays EXACT-LANE -- no
 `docs/06_status/lanes/**` or `.ops/sync/**` directory exemption was introduced.
 
 ## SHA Binding
-Head SHA: d9d5a533b
+Head SHA: 3379b4b66
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1570
