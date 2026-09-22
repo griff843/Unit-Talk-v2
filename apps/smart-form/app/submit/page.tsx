@@ -48,6 +48,12 @@ export default function SubmitPage() {
   const storedClaims = typeof window === 'undefined' ? null : getStoredCapperClaims();
 
   return (
+    <>
+      {qaAuthBypassEnabled && (
+        <div className="border-b border-primary/30 bg-primary/10 px-4 py-2 text-center text-xs font-semibold tracking-wide text-primary" role="note">
+          Local QA preview · test data
+        </div>
+      )}
     <BetForm
       authenticatedCapper={session?.capperId ? {
         capperId: session.capperId,
@@ -57,5 +63,6 @@ export default function SubmitPage() {
         displayName: storedClaims.displayName ?? storedClaims.capperId,
       } : null}
     />
+    </>
   );
 }

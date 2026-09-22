@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { CommandCenterShell } from '@/components/CommandCenterShell';
 import { resolveActorOrRefusal } from '@/lib/require-actor';
-import { getPrivilegedGlobalHealth, type GlobalHealth } from '@/lib/global-health';
 import './globals.css';
 
 // Command Center pages read privileged, request-time operator truth. Never
@@ -36,13 +35,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     );
   }
 
-  let initialHealth: GlobalHealth | null = null;
-  try {
-    initialHealth = await getPrivilegedGlobalHealth();
-  } catch (error) {
-    console.error('command_center.initial_health_read_failed', error);
-  }
-
+  // The shell resolves global health itself, client-side, via `/api/health` --
+  // on mount and every 30s thereafter, behind that route's 30s server cache.
+  //
+  // This layout used to `await getPrivilegedGlobalHealth()` first, purely to
+  // seed the sidebar badge's first paint. That read is `getDashboardData()`:
+  // eighteen database queries, the entire Overview payload, uncached, on the
+  // critical path of EVERY request the middleware matcher admits -- including
+  // 404s, which run no page query at all. Measured against production it cost
+  // 5.5s on a 404 and dominated all 55 routes, because a layout is not a page.
+  //
+  // Seeding one badge is not worth blocking first byte on. Passing `null`
+  // renders the badge as "unavailable" for the moment before the client fetch
+  // resolves, which is honest -- health genuinely is unknown until it is read.
   return (
     <html lang="en" className="dark">
       <body className="cc-shell flex min-h-screen antialiased">
@@ -52,7 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to main content
         </a>
-        <CommandCenterShell initialHealth={initialHealth}>{children}</CommandCenterShell>
+        <CommandCenterShell initialHealth={null} actor={actorResolution.actor} canSignOut={actorResolution.method === 'session'}>{children}</CommandCenterShell>
       </body>
     </html>
   );

@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1906",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1906-parlay-ticket-contract",
+  "branch": "claude/utv2-1906-parlay-ticket-contract",
+  "base_branch": "main",
+  "commit_sha": "c374b42cdc39be8e9e798d492886229152353e6c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1582",
+  "files_changed": [],
+  "file_scope_lock": [
+    "package.json",
+    "packages/contracts/src/index.ts",
+    "packages/contracts/src/ticket.test.ts",
+    "packages/contracts/src/ticket.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1906/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-15T01:57:29.611Z",
+  "heartbeat_at": "2026-09-15T13:46:22.243Z",
+  "closed_at": "2026-09-15T13:46:22.243Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-15T13:46:18.787Z",
+      "verdict": "pass",
+      "merge_sha": "c374b42cdc39be8e9e798d492886229152353e6c",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1906-parlay-ticket-contract",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

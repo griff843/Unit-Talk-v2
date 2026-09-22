@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -18,11 +17,12 @@ import {
   type CredentialExemption,
 } from './workflow-production-credential-guard.js';
 import { ROOT } from '../ops/shared.js';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 const WORKFLOW_DIR = join(ROOT, '.github', 'workflows');
 
 function fixtureDir(files: Record<string, string>): string {
-  const dir = mkdtempSync(join(tmpdir(), 'utv2-1630-wf-'));
+  const dir = createTempWorkspace('utv2-1630-wf-');
   for (const [name, body] of Object.entries(files)) {
     writeFileSync(join(dir, name), body);
   }

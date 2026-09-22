@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep parallel local previews from sharing Next's build output.
+  distDir: process.env.SMART_FORM_DIST_DIR || '.next',
   swcMinify: false,
   poweredByHeader: false,
 

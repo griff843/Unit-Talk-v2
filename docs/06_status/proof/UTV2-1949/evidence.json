@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1949",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": "47868a7e701b6bf294a37d152fdb5b883b2e4506",
+    "verified_source_sha": "7e7f06b761c09eeb95b2ee26a9aaaf89b11aa0f1",
+    "evidence_commit_sha": "7e7f06b761c09eeb95b2ee26a9aaaf89b11aa0f1",
+    "current_pr_head_sha": "eb5379454c5825749c2e3a9c79b53d7780e62c19"
+  },
+  "static_proof": {
+    "status": "pass",
+    "source": "CI",
+    "verified_sha": "7e7f06b761c09eeb95b2ee26a9aaaf89b11aa0f1",
+    "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35493511084/job/106032849424",
+    "note": "verify succeeded at this exact head after ops:merge-wrapper pr-update-branch imported main's merge of #1622. Local full verify cannot exit 0: ci:assert-staging is built to fail outside CI."
+  },
+  "acceptance_gaps": [
+    "28 unreleased temp-directory allocations across 14 files remain outside the lane's pinned file_scope_lock; they are recorded as an exact per-file ratchet in the guard, not repaired.",
+    "The analysis is syntactic, so 28 is a floor rather than a ceiling."
+  ]
+}

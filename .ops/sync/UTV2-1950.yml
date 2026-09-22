@@ -1,0 +1,257 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1950
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1950
+  objective: Command Center operator-checkpoint correctness — truthful
+    non-governed counts and functioning pick detail
+  acceptance_criteria:
+    - |-
+      Queued behind [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection). **Do not widen** [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection) **to include these.** Both defects were measured in the deployed production Command Center (release `92a7e5d32`) through the real authenticated operator browser path on 2026-09-19.
+
+      Both are the same class: the operator surface presents a failure or a truncated sample as though it were truth.
+
+      ---
+
+      ## Defect C — truthful non-governed counts
+
+      `/exceptions?deliveryPopulation=non-governed` fetches rows, hits the PostgREST **1000-row cap**, then computes its status histogram **from that truncated sample** and renders it as the total.
+
+      Deployed UI renders:
+
+      > "**1000 rows** are outside the governed delivery registry … dead_letter: **406** · processing: 32 · sent: **559** · pending: 3"
+
+      Production truth:
+
+      | status | shown | actual |
+      | -- | -- | -- |
+      | sent | 559 | **2,195** |
+      | dead_letter | 406 | **1,614** |
+      | processing | 32 | 32 |
+      | pending | 3 | 3 |
+      | **total** | **1000** | **3,844** |
+
+      `processing: 32` is correct only by coincidence of which rows landed in the sample. This violates the standing "no fabricated values" rule, and it also means the "3,984 non-governed rows" figure in the [UTV2-1946](https://linear.app/unit-talk-v2/issue/UTV2-1946/command-center-exceptions-presents-3984-non-governed-rows-as) acceptance does not match what the UI actually displays.
+
+      ### Required
+
+      * Counts and histograms must come from the **complete authoritative population**, not from a display sample.
+      * A limited 1,000-row display sample **may remain for rendering**, but must never be presented as the total.
+      * Prove with a population **larger than the display limit** that counts remain correct.
+
+      ### Related latent risk
+
+      59 of 126 reads in `apps/command-center/src/lib/data/` carry no explicit `.limit()`. Any of them can silently truncate at 1000 and render partial data as complete — e.g. `board.ts:312` reads `v_governed_pick_performance` (**270,507 rows**) with `.select('*')` and no limit. Fixing C should establish the pattern; a broader sweep is out of scope for this lane.
+
+      ---
+
+      ## Defect D — functioning pick detail
+
+      Every pick detail page is dead. Opening a real governed pick renders:
+
+      ```
+      /picks/816a84c7-58b8-4585-8e7a-7ad1e036342e   status=200
+      "PICK DETAIL UNAVAILABLE
+       getPickDetail promotion history: column pick_promotion_history.promotion_target does not exist"
+      ```
+
+      This fails the operator-checkpoint requirement to open a pick and inspect its lifecycle.
+
+      ### Required
+
+      * Remove the query against the nonexistent `pick_promotion_history.promotion_target`.
+      * Align the read with the **actual current schema** and canonical promotion fields.
+      * Preserve full **lifecycle, promotion, delivery, settlement, correction and audit** truth.
+      * Query failures must render an **explicit degraded state**, never an empty page.
+
+      ---
+
+      ## Required deployed-browser proof
+
+      Not a unit test, not an HTTP 200, not a screenshot of a shell:
+
+      1. Non-governed diagnostic totals **reconcile with production**.
+      2. One real governed pick **opens successfully**.
+      3. **Lifecycle and Track Only containment are visible**.
+      4. **No nonexistent-column error remains.**
+
+      ## Out of scope
+
+      No secrets, no migrations, no containment changes, no delivery activation, no unrelated Command Center fixes, no Smart Form changes.
+  guardrails: []
+  non_goals:
+    - No secrets, no migrations, no containment changes, no delivery activation,
+      no unrelated Command Center fixes, no Smart Form changes.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Queued behind [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection). **Do not widen** [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection) **to include these.** Both defects were measured in the deployed production Command Center (release `92a7e5d32`) through the real authenticated operator browser path on 2026-09-19.
+
+      Both are the same class: the operator surface presents a failure or a truncated sample as though it were truth.
+
+      ---
+    - |-
+      Defect C — truthful non-governed counts
+      `/exceptions?deliveryPopulation=non-governed` fetches rows, hits the PostgREST **1000-row cap**, then computes its status histogram **from that truncated sample** and renders it as the total.
+
+      Deployed UI renders:
+
+      > "**1000 rows** are outside the governed delivery registry … dead_letter: **406** · processing: 32 · sent: **559** · pending: 3"
+
+      Production truth:
+
+      | status | shown | actual |
+      | -- | -- | -- |
+      | sent | 559 | **2,195** |
+      | dead_letter | 406 | **1,614** |
+      | processing | 32 | 32 |
+      | pending | 3 | 3 |
+      | **total** | **1000** | **3,844** |
+
+      `processing: 32` is correct only by coincidence of which rows landed in the sample. This violates the standing "no fabricated values" rule, and it also means the "3,984 non-governed rows" figure in the [UTV2-1946](https://linear.app/unit-talk-v2/issue/UTV2-1946/command-center-exceptions-presents-3984-non-governed-rows-as) acceptance does not match what the UI actually displays.
+
+      ### Required
+
+      * Counts and histograms must come from the **complete authoritative population**, not from a display sample.
+      * A limited 1,000-row display sample **may remain for rendering**, but must never be presented as the total.
+      * Prove with a population **larger than the display limit** that counts remain correct.
+
+      ### Related latent risk
+
+      59 of 126 reads in `apps/command-center/src/lib/data/` carry no explicit `.limit()`. Any of them can silently truncate at 1000 and render partial data as complete — e.g. `board.ts:312` reads `v_governed_pick_performance` (**270,507 rows**) with `.select('*')` and no limit. Fixing C should establish the pattern; a broader sweep is out of scope for this lane.
+
+      ---
+    - >-
+      Defect D — functioning pick detail
+
+      Every pick detail page is dead. Opening a real governed pick renders:
+
+
+      ```
+
+      /picks/816a84c7-58b8-4585-8e7a-7ad1e036342e   status=200
+
+      "PICK DETAIL UNAVAILABLE
+       getPickDetail promotion history: column pick_promotion_history.promotion_target does not exist"
+      ```
+
+
+      This fails the operator-checkpoint requirement to open a pick and inspect
+      its lifecycle.
+
+
+      ### Required
+
+
+      * Remove the query against the nonexistent
+      `pick_promotion_history.promotion_target`.
+
+      * Align the read with the **actual current schema** and canonical
+      promotion fields.
+
+      * Preserve full **lifecycle, promotion, delivery, settlement, correction
+      and audit** truth.
+
+      * Query failures must render an **explicit degraded state**, never an
+      empty page.
+
+
+      ---
+    - |-
+      Required deployed-browser proof
+      Not a unit test, not an HTTP 200, not a screenshot of a shell:
+
+      1. Non-governed diagnostic totals **reconcile with production**.
+      2. One real governed pick **opens successfully**.
+      3. **Lifecycle and Track Only containment are visible**.
+      4. **No nonexistent-column error remains.**
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1950/command-center-operator-checkpoint-correctness-truthful-non-governed
+    title: Command Center operator-checkpoint correctness — truthful non-governed
+      counts and functioning pick detail
+    description: |-
+      Queued behind [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection). **Do not widen** [UTV2-1948](https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection) **to include these.** Both defects were measured in the deployed production Command Center (release `92a7e5d32`) through the real authenticated operator browser path on 2026-09-19.
+
+      Both are the same class: the operator surface presents a failure or a truncated sample as though it were truth.
+
+      ---
+
+      ## Defect C — truthful non-governed counts
+
+      `/exceptions?deliveryPopulation=non-governed` fetches rows, hits the PostgREST **1000-row cap**, then computes its status histogram **from that truncated sample** and renders it as the total.
+
+      Deployed UI renders:
+
+      > "**1000 rows** are outside the governed delivery registry … dead_letter: **406** · processing: 32 · sent: **559** · pending: 3"
+
+      Production truth:
+
+      | status | shown | actual |
+      | -- | -- | -- |
+      | sent | 559 | **2,195** |
+      | dead_letter | 406 | **1,614** |
+      | processing | 32 | 32 |
+      | pending | 3 | 3 |
+      | **total** | **1000** | **3,844** |
+
+      `processing: 32` is correct only by coincidence of which rows landed in the sample. This violates the standing "no fabricated values" rule, and it also means the "3,984 non-governed rows" figure in the [UTV2-1946](https://linear.app/unit-talk-v2/issue/UTV2-1946/command-center-exceptions-presents-3984-non-governed-rows-as) acceptance does not match what the UI actually displays.
+
+      ### Required
+
+      * Counts and histograms must come from the **complete authoritative population**, not from a display sample.
+      * A limited 1,000-row display sample **may remain for rendering**, but must never be presented as the total.
+      * Prove with a population **larger than the display limit** that counts remain correct.
+
+      ### Related latent risk
+
+      59 of 126 reads in `apps/command-center/src/lib/data/` carry no explicit `.limit()`. Any of them can silently truncate at 1000 and render partial data as complete — e.g. `board.ts:312` reads `v_governed_pick_performance` (**270,507 rows**) with `.select('*')` and no limit. Fixing C should establish the pattern; a broader sweep is out of scope for this lane.
+
+      ---
+
+      ## Defect D — functioning pick detail
+
+      Every pick detail page is dead. Opening a real governed pick renders:
+
+      ```
+      /picks/816a84c7-58b8-4585-8e7a-7ad1e036342e   status=200
+      "PICK DETAIL UNAVAILABLE
+       getPickDetail promotion history: column pick_promotion_history.promotion_target does not exist"
+      ```
+
+      This fails the operator-checkpoint requirement to open a pick and inspect its lifecycle.
+
+      ### Required
+
+      * Remove the query against the nonexistent `pick_promotion_history.promotion_target`.
+      * Align the read with the **actual current schema** and canonical promotion fields.
+      * Preserve full **lifecycle, promotion, delivery, settlement, correction and audit** truth.
+      * Query failures must render an **explicit degraded state**, never an empty page.
+
+      ---
+
+      ## Required deployed-browser proof
+
+      Not a unit test, not an HTTP 200, not a screenshot of a shell:
+
+      1. Non-governed diagnostic totals **reconcile with production**.
+      2. One real governed pick **opens successfully**.
+      3. **Lifecycle and Track Only containment are visible**.
+      4. **No nonexistent-column error remains.**
+
+      ## Out of scope
+
+      No secrets, no migrations, no containment changes, no delivery activation, no unrelated Command Center fixes, no Smart Form changes.
+    captured_at: 2026-09-21T02:37:01.681Z
+    description_sha256: cc03565a5036d9587cf39f125d2ccf457f6d6ec539c38871dde9958f7ca40825
+  contract_hash: 9b4b38dcfc5ae6a5cc8d793127e72cbe5a73cfe2a0e4639e4ce3f7375589bf92

@@ -53,6 +53,7 @@ import {
   extractProjectRefFromUrl,
 } from '../ci/isolated-proof-attestation.js';
 import { classifyDeadLetter } from './outbox-triage.js';
+import { isGovernedDeliveryTarget } from '@unit-talk/contracts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -66,7 +67,7 @@ export const READINESS_LEDGER_SCHEMA_VERSION = 2;
  * Bumped whenever measurement semantics change, so a ledger can be attributed to
  * the code that produced it rather than to "some earlier version of the script".
  */
-export const GENERATOR_VERSION = '1.0.0';
+export const GENERATOR_VERSION = '1.1.0';
 
 /**
  * Freshness contract. The refresher runs every 6h; `max_age_hours` is the SLA an
@@ -82,6 +83,7 @@ export const FRESHNESS_CONTRACT = {
 export const THRESHOLDS = {
   ingestorCycleMaxMinutes: 30,
   ingestorOfferMaxMinutes: 30,
+  gradingInputMaxHours: 6,
   workerHeartbeatMaxMinutes: 30,
   outboxStaleProcessingMinutes: 5,
   outboxStalePendingMinutes: 30,
@@ -105,7 +107,7 @@ export const SCHEDULED_OBSERVERS = [
   'reconcile-stale-lanes.yml',
 ] as const;
 
-export const QUEUE_SEMANTICS_VERSION = '1.1';
+export const QUEUE_SEMANTICS_VERSION = '1.2';
 export const QUEUE_SEMANTICS_DOC = 'docs/05_operations/QUEUE_READINESS_SEMANTICS.md';
 
 // ── Ledger shape ─────────────────────────────────────────────────────────────
@@ -435,6 +437,231 @@ export async function probeIngestorHealth(ctx: ProbeContext): Promise<ReadinessD
   }
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * Grading health is the outcome of the latest completed pass, not evidence that
+ * the cron woke up. A fresh heartbeat alongside a stale-input no-op is RED.
+ */
+export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDimension> {
+  const base = {
+    id: 'grading_health',
+    title: 'Latest grading pass has healthy work/input outcome',
+    blocking: true,
+    method: {
+      kind: 'supabase_read' as const,
+      source: `supabase:${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}`,
+      query:
+        "system_runs where run_type='grading.run' and status!='running' " +
+        'order by started_at desc limit 1; inspect details.outcome_class and details.input_freshness',
+    },
+  };
+
+  try {
+    const db = requireDb(ctx);
+    const run = await db.latestRow(
+      'system_runs',
+      'status, started_at, finished_at, details',
+      [
+        { column: 'run_type', op: 'eq', value: 'grading.run' },
+        { column: 'status', op: 'neq', value: 'running' },
+      ],
+      'started_at',
+    );
+
+    if (!run) {
+      return {
+        ...base,
+        status: 'fail',
+        observed_at: ctx.now.toISOString(),
+        evidence: 'No completed grading.run exists; grading outcome and input freshness are unproven.',
+        measured: {
+          outcome_class: null,
+          input_freshness_status: null,
+        },
+        unreadable_reason: null,
+      };
+    }
+
+    const details = recordValue(run['details']);
+    const freshness = recordValue(details?.['input_freshness']);
+    const outcomeClass =
+      typeof details?.['outcome_class'] === 'string'
+        ? details['outcome_class']
+        : null;
+    const runStatus = typeof run['status'] === 'string' ? run['status'] : null;
+    const freshnessStatus =
+      typeof freshness?.['status'] === 'string' ? freshness['status'] : null;
+    const thresholdHours =
+      typeof freshness?.['threshold_hours'] === 'number'
+        ? freshness['threshold_hours']
+        : null;
+    const gradedCount =
+      typeof details?.['graded_count'] === 'number' ? details['graded_count'] : null;
+    const dataDependentSkipped =
+      typeof details?.['data_dependent_skipped_count'] === 'number'
+        ? details['data_dependent_skipped_count']
+        : null;
+    const rowsScanned =
+      typeof details?.['rows_scanned'] === 'number' ? details['rows_scanned'] : null;
+    const skippedCount =
+      typeof details?.['skipped_count'] === 'number' ? details['skipped_count'] : null;
+
+    const failures: string[] = [];
+    if (!outcomeClass) {
+      failures.push('latest grading.run has no details.outcome_class');
+    } else if (outcomeClass === 'degraded_stale_input') {
+      failures.push('latest grading.run reports degraded_stale_input');
+    } else if (outcomeClass === 'failed') {
+      failures.push('latest grading.run reports failed');
+    } else if (outcomeClass === 'succeeded_with_work') {
+      if (runStatus !== 'succeeded') failures.push(`succeeded_with_work has status ${runStatus ?? 'missing'}`);
+      if (gradedCount === null || gradedCount <= 0)
+        failures.push('succeeded_with_work does not report a positive graded_count');
+    } else if (outcomeClass === 'no_op_nothing_gradeable') {
+      if (runStatus !== 'succeeded')
+        failures.push(`no_op_nothing_gradeable has status ${runStatus ?? 'missing'}`);
+      // Rows were examined and none graded. That is a legitimate outcome, but it
+      // must not be recorded as `no_op_no_input`, which positively asserts the
+      // population was empty.
+      if (rowsScanned === 0 && skippedCount === 0)
+        failures.push('no_op_nothing_gradeable examined nothing; that is no_op_no_input');
+    } else if (outcomeClass === 'no_op_no_input') {
+      if (runStatus !== 'succeeded') failures.push(`no_op_no_input has status ${runStatus ?? 'missing'}`);
+      // The conflation this lane exists to remove: a pass that examined rows and
+      // graded none must never be recorded as having had no input.
+      if ((rowsScanned ?? 0) > 0 || (skippedCount ?? 0) > 0)
+        failures.push(
+          `no_op_no_input examined ${rowsScanned ?? 0} rows and skipped ${skippedCount ?? 0}; that is no_op_nothing_gradeable`,
+        );
+      if ((dataDependentSkipped ?? 0) > 0 && freshnessStatus !== 'fresh')
+        failures.push(
+          `no_op_no_input has ${dataDependentSkipped} data-dependent skips with ${freshnessStatus ?? 'missing'} input`,
+        );
+    } else {
+      failures.push(`latest grading.run has unknown outcome_class ${outcomeClass}`);
+    }
+    if (
+      thresholdHours !== null &&
+      thresholdHours !== THRESHOLDS.gradingInputMaxHours
+    ) {
+      failures.push(
+        `grading input threshold is ${thresholdHours}h, expected ${THRESHOLDS.gradingInputMaxHours}h`,
+      );
+    }
+
+    const measured = {
+      run_status: runStatus,
+      started_at: run['started_at'] ?? null,
+      finished_at: run['finished_at'] ?? null,
+      outcome_class: outcomeClass,
+      rows_scanned: rowsScanned,
+      gradeable_rows: details?.['gradeable_rows'] ?? null,
+      graded_count: gradedCount,
+      skipped_count: details?.['skipped_count'] ?? null,
+      skipped_reasons: details?.['skipped_reasons'] ?? null,
+      data_dependent_skipped_count: dataDependentSkipped,
+      error_count: details?.['error_count'] ?? null,
+      newest_game_result_sourced_at:
+        details?.['newest_game_result_sourced_at'] ?? null,
+      input_freshness_status: freshnessStatus,
+      input_freshness_age_ms: freshness?.['age_ms'] ?? null,
+      input_freshness_threshold_hours: thresholdHours,
+    };
+
+    return {
+      ...base,
+      status: failures.length === 0 ? 'pass' : 'fail',
+      observed_at: ctx.now.toISOString(),
+      evidence:
+        failures.length === 0
+          ? `Latest grading.run outcome=${outcomeClass}, status=${runStatus}, graded=${gradedCount ?? 'unknown'}, input=${freshnessStatus ?? 'not-required'}.`
+          : `${failures.join('; ')}. This is grading outcome/input health; cron recency alone cannot satisfy it.`,
+      measured,
+      unreadable_reason: null,
+    };
+  } catch (error) {
+    return unreadable(base, errorMessage(error), ctx.now);
+  }
+}
+
+export const STALE_PROCESSING_READ_LIMIT = 20000;
+
+export interface StaleProcessingBuckets {
+  /** Rows on a target some worker configuration can actually claim and reap. */
+  claimable: number;
+  /**
+   * Rows pinned to a target no worker governs. No worker polls them, so no worker
+   * can claim them, and `reapStaleClaims` never sees them either. They are inert by
+   * construction and will sit in `processing` forever.
+   */
+  unclaimable: number;
+  /** The distinct unclaimable targets, so the evidence names them. */
+  unclaimableTargets: string[];
+}
+
+/**
+ * Split stale `processing` rows by whether any worker could ever claim them.
+ *
+ * ## Why this is not a count query
+ *
+ * The previous form of this probe counted every `status='processing'` row older
+ * than the window and failed a **blocking** readiness dimension on the total. That
+ * total is dominated by 32 rows on four `utv2-1497-canary-*` targets: synthetic
+ * targets that appear in no worker configuration. No worker polls them, so no
+ * worker claims them, so `reapStaleClaims` never reaps them. They cannot drain,
+ * which means the dimension they fail can never pass, which means a *real* stuck
+ * row on a real target changes nothing an operator would see. A control that is
+ * already red conveys no information when the thing it watches actually breaks.
+ *
+ * The mirror image of the same missing distinction lives in
+ * `apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts`, which reads the same
+ * population and asserts `ok(true)` on it. So that control can never fail while
+ * this one can never pass. Neither asked the question that decides the row:
+ * could any worker ever claim this?
+ *
+ * `isGovernedDeliveryTarget` is imported from `@unit-talk/contracts` rather than
+ * matched against a literal here. A hardcoded comparison is exactly how
+ * `discord:<channelId>` became a delivery lane no control could see (UTV2-1923),
+ * and a second copy of the target list is how this gate and the worker would come
+ * to disagree about the same row.
+ *
+ * Fail-closed direction: a row whose `target` is absent or not a string counts as
+ * **claimable**. An unreadable target is not evidence that nothing owns the row.
+ */
+export function bucketStaleProcessingRows(
+  rows: readonly Record<string, unknown>[],
+): StaleProcessingBuckets {
+  const buckets: StaleProcessingBuckets = {
+    claimable: 0,
+    unclaimable: 0,
+    unclaimableTargets: [],
+  };
+  const seen = new Set<string>();
+
+  for (const row of rows) {
+    const rawTarget = row['target'];
+    const target = typeof rawTarget === 'string' ? rawTarget : null;
+
+    if (target !== null && !isGovernedDeliveryTarget(target)) {
+      buckets.unclaimable += 1;
+      if (!seen.has(target)) {
+        seen.add(target);
+        buckets.unclaimableTargets.push(target);
+      }
+    } else {
+      buckets.claimable += 1;
+    }
+  }
+
+  buckets.unclaimableTargets.sort();
+  return buckets;
+}
+
 export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<ReadinessDimension> {
   const base = {
     id: 'worker_outbox_health',
@@ -445,7 +672,8 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       source: `supabase:${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}`,
       query:
         "system_runs where run_type='worker.heartbeat' order by started_at desc limit 1; " +
-        "count distribution_outbox where status='processing' and updated_at < now-5m; " +
+        "select target from distribution_outbox where status='processing' and updated_at < now-5m, " +
+        'partitioned by isGovernedDeliveryTarget(target); ' +
         "count distribution_outbox where status='pending' and attempt_count>0 and updated_at < now-30m; " +
         "count distribution_outbox where status in ('pending','processing')",
     },
@@ -460,7 +688,7 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       ctx.now.getTime() - THRESHOLDS.outboxStalePendingMinutes * 60_000,
     ).toISOString();
 
-    const [heartbeat, pending, processing, staleUnknown, stuckRetryable] = await Promise.all([
+    const [heartbeat, pending, processing, staleProcessingRows, stuckRetryable] = await Promise.all([
       db.latestRow(
         'system_runs',
         'status, started_at',
@@ -470,10 +698,18 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       db.countRows('distribution_outbox', [{ column: 'status', op: 'eq', value: 'pending' }]),
       db.countRows('distribution_outbox', [{ column: 'status', op: 'eq', value: 'processing' }]),
       // Bucket 5 (stale-unknown): processing past the expected processing window.
-      db.countRows('distribution_outbox', [
-        { column: 'status', op: 'eq', value: 'processing' },
-        { column: 'updated_at', op: 'lt', value: staleProcessingBefore },
-      ]),
+      // Rows, not a count -- the verdict depends on each row's target, and
+      // `DbFilter` cannot express "the target is one a worker governs".
+      // See {@link bucketStaleProcessingRows}.
+      db.selectRows(
+        'distribution_outbox',
+        'id, target, updated_at',
+        [
+          { column: 'status', op: 'eq', value: 'processing' },
+          { column: 'updated_at', op: 'lt', value: staleProcessingBefore },
+        ],
+        STALE_PROCESSING_READ_LIMIT,
+      ),
       // Bucket 4 gone bad: attempted, still pending, past the retry window.
       db.countRows('distribution_outbox', [
         { column: 'status', op: 'eq', value: 'pending' },
@@ -486,12 +722,25 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
     const heartbeatStatus = typeof heartbeat?.['status'] === 'string' ? (heartbeat['status'] as string) : null;
     const heartbeatAge = heartbeatAt ? minutesBetween(heartbeatAt, ctx.now) : null;
 
+    const staleBuckets = bucketStaleProcessingRows(staleProcessingRows);
+    const staleUnknown = staleBuckets.claimable + staleBuckets.unclaimable;
+
     const failures: string[] = [];
     if (heartbeatAge === null) failures.push('no worker.heartbeat row exists');
     else if (heartbeatAge > THRESHOLDS.workerHeartbeatMaxMinutes)
       failures.push(`worker.heartbeat is ${heartbeatAge}m old (threshold ${THRESHOLDS.workerHeartbeatMaxMinutes}m), last status "${heartbeatStatus}"`);
-    if (staleUnknown > 0)
-      failures.push(`${staleUnknown} bucket:stale_unknown rows (processing > ${THRESHOLDS.outboxStaleProcessingMinutes}m)`);
+    // Only claimable rows fail the dimension. An unclaimable row is a data-hygiene
+    // finding, not a worker-health one: no worker can drain it, so failing on it
+    // pins this blocking dimension red forever and hides the rows that matter.
+    // It stays measured, named and visible in the evidence -- it is not discarded.
+    if (staleBuckets.claimable > 0)
+      failures.push(
+        `${staleBuckets.claimable} claimable bucket:stale_unknown rows (processing > ${THRESHOLDS.outboxStaleProcessingMinutes}m)`,
+      );
+    if (staleProcessingRows.length >= STALE_PROCESSING_READ_LIMIT)
+      failures.push(
+        `stale processing read hit its ${STALE_PROCESSING_READ_LIMIT}-row limit, so the partition is incomplete`,
+      );
     if (stuckRetryable > 0)
       failures.push(`${stuckRetryable} attempted rows still pending after ${THRESHOLDS.outboxStalePendingMinutes}m`);
 
@@ -501,7 +750,12 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       observed_at: ctx.now.toISOString(),
       evidence:
         `Queue buckets per ${QUEUE_SEMANTICS_DOC} v${QUEUE_SEMANTICS_VERSION}: pending=${pending}, processing=${processing}, ` +
-        `stale_unknown=${staleUnknown}, attempted-and-stuck=${stuckRetryable}. ` +
+        `stale_unknown=${staleUnknown} (claimable=${staleBuckets.claimable}, ` +
+        `unclaimable=${staleBuckets.unclaimable}` +
+        (staleBuckets.unclaimableTargets.length > 0
+          ? ` on ${staleBuckets.unclaimableTargets.join(', ')}`
+          : '') +
+        `), attempted-and-stuck=${stuckRetryable}. ` +
         `worker.heartbeat ${heartbeatAt ?? 'none'} (${heartbeatAge ?? 'n/a'}m, status ${heartbeatStatus ?? 'n/a'}). ` +
         (failures.length === 0 ? 'No stuck rows.' : `FAIL: ${failures.join('; ')}.`),
       measured: {
@@ -511,6 +765,9 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
         pending_count: pending,
         processing_count: processing,
         stale_unknown_count: staleUnknown,
+        stale_unknown_claimable_count: staleBuckets.claimable,
+        stale_unknown_unclaimable_count: staleBuckets.unclaimable,
+        stale_unknown_unclaimable_targets: staleBuckets.unclaimableTargets,
         stuck_retryable_count: stuckRetryable,
       },
       unreadable_reason: null,
@@ -961,6 +1218,7 @@ export async function probeConstitutionConvergence(ctx: ProbeContext): Promise<R
 export const PROBES = [
   probeDeploySha,
   probeIngestorHealth,
+  probeGradingHealth,
   probeWorkerOutboxHealth,
   probeDeadLetterCount,
   probeDbTripwires,

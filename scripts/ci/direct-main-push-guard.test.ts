@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {
   classifyMainCommit,
   emergencyRecordReferencesSha,
   type CommitClassificationInput,
 } from './direct-main-push-guard.js';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 const INCIDENT_SHA = '74eb6cd65da829cb969a4a7819494a1d3747ccb2';
 
@@ -125,7 +125,7 @@ test('classifyMainCommit: github-actions[bot] with the allow-listed message but 
 // ── documented emergency exceptions ──────────────────────────────────────────────
 
 function makeTmpIncidentsRoot(): { root: string; incidentsDir: string } {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'direct-main-push-guard-test-'));
+  const root = createTempWorkspace('direct-main-push-guard-test-');
   const incidentsDir = path.join(root, 'docs', '06_status', 'INCIDENTS');
   fs.mkdirSync(incidentsDir, { recursive: true });
   return { root, incidentsDir };

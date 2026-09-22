@@ -1,4 +1,4 @@
-import type { SettlementRequest } from '@unit-talk/contracts';
+import type { OperatorGradingContext, SettlementRequest } from '@unit-talk/contracts';
 import type { RepositoryBundle } from '@unit-talk/db';
 import { normalizeApiError } from '../errors.js';
 import type { ApiResponse } from '../http.js';
@@ -64,6 +64,25 @@ function coerceSettlementRequest(body: unknown): SettlementRequest {
     notes: readOptionalString(payload.notes),
     reviewReason: readOptionalString(payload.reviewReason),
     settledBy: readString(payload.settledBy),
+    operatorGradingContext: coerceOperatorGradingContext(payload.operatorGradingContext),
+  };
+}
+
+/**
+ * Absent stays absent; present is carried through *as written*, including a
+ * partially-filled object. Substituting empty strings for missing keys here
+ * would turn a malformed body into a well-formed one and hand the settlement
+ * path a context that validation has nothing to object to.
+ */
+function coerceOperatorGradingContext(value: unknown): OperatorGradingContext | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    outcomeBasis: readString(value.outcomeBasis),
+    resultSourceUrl: readString(value.resultSourceUrl),
+    observedAt: readString(value.observedAt),
   };
 }
 

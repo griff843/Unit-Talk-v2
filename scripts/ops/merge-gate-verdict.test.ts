@@ -19,6 +19,22 @@ function approvedComment({ pr = PR_NUMBER, headSha = HEAD_SHA, issue = 'UTV2-150
   ].join('\n');
 }
 
+/**
+ * UTV2-1926: a CHANGES_REQUIRED body. `bounce` omitted produces a body with NO
+ * `Bounce:` line at all -- the exact shape of the historical #1592 comments,
+ * and invalid under docs/05_operations/schemas/pm-verdict-v1.md rule 6.
+ */
+function changesRequiredComment({ bounce = undefined, issue = 'UTV2-1501' } = {}) {
+  return [
+    'PM_VERDICT: CHANGES_REQUIRED',
+    'schema: pm-verdict/v1',
+    `Issue: ${issue}`,
+    ...(bounce === undefined ? [] : [`Bounce: ${bounce}`]),
+    '',
+    'Scope: something needs changing.',
+  ].join('\n');
+}
+
 function verdictRecord(body, overrides = {}) {
   return {
     user: 'griff843',
@@ -149,14 +165,16 @@ test('no verdicts at all fails with the generic missing-verdict message', () => 
   assert.match(errors[0], /requires a valid pm-verdict\/v1 comment/i);
 });
 
-test('bounce limit is preserved: 3 CHANGES_REQUIRED verdicts trips the limit', () => {
-  const changesRequiredBody = [
-    'PM_VERDICT: CHANGES_REQUIRED',
-    'schema: pm-verdict/v1',
-    'Issue: UTV2-1501',
-    'Bounce: 1',
-  ].join('\n');
-  const verdicts = [verdictRecord(changesRequiredBody), verdictRecord(changesRequiredBody), verdictRecord(changesRequiredBody)];
+test('bounce limit is preserved: a declared bounce 3 trips the limit', () => {
+  // UTV2-1926: the fixture used to be three identical `Bounce: 1` comments,
+  // which passed only because the implementation counted comments. Under the
+  // canonical schema the PM declares the bounce number, so a real third cycle
+  // is 1 -> 2 -> 3.
+  const verdicts = [
+    verdictRecord(changesRequiredComment({ bounce: 1 })),
+    verdictRecord(changesRequiredComment({ bounce: 2 })),
+    verdictRecord(changesRequiredComment({ bounce: 3 })),
+  ];
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.ok(errors.some((e) => /Bounce limit exceeded/i.test(e)));
 });
@@ -207,14 +225,179 @@ test('UTV2-1554: fails closed when every parsed verdict is unauthorized, even a 
 });
 
 test('UTV2-1554: bounce limit only counts authorized CHANGES_REQUIRED verdicts', () => {
-  const changesRequiredBody = ['PM_VERDICT: CHANGES_REQUIRED', 'schema: pm-verdict/v1', 'Issue: UTV2-1501'].join('\n');
+  // UTV2-1926: the unauthorized comments now declare `Bounce: 3` outright, so
+  // the trust boundary is what this asserts -- not the absence of a field.
   const verdicts = [
-    verdictRecord(changesRequiredBody), // 1 authorized
-    verdictRecord(changesRequiredBody, { user: 'some-random-user', userType: 'User' }), // unauthorized, doesn't count
-    verdictRecord(changesRequiredBody, { user: 'some-random-user', userType: 'User' }), // unauthorized, doesn't count
+    verdictRecord(changesRequiredComment({ bounce: 1 })), // 1 authorized
+    verdictRecord(changesRequiredComment({ bounce: 3 }), { user: 'some-random-user', userType: 'User' }),
+    verdictRecord(changesRequiredComment({ bounce: 3 }), { user: 'github-actions[bot]', userType: 'Bot' }),
   ];
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
+});
+
+
+// ---------------------------------------------------------------------------
+// UTV2-1926 -- bounce state comes from the canonical `Bounce:` field.
+//
+// docs/05_operations/schemas/pm-verdict-v1.md is the authority: validation rule
+// 6 requires a numeric `Bounce:` on a CHANGES_REQUIRED verdict, and the Bounce
+// Limit section makes bounce 3 the Failed / PM-triage trigger. The previous
+// implementation counted CHANGES_REQUIRED-SHAPED COMMENTS instead, so three
+// comments that were invalid under the schema froze a PR permanently.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1926: parseVerdict extracts a numeric Bounce field', () => {
+  assert.equal(parseVerdict(changesRequiredComment({ bounce: 2 })).bounce, 2);
+  assert.equal(parseVerdict(changesRequiredComment({ bounce: 0 })).bounce, 0);
+});
+
+test('UTV2-1926: parseVerdict yields a null bounce for absent or malformed fields', () => {
+  // Absent entirely -- the historical #1592 shape.
+  assert.equal(parseVerdict(changesRequiredComment()).bounce, null);
+  // Present but not a number.
+  assert.equal(parseVerdict(changesRequiredComment({ bounce: 'two' })).bounce, null);
+  // Numeric-ish but not a bare integer.
+  assert.equal(parseVerdict(changesRequiredComment({ bounce: '2 of 3' })).bounce, null);
+  assert.equal(parseVerdict(changesRequiredComment({ bounce: '-1' })).bounce, null);
+  assert.equal(parseVerdict(changesRequiredComment({ bounce: '1.5' })).bounce, null);
+  // An APPROVED verdict carries no bounce.
+  assert.equal(parseVerdict(approvedComment()).bounce, null);
+});
+
+test('UTV2-1926 R1: CHANGES_REQUIRED without a Bounce field does not count toward the limit', () => {
+  const verdicts = [
+    verdictRecord(changesRequiredComment()),
+    verdictRecord(changesRequiredComment()),
+    verdictRecord(changesRequiredComment()),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
+  // ...and it still BLOCKS. Narrowing the freeze must never become a pass.
+  assert.ok(errors.some((e) => /not "APPROVED"/.test(e)));
+});
+
+test('UTV2-1926 R2: a malformed Bounce field does not count toward the limit', () => {
+  for (const malformed of ['two', '2 of 3', '-1', '1.5', 'one']) {
+    const verdicts = [
+      verdictRecord(changesRequiredComment({ bounce: malformed })),
+      verdictRecord(changesRequiredComment({ bounce: malformed })),
+      verdictRecord(changesRequiredComment({ bounce: malformed })),
+    ];
+    const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+    assert.ok(
+      !errors.some((e) => /Bounce limit exceeded/i.test(e)),
+      `malformed bounce "${malformed}" must not count`,
+    );
+    assert.ok(errors.some((e) => /not "APPROVED"/.test(e)), `malformed bounce "${malformed}" must still block`);
+  }
+});
+
+test('UTV2-1926 R3: a valid bounce 1 is accepted and does not trip the limit', () => {
+  const verdicts = [verdictRecord(changesRequiredComment({ bounce: 1 }))];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
+});
+
+test('UTV2-1926 R4: a valid bounce 2 is accepted and does not trip the limit', () => {
+  const verdicts = [
+    verdictRecord(changesRequiredComment({ bounce: 1 })),
+    verdictRecord(changesRequiredComment({ bounce: 2 })),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
+});
+
+test('UTV2-1926 R5: a valid bounce 3 trips Failed / PM triage', () => {
+  const verdicts = [verdictRecord(changesRequiredComment({ bounce: 3 }))];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  const tripped = errors.find((e) => /Bounce limit exceeded/i.test(e));
+  assert.ok(tripped, 'a declared bounce 3 must trip the limit');
+  assert.match(tripped, /Bounce: 3/);
+  assert.match(tripped, /Failed for PM triage/i);
+});
+
+test('UTV2-1926 R5: a declared bounce above 3 also trips', () => {
+  const verdicts = [verdictRecord(changesRequiredComment({ bounce: 4 }))];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(errors.some((e) => /Bounce limit exceeded/i.test(e)));
+});
+
+test('UTV2-1926 R6: bounce state is the declared maximum, not the latest declaration', () => {
+  // A later `Bounce: 1` must not reset a freeze already reached. The freeze is
+  // a ratchet; only PM re-scoping clears it, and that is not a gate decision.
+  const verdicts = [
+    verdictRecord(changesRequiredComment({ bounce: 3 })),
+    verdictRecord(changesRequiredComment({ bounce: 1 })),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(errors.some((e) => /Bounce limit exceeded/i.test(e)));
+});
+
+test('UTV2-1926 R6: many CHANGES_REQUIRED comments at bounce 1 never trip the limit', () => {
+  const verdicts = Array.from({ length: 9 }, () => verdictRecord(changesRequiredComment({ bounce: 1 })));
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
+});
+
+test('UTV2-1926 R7: an unauthorized declared bounce 3 is ignored', () => {
+  const verdicts = [
+    verdictRecord(changesRequiredComment({ bounce: 3 }), { user: 'some-random-user', userType: 'User' }),
+    verdictRecord(changesRequiredComment({ bounce: 3 }), { user: 'github-actions[bot]', userType: 'Bot' }),
+    verdictRecord(approvedComment()),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.deepEqual(errors, []);
+});
+
+test('UTV2-1926: the #1592 shape -- three bounce-less CHANGES_REQUIRED then an exact-head APPROVED passes', () => {
+  // The live artifact this repair was measured against: PR #1592 carried three
+  // authorized CHANGES_REQUIRED comments, none with a Bounce field, plus an
+  // APPROVED. Under the counting implementation the gate reported
+  // "Bounce limit exceeded (3 CHANGES_REQUIRED verdicts)" on EVERY verdict,
+  // because the check runs unconditionally -- so no PM action could ever
+  // unblock it and the PR was permanently unmergeable.
+  const verdicts = [
+    verdictRecord(changesRequiredComment()),
+    verdictRecord(approvedComment({ headSha: OLD_HEAD_SHA })),
+    verdictRecord(changesRequiredComment()),
+    verdictRecord(changesRequiredComment()),
+    verdictRecord(approvedComment()),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.deepEqual(errors, []);
+});
+
+test('UTV2-1926 R8: exact-PR and exact-head APPROVED validation is unchanged by the repair', () => {
+  const history = [
+    verdictRecord(changesRequiredComment()),
+    verdictRecord(changesRequiredComment()),
+    verdictRecord(changesRequiredComment()),
+  ];
+
+  // Stale head still fails, with the same message, after the same history.
+  const stale = validateT1Verdicts([...history, verdictRecord(approvedComment({ headSha: OLD_HEAD_SHA }))], {
+    prNumber: PR_NUMBER,
+    headSha: HEAD_SHA,
+    authorizedReviewers: REVIEWERS,
+  });
+  assert.ok(stale.some((e) => /stale/i.test(e)));
+  assert.ok(!stale.some((e) => /Bounce limit exceeded/i.test(e)));
+
+  // Wrong PR still fails.
+  const wrongPr = validateT1Verdicts([...history, verdictRecord(approvedComment({ pr: PR_NUMBER + 1 }))], {
+    prNumber: PR_NUMBER,
+    headSha: HEAD_SHA,
+    authorizedReviewers: REVIEWERS,
+  });
+  assert.ok(wrongPr.some((e) => /PR mismatch/i.test(e)));
+
+  // Missing Head SHA still fails.
+  const noHead = validateT1Verdicts(
+    [...history, verdictRecord('PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: UTV2-1501\nPR: ' + PR_NUMBER)],
+    { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS },
+  );
+  assert.ok(noHead.some((e) => /missing a "Head SHA:" field/i.test(e)));
 });
 
 for (const issue of ['WORK-2026091001', 'UTV2-1501', 'UNI-42']) {

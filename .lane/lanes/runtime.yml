@@ -43,6 +43,19 @@ allowed_path_globs:
   - .lane/lanes/**
   - .github/workflows/**
   - deploy/production/**
+  # UTV2-1922: production promotion and production rollback are one transaction.
+  # `deploy.yml`'s promote step calls `deploy/rollback.sh` as its recovery path,
+  # so a repair to what promotion does on failure is not expressible without
+  # also repairing what the rollback restores -- and `deploy/rollback.sh` sits
+  # under `deploy/`, which only `governance.yml` admits. A runtime lane could
+  # therefore fix the promotion half and not the recovery half, which is how the
+  # 2026-09-16 edge outage was able to leave `.env.edge` and
+  # `.env.command-center` out of every snapshot/restore path at once. Admitted
+  # as one exact file, in the same narrow form as `promotion.ts`,
+  # `smart-form.ts` and `db-writer-classification.json` above -- deliberately
+  # NOT a `deploy/**` glob: every other file under `deploy/` outside
+  # `deploy/production/**` stays governance-only.
+  - deploy/rollback.sh
   - docs/06_status/proof/**
   - docs/06_status/readiness/**
   - package.json

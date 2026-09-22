@@ -13,6 +13,7 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
+import { observeSettlementRecap, type SettlementRecapOutcome } from './settlement-recap-observation.js';
 import {
   isEvidencePlanePick,
   recordGradedSettlement,
@@ -34,6 +35,25 @@ export interface GradingPassResult {
   skipped: number;
   errors: number;
   details: GradingPickResult[];
+  /** Present for real grading runs; optional so injected test runners remain source-compatible. */
+  outcomeClass?: GradingOutcomeClass;
+  inputFreshness?: GradingInputFreshness;
+}
+
+export type GradingOutcomeClass =
+  | 'succeeded_with_work'
+  /** Rows were examined and none could be graded -- not the same as no work. */
+  | 'no_op_nothing_gradeable'
+  /** Nothing was examined at all: the population read returned no rows. */
+  | 'no_op_no_input'
+  | 'degraded_stale_input'
+  | 'failed';
+
+export interface GradingInputFreshness {
+  status: 'fresh' | 'stale' | 'missing';
+  newestSourcedAt: string | null;
+  ageMs: number | null;
+  thresholdMs: number;
 }
 
 export interface RunGradingPassOptions {
@@ -52,6 +72,10 @@ export interface RunGradingPassOptions {
    * cannot admit a pick the population read did not already return.
    */
   restrictToPickIds?: ReadonlySet<string>;
+  /** Test seam for deterministic freshness classification. */
+  now?: () => Date;
+  /** Defaults to the approved six-hour result-input freshness threshold. */
+  inputFreshnessThresholdMs?: number;
 }
 
 export type GradingRetryState = Map<
@@ -82,6 +106,12 @@ const REQUIRED_INGESTION_SOURCE_BY_PROVIDER: Record<string, string> = {
 // uninterpretable by this path.
 export const MONEYLINE_RESULT_MARKET_KEY = 'game_moneyline_win';
 
+// The attested *signed margin* for the resolved participant, and nothing else.
+// Deliberately distinct from the `-sp` game-line keys: those rows carry an
+// unattributed raw score, so a spread graded off one would invent a side that was
+// never attested. See the guard in the grading loop.
+export const SPREAD_RESULT_MARKET_KEY = 'game_spread_margin';
+
 // The attested win flag, and nothing else. A `Map` rather than a comparison chain so
 // that an unlisted value (a score, a NaN, a 2) has no branch to fall into and is
 // skipped by name instead of being coerced into a verdict.
@@ -95,6 +125,30 @@ const MONEYLINE_OUTCOME_BY_ACTUAL_VALUE = new Map<
 ]);
 const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
 const GRADING_FETCH_PAGE_SIZE = 500;
+export const GRADING_INPUT_FRESHNESS_THRESHOLD_MS = 6 * 60 * 60 * 1000;
+
+const DATA_DEPENDENT_SKIP_REASONS = new Set([
+  'event_link_not_found',
+  'event_not_completed',
+  'event_provenance_missing_external_id',
+  'event_provenance_untrusted_provider',
+  'event_provenance_missing_ingestion_cycle',
+  'event_provenance_invalid_ingestion_cycle',
+  'event_provenance_historical_mismatch',
+  'game_result_not_found',
+  'game_result_retry_pending',
+  'game_result_retry_scheduled',
+  'grade_skipped_final',
+  'game_result_actual_value_invalid',
+  'moneyline_result_market_key_unsupported',
+  'moneyline_result_value_invalid',
+  'spread_result_market_key_unsupported',
+]);
+
+interface GradingPassExecution extends GradingPassResult {
+  rowsScanned: number;
+  gradeableRows: number;
+}
 
 export async function fetchAllByLifecycleState(
   picks: RepositoryBundle['picks'],
@@ -116,7 +170,8 @@ export type GradeableMarketFamily =
   | 'player_prop'
   | 'team_total'
   | 'game_total'
-  | 'game_moneyline';
+  | 'game_moneyline'
+  | 'game_spread';
 
 export interface MarketFamilyRule {
   family: GradeableMarketFamily | 'unsupported';
@@ -146,6 +201,144 @@ export async function runGradingPass(
   >,
   options: RunGradingPassOptions = {},
 ): Promise<GradingPassResult> {
+  const thresholdMs =
+    options.inputFreshnessThresholdMs ?? GRADING_INPUT_FRESHNESS_THRESHOLD_MS;
+  const readNow = options.now ?? (() => new Date());
+  const runRecord = await repositories.runs.startRun({
+    runType: 'grading.run',
+    actor: 'grading-service',
+    // Fail closed while the run is incomplete. If the process dies before
+    // completeRun, the row cannot be mistaken for successful work.
+    details: buildGradingRunDetails({
+      outcomeClass: 'failed',
+      rowsScanned: 0,
+      gradeableRows: 0,
+      graded: 0,
+      skipped: 0,
+      skipReasons: {},
+      dataDependentSkipped: 0,
+      errors: 0,
+      errorDetails: [],
+      inputFreshness: classifyInputFreshness(null, readNow(), thresholdMs),
+    }),
+  });
+
+  let newestGameResultSourcedAt: string | null = null;
+  try {
+    if (typeof repositories.gradeResults.findLatestSourcedAt !== 'function') {
+      throw new Error(
+        'Grading result repository does not expose input freshness',
+      );
+    }
+    newestGameResultSourcedAt =
+      await repositories.gradeResults.findLatestSourcedAt();
+    const execution = await executeGradingPass(repositories, options);
+    const inputFreshness = classifyInputFreshness(
+      newestGameResultSourcedAt,
+      readNow(),
+      thresholdMs,
+    );
+    const skipReasons = countSkipReasons(execution.details);
+    const dataDependentSkipped = countDataDependentSkips(execution.details);
+    const outcomeClass = classifyGradingOutcome({
+      graded: execution.graded,
+      errors: execution.errors,
+      rowsScanned: execution.rowsScanned,
+      skipped: execution.skipped,
+      dataDependentSkipped,
+      inputFreshness,
+    });
+    const errorDetails = execution.details
+      .filter((detail) => detail.outcome === 'error')
+      .map((detail) => ({
+        pickId: detail.pickId,
+        reason: detail.reason ?? 'unknown grading error',
+      }));
+
+    await repositories.runs.completeRun({
+      runId: runRecord.id,
+      status:
+        outcomeClass === 'degraded_stale_input' || outcomeClass === 'failed'
+          ? 'failed'
+          : 'succeeded',
+      details: buildGradingRunDetails({
+        outcomeClass,
+        rowsScanned: execution.rowsScanned,
+        gradeableRows: execution.gradeableRows,
+        graded: execution.graded,
+        skipped: execution.skipped,
+        skipReasons,
+        dataDependentSkipped,
+        errors: execution.errors,
+        errorDetails,
+        inputFreshness,
+      }),
+    });
+
+    return {
+      attempted: execution.attempted,
+      graded: execution.graded,
+      skipped: execution.skipped,
+      errors: execution.errors,
+      details: execution.details,
+      outcomeClass,
+      inputFreshness,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown grading error';
+    const inputFreshness = classifyInputFreshness(
+      newestGameResultSourcedAt,
+      readNow(),
+      thresholdMs,
+    );
+    try {
+      await repositories.runs.completeRun({
+        runId: runRecord.id,
+        status: 'failed',
+        details: buildGradingRunDetails({
+          outcomeClass: 'failed',
+          rowsScanned: 0,
+          gradeableRows: 0,
+          graded: 0,
+          skipped: 0,
+          skipReasons: {},
+          dataDependentSkipped: 0,
+          errors: 1,
+          errorDetails: [{ reason: message }],
+          inputFreshness,
+        }),
+      });
+    } catch (completionError) {
+      options.logger?.error?.(
+        `Failed to persist grading.run failure: ${
+          completionError instanceof Error
+            ? completionError.message
+            : 'unknown completion error'
+        }`,
+      );
+    }
+    throw error;
+  }
+}
+
+async function executeGradingPass(
+  repositories: Pick<
+    RepositoryBundle,
+    | 'picks'
+    | 'settlements'
+    | 'audit'
+    | 'gradeResults'
+    | 'providerOffers'
+    | 'participants'
+    | 'events'
+    | 'eventParticipants'
+    | 'marketUniverse'
+    | 'outbox'
+    | 'receipts'
+    | 'runs'
+  >,
+  options: RunGradingPassOptions,
+): Promise<GradingPassExecution> {
   // Evidence plane: also process awaiting_approval picks so outcome data
   // accumulates without requiring public delivery approval. Per UTV2-1253.
   // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
@@ -188,6 +381,7 @@ export async function runGradingPass(
 
   const details: GradingPickResult[] = [];
   const retryState = options.retryState;
+  let gradeableRows = 0;
 
   for (const pick of picks) {
     try {
@@ -382,6 +576,34 @@ export async function runGradingPass(
           continue;
         }
         gradedResult = moneylineOutcome;
+      } else if (marketRule.family === 'game_spread') {
+        // A spread is not an over/under. `inferSelectionSide('Chiefs -2.5')` returns
+        // null, so the over/under path below cannot express it; the outcome is read
+        // off an attested *signed margin* for the resolved participant instead.
+        //
+        // The market-key guard is load-bearing rather than defensive, for exactly the
+        // reason the moneyline guard above is: the candidate lookup can reach the
+        // `-sp` game-line keys, whose production rows carry an unattributed raw
+        // score. Grading a spread off one would invent a side that was never
+        // attested. Refusing any key but the dedicated one keeps the number's
+        // meaning unambiguous.
+        if (gameResult.market_key !== SPREAD_RESULT_MARKET_KEY) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: `spread_result_market_key_unsupported: market_key=${gameResult.market_key} for result=${gameResult.id}`,
+          });
+          continue;
+        }
+
+        // `usesLine: true` already guaranteed a finite line above. The line is signed
+        // from the selected participant's perspective (-2.5 favourite, +3.5 dog), so
+        // the cover margin is the attested margin plus the line. Exactly zero is a
+        // push rather than a win, which is why this is three branches and not two.
+        const coverMargin = gameResult.actual_value + (pick.line as number);
+        const spreadOutcome: 'win' | 'loss' | 'push' =
+          coverMargin > 0 ? 'win' : coverMargin < 0 ? 'loss' : 'push';
+        gradedResult = spreadOutcome;
       } else {
         const selectionSide = inferSelectionSide(pick.selection);
         if (!selectionSide) {
@@ -408,6 +630,7 @@ export async function runGradingPass(
         eventId: gameResult.event_id,
         gameResultId: gameResult.id,
       };
+      gradeableRows += 1;
 
       let settlementResult;
       if (isEvidencePlanePick(pick)) {
@@ -481,31 +704,132 @@ export async function runGradingPass(
     (detail) => detail.outcome === 'error',
   ).length;
 
-  const errorDetails = details
-    .filter((d) => d.outcome === 'error')
-    .map((d) => ({ pickId: d.pickId, reason: d.reason }));
-
-  const runRecord = await repositories.runs.startRun({
-    runType: 'grading.run',
-    actor: 'grading-service',
-    details: { picksGraded: gradedCount, failed: errorCount },
-  });
-  await repositories.runs.completeRun({
-    runId: runRecord.id,
-    status: errorCount > 0 ? 'failed' : 'succeeded',
-    details: {
-      picksGraded: gradedCount,
-      failed: errorCount,
-      ...(errorCount > 0 ? { errors: errorDetails } : {}),
-    },
-  });
-
   return {
     attempted: picks.length,
     graded: gradedCount,
     skipped: details.filter((detail) => detail.outcome === 'skipped').length,
     errors: errorCount,
     details,
+    rowsScanned: population.length,
+    gradeableRows,
+  };
+}
+
+export function classifyInputFreshness(
+  newestSourcedAt: string | null,
+  now: Date,
+  thresholdMs: number = GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+): GradingInputFreshness {
+  const sourcedAtMs = newestSourcedAt === null
+    ? Number.NaN
+    : new Date(newestSourcedAt).getTime();
+  if (!Number.isFinite(sourcedAtMs)) {
+    return {
+      status: 'missing',
+      newestSourcedAt,
+      ageMs: null,
+      thresholdMs,
+    };
+  }
+
+  const ageMs = Math.max(0, now.getTime() - sourcedAtMs);
+  return {
+    status: ageMs > thresholdMs ? 'stale' : 'fresh',
+    newestSourcedAt,
+    ageMs,
+    thresholdMs,
+  };
+}
+
+export function classifyGradingOutcome(input: {
+  graded: number;
+  errors: number;
+  rowsScanned: number;
+  skipped: number;
+  dataDependentSkipped: number;
+  inputFreshness: GradingInputFreshness;
+}): GradingOutcomeClass {
+  if (input.errors > 0) {
+    return 'failed';
+  }
+  if (
+    input.dataDependentSkipped > 0 &&
+    input.inputFreshness.status !== 'fresh'
+  ) {
+    return 'degraded_stale_input';
+  }
+  if (input.graded > 0) {
+    return 'succeeded_with_work';
+  }
+  // The whole point of this lane: a pass that examined 15,000 picks and graded
+  // none must not be byte-identical to one that examined zero. `no_op_no_input`
+  // positively asserts there was no input, so it is reachable only when nothing
+  // was read.
+  if (input.rowsScanned > 0 || input.skipped > 0) {
+    return 'no_op_nothing_gradeable';
+  }
+  return 'no_op_no_input';
+}
+
+function normalizeSkipReason(reason: string | undefined): string {
+  return (reason ?? 'unspecified').split(':', 1)[0]!.trim();
+}
+
+function countSkipReasons(
+  details: readonly GradingPickResult[],
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const detail of details) {
+    if (detail.outcome !== 'skipped') continue;
+    const reason = normalizeSkipReason(detail.reason);
+    counts[reason] = (counts[reason] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function countDataDependentSkips(details: readonly GradingPickResult[]): number {
+  return details.filter(
+    (detail) =>
+      detail.outcome === 'skipped' &&
+      DATA_DEPENDENT_SKIP_REASONS.has(normalizeSkipReason(detail.reason)),
+  ).length;
+}
+
+function buildGradingRunDetails(input: {
+  outcomeClass: GradingOutcomeClass;
+  rowsScanned: number;
+  gradeableRows: number;
+  graded: number;
+  skipped: number;
+  skipReasons: Record<string, number>;
+  dataDependentSkipped: number;
+  errors: number;
+  errorDetails: Array<{ pickId?: string; reason?: string }>;
+  inputFreshness: GradingInputFreshness;
+}): Record<string, unknown> {
+  return {
+    outcome_class: input.outcomeClass,
+    rows_scanned: input.rowsScanned,
+    gradeable_rows: input.gradeableRows,
+    graded_count: input.graded,
+    skipped_count: input.skipped,
+    skipped_reasons: input.skipReasons,
+    data_dependent_skipped_count: input.dataDependentSkipped,
+    error_count: input.errors,
+    newest_game_result_sourced_at: input.inputFreshness.newestSourcedAt,
+    input_freshness: {
+      status: input.inputFreshness.status,
+      age_ms: input.inputFreshness.ageMs,
+      threshold_ms: input.inputFreshness.thresholdMs,
+      threshold_hours: input.inputFreshness.thresholdMs / (60 * 60 * 1000),
+    },
+    freshness_threshold_ms: input.inputFreshness.thresholdMs,
+    freshness_threshold_hours:
+      input.inputFreshness.thresholdMs / (60 * 60 * 1000),
+    // Preserve the two legacy keys while consumers move to the explicit fields.
+    picksGraded: input.graded,
+    failed: input.errors,
+    ...(input.errorDetails.length > 0 ? { errors: input.errorDetails } : {}),
   };
 }
 
@@ -517,6 +841,16 @@ export function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyR
       participantType: 'team',
       gradeable: true,
       usesLine: false,
+    };
+  }
+
+  if (marketKey === 'spread' || marketKey === 'game_spread') {
+    return {
+      family: 'game_spread',
+      participantRequirement: 'required',
+      participantType: 'team',
+      gradeable: true,
+      usesLine: true,
     };
   }
 
@@ -621,6 +955,8 @@ async function findFirstGradeResult(
 export const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   moneyline: MONEYLINE_RESULT_MARKET_KEY,
   game_moneyline: MONEYLINE_RESULT_MARKET_KEY,
+  spread: SPREAD_RESULT_MARKET_KEY,
+  game_spread: SPREAD_RESULT_MARKET_KEY,
   'points-all-game-ou': 'player_points_ou',
   player_points_ou: 'points-all-game-ou',
   'rebounds-all-game-ou': 'player_rebounds_ou',
@@ -725,92 +1061,99 @@ function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
     : Number.POSITIVE_INFINITY;
 }
 
+/**
+ * UTV2-1923: now returns its outcome instead of `void`.
+ *
+ * Every existing caller ignores the return value, so behaviour is unchanged
+ * for them. The settle-pick controller needs it: a per-pick recap is part of
+ * the human capper delivery transaction, and "we tried and something skipped
+ * it" has to be distinguishable from "it posted" at the operator surface.
+ * A skip is a legitimate outcome here, not an error, so it is reported rather
+ * than thrown.
+ */
+export type { SettlementRecapOutcome } from './settlement-recap-observation.js';
+
 export async function postSettlementRecapIfPossible(
   pick: PickRecord,
   settlementRecord: SettlementRecord,
   repositories: Pick<RepositoryBundle, 'outbox' | 'receipts' | 'runs'>,
   options: RunGradingPassOptions,
-) {
-  const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
-  if (!botToken) {
-    return;
-  }
+): Promise<SettlementRecapOutcome> {
+  return observeSettlementRecap(pick.id, settlementRecord.id, repositories.runs, async () => {
+    const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+    if (!botToken) {
+      return { posted: false, reason: 'no_discord_bot_token' };
+    }
 
-  const resolution = await resolveRecapChannel(pick.id, repositories);
-  if (!resolution.ok) {
-    options.logger?.warn?.(
-      `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
+    const resolution = await resolveRecapChannel(pick.id, repositories);
+    if (!resolution.ok) {
+      options.logger?.warn?.(
+        `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
+      );
+      return { posted: false, reason: resolution.reason };
+    }
+
+    // UTV2-1815: fail closed on an unknown stake. The recap renders a
+    // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
+    // non-nullable number -- so publishing here with an unknown stake is exactly
+    // the "emit a value indistinguishable from an observed one" failure. Refuse
+    // to publish and say why, rather than substituting a stake of 1. Changing how
+    // the embed RENDERS an unknown stake is deliberately not in this scope.
+    const stakeResolution = readStakeUnitsResolution(pick);
+    const profitLossUnits = computeProfitLossUnits(
+      normalizeSettlementResult(settlementRecord.result),
+      stakeResolution.stake_units,
+      pick.odds,
     );
-    return;
-  }
+    if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
+      options.logger?.warn?.(
+        `Skipping recap for pick ${pick.id}: stake_units is ` +
+          `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
+          'computed against an assumed stake',
+      );
+      return { posted: false, reason: `stake_units_${stakeResolution.status}` };
+    }
 
-  // UTV2-1815: fail closed on an unknown stake. The recap renders a
-  // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
-  // non-nullable number -- so publishing here with an unknown stake is exactly
-  // the "emit a value indistinguishable from an observed one" failure. Refuse
-  // to publish and say why, rather than substituting a stake of 1. Changing how
-  // the embed RENDERS an unknown stake is deliberately not in this scope.
-  const stakeResolution = readStakeUnitsResolution(pick);
-  const profitLossUnits = computeProfitLossUnits(
-    normalizeSettlementResult(settlementRecord.result),
-    stakeResolution.stake_units,
-    pick.odds,
-  );
-  if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
-    options.logger?.warn?.(
-      `Skipping recap for pick ${pick.id}: stake_units is ` +
-        `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
-        'computed against an assumed stake',
-    );
-    return;
-  }
-
-  const response = await fetch(
-    `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bot ${botToken}`,
-        'Content-Type': 'application/json',
+    const response = await fetch(
+      `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
+      {
+        method: 'POST',
+        signal: AbortSignal.timeout(8_000),
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          embeds: [
+            buildRecapEmbedData({
+              market: pick.market,
+              selection: pick.selection,
+              result: normalizeSettlementResult(settlementRecord.result),
+              stakeUnits: stakeResolution.stake_units,
+              profitLossUnits,
+              clvPercent: readClvPercent(settlementRecord.payload),
+              submittedBy: readSubmittedBy(pick),
+            }),
+          ],
+        }),
       },
-      body: JSON.stringify({
-        embeds: [
-          buildRecapEmbedData({
-            market: pick.market,
-            selection: pick.selection,
-            result: normalizeSettlementResult(settlementRecord.result),
-            stakeUnits: stakeResolution.stake_units,
-            profitLossUnits,
-            clvPercent: readClvPercent(settlementRecord.payload),
-            submittedBy: readSubmittedBy(pick),
-          }),
-        ],
-      }),
-    },
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    options.logger?.warn?.(
-      `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
     );
-    return;
-  }
 
-  try {
-    const runRecord = await repositories.runs.startRun({
-      runType: 'recap.post',
-      actor: 'grading-service',
-      details: { channel: resolution.channelId, pickCount: 1 },
-    });
-    await repositories.runs.completeRun({
-      runId: runRecord.id,
-      status: 'succeeded',
-      details: { channel: resolution.channelId, pickCount: 1 },
-    });
-  } catch {
-    // recap.post observability is best-effort; don't fail the recap
-  }
+    if (!response.ok) {
+      const errorText = await response.text();
+      options.logger?.warn?.(
+        `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
+      );
+      return { posted: false, reason: `discord_post_failed_${response.status}`, channel: resolution.channelId, failed: true };
+    }
+
+    let messageId: string | undefined;
+    try {
+      const body: unknown = await response.json();
+      if (body && typeof body === 'object' && 'id' in body && typeof body.id === 'string') messageId = body.id;
+    } catch { /* Destination and the successful response remain recorded even without a message ID. */ }
+    return { posted: true, channel: resolution.channelId, ...(messageId ? { messageId } : {}) };
+  }, (message) => options.logger?.warn?.(message));
 }
 
 async function resolveRecapChannel(
@@ -828,6 +1171,20 @@ async function resolveRecapChannel(
     outboxRecord.id,
     'discord.message',
   );
+
+  // UTV2-1929: the delivery adapter records the resolved destination in the
+  // receipt payload as `channelId`, and has done so for every Discord delivery
+  // including the pinned per-capper route. Reading it first repairs the recap
+  // for receipts already written -- at the time this was measured, every
+  // production `discord.message` receipt carried `channel: 'discord:<target>'`,
+  // which no branch below can resolve, while the same row's payload already
+  // held the numeric id the message was posted to. Backfilling those rows to
+  // fix the recap would be rewriting delivery history to repair a reader.
+  const payloadChannelId = readReceiptPayloadChannelId(receipt?.payload);
+  if (payloadChannelId) {
+    return { ok: true, channelId: payloadChannelId };
+  }
+
   if (receipt?.channel) {
     const receiptChannelId = normalizeDiscordChannelId(receipt.channel);
     if (receiptChannelId) {
@@ -1084,6 +1441,26 @@ function normalizeSettlementResult(result: string | null) {
   }
 
   throw new Error(`Unsupported settlement result for recap: ${String(result)}`);
+}
+
+/**
+ * UTV2-1929: the numeric Discord channel a delivery receipt says it posted to.
+ *
+ * Deliberately strict. `payload.channelId` is written by the delivery adapter
+ * from the route it actually used, so a value that is not a bare numeric id is
+ * not a destination this function may guess at -- it returns null and lets the
+ * caller fall through to the receipt column and then refuse.
+ */
+function readReceiptPayloadChannelId(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+  const channelId = (payload as Record<string, unknown>)['channelId'];
+  if (typeof channelId !== 'string') {
+    return null;
+  }
+  const trimmed = channelId.trim();
+  return /^\d+$/.test(trimmed) ? trimmed : null;
 }
 
 function normalizeDiscordChannelId(value: string) {

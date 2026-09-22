@@ -207,6 +207,7 @@ test('the directly runnable fixture script uses the portable contained launcher'
     'playwright.config.ts',
     'e2e/phase-one.spec.ts',
     'e2e/smart-form-submission.spec.ts',
+    'e2e/offline-offer-slip.spec.ts',
   ]);
   assert.equal(invocation.env?.[QA_AUTH_BYPASS_ENV_FLAG], '1');
   // Every branch of the runner's own denylist, not one hand-picked example.

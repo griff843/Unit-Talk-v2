@@ -2,6 +2,7 @@ import {
   createLifecycleEvent,
   isTrackOnlyPickMetadata,
   validateSettlementRequest,
+  type OperatorGradingContext,
   type PickLifecycleState,
   type SettlementRequest,
 } from '@unit-talk/contracts';
@@ -97,6 +98,15 @@ export async function recordPickSettlement(
 
   if (request.status === 'manual_review') {
     return recordManualReview(pick, request, repositories);
+  }
+
+  // Deliberately *after* the manual_review branch. An evidence-plane pick has no
+  // delivery to pause, and `recordManualReview` refuses anything but `posted`;
+  // moving this dispatch above it would silently convert that refusal into an
+  // acceptance. A manual_review request on a Track Only pick must keep failing
+  // exactly as it does today.
+  if (isEvidencePlanePick(pick)) {
+    return recordOperatorEvidenceSettlement(pick, request, repositories);
   }
 
   if (pick.status === 'posted') {
@@ -463,6 +473,158 @@ export async function recordEvidenceSettlement(
     settlementRecord,
     lifecycleEvent: null,
     auditRecords: [audit],
+    finalLifecycleState: pick.status,
+    downstream,
+  };
+}
+
+/**
+ * An operator settling an evidence-plane pick by hand.
+ *
+ * Distinct from `recordEvidenceSettlement` in exactly three ways, and each is a
+ * consequence of there being no grading pass behind it:
+ *
+ *  1. **Provenance is attested, not derived.** There is no `game_results` row and
+ *     no resolved event, so the operator says where the outcome came from and
+ *     that attestation is required. Without it this refuses — it never infers a
+ *     basis or writes a settlement whose provenance is silent.
+ *  2. **No CLV.** `computeCLVOutcome` needs an event scope to resolve a closing
+ *     line against; every production Track Only pick carries `eventId: null`.
+ *     Computing CLV from whatever offer happened to match would invent a closing
+ *     line, so `clv` is written `null` with a reason rather than guessed.
+ *  3. **`source: 'operator'`**, so the settlement's own row distinguishes it from
+ *     the automatic `'grading'` path for any later reader.
+ *
+ * What it shares with the automatic path is what matters for containment: no
+ * lifecycle transition (`validated -> settled` is not a legal FSM edge), and no
+ * delivery of any kind. Emitting a recap here would be member delivery, which is
+ * precisely what Track Only exists to make impossible.
+ */
+async function recordOperatorEvidenceSettlement(
+  pick: PickRecord,
+  request: SettlementRequest,
+  repositories: {
+    picks: PickRepository;
+    settlements: SettlementRepository;
+    audit: AuditLogRepository;
+    pickOfferSnapshots?: PickOfferSnapshotRepository;
+  },
+): Promise<RecordSettlementResult> {
+  const operatorGradingContext: OperatorGradingContext | undefined =
+    request.operatorGradingContext;
+
+  // Fail closed. A settlement written against an evidence-plane pick with no
+  // stated basis is indistinguishable from a fabricated one after the fact.
+  if (!operatorGradingContext) {
+    throw new ApiError(
+      400,
+      'OPERATOR_GRADING_CONTEXT_REQUIRED',
+      `Pick ${pick.id} is on the evidence plane (status ${pick.status}); settling it requires operatorGradingContext with outcomeBasis, resultSourceUrl and observedAt.`,
+    );
+  }
+
+  if (request.source === 'grading') {
+    throw new ApiError(
+      409,
+      'OPERATOR_SETTLEMENT_SOURCE_INVALID',
+      `source 'grading' is reserved for the automatic grading pass; an operator settlement must declare its own source.`,
+    );
+  }
+
+  const result = request.result;
+  if (!result) {
+    // Unreachable through the validator, which requires a result for `settled`.
+    // Kept so a future caller that bypasses validation cannot write a settled
+    // row with no outcome.
+    throw new ApiError(
+      400,
+      'INVALID_SETTLEMENT_REQUEST',
+      'result is required to settle a pick',
+    );
+  }
+
+  const payload: Record<string, unknown> = {
+    operatorGradingContext,
+    correction: false,
+    evidencePlane: true,
+    operatorSettled: true,
+    ...buildPickProvenancePayload(pick),
+    ...buildStakeIntegrityPayload(pick.stake_units),
+    // Not "CLV was zero" — CLV was not computable. An evidence-plane pick has no
+    // resolved event, so there is no scope in which a closing line exists.
+    clv: null,
+    clvUnavailableReason: 'operator_evidence_settlement_has_no_event_scope',
+  };
+
+  if (result === 'win' || result === 'loss' || result === 'push') {
+    const profitLossUnits = computeProfitLossUnits(result, pick.odds, pick.stake_units);
+    if (profitLossUnits !== null) {
+      payload['profitLossUnits'] = profitLossUnits;
+    }
+  }
+
+  const settledAt = new Date().toISOString();
+
+  let settlementRecord: SettlementRecord;
+  try {
+    settlementRecord = await repositories.settlements.record({
+      pickId: pick.id,
+      status: 'settled',
+      result,
+      source: request.source,
+      confidence: request.confidence,
+      evidenceRef: request.evidenceRef,
+      notes: request.notes ?? null,
+      reviewReason: null,
+      settledBy: request.settledBy,
+      settledAt,
+      payload,
+    });
+  } catch (err: unknown) {
+    if (isDuplicateSettlementError(err)) {
+      const existing = await repositories.settlements.findLatestForPick(pick.id);
+      if (existing) {
+        const downstream = await computeSettlementDownstreamBundle(pick, repositories.settlements);
+        return {
+          pickRecord: pick,
+          settlementRecord: existing,
+          lifecycleEvent: null,
+          auditRecords: [],
+          finalLifecycleState: pick.status,
+          downstream,
+        };
+      }
+    }
+    throw err;
+  }
+
+  const downstream = await computeSettlementDownstreamBundle(pick, repositories.settlements);
+
+  const audit = await repositories.audit.record({
+    entityType: 'settlement_records',
+    entityId: settlementRecord.id,
+    entityRef: pick.id,
+    action: 'settlement.operator_evidence_graded',
+    actor: request.settledBy,
+    payload: {
+      pickId: pick.id,
+      settlementRecordId: settlementRecord.id,
+      result,
+      source: request.source,
+      operatorGradingContext,
+      evidencePlane: true,
+      downstream,
+    },
+  });
+
+  return {
+    pickRecord: pick,
+    settlementRecord,
+    lifecycleEvent: null,
+    auditRecords: [audit],
+    // No transition. `validated -> settled` is not a legal edge in the canonical
+    // FSM, and `awaiting_approval` is a governance brake that an outcome does not
+    // release.
     finalLifecycleState: pick.status,
     downstream,
   };

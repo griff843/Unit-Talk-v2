@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import type { SubmitPickResult } from '@/lib/api-client';
 import type { BetFormValues } from '@/lib/form-schema';
+import { resolveDeliveryDisposition } from '@/lib/delivery-disposition';
 import { buildSelectionString } from '@/lib/form-utils';
 import { getMarketTypeLabel } from '@/lib/market-types';
 
@@ -17,26 +18,31 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between text-sm gap-4">
       <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="text-foreground font-medium text-right">{value}</span>
+      <span className="text-foreground font-medium text-right break-all">{value}</span>
     </div>
   );
 }
 
 export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: SuccessReceiptProps) {
   const v = submittedValues;
+  // UTV2-1925: read from `result` -- what the SERVER determined -- never from
+  // `v.trackOnly`, which is a client form value that defaults to true and knows
+  // nothing about what happened. The old line stated "no member delivery" to a
+  // capper whose submission was entering the approval-for-delivery path.
+  const disposition = resolveDeliveryDisposition(result);
   const selection = buildSelectionString(v);
   const marketLabel = getMarketTypeLabel(v.marketType);
   const oddsDisplay = v.odds > 0 ? `+${v.odds}` : String(v.odds);
   const unitsDisplay = `${v.units}u`;
 
   return (
-    <div className="rounded-xl border border-border bg-gradient-to-br from-slate-900 to-slate-800 p-8 max-w-sm w-full mx-auto space-y-6">
+    <div className="bet-slip-panel rounded-2xl p-6 sm:p-8 max-w-md w-full mx-auto space-y-6">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
-          <h2 className="text-lg font-semibold text-foreground">Pick Submitted</h2>
+          <h2 className="text-lg font-semibold text-foreground">{disposition.headline}</h2>
         </div>
-        <p className="text-sm text-muted-foreground pl-4">Your pick is in the queue.</p>
+        <p className="text-sm text-muted-foreground pl-4" data-testid="delivery-disposition" data-disposition={disposition.kind}>{disposition.detail}</p>
       </div>
 
       <Separator className="bg-border/50" />

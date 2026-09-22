@@ -145,6 +145,7 @@ export function runFixtureSuite({
       'playwright.config.ts',
       'e2e/phase-one.spec.ts',
       'e2e/smart-form-submission.spec.ts',
+      'e2e/offline-offer-slip.spec.ts',
     ],
   );
   const result = spawnSyncFn(

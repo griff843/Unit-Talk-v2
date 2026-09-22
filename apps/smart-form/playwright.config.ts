@@ -1,7 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
-const apiBaseUrl = 'http://127.0.0.1:4000';
-const smartFormBaseUrl = 'http://127.0.0.1:4100';
+const apiPort = process.env.SMART_FORM_E2E_API_PORT ?? '4000';
+const formPort = process.env.SMART_FORM_E2E_PORT ?? '4100';
+const apiBaseUrl = `http://127.0.0.1:${apiPort}`;
+const smartFormBaseUrl = `http://127.0.0.1:${formPort}`;
+process.env.NEXT_PUBLIC_API_BASE_URL = apiBaseUrl;
 
 export default defineConfig({
   testDir: './e2e',
@@ -18,7 +21,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       env: {
-        PORT: '4000',
+        PORT: apiPort,
         NODE_ENV: 'test',
         UNIT_TALK_APP_ENV: 'local',
         UNIT_TALK_API_RUNTIME_MODE: 'fail_open',
@@ -48,12 +51,13 @@ export default defineConfig({
       },
     },
     {
-      command: 'pnpm dev',
+      command: `pnpm exec next dev -p ${formPort}`,
       url: `${smartFormBaseUrl}/submit`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
       env: {
         NEXT_PUBLIC_API_BASE_URL: apiBaseUrl,
+        SMART_FORM_DIST_DIR: process.env.SMART_FORM_DIST_DIR ?? '.next',
       },
     },
   ],

@@ -8,11 +8,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
+import { createTempWorkspace } from './temp-workspace.js';
 
 const requireFromTest = createRequire(import.meta.url);
 const {
@@ -30,7 +30,7 @@ const TEST_BODY = "import test from 'node:test';\ntest('t', () => {});\n";
 const HELPER_BODY = 'export const fixturePick = { id: "abc" };\n';
 
 function tempRoot(): string {
-  return mkdtempSync(join(tmpdir(), 'utv2-wiring-'));
+  return createTempWorkspace('utv2-wiring-');
 }
 
 function write(root: string, relativePath: string, content: string): string {

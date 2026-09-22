@@ -15,7 +15,8 @@ export interface PipelineStageSummary {
 
 export interface CommandMetric {
   label: string;
-  value: number;
+  /** `null` when the figure is not measurable for this cohort. Rendered as an em dash. */
+  value: number | null;
   delta?: number | string;
   unit?: string;
 }
@@ -30,7 +31,7 @@ export interface PipelineContent {
 export interface IntelligenceContent {
   metrics: CommandMetric[];
   usage: LlmUsageRow[];
-  scoreBands: Array<{ range: string; hitRatePct: number; roiPct: number; total: number }>;
+  scoreBands: Array<{ range: string; hitRatePct: number; roiPct: number | null; total: number }>;
   warnings: Array<{ segment: string; message: string }>;
 }
 
@@ -114,7 +115,14 @@ export async function getIntelligenceContent(): Promise<IntelligenceContent | nu
       metrics: [
         { label: 'Settled picks', value: performance.windows.last7d.settled, delta: `${performance.windows.last7d.hitRatePct}% hit` },
         { label: '7d ROI', value: performance.windows.last7d.roiPct, unit: '%' },
-        { label: 'Approved delta', value: Number(performance.insights.approvedVsDeniedDelta.toFixed(1)), unit: '%' },
+        {
+          label: 'Approved delta',
+          value:
+            performance.insights.approvedVsDeniedDelta === null
+              ? null
+              : Number(performance.insights.approvedVsDeniedDelta.toFixed(1)),
+          unit: '%',
+        },
         { label: 'Feedback rows', value: intelligence.feedbackLoop.length, delta: intelligence.scoreQuality.scoreVsOutcome.correlation },
       ],
       usage: [],

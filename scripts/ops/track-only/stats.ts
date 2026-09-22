@@ -13,17 +13,60 @@
 
 export type SettlementOutcome = 'win' | 'loss' | 'push' | 'void' | 'cancelled';
 
+/**
+ * The effective settlement for a pick, in exactly three states -- and three is the
+ * point. `null` is genuinely pending; a resolved row carries the numbers; an
+ * `unresolvable` chain is NEITHER. Before UTV2-1917 the third state did not exist and
+ * the report approximated "latest" by `settled_at.desc`, which silently picks between
+ * two competing root records instead of refusing. A broken correction chain is not
+ * backlog, so it must not be able to land in `pending`, where it would look like an
+ * ordinary pick waiting for a result.
+ */
+export type StatsSettlement =
+  | { result: string | null; stakeUnits: number | null }
+  | { unresolvable: string };
+
+export function isUnresolvableSettlement(
+  settlement: StatsSettlement,
+): settlement is { unresolvable: string } {
+  return 'unresolvable' in settlement;
+}
+
 export interface StatsInputPick {
   pickId: string;
   /** American odds as persisted on the pick. */
   odds: number | null;
   stakeUnits: number | null;
-  /** Latest settlement first -- callers pass `settlements[0]`, the correction winner. */
-  latestSettlement: {
-    result: string | null;
-    stakeUnits: number | null;
-  } | null;
+  /**
+   * The settlement the correction chain actually resolves to -- not `settlements[0]`.
+   * Callers obtain it from `resolveEffectiveSettlement`, the same resolver the API
+   * and the Command Center use, so this report cannot disagree with them.
+   */
+  latestSettlement: StatsSettlement | null;
 }
+
+/**
+ * A pick that also carries its canonical capper partition key -- `picks.capper_id`,
+ * verbatim.
+ *
+ * It is a SEPARATE type from `StatsInputPick`, and required rather than optional on
+ * it, because the two callers want different things. `computeTrackOnlyStats` is a
+ * pure aggregate over whatever cohort it is handed and has no business knowing who
+ * submitted the picks, so the staging journey proof can keep handing it a bare
+ * `StatsInputPick`. Every partitioning entry point below takes THIS type, so the
+ * partition key cannot be quietly omitted at the one place where omitting it would
+ * matter -- which is exactly how it came to be dropped before UTV2-1917.
+ *
+ * `null` is a real partition (a pick nobody is attributed for), never a dropped row:
+ * dropping it would make the per-capper partitions fail to sum to the aggregate,
+ * which is the one invariant this partitioning exists to keep checkable.
+ */
+export interface AttributedStatsInputPick extends StatsInputPick {
+  capperId: string | null;
+}
+
+/** An unattributed partition is named, not hidden. */
+export const UNATTRIBUTED_CAPPER = '(unattributed)';
 
 export interface TrackOnlyStats {
   cohortSize: number;
@@ -101,7 +144,17 @@ export function computeTrackOnlyStats(
   let measuredOver = 0;
 
   for (const pick of picks) {
-    const result = normalizeResult(pick.latestSettlement?.result ?? null);
+    // A chain that does not resolve is excluded by name, before anything else can
+    // read a number off it. It contributes to neither the record nor pending.
+    if (pick.latestSettlement && isUnresolvableSettlement(pick.latestSettlement)) {
+      excluded.push({
+        pickId: pick.pickId,
+        reason: `settlement chain does not resolve (${pick.latestSettlement.unresolvable}) -- counted in neither the record nor pending`,
+      });
+      continue;
+    }
+    const settlement = pick.latestSettlement;
+    const result = normalizeResult(settlement?.result ?? null);
 
     if (result === null) {
       pending += 1;
@@ -111,7 +164,7 @@ export function computeTrackOnlyStats(
     if (result === 'unknown') {
       excluded.push({
         pickId: pick.pickId,
-        reason: `settlement result ${JSON.stringify(pick.latestSettlement?.result)} is not a recognised outcome -- counted in neither the record nor pending`,
+        reason: `settlement result ${JSON.stringify(settlement?.result)} is not a recognised outcome -- counted in neither the record nor pending`,
       });
       continue;
     }
@@ -126,7 +179,7 @@ export function computeTrackOnlyStats(
 
     // The settlement's own stake is authoritative when present: it is what was
     // actually settled. The pick's stake is the fallback, not the preference.
-    const stake = pick.latestSettlement?.stakeUnits ?? pick.stakeUnits;
+    const stake = settlement?.stakeUnits ?? pick.stakeUnits;
     if (stake === null || !Number.isFinite(stake) || stake <= 0) {
       excluded.push({
         pickId: pick.pickId,
@@ -186,12 +239,20 @@ function round4(n: number): number {
  */
 export interface StatsSourceReport {
   pickId: string;
+  capperId: string | null;
   odds: number | null;
   stakeUnits: number | null;
   settlement: {
     rows: number;
     result: string | null;
     stakeUnits: number | null;
+    /**
+     * Why `resolveEffectiveSettlement` refused, when it did. Non-null means the
+     * rows exist but no single effective settlement can be named -- e.g. an
+     * `operator` root and a `grading` root coexisting, which the partial unique
+     * index `(pick_id, source) WHERE corrects_id IS NULL` permits.
+     */
+    unresolvableReason: string | null;
   };
 }
 
@@ -199,9 +260,10 @@ export interface StatsSourceReport {
  * A named function rather than an inline `.map`, because the mapping is exactly where a
  * wrong field silently becomes a wrong number and there is nothing to see afterwards.
  */
-export function toStatsInput(report: StatsSourceReport): StatsInputPick {
+export function toStatsInput(report: StatsSourceReport): AttributedStatsInputPick {
   return {
     pickId: report.pickId,
+    capperId: report.capperId,
     odds: report.odds,
     stakeUnits: report.stakeUnits,
     // `rows === 0` is the pending test, NOT `result === null`. A settlement row that
@@ -210,9 +272,55 @@ export function toStatsInput(report: StatsSourceReport): StatsInputPick {
     latestSettlement:
       report.settlement.rows === 0
         ? null
-        : {
-            result: report.settlement.result,
-            stakeUnits: report.settlement.stakeUnits,
-          },
+        : report.settlement.unresolvableReason !== null
+          ? { unresolvable: report.settlement.unresolvableReason }
+          : {
+              result: report.settlement.result,
+              stakeUnits: report.settlement.stakeUnits,
+            },
   };
+}
+
+/**
+ * Split a cohort by `picks.capper_id`. Insertion-ordered, and an absent key becomes
+ * the named `UNATTRIBUTED_CAPPER` bucket rather than disappearing.
+ */
+export function partitionByCapper(
+  picks: readonly AttributedStatsInputPick[],
+): Map<string, AttributedStatsInputPick[]> {
+  const partitions = new Map<string, AttributedStatsInputPick[]>();
+  for (const pick of picks) {
+    const key = pick.capperId ?? UNATTRIBUTED_CAPPER;
+    const bucket = partitions.get(key);
+    if (bucket) bucket.push(pick);
+    else partitions.set(key, [pick]);
+  }
+  return partitions;
+}
+
+export interface CapperStats {
+  capperId: string | null;
+  /** `capperId` rendered for display; `UNATTRIBUTED_CAPPER` when there is none. */
+  partition: string;
+  stats: TrackOnlyStats;
+}
+
+/**
+ * Per-capper statistics, computed by calling `computeTrackOnlyStats` once per
+ * partition -- the SAME function that produces the Unit Talk aggregate, not a
+ * second implementation of the same rule.
+ *
+ * That is what makes the two figures reconcilable rather than merely similar: a
+ * capper total that disagrees with the aggregate is arithmetically impossible, not
+ * unlikely. It is also how the "no second mutable stats ledger" constraint is kept
+ * -- nothing is persisted, no table, no view, no materialization.
+ */
+export function computeTrackOnlyStatsByCapper(
+  picks: readonly AttributedStatsInputPick[],
+): CapperStats[] {
+  return [...partitionByCapper(picks).entries()].map(([partition, bucket]) => ({
+    capperId: partition === UNATTRIBUTED_CAPPER ? null : partition,
+    partition,
+    stats: computeTrackOnlyStats(bucket),
+  }));
 }

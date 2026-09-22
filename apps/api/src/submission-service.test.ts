@@ -602,6 +602,20 @@ test('processSubmission leaves unknown market keys unchanged', async () => {
   assert.equal(result.pickRecord.market, 'exotic market type');
 });
 
+// UTV2-1898: an `*-all-game-ou` market prices one player, so its offers and the
+// pick's recorded scope must both name that player. These fixtures previously
+// carried `providerParticipantId: null` on both sides, which is the shape the
+// repair refuses — an offer that prices one participant but names none cannot
+// be attributed to this pick's selection.
+//
+// UTV2-1898: provider offers are only usable inside a freshness window, so
+// fixtures must be dated relative to the run rather than pinned to a literal
+// past date. The two constants preserve the old fixtures' relative ordering
+// (an older snapshot superseded by a newer one) without pinning either to a
+// date that is now 6+ months stale.
+const OFFER_OLD_AT = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+const OFFER_NEW_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
 test('processSubmission attaches deviggingResult when a matching market offer exists', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await repositories.providerOffers.upsertBatch([
@@ -609,7 +623,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       providerKey: 'sgo',
       providerEventId: 'evt-1',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -105,
@@ -617,7 +631,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T15:00:00.000Z',
+      snapshotAt: OFFER_OLD_AT,
       idempotencyKey: 'offer-old',
       bookmakerKey: null,
     },
@@ -625,7 +639,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       providerKey: 'sgo',
       providerEventId: 'evt-1',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -110,
@@ -633,7 +647,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-new',
       bookmakerKey: null,
     },
@@ -644,6 +658,12 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-1',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -653,7 +673,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
 
   assert.ok(deviggingResult);
   assert.equal(deviggingResult?.providerMarketKey, 'assists-all-game-ou');
-  assert.equal(deviggingResult?.snapshotAt, '2026-03-27T16:00:00.000Z');
+  assert.equal(deviggingResult?.snapshotAt, OFFER_NEW_AT);
   assert.equal(deviggingResult?.overFair, 0.5);
   assert.equal(deviggingResult?.underFair, 0.5);
   assert.equal(deviggingResult?.overround, 1.04762);
@@ -676,7 +696,7 @@ test('processSubmission resolves deviggingResult via SGO alias when canonical ke
       providerKey: 'sgo',
       providerEventId: 'evt-alias-sub',
       providerMarketKey: 'player-assists-game-ou', // SGO provider format
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 6.5,
       overOdds: -110,
@@ -684,7 +704,7 @@ test('processSubmission resolves deviggingResult via SGO alias when canonical ke
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-04-15T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'alias-offer-1',
       bookmakerKey: null,
     },
@@ -697,6 +717,12 @@ test('processSubmission resolves deviggingResult via SGO alias when canonical ke
       selection: 'Player Over 6.5',
       odds: 150, // positive odds → positive Kelly edge so has_edge=true
       confidence: 0.6,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-alias-sub',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -727,7 +753,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-bills',
       bookmakerKey: null,
     },
@@ -743,7 +769,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-chiefs',
       bookmakerKey: null,
     },
@@ -756,6 +782,12 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       selection: 'Bills',
       odds: -120,
       confidence: 0.62,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NFL',
+        providerEventId: 'evt-moneyline',
+        providerParticipantId: 'Bills',
+      },
     },
     repositories,
   );
@@ -780,7 +812,7 @@ test('processSubmission uses single non-SGO book before confidence-delta fallbac
       providerKey: 'odds-api:draftkings',
       providerEventId: 'evt-single-book',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -105,
@@ -788,7 +820,7 @@ test('processSubmission uses single non-SGO book before confidence-delta fallbac
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-dk-single',
       bookmakerKey: null,
     },
@@ -801,6 +833,12 @@ test('processSubmission uses single non-SGO book before confidence-delta fallbac
       selection: 'Player Over 7.5',
       odds: 150,
       confidence: 0.60,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-single-book',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -821,7 +859,7 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
       providerKey: 'sgo',
       providerEventId: 'evt-1',
       providerMarketKey: 'assists-all-game-ou',
-      providerParticipantId: null,
+      providerParticipantId: 'nba-player-assists',
       sportKey: 'NBA',
       line: 7.5,
       overOdds: -110,
@@ -829,7 +867,7 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-new',
       bookmakerKey: null,
     },
@@ -841,6 +879,12 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
       market: 'NBA assists',
       selection: 'Player Over 7.5',
       odds: 150,
+      // UTV2-1898: the scope the seeded offer must match on.
+      metadata: {
+        sport: 'NBA',
+        providerEventId: 'evt-1',
+        providerParticipantId: 'nba-player-assists',
+      },
     },
     repositories,
   );
@@ -870,7 +914,7 @@ test('processSubmission stores null kellySizing when odds are missing', async ()
       devigMode: 'PAIRED',
       isOpening: false,
       isClosing: false,
-      snapshotAt: '2026-03-27T16:00:00.000Z',
+      snapshotAt: OFFER_NEW_AT,
       idempotencyKey: 'offer-new',
       bookmakerKey: null,
     },
@@ -3346,6 +3390,7 @@ test('UTV2-1842: manual coverage-gap outcome waives the event existence gate', a
   const result = await processSubmission(fallbackPayload, repositories, {
     kind: 'manual-coverage-gap',
     distributionMode: 'track-only',
+    serverAuthorizedHumanDelivery: false,
   });
 
   assert.equal(result.pick.lifecycleState, 'validated');
@@ -3358,6 +3403,7 @@ test('UTV2-1842: structured team fallback outcome waives the event existence gat
   const result = await processSubmission(fallbackPayload, repositories, {
     kind: 'structured-team-fallback',
     distributionMode: 'track-only',
+    serverAuthorizedHumanDelivery: false,
   });
 
   assert.equal(result.pick.lifecycleState, 'validated');
@@ -3375,6 +3421,7 @@ test('UTV2-1842: canonical-event outcome does NOT waive the event existence gate
         kind: 'canonical-event',
         eventId: 'evt-utv2-1842-unrelated',
         distributionMode: 'track-only',
+        serverAuthorizedHumanDelivery: false,
       }),
     (err: unknown) => {
       assert.ok(err instanceof Error);
@@ -3402,12 +3449,17 @@ test('UTV2-1842: not-smart-form outcome does NOT waive the event existence gate'
   );
 });
 
-// The Track Only half of the predicate. Both fallback kinds are exercised, because a waiver
-// that checked the mode for only one of them would still admit the other. An authenticated
-// capper is server-pinned to `track-only` upstream; an operator or service-role caller is
-// not, and a qualified delivery-eligible pick proceeds to the outbox-enqueue path -- so this
-// is the assertion standing between the contained persistence repair and admission of a
-// nonexistent event for member delivery.
+// The delivery-eligible half of the predicate, for a caller the server did NOT authorize.
+// Both fallback kinds are exercised, because a waiver that checked only one of them would
+// still admit the other. An operator or service-role caller is not pinned upstream, and a
+// qualified delivery-eligible pick proceeds to the outbox-enqueue path -- so this is the
+// assertion standing between the contained persistence repair and admission of a nonexistent
+// event for member delivery.
+//
+// UTV2-1938: `serverAuthorizedHumanDelivery: false` is now what makes these refusals hold.
+// It is passed explicitly rather than omitted so that the absence of authorization is a
+// stated fact of each case rather than a default nobody reads. The authorized counterpart --
+// which DOES waive -- is the UTV2-1938 test immediately below.
 for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
   test(`UTV2-1842: a delivery-eligible ${kind} outcome does NOT waive the event existence gate`, async () => {
     const repositories = createInMemoryRepositoryBundle();
@@ -3418,6 +3470,7 @@ for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const)
         processSubmission(fallbackPayload, repositories, {
           kind,
           distributionMode: 'delivery-eligible',
+          serverAuthorizedHumanDelivery: false,
         }),
       (err: unknown) => {
         assert.ok(err instanceof Error);
@@ -3428,21 +3481,78 @@ for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const)
   });
 }
 
+// UTV2-1938: the case UTV2-1842 could not have anticipated, because the caller it describes
+// did not exist yet. UTV2-1923 made the server pin an allow-listed human capper to
+// `delivery-eligible` BEFORE this validator runs, so the Track-Only-only waiver excluded the
+// one caller the human-capper path exists to serve: their structured-team-fallback submission
+// naming no canonical event was refused 422 EVENT_NOT_FOUND and persisted nothing.
+//
+// What distinguishes this caller from the operator in the tests above is not the distribution
+// mode -- both are `delivery-eligible` -- but whether the SERVER wrote an authorization record
+// for them. `isHumanCapperDeliveryAuthorized` reads only that server-authored record, which
+// handlers/submit-pick.ts deletes off the client payload unconditionally before re-authoring it
+// from the env allowlist and the authenticated identity. A client cannot reach this branch by
+// asserting anything.
+for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
+  test(`UTV2-1938: a server-authorized delivery-eligible ${kind} outcome waives the event existence gate`, async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await seedUnrelatedEvent(repositories);
+
+    const result = await processSubmission(fallbackPayload, repositories, {
+      kind,
+      distributionMode: 'delivery-eligible',
+      serverAuthorizedHumanDelivery: true,
+    });
+
+    // Persisted, not refused. Reverting `waivesEventExistenceGate` to its UTV2-1842 body
+    // (`return outcome.distributionMode === 'track-only'`) turns this red and leaves every
+    // refusal test above green -- which is the whole point of adding it here.
+    assert.equal(result.pick.lifecycleState, 'validated');
+  });
+}
+
 test('UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail-closed', () => {
   // Read directly rather than through processSubmission so the truth table is exhaustive
   // over every outcome shape rather than over the two the gate tests happen to construct.
   assert.equal(waivesEventExistenceGate(undefined), false, 'an absent outcome must not waive');
   assert.equal(waivesEventExistenceGate({ kind: 'not-smart-form' }), false);
   for (const distributionMode of ['track-only', 'delivery-eligible'] as const) {
-    assert.equal(
-      waivesEventExistenceGate({ kind: 'canonical-event', eventId: 'e1', distributionMode }),
-      false,
-      `canonical-event must never waive (${distributionMode})`,
-    );
+    for (const serverAuthorizedHumanDelivery of [false, true]) {
+      assert.equal(
+        waivesEventExistenceGate({
+          kind: 'canonical-event',
+          eventId: 'e1',
+          distributionMode,
+          serverAuthorizedHumanDelivery,
+        }),
+        false,
+        `canonical-event must never waive (${distributionMode}, authorized=${serverAuthorizedHumanDelivery})`,
+      );
+    }
   }
   for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
-    assert.equal(waivesEventExistenceGate({ kind, distributionMode: 'track-only' }), true);
-    assert.equal(waivesEventExistenceGate({ kind, distributionMode: 'delivery-eligible' }), false);
+    // Track Only waives regardless of authorization -- it cannot reach delivery at all.
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'track-only', serverAuthorizedHumanDelivery: false }),
+      true,
+    );
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'track-only', serverAuthorizedHumanDelivery: true }),
+      true,
+    );
+    // UTV2-1938: delivery-eligible now turns on the server's own authorization record, and
+    // on nothing the client sent. Unauthorized stays refused -- that is the UTV2-1842
+    // protection, unchanged.
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'delivery-eligible', serverAuthorizedHumanDelivery: false }),
+      false,
+      `an unauthorized delivery-eligible ${kind} must not waive`,
+    );
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'delivery-eligible', serverAuthorizedHumanDelivery: true }),
+      true,
+      `a server-authorized human-capper ${kind} must waive`,
+    );
   }
 });
 // UTV2-1842 EVENT_GATE_FALLBACK_WAIVER_TESTS_END

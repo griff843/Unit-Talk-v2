@@ -1,0 +1,98 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1916
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1916
+  objective: |-
+    A refusal is rendered at the leg it belongs to — adjacent to the offending row, associated with it programmatically (`aria-describedby` or equivalent), not only by position.
+    The slip-level region remains for refusals that are genuinely slip-scoped (nothing belongs to one leg), so a slip-scoped message is never attached to an arbitrary leg to satisfy this change.
+    Existing entries still survive a refusal — the behaviour [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) established and [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review)'s tests pin. That assertion must keep failing if the survival is broken.
+    The refusal still blocks review completion; the submit control still refuses a slip of more than one leg. This lane does not change what can be submitted.
+  acceptance_criteria:
+    - A unit test asserts a refusal carries the identity of the leg it refers
+      to, and fails when the refusal is emitted without it.
+    - A unit test asserts a slip-scoped refusal is *not* attributed to a leg.
+    - The entry-survival assertion from
+      [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review)
+      still passes unchanged.
+    - A browser proof shows the refusal rendered at the offending row in a
+      three-leg slip, on both the desktop and mobile widths already
+      screenshotted in
+      [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review)'s
+      bundle.
+    - A mutation battery proves each new assertion fails on the condition it
+      names.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review) shipped the multi-leg bet slip (merged `3ac6a9121db5f11429e6d990985d55e408c04876`, PR [griff843/Unit-Talk-v2#1583](https://linear.app/unit-talk-v2/review/utv2-1915-build-reorder-and-review-a-multi-leg-slip-in-the-smart-form-5e06ae0d48bf)) and met four of its five acceptance criteria. Criterion 3 — *"An incomplete leg produces a visible, **leg-scoped** refusal and blocks review completion"* — is met only in part and was recorded as a Known Gap on the PR rather than claimed.
+    - |-
+      Measured current behaviour
+      `apps/smart-form/app/submit/components/BetSlipPanel.tsx` renders every refusal into a single `role="alert"` region above the leg list. The message names the missing field by label, so the operator learns *what* is missing; it does not say *which leg*. With one leg in the slip those are the same thing, which is why the single-pick flow [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) shipped was adequate. With three legs they are not: the operator reads "Line is required" and has to work out which row it belongs to.
+    - >-
+      In scope
+
+      `apps/smart-form/**` only. No `apps/api/**`, no `packages/**`, no root
+      `package.json`.
+    - |-
+      Explicitly not in scope
+      No combined parlay price, no ticket submission, no duplicate-market-identity rule — all unchanged from [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review)'s scoping and all still owned by the API/contract thirds of [UTV2-1912](https://linear.app/unit-talk-v2/issue/UTV2-1912/parlay-journey-follow-ons-persistence-api-validation-and-smart-form).
+    - >-
+      Containment
+
+      SGO off and untouched. Provider key not read, tested or replaced. Track
+      Only containment enabled. Member delivery disabled. Zero production
+      writes.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1916/lane-a1-ui-follow-up-the-multi-leg-slip-refusal-is-slip-scoped-not
+    title: "Lane A1-UI follow-up: the multi-leg slip refusal is slip-scoped, not
+      rendered at the offending leg"
+    description: |-
+      [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review) shipped the multi-leg bet slip (merged `3ac6a9121db5f11429e6d990985d55e408c04876`, PR [griff843/Unit-Talk-v2#1583](https://linear.app/unit-talk-v2/review/utv2-1915-build-reorder-and-review-a-multi-leg-slip-in-the-smart-form-5e06ae0d48bf)) and met four of its five acceptance criteria. Criterion 3 — *"An incomplete leg produces a visible, **leg-scoped** refusal and blocks review completion"* — is met only in part and was recorded as a Known Gap on the PR rather than claimed.
+
+      ## Measured current behaviour
+
+      `apps/smart-form/app/submit/components/BetSlipPanel.tsx` renders every refusal into a single `role="alert"` region above the leg list. The message names the missing field by label, so the operator learns *what* is missing; it does not say *which leg*. With one leg in the slip those are the same thing, which is why the single-pick flow [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) shipped was adequate. With three legs they are not: the operator reads "Line is required" and has to work out which row it belongs to.
+
+      ## Required outcome
+
+      1. A refusal is rendered at the leg it belongs to — adjacent to the offending row, associated with it programmatically (`aria-describedby` or equivalent), not only by position.
+      2. The slip-level region remains for refusals that are genuinely slip-scoped (nothing belongs to one leg), so a slip-scoped message is never attached to an arbitrary leg to satisfy this change.
+      3. Existing entries still survive a refusal — the behaviour [UTV2-1895](https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip) established and [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review)'s tests pin. That assertion must keep failing if the survival is broken.
+      4. The refusal still blocks review completion; the submit control still refuses a slip of more than one leg. This lane does not change what can be submitted.
+
+      ## In scope
+
+      `apps/smart-form/**` only. No `apps/api/**`, no `packages/**`, no root `package.json`.
+
+      ## Explicitly not in scope
+
+      No combined parlay price, no ticket submission, no duplicate-market-identity rule — all unchanged from [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review)'s scoping and all still owned by the API/contract thirds of [UTV2-1912](https://linear.app/unit-talk-v2/issue/UTV2-1912/parlay-journey-follow-ons-persistence-api-validation-and-smart-form).
+
+      ## Acceptance criteria
+
+      1. A unit test asserts a refusal carries the identity of the leg it refers to, and fails when the refusal is emitted without it.
+      2. A unit test asserts a slip-scoped refusal is *not* attributed to a leg.
+      3. The entry-survival assertion from [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review) still passes unchanged.
+      4. A browser proof shows the refusal rendered at the offending row in a three-leg slip, on both the desktop and mobile widths already screenshotted in [UTV2-1915](https://linear.app/unit-talk-v2/issue/UTV2-1915/lane-a1-ui-smart-form-multi-leg-bet-slip-add-remove-reorder-and-review)'s bundle.
+      5. A mutation battery proves each new assertion fails on the condition it names.
+
+      ## Containment
+
+      SGO off and untouched. Provider key not read, tested or replaced. Track Only containment enabled. Member delivery disabled. Zero production writes.
+    captured_at: 2026-09-15T06:06:39.317Z
+    description_sha256: 6e118f330315d45d8e221ae30104dd994f864f0a74e05a60c00c21fff0ff82eb
+  contract_hash: 5f639e7a6d020b063b5615497deab6ee706db963cc17ec8caae1701ec19b6951

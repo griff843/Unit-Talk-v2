@@ -651,6 +651,31 @@ Chronological record of capabilities discovered. Each entry = something that cha
 
 ---
 
+## 5. Measured coverage of the shipped ingestor — 2026-09-13 (UTV2-1897)
+
+This section records what the code on `main` supports **today**. It is a code measurement, not a provider
+capability claim: no live request was made, because the key available to tooling returns `403 Inactive API key`
+(recorded in `RESULTS_BACKFILL_AUTHORIZATION_PACKET.md`). Where a fact could only be established by a live
+request, this section says UNVERIFIED rather than assuming.
+
+| Question | Measured answer | Source on `main` |
+|---|---|---|
+| Which leagues can the ingestor request at all? | NBA, NFL, MLB, NHL — and nothing else. `validateLeagues` throws `Unsupported SGO league` on anything outside that set. | `apps/ingestor/src/ingestor-runner.ts` `SUPPORTED_SGO_LEAGUES`, `parseConfiguredLeagues`, `validateLeagues` |
+| Are NCAAF / NCAAB ingestable? | **No.** They appear in no league list and nowhere in this knowledge base. A `--leagues=NCAAF` run throws. | same |
+| Which leagues get player props in a live cycle? | **MLB and NBA only.** `SGO_PLAYER_PROP_ODD_ID_PATTERNS` carries patterns for those two; NFL and NHL have none, so `leaguePlayerPropPatterns` returns `undefined` and those leagues fetch game lines only. | `apps/ingestor/src/sgo-request-contract.ts`, `ingestor-runner.ts` |
+| How far ahead does a fetch reach? | Game lines 7 days, player props 36 hours, live lookback 12 hours, results lookback 48 hours. | `apps/ingestor/src/sgo-request-contract.ts` |
+| Does any shipped script load a **live** slate? | No. `runWindowBackfill` and `runHistoricalBackfill` both hard-code `historical: true`, which drops the `oddsAvailable=true` filter and fetches finalized events. A live-odds load needs `historical` unset, which no current script does. | `scripts/backfill-sgo-history.ts`, `apps/ingestor/src/historical-backfill.ts` |
+| Does the backfill script refuse a production target? | **No.** `backfill-sgo-history.ts` never calls `assertStagingTarget`; it writes to whatever `SUPABASE_URL` resolves to. `pnpm ci:assert-staging` is wired only into `test:db` and `test:t1-proof:live`. Any new staging loader must call the guard itself, before constructing a client. | `scripts/backfill-sgo-history.ts`, `package.json` |
+| Is there a suspended/available flag on a stored offer? | No. `provider_offer_history` carries `is_opening`/`is_closing` only, and normalization drops the provider's per-market `started`/`ended`/`cancelled`. "Suspended" can currently only be inferred as absence of a recent snapshot. | `packages/db/src/database.types.ts`, `apps/ingestor/src/sgo-normalizer.ts`, `packages/contracts/src/provider-offers.ts` |
+
+**What this bounds.** An SGO-assisted Smart Form pick can only ever offer what the ingestor can fetch. Today
+that is four professional leagues, with player props in two of them. College football — the sport most wanted
+for the current season — cannot be served by this integration at all without a league-support change, and NFL
+would be game lines only. Whether the provider *would* return more under an active key is UNVERIFIED and is
+not assumed here.
+
+---
+
 ## Update Rule
 
 Add an entry to §4 (Discovered Unlocks Log) whenever:

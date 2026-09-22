@@ -16,6 +16,7 @@ import {
   participantAliasKey,
   CLIENT_TEAM_SPORT_IDS,
 } from '../lib/form-utils.ts';
+import { resolveDeliveryDisposition } from '../lib/delivery-disposition.ts';
 import {
   buildParticipantSearchUrl,
   buildParticipantSearchEmptyMessage,
@@ -577,4 +578,157 @@ test('the QA auth bypass is documented under the name the browser bundle can see
     appManifest.scripts['test:e2e:fixture'] ?? '',
     /NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS=/u,
   );
+});
+
+// ─────────────────────────────────────────────────────────────
+// UTV2-1925 — the receipt states server truth, never client form state
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Strip comments before a structural assertion.
+ *
+ * These modules' documentation deliberately *names* the client value they exist
+ * to stop reading. A control that could not tell an explanation apart from a
+ * dependency would force the explanation out of the code, which is the wrong
+ * direction — the comment is the most useful thing in the file. What is
+ * asserted is the executable code.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+}
+
+/**
+ * The defect these tests pin: `SuccessReceipt` rendered "Track Only — no member
+ * delivery" from `submittedValues.trackOnly`, a client form value defaulting to
+ * `true`. A server-authorized capper entering the approval-for-delivery path was
+ * told, by the UI, that their pick could not be delivered.
+ *
+ * The assertions are on the DECISION, not on rendered markup, because the
+ * decision is where a claim about containment is either earned or invented. A
+ * snapshot of the rendered string would pass just as happily against a receipt
+ * that read the wrong input and happened to produce the same words.
+ */
+
+test('a submission the server enqueued is reported as queued, not as Track Only', () => {
+  const d = resolveDeliveryDisposition({
+    outboxEnqueued: true,
+    lifecycleState: 'queued',
+    promotionStatus: 'promoted',
+    promotionTarget: 'official-picks',
+  });
+  assert.equal(d.kind, 'queued');
+  assert.match(d.detail, /official-picks/);
+  assert.doesNotMatch(d.detail, /no member delivery/i);
+});
+
+test('awaiting_approval is reported as awaiting approval, which is the whole defect', () => {
+  // This is the exact case the old receipt got wrong. A server-authorized
+  // capper's pick lands here, and the UI used to say "no member delivery".
+  const d = resolveDeliveryDisposition({
+    outboxEnqueued: false,
+    lifecycleState: 'awaiting_approval',
+    promotionStatus: 'pending',
+    promotionTarget: null,
+  });
+  assert.equal(d.kind, 'awaiting-approval');
+  assert.match(d.detail, /operator approves/i);
+  assert.doesNotMatch(d.detail, /no member delivery/i);
+});
+
+test('a pick with no delivery record reports the observation, not a containment claim', () => {
+  // "no delivery record was created" is a fact about THIS submission.
+  // "no member delivery" is a claim about a permanent property of the pick.
+  // The response carries no distributionMode, so only the first is earned.
+  const d = resolveDeliveryDisposition({
+    outboxEnqueued: false,
+    lifecycleState: 'validated',
+    promotionStatus: 'not_eligible',
+    promotionTarget: null,
+  });
+  assert.equal(d.kind, 'not-enqueued');
+  assert.match(d.detail, /no delivery record/i);
+  assert.doesNotMatch(d.detail, /track only/i);
+});
+
+test('a server that said nothing is undetermined, never a reassuring default', () => {
+  // An older API build, a trimmed response, a proxy that dropped fields. None
+  // of these is evidence that delivery did not happen.
+  for (const input of [
+    {},
+    { lifecycleState: 'validated' },
+    { outboxEnqueued: 'false' },
+    { outboxEnqueued: null },
+    null,
+    undefined,
+  ]) {
+    const d = resolveDeliveryDisposition(input as never);
+    assert.equal(d.kind, 'undetermined', `expected undetermined for ${JSON.stringify(input)}`);
+    assert.doesNotMatch(d.detail, /no member delivery/i);
+    assert.doesNotMatch(d.detail, /Track Only/i);
+  }
+});
+
+test('a queued delivery is reported even when the server named no target', () => {
+  const d = resolveDeliveryDisposition({ outboxEnqueued: true, promotionTarget: null });
+  assert.equal(d.kind, 'queued');
+  assert.match(d.detail, /created a delivery record/i);
+});
+
+test('enqueued wins over awaiting_approval, because a created record is the stronger fact', () => {
+  const d = resolveDeliveryDisposition({
+    outboxEnqueued: true,
+    lifecycleState: 'awaiting_approval',
+    promotionTarget: 'official-picks',
+  });
+  assert.equal(d.kind, 'queued');
+});
+
+test('the disposition is a function of the server response alone', async () => {
+  // A structural control: the module must not import client form state, and the
+  // receipt must not reach for `trackOnly` again. The unit assertions above
+  // cannot see a second code path added later; this can.
+  const module = await readFile(
+    new URL('../lib/delivery-disposition.ts', import.meta.url),
+    'utf8',
+  );
+  // Comments are stripped first, on purpose. The module's documentation *names*
+  // the client value it exists to stop reading, and a test that could not tell
+  // an explanation apart from a dependency would force the explanation out --
+  // which is the wrong direction. What is asserted is the executable code.
+  const code = stripComments(module);
+  for (const forbidden of ['form-schema', 'BetFormValues', 'trackOnly', 'submittedValues']) {
+    assert.ok(
+      !code.includes(forbidden),
+      `delivery-disposition.ts must not reference \`${forbidden}\` in code — it reads the server response only`,
+    );
+  }
+  assert.ok(!/^\s*import\b/m.test(code), 'delivery-disposition.ts must stay dependency-free');
+
+  const receipt = stripComments(
+    await readFile(new URL('../app/submit/components/SuccessReceipt.tsx', import.meta.url), 'utf8'),
+  );
+  assert.ok(
+    !/\bv\.trackOnly\b/.test(receipt),
+    'SuccessReceipt must not read the client trackOnly value — that is the defect',
+  );
+  assert.ok(
+    receipt.includes('resolveDeliveryDisposition(result)'),
+    'SuccessReceipt must derive its delivery statement from the server result',
+  );
+});
+
+test('the UI never claims a containment property it was not told', async () => {
+  // The literal sentence that caused this issue must not reappear anywhere in
+  // the submit surface. It asserts a permanent property from a transient one.
+  for (const file of [
+    '../app/submit/components/SuccessReceipt.tsx',
+    '../app/submit/components/BetSlipPanel.tsx',
+    '../app/submit/components/BetForm.tsx',
+  ]) {
+    const source = await readFile(new URL(file, import.meta.url), 'utf8');
+    assert.ok(
+      !/No member delivery\./i.test(source),
+      `${file} must not state "No member delivery." — the server determines delivery, and the receipt reports what it did`,
+    );
+  }
 });

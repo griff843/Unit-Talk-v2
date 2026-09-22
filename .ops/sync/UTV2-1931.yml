@@ -1,0 +1,119 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1931
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1931
+  objective: Reconcile mission plan and record the Human Capper V1 lifecycle hand-off
+  acceptance_criteria:
+    - >-
+      `docs/mission/plan.md` is startup context and is measurably stale.
+      Re-measured against production `zfzdnfwdarxucxtaojxm` and `origin/main`
+      `17b3f964f` on 2026-09-18:
+
+
+      * Governed pick cohort (`metadata ? 'distributionMode'`) is **7**, not 4.
+
+      * **Six** of those picks carry a `settlement_records` row, all `source =
+      operator`, `confidence = confirmed`, with real ESPN `evidence_ref`.
+      plan.md records 0.
+
+      * `UNIT_TALK_COMMAND_CENTER_ENABLED` is already `true` and the Command
+      Center is deployed. plan.md records it as `false` and lists it as decision
+      2.
+
+      * Deployed release is `961f17c64` (Deploy run `35289985486`), not
+      `40968bf80`.
+
+      * One `distribution_outbox` row exists since 2026-09-01 — `684ba33f…`,
+      `discord:official-picks`, `sent` — the accepted Human Capper canary.
+      plan.md records the newest outbox row repo-wide as 2026-07-30.
+
+
+      Also record the Human Capper V1 lifecycle position and the two owner
+      decisions it is now blocked on: deploying `961f17c64..main` (the recap
+      channel-resolution repair), and the results/reference-data supply.
+
+
+      Governance lane, T3, docs only. No code behaviour change.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `docs/mission/plan.md` is startup context and is measurably stale.
+      Re-measured against production `zfzdnfwdarxucxtaojxm` and `origin/main`
+      `17b3f964f` on 2026-09-18:
+
+
+      * Governed pick cohort (`metadata ? 'distributionMode'`) is **7**, not 4.
+
+      * **Six** of those picks carry a `settlement_records` row, all `source =
+      operator`, `confidence = confirmed`, with real ESPN `evidence_ref`.
+      plan.md records 0.
+
+      * `UNIT_TALK_COMMAND_CENTER_ENABLED` is already `true` and the Command
+      Center is deployed. plan.md records it as `false` and lists it as decision
+      2.
+
+      * Deployed release is `961f17c64` (Deploy run `35289985486`), not
+      `40968bf80`.
+
+      * One `distribution_outbox` row exists since 2026-09-01 — `684ba33f…`,
+      `discord:official-picks`, `sent` — the accepted Human Capper canary.
+      plan.md records the newest outbox row repo-wide as 2026-07-30.
+
+
+      Also record the Human Capper V1 lifecycle position and the two owner
+      decisions it is now blocked on: deploying `961f17c64..main` (the recap
+      channel-resolution repair), and the results/reference-data supply.
+
+
+      Governance lane, T3, docs only. No code behaviour change.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1931/reconcile-mission-plan-and-record-the-human-capper-v1-lifecycle-hand
+    title: Reconcile mission plan and record the Human Capper V1 lifecycle hand-off
+    description: >-
+      `docs/mission/plan.md` is startup context and is measurably stale.
+      Re-measured against production `zfzdnfwdarxucxtaojxm` and `origin/main`
+      `17b3f964f` on 2026-09-18:
+
+
+      * Governed pick cohort (`metadata ? 'distributionMode'`) is **7**, not 4.
+
+      * **Six** of those picks carry a `settlement_records` row, all `source =
+      operator`, `confidence = confirmed`, with real ESPN `evidence_ref`.
+      plan.md records 0.
+
+      * `UNIT_TALK_COMMAND_CENTER_ENABLED` is already `true` and the Command
+      Center is deployed. plan.md records it as `false` and lists it as decision
+      2.
+
+      * Deployed release is `961f17c64` (Deploy run `35289985486`), not
+      `40968bf80`.
+
+      * One `distribution_outbox` row exists since 2026-09-01 — `684ba33f…`,
+      `discord:official-picks`, `sent` — the accepted Human Capper canary.
+      plan.md records the newest outbox row repo-wide as 2026-07-30.
+
+
+      Also record the Human Capper V1 lifecycle position and the two owner
+      decisions it is now blocked on: deploying `961f17c64..main` (the recap
+      channel-resolution repair), and the results/reference-data supply.
+
+
+      Governance lane, T3, docs only. No code behaviour change.
+    captured_at: 2026-09-18T08:28:05.379Z
+    description_sha256: 43f074d58b3d7e4fdb2b594bc485e938aaec16a50f1f5df101d73522122d1ff4
+  contract_hash: c1e0f3df2863a5b3c9d93f17560cac6a8102132cf4e06d9d7691c63f63c0fa5b

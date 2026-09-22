@@ -1,0 +1,154 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1895
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1895
+  objective: Smart Form mobile capper UI — brand, sportsbook-style
+    selection-to-slip flow, verified manual Track Only submission
+  acceptance_criteria:
+    - >-
+      Griff directed on 2026-09-13: deliver a working visual preview first, then
+      the earliest verified manual capper submission. Purpose: let Unit Talk
+      cappers record picks quickly, accurately and comfortably from their
+      phones, using the existing application, authentication, contracts and
+      approved brand assets.
+
+
+      Scope (delivery-ui, `apps/smart-form/**` only):
+
+
+      * Apply the Unit Talk brand (`docs/03_product/brand/README.md`: angular UT
+      monogram, UNIT TALK wordmark, near-black `#151619`, warm gold `#C7A34B`,
+      soft white `#F5F4EF`), consistent typography and spacing.
+
+      * Sportsbook-style selection-to-slip flow: sport → matchup/participants →
+      market → selection → line → odds → stake, each easy to understand; one
+      shared bet slip.
+
+      * Track Only obvious on the slip and receipt; entries preserved after
+      validation errors; accidental duplicate submission prevented (disabled
+      submit while in flight + session duplicate guard); clear saved
+      confirmation showing the persisted pick id and Track Only state.
+
+      * Manual (DB-backed participant, no canonical event) submission path
+      verified through the browser against the local isolated API, and the
+      persisted pick asserted.
+
+      * Preserve the existing live-offer browse mode and
+      `EventOfferBrowseResult` provenance so the SGO-assisted path can plug in
+      without a contract change.
+
+
+      Out of scope: `apps/api`, `packages/contracts`, deployment, live SGO
+      requests, production writes. Submission contract (`POST /api/submissions`,
+      Track Only pin) is unchanged.
+
+
+      Evidence: desktop and mobile screenshots (delivery-ui required proof),
+      `pnpm --filter @unit-talk/smart-form verify` green, Playwright
+      manual-submission case green locally.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Griff directed on 2026-09-13: deliver a working visual preview first, then
+      the earliest verified manual capper submission. Purpose: let Unit Talk
+      cappers record picks quickly, accurately and comfortably from their
+      phones, using the existing application, authentication, contracts and
+      approved brand assets.
+
+
+      Scope (delivery-ui, `apps/smart-form/**` only):
+
+
+      * Apply the Unit Talk brand (`docs/03_product/brand/README.md`: angular UT
+      monogram, UNIT TALK wordmark, near-black `#151619`, warm gold `#C7A34B`,
+      soft white `#F5F4EF`), consistent typography and spacing.
+
+      * Sportsbook-style selection-to-slip flow: sport → matchup/participants →
+      market → selection → line → odds → stake, each easy to understand; one
+      shared bet slip.
+
+      * Track Only obvious on the slip and receipt; entries preserved after
+      validation errors; accidental duplicate submission prevented (disabled
+      submit while in flight + session duplicate guard); clear saved
+      confirmation showing the persisted pick id and Track Only state.
+
+      * Manual (DB-backed participant, no canonical event) submission path
+      verified through the browser against the local isolated API, and the
+      persisted pick asserted.
+
+      * Preserve the existing live-offer browse mode and
+      `EventOfferBrowseResult` provenance so the SGO-assisted path can plug in
+      without a contract change.
+
+
+      Out of scope: `apps/api`, `packages/contracts`, deployment, live SGO
+      requests, production writes. Submission contract (`POST /api/submissions`,
+      Track Only pin) is unchanged.
+
+
+      Evidence: desktop and mobile screenshots (delivery-ui required proof),
+      `pnpm --filter @unit-talk/smart-form verify` green, Playwright
+      manual-submission case green locally.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1895/smart-form-mobile-capper-ui-brand-sportsbook-style-selection-to-slip
+    title: Smart Form mobile capper UI — brand, sportsbook-style selection-to-slip
+      flow, verified manual Track Only submission
+    description: >-
+      Griff directed on 2026-09-13: deliver a working visual preview first, then
+      the earliest verified manual capper submission. Purpose: let Unit Talk
+      cappers record picks quickly, accurately and comfortably from their
+      phones, using the existing application, authentication, contracts and
+      approved brand assets.
+
+
+      Scope (delivery-ui, `apps/smart-form/**` only):
+
+
+      * Apply the Unit Talk brand (`docs/03_product/brand/README.md`: angular UT
+      monogram, UNIT TALK wordmark, near-black `#151619`, warm gold `#C7A34B`,
+      soft white `#F5F4EF`), consistent typography and spacing.
+
+      * Sportsbook-style selection-to-slip flow: sport → matchup/participants →
+      market → selection → line → odds → stake, each easy to understand; one
+      shared bet slip.
+
+      * Track Only obvious on the slip and receipt; entries preserved after
+      validation errors; accidental duplicate submission prevented (disabled
+      submit while in flight + session duplicate guard); clear saved
+      confirmation showing the persisted pick id and Track Only state.
+
+      * Manual (DB-backed participant, no canonical event) submission path
+      verified through the browser against the local isolated API, and the
+      persisted pick asserted.
+
+      * Preserve the existing live-offer browse mode and
+      `EventOfferBrowseResult` provenance so the SGO-assisted path can plug in
+      without a contract change.
+
+
+      Out of scope: `apps/api`, `packages/contracts`, deployment, live SGO
+      requests, production writes. Submission contract (`POST /api/submissions`,
+      Track Only pin) is unchanged.
+
+
+      Evidence: desktop and mobile screenshots (delivery-ui required proof),
+      `pnpm --filter @unit-talk/smart-form verify` green, Playwright
+      manual-submission case green locally.
+    captured_at: 2026-09-13T14:17:51.224Z
+    description_sha256: 39f6cededd1040e0ed418dad4726a2ecd1fb351aad42e6acd54bada81330803a
+  contract_hash: a2f7e5261295dab2df3f402d8a72b6dd1a803a20bf3ff8514f51ca8edc94f77f

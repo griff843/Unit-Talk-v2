@@ -1,0 +1,172 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1915",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "3ac6a9121db5f11429e6d990985d55e408c04876",
+    "verified_source_sha": "696ba732c14b969aead13779a300e1d6b7e23348",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "696ba732c14b969aead13779a300e1d6b7e23348 is the implementation commit and the execution anchor named in verification.md. Every commit after it on this lane touches only docs/06_status/proof/UTV2-1915/ and the lane's own metadata (docs/06_status/lanes/UTV2-1915.json, written by ops:lane-link-pr), so no measurement recorded below was taken on a different tree than the one this SHA names.",
+    "bound_at": "2026-09-15T05:55:30.893Z",
+    "ci_sentinels": {
+      "head_sha": "dded4b039432a532348470e96d79b7bea6ce02cf",
+      "verify": {
+        "conclusion": "success"
+      },
+      "writable_db_proof_staging_only": {
+        "conclusion": "success"
+      },
+      "note": "Carried because .claude/hooks/pre-proof-validator.sh requires a non-empty sha_binding.ci_sentinels while scripts/ops/proof-schema.ts reads the flat evidence_commit_sha / current_pr_head_sha fields; both shapes are present so neither validator is satisfied by omission. Both contexts are green at the PR head dded4b039432a532348470e96d79b7bea6ce02cf, which is a descendant of the execution anchor."
+    }
+  },
+  "what_this_lane_delivers": {
+    "capability": "The Smart Form bet slip can hold more than one leg: legs are added, removed and reordered, and the slip renders a review of every leg before submission.",
+    "what_it_deliberately_does_not_do": "It does not submit a multi-leg ticket. There is no combined price, no parlay identity and no ticket-level persistence in this lane. A slip holding more than one leg cannot reach the submission endpoint at all — the submit control refuses it — so no multi-leg row can be written by this change.",
+    "why_that_split": "Parlay pricing, ticket identity, idempotency and grading are API and persistence work owned by the apps/api lane. Shipping the slip first gives that lane a real surface to bind to, and shipping it refusing to submit is what keeps the two halves from being half-wired in production.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm --filter @unit-talk/smart-form test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 193,
+          "pass": 193,
+          "fail": 0,
+          "skipped": 0,
+          "suites": 22
+        },
+        "label": "The whole Smart Form package suite at the execution anchor, including apps/smart-form/test/bet-slip.test.ts (18 tests) added by this lane: adding a leg appends it, removing a leg leaves the rest in order, moveLeg reorders within bounds and refuses to wrap at either end, a leg missing a required field is refused with the list returned unchanged, and a slip of more than one leg is not submittable."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/smart-form/test/bet-slip.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 18,
+          "pass": 18,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The new suite in isolation, so its result is not carried by the rest of the package."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0,
+      "note": "Run repository-wide in the lane worktree at this anchor; tsc -b reported no diagnostics."
+    },
+    "full_repository_test": {
+      "command": "pnpm test",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not run in full on this workstation for this lane, and recorded as not run rather than claimed. The changed surface is apps/smart-form/** only and that package's own suite was run in full. The binding repository-wide run is the verify job of the CI workflow on this branch."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1915 --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 12,
+      "rules_matched": [
+        "operator-ui"
+      ],
+      "note": "The operator-ui rule triggered and its required artifacts are present: a diff summary, a verification log and the two screenshots."
+    },
+    "browser_proof": {
+      "spec": "apps/smart-form/e2e/multi-leg-slip.spec.ts",
+      "status": "AUTHORED_AND_RUN_LOCALLY",
+      "note": "Playwright drives the deployed-shape local form: three legs are added, the middle one removed, the remaining two reordered, and the submit control is asserted disabled with the multi-leg refusal visible. It does not run in CI on this branch, because the UNIT_TALK_SMART_FORM_E2E gate defaults off and turning it on is a .github/workflows edit outside this lane's file_scope_lock. Recorded as a dependency rather than as CI-proven coverage.",
+      "screenshots": [
+        "docs/06_status/proof/UTV2-1915/screenshot-desktop.png",
+        "docs/06_status/proof/UTV2-1915/screenshot-mobile.png"
+      ]
+    },
+    "mutation_battery": {
+      "baseline": {
+        "pass": 18,
+        "fail": 0
+      },
+      "method": "Each mutation applied alone to apps/smart-form/lib/bet-slip.ts, the suite run, the file restored from a copy taken before the battery. Baseline re-confirmed after the final revert; git status clean.",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "Let moveLeg wrap past the end of the list instead of refusing",
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
+        },
+        {
+          "id": "M2",
+          "mutation": "Let addLeg accept a leg missing a required field",
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
+        },
+        {
+          "id": "M3",
+          "mutation": "Drop the refusal and let a slip of more than one leg report as submittable",
+          "result": {
+            "pass": 16,
+            "fail": 2
+          }
+        },
+        {
+          "id": "M4",
+          "mutation": "Make a refused add mutate the list in place before returning",
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
+        },
+        {
+          "id": "M5",
+          "mutation": "Make removeLeg drop the wrong index",
+          "result": {
+            "pass": 17,
+            "fail": 1
+          }
+        }
+      ]
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off — no provider key read, tested or activated",
+    "member_delivery": "disabled — unchanged",
+    "track_only_containment": "enabled — unchanged",
+    "note": "The change is confined to apps/smart-form/**. It adds no API route, no repository call and no migration, and it cannot enqueue anything: the slip refuses to submit while it holds more than one leg."
+  },
+  "known_gaps": [
+    {
+      "gap": "The leg refusal is slip-scoped rather than rendered inline at the offending leg row.",
+      "disposition": "The acceptance criterion asks for a leg-scoped refusal; what shipped names the missing field but renders it in one region above the list. Recorded rather than claimed, and owed to the follow-up that also brings the ticket surface."
+    },
+    {
+      "gap": "No combined price is shown for a multi-leg slip.",
+      "disposition": "Deliberate. Pricing a parlay is API work and showing a number the server cannot yet produce would be the conflation this bundle exists to avoid."
+    },
+    {
+      "gap": "The e2e spec is not executed by CI on this branch.",
+      "disposition": "The UNIT_TALK_SMART_FORM_E2E gate defaults off and enabling it is a .github/workflows edit, admitted by only the migration and runtime lane types. Outside this lane's pinned file_scope_lock."
+    },
+    {
+      "gap": "Teasers and round robins are untouched.",
+      "disposition": "Owned by UTV2-1908 and UTV2-1909 with their own acceptance criteria. Explicitly not folded into this lane."
+    }
+  ],
+  "known_red_checks_at_this_head": [
+    {
+      "check": "QA Experience Regression (Advisory)",
+      "cause": "The job fails posting its own PR comment with 403 Resource not accessible by integration.",
+      "disposition": "Non-required, and environmental rather than a QA result."
+    }
+  ]
+}

@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
+import { governedDeliveryTargets } from '@unit-talk/contracts';
 import { InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import {
   getDiscordOpsSnapshot,
@@ -7,7 +8,6 @@ import {
   type DeliveryKillSwitchStatus,
 } from '@/lib/data/discord-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
-import { describeThrown } from '@/lib/describe-error';
 import { KillSwitchPanel } from './KillSwitchPanel';
 
 export const metadata = { title: 'Discord Control — Unit Talk Command Center' };
@@ -35,7 +35,8 @@ export default async function DiscordOpsPage() {
   try {
     snapshot = await getDiscordOpsSnapshot();
   } catch (error) {
-    loadError = describeThrown(error);
+    console.error('Delivery data unavailable', error);
+    loadError = 'Delivery records could not be loaded. Refresh to retry; counts are unavailable until the read succeeds.';
   }
 
   let killSwitchStatuses: DeliveryKillSwitchStatus[] = [];
@@ -43,14 +44,15 @@ export default async function DiscordOpsPage() {
   try {
     killSwitchStatuses = await getDeliveryKillSwitchStatuses();
   } catch (error) {
-    killSwitchLoadError = describeThrown(error);
+    console.error('Delivery controls unavailable', error);
+    killSwitchLoadError = 'Refresh to read the current delivery posture. No control state has been assumed.';
   }
 
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
         <p className="text-sm cc-text-muted">
-          Delivery truth derived from distribution_outbox + distribution_receipts. Observed {observedAt}.
+          Recorded delivery for governed operator picks; proof fixtures excluded. Observed {observedAt}.
         </p>
       </div>
 
@@ -63,7 +65,7 @@ export default async function DiscordOpsPage() {
           <p className="mt-2 text-xs cc-text-muted font-mono">{killSwitchLoadError}</p>
         </div>
       ) : (
-        <KillSwitchPanel statuses={killSwitchStatuses} />
+        <KillSwitchPanel statuses={killSwitchStatuses} targets={governedDeliveryTargets} />
       )}
 
       {loadError ? (

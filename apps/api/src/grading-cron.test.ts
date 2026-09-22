@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
-import { runGradingCronCycles, startGradingCronLoop } from './grading-cron.js';
+import {
+  evaluateGradingHealthAlertTransition,
+  runGradingCronCycles,
+  startGradingCronLoop,
+} from './grading-cron.js';
 import { fetchAllByLifecycleState } from './grading-service.js';
 import type { PickRecord, SystemRunRecord } from '@unit-talk/db';
 
@@ -320,4 +325,200 @@ test('fetchAllByLifecycleState paginates through more than 1000 picks', async ()
   assert.deepEqual(calls[0], [PAGE_SIZE, 0]);
   assert.deepEqual(calls[1], [PAGE_SIZE, PAGE_SIZE]);
   assert.deepEqual(calls[2], [PAGE_SIZE, PAGE_SIZE * 2]);
+});
+
+function gradingRun(
+  id: string,
+  outcomeClass: string,
+  status: SystemRunRecord['status'],
+  details: Record<string, unknown> = {},
+): SystemRunRecord {
+  return {
+    id,
+    run_type: 'grading.run',
+    actor: 'grading-service',
+    status,
+    details: {
+      outcome_class: outcomeClass,
+      graded_count: outcomeClass === 'succeeded_with_work' ? 1 : 0,
+      ...details,
+    },
+    idempotency_key: null,
+    created_at: '2026-09-19T12:00:00.000Z',
+    started_at: '2026-09-19T12:00:00.000Z',
+    finished_at: '2026-09-19T12:00:01.000Z',
+  };
+}
+
+test('grading health alert opens once for stale input and deduplicates repeats', () => {
+  const stale = gradingRun('stale-2', 'degraded_stale_input', 'failed', {
+    newest_game_result_sourced_at: '2026-09-19T01:00:00.000Z',
+    input_freshness: { status: 'stale', threshold_hours: 6 },
+    skipped_reasons: { game_result_not_found: 3 },
+  });
+  const success = gradingRun('success-1', 'succeeded_with_work', 'succeeded');
+
+  const opened = evaluateGradingHealthAlertTransition([stale, success]);
+  assert.equal(opened?.kind, 'open');
+  assert.match(opened?.message ?? '', /game_result_not_found/);
+  assert.match(opened?.message ?? '', /Check results ingestion/);
+
+  const repeated = evaluateGradingHealthAlertTransition([
+    gradingRun('failed-2', 'failed', 'failed'),
+    stale,
+    success,
+  ]);
+  assert.equal(repeated, null);
+});
+
+test('fresh successful work clears an alert across intervening no-op runs', () => {
+  const transition = evaluateGradingHealthAlertTransition([
+    gradingRun('success-2', 'succeeded_with_work', 'succeeded', {
+      graded_count: 4,
+    }),
+    gradingRun('noop-1', 'no_op_no_input', 'succeeded'),
+    gradingRun('stale-1', 'degraded_stale_input', 'failed'),
+  ]);
+
+  assert.equal(transition?.kind, 'clear');
+  assert.match(transition?.message ?? '', /graded=4/);
+});
+
+function runGradingReadinessProbe(row: Record<string, unknown>): {
+  blocking: boolean;
+  status: string;
+  evidence: string;
+} {
+  const source = `
+    import('./scripts/ops/readiness-refresh.ts').then(async (loaded) => {
+      const exports = loaded.probeGradingHealth ? loaded : loaded.default;
+      const row = ${JSON.stringify(row)};
+      const result = await exports.probeGradingHealth({
+        now: new Date('2026-09-19T12:05:00.000Z'),
+        db: {
+          projectRef: 'zfzdnfwdarxucxtaojxm',
+          latestRow: async () => row,
+          countRows: async () => 0,
+          selectRows: async () => [],
+        },
+        dbUnavailableReason: null,
+        github: null,
+        githubUnavailableReason: 'not needed',
+        repoRoot: process.cwd(),
+      });
+      process.stdout.write(JSON.stringify(result));
+    });
+  `;
+  return JSON.parse(
+    execFileSync('pnpm', ['exec', 'tsx', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }),
+  ) as { blocking: boolean; status: string; evidence: string };
+}
+
+test('readiness consumes degraded grading outcome as blocking RED input', () => {
+  const dimension = runGradingReadinessProbe({
+    status: 'failed',
+    started_at: '2026-09-19T12:00:00.000Z',
+    finished_at: '2026-09-19T12:00:01.000Z',
+    details: {
+      outcome_class: 'degraded_stale_input',
+      graded_count: 0,
+      data_dependent_skipped_count: 2,
+      input_freshness: { status: 'stale', age_ms: 25_200_000, threshold_hours: 6 },
+    },
+  });
+
+  assert.equal(dimension.blocking, true);
+  assert.equal(dimension.status, 'fail');
+  assert.match(dimension.evidence, /degraded_stale_input/);
+});
+
+test('readiness treats a genuine empty no-op as healthy, not an incident', () => {
+  const dimension = runGradingReadinessProbe({
+    status: 'succeeded',
+    started_at: '2026-09-19T12:00:00.000Z',
+    finished_at: '2026-09-19T12:00:01.000Z',
+    details: {
+      outcome_class: 'no_op_no_input',
+      rows_scanned: 0,
+      gradeable_rows: 0,
+      graded_count: 0,
+      skipped_count: 0,
+      skipped_reasons: {},
+      data_dependent_skipped_count: 0,
+      error_count: 0,
+      input_freshness: { status: 'fresh', age_ms: 60_000, threshold_hours: 6 },
+    },
+  });
+
+  assert.equal(dimension.status, 'pass');
+  assert.match(dimension.evidence, /no_op_no_input/);
+});
+
+test('readiness accepts a nothing-gradeable pass and refuses a no-input claim that examined rows', () => {
+  const examinedAndSkipped = {
+    outcome_class: 'no_op_nothing_gradeable',
+    rows_scanned: 15_000,
+    gradeable_rows: 0,
+    graded_count: 0,
+    skipped_count: 15_000,
+    skipped_reasons: { settlement_already_exists: 15_000 },
+    data_dependent_skipped_count: 0,
+    error_count: 0,
+    input_freshness: { status: 'fresh', age_ms: 60_000, threshold_hours: 6 },
+  };
+
+  const honest = runGradingReadinessProbe({
+    status: 'succeeded',
+    started_at: '2026-09-19T12:00:00.000Z',
+    finished_at: '2026-09-19T12:00:01.000Z',
+    details: examinedAndSkipped,
+  });
+  assert.equal(honest.status, 'pass');
+  assert.match(honest.evidence, /no_op_nothing_gradeable/);
+
+  // Mutation control. The same 15,000-row pass mislabelled as no_op_no_input is
+  // the defect this lane removes: it positively asserts there was no input. The
+  // probe must refuse it rather than pass it as a healthy quiet run.
+  const mislabelled = runGradingReadinessProbe({
+    status: 'succeeded',
+    started_at: '2026-09-19T12:00:00.000Z',
+    finished_at: '2026-09-19T12:00:01.000Z',
+    details: { ...examinedAndSkipped, outcome_class: 'no_op_no_input' },
+  });
+  assert.equal(mislabelled.status, 'fail');
+  assert.match(mislabelled.evidence, /examined 15000 rows/);
+});
+
+
+test('PM-ratified five-value grading model is understood by readiness', () => {
+  const cases = [
+    ['succeeded_with_work', 'succeeded', 1, 1, 0, 0, 'fresh', 'pass'],
+    ['no_op_no_input', 'succeeded', 0, 0, 0, 0, 'fresh', 'pass'],
+    ['no_op_nothing_gradeable', 'succeeded', 1, 0, 1, 0, 'fresh', 'pass'],
+    ['degraded_stale_input', 'failed', 1, 0, 1, 0, 'stale', 'fail'],
+    ['failed', 'failed', 1, 0, 0, 1, 'fresh', 'fail'],
+    ['unknown_outcome', 'succeeded', 0, 0, 0, 0, 'fresh', 'fail'],
+  ] as const;
+  for (const [outcome, status, scanned, graded, skipped, errors, freshness, expected] of cases) {
+    const result = runGradingReadinessProbe({
+      status,
+      started_at: '2026-09-19T12:00:00.000Z',
+      finished_at: '2026-09-19T12:00:01.000Z',
+      details: {
+        outcome_class: outcome,
+        rows_scanned: scanned,
+        gradeable_rows: graded,
+        graded_count: graded,
+        skipped_count: skipped,
+        skipped_reasons: skipped ? { settlement_already_exists: skipped } : {},
+        data_dependent_skipped_count: freshness === 'stale' ? 1 : 0,
+        error_count: errors,
+        input_freshness: { status: freshness, age_ms: freshness === 'stale' ? 86_400_000 : 60_000, threshold_hours: 6 },
+      },
+    });
+    assert.equal(result.status, expected, outcome);
+  }
 });

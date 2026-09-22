@@ -4,10 +4,14 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
+import { normalizeMarketKey } from '@unit-talk/domain';
 import {
   runGradingPass,
   readEventStartTime,
   postSettlementRecapIfPossible,
+  classifyMarketFamilyForGrading,
+  classifyGradingOutcome,
+  GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
   type GradingRetryState,
 } from './grading-service.js';
 import { recordEvidenceSettlement, recordGradedSettlement } from './settlement-service.js';
@@ -280,6 +284,152 @@ test('runGradingPass grades a posted over pick and records grading settlement', 
   assert.equal(settlements.length, 1);
   assert.equal(settlements[0]?.source, 'grading');
   assert.equal(settlements[0]?.result, 'win');
+});
+
+/**
+ * UTV2-1929: the production receipt shape for a human capper delivery.
+ *
+ * `channel` holds the LOGICAL target, which is what the worker wrote before
+ * this lane and what every `discord.message` receipt in production still
+ * carries. `payload.channelId` holds the numeric destination the adapter
+ * actually POSTed to, resolved from the capper's pinned channel.
+ */
+async function seedHumanCapperDistributionReceipt(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+  logicalTarget: string,
+  resolvedChannelId: string,
+) {
+  const outboxRecord = await repositories.outbox.enqueue({
+    pickId,
+    target: logicalTarget,
+    payload: {},
+    idempotencyKey: `outbox:${pickId}:${logicalTarget}`,
+  });
+  await repositories.outbox.markSent(outboxRecord.id);
+  await repositories.receipts.record({
+    outboxId: outboxRecord.id,
+    receiptType: 'discord.message',
+    status: 'sent',
+    channel: logicalTarget,
+    externalId: `message:${pickId}`,
+    payload: {
+      adapter: 'discord',
+      route: 'capper-pinned',
+      target: logicalTarget,
+      channelId: resolvedChannelId,
+      destinationSource: 'cappers.metadata.discord.picksChannelId',
+    },
+  });
+}
+
+test('UTV2-1929: the settlement recap resolves the pinned channel from the receipt payload', async () => {
+  // Reproduces production outbox 684ba33f-45c4-4a80-adf0-db8286c90815: a human
+  // capper pick delivered to a pinned channel, whose receipt names the logical
+  // target. `normalizeDiscordChannelId` cannot resolve `official-picks` -- it
+  // is not numeric, and UTV2-1923 exempts human delivery targets from the
+  // shared target map -- so before this lane the recap refused with
+  // `no_receipt_channel_or_resolvable_outbox_target` and no human capper pick
+  // could ever be told to members how it finished.
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedHumanCapperDistributionReceipt(
+    repositories,
+    pickId,
+    'discord:official-picks',
+    '1384052464189440120',
+  );
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  let capturedUrl = '';
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async (input) => {
+    capturedUrl = String(input);
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1);
+    const [recapRun] = await repositories.runs.listByType('recap.post');
+    assert.equal(recapRun?.status, 'succeeded');
+    assert.deepEqual(recapRun?.details, { recapKind: 'settlement-pick', pickId, settlementRecordId: (await repositories.settlements.listByPick(pickId))[0]?.id, pickCount: 1, posted: true, channel: '1384052464189440120', messageId: 'message-1' });
+    assert.equal(
+      capturedUrl,
+      'https://discord.com/api/v10/channels/1384052464189440120/messages',
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+});
+
+test('UTV2-1929: a non-numeric payload channelId is not a destination', async () => {
+  // The payload read must not become a second way to guess a destination. A
+  // channel NAME where an id belongs falls through to the receipt column and
+  // then to the outbox target, both of which also fail to resolve, and the
+  // recap refuses rather than posting somewhere it inferred.
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedHumanCapperDistributionReceipt(
+    repositories,
+    pickId,
+    'discord:official-picks',
+    '#griff-official-picks',
+  );
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  let called = false;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async () => {
+    called = true;
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1);
+    assert.equal(called, false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
 });
 
 test('runGradingPass posts a settlement recap embed for a graded pick with CLV', async () => {
@@ -1602,16 +1752,197 @@ test('runGradingPass writes a grading.run system_runs row on completion', async 
     actualValue: 30,
   });
 
-  await runGradingPass(repositories);
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-03-27T01:00:00.000Z'),
+  });
 
   const runs = await repositories.runs.listByType('grading.run');
   assert.equal(runs.length, 1);
   assert.equal(runs[0]?.run_type, 'grading.run');
+  assert.equal(runs[0]?.status, 'succeeded');
+  assert.equal(result.outcomeClass, 'succeeded_with_work');
   assert.equal(
     (runs[0]?.details as Record<string, unknown>)?.['picksGraded'],
     1,
   );
   assert.equal((runs[0]?.details as Record<string, unknown>)?.['failed'], 0);
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)?.['outcome_class'],
+    'succeeded_with_work',
+  );
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)?.['graded_count'],
+    1,
+  );
+});
+
+test('fresh empty grading input is a no-op, never successful work', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedGameResult(repositories, {
+    eventId: 'unrelated-fresh-event',
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 210,
+    sourcedAt: '2026-09-19T11:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-09-19T12:00:00.000Z'),
+  });
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+
+  assert.equal(result.attempted, 0);
+  assert.equal(result.outcomeClass, 'no_op_no_input');
+  assert.equal(run?.status, 'succeeded');
+  assert.equal(details['outcome_class'], 'no_op_no_input');
+  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['gradeable_rows'], 0);
+  assert.equal(details['graded_count'], 0);
+  assert.deepEqual(details['skipped_reasons'], {});
+  assert.equal(
+    details['newest_game_result_sourced_at'],
+    '2026-09-19T11:00:00.000Z',
+  );
+  assert.equal(
+    (details['input_freshness'] as Record<string, unknown>)['status'],
+    'fresh',
+  );
+});
+
+test('stale data-dependent skips produce degraded_stale_input and failed status', async () => {
+  const { repositories, pickId } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'rebounds-all-game-ou',
+    actualValue: 8,
+    sourcedAt: '2026-09-19T04:59:59.999Z',
+  });
+
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-09-19T12:00:00.000Z'),
+  });
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.outcomeClass, 'degraded_stale_input');
+  assert.equal(run?.status, 'failed');
+  assert.equal(details['outcome_class'], 'degraded_stale_input');
+  assert.equal(details['data_dependent_skipped_count'], 1);
+  assert.deepEqual(details['skipped_reasons'], { game_result_not_found: 1 });
+  assert.equal(details['freshness_threshold_hours'], 6);
+  assert.equal(
+    (details['input_freshness'] as Record<string, unknown>)['status'],
+    'stale',
+  );
+  assert.equal(
+    (details['input_freshness'] as Record<string, unknown>)['threshold_ms'],
+    GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+  );
+});
+
+test('a skips-only pass is nothing-gradeable, never succeeded_with_work and never no-input', async () => {
+  const { repositories } = await createPostedPickFixture({
+    market: 'unsupported-proof-market',
+  });
+
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-09-19T12:00:00.000Z'),
+  });
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
+  assert.notEqual(result.outcomeClass, 'succeeded_with_work');
+  // This is the whole point of the lane. A pass that examined rows and graded
+  // none must not be recorded with a class that positively asserts there was no
+  // input -- otherwise it is byte-identical to a pass that examined zero.
+  assert.notEqual(result.outcomeClass, 'no_op_no_input');
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.ok((details['rows_scanned'] as number) > 0);
+  assert.equal(run?.status, 'succeeded');
+});
+
+test('examined-and-skipped and examined-nothing are distinguishable at the class, not only in the histogram', () => {
+  const fresh = {
+    status: 'fresh' as const,
+    newestSourcedAt: '2026-09-19T11:00:00.000Z',
+    ageMs: 60 * 60 * 1000,
+    thresholdMs: GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+  };
+
+  const examinedManySkippedAll = classifyGradingOutcome({
+    graded: 0,
+    errors: 0,
+    rowsScanned: 15_000,
+    skipped: 15_000,
+    dataDependentSkipped: 0,
+    inputFreshness: fresh,
+  });
+  const examinedNothing = classifyGradingOutcome({
+    graded: 0,
+    errors: 0,
+    rowsScanned: 0,
+    skipped: 0,
+    dataDependentSkipped: 0,
+    inputFreshness: fresh,
+  });
+
+  assert.equal(examinedManySkippedAll, 'no_op_nothing_gradeable');
+  assert.equal(examinedNothing, 'no_op_no_input');
+  assert.notEqual(examinedManySkippedAll, examinedNothing);
+
+  // A data-dependent skip on stale input still outranks both, and errors
+  // outrank everything.
+  assert.equal(
+    classifyGradingOutcome({
+      graded: 0,
+      errors: 0,
+      rowsScanned: 10,
+      skipped: 10,
+      dataDependentSkipped: 10,
+      inputFreshness: { ...fresh, status: 'stale' },
+    }),
+    'degraded_stale_input',
+  );
+  assert.equal(
+    classifyGradingOutcome({
+      graded: 5,
+      errors: 1,
+      rowsScanned: 10,
+      skipped: 4,
+      dataDependentSkipped: 0,
+      inputFreshness: fresh,
+    }),
+    'failed',
+  );
+});
+
+test("production grading proof requires grader identity and game-result linkage, not source='grading' alone", () => {
+  const rows = [
+    { id: 'production-row', source: 'grading', settled_by: 'grading-service', evidence_ref: 'game-result:real-result-id' },
+    { id: 'test-actor-row', source: 'grading', settled_by: 't1-proof-grader', evidence_ref: 'game-result:test-result-id' },
+    { id: 'test-evidence-row', source: 'grading', settled_by: 'grading-service', evidence_ref: 'test-fixture:result-id' },
+  ];
+
+  const productionEvidence = rows.filter(
+    (row) =>
+      row.source === 'grading' &&
+      row.settled_by === 'grading-service' &&
+      row.evidence_ref.startsWith('game-result:'),
+  );
+
+  assert.deepEqual(productionEvidence.map((row) => row.id), ['production-row']);
+  assert.equal(rows.filter((row) => row.source === 'grading').length, 3);
 });
 
 // UTV2-1886: overriding a repository method has to preserve the prototype chain --
@@ -1661,15 +1992,24 @@ test('UTV2-1886: a failed settlement prefetch rejects the pass instead of readin
   };
 
   // An empty map is indistinguishable from "nothing is settled", so a prefetch that
-  // fails must stop the pass rather than hand the loop a map it can misread. Nothing
-  // is recorded, because the run row is only opened once the loop has finished.
+  // fails must stop the pass rather than hand the loop a map it can misread. The
+  // run row is opened fail-closed first so the execution failure remains visible.
   await assert.rejects(
     () => runGradingPass(brokenRepos as typeof repositories),
     /forced settlement prefetch error/,
   );
 
   const runs = await repositories.runs.listByType('grading.run');
-  assert.equal(runs.length, 0);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]?.status, 'failed');
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)['outcome_class'],
+    'failed',
+  );
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)['error_count'],
+    1,
+  );
 });
 
 test('UTV2-1886: the settlement lookup is one batched read, not one read per pick', async () => {
@@ -1864,14 +2204,194 @@ test('runGradingPass grades a legacy totals pick as a game-line market', async (
   assert.equal(detail.result, 'win');
 });
 
+async function createSpreadResultFixture(
+  options: {
+    actualValue?: number;
+    marketKey?: string;
+    line?: number;
+    attachParticipant?: boolean;
+  } = {},
+) {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      market: 'spread',
+      selection: 'Lakers',
+      line: options.line ?? -3.5,
+    });
+
+  const team = await repositories.participants.upsertByExternalId({
+    externalId: 'TEAM_LAL',
+    displayName: 'Lakers',
+    participantType: 'team',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+
+  const event = await repositories.events.upsertByExternalId({
+    externalId: `sgo:NBA:2026-04-04:${eventName}`,
+    sportId: 'NBA',
+    eventName,
+    eventDate: '2026-04-04',
+    status: 'completed',
+    metadata: trustedEventMetadata({ startsAt: '2026-04-04T19:30:00.000Z' }),
+  });
+
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: team.id,
+    role: 'home',
+  });
+
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'NBA',
+      // Omitting teamId is how the participant-required skip is exercised; the
+      // resolver has nothing else to key a team off for a spread.
+      ...(options.attachParticipant === false ? {} : { teamId: team.id }),
+      team: 'Lakers',
+      eventName,
+    },
+  }));
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: team.id,
+    marketKey: options.marketKey ?? 'game_spread_margin',
+    actualValue: options.actualValue ?? 7,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  return { repositories, pickId, event, team };
+}
+
+test('classifyMarketFamilyForGrading declares spread a participant-required, line-using family', () => {
+  for (const key of ['spread', 'game_spread']) {
+    const rule = classifyMarketFamilyForGrading(key);
+    assert.equal(rule.family, 'game_spread');
+    assert.equal(rule.gradeable, true);
+    assert.equal(rule.usesLine, true);
+    assert.equal(rule.participantRequirement, 'required');
+    assert.equal(rule.participantType, 'team');
+  }
+});
+
+test('normalizeMarketKey feeds every spread alias into the spread family', () => {
+  // The aliases are the whole reason this family keys on two strings rather than
+  // one: `game-spread` and `game_spread` both normalize to `spread` upstream, so a
+  // family that matched only the raw submitted value would grade inconsistently.
+  for (const submitted of ['spread', 'game_spread', 'game-spread']) {
+    assert.equal(
+      classifyMarketFamilyForGrading(normalizeMarketKey(submitted)).family,
+      'game_spread',
+    );
+  }
+});
+
+test('runGradingPass settles a covered spread as a win', async () => {
+  // Lakers -3.5, attested margin +7 -> cover margin +3.5.
+  const { repositories, pickId } = await createSpreadResultFixture({
+    actualValue: 7,
+    line: -3.5,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.skipped, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
+test('a spread that fails to cover settles as a loss, and an exact push settles as push', async () => {
+  // The push row is the one that matters: exactly zero must not fall into the win
+  // branch, which is why the implementation is three branches rather than two.
+  for (const [actualValue, line, expected] of [
+    [2, -3.5, 'loss'],
+    [3, -3, 'push'],
+    [-2, 3.5, 'win'],
+    [-5, 3, 'loss'],
+    [-3, 3, 'push'],
+  ] as [number, number, string][]) {
+    const { repositories, pickId } = await createSpreadResultFixture({
+      actualValue,
+      line,
+    });
+    const result = await runGradingPass(repositories);
+    const detail = result.details.find((d) => d.pickId === pickId);
+    assert.ok(detail, `no detail for margin=${actualValue} line=${line}`);
+    assert.equal(
+      detail.outcome,
+      'graded',
+      `margin=${actualValue} line=${line} was not graded`,
+    );
+    assert.equal(
+      detail.result,
+      expected,
+      `margin=${actualValue} line=${line} expected ${expected}`,
+    );
+  }
+});
+
+test('a spread refuses any result market key but the dedicated attested-margin one', async () => {
+  // This is the load-bearing guard, not a defensive one, and the reachable case is
+  // narrower than it first looks. `resolveGradingMarketKeyCandidates` always seeds
+  // the candidate set with the *normalized* key, so a `game_results` row keyed
+  // plain `spread` is found by the lookup. Such a row carries an unattributed raw
+  // score: an actual_value of 7 is one team's points, not a margin, and grading it
+  // would invent a side that was never attested.
+  //
+  // A key outside the candidate set (`points-all-game-sp`) is a weaker test: it
+  // skips as `game_result_not_found` before the guard is ever consulted, so it
+  // would pass whether or not the guard existed.
+  const { repositories, pickId } = await createSpreadResultFixture({
+    marketKey: 'spread',
+    actualValue: 7,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.match(
+    String(detail.reason),
+    /^spread_result_market_key_unsupported: market_key=spread/,
+  );
+});
+
+test('a spread with no resolvable team skips as missing_participant_id', async () => {
+  const { repositories, pickId } = await createSpreadResultFixture({
+    attachParticipant: false,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.equal(detail.reason, 'missing_participant_id');
+  assert.equal(detail.marketFamily, 'game_spread');
+  assert.equal(detail.participantRequirement, 'required');
+});
+
 test('runGradingPass fails closed for unsupported game-line families', async () => {
-  // `spread` carries this assertion now. It used to be carried by `moneyline`, which
-  // is a real, participant-required family as of UTV2-1889 — so
-  // this test moved to a market that is still genuinely unsupported rather than
-  // being deleted along with the rule it was protecting.
+  // This assertion has now moved twice. It was carried by `moneyline` until
+  // UTV2-1889 made that a real family, then by `spread` until UTV2-1903 made this
+  // one real. Each time it moves to a market that is still genuinely unsupported
+  // rather than being deleted along with the rule it protects.
   const { repositories, pickId } = await createPostedGameLinePickFixture({
-    market: 'spread',
-    selection: 'LAL -3.5',
+    market: 'futures',
+    selection: 'Lakers to win the title',
     line: -3.5,
   });
 
@@ -2614,7 +3134,7 @@ function recapHarness(stakeUnits: unknown) {
       findLatestByPick: async () => ({ id: 'outbox-1', target: '123456789012345678' }),
     },
     receipts: { findLatestByOutboxId: async () => null },
-    runs: {},
+    runs: createInMemoryRepositoryBundle().runs,
   } as unknown as Parameters<typeof postSettlementRecapIfPossible>[2];
 
   const warnings: string[] = [];

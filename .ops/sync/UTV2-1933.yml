@@ -1,0 +1,266 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1933
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1933
+  objective: Dimension 1's stranded-outbox control asserts true and cannot fail
+  acceptance_criteria:
+    - >-
+      `T1_PRODUCTION_READINESS_CONTRACT.md` Dimension 1 (Runtime Health)
+      requires "0 picks stuck in `processing` > 10 minutes". The only automated
+      control that measures it against the live database is vacuous.
+
+
+      `apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts:417-444`, test
+      named *"LIVE-DB: distribution_outbox has no long-stranded processing
+      rows"*:
+
+
+      ```js
+
+      const count = strandedRows?.length ?? 0;
+
+      console.log(`[T1-PROOF] distribution_outbox stranded processing rows
+      (>10min): ${count}`);
+
+      if (count > 0) { /* logs the oldest */ }
+
+      // Any pre-existing rows are classified as historical gap from before
+      stale claim reaper deployment.
+
+      assert.ok(true, `stale reaper operational; ${count} historical stranded
+      rows classified as gap`);
+
+      ```
+
+
+      It queries, it prints, and then it asserts a literal `true`. There is no
+      `assert.equal(count, 0)` anywhere in the file. **The test passes today
+      with 32+ stranded rows exactly as it would with zero**, and would keep
+      passing if the reaper were deleted. It is the same defect class as
+      `governance.awaiting-approval-drift` — a control that cannot fail conveys
+      no information (\[\[feedback-validate-controls-by-execution-path\]\]).
+
+
+      The comment's justification was true when written: the rows predate the
+      reaper, and blanket-failing on them would have failed a control on history
+      rather than on behaviour. The correct answer is a scoped assertion, not a
+      blanket one.
+
+
+      **The reaper itself is real and works** — verified on `main`, not assumed.
+      `reapStaleClaims` (`packages/db/src/runtime-repositories.ts:4034-4079`)
+      selects `status='processing' AND claimed_at < staleBefore`, resets to
+      `pending`, clears the claim fields and bumps `attempt_count`. It runs
+      per-target every worker cycle (`apps/worker/src/runner.ts:176`,
+      `:463-497`), default 300000ms via `UNIT_TALK_WORKER_STALE_CLAIM_MS`. So
+      this issue is about the *control*, not the mechanism. Do not "fix" the
+      reaper.
+
+
+      **Why the historical rows are inert.** The stranded rows are UTV2-1497
+      canary fixtures whose `target` values are outside the worker's configured
+      target list, so no cycle ever reaps them: `reapStaleClaims` is driven from
+      the per-target loop, and `claim_next_outbox`
+      (`baseline_live_schema.sql:490-520`) only selects `status='pending' AND
+      claimed_at IS NULL`, making `processing` rows invisible to it. They are
+      permanently invisible to the running worker — which is precisely why they
+      must not be allowed to mask a real one.
+
+
+      **Required outcome:** the control fails when a row is stranded on a target
+      the worker actually serves, and does not fail on the inert historical
+      cohort. Partition on the worker's configured target list rather than on a
+      hard-coded id list or a cut-off date — a date cut-off silently re-widens
+      into the same vacuum as rows age, and an id list rots.
+
+
+      **Explicitly out of scope:** deleting or mutating the historical rows.
+      That would be a production write made to improve a number rather than to
+      fix a defect, and it destroys the evidence that the partition is needed.
+      The rows stay; the control learns to tell them apart.
+
+
+      T1 because it changes what a production-readiness control asserts. Needs a
+      mutation drill (`/mutation-test`): prove the repaired control fails on a
+      synthetic stranded row for a served target, and passes with it absent.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `T1_PRODUCTION_READINESS_CONTRACT.md` Dimension 1 (Runtime Health)
+      requires "0 picks stuck in `processing` > 10 minutes". The only automated
+      control that measures it against the live database is vacuous.
+
+
+      `apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts:417-444`, test
+      named *"LIVE-DB: distribution_outbox has no long-stranded processing
+      rows"*:
+
+
+      ```js
+
+      const count = strandedRows?.length ?? 0;
+
+      console.log(`[T1-PROOF] distribution_outbox stranded processing rows
+      (>10min): ${count}`);
+
+      if (count > 0) { /* logs the oldest */ }
+
+      // Any pre-existing rows are classified as historical gap from before
+      stale claim reaper deployment.
+
+      assert.ok(true, `stale reaper operational; ${count} historical stranded
+      rows classified as gap`);
+
+      ```
+
+
+      It queries, it prints, and then it asserts a literal `true`. There is no
+      `assert.equal(count, 0)` anywhere in the file. **The test passes today
+      with 32+ stranded rows exactly as it would with zero**, and would keep
+      passing if the reaper were deleted. It is the same defect class as
+      `governance.awaiting-approval-drift` — a control that cannot fail conveys
+      no information (\[\[feedback-validate-controls-by-execution-path\]\]).
+
+
+      The comment's justification was true when written: the rows predate the
+      reaper, and blanket-failing on them would have failed a control on history
+      rather than on behaviour. The correct answer is a scoped assertion, not a
+      blanket one.
+
+
+      **The reaper itself is real and works** — verified on `main`, not assumed.
+      `reapStaleClaims` (`packages/db/src/runtime-repositories.ts:4034-4079`)
+      selects `status='processing' AND claimed_at < staleBefore`, resets to
+      `pending`, clears the claim fields and bumps `attempt_count`. It runs
+      per-target every worker cycle (`apps/worker/src/runner.ts:176`,
+      `:463-497`), default 300000ms via `UNIT_TALK_WORKER_STALE_CLAIM_MS`. So
+      this issue is about the *control*, not the mechanism. Do not "fix" the
+      reaper.
+
+
+      **Why the historical rows are inert.** The stranded rows are UTV2-1497
+      canary fixtures whose `target` values are outside the worker's configured
+      target list, so no cycle ever reaps them: `reapStaleClaims` is driven from
+      the per-target loop, and `claim_next_outbox`
+      (`baseline_live_schema.sql:490-520`) only selects `status='pending' AND
+      claimed_at IS NULL`, making `processing` rows invisible to it. They are
+      permanently invisible to the running worker — which is precisely why they
+      must not be allowed to mask a real one.
+
+
+      **Required outcome:** the control fails when a row is stranded on a target
+      the worker actually serves, and does not fail on the inert historical
+      cohort. Partition on the worker's configured target list rather than on a
+      hard-coded id list or a cut-off date — a date cut-off silently re-widens
+      into the same vacuum as rows age, and an id list rots.
+
+
+      **Explicitly out of scope:** deleting or mutating the historical rows.
+      That would be a production write made to improve a number rather than to
+      fix a defect, and it destroys the evidence that the partition is needed.
+      The rows stay; the control learns to tell them apart.
+
+
+      T1 because it changes what a production-readiness control asserts. Needs a
+      mutation drill (`/mutation-test`): prove the repaired control fails on a
+      synthetic stranded row for a served target, and passes with it absent.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1933/dimension-1s-stranded-outbox-control-asserts-true-and-cannot-fail
+    title: Dimension 1's stranded-outbox control asserts true and cannot fail
+    description: >-
+      `T1_PRODUCTION_READINESS_CONTRACT.md` Dimension 1 (Runtime Health)
+      requires "0 picks stuck in `processing` > 10 minutes". The only automated
+      control that measures it against the live database is vacuous.
+
+
+      `apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts:417-444`, test
+      named *"LIVE-DB: distribution_outbox has no long-stranded processing
+      rows"*:
+
+
+      ```js
+
+      const count = strandedRows?.length ?? 0;
+
+      console.log(`[T1-PROOF] distribution_outbox stranded processing rows
+      (>10min): ${count}`);
+
+      if (count > 0) { /* logs the oldest */ }
+
+      // Any pre-existing rows are classified as historical gap from before
+      stale claim reaper deployment.
+
+      assert.ok(true, `stale reaper operational; ${count} historical stranded
+      rows classified as gap`);
+
+      ```
+
+
+      It queries, it prints, and then it asserts a literal `true`. There is no
+      `assert.equal(count, 0)` anywhere in the file. **The test passes today
+      with 32+ stranded rows exactly as it would with zero**, and would keep
+      passing if the reaper were deleted. It is the same defect class as
+      `governance.awaiting-approval-drift` — a control that cannot fail conveys
+      no information (\[\[feedback-validate-controls-by-execution-path\]\]).
+
+
+      The comment's justification was true when written: the rows predate the
+      reaper, and blanket-failing on them would have failed a control on history
+      rather than on behaviour. The correct answer is a scoped assertion, not a
+      blanket one.
+
+
+      **The reaper itself is real and works** — verified on `main`, not assumed.
+      `reapStaleClaims` (`packages/db/src/runtime-repositories.ts:4034-4079`)
+      selects `status='processing' AND claimed_at < staleBefore`, resets to
+      `pending`, clears the claim fields and bumps `attempt_count`. It runs
+      per-target every worker cycle (`apps/worker/src/runner.ts:176`,
+      `:463-497`), default 300000ms via `UNIT_TALK_WORKER_STALE_CLAIM_MS`. So
+      this issue is about the *control*, not the mechanism. Do not "fix" the
+      reaper.
+
+
+      **Why the historical rows are inert.** The stranded rows are UTV2-1497
+      canary fixtures whose `target` values are outside the worker's configured
+      target list, so no cycle ever reaps them: `reapStaleClaims` is driven from
+      the per-target loop, and `claim_next_outbox`
+      (`baseline_live_schema.sql:490-520`) only selects `status='pending' AND
+      claimed_at IS NULL`, making `processing` rows invisible to it. They are
+      permanently invisible to the running worker — which is precisely why they
+      must not be allowed to mask a real one.
+
+
+      **Required outcome:** the control fails when a row is stranded on a target
+      the worker actually serves, and does not fail on the inert historical
+      cohort. Partition on the worker's configured target list rather than on a
+      hard-coded id list or a cut-off date — a date cut-off silently re-widens
+      into the same vacuum as rows age, and an id list rots.
+
+
+      **Explicitly out of scope:** deleting or mutating the historical rows.
+      That would be a production write made to improve a number rather than to
+      fix a defect, and it destroys the evidence that the partition is needed.
+      The rows stay; the control learns to tell them apart.
+
+
+      T1 because it changes what a production-readiness control asserts. Needs a
+      mutation drill (`/mutation-test`): prove the repaired control fails on a
+      synthetic stranded row for a served target, and passes with it absent.
+    captured_at: 2026-09-18T13:01:28.080Z
+    description_sha256: b4e91bea7ced239df63c9d9107d7aa3c123a8a1965ae86781d81184d9998d706
+  contract_hash: b74241fc9e35c6fe62da73fee9ac17afee381c58d2c0550ccd315bae6bd081ce

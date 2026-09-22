@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1930",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1930-operator-event-seeding",
+  "branch": "claude/utv2-1930-operator-event-seeding",
+  "base_branch": "main",
+  "commit_sha": "17b3f964fb04faa4060fa43fc095531a4f8e8942",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1602",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1930.yml",
+    "docs/06_status/lanes/UTV2-1930.json",
+    "docs/06_status/proof/UTV2-1930/diff-summary.md",
+    "docs/06_status/proof/UTV2-1930/evidence.json",
+    "docs/06_status/proof/UTV2-1930/verification.md",
+    "package.json",
+    "scripts/ops/seed-operator-event.test.ts",
+    "scripts/ops/seed-operator-event.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1930/diff-summary.md",
+    "docs/06_status/proof/UTV2-1930/verification.md",
+    "docs/06_status/proof/UTV2-1930/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-18T07:37:27.649Z",
+  "heartbeat_at": "2026-09-18T08:43:35.941Z",
+  "closed_at": "2026-09-18T08:43:35.941Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-18T08:43:33.489Z",
+      "verdict": "pass",
+      "merge_sha": "17b3f964fb04faa4060fa43fc095531a4f8e8942",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1930-operator-event-seeding",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

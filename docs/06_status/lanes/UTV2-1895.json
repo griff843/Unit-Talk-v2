@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1895",
+  "lane_type": "delivery-ui",
+  "executor": "codex",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1895-smart-form-capper-ui",
+  "branch": "claude/utv2-1895-smart-form-capper-ui",
+  "base_branch": "main",
+  "commit_sha": "8521670603a43377aa93e4a5bf7b2ffb73abf71f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1575",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/smart-form/**"
+  ],
+  "expected_proof_paths": [],
+  "status": "merged",
+  "started_at": "2026-09-13T14:18:05.865Z",
+  "heartbeat_at": "2026-09-13T21:22:13.291Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1895-smart-form-capper-ui.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-13T19:18:33.079Z",
+      "verdict": "pass",
+      "merge_sha": "82cd1218f9fe66d9e476cb25247d569fc0f2cefc",
+      "failures": [],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-09-14T11:25:07.441Z",
+      "verdict": "fail",
+      "merge_sha": "8521670603a43377aa93e4a5bf7b2ffb73abf71f",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1575 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-09-13T21:21:48.990Z",
+      "reasons": [
+        "Owner authorized same-branch team-button follow-up and draft-before-staging ordering exception; original PR #1573 merged at 82cd1218f9fe66d9e476cb25247d569fc0f2cefc remains historical."
+      ],
+      "detected_by": "codex-owner-request"
+    }
+  ],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1895-smart-form-capper-ui",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

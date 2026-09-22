@@ -7,6 +7,47 @@ export const promotionTargets = [
 ] as const;
 export type PromotionTarget = (typeof promotionTargets)[number];
 
+/**
+ * UTV2-1923: human-capper delivery targets.
+ *
+ * `promotionTargets` above are the *model/board* lane: a pick reaches one of
+ * them by scoring qualified against a PromotionPolicy. An authorized human
+ * capper's pick reaches members through none of that machinery -- there is no
+ * model, no edge, no CLV and no automated grading in its path -- so it cannot
+ * be expressed as a promotion target without inventing a scoring policy that
+ * would never run.
+ *
+ * It is still a *governed* delivery destination: it participates in the target
+ * registry, in worker target coverage, and in the DB-backed delivery kill
+ * switch, exactly as the promotion targets do. Everything that can stop a
+ * promotion target can stop this one.
+ *
+ * `DISCORD_CAPPER_CHANNEL_ID` is deliberately NOT this target: that is the
+ * private capper home/onboarding channel, not a member-facing destination.
+ */
+export const humanDeliveryTargets = ['official-picks'] as const;
+export type HumanDeliveryTarget = (typeof humanDeliveryTargets)[number];
+
+/**
+ * Every delivery destination the registry, the worker coverage report and the
+ * kill switch govern. Derive membership from this list -- never from a
+ * hardcoded literal comparison, which is how `discord:<channelId>` became a
+ * delivery lane that neither control could see (UTV2-1923).
+ */
+export const governedDeliveryTargets = [
+  ...promotionTargets,
+  ...humanDeliveryTargets,
+] as const;
+export type GovernedDeliveryTarget = (typeof governedDeliveryTargets)[number];
+
+export function isHumanDeliveryTarget(value: string): value is HumanDeliveryTarget {
+  return (humanDeliveryTargets as readonly string[]).includes(value);
+}
+
+export function isGovernedDeliveryTarget(value: string): value is GovernedDeliveryTarget {
+  return (governedDeliveryTargets as readonly string[]).includes(value);
+}
+
 export const approvalStatuses = [
   'pending',
   'approved',
@@ -77,7 +118,19 @@ export type EdgeFallbackReason =
   | 'no-market-key'
   | 'no-participant-scope'
   | 'no-provider-offer'
-  | 'computation-error';
+  | 'computation-error'
+  /**
+   * UTV2-1898: scope reasons. A provider offer may only back a pick when it
+   * matches that pick's sport, event, market, participant side AND falls inside
+   * the provider freshness window. Each dimension that cannot be established
+   * names itself here rather than being silently dropped from the query --
+   * the omitted-argument-means-unfiltered behaviour these replace is what let
+   * an unrelated stale MLB offer supply edge to an NFL pick.
+   */
+  | 'no-sport-scope'
+  | 'no-event-scope'
+  | 'no-fresh-offer'
+  | 'offer-participant-unattributed';
 
 export interface PromotionScoreWeights {
   edge: number;
@@ -456,7 +509,7 @@ export interface PromotionDecisionSnapshot {
 }
 
 export interface TargetRegistryEntry {
-  target: PromotionTarget;
+  target: GovernedDeliveryTarget;
   enabled: boolean;
   disabledReason?: string;
   /** Percentage of picks delivered to this target (0-100). Default 100. */
@@ -483,11 +536,41 @@ export const defaultTargetRegistry: TargetRegistryEntry[] = [
   },
 ];
 
+/**
+ * UTV2-1923: the human-capper delivery target, registered DISABLED.
+ *
+ * It is held separately from `defaultTargetRegistry` on purpose.
+ * `defaultTargetRegistry` is the set the `20260714130000_bootstrap_delivery_kill_switch_posture`
+ * migration seeded rows for, and the UTV2-1427 live proof asserts a
+ * `system-bootstrap` row exists for each of its members. `official-picks` has
+ * no seeded row and must not pretend to -- and it needs none, because
+ * `DeliveryKillSwitchRepository.isKilled()` is contractually fail-closed for a
+ * target it has no row for. A missing row IS the killed state.
+ *
+ * So this target starts dead twice over: `enabled: false` in the registry, and
+ * `killed` at the live switch for want of a row. Both must be deliberately
+ * released before anything reaches a member.
+ */
+export const humanDeliveryTargetRegistry: TargetRegistryEntry[] = [
+  {
+    target: 'official-picks',
+    enabled: false,
+    disabledReason: 'Human capper official picks delivery is not activated',
+    rolloutPct: 100,
+  },
+];
+
+/** Every governed destination, promotion and human, in registry form. */
+export const governedTargetRegistry: TargetRegistryEntry[] = [
+  ...defaultTargetRegistry,
+  ...humanDeliveryTargetRegistry,
+];
+
 export interface WorkerTargetCoverageReport {
   configuredWorkerTargets: string[];
-  enabledPromotionTargets: PromotionTarget[];
+  enabledPromotionTargets: GovernedDeliveryTarget[];
   missingWorkerTargets: Array<{
-    target: PromotionTarget;
+    target: GovernedDeliveryTarget;
     requiredWorkerTarget: string;
   }>;
   blockedWorkerTargets: string[];
@@ -500,11 +583,14 @@ export function isBlockedDiscordTarget(target: string): target is BlockedDiscord
 }
 
 export function deliveryTargetForPromotionTarget(
-  target: PromotionTarget,
+  target: GovernedDeliveryTarget,
   appEnv?: string | undefined,
 ): string {
   return appEnv === 'local' ? 'discord:canary' : `discord:${target}`;
 }
+
+/** Alias that names what it actually covers now: every governed destination. */
+export const deliveryTargetForGovernedTarget = deliveryTargetForPromotionTarget;
 
 export function parsePromotionTargetFromDeliveryTarget(
   target: string,
@@ -519,7 +605,26 @@ export function parsePromotionTargetFromDeliveryTarget(
     : null;
 }
 
-export function isPromotionTargetBlocked(target: PromotionTarget): boolean {
+/**
+ * UTV2-1923: the single derivation of "is this delivery target governed?".
+ *
+ * `apps/worker/src/runner.ts` previously answered this with three hardcoded
+ * string comparisons, so BOTH the registry check and the DB kill switch simply
+ * did not run for any target outside that literal list. Every caller that
+ * decides whether a control applies must route through this function.
+ */
+export function parseGovernedTargetFromDeliveryTarget(
+  target: string,
+): GovernedDeliveryTarget | null {
+  if (!target.startsWith('discord:')) {
+    return null;
+  }
+
+  const candidate = target.slice('discord:'.length);
+  return isGovernedDeliveryTarget(candidate) ? candidate : null;
+}
+
+export function isPromotionTargetBlocked(target: GovernedDeliveryTarget): boolean {
   return isBlockedDiscordTarget(deliveryTargetForPromotionTarget(target, 'production'));
 }
 
@@ -613,13 +718,17 @@ export function resolveTargetRegistry(
   let registry: TargetRegistryEntry[];
 
   if (!raw) {
-    registry = defaultTargetRegistry.map((entry) => ({ ...entry }));
+    registry = governedTargetRegistry.map((entry) => ({ ...entry }));
   } else {
     const explicitlyEnabled = new Set(
       raw.split(',').map((t) => t.trim()).filter(Boolean),
     );
 
-    registry = promotionTargets.map((target) => ({
+    // UTV2-1923: enumerate every governed destination, not only the promotion
+    // ones. A target omitted from this map would carry no registry entry at
+    // all, and `isTargetEnabled` answers `false` for an absent entry -- which
+    // is fail-closed, but silently so, and unauditable.
+    registry = governedDeliveryTargets.map((target) => ({
       target,
       enabled: explicitlyEnabled.has(target),
       rolloutPct: 100,

@@ -1,0 +1,135 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1901
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1901
+  objective: "Ninth plan reconciliation: record the four-pick production
+    acceptance and the guarded edge-provenance correction"
+  acceptance_criteria:
+    - |-
+      Docs-only. Reconcile `docs/mission/plan.md` against what was actually executed on 2026-09-14 after the eighth pass ([UTV2-1899](https://linear.app/unit-talk-v2/issue/UTV2-1899/eighth-plan-reconciliation-the-t1-readiness-contract-measured-against)) merged, and write the durable evidence record for it.
+
+      ## What happened that the eighth pass does not record
+
+      1. **Deploy run** `34858627673` **succeeded** and the release was verified from the live health endpoint — the running API self-reports `deploymentIdentifier = a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6`, which is the target SHA. Containment `parked` throughout; 0 migrations; 0 changes to `deploy.yml` or `deploy/**`.
+      2. **A fresh non-moneyline Track Only pick** (`04174f12`, NFL spread, Chiefs -2.5) was submitted by Griff on the new release and passed the read-only acceptance query: honest `confidence-delta` provenance, `hasRealEdge: false`, `edgeProvenance.fallbackReason = no-event-scope`, `kellySizing: null`, no `deviggingResult`.
+      3. **The three legacy rows were corrected** in one guarded transaction under explicit PM authorization, with `id` + `updated_at` predicates and three row-count guards. All three matched; nothing rolled back; blast radius measured at exactly three rows.
+      4. **The governed cohort moved 1 → 4**, and 4 of 4 now carry honest `confidence-delta` provenance.
+
+      ## Why it matters to the readiness verdict
+
+      Dimension 2's market-backed figure stays **0.00%** — but it is now *honest* rather than accidental. The three legacy rows previously claimed `realEdgeSource: 'sgo'` against offers that did not scope to them; they now record the truth. `overall_pass: false` is unchanged, and no dimension verdict moves.
+
+      ## The sequencing lesson worth recording
+
+      PM re-ordered the plan's own sequence from deploy → correct → verify to **deploy → verify → correct**. That re-ordering is what caught a factual error in the correction packet: the packet asserted `selectedOffer: present → removed`, and measurement of the acceptance pick showed `selectedOffer` is written as JSON `null` on both the repaired path and all three legacy rows. Correcting on the plan's original order would have deleted a key the repaired code actually writes, making the corrected rows diverge from live behaviour.
+
+      ## Scope
+
+      * `docs/mission/plan.md` — the ninth pass
+      * `docs/05_operations/PRODUCTION_ACCEPTANCE_2026-09-14.md` — new; the acceptance and correction evidence record
+
+      ## Bounds
+
+      No production write, no containment change, no SGO activation, no member-delivery activation. The `force_promote` / best-bets policy question is **not** decided here — it is filed as [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on) and referenced.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Docs-only. Reconcile `docs/mission/plan.md` against what was actually executed on 2026-09-14 after the eighth pass ([UTV2-1899](https://linear.app/unit-talk-v2/issue/UTV2-1899/eighth-plan-reconciliation-the-t1-readiness-contract-measured-against)) merged, and write the durable evidence record for it.
+    - >-
+      What happened that the eighth pass does not record
+
+      1. **Deploy run** `34858627673` **succeeded** and the release was verified
+      from the live health endpoint — the running API self-reports
+      `deploymentIdentifier = a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6`, which
+      is the target SHA. Containment `parked` throughout; 0 migrations; 0
+      changes to `deploy.yml` or `deploy/**`.
+
+      2. **A fresh non-moneyline Track Only pick** (`04174f12`, NFL spread,
+      Chiefs -2.5) was submitted by Griff on the new release and passed the
+      read-only acceptance query: honest `confidence-delta` provenance,
+      `hasRealEdge: false`, `edgeProvenance.fallbackReason = no-event-scope`,
+      `kellySizing: null`, no `deviggingResult`.
+
+      3. **The three legacy rows were corrected** in one guarded transaction
+      under explicit PM authorization, with `id` + `updated_at` predicates and
+      three row-count guards. All three matched; nothing rolled back; blast
+      radius measured at exactly three rows.
+
+      4. **The governed cohort moved 1 → 4**, and 4 of 4 now carry honest
+      `confidence-delta` provenance.
+    - >-
+      Why it matters to the readiness verdict
+
+      Dimension 2's market-backed figure stays **0.00%** — but it is now
+      *honest* rather than accidental. The three legacy rows previously claimed
+      `realEdgeSource: 'sgo'` against offers that did not scope to them; they
+      now record the truth. `overall_pass: false` is unchanged, and no dimension
+      verdict moves.
+    - >-
+      The sequencing lesson worth recording
+
+      PM re-ordered the plan's own sequence from deploy → correct → verify to
+      **deploy → verify → correct**. That re-ordering is what caught a factual
+      error in the correction packet: the packet asserted `selectedOffer:
+      present → removed`, and measurement of the acceptance pick showed
+      `selectedOffer` is written as JSON `null` on both the repaired path and
+      all three legacy rows. Correcting on the plan's original order would have
+      deleted a key the repaired code actually writes, making the corrected rows
+      diverge from live behaviour.
+    - >-
+      Scope
+
+      * `docs/mission/plan.md` — the ninth pass
+
+      * `docs/05_operations/PRODUCTION_ACCEPTANCE_2026-09-14.md` — new; the
+      acceptance and correction evidence record
+    - |-
+      Bounds
+      No production write, no containment change, no SGO activation, no member-delivery activation. The `force_promote` / best-bets policy question is **not** decided here — it is filed as [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on) and referenced.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1901/ninth-plan-reconciliation-record-the-four-pick-production-acceptance
+    title: "Ninth plan reconciliation: record the four-pick production acceptance
+      and the guarded edge-provenance correction"
+    description: |-
+      Docs-only. Reconcile `docs/mission/plan.md` against what was actually executed on 2026-09-14 after the eighth pass ([UTV2-1899](https://linear.app/unit-talk-v2/issue/UTV2-1899/eighth-plan-reconciliation-the-t1-readiness-contract-measured-against)) merged, and write the durable evidence record for it.
+
+      ## What happened that the eighth pass does not record
+
+      1. **Deploy run** `34858627673` **succeeded** and the release was verified from the live health endpoint — the running API self-reports `deploymentIdentifier = a45e9cd1123fed9f9aabc28732fdbcd92a70b2c6`, which is the target SHA. Containment `parked` throughout; 0 migrations; 0 changes to `deploy.yml` or `deploy/**`.
+      2. **A fresh non-moneyline Track Only pick** (`04174f12`, NFL spread, Chiefs -2.5) was submitted by Griff on the new release and passed the read-only acceptance query: honest `confidence-delta` provenance, `hasRealEdge: false`, `edgeProvenance.fallbackReason = no-event-scope`, `kellySizing: null`, no `deviggingResult`.
+      3. **The three legacy rows were corrected** in one guarded transaction under explicit PM authorization, with `id` + `updated_at` predicates and three row-count guards. All three matched; nothing rolled back; blast radius measured at exactly three rows.
+      4. **The governed cohort moved 1 → 4**, and 4 of 4 now carry honest `confidence-delta` provenance.
+
+      ## Why it matters to the readiness verdict
+
+      Dimension 2's market-backed figure stays **0.00%** — but it is now *honest* rather than accidental. The three legacy rows previously claimed `realEdgeSource: 'sgo'` against offers that did not scope to them; they now record the truth. `overall_pass: false` is unchanged, and no dimension verdict moves.
+
+      ## The sequencing lesson worth recording
+
+      PM re-ordered the plan's own sequence from deploy → correct → verify to **deploy → verify → correct**. That re-ordering is what caught a factual error in the correction packet: the packet asserted `selectedOffer: present → removed`, and measurement of the acceptance pick showed `selectedOffer` is written as JSON `null` on both the repaired path and all three legacy rows. Correcting on the plan's original order would have deleted a key the repaired code actually writes, making the corrected rows diverge from live behaviour.
+
+      ## Scope
+
+      * `docs/mission/plan.md` — the ninth pass
+      * `docs/05_operations/PRODUCTION_ACCEPTANCE_2026-09-14.md` — new; the acceptance and correction evidence record
+
+      ## Bounds
+
+      No production write, no containment change, no SGO activation, no member-delivery activation. The `force_promote` / best-bets policy question is **not** decided here — it is filed as [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on) and referenced.
+    captured_at: 2026-09-14T17:42:12.563Z
+    description_sha256: 1e3c8fc71754beaa9429b5fc0cbeba4cd6b4e4a77701524c9e57f253576244a4
+  contract_hash: 2675e16e05a22e6f56250c931f2d4b8a52e1a5ff5882abe09d09ba5506c7fee2

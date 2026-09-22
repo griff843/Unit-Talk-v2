@@ -27,6 +27,7 @@ import type {
   AuditLogRepository,
   BrowseSearchResult,
   ClosingLineLookupCriteria,
+  CapperRepository,
   DeliveryKillSwitchRepository,
   DeliveryKillSwitchRow,
   DeliveryKillSwitchSetInput,
@@ -41,6 +42,7 @@ import type {
   GradeResultInsertInput,
   GradeResultLookupCriteria,
   GradeResultRepository,
+  GradingResultRepository,
   HedgeOpportunityCreateInput,
   HedgeOpportunityCooldownQuery,
   HedgeOpportunityNotificationUpdateInput,
@@ -79,6 +81,7 @@ import type {
   ProviderOfferMergeInput,
   ProviderOfferMergeResult,
   ProviderOfferRepository,
+  ScopedProviderOfferLookup,
   ProviderOfferStageInput,
   ProviderOfferStageResult,
   ProviderOfferUpsertInput,
@@ -126,6 +129,7 @@ import type {
 import type {
   AlertDetectionRecord,
   AuditLogRow,
+  CapperRow,
   EventStatus,
   EventParticipantRow,
   ExperimentLedgerRecord,
@@ -1422,7 +1426,7 @@ export class InMemoryReceiptRepository implements ReceiptRepository {
 }
 
 export class InMemoryGradeResultRepository implements GradeResultRepository {
-  private readonly records: GradeResultRecord[] = [];
+  protected readonly records: GradeResultRecord[] = [];
 
   async insert(input: GradeResultInsertInput): Promise<GradeResultRecord> {
     const duplicate = this.records.find(
@@ -1467,6 +1471,20 @@ export class InMemoryGradeResultRepository implements GradeResultRepository {
 
   async listByEvent(eventId: string): Promise<GradeResultRecord[]> {
     return this.records.filter((record) => record.event_id === eventId);
+  }
+
+}
+
+export class InMemoryGradingResultRepository
+  extends InMemoryGradeResultRepository
+  implements GradingResultRepository
+{
+  async findLatestSourcedAt(): Promise<string | null> {
+    return (
+      this.records
+        .map((record) => record.sourced_at)
+        .sort((left, right) => right.localeCompare(left))[0] ?? null
+    );
   }
 }
 
@@ -1717,19 +1735,17 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       );
   }
 
-  async findLatestByMarketKey(
-    marketKey: string,
-    providerKey?: string,
-    providerParticipantId?: string | null,
+  async findLatestScopedOffer(
+    criteria: ScopedProviderOfferLookup,
   ): Promise<ProviderOfferRecord | null> {
     const matches = Array.from(this.currentOffers.values())
       .filter(
         (o) =>
-          o.provider_market_key === marketKey &&
-          (providerKey ? o.provider_key === providerKey : true) &&
-          (providerParticipantId === undefined
-            ? true
-            : (o.provider_participant_id ?? null) === providerParticipantId),
+          o.provider_market_key === criteria.providerMarketKey &&
+          (o.sport_key ?? null) === criteria.sportKey &&
+          o.provider_event_id === criteria.providerEventId &&
+          (o.provider_participant_id ?? null) === criteria.providerParticipantId &&
+          (criteria.providerKey ? o.provider_key === criteria.providerKey : true),
       )
       .sort((left, right) =>
         compareProviderOfferRecordsDescending(left, right),
@@ -2363,6 +2379,23 @@ export class InMemoryDeliveryKillSwitchRepository implements DeliveryKillSwitchR
 
   async listAll(): Promise<DeliveryKillSwitchRow[]> {
     return [...this.state.values()];
+  }
+}
+
+/**
+ * UTV2-1923: in-memory canonical capper rows. Read-only, exactly like the
+ * database implementation; `seed` exists for tests and for nothing else, and
+ * is not part of `CapperRepository`.
+ */
+export class InMemoryCapperRepository implements CapperRepository {
+  private readonly rows = new Map<string, CapperRow>();
+
+  seed(row: CapperRow): void {
+    this.rows.set(row.id, row);
+  }
+
+  async findById(capperId: string): Promise<CapperRow | null> {
+    return this.rows.get(capperId) ?? null;
   }
 }
 
@@ -4801,7 +4834,7 @@ export class DatabaseSettlementRepository implements SettlementRepository {
 }
 
 export class DatabaseGradeResultRepository implements GradeResultRepository {
-  private readonly client: UnitTalkSupabaseClient;
+  protected readonly client: UnitTalkSupabaseClient;
 
   constructor(connection: DatabaseConnectionConfig) {
     this.client = createDatabaseClientFromConnection(connection);
@@ -4889,6 +4922,27 @@ export class DatabaseGradeResultRepository implements GradeResultRepository {
     }
 
     return data ?? [];
+  }
+
+}
+
+export class DatabaseGradingResultRepository
+  extends DatabaseGradeResultRepository
+  implements GradingResultRepository
+{
+  async findLatestSourcedAt(): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('game_results')
+      .select('sourced_at')
+      .order('sourced_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load latest game result timestamp: ${error.message}`);
+    }
+
+    return data?.sourced_at ?? null;
   }
 }
 
@@ -5291,23 +5345,27 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     return data ?? [];
   }
 
-  async findLatestByMarketKey(
-    marketKey: string,
-    providerKey?: string,
-    providerParticipantId?: string | null,
+  async findLatestScopedOffer(
+    criteria: ScopedProviderOfferLookup,
   ): Promise<ProviderOfferRecord | null> {
+    // UTV2-1898: every discriminating predicate is unconditional. There is no
+    // branch that can drop one, because a dropped predicate widens the match
+    // set instead of emptying it.
     let query = fromUntyped(this.client, 'provider_offer_current')
       .select('*')
-      .eq('provider_market_key', marketKey)
+      .eq('provider_market_key', criteria.providerMarketKey)
+      .eq('sport_key', criteria.sportKey)
+      .eq('provider_event_id', criteria.providerEventId)
       .order('snapshot_at', { ascending: false })
       .limit(1);
 
-    if (providerKey) {
-      query = query.eq('provider_key', providerKey);
-    }
+    query =
+      criteria.providerParticipantId === null
+        ? query.is('provider_participant_id', null)
+        : query.eq('provider_participant_id', criteria.providerParticipantId);
 
-    if (providerParticipantId !== undefined) {
-      query = query.eq('provider_participant_id', providerParticipantId);
+    if (criteria.providerKey) {
+      query = query.eq('provider_key', criteria.providerKey);
     }
 
     const { data, error } = await (query.maybeSingle() as unknown as Promise<{
@@ -5317,7 +5375,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     if (error) {
       throw new Error(
-        `Failed to find latest offer by market key: ${error.message}`,
+        `Failed to find latest scoped provider offer: ${error.message}`,
       );
     }
 
@@ -5972,6 +6030,35 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
     }
 
     return data ?? [];
+  }
+}
+
+/**
+ * UTV2-1923: the canonical `cappers` row, read-only.
+ *
+ * A read error is NOT distinguished from a missing row here, and that is
+ * deliberate: both mean "this server cannot prove where this capper's picks
+ * belong", and the only safe answer to that is to deliver nowhere. The caller
+ * turns `null` into a named refusal.
+ */
+export class DatabaseCapperRepository implements CapperRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async findById(capperId: string): Promise<CapperRow | null> {
+    const { data, error } = await this.client
+      .from('cappers')
+      .select('id, display_name, active, metadata, created_at, updated_at')
+      .eq('id', capperId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+    return data as unknown as CapperRow;
   }
 }
 
@@ -9109,7 +9196,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     participants,
     events,
     eventParticipants,
-    gradeResults: new InMemoryGradeResultRepository(),
+    gradeResults: new InMemoryGradingResultRepository(),
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
     referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
@@ -9126,6 +9213,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     executionIntents: new InMemoryExecutionIntentRepository(),
     pickOfferSnapshots: new InMemoryPickOfferSnapshotRepository(),
     killSwitch: new InMemoryDeliveryKillSwitchRepository(),
+    cappers: new InMemoryCapperRepository(),
   };
 }
 
@@ -9144,7 +9232,7 @@ export function createDatabaseRepositoryBundle(
     participants: new DatabaseParticipantRepository(connection),
     events: new DatabaseEventRepository(connection),
     eventParticipants: new DatabaseEventParticipantRepository(connection),
-    gradeResults: new DatabaseGradeResultRepository(connection),
+    gradeResults: new DatabaseGradingResultRepository(connection),
     runs: new DatabaseSystemRunRepository(connection),
     audit: new DatabaseAuditLogRepository(connection),
     referenceData: new DatabaseReferenceDataRepository(connection),
@@ -9163,6 +9251,7 @@ export function createDatabaseRepositoryBundle(
     executionIntents: new DatabaseExecutionIntentRepository(connection),
     pickOfferSnapshots: new DatabasePickOfferSnapshotRepository(connection),
     killSwitch: new DatabaseDeliveryKillSwitchRepository(connection),
+    cappers: new DatabaseCapperRepository(connection),
   };
 }
 

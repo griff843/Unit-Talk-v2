@@ -23,14 +23,14 @@ export interface CommandCenterRoute {
   primary: boolean;
   primaryParent?: string;
   primaryIcon?: CommandCenterPrimaryIcon;
-  workspace?: 'decision' | 'intelligence';
+  workspace?: 'operations' | 'decision' | 'intelligence' | 'research';
 }
 
 /**
  * The sole Command Center route and navigation authority.
  *
- * Every page.tsx route is classified here. Only the six records marked
- * `primary` are allowed into the sidebar and command palette. Secondary and
+ * Every page.tsx route is classified here. Records marked
+ * `primary` are usable pages in the workspace sidebar and command palette. Secondary and
  * historical routes remain addressable only with an explicit disposition
  * banner supplied by CommandCenterShell.
  */
@@ -69,8 +69,7 @@ export const COMMAND_CENTER_ROUTES: readonly CommandCenterRoute[] = [
     'Removed from the primary workflow until event replay is revalidated as operator-grade truth.'),
   route('/model-health', 'Model Health', 'Model runtime health and diagnostics.', 'deferred',
     'Removed from primary navigation because it is not required for the six-workflow operator loop.'),
-  route('/performance', 'Performance', 'Performance and attribution reporting.', 'deferred',
-    'Decision-support reporting is deferred from the primary operator workflow.', { workspace: 'intelligence' }),
+  primary('/performance', 'Performance', 'Governed capper and aggregate record, units, and ROI.', 'overview', 'intelligence'),
   route('/intelligence', 'Form Windows', 'Model and score-window reporting.', 'deferred',
     'Model economics are deferred until the measurements are fully authoritative.', { workspace: 'intelligence' }),
   route('/intelligence/attribution', 'Governed Attribution', 'Attribution reporting.', 'deferred',
@@ -106,12 +105,10 @@ export const COMMAND_CENTER_ROUTES: readonly CommandCenterRoute[] = [
 
   route('/operations/approvals', 'Approvals', 'Legacy approval operations view.', 'deferred',
     'The authoritative approval workflow is Review.', { primaryParent: '/review' }),
-  route('/operations/discord', 'Discord Control', 'Discord delivery controls.', 'deferred',
-    'Delivery control is not a primary workflow in this phase.'),
+  primary('/operations/discord', 'Delivery', 'Delivery receipts and governed kill-switch posture.', 'health'),
   route('/operations/governance', 'Governance Lanes', 'Lane and governance telemetry.', 'deferred',
     'Governance telemetry is retained for direct access only.'),
-  route('/operations/outbox', 'Dispatch Outbox', 'Distribution outbox inspection.', 'deferred',
-    'Outbox inspection is retained for direct access only.'),
+  primary('/operations/outbox', 'Delivery Outbox', 'Inspect queued, failed, and delivered distribution attempts.', 'picks'),
 
   route('/intel/alerts', 'Alert Builder', 'Local alert-definition builder.', 'deferred',
     'New intelligence tooling is outside this stabilization phase.'),
@@ -147,15 +144,17 @@ function primary(
   label: string,
   description: string,
   primaryIcon: CommandCenterPrimaryIcon,
+  workspace: NonNullable<CommandCenterRoute['workspace']> = 'operations',
 ): CommandCenterRoute {
   return {
     href,
     label,
     description,
     classification: 'authoritative',
-    classificationReason: 'One of the six authoritative internal operator workflows.',
+    classificationReason: 'Reads the canonical operator record.',
     primary: true,
     primaryIcon,
+    workspace,
   };
 }
 
@@ -195,4 +194,21 @@ export function getPrimaryRouteForPath(pathname: string): string | null {
   if (!routeEntry) return null;
   if (routeEntry.primary) return routeEntry.href;
   return routeEntry.primaryParent ?? null;
+}
+
+
+export const COMMAND_CENTER_WORKSPACES = [
+  { id: 'operations', label: 'Operations', href: '/', available: true },
+  { id: 'decision', label: 'Decision', href: '/decision', available: false },
+  { id: 'intelligence', label: 'Intelligence', href: '/performance', available: true },
+  { id: 'research', label: 'Research', href: '/research', available: false },
+] as const;
+
+export function getActiveWorkspace(pathname: string): typeof COMMAND_CENTER_WORKSPACES[number]['id'] {
+  const declared = getRouteMeta(pathname)?.workspace;
+  if (declared) return declared;
+  if (pathname.startsWith('/decision/')) return 'decision';
+  if (pathname === '/decision') return 'decision';
+  if (pathname.startsWith('/research') || pathname.startsWith('/intel/')) return 'research';
+  return 'operations';
 }

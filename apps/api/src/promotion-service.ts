@@ -39,6 +39,7 @@ import type {
   ProviderOfferRepository,
   SettlementRepository,
 } from '@unit-talk/db';
+import { isUnattributedCapper, resolveCapperIdentity } from './capper-identity.js';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
 import {
   computeSubmissionDomainAnalysis,
@@ -197,13 +198,17 @@ async function tryPromotionTimeRealEdgeRecovery(
 
   let realEdgeResult;
   try {
-    const { computeRealEdge } = await import('./real-edge-service.js');
+    const { computeRealEdge, readPersistedRealEdgeScope } = await import('./real-edge-service.js');
     realEdgeResult = await computeRealEdge({
       confidence: pick.confidence,
       marketKey: pick.market,
       selection: pick.selection,
       submittedOdds: pick.odds,
       providerOffers,
+      // UTV2-1898: re-derive under the scope the pick was submitted with. A
+      // pick that carries no recorded scope gets an honest fallbackReason
+      // instead of an unscoped market lookup.
+      scope: readPersistedRealEdgeScope(pick.metadata as Record<string, unknown> | undefined),
     });
   } catch {
     // UTV2-1379: fail closed — do not let an exception escape into a silent
@@ -431,6 +436,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     scoringPick,
     openPicks,
     settlementRepository ? { settlements: settlementRepository, picks: pickRepository } : undefined,
+    resolveCapperIdentity(pickRecord),
   );
   const decidedAt = new Date().toISOString();
 
@@ -1072,6 +1078,7 @@ async function persistPromotionDecisionForPick(
     scoringPick,
     openPicks,
     settlementRepository ? { settlements: settlementRepository, picks: pickRepository } : undefined,
+    resolveCapperIdentity(pickRecord),
   );
   const overrideState = mapOverrideState(override);
   const decision = evaluatePromotionEligibility({
@@ -1265,6 +1272,10 @@ async function readPromotionScoreInputs(
     settlements: SettlementRepository;
     picks: PickRepository;
   },
+  // UTV2-1907: the canonical capper identity, resolved from `picks.capper_id`
+  // by the caller, which is the layer that still holds the persisted row.
+  // `CanonicalPick` does not carry the column, so it cannot be recovered here.
+  capperIdentity?: string,
 ) {
   const configured = readNestedRecord(pick.metadata, 'promotionScores');
   const confidenceScore = normalizeConfidenceForScoring(pick.confidence);
@@ -1319,8 +1330,13 @@ async function readPromotionScoreInputs(
   let trust = readScore(configured, 'trust', trustFallback);
 
   // Apply CLV feedback adjustment to trust score when repositories are available
-  if (repositories) {
-    const capperIdentity = readMetadataString(pick.metadata, 'capper') || pick.source;
+  // UTV2-1907: attribution comes from the canonical `picks.capper_id` column,
+  // never from `metadata.capper` and never falling back to `pick.source`.
+  // `source` is an intake channel, so that fallback aggregated every
+  // unattributed pick under a pseudo-capper named after its channel. An
+  // unattributed pick now gets no CLV trust adjustment at all, rather than one
+  // computed from a population it does not belong to.
+  if (repositories && capperIdentity !== undefined && !isUnattributedCapper(capperIdentity)) {
     const clvAdjustment = await computeClvTrustAdjustment(
       capperIdentity,
       repositories.settlements,

@@ -1,0 +1,239 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1920
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1920
+  objective: packages/contracts/src/picks.ts contains an invalid UTF-8 byte and
+    fails every Next.js (SWC) build that reads contracts source
+  acceptance_criteria:
+    - |-
+      ## Measured defect
+
+      `packages/contracts/src/picks.ts` byte offset 410 is a lone `0x97` — the CP1252 em dash, never re-encoded to UTF-8 (`E2 80 94`). It sits inside a comment:
+
+      ```
+       * Canonical lifecycle FSM <0x97> single source of truth for all layers (contracts, DB, domain).
+      ```
+
+      Measured, not inferred:
+
+      ```
+      $ iconv -f UTF-8 -t UTF-8 packages/contracts/src/picks.ts
+      iconv: illegal input sequence at position 410
+
+      $ for f in $(git ls-files '*.ts' '*.tsx' '*.js' '*.mjs' '*.cjs' '*.json'); do
+          iconv -f UTF-8 -t UTF-8 "$f" >/dev/null 2>&1 || echo "INVALID: $f"; done
+      INVALID: packages/contracts/src/picks.ts
+      ```
+
+      It is the only invalid-UTF-8 tracked source file in the repository. Introduced by `cc1944555` (UTV2-930, PR [griff843/Unit-Talk-v2#710](https://linear.app/unit-talk-v2/review/featcontracts-utv2-930-canonical-lifecycle-fsm-single-source-of-truth-e6ef21320a66)) and untouched since.
+
+      ## Why it only surfaced now
+
+      `tsc` and esbuild tolerate the byte. Next.js compiles through SWC, which is Rust and refuses a non-UTF-8 source stream outright. `apps/command-center` is the only Next app that reaches `packages/contracts/src` through the transpiled-package path:
+
+      ```
+      ../../packages/contracts/src/picks.ts
+      ../../packages/contracts/src/index.ts
+      ./src/lib/operator-grading-context.ts
+      ./src/app/actions/settle.ts
+      ```
+
+      `apps/web` and `apps/smart-form` do not, which is why both built green in the same run.
+
+      The Command Center image had never been built by `deploy.yml` before. Enabling `UNIT_TALK_COMMAND_CENTER_ENABLED=true` after [UTV2-1918](https://linear.app/unit-talk-v2/issue/UTV2-1918/command-center-internal-only-deployment-candidate-add-the-compose) merged is what first exercised that build job, and it failed immediately:
+
+      ```
+      Deploy run 35075808951 — build-nextjs (command-center, apps/command-center, @unit-talk/command-center, 4300): FAILURE
+      apps/command-center build: Failed to compile.
+      ../../packages/contracts/src/picks.ts
+      Caused by:
+          0: Failed to read source code from /repo/packages/contracts/src/picks.ts
+          1: stream did not contain valid UTF-8
+      > Build failed because of webpack errors
+      ```
+
+      `Canary deploy`, `Promote production` and `Post-deploy functional smoke` were all skipped. No environment approval gate was reached and containment was never exercised.
+
+      ## Impact
+
+      This is the sole blocker on dispatching a Deploy that can ship the Command Center. No deploy can complete while it stands.
+
+      ## Fix
+
+      Replace the single `0x97` byte with the UTF-8 em dash `E2 80 94`. No code, no type, no exported symbol changes — the byte is inside a doc comment.
+
+      ## Regression guard
+
+      Add an assertion to the already-wired `scripts/ci/nextjs-deploy-wiring.test.ts` that every tracked source file the Next builds can read decodes as valid UTF-8, so a CP1252 paste can never again reach a Next build undetected. Mutation-test it by reintroducing the byte in a fixture.
+
+      ## Scope
+
+      * `packages/contracts/src/picks.ts` (one byte)
+      * `scripts/ci/nextjs-deploy-wiring.test.ts` (regression guard; already wired through `test:ops`, so no root `package.json` edit)
+
+      T1 is the mechanical floor: `classifyMechanicalMinimum(['packages/contracts/src/picks.ts'])` returns `T1`, `rule_id: tier-c-prefix`. The diff is one byte plus a test.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Measured defect
+      `packages/contracts/src/picks.ts` byte offset 410 is a lone `0x97` — the CP1252 em dash, never re-encoded to UTF-8 (`E2 80 94`). It sits inside a comment:
+
+      ```
+       * Canonical lifecycle FSM <0x97> single source of truth for all layers (contracts, DB, domain).
+      ```
+
+      Measured, not inferred:
+
+      ```
+      $ iconv -f UTF-8 -t UTF-8 packages/contracts/src/picks.ts
+      iconv: illegal input sequence at position 410
+
+      $ for f in $(git ls-files '*.ts' '*.tsx' '*.js' '*.mjs' '*.cjs' '*.json'); do
+          iconv -f UTF-8 -t UTF-8 "$f" >/dev/null 2>&1 || echo "INVALID: $f"; done
+      INVALID: packages/contracts/src/picks.ts
+      ```
+
+      It is the only invalid-UTF-8 tracked source file in the repository. Introduced by `cc1944555` (UTV2-930, PR [griff843/Unit-Talk-v2#710](https://linear.app/unit-talk-v2/review/featcontracts-utv2-930-canonical-lifecycle-fsm-single-source-of-truth-e6ef21320a66)) and untouched since.
+    - |-
+      Why it only surfaced now
+      `tsc` and esbuild tolerate the byte. Next.js compiles through SWC, which is Rust and refuses a non-UTF-8 source stream outright. `apps/command-center` is the only Next app that reaches `packages/contracts/src` through the transpiled-package path:
+
+      ```
+      ../../packages/contracts/src/picks.ts
+      ../../packages/contracts/src/index.ts
+      ./src/lib/operator-grading-context.ts
+      ./src/app/actions/settle.ts
+      ```
+
+      `apps/web` and `apps/smart-form` do not, which is why both built green in the same run.
+
+      The Command Center image had never been built by `deploy.yml` before. Enabling `UNIT_TALK_COMMAND_CENTER_ENABLED=true` after [UTV2-1918](https://linear.app/unit-talk-v2/issue/UTV2-1918/command-center-internal-only-deployment-candidate-add-the-compose) merged is what first exercised that build job, and it failed immediately:
+
+      ```
+      Deploy run 35075808951 — build-nextjs (command-center, apps/command-center, @unit-talk/command-center, 4300): FAILURE
+      apps/command-center build: Failed to compile.
+      ../../packages/contracts/src/picks.ts
+      Caused by:
+          0: Failed to read source code from /repo/packages/contracts/src/picks.ts
+          1: stream did not contain valid UTF-8
+      > Build failed because of webpack errors
+      ```
+
+      `Canary deploy`, `Promote production` and `Post-deploy functional smoke` were all skipped. No environment approval gate was reached and containment was never exercised.
+    - >-
+      Impact
+
+      This is the sole blocker on dispatching a Deploy that can ship the Command
+      Center. No deploy can complete while it stands.
+    - >-
+      Fix
+
+      Replace the single `0x97` byte with the UTF-8 em dash `E2 80 94`. No code,
+      no type, no exported symbol changes — the byte is inside a doc comment.
+    - >-
+      Regression guard
+
+      Add an assertion to the already-wired
+      `scripts/ci/nextjs-deploy-wiring.test.ts` that every tracked source file
+      the Next builds can read decodes as valid UTF-8, so a CP1252 paste can
+      never again reach a Next build undetected. Mutation-test it by
+      reintroducing the byte in a fixture.
+    - >-
+      Scope
+
+      * `packages/contracts/src/picks.ts` (one byte)
+
+      * `scripts/ci/nextjs-deploy-wiring.test.ts` (regression guard; already
+      wired through `test:ops`, so no root `package.json` edit)
+
+
+      T1 is the mechanical floor:
+      `classifyMechanicalMinimum(['packages/contracts/src/picks.ts'])` returns
+      `T1`, `rule_id: tier-c-prefix`. The diff is one byte plus a test.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1920/packagescontractssrcpicksts-contains-an-invalid-utf-8-byte-and-fails
+    title: packages/contracts/src/picks.ts contains an invalid UTF-8 byte and fails
+      every Next.js (SWC) build that reads contracts source
+    description: |-
+      ## Measured defect
+
+      `packages/contracts/src/picks.ts` byte offset 410 is a lone `0x97` — the CP1252 em dash, never re-encoded to UTF-8 (`E2 80 94`). It sits inside a comment:
+
+      ```
+       * Canonical lifecycle FSM <0x97> single source of truth for all layers (contracts, DB, domain).
+      ```
+
+      Measured, not inferred:
+
+      ```
+      $ iconv -f UTF-8 -t UTF-8 packages/contracts/src/picks.ts
+      iconv: illegal input sequence at position 410
+
+      $ for f in $(git ls-files '*.ts' '*.tsx' '*.js' '*.mjs' '*.cjs' '*.json'); do
+          iconv -f UTF-8 -t UTF-8 "$f" >/dev/null 2>&1 || echo "INVALID: $f"; done
+      INVALID: packages/contracts/src/picks.ts
+      ```
+
+      It is the only invalid-UTF-8 tracked source file in the repository. Introduced by `cc1944555` (UTV2-930, PR [griff843/Unit-Talk-v2#710](https://linear.app/unit-talk-v2/review/featcontracts-utv2-930-canonical-lifecycle-fsm-single-source-of-truth-e6ef21320a66)) and untouched since.
+
+      ## Why it only surfaced now
+
+      `tsc` and esbuild tolerate the byte. Next.js compiles through SWC, which is Rust and refuses a non-UTF-8 source stream outright. `apps/command-center` is the only Next app that reaches `packages/contracts/src` through the transpiled-package path:
+
+      ```
+      ../../packages/contracts/src/picks.ts
+      ../../packages/contracts/src/index.ts
+      ./src/lib/operator-grading-context.ts
+      ./src/app/actions/settle.ts
+      ```
+
+      `apps/web` and `apps/smart-form` do not, which is why both built green in the same run.
+
+      The Command Center image had never been built by `deploy.yml` before. Enabling `UNIT_TALK_COMMAND_CENTER_ENABLED=true` after [UTV2-1918](https://linear.app/unit-talk-v2/issue/UTV2-1918/command-center-internal-only-deployment-candidate-add-the-compose) merged is what first exercised that build job, and it failed immediately:
+
+      ```
+      Deploy run 35075808951 — build-nextjs (command-center, apps/command-center, @unit-talk/command-center, 4300): FAILURE
+      apps/command-center build: Failed to compile.
+      ../../packages/contracts/src/picks.ts
+      Caused by:
+          0: Failed to read source code from /repo/packages/contracts/src/picks.ts
+          1: stream did not contain valid UTF-8
+      > Build failed because of webpack errors
+      ```
+
+      `Canary deploy`, `Promote production` and `Post-deploy functional smoke` were all skipped. No environment approval gate was reached and containment was never exercised.
+
+      ## Impact
+
+      This is the sole blocker on dispatching a Deploy that can ship the Command Center. No deploy can complete while it stands.
+
+      ## Fix
+
+      Replace the single `0x97` byte with the UTF-8 em dash `E2 80 94`. No code, no type, no exported symbol changes — the byte is inside a doc comment.
+
+      ## Regression guard
+
+      Add an assertion to the already-wired `scripts/ci/nextjs-deploy-wiring.test.ts` that every tracked source file the Next builds can read decodes as valid UTF-8, so a CP1252 paste can never again reach a Next build undetected. Mutation-test it by reintroducing the byte in a fixture.
+
+      ## Scope
+
+      * `packages/contracts/src/picks.ts` (one byte)
+      * `scripts/ci/nextjs-deploy-wiring.test.ts` (regression guard; already wired through `test:ops`, so no root `package.json` edit)
+
+      T1 is the mechanical floor: `classifyMechanicalMinimum(['packages/contracts/src/picks.ts'])` returns `T1`, `rule_id: tier-c-prefix`. The diff is one byte plus a test.
+    captured_at: 2026-09-16T09:05:27.697Z
+    description_sha256: 3c3fce8857592d16aebf3b6d99e760cd71bd94bbc7159bd91e7077f6de271104
+  contract_hash: 7f2ec69ed7b216aa9717f78ada85659f6a108b97ef9aaa8e5f6c4f2f4a4332dc

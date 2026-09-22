@@ -347,3 +347,82 @@ test('no writable-path script guards its CLI entrypoint by filename', () => {
     );
   }
 });
+
+
+test('manual staging proof executes the complete gate before credentials are scrubbed', () => {
+  const source = readRepo('.github/workflows/staging-db-proof.yml');
+  const fullGate = source.indexOf('      - name: Run complete repository verification against staging');
+  const scrub = source.indexOf('      - name: Scrub credentials');
+  assert.ok(fullGate > source.indexOf('      - name: Run writable DB proof against staging'));
+  assert.ok(scrub > fullGate, 'the complete gate must run while the staging-only environment exists');
+  const step = source.slice(fullGate, scrub);
+  assert.match(step, /run: pnpm verify/);
+  assert.match(step, /CI_FIXTURE_RUN_ID: full-verify-/);
+  assert.match(step, /CI_REQUIRE_DB_SMOKE: 'true'/);
+  assert.doesNotMatch(step, /continue-on-error|secrets\.SUPABASE_/);
+});
+
+test('operator browser writes stay in the staging-only job before credential scrub', () => {
+  const source = readRepo('.github/workflows/staging-db-proof.yml');
+  const proof = source.indexOf('      - name: Run staging operator browser proof');
+  assert.ok(proof > source.indexOf('      - name: Run complete repository verification against staging'));
+  assert.ok(proof < source.indexOf('      - name: Scrub credentials'));
+  assert.match(source.slice(proof, source.indexOf('      - name: Scrub credentials')), /run: pnpm proof:command-center-staging/);
+  const runner = readRepo('scripts/ops/command-center/staging-operator-proof.ts');
+  assert.ok(runner.indexOf('assert.equal(isApprovedStagingTarget') < runner.indexOf('const api = createApiServer'));
+  assert.match(runner, /distributionMode: 'track-only'/);
+  assert.doesNotMatch(runner, /setKilled|createWorker|runGradingPass/);
+});
+
+// UTV2-1951. This suite already asserts over the *text* of the scripts and
+// workflows that CI executes, which is why this guard lives here rather than
+// beside the rollback behaviour tests: the defect is not what the rollback does
+// on the host, it is what the local shell does while assembling the string.
+//
+// `deploy/rollback.sh:95` opens the remote script with an UNQUOTED heredoc
+// (`REMOTE_COMMAND=$(cat <<EOF`), so the body is expanded before it is ever
+// sent. An unescaped backtick or `$(` therefore runs on the operator's machine
+// at the moment a rollback is being assembled, and splices its stdout into the
+// script. One comment reading "failed at `docker compose up`" was enough to
+// invoke docker and rewrite itself as
+// "failed at The command 'docker' could not be found ...".
+//
+// It survived review because GitHub runners have no docker binary: the
+// substitution yields empty there and every existing test stayed green. Nothing
+// mechanical asked the question this test asks.
+test('the rollback remote heredoc performs no command substitution while it is assembled', () => {
+  const source = readRepo('deploy/rollback.sh');
+  const open = source.indexOf('REMOTE_COMMAND=$(cat <<EOF\n');
+  assert.ok(open >= 0, 'rollback.sh must still assemble its remote script from a heredoc');
+
+  const bodyStart = open + 'REMOTE_COMMAND=$(cat <<EOF\n'.length;
+  const bodyEnd = source.indexOf('\nEOF\n', bodyStart);
+  assert.ok(bodyEnd > bodyStart, 'the remote heredoc must be terminated');
+  const body = source.slice(bodyStart, bodyEnd);
+
+  // An odd number of preceding backslashes means the character is escaped.
+  const isEscaped = (index: number) => {
+    let backslashes = 0;
+    for (let i = index - 1; i >= 0 && body[i] === '\\'; i -= 1) backslashes += 1;
+    return backslashes % 2 === 1;
+  };
+
+  const offenders: string[] = [];
+  for (let i = 0; i < body.length; i += 1) {
+    const isBacktick = body[i] === '`';
+    const isDollarParen = body[i] === '$' && body[i + 1] === '(';
+    if (!isBacktick && !isDollarParen) continue;
+    if (isEscaped(i)) continue;
+    const lineNumber = source.slice(0, bodyStart + i).split('\n').length;
+    offenders.push(`${lineNumber}: ${body.slice(0, i).split('\n').pop()!.trim()}`);
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'Unescaped command substitution inside the unquoted remote heredoc. It executes on the ' +
+      'operator machine while the rollback script is being built, and its stdout is spliced into ' +
+      'the script. Escape it as \\` or \\$( — see line 129 for the correct form.\n' +
+      offenders.join('\n'),
+  );
+});

@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1929",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1929-human-capper-lifecycle-repairs",
+  "branch": "claude/utv2-1929-human-capper-lifecycle-repairs",
+  "base_branch": "main",
+  "commit_sha": "7731c80d083fd44760b042c647b31092c5ea6d9a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1601",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/deploy.yml",
+    ".ops/sync/UTV2-1929.yml",
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/worker/src/delivery-adapters.test.ts",
+    "apps/worker/src/delivery-adapters.ts",
+    "apps/worker/src/worker-runtime.test.ts",
+    "docs/06_status/lanes/UTV2-1929.json",
+    "docs/06_status/proof/UTV2-1929/diff-summary.md",
+    "docs/06_status/proof/UTV2-1929/evidence.json",
+    "docs/06_status/proof/UTV2-1929/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1929/diff-summary.md",
+    "docs/06_status/proof/UTV2-1929/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-18T06:40:18.097Z",
+  "heartbeat_at": "2026-09-18T07:24:28.940Z",
+  "closed_at": "2026-09-18T07:24:28.940Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-18T07:24:27.035Z",
+      "verdict": "pass",
+      "merge_sha": "7731c80d083fd44760b042c647b31092c5ea6d9a",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1929-human-capper-lifecycle-repairs",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

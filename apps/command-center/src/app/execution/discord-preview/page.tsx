@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { Card, EmptyState, InternalLabelBadge, Table, TableHead, TableBody, Th, Td } from '@/components/ui';
 import { DiscordEmbedPreview } from '@/components/DiscordEmbedPreview';
 import { getExecutionPick, listPreviewablePicks } from '@/lib/data/execution';

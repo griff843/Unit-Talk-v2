@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { Card, EmptyState } from '@/components/ui';
 import { getResearchLines } from '@/lib/data';
 import { getCurrentOfferGroups, type IntelOfferGroup } from '@/lib/data/odds-intel';

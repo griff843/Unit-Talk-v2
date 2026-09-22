@@ -1,0 +1,550 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1942
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1942
+  objective: "Command Center is operationally unusable: the root layout runs an
+    11.5s unindexed scan on every request"
+  acceptance_criteria:
+    - >-
+      Measured against production `zfzdnfwdarxucxtaojxm` and the deployed
+      Command Center on 2026-09-18 via Playwright (55 routes, read-only) and
+      direct `EXPLAIN ANALYZE`.
+
+
+      ## Operator-visible symptom
+
+
+      Clicks appear not to work. They do work — client navigation commits in
+      10–14s with no pending indicator, so the operator reads it as dead.
+      Measured serially, every route costs **4.7–18.2s**, and three render a raw
+      Postgres timeout instead of data.
+
+
+      ## Root cause
+
+
+      `src/app/layout.tsx` awaits `getPrivilegedGlobalHealth()` on **every
+      request**, which calls `getDashboardData()` — 18 database queries, the
+      entire Overview payload — to colour one word in the sidebar.
+
+
+      This is redundant: `CommandCenterShell.useGlobalHealth` already fetches
+      `/api/health` client-side on mount, and that route already returns full
+      privileged health **with a 30s cache**. The layout duplicates it,
+      uncached, blocking first byte.
+
+
+      Because it is in the layout it runs on everything, including 404s:
+
+
+      | Route | Time |
+
+      | -- | -- |
+
+      | `/_next/static/...` (outside middleware matcher) | 0.002s |
+
+      | `/nonexistent-xyz` — a 404, zero page queries | **5.49s** |
+
+      | `/` | 8.28s |
+
+      | `/exceptions` | 13.22s |
+
+
+      A 404 costing 5.5s proves the cost is in the shell, not the pages.
+
+
+      ## The slowest query is also incorrect
+
+
+      Inside `getSnapshotData` (`src/lib/data/snapshot.ts`):
+
+
+      ```
+
+      select * from system_runs order by created_at desc limit 26
+
+      ```
+
+
+      `system_runs` holds **3,516,347 rows**, of which **3,429,120 (97.5%) are**
+      `worker.heartbeat` — one row every \~6s since 2026-04-21, with no
+      retention. No index serves a bare `ORDER BY` on this table (the only
+      composite leads with `run_type`), so it is a full parallel seq scan:
+
+
+      ```
+
+      Parallel Seq Scan on system_runs ... rows=1758174 loops=2
+
+      Execution Time: 11501.573 ms
+
+      ```
+
+
+      Ordering by `started_at` instead does **not** help — also a seq scan,
+      4.85s.
+
+
+      Worse, it returns nothing usable. All 26 returned rows are
+      `worker.heartbeat`, so `latestDistributionRunAt`, `latestIngestorRunAt`,
+      `failedRuns`, and the alert/grading/recap summaries derived from
+      `recentRuns` are structurally always null/zero/empty.
+
+
+      (Correction to an earlier draft of this issue: this is **not** why the
+      sidebar reads GLOBAL HEALTH: down. `deriveSignals` does not read
+      `system_runs` at all. Measured against production, `/api/health` returns
+      `degradedSignals: ["discord_delivery","stats_propagation"]` — a separate
+      and genuine signal. The `system_runs` defect corrupts the runtime/ops
+      panels, not the global health badge.)
+
+
+      **Verified fix, no DDL needed.** Querying per `run_type` against the
+      existing `system_runs_run_type_started_at_idx` is both correct and fast —
+      `EXPLAIN ANALYZE` of a 7-type lateral-limit form returns 182 rows covering
+      every consumed run type in **98.8ms**, versus 11,501ms for 26 useless
+      rows. In `supabase-js` this becomes one indexed `.eq('run_type',
+      t).order('started_at').limit(n)` per type, issued in parallel.
+
+
+      ## Route inventory (Playwright 55 routes + serial `curl` re-verification,
+      2026-09-18)
+
+
+      **Correction to the first draft of this issue.** The first sweep ran 4
+      Playwright workers in parallel against a server where every request costs
+      5–11s of database time. That contention manufactured failures. Re-measured
+      serially, the corrected findings are:
+
+
+      **No route is dead.** The six previously listed as "never loads (90s
+      timeout)" — `/ops`, `/burn-in`, `/agents`, `/interventions`,
+      `/runtime-dashboard`, `/research` — are all `redirect()` stubs to other
+      surfaces. Serially they resolve 200 in 9.4–18.2s. The 90s timeouts were
+      self-inflicted.
+
+
+      **Three routes reproduce a rendered Postgres** `canceling statement due to
+      statement timeout` **with no concurrent load:**
+
+
+      | Route | Serial time | Serial result |
+
+      | -- | -- | -- |
+
+      | `/picks` | 10.10s | timeout rendered |
+
+      | `/picks-list` | 15.31s | timeout rendered |
+
+      | `/intelligence/attribution` | 8.32s | timeout rendered |
+
+
+      **Four more failed only under parallel load**, and sit close enough to the
+      8s `authenticated` role timeout that any real concurrent operator use will
+      trip them: `/review` (5.88s), `/held` (5.62s), `/decisions` (11.66s),
+      `/operations/approvals` (5.78s).
+
+
+      `/model-health` renders "Unable to load" and returns in 4.74s — a
+      data-read failure, not a timeout.
+
+
+      Hydration is correct on all 55 routes (`interactive == hydrated`), so none
+      of this is broken client JS.
+
+
+      **Method note for whoever verifies the fix:** measure serially, or with at
+      most one worker. A parallel sweep of this app measures the database's
+      queue depth, not the app.
+
+
+      ## Scope
+
+
+      1. Remove the blocking health read from the root layout; rely on the
+      existing cached client fetch.
+
+      2. Make the `system_runs` reads index-usable and correct — query per
+      `run_type` against `system_runs_run_type_started_at_idx` rather than
+      taking the global latest N.
+
+      3. Remove `count: 'exact'` from the operator queue reads that time out
+      (`searchPicks`, `getReviewQueue`, `getHeldQueue`), and move fixture
+      exclusion into SQL.
+
+
+      Retention on `system_runs` and any new index are production DDL/data
+      decisions and are **out of scope here** — surfaced separately.
+
+
+      ## Blocks
+
+
+      The Human Capper E2E cannot be performed on a Command Center in this
+      state.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Measured against production `zfzdnfwdarxucxtaojxm` and the deployed
+      Command Center on 2026-09-18 via Playwright (55 routes, read-only) and
+      direct `EXPLAIN ANALYZE`.
+    - >-
+      Operator-visible symptom
+
+      Clicks appear not to work. They do work — client navigation commits in
+      10–14s with no pending indicator, so the operator reads it as dead.
+      Measured serially, every route costs **4.7–18.2s**, and three render a raw
+      Postgres timeout instead of data.
+    - >-
+      Root cause
+
+      `src/app/layout.tsx` awaits `getPrivilegedGlobalHealth()` on **every
+      request**, which calls `getDashboardData()` — 18 database queries, the
+      entire Overview payload — to colour one word in the sidebar.
+
+
+      This is redundant: `CommandCenterShell.useGlobalHealth` already fetches
+      `/api/health` client-side on mount, and that route already returns full
+      privileged health **with a 30s cache**. The layout duplicates it,
+      uncached, blocking first byte.
+
+
+      Because it is in the layout it runs on everything, including 404s:
+
+
+      | Route | Time |
+
+      | -- | -- |
+
+      | `/_next/static/...` (outside middleware matcher) | 0.002s |
+
+      | `/nonexistent-xyz` — a 404, zero page queries | **5.49s** |
+
+      | `/` | 8.28s |
+
+      | `/exceptions` | 13.22s |
+
+
+      A 404 costing 5.5s proves the cost is in the shell, not the pages.
+    - >-
+      The slowest query is also incorrect
+
+      Inside `getSnapshotData` (`src/lib/data/snapshot.ts`):
+
+
+      ```
+
+      select * from system_runs order by created_at desc limit 26
+
+      ```
+
+
+      `system_runs` holds **3,516,347 rows**, of which **3,429,120 (97.5%) are**
+      `worker.heartbeat` — one row every \~6s since 2026-04-21, with no
+      retention. No index serves a bare `ORDER BY` on this table (the only
+      composite leads with `run_type`), so it is a full parallel seq scan:
+
+
+      ```
+
+      Parallel Seq Scan on system_runs ... rows=1758174 loops=2
+
+      Execution Time: 11501.573 ms
+
+      ```
+
+
+      Ordering by `started_at` instead does **not** help — also a seq scan,
+      4.85s.
+
+
+      Worse, it returns nothing usable. All 26 returned rows are
+      `worker.heartbeat`, so `latestDistributionRunAt`, `latestIngestorRunAt`,
+      `failedRuns`, and the alert/grading/recap summaries derived from
+      `recentRuns` are structurally always null/zero/empty.
+
+
+      (Correction to an earlier draft of this issue: this is **not** why the
+      sidebar reads GLOBAL HEALTH: down. `deriveSignals` does not read
+      `system_runs` at all. Measured against production, `/api/health` returns
+      `degradedSignals: ["discord_delivery","stats_propagation"]` — a separate
+      and genuine signal. The `system_runs` defect corrupts the runtime/ops
+      panels, not the global health badge.)
+
+
+      **Verified fix, no DDL needed.** Querying per `run_type` against the
+      existing `system_runs_run_type_started_at_idx` is both correct and fast —
+      `EXPLAIN ANALYZE` of a 7-type lateral-limit form returns 182 rows covering
+      every consumed run type in **98.8ms**, versus 11,501ms for 26 useless
+      rows. In `supabase-js` this becomes one indexed `.eq('run_type',
+      t).order('started_at').limit(n)` per type, issued in parallel.
+    - >-
+      Route inventory (Playwright 55 routes + serial `curl` re-verification,
+      2026-09-18)
+
+      **Correction to the first draft of this issue.** The first sweep ran 4
+      Playwright workers in parallel against a server where every request costs
+      5–11s of database time. That contention manufactured failures. Re-measured
+      serially, the corrected findings are:
+
+
+      **No route is dead.** The six previously listed as "never loads (90s
+      timeout)" — `/ops`, `/burn-in`, `/agents`, `/interventions`,
+      `/runtime-dashboard`, `/research` — are all `redirect()` stubs to other
+      surfaces. Serially they resolve 200 in 9.4–18.2s. The 90s timeouts were
+      self-inflicted.
+
+
+      **Three routes reproduce a rendered Postgres** `canceling statement due to
+      statement timeout` **with no concurrent load:**
+
+
+      | Route | Serial time | Serial result |
+
+      | -- | -- | -- |
+
+      | `/picks` | 10.10s | timeout rendered |
+
+      | `/picks-list` | 15.31s | timeout rendered |
+
+      | `/intelligence/attribution` | 8.32s | timeout rendered |
+
+
+      **Four more failed only under parallel load**, and sit close enough to the
+      8s `authenticated` role timeout that any real concurrent operator use will
+      trip them: `/review` (5.88s), `/held` (5.62s), `/decisions` (11.66s),
+      `/operations/approvals` (5.78s).
+
+
+      `/model-health` renders "Unable to load" and returns in 4.74s — a
+      data-read failure, not a timeout.
+
+
+      Hydration is correct on all 55 routes (`interactive == hydrated`), so none
+      of this is broken client JS.
+
+
+      **Method note for whoever verifies the fix:** measure serially, or with at
+      most one worker. A parallel sweep of this app measures the database's
+      queue depth, not the app.
+    - >-
+      Scope
+
+      1. Remove the blocking health read from the root layout; rely on the
+      existing cached client fetch.
+
+      2. Make the `system_runs` reads index-usable and correct — query per
+      `run_type` against `system_runs_run_type_started_at_idx` rather than
+      taking the global latest N.
+
+      3. Remove `count: 'exact'` from the operator queue reads that time out
+      (`searchPicks`, `getReviewQueue`, `getHeldQueue`), and move fixture
+      exclusion into SQL.
+
+
+      Retention on `system_runs` and any new index are production DDL/data
+      decisions and are **out of scope here** — surfaced separately.
+    - >-
+      Blocks
+
+      The Human Capper E2E cannot be performed on a Command Center in this
+      state.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1942/command-center-is-operationally-unusable-the-root-layout-runs-an-115s
+    title: "Command Center is operationally unusable: the root layout runs an 11.5s
+      unindexed scan on every request"
+    description: >-
+      Measured against production `zfzdnfwdarxucxtaojxm` and the deployed
+      Command Center on 2026-09-18 via Playwright (55 routes, read-only) and
+      direct `EXPLAIN ANALYZE`.
+
+
+      ## Operator-visible symptom
+
+
+      Clicks appear not to work. They do work — client navigation commits in
+      10–14s with no pending indicator, so the operator reads it as dead.
+      Measured serially, every route costs **4.7–18.2s**, and three render a raw
+      Postgres timeout instead of data.
+
+
+      ## Root cause
+
+
+      `src/app/layout.tsx` awaits `getPrivilegedGlobalHealth()` on **every
+      request**, which calls `getDashboardData()` — 18 database queries, the
+      entire Overview payload — to colour one word in the sidebar.
+
+
+      This is redundant: `CommandCenterShell.useGlobalHealth` already fetches
+      `/api/health` client-side on mount, and that route already returns full
+      privileged health **with a 30s cache**. The layout duplicates it,
+      uncached, blocking first byte.
+
+
+      Because it is in the layout it runs on everything, including 404s:
+
+
+      | Route | Time |
+
+      | -- | -- |
+
+      | `/_next/static/...` (outside middleware matcher) | 0.002s |
+
+      | `/nonexistent-xyz` — a 404, zero page queries | **5.49s** |
+
+      | `/` | 8.28s |
+
+      | `/exceptions` | 13.22s |
+
+
+      A 404 costing 5.5s proves the cost is in the shell, not the pages.
+
+
+      ## The slowest query is also incorrect
+
+
+      Inside `getSnapshotData` (`src/lib/data/snapshot.ts`):
+
+
+      ```
+
+      select * from system_runs order by created_at desc limit 26
+
+      ```
+
+
+      `system_runs` holds **3,516,347 rows**, of which **3,429,120 (97.5%) are**
+      `worker.heartbeat` — one row every \~6s since 2026-04-21, with no
+      retention. No index serves a bare `ORDER BY` on this table (the only
+      composite leads with `run_type`), so it is a full parallel seq scan:
+
+
+      ```
+
+      Parallel Seq Scan on system_runs ... rows=1758174 loops=2
+
+      Execution Time: 11501.573 ms
+
+      ```
+
+
+      Ordering by `started_at` instead does **not** help — also a seq scan,
+      4.85s.
+
+
+      Worse, it returns nothing usable. All 26 returned rows are
+      `worker.heartbeat`, so `latestDistributionRunAt`, `latestIngestorRunAt`,
+      `failedRuns`, and the alert/grading/recap summaries derived from
+      `recentRuns` are structurally always null/zero/empty.
+
+
+      (Correction to an earlier draft of this issue: this is **not** why the
+      sidebar reads GLOBAL HEALTH: down. `deriveSignals` does not read
+      `system_runs` at all. Measured against production, `/api/health` returns
+      `degradedSignals: ["discord_delivery","stats_propagation"]` — a separate
+      and genuine signal. The `system_runs` defect corrupts the runtime/ops
+      panels, not the global health badge.)
+
+
+      **Verified fix, no DDL needed.** Querying per `run_type` against the
+      existing `system_runs_run_type_started_at_idx` is both correct and fast —
+      `EXPLAIN ANALYZE` of a 7-type lateral-limit form returns 182 rows covering
+      every consumed run type in **98.8ms**, versus 11,501ms for 26 useless
+      rows. In `supabase-js` this becomes one indexed `.eq('run_type',
+      t).order('started_at').limit(n)` per type, issued in parallel.
+
+
+      ## Route inventory (Playwright 55 routes + serial `curl` re-verification,
+      2026-09-18)
+
+
+      **Correction to the first draft of this issue.** The first sweep ran 4
+      Playwright workers in parallel against a server where every request costs
+      5–11s of database time. That contention manufactured failures. Re-measured
+      serially, the corrected findings are:
+
+
+      **No route is dead.** The six previously listed as "never loads (90s
+      timeout)" — `/ops`, `/burn-in`, `/agents`, `/interventions`,
+      `/runtime-dashboard`, `/research` — are all `redirect()` stubs to other
+      surfaces. Serially they resolve 200 in 9.4–18.2s. The 90s timeouts were
+      self-inflicted.
+
+
+      **Three routes reproduce a rendered Postgres** `canceling statement due to
+      statement timeout` **with no concurrent load:**
+
+
+      | Route | Serial time | Serial result |
+
+      | -- | -- | -- |
+
+      | `/picks` | 10.10s | timeout rendered |
+
+      | `/picks-list` | 15.31s | timeout rendered |
+
+      | `/intelligence/attribution` | 8.32s | timeout rendered |
+
+
+      **Four more failed only under parallel load**, and sit close enough to the
+      8s `authenticated` role timeout that any real concurrent operator use will
+      trip them: `/review` (5.88s), `/held` (5.62s), `/decisions` (11.66s),
+      `/operations/approvals` (5.78s).
+
+
+      `/model-health` renders "Unable to load" and returns in 4.74s — a
+      data-read failure, not a timeout.
+
+
+      Hydration is correct on all 55 routes (`interactive == hydrated`), so none
+      of this is broken client JS.
+
+
+      **Method note for whoever verifies the fix:** measure serially, or with at
+      most one worker. A parallel sweep of this app measures the database's
+      queue depth, not the app.
+
+
+      ## Scope
+
+
+      1. Remove the blocking health read from the root layout; rely on the
+      existing cached client fetch.
+
+      2. Make the `system_runs` reads index-usable and correct — query per
+      `run_type` against `system_runs_run_type_started_at_idx` rather than
+      taking the global latest N.
+
+      3. Remove `count: 'exact'` from the operator queue reads that time out
+      (`searchPicks`, `getReviewQueue`, `getHeldQueue`), and move fixture
+      exclusion into SQL.
+
+
+      Retention on `system_runs` and any new index are production DDL/data
+      decisions and are **out of scope here** — surfaced separately.
+
+
+      ## Blocks
+
+
+      The Human Capper E2E cannot be performed on a Command Center in this
+      state.
+    captured_at: 2026-09-19T03:39:47.051Z
+    description_sha256: 1ca968ba4bbfb728c050c7a598256a7bb17fda5dd34864c68e0d011a74085853
+  contract_hash: 95f9472f0b8b348030bc228f19fada272efb28ac6ed16359b90eccd7f59fcb5b

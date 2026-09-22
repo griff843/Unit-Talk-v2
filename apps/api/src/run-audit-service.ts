@@ -7,7 +7,17 @@ import type {
   SystemRunRecord,
   SystemRunRepository,
 } from '@unit-talk/db';
-import { isTrackOnlyPickMetadata, type CanonicalPick } from '@unit-talk/contracts';
+import {
+  capperDiscordRoutingVersion,
+  humanDeliveryTargets,
+  isHumanCapperDeliveryAuthorized,
+  isHumanDeliveryTarget,
+  isTrackOnlyPickMetadata,
+  parseGovernedTargetFromDeliveryTarget,
+  pinnedDeliveryDestinationKey,
+  readHumanCapperDeliveryAuthorization,
+  type CanonicalPick,
+} from '@unit-talk/contracts';
 import {
   bestBetsPromotionPolicy,
   exclusiveInsightsPromotionPolicy,
@@ -17,10 +27,16 @@ import {
   AwaitingApprovalBrakeError,
   enqueueDistributionWork,
   evaluateDistributionTargetGate,
+  HumanDeliveryNotAuthorizedError,
   resolveDeliveryTarget,
   TrackOnlyDistributionError,
   type DistributionEnqueueResult,
 } from './distribution-service.js';
+import {
+  loadCapperDeliveryDestination,
+  type CapperDeliveryDestination,
+  type CapperRoutingReader,
+} from './capper-delivery-authorization.js';
 import { ensurePickLifecycleState } from './lifecycle-service.js';
 import { evaluateAndPersistPromotion } from './promotion-service.js';
 
@@ -72,6 +88,24 @@ export async function enqueueDistributionWithRunTracking(
     throw new TrackOnlyDistributionError(pick.id, resolvedTarget);
   }
   // UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_END
+
+  // UTV2-1923 HUMAN_DELIVERY_ATOMIC_GUARD_START
+  // The same reasoning as the Track Only guard above, for the human capper
+  // target. It matters here specifically because the happy path below is the
+  // ATOMIC one: `enqueueDistributionAtomic` writes the lifecycle transition
+  // and the outbox row in one transaction WITHOUT calling
+  // `enqueueDistributionWork`, so the authorization guard inside that function
+  // is only reached on the InMemory sequential fallback. Without this check a
+  // production enqueue to the human target would consult no authorization at
+  // all. The persisted row is authoritative; a caller's in-memory
+  // `CanonicalPick` is not.
+  if (isHumanDeliveryTarget(parseGovernedTargetFromDeliveryTarget(resolvedTarget) ?? '')) {
+    const persistedMetadata = isRecord(currentPick?.metadata) ? currentPick.metadata : null;
+    if (!isHumanCapperDeliveryAuthorized(persistedMetadata)) {
+      throw new HumanDeliveryNotAuthorizedError(pick.id, resolvedTarget);
+    }
+  }
+  // UTV2-1923 HUMAN_DELIVERY_ATOMIC_GUARD_END
 
   const currentLifecycleState =
     currentPick?.status ?? pick.lifecycleState;
@@ -299,4 +333,415 @@ function needsPromotionEvaluationForTarget(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// ---------------------------------------------------------------------------
+// UTV2-1923: human capper delivery release (W3 — the second key)
+// ---------------------------------------------------------------------------
+
+export interface HumanCapperDeliveryReleaseResult {
+  run: SystemRunRecord;
+  audit: AuditLogRecord;
+  target: string;
+  pickId: string;
+  /** False when a control refused the release without erroring — e.g. the registry has the target disabled. */
+  enqueued: boolean;
+  reason?: string;
+  /** The capper-specific destination this release routed to, when one was resolved. */
+  destination?: CapperDeliveryDestination;
+}
+
+/**
+ * UTV2-1923 (revised): which lifecycle state this release leaves from, and
+ * under whose authority.
+ *
+ * There are exactly two lawful entries, and they are NOT interchangeable:
+ *
+ *   `submission`  — the CANONICAL path for an authorized human capper. The
+ *                   pick leaves `validated` under the `promoter` role at
+ *                   submission time. No operator stands between the capper and
+ *                   the member-facing post, because for a human capper there is
+ *                   nothing for an operator to decide: the server already
+ *                   decided, from its own allow-list, that this capper's picks
+ *                   are deliverable.
+ *
+ *   `approval`    — the RECOVERY path only. It leaves `awaiting_approval` under
+ *                   `operator_override`. A human capper pick does not enter
+ *                   `awaiting_approval` on the canonical path, so this entry
+ *                   exists for a pick an operator has deliberately parked, and
+ *                   for nothing else.
+ *
+ * `approval` is the default so that every pre-existing caller keeps its exact
+ * previous behaviour and a new caller must state which door it is using.
+ */
+export type HumanCapperDeliveryReleaseEntry = 'approval' | 'submission';
+
+interface HumanCapperDeliveryReleaseEntrySpec {
+  fromState: 'awaiting_approval' | 'validated';
+  writerRole: 'operator_override' | 'promoter';
+  runIdempotencySuffix: string;
+}
+
+const HUMAN_DELIVERY_RELEASE_ENTRIES: Readonly<
+  Record<HumanCapperDeliveryReleaseEntry, HumanCapperDeliveryReleaseEntrySpec>
+> = {
+  approval: {
+    fromState: 'awaiting_approval',
+    writerRole: 'operator_override',
+    runIdempotencySuffix: 'human-delivery-release',
+  },
+  submission: {
+    fromState: 'validated',
+    writerRole: 'promoter',
+    runIdempotencySuffix: 'human-delivery-submit',
+  },
+};
+
+/**
+ * Release an authorized human capper pick into the governed member-facing
+ * delivery target, atomically, with a run and an audit record for both
+ * outcomes. `entry` selects which lifecycle door it leaves by — see
+ * `HumanCapperDeliveryReleaseEntry`. The canonical human capper path is
+ * `submission`; `approval` is an operator recovery door.
+ *
+ * This is deliberately NOT `enqueueDistributionWithRunTracking`. That function
+ * exists to serve the model/board lane, where an enqueue is the downstream
+ * consequence of a scoring decision and an `awaiting_approval` pick is by
+ * definition not yet approved. Nothing here is scored, and — on the canonical
+ * `submission` entry — nothing here is approved either; the server's own
+ * allow-list already decided. What both entries share is the reason this is
+ * one transaction: the lifecycle move and the outbox row must land together,
+ * or a pick reaches `queued` with nothing to deliver.
+ *
+ * Every control still applies, and each is re-read from the persisted row
+ * rather than trusted from the caller:
+ *
+ *   1. the pick must not be Track Only;
+ *   2. the pick must carry a server delivery authorization (key one);
+ *   3. the pick must actually be in `awaiting_approval` (key two is being
+ *      turned right now, and cannot be turned twice);
+ *   4. the registry must have the target enabled;
+ *   5. the worker's own DB kill switch still gates the actual send.
+ */
+export async function releaseHumanCapperDeliveryWithRunTracking(
+  pickId: string,
+  actor: string,
+  reason: string,
+  pickRepository: PickRepository,
+  outboxRepository: OutboxRepository,
+  systemRunRepository: SystemRunRepository,
+  auditLogRepository: AuditLogRepository,
+  entry: HumanCapperDeliveryReleaseEntry = 'approval',
+  capperRepository?: CapperRoutingReader | undefined,
+): Promise<HumanCapperDeliveryReleaseResult> {
+  const entrySpec = HUMAN_DELIVERY_RELEASE_ENTRIES[entry];
+  const target = `discord:${humanDeliveryTargets[0]}`;
+  const resolvedTarget = resolveDeliveryTarget(target);
+
+  const currentPick = await pickRepository.findPickById(pickId);
+  if (!currentPick) {
+    throw new Error(`Human capper delivery release failed: pick ${pickId} not found`);
+  }
+
+  const persistedMetadata = isRecord(currentPick.metadata) ? currentPick.metadata : null;
+
+  // UTV2-1923 HUMAN_DELIVERY_RELEASE_GUARD_START
+  if (isTrackOnlyPickMetadata(persistedMetadata)) {
+    throw new TrackOnlyDistributionError(pickId, resolvedTarget);
+  }
+  if (!isHumanCapperDeliveryAuthorized(persistedMetadata)) {
+    throw new HumanDeliveryNotAuthorizedError(pickId, resolvedTarget);
+  }
+  if (currentPick.status !== entrySpec.fromState) {
+    throw new Error(
+      `Human capper delivery release failed: pick ${pickId} is ${currentPick.status}, not ${entrySpec.fromState}`,
+    );
+  }
+  // UTV2-1923 HUMAN_DELIVERY_RELEASE_GUARD_END
+
+  const authorization = readHumanCapperDeliveryAuthorization(persistedMetadata);
+  const run = await systemRunRepository.startRun({
+    runType: 'distribution.enqueue',
+    actor,
+    details: {
+      pickId,
+      target: resolvedTarget,
+      lane: 'human-capper-delivery',
+      entry,
+      capperId: authorization?.capperId ?? null,
+    },
+    idempotencyKey: `${pickId}:${resolvedTarget}:${entrySpec.runIdempotencySuffix}`,
+  });
+
+  const targetGate = evaluateDistributionTargetGate(target);
+  if (!targetGate.ok) {
+    const completedRun = await systemRunRepository.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: { target: resolvedTarget, reason: targetGate.reason },
+    });
+    const audit = await auditLogRepository.record({
+      entityType: 'distribution_outbox',
+      entityId: run.id,
+      entityRef: pickId,
+      action: 'distribution.enqueue',
+      actor,
+      payload: {
+        pickId,
+        target: resolvedTarget,
+        lane: 'human-capper-delivery',
+        entry,
+        skipped: true,
+        reason: targetGate.reason,
+      },
+    });
+    return {
+      run: completedRun,
+      audit,
+      target: resolvedTarget,
+      pickId,
+      enqueued: false,
+      reason: targetGate.reason,
+    };
+  }
+
+  // Declared OUTSIDE the guard region on purpose: the mutation control deletes
+  // that region, and a mutant that crashed on an undefined binding would prove
+  // nothing about the guard. Removing it must produce the failure the guard
+  // prevents -- an enqueue with no destination -- not a ReferenceError.
+  let destination: CapperDeliveryDestination | null = null;
+  // UTV2-1923 HUMAN_DELIVERY_DESTINATION_GUARD_START
+  // WHERE this pick goes is resolved here, from the canonical `cappers` row,
+  // and from nowhere else. Not from the request -- the browser never sees this
+  // code path. Not from `UNIT_TALK_DISCORD_TARGET_MAP` -- that is one shared
+  // value and would send every capper's picks to one channel. Not from a
+  // channel's NAME -- a name is not an identity.
+  //
+  // A capper with no mapping, a malformed mapping, a mapping into another
+  // guild, or a mapping that points at the private global capper channel
+  // delivers NOWHERE. There is deliberately no default destination, because
+  // every candidate default is either somebody else's audience or an audience
+  // this pick was never authorized to reach. The refusal is reported the same
+  // way the registry refusal above is: a completed run, an audit record naming
+  // the reason, `enqueued: false`, and the pick left exactly where it was.
+  const destinationResult = await loadCapperDeliveryDestination({
+    capperId: authorization?.capperId ?? null,
+    capperRepository,
+  });
+  if (destinationResult.decision === 'refused') {
+    const reason = `destination-refused:${destinationResult.reason}`;
+    const completedRun = await systemRunRepository.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: { target: resolvedTarget, reason },
+    });
+    const audit = await auditLogRepository.record({
+      entityType: 'distribution_outbox',
+      entityId: run.id,
+      entityRef: pickId,
+      action: 'distribution.enqueue',
+      actor,
+      payload: {
+        pickId,
+        target: resolvedTarget,
+        lane: 'human-capper-delivery',
+        entry,
+        skipped: true,
+        reason,
+        capperId: authorization?.capperId ?? null,
+      },
+    });
+    return {
+      run: completedRun,
+      audit,
+      target: resolvedTarget,
+      pickId,
+      enqueued: false,
+      reason,
+    };
+  }
+  destination = destinationResult.destination;
+  // UTV2-1923 HUMAN_DELIVERY_DESTINATION_GUARD_END
+
+  try {
+    const canonicalPick = mapPickRecordToCanonicalPickForDelivery(currentPick);
+    const { buildDistributionWorkItem: buildWorkItem } = await import('@unit-talk/domain');
+    const workItem = buildWorkItem(canonicalPick, resolvedTarget);
+    // The resolved destination travels WITH the row. See
+    // `pinnedDeliveryDestinationKey` for why it is pinned rather than re-read
+    // at delivery time.
+    const pinnedDestination =
+      destination === null
+        ? {}
+        : {
+            [pinnedDeliveryDestinationKey]: {
+              version: capperDiscordRoutingVersion,
+              guildId: destination.guildId,
+              channelId: destination.channelId,
+              capperId: destination.capperId,
+              source: destination.source,
+            },
+          };
+    const pinnedPayload: Record<string, unknown> = {
+      ...workItem.payload,
+      ...pinnedDestination,
+    };
+
+    let outboxRecord: OutboxRecord;
+    try {
+      const atomicResult = await outboxRepository.enqueueDistributionAtomic({
+        pickId,
+        fromState: entrySpec.fromState,
+        toState: 'queued',
+        writerRole: entrySpec.writerRole,
+        reason,
+        lifecycleCreatedAt: new Date().toISOString(),
+        outboxTarget: resolvedTarget,
+        outboxPayload: pinnedPayload,
+        outboxIdempotencyKey: workItem.idempotencyKey,
+      });
+
+      if (!atomicResult) {
+        const existing = await outboxRepository.findByPickAndTarget(pickId, resolvedTarget);
+        if (!existing) {
+          throw new Error('Pick already released but no outbox record found');
+        }
+        outboxRecord = existing;
+      } else {
+        outboxRecord = atomicResult.outbox;
+      }
+    } catch (err) {
+      // Same rule as the model lane: the sequential fallback is only safe in
+      // InMemory mode. A real database error must rethrow rather than risk a
+      // partial durable write.
+      if (!getEnqueueAtomicFallbackReason(err)) throw err;
+      await ensurePickLifecycleState(
+        pickRepository,
+        pickId,
+        'queued',
+        reason,
+        entrySpec.writerRole,
+      );
+      const queuedPick = await pickRepository.findPickById(pickId);
+      const distribution = await enqueueDistributionWork(
+        mapPickRecordToCanonicalPickForDelivery(queuedPick ?? currentPick),
+        outboxRepository,
+        resolvedTarget,
+        undefined,
+        pinnedDestination,
+      );
+      if ('enqueued' in distribution) {
+        const completedRun = await systemRunRepository.completeRun({
+          runId: run.id,
+          status: 'succeeded',
+          details: { target: resolvedTarget, reason: distribution.reason },
+        });
+        const audit = await auditLogRepository.record({
+          entityType: 'distribution_outbox',
+          entityId: run.id,
+          entityRef: pickId,
+          action: 'distribution.enqueue',
+          actor,
+          payload: {
+            pickId,
+            target: resolvedTarget,
+            lane: 'human-capper-delivery',
+            entry,
+            skipped: true,
+            reason: distribution.reason,
+          },
+        });
+        return {
+          run: completedRun,
+          audit,
+          target: resolvedTarget,
+          pickId,
+          enqueued: false,
+          reason: distribution.reason,
+        };
+      }
+      outboxRecord = distribution.outboxRecord;
+    }
+
+    const completedRun = await systemRunRepository.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: { target: resolvedTarget, outboxId: outboxRecord.id },
+    });
+    const audit = await auditLogRepository.record({
+      entityType: 'distribution_outbox',
+      entityId: outboxRecord.id,
+      entityRef: pickId,
+      action: 'distribution.enqueue',
+      actor,
+      payload: {
+        pickId,
+        target: resolvedTarget,
+        lane: 'human-capper-delivery',
+        outboxId: outboxRecord.id,
+        capperId: authorization?.capperId ?? null,
+        authority: authorization?.authority ?? null,
+        entry,
+        releasedBy: actor,
+        destinationChannelId: destination?.channelId ?? null,
+        destinationGuildId: destination?.guildId ?? null,
+        destinationSource: destination?.source ?? null,
+      },
+    });
+
+    return {
+      run: completedRun,
+      audit,
+      target: resolvedTarget,
+      pickId,
+      enqueued: true,
+      ...(destination === null ? {} : { destination }),
+    };
+  } catch (error) {
+    await systemRunRepository.completeRun({
+      runId: run.id,
+      status: 'failed',
+      details: {
+        target: resolvedTarget,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+    await auditLogRepository.record({
+      entityType: 'distribution_outbox',
+      entityId: run.id,
+      entityRef: pickId,
+      action: 'distribution.enqueue.failed',
+      actor,
+      payload: {
+        pickId,
+        target: resolvedTarget,
+        lane: 'human-capper-delivery',
+        entry,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+    throw error;
+  }
+}
+
+function mapPickRecordToCanonicalPickForDelivery(
+  pick: import('@unit-talk/db').PickRecord,
+): CanonicalPick {
+  return {
+    id: pick.id,
+    submissionId: pick.submission_id ?? '',
+    market: pick.market,
+    selection: pick.selection,
+    line: pick.line ?? undefined,
+    odds: pick.odds ?? undefined,
+    stakeUnits: pick.stake_units ?? undefined,
+    confidence: pick.confidence ?? undefined,
+    source: pick.source as CanonicalPick['source'],
+    approvalStatus: pick.approval_status as CanonicalPick['approvalStatus'],
+    promotionStatus: pick.promotion_status as CanonicalPick['promotionStatus'],
+    promotionTarget: (pick.promotion_target ?? undefined) as CanonicalPick['promotionTarget'],
+    lifecycleState: pick.status as CanonicalPick['lifecycleState'],
+    metadata: isRecord(pick.metadata) ? pick.metadata : {},
+    createdAt: pick.created_at,
+  };
 }

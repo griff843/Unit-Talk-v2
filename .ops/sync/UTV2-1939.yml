@@ -1,0 +1,176 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1939
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1939
+  objective: "Command Center: facilitate the human-capper pick lifecycle end to end"
+  acceptance_criteria:
+    - |-
+      The bounded Human Capper E2E canary on 2026-09-18 (pick `ed0ed43c`, outbox `3447bb03`, Discord message `1550652082896375962`) proved the runtime path works: submit → persist → authorize → enqueue → deliver → post. It also exposed that the **operator surface cannot drive or observe that lifecycle** without hand-written URLs and out-of-band database reads.
+
+      Distinct from [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) (Dimension 5 field rendering, Done, [griff843/Unit-Talk-v2#1606](https://linear.app/unit-talk-v2/review/utv2-1932-make-the-command-center-show-what-an-operator-decides-on-49e1d8020ea8)). That made the Command Center *show* the fields a decision needs. This makes it *carry the human-capper transaction*.
+
+      Audited against `main` `142d4283b`.
+
+      ## 1. The recap outcome is computed, returned, and thrown away
+
+      `apps/api/src/controllers/settle-pick-controller.ts:35-44` states the intent:
+
+      > the immediate per-pick recap is part of the human delivery transaction, so its outcome is reported rather than fire-and-forget — an operator who settles a delivered pick needs to know whether members were told.
+
+      The controller returns `humanCapperRecap: { posted, reason? }` (`:145`). `grep -rn "humanCapperRecap" apps/command-center/src` returns **nothing**. `app/actions/settle.ts` reads only `settlementRecordId`; `components/SettlementForm.tsx:76` renders `Settled. Record ID: …`.
+
+      **This already caused one real silent failure.** Canary `816a84c7` settled 2026-09-18T06:31:21Z, the recap never posted, and nobody knew until a later session read deploy logs. The operator saw an unqualified success message.
+
+      ## 2. The recap is suppressed by the kill switch, and nothing says so
+
+      `postSettlementRecapIfPossible` posts by **direct fetch, not through the outbox**, so the worker's kill-switch check never sees it. The controller checks the switch itself and short-circuits to `{ posted: false, reason: 'kill-switch-engaged' }`. Because member-delivery activation is reserved, the switch is normally engaged — so the default outcome of settling a delivered pick is a silently suppressed recap. The operator gets no warning before settling and no signal after.
+
+      ## 3. No worklist reaches a delivered pick awaiting its result
+
+      `app/settlement/page.tsx` offers two actionable lists: `settlement_records` with `status = manual_review`, and "Stuck in Posted" (`results-ops.ts`, `status = posted` older than **24h**, and that table has no settle action — it links to `/picks/[id]`).
+
+      A pick delivered today whose game finishes tonight is in neither. The only route is typing `/settlement?pickId=<uuid>` or `/picks/<uuid>` by hand, with the uuid obtained from the database. That is per-submission engineering intervention, which Milestone 2 condition 1 exists to eliminate.
+
+      ## Acceptance
+
+      1. Settling through the Command Center reports the recap outcome distinctly from the settlement outcome — a suppressed recap is never rendered as unqualified success, and its reason is shown.
+      2. Before settling a delivery-authorized pick, the operator can see whether a recap will post.
+      3. A delivered human-capper pick awaiting settlement is reachable from a worklist without hand-constructing a URL, with no 24h delay.
+      4. No change to delivery authority, containment, the kill switch's own semantics, grading, or merge authority. The kill switch continues to suppress the recap exactly as it does today — this issue makes the suppression *visible*, never bypasses it.
+
+      ## Not in scope
+
+      CLV or edge values needing provider data; any containment or member-delivery change; automated grading.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      The bounded Human Capper E2E canary on 2026-09-18 (pick `ed0ed43c`, outbox `3447bb03`, Discord message `1550652082896375962`) proved the runtime path works: submit → persist → authorize → enqueue → deliver → post. It also exposed that the **operator surface cannot drive or observe that lifecycle** without hand-written URLs and out-of-band database reads.
+
+      Distinct from [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) (Dimension 5 field rendering, Done, [griff843/Unit-Talk-v2#1606](https://linear.app/unit-talk-v2/review/utv2-1932-make-the-command-center-show-what-an-operator-decides-on-49e1d8020ea8)). That made the Command Center *show* the fields a decision needs. This makes it *carry the human-capper transaction*.
+
+      Audited against `main` `142d4283b`.
+    - >-
+      1. The recap outcome is computed, returned, and thrown away
+
+      `apps/api/src/controllers/settle-pick-controller.ts:35-44` states the
+      intent:
+
+
+      > the immediate per-pick recap is part of the human delivery transaction,
+      so its outcome is reported rather than fire-and-forget — an operator who
+      settles a delivered pick needs to know whether members were told.
+
+
+      The controller returns `humanCapperRecap: { posted, reason? }` (`:145`).
+      `grep -rn "humanCapperRecap" apps/command-center/src` returns **nothing**.
+      `app/actions/settle.ts` reads only `settlementRecordId`;
+      `components/SettlementForm.tsx:76` renders `Settled. Record ID: …`.
+
+
+      **This already caused one real silent failure.** Canary `816a84c7` settled
+      2026-09-18T06:31:21Z, the recap never posted, and nobody knew until a
+      later session read deploy logs. The operator saw an unqualified success
+      message.
+    - >-
+      2. The recap is suppressed by the kill switch, and nothing says so
+
+      `postSettlementRecapIfPossible` posts by **direct fetch, not through the
+      outbox**, so the worker's kill-switch check never sees it. The controller
+      checks the switch itself and short-circuits to `{ posted: false, reason:
+      'kill-switch-engaged' }`. Because member-delivery activation is reserved,
+      the switch is normally engaged — so the default outcome of settling a
+      delivered pick is a silently suppressed recap. The operator gets no
+      warning before settling and no signal after.
+    - >-
+      3. No worklist reaches a delivered pick awaiting its result
+
+      `app/settlement/page.tsx` offers two actionable lists:
+      `settlement_records` with `status = manual_review`, and "Stuck in Posted"
+      (`results-ops.ts`, `status = posted` older than **24h**, and that table
+      has no settle action — it links to `/picks/[id]`).
+
+
+      A pick delivered today whose game finishes tonight is in neither. The only
+      route is typing `/settlement?pickId=<uuid>` or `/picks/<uuid>` by hand,
+      with the uuid obtained from the database. That is per-submission
+      engineering intervention, which Milestone 2 condition 1 exists to
+      eliminate.
+    - >-
+      Acceptance
+
+      1. Settling through the Command Center reports the recap outcome
+      distinctly from the settlement outcome — a suppressed recap is never
+      rendered as unqualified success, and its reason is shown.
+
+      2. Before settling a delivery-authorized pick, the operator can see
+      whether a recap will post.
+
+      3. A delivered human-capper pick awaiting settlement is reachable from a
+      worklist without hand-constructing a URL, with no 24h delay.
+
+      4. No change to delivery authority, containment, the kill switch's own
+      semantics, grading, or merge authority. The kill switch continues to
+      suppress the recap exactly as it does today — this issue makes the
+      suppression *visible*, never bypasses it.
+    - >-
+      Not in scope
+
+      CLV or edge values needing provider data; any containment or
+      member-delivery change; automated grading.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1939/command-center-facilitate-the-human-capper-pick-lifecycle-end-to-end
+    title: "Command Center: facilitate the human-capper pick lifecycle end to end"
+    description: |-
+      The bounded Human Capper E2E canary on 2026-09-18 (pick `ed0ed43c`, outbox `3447bb03`, Discord message `1550652082896375962`) proved the runtime path works: submit → persist → authorize → enqueue → deliver → post. It also exposed that the **operator surface cannot drive or observe that lifecycle** without hand-written URLs and out-of-band database reads.
+
+      Distinct from [UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator) (Dimension 5 field rendering, Done, [griff843/Unit-Talk-v2#1606](https://linear.app/unit-talk-v2/review/utv2-1932-make-the-command-center-show-what-an-operator-decides-on-49e1d8020ea8)). That made the Command Center *show* the fields a decision needs. This makes it *carry the human-capper transaction*.
+
+      Audited against `main` `142d4283b`.
+
+      ## 1. The recap outcome is computed, returned, and thrown away
+
+      `apps/api/src/controllers/settle-pick-controller.ts:35-44` states the intent:
+
+      > the immediate per-pick recap is part of the human delivery transaction, so its outcome is reported rather than fire-and-forget — an operator who settles a delivered pick needs to know whether members were told.
+
+      The controller returns `humanCapperRecap: { posted, reason? }` (`:145`). `grep -rn "humanCapperRecap" apps/command-center/src` returns **nothing**. `app/actions/settle.ts` reads only `settlementRecordId`; `components/SettlementForm.tsx:76` renders `Settled. Record ID: …`.
+
+      **This already caused one real silent failure.** Canary `816a84c7` settled 2026-09-18T06:31:21Z, the recap never posted, and nobody knew until a later session read deploy logs. The operator saw an unqualified success message.
+
+      ## 2. The recap is suppressed by the kill switch, and nothing says so
+
+      `postSettlementRecapIfPossible` posts by **direct fetch, not through the outbox**, so the worker's kill-switch check never sees it. The controller checks the switch itself and short-circuits to `{ posted: false, reason: 'kill-switch-engaged' }`. Because member-delivery activation is reserved, the switch is normally engaged — so the default outcome of settling a delivered pick is a silently suppressed recap. The operator gets no warning before settling and no signal after.
+
+      ## 3. No worklist reaches a delivered pick awaiting its result
+
+      `app/settlement/page.tsx` offers two actionable lists: `settlement_records` with `status = manual_review`, and "Stuck in Posted" (`results-ops.ts`, `status = posted` older than **24h**, and that table has no settle action — it links to `/picks/[id]`).
+
+      A pick delivered today whose game finishes tonight is in neither. The only route is typing `/settlement?pickId=<uuid>` or `/picks/<uuid>` by hand, with the uuid obtained from the database. That is per-submission engineering intervention, which Milestone 2 condition 1 exists to eliminate.
+
+      ## Acceptance
+
+      1. Settling through the Command Center reports the recap outcome distinctly from the settlement outcome — a suppressed recap is never rendered as unqualified success, and its reason is shown.
+      2. Before settling a delivery-authorized pick, the operator can see whether a recap will post.
+      3. A delivered human-capper pick awaiting settlement is reachable from a worklist without hand-constructing a URL, with no 24h delay.
+      4. No change to delivery authority, containment, the kill switch's own semantics, grading, or merge authority. The kill switch continues to suppress the recap exactly as it does today — this issue makes the suppression *visible*, never bypasses it.
+
+      ## Not in scope
+
+      CLV or edge values needing provider data; any containment or member-delivery change; automated grading.
+    captured_at: 2026-09-18T23:51:53.831Z
+    description_sha256: cd5b7e2d3b7c85642791b868b7ddcb724839d89af52e946338e4895eeb8b24a4
+  contract_hash: ae13d313ff9259cdbc4429b824ffe0257272b614a5f31a5fe8f4d605e2e14c6a

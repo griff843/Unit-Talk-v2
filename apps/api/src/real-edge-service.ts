@@ -18,9 +18,10 @@
  * Issue: UTV2-198 (Sprint D)
  */
 
-import type { ProviderOfferRepository } from '@unit-talk/db';
+import type { ProviderOfferRecord, ProviderOfferRepository } from '@unit-talk/db';
 import { americanToImplied, proportionalDevig, roundTo, classifyContrarianism, type ContrarySignal } from '@unit-talk/domain';
 import type { EdgeFallbackReason, EdgeMethod, ProviderCoverageState } from '@unit-talk/contracts';
+import { classifyMarketFamilyForGrading } from './grading-service.js';
 
 /**
  * Full diagnostic trace of how edge was computed and why each tier was skipped.
@@ -55,6 +56,37 @@ export interface RealEdgeResult {
   provenance: EdgeProvenance;
 }
 
+/**
+ * UTV2-1898: how old a provider snapshot may be and still describe the market
+ * a pick is being submitted into. Six hours spans a normal pre-game window
+ * without admitting a line from a previous slate.
+ */
+export const PROVIDER_OFFER_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * UTV2-1898: the scope an offer must match to be allowed to back this pick.
+ *
+ * Every field is stated explicitly, including the ones that are unknown, so
+ * that an unresolved dimension refuses the lookup instead of widening it. The
+ * defect this replaces was not a wrong filter -- it was a filter that vanished
+ * when its argument was `undefined`, letting an unrelated stale MLB moneyline
+ * supply edge to an NFL pick.
+ */
+export interface RealEdgeMarketScope {
+  /** Canonical sport of the pick, or null when it could not be resolved. */
+  sportKey: string | null;
+  /** Provider-native event id for the pick's event, or null when unresolved. */
+  providerEventId: string | null;
+  /**
+   * Provider-native participant id for the pick's side; `null` only when the
+   * market is genuinely game-level and its offers carry no participant.
+   * `undefined` means "not resolved" and refuses the lookup.
+   */
+  providerParticipantId: string | null | undefined;
+  /** Evaluation instant; offers older than PROVIDER_OFFER_MAX_AGE_MS are refused. */
+  now: Date;
+}
+
 export interface RealEdgeOptions {
   /** Capper's confidence (0-1 win probability estimate) */
   confidence: number;
@@ -66,6 +98,8 @@ export interface RealEdgeOptions {
   submittedOdds: number;
   /** Provider offers repository */
   providerOffers: ProviderOfferRepository;
+  /** UTV2-1898: required scope. Without it no offer may be used. */
+  scope: RealEdgeMarketScope;
 }
 
 /**
@@ -77,6 +111,48 @@ export interface RealEdgeOptions {
  * confidence-delta fallback with the wrong provenance.
  */
 class RealEdgeComputationError extends Error {}
+
+/**
+ * UTV2-1898: recover the scope a pick was submitted under from its own
+ * persisted metadata, so promotion-time re-derivation runs under exactly the
+ * scope submission used rather than re-resolving (or, as before, not scoping
+ * at all).
+ *
+ * An absent or malformed block yields unresolved dimensions, which refuse the
+ * lookup. That is deliberate: a pick whose scope was never recorded has no
+ * basis for market-backed edge, and inventing one at promotion time is the
+ * behaviour this repair exists to remove.
+ */
+export function readPersistedRealEdgeScope(
+  metadata: Record<string, unknown> | null | undefined,
+  now: Date = new Date(),
+): RealEdgeMarketScope {
+  const block =
+    metadata && typeof metadata['edgeScope'] === 'object' && metadata['edgeScope'] !== null
+      ? (metadata['edgeScope'] as Record<string, unknown>)
+      : null;
+
+  const text = (key: string): string | null => {
+    const value = block?.[key];
+    return typeof value === 'string' && value.trim().length > 0 ? value : null;
+  };
+
+  // `null` and "absent" are different here: a recorded null participant means
+  // "this market is game-level", while an absent key means "never resolved".
+  const participant = block && 'providerParticipantId' in block ? block['providerParticipantId'] : undefined;
+
+  return {
+    sportKey: text('sportKey'),
+    providerEventId: text('providerEventId'),
+    providerParticipantId:
+      participant === null
+        ? null
+        : typeof participant === 'string' && participant.trim().length > 0
+          ? participant
+          : undefined,
+    now,
+  };
+}
 
 /**
  * Compute real edge against market consensus.
@@ -91,7 +167,7 @@ class RealEdgeComputationError extends Error {}
 export async function computeRealEdge(
   options: RealEdgeOptions,
 ): Promise<RealEdgeResult> {
-  const { confidence, marketKey, selection, submittedOdds, providerOffers } = options;
+  const { confidence, marketKey, selection, submittedOdds, providerOffers, scope } = options;
 
   // UTV2-1379: classify only what the code can prove. A missing/empty market
   // key means no tier lookup is even possible — distinct from "we looked and
@@ -108,6 +184,22 @@ export async function computeRealEdge(
     return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-participant-scope');
   }
 
+  // UTV2-1898: refuse before querying when any discriminating dimension is
+  // unresolved. Each reason names the dimension that was missing, so an
+  // operator reading `edgeProvenance.fallbackReason` learns what to fix rather
+  // than only that edge was unavailable. Order is deliberate: sport, then
+  // event, then side — widest scope first, so the reported reason is the
+  // outermost thing that is missing.
+  if (scope.sportKey == null || scope.sportKey.trim().length === 0) {
+    return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-sport-scope');
+  }
+  if (scope.providerEventId == null || scope.providerEventId.trim().length === 0) {
+    return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-event-scope');
+  }
+  if (scope.providerParticipantId === undefined) {
+    return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-participant-scope');
+  }
+
   try {
     // Translate canonical market key to SGO provider-native format once. The DB
     // stores provider-format keys (e.g., 'player-points-game-ou'); canonical keys
@@ -117,9 +209,31 @@ export async function computeRealEdge(
     const sgoProviderKey = await providerOffers.resolveProviderMarketKey(marketKey, 'sgo');
     const resolvedKey = sgoProviderKey ?? marketKey;
 
+    // UTV2-1898: the participant and the side are resolved from the CANONICAL
+    // key, never from `resolvedKey`. Deriving them after translation is what
+    // silently dropped the participant scope: `resolveSelectionParticipantKey`
+    // returns `undefined` for anything that is not literally 'moneyline', and
+    // the translated key never is.
+    const lookup: ScopedOfferLookupContext = {
+      sportKey: scope.sportKey,
+      providerEventId: scope.providerEventId,
+      providerMarketKey: resolvedKey,
+      providerParticipantId: scope.providerParticipantId,
+      canonicalMarketKey: marketKey,
+      notBefore: new Date(scope.now.getTime() - PROVIDER_OFFER_MAX_AGE_MS),
+    };
+    let sawStaleOffer = false;
+    let sawUnattributedOffer = false;
+    const noteStale = (): void => {
+      sawStaleOffer = true;
+    };
+    const noteUnattributed = (): void => {
+      sawUnattributedOffer = true;
+    };
+
     // Try Pinnacle first (sharpest line)
     const pinnacleEdge = await tryProviderEdge(
-      confidence, resolvedKey, selection, 'odds-api:pinnacle', providerOffers,
+      confidence, selection, 'odds-api:pinnacle', providerOffers, lookup, noteStale, noteUnattributed,
     );
     if (pinnacleEdge) {
       const marketSource = 'pinnacle' as const;
@@ -132,7 +246,7 @@ export async function computeRealEdge(
 
     // Try multi-book consensus
     const consensusEdge = await tryConsensusEdge(
-      confidence, resolvedKey, selection, providerOffers,
+      confidence, selection, providerOffers, lookup, noteStale, noteUnattributed,
     );
     if (consensusEdge) {
       const contrarySignal = classifyContrarianism(consensusEdge.modelProbability, consensusEdge.marketProbability, consensusEdge.marketSource);
@@ -144,7 +258,7 @@ export async function computeRealEdge(
 
     // Try SGO (existing single provider)
     const sgoEdge = await tryProviderEdge(
-      confidence, resolvedKey, selection, 'sgo', providerOffers,
+      confidence, selection, 'sgo', providerOffers, lookup, noteStale, noteUnattributed,
     );
     if (sgoEdge) {
       const marketSource = 'sgo' as const;
@@ -160,7 +274,7 @@ export async function computeRealEdge(
     // lookup only checked Pinnacle/SGO directly. Use that book before falling
     // back to self-reported confidence delta.
     const singleBookEdge = await tryProviderEdge(
-      confidence, resolvedKey, selection, undefined, providerOffers,
+      confidence, selection, undefined, providerOffers, lookup, noteStale, noteUnattributed,
     );
     if (singleBookEdge) {
       const marketSource = 'single-book' as const;
@@ -169,6 +283,21 @@ export async function computeRealEdge(
         ...singleBookEdge, marketSource, contrarySignal,
         provenance: { method: 'market-devigged', providerCoverageState: 'single-book', fallbackReason: null },
       };
+    }
+    if (sawUnattributedOffer) {
+      // UTV2-1898: an in-scope, in-window offer exists but prices a side it
+      // does not name. Refusing it is the whole point — reading it as the
+      // "over" side is how a moneyline pick acquired a market probability
+      // belonging to the other team.
+      return buildConfidenceDeltaFallback(
+        confidence, submittedOdds, 'offer-participant-unattributed',
+      );
+    }
+    if (sawStaleOffer) {
+      // UTV2-1898: an offer matched the pick's full scope but every snapshot
+      // was outside the freshness window. That is a materially different
+      // operator signal from "this market has no coverage at all".
+      return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-fresh-offer');
     }
   } catch (error) {
     if (error instanceof RealEdgeComputationError) {
@@ -218,20 +347,118 @@ function buildConfidenceDeltaFallback(
 }
 
 /**
+ * UTV2-1898: the resolved scope a lookup runs under, carried as one value so a
+ * tier helper cannot construct a partial one.
+ */
+interface ScopedOfferLookupContext {
+  sportKey: string;
+  providerEventId: string;
+  /** Provider-native key, already translated. Used ONLY for the query. */
+  providerMarketKey: string;
+  providerParticipantId: string | null;
+  /** Canonical key. Used for participant and side semantics. */
+  canonicalMarketKey: string;
+  /** Offers with `snapshot_at` before this instant are refused. */
+  notBefore: Date;
+}
+
+/**
+ * UTV2-1898: markets whose price belongs to one participant, so a provider row
+ * that carries no participant cannot be attributed to the pick's selection. For
+ * these, an unattributed offer is refused rather than read as the "over" side.
+ *
+ * The set is taken from `classifyMarketFamilyForGrading` rather than re-derived
+ * here. That classifier is already the repository's single definition of which
+ * markets name a participant, and grading depends on it being right; keeping a
+ * second private copy is how the submission and edge paths drifted apart in the
+ * first place.
+ *
+ * An unrecognised key counts as participant-scoped. Refusing an unknown market
+ * costs an edge; classifying it game-level matches a NULL-participant row and
+ * fabricates one, which is the failure this lane exists to close.
+ */
+function requiresAttributedParticipant(canonicalMarketKey: string): boolean {
+  const rule = classifyMarketFamilyForGrading(canonicalMarketKey);
+  if (rule.family === 'unsupported') return true;
+  return rule.participantRequirement === 'required';
+}
+
+/**
+ * Markets with no over/under axis, where the devigged "over" price IS the named
+ * participant's price.
+ *
+ * Deliberately NOT the same set as `requiresAttributedParticipant`, and the two
+ * must not be folded together: a player prop and a team total are both
+ * participant-scoped *and* carry a real over/under, so treating them as
+ * side-bearing would read every "Under" selection as its "Over".
+ *
+ * `spread` is participant-scoped and plausibly belongs here too, but no spread
+ * offer exists in production to verify the provider's over/under orientation
+ * against, so it is left out rather than assumed. It still reaches the
+ * over/under heuristic below, where a spread selection ("Lions -3.5") contains
+ * no "under" and resolves to `overFair` anyway — the same answer, reached by a
+ * rule that has been checked rather than by one that has not.
+ */
+function namedSideIsOverSide(canonicalMarketKey: string): boolean {
+  return canonicalMarketKey === 'moneyline';
+}
+
+/**
+ * Applies freshness and side-attribution to a scoped offer.
+ * Returns the usable row, or null with the reason flagged for the caller.
+ */
+function admitOffer(
+  matching: ProviderOfferRecord | null,
+  lookup: ScopedOfferLookupContext,
+  noteStale: () => void,
+  noteUnattributed: () => void,
+): ProviderOfferRecord | null {
+  if (!matching) return null;
+
+  const snapshotAt = matching.snapshot_at ? Date.parse(matching.snapshot_at) : Number.NaN;
+  if (!Number.isFinite(snapshotAt) || snapshotAt < lookup.notBefore.getTime()) {
+    noteStale();
+    return null;
+  }
+
+  if (
+    requiresAttributedParticipant(lookup.canonicalMarketKey) &&
+    matching.provider_participant_id == null
+  ) {
+    // The row prices one side of the game but says which side nowhere. Reading
+    // `overFair` here would pick an arbitrary team; every game-moneyline row in
+    // production carries a NULL participant, so this is the common case, not
+    // an edge case.
+    noteUnattributed();
+    return null;
+  }
+
+  return matching;
+}
+
+/**
  * Try to compute edge against a single provider's devigged line.
  */
 async function tryProviderEdge(
   confidence: number,
-  marketKey: string,
   selection: string,
   providerKey: string | undefined,
   providerOffers: ProviderOfferRepository,
+  lookup: ScopedOfferLookupContext,
+  noteStale: () => void,
+  noteUnattributed: () => void,
 ): Promise<Omit<RealEdgeResult, 'marketSource' | 'provenance'> | null> {
-  const participantKey = resolveSelectionParticipantKey(marketKey, selection);
-  const matching = await providerOffers.findLatestByMarketKey(
-    marketKey,
-    providerKey,
-    participantKey,
+  const matching = admitOffer(
+    await providerOffers.findLatestScopedOffer({
+      sportKey: lookup.sportKey,
+      providerEventId: lookup.providerEventId,
+      providerMarketKey: lookup.providerMarketKey,
+      providerParticipantId: lookup.providerParticipantId,
+      ...(providerKey ? { providerKey } : {}),
+    }),
+    lookup,
+    noteStale,
+    noteUnattributed,
   );
 
   if (!matching) return null;
@@ -242,7 +469,9 @@ async function tryProviderEdge(
   const devigged = proportionalDevig(overImplied, underImplied);
   if (!devigged) return null;
 
-  const marketProbability = resolveSelectionFairProbability(marketKey, selection, devigged);
+  const marketProbability = resolveSelectionFairProbability(
+    lookup.canonicalMarketKey, selection, devigged,
+  );
 
   const realEdge = roundTo(confidence - marketProbability, 6);
 
@@ -260,9 +489,11 @@ async function tryProviderEdge(
  */
 async function tryConsensusEdge(
   confidence: number,
-  marketKey: string,
   selection: string,
   providerOffers: ProviderOfferRepository,
+  lookup: ScopedOfferLookupContext,
+  noteStale: () => void,
+  noteUnattributed: () => void,
 ): Promise<Omit<RealEdgeResult, 'provenance'> | null> {
   const consensusProviders = [
     'odds-api:pinnacle',
@@ -275,11 +506,17 @@ async function tryConsensusEdge(
   let bookCount = 0;
 
   for (const providerKey of consensusProviders) {
-    const participantKey = resolveSelectionParticipantKey(marketKey, selection);
-    const matching = await providerOffers.findLatestByMarketKey(
-      marketKey,
-      providerKey,
-      participantKey,
+    const matching = admitOffer(
+      await providerOffers.findLatestScopedOffer({
+        sportKey: lookup.sportKey,
+        providerEventId: lookup.providerEventId,
+        providerMarketKey: lookup.providerMarketKey,
+        providerParticipantId: lookup.providerParticipantId,
+        providerKey,
+      }),
+      lookup,
+      noteStale,
+      noteUnattributed,
     );
 
     if (!matching) continue;
@@ -290,7 +527,7 @@ async function tryConsensusEdge(
     const devigged = proportionalDevig(overImplied, underImplied);
     if (!devigged) continue;
 
-    totalProb += resolveSelectionFairProbability(marketKey, selection, devigged);
+    totalProb += resolveSelectionFairProbability(lookup.canonicalMarketKey, selection, devigged);
     bookCount++;
   }
 
@@ -319,11 +556,19 @@ function resolveSelectionParticipantKey(marketKey: string, selection: string): s
 }
 
 function resolveSelectionFairProbability(
-  marketKey: string,
+  canonicalMarketKey: string,
   selection: string,
   devigged: { overFair: number; underFair: number },
 ): number {
-  if (marketKey === 'moneyline') {
+  // UTV2-1898: `canonicalMarketKey` is the canonical key, never the translated
+  // provider key. Passing the provider key here made the moneyline branch
+  // unreachable, so a moneyline fell through to the over/under heuristic and
+  // matched `overFair` by accident rather than by rule.
+  //
+  // A side-bearing market only reaches this function once `admitOffer` has
+  // established that the offer names its participant, so `overFair` is the
+  // fair price of the named side rather than an arbitrary one.
+  if (namedSideIsOverSide(canonicalMarketKey)) {
     return devigged.overFair;
   }
 

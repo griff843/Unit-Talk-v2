@@ -1,16 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import type { AutomationRegistry } from './automation-coverage-check.js';
+import { createTempWorkspace } from './temp-workspace.js';
 
 const requireFromTest = createRequire(import.meta.url);
 const { buildAutomationCoverageReport } = requireFromTest('./automation-coverage-check.ts') as typeof import('./automation-coverage-check.js');
 
 function tempRoot(): string {
-  return mkdtempSync(join(tmpdir(), 'utv2-automation-'));
+  return createTempWorkspace('utv2-automation-');
 }
 
 function write(root: string, relativePath: string, content: string): string {
