@@ -8,9 +8,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1902-score-gate-smart-form-best-bets
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1630
-Head SHA: f712015e1de23685c7be49ef30df0681a2835a05
-Execution SHA: f712015e1de23685c7be49ef30df0681a2835a05
-Diff base: 4fe09e4d5500373baeb070a53b56186ad5533064
+Head SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
+Execution SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
+Diff base: 64e9e981c2879bda4e9003c3dc3e3ce9406ea209
 result: pass
 
 ## Git Diff Stat
@@ -29,15 +29,15 @@ result: pass
  docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md    |  27 ++
  docs/06_status/lanes/UTV2-1902.json                |  45 +++
  docs/06_status/proof/UTV2-1902/.gitkeep            |   0
- docs/06_status/proof/UTV2-1902/diff-summary.md     |  64 ++++
- docs/06_status/proof/UTV2-1902/evidence.json       | 161 +++++++++
- docs/06_status/proof/UTV2-1902/verification.md     | 254 ++++++++++++++
- 16 files changed, 1336 insertions(+), 406 deletions(-)
+ docs/06_status/proof/UTV2-1902/diff-summary.md     |  73 ++++
+ docs/06_status/proof/UTV2-1902/evidence.json       | 179 ++++++++++
+ docs/06_status/proof/UTV2-1902/verification.md     | 292 ++++++++++++++++
+ 16 files changed, 1401 insertions(+), 406 deletions(-)
 ```
 
 ## What changed, and why
 
-The implementation now spans two commits: `370d9a43b` (the score gate) and `f712015e1` (the replay-parity fix for Codex review finding P1).
+The implementation now spans two commits: `992a896a8` (the score gate) and `d20b5af93` (the replay-parity fix for Codex review finding P1).
 
 PM rule, ratified under UTV2-1900: **intake source never confers promotion.**
 
