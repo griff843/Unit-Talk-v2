@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-23T04:03:30.000Z
+Generated at: 2026-09-23T05:43:28.000Z
 Issue: WORK-2026092101
 Tier: T1
 Lane type: governance
 Branch: claude/work-2026092101-historical-data-warehouse
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1627
-Head SHA: e9521eb2e7985bdad2ae1c8ccaf90e0a81621122
+Head SHA: ae244e21c74a6f374875bcdec205f94cf7e3879d
 result: pass
 
 ## ASSERTIONS:
@@ -82,9 +82,9 @@ target by design - "REFUSED: target identity could not be resolved from its URL
 (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx." The lane
 manifest records t1_live_db_precondition: deferred_to_ci.
 
-$ pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092101 --base origin/main --head e9521eb2e7985bdad2ae1c8ccaf90e0a81621122
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092101 --base origin/main --head ae244e21c74a6f374875bcdec205f94cf7e3879d
 Verdict: PASS
-Changed files: 36
+Changed files: 37
 Rules matched: (none) - no R-level artifacts required for this diff
 
 $ pnpm exec tsx --test scripts/warehouse/*.test.ts
@@ -97,7 +97,7 @@ $ pnpm exec tsx --test scripts/warehouse/*.test.ts
 - [x] `pnpm type-check`: rc=0
 - [x] `pnpm test`: 6798 passed, 0 failed
 - [x] `pnpm verify`: verify:static rc=0; test:live-db deferred to CI (staging-target refusal is by design locally)
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092101 --base origin/main --head e9521eb2e7985bdad2ae1c8ccaf90e0a81621122`: PASS, 36 changed files, no R-level artifacts required
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092101 --base origin/main --head ae244e21c74a6f374875bcdec205f94cf7e3879d`: PASS, 37 changed files, no R-level artifacts required
 
 ## Runtime Verification
 
@@ -134,16 +134,21 @@ production statement was issued.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1627
 Approved PR head: pending merge
-Execution SHA: e9521eb2e7985bdad2ae1c8ccaf90e0a81621122
+Execution SHA: ae244e21c74a6f374875bcdec205f94cf7e3879d
 
-Execution anchor: `e9521eb2e7985bdad2ae1c8ccaf90e0a81621122` -- the last commit on this lane that changes anything outside
+Execution anchor: `ae244e21c74a6f374875bcdec205f94cf7e3879d` -- the last commit on this lane that changes anything outside
 `docs/06_status/proof/WORK-2026092101/`. It is the branch-refresh merge commit that reconciled
-this lane onto `origin/main` `2103f721b` (the merge of #1570), produced by
-`ops:merge-wrapper pr-update-branch`. No conflict and no overlap: no file this lane changes was
-changed on `main`. The anchor moves because `scripts/ci/proof-binding-validator.ts` rule 4 compares
-trees, and the refresh brought in non-proof files. Superseded anchor, not withdrawn: `12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b`.
-Every figure above was re-measured at the new anchor rather than carried forward. CI at the
-anchor: run `35815981499` attempt 1 -- `Writable DB proof (staging only)` job `107037479107` and `verify` job `107038782350`, both success; receipt auditor `Verdict: PASS` against staging `xskgrzbteyqdufktjrjx`, pass=7 fail=0 skipped=0.
+this lane onto `origin/main` `966d9a31b` (the merge of #1629), produced by
+`ops:merge-wrapper pr-update-branch`. No conflict and no overlap. What `main` brought in since the
+previous anchor is lane bookkeeping only -- `docs/06_status/lanes/UTV2-1892.json`,
+`docs/06_status/lanes/WORK-2026092302.json`, `.ops/sync/WORK-2026092302.yml` and
+`.ops/work/WORK-2026092302.md` -- and no code, test or configuration file. The anchor moves because
+`scripts/ci/proof-binding-validator.ts` rule 4 compares trees and refuses the two `.ops` files.
+Superseded anchors, not withdrawn: `e9521eb2e7985bdad2ae1c8ccaf90e0a81621122`, `12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b`.
+CI at the anchor: run `35822642624` -- `Writable DB proof (staging only)` job `107057593577` and
+`verify` job `107059187422`, both success. The R-level check was re-run at the anchor (PASS, 37
+files). The unit-test, warehouse-battery and `verify:static` figures above were measured at `e9521eb2e7985bdad2ae1c8ccaf90e0a81621122`
+and carry forward, because the refresh changed no executable file.
 
 `work-order.md` in this directory is a byte-identical copy of the repository-owned work order
 `.ops/work/WORK-2026092101.md`, which existed only as an uncommitted file. It is kept here
