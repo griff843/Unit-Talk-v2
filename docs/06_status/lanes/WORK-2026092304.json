@@ -19,14 +19,22 @@
     "docs/06_status/proof/WORK-2026092304/diff-summary.md",
     "docs/06_status/proof/WORK-2026092304/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-09-23T13:11:51.277Z",
-  "heartbeat_at": "2026-09-23T13:28:24.335Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-23T14:25:08.630Z",
+  "closed_at": "2026-09-23T14:25:08.630Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092304-cc-settle-error-message.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-23T14:25:06.037Z",
+      "verdict": "pass",
+      "merge_sha": "36de9b57b64de0df7257d6e577b0925873ff758f",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

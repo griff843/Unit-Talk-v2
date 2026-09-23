@@ -7,7 +7,7 @@ Lane type: delivery-ui
 Branch: claude/work-2026092304-cc-settle-error-message
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1632
 Head SHA: 2eee84802e3aaff01c89b7cdd27f45f0141004a4
-Merge SHA: N/A
+Merge SHA: 36de9b57b64de0df7257d6e577b0925873ff758f
 Diff base: 4ab51ce8638062651fd3c8c572b260f5875dc6c0
 Diff target: 2eee84802e3aaff01c89b7cdd27f45f0141004a4
 
@@ -34,4 +34,4 @@ A	docs/06_status/proof/WORK-2026092304/.gitkeep
 
 ## SHA Binding
 Head SHA: 2eee84802e3aaff01c89b7cdd27f45f0141004a4
-Merge SHA: N/A
+Merge SHA: 36de9b57b64de0df7257d6e577b0925873ff758f

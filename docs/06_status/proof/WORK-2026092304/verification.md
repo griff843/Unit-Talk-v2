@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092304
 
-MERGE_SHA: 2eee84802e3aaff01c89b7cdd27f45f0141004a4
+MERGE_SHA: 36de9b57b64de0df7257d6e577b0925873ff758f
 
 Generated at: 2026-09-23T13:12:27.000Z
 Issue: WORK-2026092304
@@ -77,6 +77,6 @@ end to end. It depends on the API half in #1589, and it is not run here.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 36de9b57b64de0df7257d6e577b0925873ff758f
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1632
 Execution SHA: 2eee84802e3aaff01c89b7cdd27f45f0141004a4
