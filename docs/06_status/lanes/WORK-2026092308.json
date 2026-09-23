@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092308-model-performance-effective-settlement",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1636",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/model-performance-service.test.ts",
@@ -18,7 +18,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026092308/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-23T19:33:49.206Z",
   "heartbeat_at": "2026-09-23T19:33:49.206Z",
   "closed_at": null,
