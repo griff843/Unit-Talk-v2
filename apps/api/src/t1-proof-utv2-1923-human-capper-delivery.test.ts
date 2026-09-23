@@ -18,6 +18,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { applyPromotionOverride } from './promotion-service.js';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -1004,7 +1005,27 @@ test('mutation control: without the requeue guard, a human capper pick can re-en
     'REQUEUE_HUMAN_DELIVERY_GUARD',
     async (mutant) => {
       const mutantRequeue = mutant['requeuePickController'] as typeof requeuePickController;
+      // UTV2-1902: a human capper pick can no longer acquire a board target --
+      // not by source and not by score. The guard stays load-bearing for rows
+      // written before that fix: four production UTV2-1900 human picks still
+      // carry a force-promoted `best-bets` target and are deliberately not
+      // rewritten. Reproduce that legacy row through the service (the operator
+      // route now refuses it), and assert the precondition so this control
+      // cannot pass vacuously.
       const { repositories, data } = await submitAuthorizedPick('mutant-requeue');
+      await applyPromotionOverride(
+        {
+          pickId: data.pickId,
+          actor: 'legacy:utv2-1900-force-promote',
+          action: 'force_promote',
+          reason: 'smart-form submissions route directly to best-bets',
+          target: 'best-bets',
+        },
+        repositories.picks,
+        repositories.audit,
+      );
+      const legacy = await repositories.picks.findPickById(data.pickId);
+      assert.equal(legacy?.promotion_target, 'best-bets', 'precondition: a legacy board target exists');
       // With the guard removed the route no longer recognises the pick as
       // human delivery at all: it falls through to the generic requeue path and
       // tries to enqueue the pick to its board `promotion_target`. That it is
