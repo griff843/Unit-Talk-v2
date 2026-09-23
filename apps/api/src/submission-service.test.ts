@@ -335,7 +335,7 @@ test('handleSubmitPick in local env keeps promotion target but enqueues to disco
   }
 });
 
-test('handleSubmitPick smart-form pick below promotion threshold still enqueues to best-bets', async () => {
+test('UTV2-1902: handleSubmitPick smart-form pick below promotion threshold is not promoted or enqueued', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const response = await handleSubmitPick(
     {
@@ -371,22 +371,23 @@ test('handleSubmitPick smart-form pick below promotion threshold still enqueues 
   assert.equal(response.status, 201);
   if (!response.body.ok) throw new Error('expected ok response');
 
+  // Source alone never qualifies a pick: below threshold is below threshold.
   const data = response.body.data as SubmitPickControllerResult;
-  assert.equal(data.promotionStatus, 'qualified');
-  assert.equal(data.promotionTarget, 'best-bets');
-  assert.equal(data.outboxEnqueued, true);
-  assert.equal(data.lifecycleState, 'queued');
+  assert.notEqual(data.promotionStatus, 'qualified');
+  assert.equal(data.promotionTarget, null);
+  assert.equal(data.outboxEnqueued, false);
+  assert.equal(data.lifecycleState, 'validated');
+  assert.deepEqual(await repositories.outbox.listByPickId(data.pickId), []);
 
   const claimed = await claimDistributionWork(
     repositories.outbox,
     'discord:best-bets',
     'test-worker-smart-form-threshold',
   );
-  assert.ok(claimed.outboxRecord);
-  assert.equal(claimed.outboxRecord?.pick_id, data.pickId);
+  assert.equal(claimed.outboxRecord, null);
 });
 
-test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets', async () => {
+test('handleSubmitPick smart-form same-game exposure is decided by score, not by the exposure gate', async () => {
   const repositories = createInMemoryRepositoryBundle();
 
   const first = await handleSubmitPick(
@@ -447,8 +448,8 @@ test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets
             ],
           },
           capper: 'griff843',
-          capperConviction: 7,
-          promotionScores: { edge: 55, trust: 70, readiness: 65, uniqueness: 50, boardFit: 45 },
+          capperConviction: 8,
+          promotionScores: { edge: 78, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
         },
       },
     },
@@ -458,11 +459,14 @@ test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets
   assert.equal(second.status, 201);
   if (!second.body.ok) throw new Error('expected ok response');
 
+  // Smart Form skips the exposure gate, so the same-game second pick is scored
+  // rather than exposure-rejected. UTV2-1902: it is no longer force-promoted;
+  // board fit accounts for the correlated first pick, and the verdict is the
+  // score's.
   const data = second.body.data as SubmitPickControllerResult;
-  assert.equal(data.promotionStatus, 'qualified');
-  assert.equal(data.promotionTarget, 'best-bets');
-  assert.equal(data.outboxEnqueued, true);
-  assert.equal(data.lifecycleState, 'queued');
+  const persisted = await repositories.picks.findPickById(data.pickId);
+  assert.match(persisted?.promotion_reason ?? '', /promotion score [\d.]+ (meets|is below) threshold/);
+  assert.equal(data.outboxEnqueued, data.promotionStatus === 'qualified');
 });
 
 // ─── End enqueue-gap fix tests ────────────────────────────────────────────────
