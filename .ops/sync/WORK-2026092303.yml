@@ -1,0 +1,151 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092303
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092303
+  objective: Make the archive conveyor fail closed when row-level security would
+    silently hide source rows, and record the read-only production sizing audit
+    of 2026-09-23 in the canonical warehouse documents.
+  acceptance_criteria:
+    - The conveyor probes `row_security_active()` for every planned relation
+      before exporting, and refuses with `row_security_filtered` when it is true
+      and `row_security_unknown` when the answer is not a definite false.
+    - Tests prove the exact probe SQL, injected-relation refusal, admission on
+      false, refusal on true, refusal on every non-boolean answer, and that the
+      guard is wired before `runConveyor`; mutation drills show each fails when
+      its guard is removed.
+    - "`PRODUCTION_DB_SIZING_AUDIT.md` §6 records the measured production values
+      with the statistics-reset caveat."
+    - "`FIRST_ARCHIVE_CANDIDATE_PACKET.md` §3 answers the nine questions and
+      keeps the relation not recommended for prune."
+    - "`WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` states the BYPASSRLS
+      reader-role requirement, the prepared owner-executed SQL (not executed)
+      and the session-pooler DSN."
+    - "`SGO_REACTIVATION_GATE.md` records that the `provider_offers` view is
+      insertable into the quarantine."
+  guardrails:
+    - No production DDL, no production write, no prune, no delete, no partition
+      drop.
+    - No secret value in the repository.
+    - No archive run; object storage is not provisioned by this lane.
+    - No weakening of migration, proof, PR or merge controls.
+  non_goals:
+    - Provisioning Hetzner object storage or creating the reader role.
+    - Deactivating pg_cron job 5.
+    - Running the first archive.
+  required_evidence:
+    - "`docs/06_status/proof/WORK-2026092303/diff-summary.md`"
+    - "`docs/06_status/proof/WORK-2026092303/verification.md`"
+    - "`docs/06_status/proof/WORK-2026092303/evidence.json`"
+    - Warehouse test battery output and the three mutation drills.
+  exit_criteria:
+    - PR merged on green CI with the evidence above bound to the merge SHA;
+      confirmation that no production data was changed.
+  unmapped_sections:
+    - >-
+      WORK-2026092303 — Warehouse: refuse row-filtered sources and record the
+      production audit
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Follow-up to
+      WORK-2026092101 (#1627, merged 8151a55c3).
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092303.md
+    title: "WORK-2026092303 — Warehouse: refuse row-filtered sources and record the
+      production audit"
+    description: >-
+      # WORK-2026092303 — Warehouse: refuse row-filtered sources and record the
+      production audit
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Follow-up to
+      WORK-2026092101 (#1627, merged 8151a55c3).
+
+
+      ## Objective
+
+
+      - Make the archive conveyor fail closed when row-level security would
+      silently hide source rows, and record the read-only production sizing
+      audit of 2026-09-23 in the canonical warehouse documents.
+
+
+      ## Acceptance Criteria
+
+
+      - The conveyor probes `row_security_active()` for every planned relation
+      before exporting, and refuses with `row_security_filtered` when it is true
+      and `row_security_unknown` when the answer is not a definite false.
+
+      - Tests prove the exact probe SQL, injected-relation refusal, admission on
+      false, refusal on true, refusal on every non-boolean answer, and that the
+      guard is wired before `runConveyor`; mutation drills show each fails when
+      its guard is removed.
+
+      - `PRODUCTION_DB_SIZING_AUDIT.md` §6 records the measured production
+      values with the statistics-reset caveat.
+
+      - `FIRST_ARCHIVE_CANDIDATE_PACKET.md` §3 answers the nine questions and
+      keeps the relation not recommended for prune.
+
+      - `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` states the BYPASSRLS
+      reader-role requirement, the prepared owner-executed SQL (not executed)
+      and the session-pooler DSN.
+
+      - `SGO_REACTIVATION_GATE.md` records that the `provider_offers` view is
+      insertable into the quarantine.
+
+
+      ## Guardrails
+
+
+      - No production DDL, no production write, no prune, no delete, no
+      partition drop.
+
+      - No secret value in the repository.
+
+      - No archive run; object storage is not provisioned by this lane.
+
+      - No weakening of migration, proof, PR or merge controls.
+
+
+      ## Non-goals
+
+
+      - Provisioning Hetzner object storage or creating the reader role.
+
+      - Deactivating pg_cron job 5.
+
+      - Running the first archive.
+
+
+      ## Required Evidence
+
+
+      - `docs/06_status/proof/WORK-2026092303/diff-summary.md`
+
+      - `docs/06_status/proof/WORK-2026092303/verification.md`
+
+      - `docs/06_status/proof/WORK-2026092303/evidence.json`
+
+      - Warehouse test battery output and the three mutation drills.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI with the evidence above bound to the merge SHA;
+      confirmation that no production data was changed.
+    captured_at: 2026-09-23T08:38:38.228Z
+    description_sha256: 93f48605d6028a69d4f03b0fb9c06cc218aee7378f509418a9d31b8da54f3b58
+  contract_hash: 1a706bd093185d0c3476aadc126035a45c2bf894b10086a7ef4045efc379bfd3
