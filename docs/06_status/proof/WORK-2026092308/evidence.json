@@ -7,11 +7,11 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "88afdea241f69ce76e805a7ce31ac74f1e4e12b7",
+    "verified_source_sha": "056f9b575b4251bbb67bac3fbf1752e1dc66e563",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "88afdea241f69ce76e805a7ce31ac74f1e4e12b7 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092308/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree."
+    "note": "056f9b575b4251bbb67bac3fbf1752e1dc66e563 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092308/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree. It is the merge of main into this branch; the lane's own implementation files are byte-identical to 88afdea24 (git diff 88afdea24 056f9b575b4251bbb67bac3fbf1752e1dc66e563 -- apps/api is empty), and the only non-proof paths the merge changed are main's own (apps/command-center/src/lib/data/snapshot.ts, scripts/ops/readiness-refresh.ts and their tests)."
   },
   "what_this_lane_repairs": {
     "defect": "getModelPerformanceReport built its pick -> settlement map by skipping every settlement_records row whose corrects_id is set, keeping only each chain's root. A corrected pick was therefore reported with its superseded result and CLV. The in-memory test that covered the path asserted the inverted behaviour ('correction rows excluded').",

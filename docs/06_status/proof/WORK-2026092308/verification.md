@@ -11,7 +11,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/work-2026092308-model-performance-effective-settlement
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1636
-Head SHA: 88afdea241f69ce76e805a7ce31ac74f1e4e12b7
+Head SHA: 056f9b575b4251bbb67bac3fbf1752e1dc66e563
 result: pass
 
 ## ASSERTIONS:
@@ -32,7 +32,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on head `88afdea241f69ce76e805a7ce31ac74f1e4e12b7` in the lane worktree.
+Measured on head `056f9b575b4251bbb67bac3fbf1752e1dc66e563` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test apps/api/src/model-performance-service.test.ts
@@ -119,4 +119,4 @@ tests, which is how the failure is known to be the containment placeholder rathe
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1636
 Approved PR head: pending merge
-Execution SHA: 88afdea241f69ce76e805a7ce31ac74f1e4e12b7
+Execution SHA: 056f9b575b4251bbb67bac3fbf1752e1dc66e563
