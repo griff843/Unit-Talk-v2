@@ -1,25 +1,25 @@
 # UTV2-1919 Diff Summary
 
-Generated at: 2026-09-16T09:29:57.918Z
+Generated at: 2026-09-23T13:04:12.000Z
 Issue: UTV2-1919
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1919-evidence-settlement-correction
-PR URL: N/A
-Head SHA: b149c1a9bf93ff22c85acc4357fa25fc8dec3166
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1589
+Head SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
 Merge SHA: N/A
-Diff base: f47a35859e16b869d7398de3589f251a68727008
-Diff target: b149c1a9bf93ff22c85acc4357fa25fc8dec3166
+Diff base: 4ab51ce8638062651fd3c8c572b260f5875dc6c0
+Diff target: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
 
 ## Git Diff Stat
 ```
-.ops/sync/UTV2-1919.yml                            | 312 +++++++++++++++++++++
- apps/api/src/settlement-service.test.ts            | 197 +++++++++++++
+ .ops/sync/UTV2-1919.yml                            | 312 +++++++++++++++++++++
+ apps/api/src/settlement-service.test.ts            | 201 +++++++++++++
  apps/api/src/settlement-service.ts                 |  54 +++-
  ...-utv2-1904-operator-evidence-settlement.test.ts | 111 +++++++-
  docs/06_status/lanes/UTV2-1919.json                |  38 +++
  docs/06_status/proof/UTV2-1919/.gitkeep            |   0
- 6 files changed, 696 insertions(+), 16 deletions(-)
+ 6 files changed, 700 insertions(+), 16 deletions(-)
 ```
 
 ## Git Name Status
@@ -36,5 +36,5 @@ A	docs/06_status/proof/UTV2-1919/.gitkeep
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: b149c1a9bf93ff22c85acc4357fa25fc8dec3166
+Head SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
 Merge SHA: N/A

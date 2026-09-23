@@ -11,7 +11,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1919-evidence-settlement-correction
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1589
-Head SHA: b149c1a9bf93ff22c85acc4357fa25fc8dec3166
+Head SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
 result: pass
 
 ## ASSERTIONS:
@@ -28,7 +28,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on head `b149c1a9bf93ff22c85acc4357fa25fc8dec3166` in the lane worktree.
+Measured on head `f9ec8add91c30978a4cc797f4aecac2f09ceafdb` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test apps/api/src/settlement-service.test.ts
@@ -38,8 +38,8 @@ $ pnpm exec tsx --test apps/api/src/settlement-service.test.ts
 exit 0
 
 $ pnpm test
-# tests 6369
-# pass  6369
+# tests 6807
+# pass  6807
 # fail  0
 (zero 'not ok' TAP lines across the whole workspace)
 exit 0
@@ -54,7 +54,7 @@ exit 0
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 6
+Changed files: 9
 Rules matched: settlement-grading
 Advisory (PM-gated) artifacts missing: r4-fault-report [PM-gated]
 exit 0
@@ -90,7 +90,7 @@ exists to prevent: `resolveEffectiveSettlement` refuses two root records and ret
 than a restatement of the code. The race test stayed green, correctly — it does not depend on
 linkage.
 
-**M2 — restore the pre-lane behaviour of the 23505 catch** (look up `findLatestForPick` and
+**M2 — restore main's exact pre-lane 23505 catch body** (re-read `findLatestForPick` and
 return it as this request's `settlementRecord` with `auditRecords: []`):
 
 ```
@@ -102,6 +102,13 @@ not ok 38 - UTV2-1919: a duplicate-key race is refused, never reported as a succ
 The other 37 pass, which is the point: before this lane nothing in the repository failed on that
 behaviour.
 
+**Correction to the earlier record (2026-09-23).** Re-running M2 at the resynced head showed the
+race test was weaker than first recorded: its stub returned `null` from *every*
+`findLatestForPick` call, so the fake-success branch could never find a row, and the mutant failed
+only because the raw 23505 message did not match the expected pattern. Commit `f9ec8add9` makes
+only the pre-insert read miss — every later read sees the other writer's row, as in the real race —
+so the mutant now **resolves** with that row and the test fails for the reason it names.
+
 **Restored:**
 
 ```
@@ -112,7 +119,7 @@ behaviour.
 
 ## Verification
 - [x] `pnpm type-check`: exit 0
-- [x] `pnpm test`: exit 0 — 6369 tests, 6369 pass, 0 fail
+- [x] `pnpm test`: exit 0 — 6807 tests, 6807 pass, 0 fail
 - [ ] `pnpm verify`: not runnable locally (staging-target assertion); executed by the required `verify` check on this PR
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS; the one advisory artifact is PM-gated and not required
 
@@ -146,4 +153,4 @@ unreachable from this workstation.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1589
 Approved PR head: pending merge
-Execution SHA: b149c1a9bf93ff22c85acc4357fa25fc8dec3166
+Execution SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
