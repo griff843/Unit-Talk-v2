@@ -133,6 +133,7 @@ EVIDENCE:
 | `pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts` | 0 | 237 pass / 0 fail |
 | `pnpm exec tsx --test apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 7 pass / 0 fail |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | 0 | `Verdict: PASS`, 13 changed files, rules matched `promotion-scoring`, `operator-ui` |
+| `pnpm verify` | n/a locally | refuses at `ci:assert-staging` from a developer checkout (deliberate staging isolation). The required `verify` context on PR #1630 **passed** at head `9ed2aaae8c59cffa9bf99c3730b1076f8debd8ca`, including its run-scoped DB-proof receipt check |
 | `pnpm test:db` | n/a locally | CI `staging-db-proof` job on PR #1630, receipt verified inside `verify` |
 
 ### R-level: what the PASS does and does not show
