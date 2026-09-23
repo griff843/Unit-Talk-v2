@@ -136,6 +136,21 @@ EVIDENCE:
 | `pnpm verify` | n/a locally | refuses at `ci:assert-staging` from a developer checkout (deliberate staging isolation). The required `verify` context on PR #1630 **passed** at head `9ed2aaae8c59cffa9bf99c3730b1076f8debd8ca`, including its run-scoped DB-proof receipt check |
 | `pnpm test:db` | n/a locally | CI `staging-db-proof` job on PR #1630, receipt verified inside `verify` |
 
+```
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 13
+Rules matched: promotion-scoring, operator-ui
+
+$ pnpm test   (tallied from the TAP output)
+exit=0
+ok lines: 6082   not ok lines: 0   suite blocks: 105   blocks with # fail != 0: 0
+
+$ pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
+# pass 237
+# fail 0
+```
+
 ### R-level: what the PASS does and does not show
 
 `r-level-check` reports `promotion-scoring` → R2 (`r2-determinism`), R3 (`r3-shadow-report`), and
