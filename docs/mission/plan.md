@@ -234,9 +234,11 @@ governance/reliability slot a **ceiling, not a quota**. An empty slot alongside 
 work is a correct state. Record findings in §9 and `plan-lessons.md` rather than filing them. One
 defect class gets one canonical issue.
 
-**Lane hygiene owed.** `ops:orchestration-reconcile --current` exits 1 on 24 failures. They are
-leases and Linear states that closeouts never released on UTV2-1892/1950/1924/1948/1708, and
-WORK-### leases that Linear cannot see. Release a terminal lane's lease with
+**Lane hygiene owed.** `ops:orchestration-reconcile --current` exits 1 on 12 failures (down from 24
+earlier on 2026-09-23). They are leases and Linear states that closeouts never released on
+UTV2-1892/1950/1924/1948/1708/1771, and WORK-### leases that Linear cannot see. The reconciler
+flags only lanes where Linear or a lease also disagrees; the 25 manifests at `merged` (§1) are the
+wider population. Release a terminal lane's lease with
 `pnpm ops:lease release --issue <ID> --actor claude --reason "<why>"` as part of every closeout.
 Every closeout this session leaked its lease.
 
