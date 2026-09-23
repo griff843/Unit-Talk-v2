@@ -33,7 +33,7 @@ Measured 2026-09-23 against `origin/main`, the GitHub API and production `zfzdnf
 | `worker.heartbeat` | alive — newest 2026-09-23 20:03Z |
 | Readiness ledger | **RED**, generated 2026-09-23T16:30Z — see §2 |
 | Open PRs | **11** |
-| Active lanes | This session's `WORK-2026092308` (#1636, T1, awaiting Griff's T1 pair). Every other manifest on `main` is terminal. |
+| Active lanes | This session's `WORK-2026092308` (#1636, T1, awaiting Griff's T1 pair) and this edition's own lane. **25** manifests on `main` are stuck at `merged` — their PRs merged and closeout never completed (oldest UTV2-1383, newest UTV2-1950). They are not live work, but they are not `done` either; count them with `jq .status docs/06_status/lanes/*.json`, never assume terminal. |
 
 **Milestone 1 is complete.** Griff performed it end to end against the deployed system on
 2026-09-09. It was verified by governed read-only production observation, with containment intact
@@ -210,7 +210,11 @@ lines. Mark the rest **explicitly deferred, not failed**.
    would score this dimension an honest `fail` with named checks. That does not turn it green —
    the size findings are real and their relief is reserved.
 3. **UTV2-1954, then UTV2-1953, then UTV2-1952** — the runtime-slot queue owned by the parallel
-   session: market-adjusted replay fidelity split out of #1630, not waived.
+   session: market-adjusted replay fidelity split out of #1630, not waived. UTV2-1954's root cause is
+   confirmed in code: `replayPromotion` passes only `{confidence}` as the pick, so `calculateScore`
+   sees an empty market and skips `applyPromotionModifiers` (market-family multipliers and caps);
+   and replay scores with the caller's *current* policy rather than the weights and
+   `minimumScore` persisted in the history payload.
 4. **Seed a current event, then submit again through the deployed form** in market shapes not yet
    exercised: a player prop, a total, or a multi-leg slip. Condition 1 is a claim about
    repeatability, and only repetition tests it.
