@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092307",
+  "lane_type": "delivery-ui",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092307-settlement-chain-windows",
+  "branch": "claude/work-2026092307-settlement-chain-windows",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/src/lib/data/snapshot-settlement-history.test.ts",
+    "apps/command-center/src/lib/data/snapshot.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092307/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092307/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-09-23T19:20:56.282Z",
+  "heartbeat_at": "2026-09-23T19:20:56.282Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026092307-settlement-chain-windows.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092307-settlement-chain-windows",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
