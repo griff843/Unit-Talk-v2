@@ -7,11 +7,11 @@
   "status": "in_review",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "6c53071c411ba5365c0ae014e6a793081091a29f",
+    "verified_source_sha": "f712015e1de23685c7be49ef30df0681a2835a05",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-23T12:45:00.000Z",
+    "bound_at": "2026-09-23T14:30:00.000Z",
     "ci_sentinels": {
       "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. The authoritative result is the set of required contexts on PR #1630. post-merge-lane-close.yml rebinds merge_sha.",
       "local_type_check": {
@@ -26,7 +26,7 @@
       "local_full_suite": {
         "command": "pnpm test",
         "exit_code": 0,
-        "ok_lines": 6949,
+        "ok_lines": 6956,
         "not_ok_lines": 0,
         "suite_blocks": 105,
         "suite_blocks_with_failures": 0
@@ -36,7 +36,7 @@
   "static_proof": {
     "status": "pass",
     "measured_at": "2026-09-23T05:45:00Z",
-    "measured_against_sha": "6c53071c411ba5365c0ae014e6a793081091a29f",
+    "measured_against_sha": "f712015e1de23685c7be49ef30df0681a2835a05",
     "commands": [
       {
         "command": "pnpm type-check",
@@ -52,7 +52,7 @@
         "command": "pnpm test",
         "exit_code": 0,
         "result": "pass",
-        "ok_lines": 6082,
+        "ok_lines": 6956,
         "not_ok_lines": 0,
         "suite_blocks": 105,
         "suite_blocks_with_failures": 0
@@ -61,7 +61,7 @@
         "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
         "exit_code": 0,
         "result": "pass",
-        "note": "237 pass / 0 fail"
+        "note": "240 pass / 0 fail"
       },
       {
         "command": "pnpm exec tsx --test apps/command-center/src/lib/promotion-presentation.test.ts",
@@ -111,8 +111,26 @@
     {
       "control": "unmutated baseline",
       "mutation": "none",
-      "observed": "237/237 and 7/7",
+      "observed": "237/237 and 7/7 (pre-replay-fix); 240/240 after f712015e1",
       "result": "pass"
+    },
+    {
+      "control": "UTV2-1902 replay: low-confidence Smart Form pick replays as qualified; human capper pick replays with no board qualification",
+      "mutation": "promotion-service.ts reverted to unfixed 8786facdf",
+      "observed": "96 pass / 2 fail; behaviour-only: Smart Form expected qualified replayed not_eligible, human capper expected not_eligible replayed qualified",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902 replay: low-confidence Smart Form pick that qualified replays as qualified",
+      "mutation": "snapshot confidenceFloor reverted to policy.confidenceFloor",
+      "observed": "97 pass / 1 fail (not ok 96)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902 replay: an authorized human capper delivery pick replays with no board qualification",
+      "mutation": "override dropped from the multi-policy snapshot",
+      "observed": "97 pass / 1 fail (not ok 97)",
+      "result": "fails_on_the_named_condition"
     }
   ],
   "runtime_proof": {
