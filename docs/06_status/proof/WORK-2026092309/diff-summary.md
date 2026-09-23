@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092309-readiness-reader-pages
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1637
 Head SHA: 98b4b93872c4eff555c35c9ea6dd328a040c75a1
-Merge SHA: pending merge
+Merge SHA: 4759ff148f19275b6bc3666a92a3d78b55d27133
 Diff base: aaf9e2614ac244e1c2e09670608aa375aad59131
 Diff target: 98b4b93872c4eff555c35c9ea6dd328a040c75a1
 
@@ -32,4 +32,4 @@ M	scripts/ops/readiness-refresh.ts
 
 ## SHA Binding
 Head SHA: 98b4b93872c4eff555c35c9ea6dd328a040c75a1
-Merge SHA: pending merge
+Merge SHA: 4759ff148f19275b6bc3666a92a3d78b55d27133

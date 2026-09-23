@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092309
 
-MERGE_SHA: 98b4b93872c4eff555c35c9ea6dd328a040c75a1
+MERGE_SHA: 4759ff148f19275b6bc3666a92a3d78b55d27133
 
 Generated at: 2026-09-23T20:15:09.000Z
 Issue: WORK-2026092309
@@ -105,6 +105,6 @@ bucketing may still find true failures, and a `fail` there would be a correct me
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 4759ff148f19275b6bc3666a92a3d78b55d27133
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1637
 Execution SHA: 98b4b93872c4eff555c35c9ea6dd328a040c75a1
