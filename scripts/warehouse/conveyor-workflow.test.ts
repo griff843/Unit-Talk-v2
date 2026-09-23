@@ -109,3 +109,12 @@ test('the workflow names no other lane’s job or gate', () => {
     assert.equal(workflow.includes(forbidden), false, `the conveyor must not touch ${forbidden}`);
   }
 });
+
+test('the conveyor refuses a row-security-filtered source before exporting anything', () => {
+  const conveyorCase = cli.slice(cli.indexOf("case 'conveyor':"), cli.indexOf("case 'staleness':"));
+  const guard = conveyorCase.indexOf('assertSourceNotRowFiltered(connection');
+  const exportRun = conveyorCase.indexOf('runConveyor(');
+  assert.ok(guard > 0, 'the conveyor path must call assertSourceNotRowFiltered');
+  assert.ok(guard < exportRun, 'the row-security guard must run before runConveyor');
+  assert.match(conveyorCase, /new Set\(plan\.items\.map\(\(item\) => item\.relation\)\)/);
+});

@@ -60,6 +60,30 @@ The exporter attaches the source database `READ_ONLY` and the audit pins
 `default_transaction_read_only`. Both are belt to the DSN's braces. Issue the DSN against a role
 with `SELECT` and nothing else; do not reuse the service-role credential.
 
+**The role must also bypass row-level security.** Production `provider_offer_history` has RLS
+enabled on the parent and all 60 partitions and **no policy** (measured 2026-09-23). A plain
+`SELECT`-only role therefore reads **zero rows** — and a zero-row export verified against a
+zero-row source count passes `0 = 0`. The conveyor now refuses before exporting
+(`assertSourceNotRowFiltered`, `row_security_filtered` / `row_security_unknown`), so the failure is
+loud, but the role still has to be right.
+
+Prepared for the owner — **production DDL plus a secret, so reserved; not executed**:
+
+```sql
+CREATE ROLE warehouse_reader LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE BYPASSRLS PASSWORD '<owner-chosen>';
+ALTER ROLE warehouse_reader SET default_transaction_read_only = on;
+GRANT USAGE ON SCHEMA public TO warehouse_reader;
+GRANT SELECT ON public.provider_offer_history TO warehouse_reader;
+```
+
+`postgres` on this project holds `CREATEROLE` and `BYPASSRLS` without superuser, so it can issue
+this. Add `GRANT SELECT` on further relations only when a policy entry for them lands.
+
+**Use the Supabase session pooler for `UNIT_TALK_WAREHOUSE_SOURCE_DSN`**
+(`postgresql://warehouse_reader.zfzdnfwdarxucxtaojxm:<password>@<region>.pooler.supabase.com:5432/postgres`).
+GitHub-hosted runners are IPv4-only and the direct host is IPv6; the transaction pooler (6543)
+does not suit a long read-only session.
+
 ## 4. Confirming it without revealing anything
 
 `pnpm warehouse doctor` prints **presence only** — `present`, `missing` or `placeholder` per key,

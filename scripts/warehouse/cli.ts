@@ -13,7 +13,7 @@ import {
   runConveyor,
   type RetentionPolicyEntry,
 } from './conveyor.js';
-import { attachPostgres, qualifyAttached } from './export-partition.js';
+import { assertSourceNotRowFiltered, attachPostgres, qualifyAttached } from './export-partition.js';
 import { createObjectStoreFromEnv } from './object-store.js';
 import { REPRESENTATIVE_QUERY, runWarehouseQuery } from './query.js';
 import { assessArchiveCandidate, runDbAudit, type SqlRunner } from './db-audit.js';
@@ -180,6 +180,9 @@ async function main(): Promise<number> {
       const connection = await openDuckDb();
       const attached = await attachPostgres(connection, dsn.config.dsn);
       try {
+        for (const relation of new Set(plan.items.map((item) => item.relation))) {
+          await assertSourceNotRowFiltered(connection, 'src', relation);
+        }
         const result = await runConveyor({
           plan,
           connection,
