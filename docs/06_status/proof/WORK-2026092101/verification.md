@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-21T15:28:15.000Z
+Generated at: 2026-09-23T04:03:30.000Z
 Issue: WORK-2026092101
 Tier: T1
 Lane type: governance
 Branch: claude/work-2026092101-historical-data-warehouse
-PR URL: N/A
-Head SHA: 12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1627
+Head SHA: e9521eb2e7985bdad2ae1c8ccaf90e0a81621122
 result: pass
 
 ## ASSERTIONS:
@@ -67,13 +67,13 @@ $ pnpm type-check
 rc=0
 
 $ pnpm test
-# tests 6787
-# pass 6787
+# tests 6798
+# pass 6798
 # fail 0
 rc=0
 
 $ pnpm verify
-verify:static rc=0 (env:check + lint + type-check + build + test + verify:commands)
+verify:static rc=0 (env:check + lint + type-check + build + test + verify:commands); 7004/7004 across 106 TAP blocks
   [command-manifest] Verified 14 command definition(s)
   [check-migration-versions] 136 migration file(s) verified - no duplicate versions.
   [lint-migrations] 135 migration file(s) checked - no findings.
@@ -82,9 +82,9 @@ target by design - "REFUSED: target identity could not be resolved from its URL
 (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx." The lane
 manifest records t1_live_db_precondition: deferred_to_ci.
 
-$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092101 --base origin/main --head e9521eb2e7985bdad2ae1c8ccaf90e0a81621122
 Verdict: PASS
-Changed files: 34
+Changed files: 36
 Rules matched: (none) - no R-level artifacts required for this diff
 
 $ pnpm exec tsx --test scripts/warehouse/*.test.ts
@@ -95,9 +95,9 @@ $ pnpm exec tsx --test scripts/warehouse/*.test.ts
 
 ## Verification
 - [x] `pnpm type-check`: rc=0
-- [x] `pnpm test`: 6787 passed, 0 failed
+- [x] `pnpm test`: 6798 passed, 0 failed
 - [x] `pnpm verify`: verify:static rc=0; test:live-db deferred to CI (staging-target refusal is by design locally)
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, no R-level artifacts required
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092101 --base origin/main --head e9521eb2e7985bdad2ae1c8ccaf90e0a81621122`: PASS, 36 changed files, no R-level artifacts required
 
 ## Runtime Verification
 
@@ -122,14 +122,30 @@ exercised against real artifacts rather than mocks:
   relation is safe to prune - including for a 6.8 GB, 8.19M-row, zero-FK relation.
 - `conveyor-workflow.test.ts` reads the committed workflow and CLI from disk. Its
   destructive-reachability assertion was mutation-tested: appending a real
-  `run: pnpm warehouse prune --yes` step failed it.
+  `run: pnpm warehouse prune --yes` step failed it (1 fail), and restoring the file gave 8/8.
+  Re-run at the current anchor with the same result.
 
-Production observation is NOT part of this proof. Production Supabase was `RESTORING`
-throughout, no production credential was used, and no production statement was issued.
+Production observation is NOT part of this proof. Production Supabase was unavailable
+throughout (`RESTORING`, then `RESTORE_FAILED`), no production credential was used, and no
+production statement was issued.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1627
 Approved PR head: pending merge
-Execution SHA: 12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b
+Execution SHA: e9521eb2e7985bdad2ae1c8ccaf90e0a81621122
+
+Execution anchor: `e9521eb2e7985bdad2ae1c8ccaf90e0a81621122` -- the last commit on this lane that changes anything outside
+`docs/06_status/proof/WORK-2026092101/`. It is the branch-refresh merge commit that reconciled
+this lane onto `origin/main` `2103f721b` (the merge of #1570), produced by
+`ops:merge-wrapper pr-update-branch`. No conflict and no overlap: no file this lane changes was
+changed on `main`. The anchor moves because `scripts/ci/proof-binding-validator.ts` rule 4 compares
+trees, and the refresh brought in non-proof files. Superseded anchor, not withdrawn: `12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b`.
+Every figure above was re-measured at the new anchor rather than carried forward. CI at the
+anchor: run `35815981499` attempt 1 -- `Writable DB proof (staging only)` job `107037479107` and `verify` job `107038782350`, both success; receipt auditor `Verdict: PASS` against staging `xskgrzbteyqdufktjrjx`, pass=7 fail=0 skipped=0.
+
+`work-order.md` in this directory is a byte-identical copy of the repository-owned work order
+`.ops/work/WORK-2026092101.md`, which existed only as an uncommitted file. It is kept here
+because the lane's own proof directory is the one path the closeout scope check (S1) and the
+file-scope guard both admit without widening `file_scope_lock`.

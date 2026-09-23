@@ -7,19 +7,25 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b",
+    "verified_source_sha": "e9521eb2e7985bdad2ae1c8ccaf90e0a81621122",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "verify": "pass (run 35815981499 job 107038782350 @ e9521eb2e)",
+      "writable_db_proof_staging": "pass (run 35815981499 job 107037479107 @ e9521eb2e)"
+    },
+    "note": "e9521eb2e7985bdad2ae1c8ccaf90e0a81621122 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092101/. It is the branch-refresh merge commit produced by `ops:merge-wrapper pr-update-branch`, which reconciled the lane onto origin/main 2103f721bdf678f4a0e5214a8b09a125b0fef245 (the merge of #1570) with no conflict and no overlap: no file this lane changes was changed on main. The anchor moves because scripts/ci/proof-binding-validator.ts rule 4 compares trees (git diff --name-only <anchor>..HEAD), and the refresh brought in non-proof files (readiness-score.json and #1570's parser files). Superseded anchor, not withdrawn: 12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b. Every static measurement in this bundle was re-taken at the new anchor, not carried forward. Merge SHA is null until post-merge-lane-close.yml rebinds it."
   },
   "static_proof": {
     "unit_tests": {
-      "pass": 6787,
-      "fail": 0
+      "pass": 6798,
+      "fail": 0,
+      "note": "pnpm test at e9521eb2e7985bdad2ae1c8ccaf90e0a81621122, summed over its TAP blocks inside the local pnpm verify:static run (was 6787 at the superseded anchor; the difference is tests merged in from #1570)."
     },
     "type_check": "pass",
     "lint": "pass",
     "build": "pass",
-    "r_level": "PASS; 34 changed files; no R-level artifacts required",
+    "r_level": "PASS; 36 changed files; no R-level artifacts required (measured at e9521eb2e)",
     "warehouse_battery": {
       "suites": [
         "scripts/warehouse/config.test.ts",
@@ -35,16 +41,17 @@
       ],
       "pass": 102,
       "fail": 0,
-      "note": "All ten files are wired into pnpm test:ops, so they run inside pnpm verify rather than only on demand."
+      "note": "All ten files are wired into pnpm test:ops, so they run inside pnpm verify rather than only on demand. Re-measured at e9521eb2e: 102/102."
     },
     "destructive_reachability_mutation_drill": {
       "control": "scripts/warehouse/conveyor-workflow.test.ts :: nothing reachable from the schedule can delete production data",
       "mutation": "appended a real 'run: pnpm warehouse prune --yes' step to .github/workflows/warehouse-archive-conveyor.yml",
-      "result": "fail 1 on mutation ('the conveyor workflow must not execute prune'), 8/8 on restore"
+      "result": "fail 1 on mutation ('nothing reachable from the schedule can delete production data'), 8/8 on restore; re-run at e9521eb2e with the workflow restored byte-identical to HEAD"
     },
     "full_pnpm_verify": {
-      "result": "verify:static pass; test:live-db deferred to CI",
-      "note": "pnpm verify cannot exit 0 locally: scripts/ci/assert-staging-target.ts refuses any target it cannot identify as the staging project (host=127.0.0.1). CI is the authority and no green local verify is claimed. The lane manifest records t1_live_db_precondition: deferred_to_ci."
+      "result": "verify:static pass at e9521eb2e (7004/7004 tests across 106 TAP blocks, including Command Center and Smart Form); test:live-db deferred to CI",
+      "note": "pnpm verify cannot exit 0 locally: scripts/ci/assert-staging-target.ts refuses any target it cannot identify as the staging project (host=127.0.0.1). CI is the authority and no green local verify is claimed. The lane manifest records t1_live_db_precondition: deferred_to_ci.",
+      "ci_run": "run 35815981499 attempt 1 at e9521eb2e: Writable DB proof (staging only) job 107037479107 success 03:51:23Z-03:58:05Z, verify job 107038782350 success 03:58:07Z-04:01:43Z; receipt auditor Verdict: PASS, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0"
     }
   },
   "runtime_proof": {
