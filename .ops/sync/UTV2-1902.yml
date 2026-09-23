@@ -1,0 +1,117 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1902
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1902
+  objective: Score-gate Smart Form best-bets promotion; remove source-only
+    force_promote from member-facing target
+  acceptance_criteria:
+    - |-
+      ## PM-ratified product rule
+
+      [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on) decided that Smart Form/operator source **must not automatically confer Best Bets status**. `best-bets` is a scored curation surface; official-pick entitlement is a separate product promise.
+
+      Canonical behavior to implement:
+
+      * A Smart Form/operator-submitted pick may be an official capper pick and later flow through the ordinary official-pick delivery path when that path is separately activated.
+      * Promotion to member-facing `best-bets` must be earned by the canonical promotion policy, including the active `best-bets-v2` minimum score. Source alone must not bypass that threshold.
+      * Remove/disable the automatic Smart Form source-derived `force_promote -> best-bets` behavior. Do not remove generic audited override capability if it serves other explicitly authorized flows; the prohibited behavior is **automatic promotion solely because source = Smart Form/operator intake**.
+      * Track Only containment remains unchanged: no member-facing delivery/outbox artifact.
+      * Do not rewrite the four existing production rows identified by [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on). They are historical evidence; production data correction is a separate reserved decision.
+      * Do not activate member delivery, SGO/provider ingestion, system picks, or any parked channel.
+
+      ## Required repo truth
+
+      Write this rule into the canonical promotion/product contract so future agents do not infer that intake source equals promotion quality. Reconcile any older statement that says Smart Form submissions route directly to `best-bets`.
+
+      ## Acceptance
+
+      1. A below-threshold Smart Form pick remains below-threshold/suppressed for `best-bets`; no source-only override makes it qualified.
+      2. An otherwise equivalent pick that meets the canonical threshold can qualify normally.
+      3. Official-capper-pick entitlement/delivery logic is not narrowed by this change; Best Bets curation remains distinct from the complete official paid feed defined by `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`.
+      4. Track Only continues to produce zero member-facing delivery artifacts.
+      5. Promotion history remains auditable and truthfully records whether a real explicit override occurred.
+      6. Focused regression tests cover below-threshold Smart Form, qualifying Smart Form, and Track Only containment.
+      7. Exact-head review and normal governed merge/closeout complete before this lane is Done.
+
+      Parent decision: [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      PM-ratified product rule
+      [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on) decided that Smart Form/operator source **must not automatically confer Best Bets status**. `best-bets` is a scored curation surface; official-pick entitlement is a separate product promise.
+
+      Canonical behavior to implement:
+
+      * A Smart Form/operator-submitted pick may be an official capper pick and later flow through the ordinary official-pick delivery path when that path is separately activated.
+      * Promotion to member-facing `best-bets` must be earned by the canonical promotion policy, including the active `best-bets-v2` minimum score. Source alone must not bypass that threshold.
+      * Remove/disable the automatic Smart Form source-derived `force_promote -> best-bets` behavior. Do not remove generic audited override capability if it serves other explicitly authorized flows; the prohibited behavior is **automatic promotion solely because source = Smart Form/operator intake**.
+      * Track Only containment remains unchanged: no member-facing delivery/outbox artifact.
+      * Do not rewrite the four existing production rows identified by [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on). They are historical evidence; production data correction is a separate reserved decision.
+      * Do not activate member delivery, SGO/provider ingestion, system picks, or any parked channel.
+    - >-
+      Required repo truth
+
+      Write this rule into the canonical promotion/product contract so future
+      agents do not infer that intake source equals promotion quality. Reconcile
+      any older statement that says Smart Form submissions route directly to
+      `best-bets`.
+    - |-
+      Acceptance
+      1. A below-threshold Smart Form pick remains below-threshold/suppressed for `best-bets`; no source-only override makes it qualified.
+      2. An otherwise equivalent pick that meets the canonical threshold can qualify normally.
+      3. Official-capper-pick entitlement/delivery logic is not narrowed by this change; Best Bets curation remains distinct from the complete official paid feed defined by `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`.
+      4. Track Only continues to produce zero member-facing delivery artifacts.
+      5. Promotion history remains auditable and truthfully records whether a real explicit override occurred.
+      6. Focused regression tests cover below-threshold Smart Form, qualifying Smart Form, and Track Only containment.
+      7. Exact-head review and normal governed merge/closeout complete before this lane is Done.
+
+      Parent decision: [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1902/score-gate-smart-form-best-bets-promotion-remove-source-only-force
+    title: Score-gate Smart Form best-bets promotion; remove source-only
+      force_promote from member-facing target
+    description: |-
+      ## PM-ratified product rule
+
+      [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on) decided that Smart Form/operator source **must not automatically confer Best Bets status**. `best-bets` is a scored curation surface; official-pick entitlement is a separate product promise.
+
+      Canonical behavior to implement:
+
+      * A Smart Form/operator-submitted pick may be an official capper pick and later flow through the ordinary official-pick delivery path when that path is separately activated.
+      * Promotion to member-facing `best-bets` must be earned by the canonical promotion policy, including the active `best-bets-v2` minimum score. Source alone must not bypass that threshold.
+      * Remove/disable the automatic Smart Form source-derived `force_promote -> best-bets` behavior. Do not remove generic audited override capability if it serves other explicitly authorized flows; the prohibited behavior is **automatic promotion solely because source = Smart Form/operator intake**.
+      * Track Only containment remains unchanged: no member-facing delivery/outbox artifact.
+      * Do not rewrite the four existing production rows identified by [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on). They are historical evidence; production data correction is a separate reserved decision.
+      * Do not activate member delivery, SGO/provider ingestion, system picks, or any parked channel.
+
+      ## Required repo truth
+
+      Write this rule into the canonical promotion/product contract so future agents do not infer that intake source equals promotion quality. Reconcile any older statement that says Smart Form submissions route directly to `best-bets`.
+
+      ## Acceptance
+
+      1. A below-threshold Smart Form pick remains below-threshold/suppressed for `best-bets`; no source-only override makes it qualified.
+      2. An otherwise equivalent pick that meets the canonical threshold can qualify normally.
+      3. Official-capper-pick entitlement/delivery logic is not narrowed by this change; Best Bets curation remains distinct from the complete official paid feed defined by `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`.
+      4. Track Only continues to produce zero member-facing delivery artifacts.
+      5. Promotion history remains auditable and truthfully records whether a real explicit override occurred.
+      6. Focused regression tests cover below-threshold Smart Form, qualifying Smart Form, and Track Only containment.
+      7. Exact-head review and normal governed merge/closeout complete before this lane is Done.
+
+      Parent decision: [UTV2-1900](https://linear.app/unit-talk-v2/issue/UTV2-1900/force-promote-routes-every-smart-form-submission-to-best-bets-on).
+    captured_at: 2026-09-23T05:43:49.122Z
+    description_sha256: 8f34451b2be552fcdbbd4fc3a58987adb9e9d0ed3a4b411de75e46019fcf35c1
+  contract_hash: 5b6eda3841f5f5e94d598dd440efd58651d13dc0a3e800b2efe1a09d11557c79
