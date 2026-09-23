@@ -51,9 +51,23 @@ import path from 'node:path';
 // others, not what field is consulted.
 const SELF_SCOPE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened', 'merged']);
 const LOCK_CONFLICT_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
-const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
+// UTV2-1892: the admitted lane-identity namespaces.
+//
+// `UTV2` and `UNI` are tracker identities. `WORK` is a REPOSITORY-OWNED work
+// identity (docs/mission/intent.md, "Execution must not depend on the
+// tracker") -- it is deliberately NOT a tracker ref, and admitting it here
+// does not make it one. This constant governs only which identifiers this
+// guard will recognise as naming a lane; it grants no authority, widens no
+// path scope, and is not consulted by any tracker-reference semantics.
+//
+// The set is CLOSED. `bootstrap/*` branches and any other namespace remain
+// unrecognised here and keep whatever separate, dedicated mechanism already
+// authorises them -- an unrecognised identity receives no grant at all, which
+// is the fail-closed direction.
+const ISSUE_NAMESPACES = 'UTV2|UNI|WORK';
+const ISSUE_BRANCH_PATTERN = new RegExp(`(?:^|[/_-])((?:${ISSUE_NAMESPACES})-\\d+)(?:$|[/_-])`, 'i');
 /** A whole issue ID and nothing else -- used to key exact-lane lifecycle paths. */
-const ISSUE_ID_PATTERN = /^UTV2-\d+$/;
+const ISSUE_ID_PATTERN = new RegExp(`^(?:${ISSUE_NAMESPACES})-\\d+$`);
 
 type GuardVerdict = 'PASS' | 'FAIL';
 

@@ -1,0 +1,282 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1892",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1892/. It is the branch-refresh merge commit produced by `ops:merge-wrapper pr-update-branch`, which reconciled the lane onto origin/main 6685f171c660dd9f23ca15734a21a7241daa60a1. This is the FOURTH such refresh on this PR, and the mechanism is structural rather than incidental: the automated `ops(readiness): refresh ledger [skip ci]` job (.github/workflows/readiness-refresh.yml, cron '0 */6 * * *', contents:write) advances main every few hours, `[skip ci]` means nothing re-runs to announce it, and branch protection sets strict:true, so an open PR goes BEHIND on its own and silently -- invalidating any head-bound pm-verdict/v1 issued before it. Observed landings on this PR: b0731adc9 02:59:50Z, 96c990286 10:50:56Z, 3af0379f6 16:08:58Z, 6685f171c 20:48:16Z. Before this fourth refresh the operator disabled that workflow (state=disabled_manually) so the landing window is deterministic rather than a race; it is to be re-enabled after this PR merges. Each refresh moves the anchor, because scripts/ci/proof-binding-validator.ts rule 4 compares trees (git diff --name-only <anchor>..HEAD) and the ledger file would otherwise read as non-proof drift. No refresh has produced a conflict and none has changed an implementation file: each introduced exactly docs/06_status/readiness/readiness-score.json, and git diff --stat ab4d0b0ca 0946acb8e -- scripts/ .github/ .ops/ docs/06_status/proof/ docs/06_status/lanes/ is empty. Superseded anchors, in order and none withdrawn: d9d5a533bbdc61888b368677d8a8e5efd73d2a12 (the lane-pr-binding workflow's own commit, which wrote pr_url into docs/06_status/lanes/UTV2-1892.json once the PR was reopened), 3379b4b66c775612528d000b8efa6ab565d07853, fc8b7d09fac867fd0b1a2502b2e743ad0c69433f and 1d661dec9d3c2e820e2e57282a38938e698fe781 (the first, second and third branch refreshes). PR #1570 was closed on 2026-09-14 to release its locks on the two parser files so the canonical-`Bounce:` repair (UTV2-1926) could take them; that repair has landed, and the PR was reopened on 2026-09-21 under the same UTV2-1892 authority -- no new tracker issue was minted. The lane was readmitted with `ops:lane-start --readmit-existing-branch --singleton-approved`, which re-pinned file_scope_lock to the five files this bundle measures, and was first reconciled onto origin/main 6846fe19fb83158aa1735c47c922e6d5c582d234 by merge commit 71c7fa65a. That merge had exactly one conflict, in scripts/ops/merge-gate-verdict.test.ts, where this lane and UTV2-1926 had both appended tests to the end of the same file; both sets are kept and 38/38 pass. Every measurement in this bundle was taken at the current anchor, not carried forward from an earlier edition. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-23T02:10:00Z"
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/merge-gate-verdict.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 38,
+          "pass": 38,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 34,
+          "new": 4
+        },
+        "label": "34 pre-existing tests unchanged -- 21 original parseVerdict/evaluate tests plus the 13 UTV2-1926 canonical-Bounce tests that arrived from main in the reconciliation merge. New (this lane): the loop `repository and legacy identity <id> retain exact-head PM approval checks` for WORK-2026091001, UTV2-1501 and UNI-42 (each approved at the matching PR and head, each refused at a stale head); the drift lock `UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces`, which reads merge-gate.yml AND merge-gate-verdict.cjs off disk and asserts the workflow's three alternations, parseVerdict's behaviour and the parser's own Issue-line alternation all admit exactly {UNI, UTV2, WORK} and refuse BOOTSTRAP-; and `UTV2-1892: workflow issue extraction is bounded at both ends`, which evaluates the three extractors read from the workflow (the two JS literals directly, the grep pattern through grep -oiP) against seven branch and six title samples including homework-123, work-123abc and mywork-123, which must NOT resolve."
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ci/file-scope-guard.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 52,
+          "pass": 52,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 46,
+          "new": 6
+        },
+        "label": "46 pre-existing file-scope-guard tests unchanged. New (this lane, the second half of the WORK identity admission): `a WORK lane is granted its own lifecycle bookkeeping paths` (the defect -- the three files ops:lane-start itself creates were reported as cross-lane bleed on the lane's own PR); `laneLifecycleScopePatterns keys every admitted namespace, and only those`, which pins the exact three patterns for WORK-/UTV2-/UNI- and asserts an empty grant for nine rejected inputs including BOOTSTRAP-1, WORK-abc, WORK-123abc, HOMEWORK-123, null and undefined; `a WORK lane still cannot carry another lane's manifest` (the grant stays EXACT-LANE -- no docs/06_status/lanes/** directory exemption); `a WORK lane still enforces its file_scope_lock on ordinary files`; `an active WORK lane's lock blocks a UTV2 lane, and the reverse` (conflict detection in both directions); and `an unrecognised namespace branch still fails closed with no own manifest`."
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 66,
+          "pass": 66,
+          "fail": 0,
+          "skipped": 0,
+          "pre_existing": 66,
+          "new": 0
+        },
+        "label": "The workflow-hardening suite that reads merge-gate.yml; unchanged and still green with the widened alternations."
+      }
+    ],
+    "full_test_suite": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 6902,
+        "pass": 6902,
+        "fail": 0
+      },
+      "note": "Run to completion in the lane worktree at db3249992ea8c2ff133b596a3788b762f0611da3, and re-run by CI at the anchor 0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61 inside run 35757143934's `verify` job, which reported the identical 6902/6902 (plus Command Center tests 659/659). The commits differ only in docs/06_status/lanes/UTV2-1892.json and docs/06_status/readiness/readiness-score.json, neither of which any test reads. verify:static is the whole of pnpm verify except test:live-db; see the verify row below for why the live-DB half cannot run on a workstation."
+    },
+    "type_check": {
+      "command": "pnpm type-check (inside pnpm verify:static)",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint (inside pnpm verify:static)",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: verify ends at test:live-db, where ci:assert-staging refuses any target that is not staging xskgrzbteyqdufktjrjx. The CI verify job on this PR is the authoritative run and is recorded under runtime_proof."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1892 --base origin/main --head 0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61",
+      "verdict": "PASS",
+      "changed_files": 10,
+      "rules_matched": [],
+      "advisory_missing": [],
+      "note": "No R-level rule matches a merge-gate workflow, a CI guard script or an ops-script diff. Re-anchored to 0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61 after the third branch refresh; the check was re-run at that head (Verdict: PASS, 10 changed files, no rule matched) and the R-Level Compliance Check in run 35757143934 concluded success at the same head. The 10 changed files are identical across all three refreshes."
+    },
+    "reviewer_probe": {
+      "command": "node -e 'require(\"./scripts/ops/merge-gate-verdict.cjs\").parseVerdict(<exact-head APPROVED body for PR 1556 at ecb7daeaff2fc4a346855e73bd5669e7644e3faf>)'",
+      "results": {
+        "WORK-2026091001": {
+          "verdict": "APPROVED",
+          "issueId": "WORK-2026091001",
+          "prNumber": 1556,
+          "headSha": "ecb7daeaff2fc4a346855e73bd5669e7644e3faf"
+        },
+        "UTV2-1889": {
+          "verdict": "APPROVED",
+          "issueId": "UTV2-1889",
+          "prNumber": 1556,
+          "headSha": "ecb7daeaff2fc4a346855e73bd5669e7644e3faf"
+        },
+        "BOOTSTRAP-1": null
+      },
+      "note": "The exact probe from PR 1556 comment 5651878285, executed against this head's module at 63115cbff33f0196bbe8d9aa182345be33effb0b. At the trusted base e0c8f812d the first line was null."
+    },
+    "mutation_battery": {
+      "command": "for each mutation: git apply -R the single hunk, run the named suite, re-apply the hunk, assert the combined sha256 of both files is unchanged afterwards",
+      "baseline": {
+        "merge_gate_verdict": {
+          "tests": 25,
+          "pass": 25,
+          "fail": 0
+        }
+      },
+      "mutations": [
+        {
+          "id": "revert-cjs",
+          "file": "scripts/ops/merge-gate-verdict.cjs",
+          "change": "restore the (?:UTV2|UNI) alternation on the Issue: line",
+          "failing": 2,
+          "failing_assertions": [
+            "not ok 21 - repository and legacy identity WORK-2026091001 retain exact-head PM approval checks",
+            "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
+          ],
+          "note": "measured at f638dd89f2b9e449062461712f5da5a4e0a40c0a; the alternation is unchanged at 63115cbff33f0196bbe8d9aa182345be33effb0b"
+        },
+        {
+          "id": "revert-yml",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "restore the (?:utv2|uni) alternations in the workflow's issue extraction",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
+          ],
+          "note": "measured at f638dd89f2b9e449062461712f5da5a4e0a40c0a; the alternation is unchanged at 63115cbff33f0196bbe8d9aa182345be33effb0b"
+        },
+        {
+          "id": "drop-headref-trailing-boundary",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "remove (?![a-z0-9]) after the headRef alternation",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - UTV2-1892: workflow issue extraction is bounded at both ends"
+          ]
+        },
+        {
+          "id": "drop-title-leading-boundary",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "remove (?:^|[^a-z0-9]) before the title alternation",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - UTV2-1892: workflow issue extraction is bounded at both ends"
+          ]
+        },
+        {
+          "id": "drop-grep-lookbehind",
+          "file": ".github/workflows/merge-gate.yml",
+          "change": "remove (?<![a-z0-9]) from the WFR-v2 grep pattern",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 25 - UTV2-1892: workflow issue extraction is bounded at both ends"
+          ]
+        },
+        {
+          "id": "parser-admits-bootstrap",
+          "file": "scripts/ops/merge-gate-verdict.cjs",
+          "change": "widen the Issue: alternation to (?:UTV2|UNI|WORK|BOOTSTRAP)",
+          "failing": 1,
+          "failing_assertions": [
+            "not ok 24 - UTV2-1892: merge-gate.yml issue extraction and parseVerdict admit the same namespaces"
+          ]
+        }
+      ],
+      "restored": true
+    },
+    "independent_review": {
+      "reviewer": "codex exec -s read-only (gpt-5 family), prompt in the return packet",
+      "first_pass_at": "f638dd89f2b9e449062461712f5da5a4e0a40c0a",
+      "verdict": "CHANGES_REQUIRED",
+      "blocking": "the widened extractors had no trailing token boundary and the title extractor no leading one: 'Fix homework-123' and 'feature/work-123abc' resolved as WORK-123 while the parser anchors the whole Issue: line",
+      "advisory": "the drift lock read namespaces only from the workflow text, so a parser widening beyond the workflow's set would pass unless it happened to be BOOTSTRAP",
+      "disposition": "both addressed at 63115cbff33f0196bbe8d9aa182345be33effb0b: boundaries on all three extractors with a sample-driven test, and the drift lock now reads the parser's own alternation from source. The reviewer also confirmed the T1 trust boundary unchanged: authorized-reviewer filtering, PR-number and head-SHA equality, CODEOWNERS, AUTHORIZED_REVIEWERS, required checks, bounce handling and supersession ordering."
+    },
+    "mutation_drill": {
+      "control": "scripts/ci/file-scope-guard.test.ts -- the six UTV2-1892 tests",
+      "method": "The admitted set is one constant, ISSUE_NAMESPACES, from which both identity patterns derive. Mutating it in each direction shows the tests constrain both the grant and its boundary, rather than only asserting the behaviour that was just written.",
+      "mutations": [
+        {
+          "mutation": "ISSUE_NAMESPACES narrowed back to 'UTV2' (the pre-repair state)",
+          "result": "2 fail -- `a WORK lane is granted its own lifecycle bookkeeping paths` and `laneLifecycleScopePatterns keys every admitted namespace, and only those`"
+        },
+        {
+          "mutation": "ISSUE_NAMESPACES opened to 'UTV2|UNI|WORK|BOOTSTRAP|FOO|BOOT'",
+          "result": "2 fail -- `laneLifecycleScopePatterns keys every admitted namespace, and only those` and `an unrecognised namespace branch still fails closed with no own manifest`"
+        },
+        {
+          "mutation": "restored",
+          "result": "52/52 pass"
+        }
+      ]
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "RECEIPTED",
+    "executed_at": "2026-09-23T01:48:26Z/2026-09-23T02:04:10Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx via the run-scoped credentials ci.yml materializes. Never production. assert-staging-target.ts ran first in each credentialed invocation and printed \"[assert-staging] OK: target is the approved staging project\" before any test executed (the project ref itself is masked by GitHub secret redaction in the log; the verify job's receipt auditor printed it unmasked as Observed project: xskgrzbteyqdufktjrjx / Expected staging: xskgrzbteyqdufktjrjx). Production zfzdnfwdarxucxtaojxm was neither read nor written, and is in any case RESTORE_FAILED as of 2026-09-21.",
+    "command": "job \"Writable DB proof (staging only)\", run 35807801729 attempt 1, job 107012398481, at head 0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61. Step `pnpm test:db` -> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts. Step `pnpm test:t1-proof:live` -> pnpm ci:assert-staging && the 24 t1-proof suites wired in package.json at this head. Run conclusion SUCCESS; `verify` (job 107014509057) is green in the same run. Every value in this block was read out of that run's job logs rather than written from recollection. Superseded editions, none withdrawn: run 35757143934 at 1d661dec9d3c2e820e2e57282a38938e698fe781, run 35736058151 at fc8b7d09fac867fd0b1a2502b2e743ad0c69433f, run 35685090342 at 3379b4b66, run 35671709911 at d9d5a533b, run 34746934490 at 92f34932f.",
+    "receipt": "CI run 35807801729 attempt 1. Job 107012398481 \"Writable DB proof (staging only)\" succeeded (01:48:26Z-01:58:35Z) and job 107014509057 \"verify\" succeeded (01:59:13Z-02:04:10Z), both at head 0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61. pnpm test:db -> database-smoke.test.ts 7/7 pass, 0 fail, 0 skipped, 51322.5ms. pnpm test:t1-proof:live -> 24 suites, 140/140 pass, 0 fail, 0 skipped, 530324ms summed over the 24 TAP blocks. Receipt artifact utv2-1630-db-proof-receipt-35807801729-1 (id 10728169122), ci-db-proof-receipt.json sha256 4f85c592e386ca5f8c454e9f198b13d286234222add486fd7895bc11303c4d61, uploaded-zip sha256 c5aa967a45845c5ee2a81d5087eab9c9485760141521ecabd92b2e333add00b2. The same-run, attempt-scoped auditor scripts/ci/verify-db-proof-receipt.ts returned Verdict: PASS -- \"DB proof verified: run 35807801729 attempt 1 @ 0cd110190763d5fabdb529331e295415214add38, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0\" (0cd110190... is the pull_request merge ref CI executed, whose second parent is the anchor 0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61), with Observed project xskgrzbteyqdufktjrjx == Expected staging xskgrzbteyqdufktjrjx.",
+    "note": "Admitted under the route B deferral (manifest t1_live_db_precondition: deferred_to_ci). This lane changes CI parsers and a CI guard, not application or database code: `git diff --name-only 3af0379f6 1d661dec9d3c2e820e2e57282a38938e698fe781 -- apps packages supabase` is empty. Its real runtime is the Merge Gate workflow, whose trusted copy runs from pull_request.base.sha and therefore cannot exercise the repaired parser until this PR merges. The live-DB obligation is the standard staging proof, discharged here from ONE concluded run at the anchor 1d661dec9d3c2e820e2e57282a38938e698fe781 rather than a byte-identical neighbour. Closeout G6 separately requires verify and Writable DB proof green on the MERGE SHA. Four earlier runs are superseded rather than withdrawn: 35671433656 at db3249992, cancelled by concurrency when the lane-pr-binding workflow pushed its commit; 35671709911 at d9d5a533b, 35685090342 at 3379b4b66 and 35736058151 at fc8b7d09fac867fd0b1a2502b2e743ad0c69433f, all green but no longer the anchor after the successive branch refreshes.",
+    "queries": [
+      {
+        "label": "[assert-staging] target guard ran before any test in each credentialed invocation and reported \"OK: target is the approved staging project\"; the verify job's receipt auditor independently printed Observed project: xskgrzbteyqdufktjrjx == Expected staging",
+        "result": "ok -- staging confirmed, production never contacted"
+      },
+      {
+        "label": "staging fixtures seeded before either step: [seed-staging] retained by design: settlement_records, picks, submissions ; reset distribution_receipts: 1 row(s) deleted ; reset distribution_outbox: 12 row(s) deleted ; reset system_runs: 9 row(s) deleted ; sports: 9 upserted ; cappers: 1 upserted ; market_families: 6 upserted ; selection_types: 3 upserted ; market_types: 133 upserted",
+        "result": "ok -- mutable tables reset, reference data re-seeded"
+      },
+      {
+        "label": "step `pnpm test:db` -- apps/api/src/database-smoke.test.ts against staging Postgres. This is the receipted step; ci-db-proof-receipt.json covers this step and no other",
+        "result": "7/7 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "step `pnpm test:t1-proof:live` -- the 24 t1-proof suites wired in package.json at this head against staging Postgres, 24 TAP summary blocks in the job log, summed rather than recalled",
+        "result": "140/140 pass, 0 fail, 0 skipped"
+      },
+      {
+        "label": "`Verify (static)` inside the same run's verify job -- the full pnpm verify:static suite (not a database query; recorded here because it is the other half of the tier-required verification and was measured in the same run)",
+        "result": "6902/6902 pass, 0 fail -- identical to the figure measured locally at the same anchor"
+      },
+      {
+        "label": "the file-scope guard and Merge Gate parsers, exercised at the anchor in the lane worktree (not a database query; recorded here because they are this lane's actual runtime)",
+        "result": "merge-gate-verdict 38/38, file-scope-guard 52/52, workflow-hardening 66/66"
+      }
+    ],
+    "row_counts": [
+      {
+        "label": "TAP assertions executed against staging across both credentialed steps (7 database-smoke + 140 t1-proof)",
+        "count": 147
+      },
+      {
+        "label": "TAP assertions failed",
+        "count": 0
+      },
+      {
+        "label": "TAP assertions skipped",
+        "count": 0
+      },
+      {
+        "label": "test files executed against staging (1 database-smoke + 24 t1-proof)",
+        "count": 25
+      },
+      {
+        "label": "staging rows reset by the seed step (distribution_receipts 1 + distribution_outbox 12 + system_runs 9)",
+        "count": 22
+      },
+      {
+        "label": "production database connections opened by this job",
+        "count": 0
+      }
+    ],
+    "skipped": 0,
+    "binding": {
+      "pr": 1570,
+      "run_head_sha": "0946acb8eeb0f4d4f8d4ab70b18cfd34b84bba61",
+      "run_id": 35807801729,
+      "attempt": 1,
+      "db_proof_job_id": 107012398481,
+      "verify_job_id": 107014509057,
+      "workflow": "CI",
+      "conclusion": "success",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35807801729"
+    },
+    "known_non_blocking": "The `Audit production dependencies` step's own outcome is failure and the step is continue-on-error, so the run's CI truth summary prints `audit: failure` while the `verify` job concludes success. That is the pre-existing `pnpm audit --prod` advisory condition affecting every PR on main; it is not introduced by this lane, and it is recorded here rather than omitted."
+  }
+}
