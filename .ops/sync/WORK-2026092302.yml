@@ -1,0 +1,121 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092302
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092302
+  objective: "Release the runtime singleton that UTV2-1892's manifest still holds
+    after its PR #1570 merged, by landing the `ghost_merged` mutation that `pnpm
+    ops:reconcile --apply` itself computes: status `merged`, `commit_sha` bound
+    to merge SHA `2103f721bdf678f4a0e5214a8b09a125b0fef245`."
+  acceptance_criteria:
+    - "`docs/06_status/lanes/UTV2-1892.json` on main reads `status: merged` and
+      `commit_sha: 2103f721bdf678f4a0e5214a8b09a125b0fef245`."
+    - The mutation is byte-for-byte the output of `pnpm ops:reconcile --apply`
+      (UTV2-1613 ghost_merged rule), not a hand edit.
+    - UTV2-1892 is NOT marked done; its G6 truth-check failure stands.
+    - "`checkConcurrencyLimits` against main's manifests no longer reports a
+      runtime singleton holder."
+  guardrails:
+    - No change to truth-check, lane-close, reconcile logic, workflows or merge
+      authority.
+    - UTV2-1892 stays not-done; reaching done requires Griff's decision on G6.
+    - Nothing written directly to main.
+  non_goals:
+    - Fixing reconcile-stale-lanes.yml's missing GH_TOKEN (a separate T1
+      workflow change).
+    - Closing UTV2-1892.
+  required_evidence:
+    - "`docs/06_status/proof/WORK-2026092302/verification.md`"
+    - Dry-run and apply output of `pnpm ops:reconcile` showing the ghost_merged
+      classification.
+  exit_criteria:
+    - PR merged on green CI and the runtime singleton is released on main's live
+      lane state.
+  unmapped_sections:
+    - >-
+      WORK-2026092302 — Record UTV2-1892 as merged (ghost-lane reconcile)
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092302.md
+    title: WORK-2026092302 — Record UTV2-1892 as merged (ghost-lane reconcile)
+    description: >-
+      # WORK-2026092302 — Record UTV2-1892 as merged (ghost-lane reconcile)
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      - Release the runtime singleton that UTV2-1892's manifest still holds
+      after its PR #1570 merged, by landing the `ghost_merged` mutation that
+      `pnpm ops:reconcile --apply` itself computes: status `merged`,
+      `commit_sha` bound to merge SHA
+      `2103f721bdf678f4a0e5214a8b09a125b0fef245`.
+
+
+      ## Acceptance Criteria
+
+
+      - `docs/06_status/lanes/UTV2-1892.json` on main reads `status: merged` and
+      `commit_sha: 2103f721bdf678f4a0e5214a8b09a125b0fef245`.
+
+      - The mutation is byte-for-byte the output of `pnpm ops:reconcile --apply`
+      (UTV2-1613 ghost_merged rule), not a hand edit.
+
+      - UTV2-1892 is NOT marked done; its G6 truth-check failure stands.
+
+      - `checkConcurrencyLimits` against main's manifests no longer reports a
+      runtime singleton holder.
+
+
+      ## Guardrails
+
+
+      - No change to truth-check, lane-close, reconcile logic, workflows or
+      merge authority.
+
+      - UTV2-1892 stays not-done; reaching done requires Griff's decision on G6.
+
+      - Nothing written directly to main.
+
+
+      ## Non-goals
+
+
+      - Fixing reconcile-stale-lanes.yml's missing GH_TOKEN (a separate T1
+      workflow change).
+
+      - Closing UTV2-1892.
+
+
+      ## Required Evidence
+
+
+      - `docs/06_status/proof/WORK-2026092302/verification.md`
+
+      - Dry-run and apply output of `pnpm ops:reconcile` showing the
+      ghost_merged classification.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI and the runtime singleton is released on main's
+      live lane state.
+    captured_at: 2026-09-23T05:16:11.957Z
+    description_sha256: 490651825665a5ccfb6c0360648a48684125f7188954eb09aa68551d82a9625f
+  contract_hash: e2324c6a2477893f7bbe7f8e1091710a336dd96f09747ddb3767ba0ca7137e62
