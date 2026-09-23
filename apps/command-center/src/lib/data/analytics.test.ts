@@ -11,6 +11,7 @@ import {
   isTrackOnlyPick,
   pickProfitUnits,
   resolveCapperId,
+  selectEffectiveSettlementRows,
 } from './analytics.js';
 
 /**
@@ -271,4 +272,100 @@ test('contracts validation is stricter than the local converter, not looser', ()
   assert.equal(pickProfitUnits('win', 110.5, 1), null, 'non-integer price is refused');
   assert.equal(pickProfitUnits('win', 50, 1), null, 'price inside (-100, 100) is refused');
   assert.ok(Number.isFinite(localAmericanToDecimal(110.5)), 'the local converter would have priced it');
+});
+
+// ── 5. Settlement corrections ─────────────────────────────────
+
+/**
+ * A pick's result is the tip of its correction chain, never the root. Reading
+ * `corrects_id IS NULL` selects the root, so every corrected pick would report
+ * the result it was corrected away from -- and a superseded WIN reads exactly
+ * like a real one.
+ */
+function settlementRow(
+  id: string,
+  pickId: string,
+  result: string,
+  settledAt: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id, pick_id: pickId, result, status: 'settled', confidence: 'confirmed',
+    corrects_id: null, settled_at: settledAt, payload: {}, ...extra,
+  };
+}
+
+test('a corrected pick reports the correction, not the superseded original', () => {
+  const original = settlementRow('s1', 'p1', 'win', '2026-09-20T00:00:00Z', { payload: { clvPercent: 2 } });
+  const correction = settlementRow('s2', 'p1', 'loss', '2026-09-22T00:00:00Z', {
+    corrects_id: 's1', payload: { clvPercent: -1 },
+  });
+  const { rows, unresolvedPickCount } = selectEffectiveSettlementRows([original, correction]);
+  assert.equal(rows.length, 1, 'one pick yields exactly one row, never one per record');
+  assert.equal(rows[0]!['id'], 's2');
+  assert.equal(rows[0]!['result'], 'loss');
+  assert.deepEqual(rows[0]!['payload'], { clvPercent: -1 });
+  assert.equal(unresolvedPickCount, 0);
+});
+
+test('the effective record is the tip of a multi-step chain, whatever order the rows arrive in', () => {
+  const rows = [
+    settlementRow('s3', 'p1', 'win', '2026-09-23T00:00:00Z', { corrects_id: 's2' }),
+    settlementRow('s1', 'p1', 'win', '2026-09-20T00:00:00Z'),
+    settlementRow('s2', 'p1', 'loss', '2026-09-22T00:00:00Z', { corrects_id: 's1' }),
+  ];
+  const selected = selectEffectiveSettlementRows(rows);
+  assert.deepEqual(selected.rows.map((row) => row['id']), ['s3']);
+});
+
+test('a correction whose target is absent is excluded and counted, never read as a root', () => {
+  const orphan = settlementRow('s9', 'p1', 'win', '2026-09-22T00:00:00Z', { corrects_id: 'missing' });
+  const clean = settlementRow('s5', 'p2', 'loss', '2026-09-21T00:00:00Z');
+  const { rows, unresolvedPickCount } = selectEffectiveSettlementRows([orphan, clean]);
+  assert.deepEqual(rows.map((row) => row['pick_id']), ['p2']);
+  assert.equal(unresolvedPickCount, 1);
+});
+
+test('two roots for one pick are excluded and counted rather than picking one', () => {
+  const { rows, unresolvedPickCount } = selectEffectiveSettlementRows([
+    settlementRow('s1', 'p1', 'win', '2026-09-20T00:00:00Z'),
+    settlementRow('s2', 'p1', 'loss', '2026-09-21T00:00:00Z'),
+  ]);
+  assert.equal(rows.length, 0);
+  assert.equal(unresolvedPickCount, 1);
+});
+
+test('two corrections of the same record are excluded rather than one silently winning', () => {
+  const { rows, unresolvedPickCount } = selectEffectiveSettlementRows([
+    settlementRow('s1', 'p1', 'win', '2026-09-20T00:00:00Z'),
+    settlementRow('s2', 'p1', 'loss', '2026-09-21T00:00:00Z', { corrects_id: 's1' }),
+    settlementRow('s3', 'p1', 'push', '2026-09-22T00:00:00Z', { corrects_id: 's1' }),
+  ]);
+  assert.equal(rows.length, 0);
+  assert.equal(unresolvedPickCount, 1);
+});
+
+test('a chain whose tip is in manual review is not a settlement', () => {
+  const { rows, unresolvedPickCount } = selectEffectiveSettlementRows([
+    settlementRow('s1', 'p1', 'win', '2026-09-20T00:00:00Z'),
+    settlementRow('s2', 'p1', null as unknown as string, '2026-09-21T00:00:00Z', {
+      corrects_id: 's1', status: 'manual_review',
+    }),
+  ]);
+  assert.equal(rows.length, 0);
+  assert.equal(unresolvedPickCount, 0, 'a pending review is a known state, not a broken chain');
+});
+
+test('rows are ordered by the original settlement, so a late correction does not jump the form window', () => {
+  const { rows } = selectEffectiveSettlementRows([
+    settlementRow('a1', 'old', 'win', '2026-09-01T00:00:00Z'),
+    settlementRow('a2', 'old', 'loss', '2026-09-23T00:00:00Z', { corrects_id: 'a1' }),
+    settlementRow('b1', 'new', 'win', '2026-09-20T00:00:00Z'),
+  ]);
+  assert.deepEqual(rows.map((row) => row['pick_id']), ['new', 'old']);
+});
+
+test('getIntelligenceData does not select settlement roots with corrects_id IS NULL', () => {
+  const source = readFileSync(join(SRC, 'lib', 'data', 'analytics.ts'), 'utf8');
+  assert.equal(/\.is\(\s*'corrects_id'\s*,\s*null\s*\)/.test(source), false);
 });
