@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1902-score-gate-smart-form-best-bets",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1630",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/controllers/override-promotion-controller.ts",
@@ -25,9 +25,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1902/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-23T05:43:57.163Z",
-  "heartbeat_at": "2026-09-23T05:43:57.163Z",
+  "heartbeat_at": "2026-09-23T05:52:42.683Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1902-score-gate-smart-form-best-bets.json",
