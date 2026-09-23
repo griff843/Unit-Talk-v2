@@ -1,6 +1,6 @@
 # PROOF: UTV2-1902
 
-MERGE_SHA: pending merge
+MERGE_SHA: 40557d9183e700bc2fce78ecf84d848016ce0fce
 
 > Pre-merge, the merge row intentionally holds the placeholder value. The Execution SHA row below
 > carries the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -331,5 +331,5 @@ Nothing in this bundle self-certifies Done.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `40557d9183e700bc2fce78ecf84d848016ce0fce`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1630
