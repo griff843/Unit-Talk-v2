@@ -4,14 +4,14 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "in_review",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "40557d9183e700bc2fce78ecf84d848016ce0fce",
     "verified_source_sha": "1410cd437717eb128417818d07fe0a62a14a7d80",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-23T15:40:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-23T19:26:34.063Z",
     "ci_sentinels": {
       "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. The authoritative result is the set of required contexts on PR #1630. post-merge-lane-close.yml rebinds merge_sha.",
       "local_type_check": {

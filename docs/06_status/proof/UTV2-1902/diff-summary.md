@@ -1,6 +1,6 @@
 # PROOF: UTV2-1902 Diff Summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: 40557d9183e700bc2fce78ecf84d848016ce0fce
 
 Generated at: 2026-09-23T06:00:00.000Z
 Issue: UTV2-1902
@@ -69,5 +69,5 @@ source-only path were changed to fixtures that honestly meet the threshold.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `40557d9183e700bc2fce78ecf84d848016ce0fce`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1630
