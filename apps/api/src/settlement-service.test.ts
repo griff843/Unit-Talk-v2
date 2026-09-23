@@ -1230,7 +1230,11 @@ test('UTV2-1919: a duplicate-key race is refused, never reported as a successful
   const settlements = repositories.settlements;
   const realRecord = settlements.record.bind(settlements);
   const realFindLatest = settlements.findLatestForPick.bind(settlements);
-  settlements.findLatestForPick = async () => null;
+  // Only the pre-insert read misses. Every later read sees the other writer's
+  // row, exactly as it would in the real race — so a handler that answers the
+  // 23505 by re-reading and returning that row is caught, not masked.
+  let reads = 0;
+  settlements.findLatestForPick = async (id: string) => (reads++ === 0 ? null : realFindLatest(id));
   settlements.record = async () => {
     const err: Error & { code?: string } = new Error(
       'duplicate key value violates unique constraint "settlement_records_pick_source_idx"',
