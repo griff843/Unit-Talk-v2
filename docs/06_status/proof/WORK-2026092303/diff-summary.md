@@ -5,7 +5,7 @@ Issue: WORK-2026092303
 Tier: T2
 Lane type: governance
 Branch: claude/work-2026092303-warehouse-row-security-guard
-PR URL: N/A
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1631
 Head SHA: 9fb40cd5661c17f3f575445eed3c4a49083bdcd6
 Merge SHA: N/A
 Diff base: f041b9261a660fd8e91134000f50676374703a11

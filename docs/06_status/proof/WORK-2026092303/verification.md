@@ -120,5 +120,5 @@ recorded above. No live-DB write proof is claimed.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1631
 Execution SHA: 9fb40cd5661c17f3f575445eed3c4a49083bdcd6

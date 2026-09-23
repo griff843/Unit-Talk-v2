@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092303-warehouse-row-security-guard",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1631",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/FIRST_ARCHIVE_CANDIDATE_PACKET.md",
@@ -24,9 +24,9 @@
     "docs/06_status/proof/WORK-2026092303/diff-summary.md",
     "docs/06_status/proof/WORK-2026092303/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-23T08:38:47.429Z",
-  "heartbeat_at": "2026-09-23T08:38:47.429Z",
+  "heartbeat_at": "2026-09-23T08:42:23.958559241Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026092303-warehouse-row-security-guard.json",
