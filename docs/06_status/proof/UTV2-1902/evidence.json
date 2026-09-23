@@ -7,11 +7,11 @@
   "status": "in_review",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "2dc79802be461f8a0420cdce945bc4326e753d23",
+    "verified_source_sha": "6c53071c411ba5365c0ae014e6a793081091a29f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-23T06:00:00.000Z",
+    "bound_at": "2026-09-23T12:45:00.000Z",
     "ci_sentinels": {
       "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. The authoritative result is the set of required contexts on PR #1630. post-merge-lane-close.yml rebinds merge_sha.",
       "local_type_check": {
@@ -26,7 +26,7 @@
       "local_full_suite": {
         "command": "pnpm test",
         "exit_code": 0,
-        "ok_lines": 6082,
+        "ok_lines": 6949,
         "not_ok_lines": 0,
         "suite_blocks": 105,
         "suite_blocks_with_failures": 0
@@ -36,7 +36,7 @@
   "static_proof": {
     "status": "pass",
     "measured_at": "2026-09-23T05:45:00Z",
-    "measured_against_sha": "2dc79802be461f8a0420cdce945bc4326e753d23",
+    "measured_against_sha": "6c53071c411ba5365c0ae014e6a793081091a29f",
     "commands": [
       {
         "command": "pnpm type-check",
