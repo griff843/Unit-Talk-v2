@@ -8,9 +8,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1902-score-gate-smart-form-best-bets
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1630
-Head SHA: 2dc79802be461f8a0420cdce945bc4326e753d23
-Execution SHA: 2dc79802be461f8a0420cdce945bc4326e753d23
-Diff base: 966d9a31b851a67f65864002b8ef5109b2003bfe
+Head SHA: 6c53071c411ba5365c0ae014e6a793081091a29f
+Execution SHA: 6c53071c411ba5365c0ae014e6a793081091a29f
+Diff base: 4ab51ce8638062651fd3c8c572b260f5875dc6c0
 result: pass
 
 ## Git Diff Stat

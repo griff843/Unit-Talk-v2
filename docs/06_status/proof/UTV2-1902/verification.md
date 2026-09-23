@@ -12,9 +12,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1902-score-gate-smart-form-best-bets
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1630
-Head SHA: 2dc79802be461f8a0420cdce945bc4326e753d23
-Execution SHA: 2dc79802be461f8a0420cdce945bc4326e753d23
-Diff base: 966d9a31b851a67f65864002b8ef5109b2003bfe
+Head SHA: 6c53071c411ba5365c0ae014e6a793081091a29f
+Execution SHA: 6c53071c411ba5365c0ae014e6a793081091a29f
+Diff base: 4ab51ce8638062651fd3c8c572b260f5875dc6c0
 result: pass
 
 > PM rule, ratified under UTV2-1900: intake source never confers promotion. Smart Form picks are
@@ -70,7 +70,9 @@ Each box names a test that asserts it and a mutation that makes that test fail.
 
 ## MUTATION CONTROLS:
 
-Every mutation was applied at head `2dc79802b` and reverted with `git checkout`. The baseline was
+Every mutation was applied at `2dc79802b`, the pre-resync implementation commit, and reverted with
+`git checkout`. After the resync onto `4ab51ce86`, `git diff` of the implementation commit is
+byte-identical (`6c53071c4`), and the focused suites re-ran 237/237 there. The baseline was
 re-run clean after each.
 
 | Mutation applied | Expected | Observed |
@@ -118,8 +120,68 @@ Nothing in this lane deployed, wrote to production, or changed containment.
 `pnpm test:db` cannot run from a developer checkout: `ci:assert-staging` refuses anything that is
 not the staging project. The authoritative run is the CI `staging-db-proof` job on PR #1630. Its
 run-scoped `ci-db-proof-receipt` is verified inside the required `verify` context by
-`scripts/ci/verify-db-proof-receipt.ts`. Text in this file cannot show which database a run
-targeted, so no TAP block is transcribed here.
+`scripts/ci/verify-db-proof-receipt.ts`.
+
+### The rule itself, persisted in a real database (staging)
+
+The CI DB proof exercises the database generally, not this rule. To show the rule in persisted
+rows, three live tests were run through the real `processSubmission` path against the staging
+project (`xskgrzbteyqdufktjrjx`), writing real `picks`, `pick_promotion_history` and
+`distribution_outbox` rows. They were run with the `staging-db-proof.yml` workflow
+(`workflow_dispatch`, `pnpm ci:db-smoke`) on scratch branches that are **not part of this PR**.
+`database-smoke.test.ts` lies outside this lane's `file_scope_lock`, which cannot be widened, so
+the tests live only on those branches:
+
+- `proof-probe/utv2-1902-staging`: the implementation, plus the three tests.
+- `proof-probe/utv2-1902-staging-mutant`: the same, plus a restored source-only
+  `forcePromote` for `source === 'smart-form'`.
+
+| Run | Head | Result |
+|---|---|---|
+| `35834648486` | `c446c2553` (implementation + tests) | DB smoke **10/10 pass**, including all three tests |
+| `35834268087` | `ddb7766c0` (mutant) | **8 pass / 2 fail**. The below-threshold pick (score 31.27) persisted `qualified` on every board target |
+| `35834265418` | `0de7fdb60` (first cut of the tests) | 9/10. The qualifying test asserted `qualified` and failed because staging's shared slate cap was already saturated by accumulated fixtures. The test was corrected to the claim it is meant to make, as below |
+
+What the persisted rows show, from run `35834648486`:
+
+- **Below threshold.** Pick `991281af…`, score 31.91: `promotion_target = null`. Every history
+  row has `override_action = null`, and none says "route directly to best-bets". It wrote 0 outbox
+  rows.
+- **Qualifying scores.** Pick `3ff48173…`, score 72.5: the best-bets row has no override, no
+  source routing and no "below threshold" reason. The only refusal is `board cap for the slate
+  has been reached`, because staging's shared board is full. So this run proves the pick **clears
+  the score gate** and is refused only by a genuine policy rule. It does **not** show a persisted
+  `qualified` row; that outcome is covered by the in-memory test
+  `UTV2-1902: a Smart Form pick that meets the threshold qualifies by score`.
+- **Human capper delivery.** Pick `889d45fe…`, score 77.22: `promotion_target = null`, and every
+  history row carries `human capper delivery pick: board promotion not applicable`. It wrote 0
+  outbox rows.
+
+```
+$ gh run view 35834648486 --log   (UTV2-1902 lines)
+ok 8 - UTV2-1902 live-DB: a below-threshold Smart Form pick persists with no board target and no force_promote
+ok 9 - UTV2-1902 live-DB: a qualifying Smart Form pick persists as qualified for best-bets by score
+ok 10 - UTV2-1902 live-DB: a human capper delivery pick that meets a board threshold persists with no board target
+# tests 10
+# pass 10
+# fail 0
+
+$ gh run view 35834268087 --log   (mutant)
+# pass 8
+# fail 2
+```
+
+These writes went to staging only. Nothing was written to production.
+
+**The same workflow's later browser step fails, and not because of this diff.** After the DB
+smoke passes, `staging-db-proof.yml` runs the Command Center staging operator browser proof. It
+failed in run `35834648486` at `getByText('Correction recorded.')`, where the settlement-correction
+submit returned `API error 400`. The page loaded and the first settlement completed. The PR's
+required CI does not run this browser step, so it is disclosed here rather than left for a
+reviewer to find. As a baseline, the same workflow was dispatched on `main` at `4ab51ce86`, which
+does not contain this diff: run `35859871797` **fails identically**, at the same locator. This PR
+touches no settlement or correction code. The defect predates this lane, is recorded here and is
+not repaired here.
 
 ## Verification
 
@@ -129,22 +191,22 @@ EVIDENCE:
 |---|---|---|
 | `pnpm type-check` | 0 | pass: no diagnostics |
 | `pnpm lint` | 0 | pass: no output |
-| `pnpm test` | 0 | pass: **6,082 `ok` lines, 0 `not ok`**, 105 suite blocks each `# fail 0` |
+| `pnpm test` | 0 | pass: **6,949 `ok` lines, 0 `not ok`**, 105 suite blocks each `# fail 0` |
 | `pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts` | 0 | 237 pass / 0 fail |
 | `pnpm exec tsx --test apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 7 pass / 0 fail |
-| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | 0 | `Verdict: PASS`, 13 changed files, rules matched `promotion-scoring`, `operator-ui` |
+| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | 0 | `Verdict: PASS`, 16 changed files (the 10 implementation files, the lane manifest and sync file, and the proof bundle), rules matched `promotion-scoring`, `operator-ui` |
 | `pnpm verify` | n/a locally | refuses at `ci:assert-staging` from a developer checkout (deliberate staging isolation). The required `verify` context on PR #1630 **passed** at head `9ed2aaae8c59cffa9bf99c3730b1076f8debd8ca`, including its run-scoped DB-proof receipt check |
 | `pnpm test:db` | n/a locally | CI `staging-db-proof` job on PR #1630, receipt verified inside `verify` |
 
 ```
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 13
+Changed files: 16
 Rules matched: promotion-scoring, operator-ui
 
 $ pnpm test   (tallied from the TAP output)
 exit=0
-ok lines: 6082   not ok lines: 0   suite blocks: 105   blocks with # fail != 0: 0
+ok lines: 6949   not ok lines: 0   suite blocks: 105   blocks with # fail != 0: 0
 
 $ pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
 # pass 237
@@ -181,7 +243,7 @@ claims an R2 or R3 artifact was produced.
 
 Verifier Identity: Claude Opus 5.5 (1M context), acting as execution orchestrator
 Date: 2026-09-23
-Commit SHA(s): 2dc79802be461f8a0420cdce945bc4326e753d23
+Commit SHA(s): 6c53071c411ba5365c0ae014e6a793081091a29f
 Related PRs: https://github.com/griff843/Unit-Talk-v2/pull/1630
 
 Nothing in this bundle self-certifies Done.
