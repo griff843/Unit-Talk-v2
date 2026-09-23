@@ -143,6 +143,33 @@ Smart Form POST → apps/api POST /api/submissions
 
 The only change at the API layer is that `picks.metadata.promotionScores.trust` is now populated for Smart Form submissions. The promotion service reads it as a first-priority trust signal without any code change.
 
+### 7a. Intake source never confers promotion (UTV2-1902, PM-ratified under UTV2-1900)
+
+Board promotion (`best-bets`, `trader-insights`, `exclusive-insights`) is a **scored curation
+surface**. It is earned against the canonical `PromotionPolicy` — including the active
+`best-bets-v2` minimum score — and is never conferred by where a pick came from.
+
+- `source = 'smart-form'` (or any operator intake) does **not** qualify a pick for any board
+  target. There is no automatic, source-derived `force_promote`. A below-threshold Smart Form pick
+  is persisted as below threshold; an otherwise equivalent pick that meets the threshold qualifies
+  normally.
+- The Smart Form accommodations that remain are exactly two, both in the ordinary scoring path:
+  the confidence floor does not apply (capper confidence is analytical metadata), and the
+  same-game exposure gate does not apply. Neither makes a pick qualified.
+- A **human capper delivery pick** (`isHumanCapperDeliveryAuthorized`) reaches `official-picks`
+  through its delivery authorization, which is a `humanDeliveryTarget`, disjoint from
+  `promotionTargets` (`packages/contracts/src/promotion.ts`). It is still scored for information,
+  but no score authorizes a board target for it: its decision is persisted as a suppression with an
+  explicit reason. Official-pick entitlement is neither widened nor narrowed by this rule.
+- An explicit, audited operator override remains available, and promotion history records
+  whether a real override occurred. For a human capper delivery pick, `force_promote` is refused
+  (`409 HUMAN_CAPPER_DELIVERY_PICK`) because it would write a board target no scoring decision
+  placed there; `suppress` remains allowed, since it grants nothing.
+- Track Only is unchanged: zero member-facing delivery artifacts.
+
+Earlier text in this contract that describes Smart Form picks as routed or enqueued by promotion
+qualification predates this rule; where the two read differently, this section governs.
+
 ---
 
 ## 8. What Is Visible in UI vs Hidden System Metadata

@@ -10,8 +10,11 @@ import {
   evaluateAndPersistBestBetsPromotion,
   evaluateAllPoliciesEagerAndPersist,
   enrichPickAtPromotionTime,
+  HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE,
 } from './promotion-service.js';
 import { processSubmission } from './submission-service.js';
+import { overridePromotionController } from './controllers/override-promotion-controller.js';
+import { humanCapperDeliveryAuthorizationVersion } from '@unit-talk/contracts';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
 import {
@@ -640,40 +643,46 @@ test('promotion snapshot records edgeSource=explicit when promotionScores.edge i
 // ── Smart Form capper attribution and confidence floor bypass ─────────────────
 
 test('smart-form pick with low confidence is never blocked by confidence floor', async () => {
-  const repositories = createInMemoryRepositoryBundle();
-  // capperConviction=3 → confidence=0.3, well below the policy floor of 0.6
-  // With all explicit scores passing thresholds, a non-smart-form pick would be blocked.
-  // smart-form picks must bypass the confidence floor gate.
-  const result = await processSubmission(
-    {
-      source: 'smart-form',
-      submittedBy: 'griff843',
-      market: 'NBA - Player Prop',
-      selection: 'Jalen Brunson Points O 28.5',
-      odds: -110,
-      confidence: 0.3, // below confidenceFloor of 0.6
-      metadata: {
-        sport: 'NBA',
-        eventName: 'Knicks vs Celtics',
-        capper: 'griff843',
-        capperConviction: 3,
-        promotionScores: {
-          edge: 75,
-          trust: 75,
-          readiness: 80,
-          uniqueness: 75,
-          boardFit: 80,
+  // confidence=0.3 is well below the best-bets floor of 0.6. The same pick,
+  // scored above threshold, qualifies from Smart Form and is floor-blocked from
+  // a source the floor applies to -- so the bypass is proven, not assumed.
+  // UTV2-1902: this test previously used a fixture that honestly scores ~59 and
+  // passed only because every smart-form pick was force-promoted by source.
+  const submitFrom = async (source: 'smart-form' | 'api') => {
+    const repositories = createInMemoryRepositoryBundle();
+    return processSubmission(
+      {
+        source,
+        submittedBy: 'griff843',
+        market: 'MLB - Moneyline',
+        selection: `Confidence floor ${source}`,
+        odds: -120,
+        confidence: 0.3,
+        metadata: {
+          sport: 'MLB',
+          eventName: `Confidence floor ${source} at Opponent`,
+          capper: 'griff843',
+          promotionScores: {
+            edge: 75,
+            trust: 75,
+            readiness: 80,
+            uniqueness: 75,
+            boardFit: 80,
+          },
         },
       },
-    },
-    repositories,
-  );
+      repositories,
+    );
+  };
 
-  // Smart Form bypasses the confidence floor — pick should qualify for best-bets.
-  assert.equal(result.pick.source, 'smart-form');
-  assert.equal(result.submission.payload.submittedBy, 'griff843');
-  assert.equal(result.submissionRecord.submitted_by, 'griff843');
-  assert.equal(result.pick.promotionStatus, 'qualified', 'smart-form capper pick must not be blocked by low confidence');
+  const smartForm = await submitFrom('smart-form');
+  assert.equal(smartForm.pick.source, 'smart-form');
+  assert.equal(smartForm.submission.payload.submittedBy, 'griff843');
+  assert.equal(smartForm.submissionRecord.submitted_by, 'griff843');
+  assert.equal(smartForm.pick.promotionStatus, 'qualified', 'smart-form capper pick must not be blocked by low confidence');
+
+  const floored = await submitFrom('api');
+  assert.notEqual(floored.pick.promotionStatus, 'qualified', 'the floor must still apply to other sources');
 });
 
 test('alert-agent pick with baseline confidence is not floor-clamped', async () => {
@@ -2080,4 +2089,158 @@ test('UTV2-1907: a pick whose capper FK did not resolve gets no CLV adjustment',
     `an unresolved capper FK must fail closed to no adjustment ` +
       `(attributed ${baseline}, unresolved ${unresolved})`,
   );
+});
+
+// ── UTV2-1902: Smart Form is score-gated, not source-promoted ────────────────
+
+const UTV2_1902_BELOW_THRESHOLD_SCORES = {
+  edge: 30,
+  trust: 35,
+  readiness: 40,
+  uniqueness: 30,
+  boardFit: 35,
+};
+
+async function submitSmartForm1902(
+  label: string,
+  extraMetadata: Record<string, unknown>,
+  promotionScores: Record<string, number>,
+) {
+  const repositories = createInMemoryRepositoryBundle();
+  const since = new Date(Date.now() - 60_000).toISOString();
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'MLB - Moneyline',
+      selection: `UTV2-1902 ${label}`,
+      odds: -120,
+      confidence: 0.4,
+      metadata: {
+        sport: 'MLB',
+        eventName: `UTV2-1902 ${label} at Opponent`,
+        capper: 'griff843',
+        promotionScores,
+        ...extraMetadata,
+      },
+    },
+    repositories,
+  );
+  const promotionAudit = await repositories.audit.listRecentByEntityType('pick_promotion_history', since);
+  return { repositories, result, promotionAudit };
+}
+
+test('UTV2-1902: a below-threshold Smart Form pick stays below threshold, with no board target', async () => {
+  const { result, promotionAudit } = await submitSmartForm1902('below', {}, UTV2_1902_BELOW_THRESHOLD_SCORES);
+
+  assert.notEqual(result.pick.promotionStatus, 'qualified', 'source alone must never qualify a pick');
+  assert.equal(result.pick.promotionTarget ?? null, null, 'no board target without score qualification');
+  assert.ok(promotionAudit.length > 0, 'the promotion decision is still audited');
+  for (const row of promotionAudit) {
+    assert.notEqual(row.action, 'promotion.force_promote', 'no source-only force promotion');
+    assert.doesNotMatch(JSON.stringify(row.payload), /route directly to best-bets/);
+  }
+});
+
+test('UTV2-1902: a below-threshold Track Only pick carries no board target either', async () => {
+  const { result } = await submitSmartForm1902(
+    'track-only',
+    { distributionMode: 'track-only' },
+    UTV2_1902_BELOW_THRESHOLD_SCORES,
+  );
+  assert.notEqual(result.pick.promotionStatus, 'qualified');
+  assert.equal(result.pick.promotionTarget ?? null, null);
+});
+
+test('UTV2-1902: a Smart Form pick that meets the threshold qualifies by score', async () => {
+  const { result, promotionAudit } = await submitSmartForm1902('qualifying', {}, {
+    edge: 75,
+    trust: 75,
+    readiness: 80,
+    uniqueness: 75,
+    boardFit: 80,
+  });
+  assert.equal(result.pick.promotionStatus, 'qualified');
+  assert.equal(result.pick.promotionTarget, 'best-bets');
+  assert.ok(promotionAudit.some((row) => row.action === 'promotion.qualified'));
+  assert.ok(promotionAudit.every((row) => row.action !== 'promotion.force_promote'));
+});
+
+test('UTV2-1902: board force_promote is refused for a human capper delivery pick', async () => {
+  const { repositories, result } = await submitSmartForm1902(
+    'human-capper',
+    {
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: {
+        version: humanCapperDeliveryAuthorizationVersion,
+        decision: 'authorized',
+        authority: 'server-allowlist',
+        capperId: 'griff843',
+        decidedAt: new Date().toISOString(),
+      },
+    },
+    UTV2_1902_BELOW_THRESHOLD_SCORES,
+  );
+  const before = await repositories.picks.findPickById(result.pick.id);
+
+  const refused = await overridePromotionController(
+    result.pick.id,
+    { action: 'force_promote', target: 'best-bets', reason: 'operator test', actor: 'operator:test' },
+    repositories,
+  );
+  assert.equal(refused.status, 409);
+  const after = await repositories.picks.findPickById(result.pick.id);
+  assert.equal(after?.promotion_target ?? null, before?.promotion_target ?? null);
+  assert.equal(after?.promotion_status, before?.promotion_status);
+
+  // Suppress grants nothing and stays available.
+  const suppressed = await overridePromotionController(
+    result.pick.id,
+    { action: 'suppress', reason: 'operator test', actor: 'operator:test' },
+    repositories,
+  );
+  assert.equal(suppressed.status, 200);
+});
+
+test('UTV2-1902: a human capper delivery pick that meets a board threshold still gets no board target', async () => {
+  const { repositories, result, promotionAudit } = await submitSmartForm1902(
+    'human-capper-qualifying',
+    {
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: {
+        version: humanCapperDeliveryAuthorizationVersion,
+        decision: 'authorized',
+        authority: 'server-allowlist',
+        capperId: 'griff843',
+        decidedAt: new Date().toISOString(),
+      },
+    },
+    { edge: 80, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
+  );
+
+  assert.notEqual(result.pick.promotionStatus, 'qualified', 'a score never authorizes board promotion here');
+  assert.equal(result.pick.promotionTarget ?? null, null);
+  const persisted = await repositories.picks.findPickById(result.pick.id);
+  assert.equal(persisted?.promotion_target ?? null, null);
+  assert.match(persisted?.promotion_reason ?? '', /board promotion not applicable/);
+  assert.ok(
+    (persisted?.promotion_reason ?? '').includes(HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE),
+    'the persisted reason names why no board target exists',
+  );
+  // Scoring is retained as information.
+  assert.ok((persisted?.promotion_score ?? 0) >= 70, `score retained: ${persisted?.promotion_score}`);
+  assert.ok(promotionAudit.every((row) => row.action !== 'promotion.qualified'));
+  assert.ok(promotionAudit.every((row) => row.action !== 'promotion.force_promote'));
+});
+
+test('UTV2-1902: the same qualifying scores without a delivery authorization do qualify', async () => {
+  // Control for the test above: the suppression is caused by the authorization,
+  // not by the scores.
+  const { result } = await submitSmartForm1902(
+    'unauthorized-qualifying',
+    {},
+    { edge: 80, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
+  );
+  assert.equal(result.pick.promotionStatus, 'qualified');
+  assert.equal(result.pick.promotionTarget, 'best-bets');
 });
