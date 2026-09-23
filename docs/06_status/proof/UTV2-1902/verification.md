@@ -12,9 +12,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1902-score-gate-smart-form-best-bets
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1630
-Head SHA: f712015e1de23685c7be49ef30df0681a2835a05
-Execution SHA: f712015e1de23685c7be49ef30df0681a2835a05
-Diff base: 4fe09e4d5500373baeb070a53b56186ad5533064
+Head SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
+Execution SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
+Diff base: 64e9e981c2879bda4e9003c3dc3e3ce9406ea209
 result: pass
 
 > PM rule, ratified under UTV2-1900: intake source never confers promotion. Smart Form picks are
@@ -61,7 +61,7 @@ Each box names a test that asserts it and a mutation that makes that test fail.
 Codex review finding P1 on PR #1630 (`discussion_r4079469671`): `makeSnapshot()` persisted the
 policy's configured confidence floor and no override, while the evaluation had used the waived
 floor and, for a human capper delivery pick, a board suppression. Reproduced on the unfixed
-code at `8786facdf`, then fixed in `f712015e1`. Both the evaluation input and every snapshot now
+code at `8786facdf`, then fixed in `d20b5af93`. Both the evaluation input and every snapshot now
 take the floor from `effectiveConfidenceFloor()`, and the multi-policy snapshot records the
 override the decision was evaluated with (`boardOverride`).
 
@@ -94,8 +94,8 @@ The tests read the real rows the eager submission path persisted, parse each pay
 ## MUTATION CONTROLS:
 
 Every mutation was applied at `2dc79802b`, the pre-resync implementation commit, and reverted with
-`git checkout`. After the resync onto `4fe09e4d5`, `git diff` of the implementation commit is
-byte-identical (`370d9a43b`), and the focused suites re-run 240/240 at the final head, which adds the replay tests. The baseline was
+`git checkout`. After the resync onto `64e9e981c`, `git diff` of the implementation commit is
+byte-identical (`992a896a8`), and the focused suites re-run 240/240 at the final head, which adds the replay tests. The baseline was
 re-run clean after each.
 
 | Mutation applied | Expected | Observed |
@@ -107,7 +107,7 @@ re-run clean after each.
 | Delete the `explicit === false` branch of `readRealEdgePresence` | the explicit-false control fails | `not ok 4 - UTV2-1902: explicit hasRealEdge:false wins over a numeric realEdge`. 6 pass / 1 fail |
 | None (baseline) | all pass | API focused suites 237/237; Command Center 7/7 |
 
-**Replay-parity mutations**, applied at `5c83a6f9c` (byte-identical to `f712015e1` after the resync) and reverted:
+**Replay-parity mutations**, applied at `5c83a6f9c` (byte-identical to `d20b5af93` after the resync) and reverted:
 
 | Mutation applied | Expected | Observed |
 |---|---|---|
@@ -116,6 +116,9 @@ re-run clean after each.
 | The snapshot floor alone reverted to `policy.confidenceFloor` | the floor control fails | `not ok 96`. 97 pass / 1 fail |
 | The override alone dropped from the multi-policy snapshot | the override control fails | `not ok 97`. 97 pass / 1 fail |
 | None (baseline) | all pass | `promotion-edge-integration.test.ts` 98/98 |
+
+Re-run at the final head after the resync onto `64e9e981c`: with `promotion-service.ts` reverted to
+the unfixed version, `not ok 96` and `not ok 97` (96 pass / 2 fail). Restored, 98/98.
 
 ## RUNTIME EVIDENCE:
 
@@ -206,7 +209,7 @@ $ gh run view 35834268087 --log   (mutant)
 
 These writes went to staging only. Nothing was written to production.
 
-These staging runs predate the replay fix (`f712015e1`). That fix changes only what the history
+These staging runs predate the replay fix (`d20b5af93`). That fix changes only what the history
 payload records, not the decision, so the persisted status, target and reason in each row are
 unchanged by it. The replay parity itself is proven by the in-process tests above.
 
@@ -215,7 +218,7 @@ smoke passes, `staging-db-proof.yml` runs the Command Center staging operator br
 failed in run `35834648486` at `getByText('Correction recorded.')`, where the settlement-correction
 submit returned `API error 400`. The page loaded and the first settlement completed. The PR's
 required CI does not run this browser step, so it is disclosed here rather than left for a
-reviewer to find. As a baseline, the same workflow was dispatched on `main` at `4fe09e4d5`, which
+reviewer to find. As a baseline, the same workflow was dispatched on `main` at `64e9e981c`, which
 does not contain this diff: run `35859871797` **fails identically**, at the same locator. This PR
 touches no settlement or correction code. The defect predates this lane, is recorded here and is
 not repaired here.
@@ -228,7 +231,7 @@ EVIDENCE:
 |---|---|---|
 | `pnpm type-check` | 0 | pass: no diagnostics |
 | `pnpm lint` | 0 | pass: no output |
-| `pnpm test` | 0 | pass: **6,956 `ok` lines, 0 `not ok`**, 105 suite blocks each `# fail 0` |
+| `pnpm test` | 0 | pass: **6,964 `ok` lines, 0 `not ok`**, 105 suite blocks each `# fail 0` |
 | `pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts` | 0 | 240 pass / 0 fail |
 | `pnpm exec tsx --test apps/api/src/replayable-scoring.test.ts apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 13 pass / 0 fail |
 | `pnpm exec tsx --test apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 7 pass / 0 fail |
@@ -244,7 +247,7 @@ Rules matched: promotion-scoring, operator-ui
 
 $ pnpm test   (tallied from the TAP output)
 exit=0
-ok lines: 6956   not ok lines: 0   suite blocks: 105   blocks with # fail != 0: 0
+ok lines: 6964   not ok lines: 0   suite blocks: 105   blocks with # fail != 0: 0
 
 $ pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
 # pass 240
@@ -281,7 +284,7 @@ claims an R2 or R3 artifact was produced.
 
 Verifier Identity: Claude Opus 5.5 (1M context), acting as execution orchestrator
 Date: 2026-09-23
-Commit SHA(s): f712015e1de23685c7be49ef30df0681a2835a05
+Commit SHA(s): d20b5af93b5c99310ba73278ebd97c9380afc23c
 Related PRs: https://github.com/griff843/Unit-Talk-v2/pull/1630
 
 Nothing in this bundle self-certifies Done.
