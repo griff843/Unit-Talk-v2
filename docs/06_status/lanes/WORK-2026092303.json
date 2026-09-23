@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092303-warehouse-row-security-guard",
   "branch": "claude/work-2026092303-warehouse-row-security-guard",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "23ab0cd979c89a8f4eb0dc05f8aa41a8fce02bfe",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1631",
   "files_changed": [],
   "file_scope_lock": [
@@ -24,14 +24,22 @@
     "docs/06_status/proof/WORK-2026092303/diff-summary.md",
     "docs/06_status/proof/WORK-2026092303/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-23T08:38:47.429Z",
-  "heartbeat_at": "2026-09-23T08:42:23.958559241Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-23T09:28:29.208Z",
+  "closed_at": "2026-09-23T09:28:29.208Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092303-warehouse-row-security-guard.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-23T09:28:27.157Z",
+      "verdict": "pass",
+      "merge_sha": "23ab0cd979c89a8f4eb0dc05f8aa41a8fce02bfe",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

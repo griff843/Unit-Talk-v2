@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092303-warehouse-row-security-guard
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1631
 Head SHA: 9fb40cd5661c17f3f575445eed3c4a49083bdcd6
-Merge SHA: N/A
+Merge SHA: 23ab0cd979c89a8f4eb0dc05f8aa41a8fce02bfe
 Diff base: f041b9261a660fd8e91134000f50676374703a11
 Diff target: 9fb40cd5661c17f3f575445eed3c4a49083bdcd6
 
@@ -47,4 +47,4 @@ M	scripts/warehouse/export-partition.ts
 
 ## SHA Binding
 Head SHA: 9fb40cd5661c17f3f575445eed3c4a49083bdcd6
-Merge SHA: N/A
+Merge SHA: 23ab0cd979c89a8f4eb0dc05f8aa41a8fce02bfe

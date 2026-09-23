@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092303
 
-MERGE_SHA: b9b6a00f7fa94377384cf765955278ed36b58b66
+MERGE_SHA: 23ab0cd979c89a8f4eb0dc05f8aa41a8fce02bfe
 
 Generated at: 2026-09-23T09:30:00.000Z
 Issue: WORK-2026092303
@@ -119,6 +119,6 @@ recorded above. No live-DB write proof is claimed.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 23ab0cd979c89a8f4eb0dc05f8aa41a8fce02bfe
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1631
 Execution SHA: 9fb40cd5661c17f3f575445eed3c4a49083bdcd6
