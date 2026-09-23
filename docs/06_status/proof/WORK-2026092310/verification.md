@@ -12,8 +12,8 @@ Tier: T3
 Lane type: governance
 Branch: claude/work-2026092310-plan-reconcile
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1638
-Head SHA: 41116f137588dfd29b46cee80a9cf5b66db084f8
-Execution SHA: 41116f137588dfd29b46cee80a9cf5b66db084f8
+Head SHA: 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2
+Execution SHA: 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2
 Diff base: df071f24b11d9988f830a6ee56bec6b2c03a31db
 result: pass
 
@@ -43,9 +43,9 @@ reading the diff or re-running the measurement it cites.
 ## EVIDENCE:
 
 ```
-$ git diff --name-only df071f24b11d9988f830a6ee56bec6b2c03a31db 41116f137588dfd29b46cee80a9cf5b66db084f8 | grep -cv -E '^(docs/|\.ops/)'
+$ git diff --name-only df071f24b11d9988f830a6ee56bec6b2c03a31db 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2 | grep -cv -E '^(docs/|\.ops/)'
 0
-$ git diff --name-only df071f24b11d9988f830a6ee56bec6b2c03a31db 41116f137588dfd29b46cee80a9cf5b66db084f8 | grep -c docs/mission/intent.md
+$ git diff --name-only df071f24b11d9988f830a6ee56bec6b2c03a31db 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2 | grep -c docs/mission/intent.md
 0
 $ pnpm verify:quick
 exit 0 (sync-check, env, lint, type-check)
@@ -56,7 +56,7 @@ diff changes no executable file. CI `verify` on the PR head is the binding execu
 
 ## Verification
 
-- `pnpm verify:quick` exit 0 on 41116f137588dfd29b46cee80a9cf5b66db084f8
+- `pnpm verify:quick` exit 0 on 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2
 - `ops:preflight WORK-2026092310` VERDICT PASS (38 checks)
 - CI `verify` on the PR head
 
@@ -65,4 +65,4 @@ diff changes no executable file. CI `verify` on the PR head is the binding execu
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1638
 Approved PR head: pending merge
-Execution SHA: 41116f137588dfd29b46cee80a9cf5b66db084f8
+Execution SHA: 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2
