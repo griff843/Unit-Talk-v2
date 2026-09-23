@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092307
 
-MERGE_SHA: ec51e7890543520242c33adeac09801664ba85b3
+MERGE_SHA: 051c474c5a0ba3c5054b3f9e62fb44a79a837053
 
 Generated at: 2026-09-23T19:28:20.000Z
 Issue: WORK-2026092307
@@ -113,6 +113,6 @@ against a stubbed loopback `fetch`.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 051c474c5a0ba3c5054b3f9e62fb44a79a837053
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1635
 Execution SHA: ec51e7890543520242c33adeac09801664ba85b3
