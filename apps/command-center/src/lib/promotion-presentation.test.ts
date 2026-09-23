@@ -57,6 +57,26 @@ test('UTV2-1902: a force_promote history row reads as an override, never as scor
   assert.equal(view.boardOverrideAvailable, true);
 });
 
+test('UTV2-1902: a legacy force-promoted pick reads as an override when a tied non-winner row sorts first', () => {
+  // The pre-UTV2-1902 Smart Form path wrote the best-bets winner and the
+  // suppressed non-winner rows with one decided_at, so the loader's order among
+  // them is arbitrary. The winner is the row for the persisted target.
+  const view = buildPromotionPresentation({
+    promotionStatus: 'qualified',
+    promotionTarget: 'best-bets',
+    promotionScore: 32.75,
+    promotionReason: 'smart-form submissions route directly to best-bets',
+    metadata: {},
+    promotionHistory: [
+      { target: 'trader-insights', overrideAction: null },
+      { target: 'best-bets', overrideAction: 'force_promote' },
+      { target: 'exclusive-insights', overrideAction: null },
+    ],
+  });
+  assert.equal(view.qualificationBasis, 'override');
+  assert.doesNotMatch(view.qualificationNote, /^Qualified for/);
+});
+
 test('UTV2-1902: score-qualified picks say so', () => {
   const view = buildPromotionPresentation({
     promotionStatus: 'qualified',

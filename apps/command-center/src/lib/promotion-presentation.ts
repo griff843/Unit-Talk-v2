@@ -21,7 +21,7 @@ export interface PromotionPresentationInput {
   promotionReason: string | null;
   metadata: Record<string, unknown>;
   /** Newest first, as the detail loader orders it. */
-  promotionHistory: ReadonlyArray<{ overrideAction: string | null }>;
+  promotionHistory: ReadonlyArray<{ target?: string | null; overrideAction: string | null }>;
 }
 
 export interface PromotionPresentation {
@@ -63,8 +63,13 @@ export function readRealEdgePresence(metadata: Record<string, unknown>): 'presen
 
 export function buildPromotionPresentation(input: PromotionPresentationInput): PromotionPresentation {
   const humanCapperDelivery = isHumanCapperDeliveryAuthorized(input.metadata);
-  const latest = input.promotionHistory[0];
-  const overridden = latest?.overrideAction === 'force_promote';
+  // The row that set the persisted target, not merely the newest row: one
+  // evaluation writes a row per policy with the same decided_at, so ordering
+  // alone cannot say which row is the winner's. Matching the target can.
+  const decisive = input.promotionTarget
+    ? input.promotionHistory.find((row) => row.target === input.promotionTarget) ?? input.promotionHistory[0]
+    : input.promotionHistory[0];
+  const overridden = decisive?.overrideAction === 'force_promote';
   const scoreText = input.promotionScore != null ? input.promotionScore.toFixed(1) : 'none';
 
   const boardLabel = input.promotionTarget
