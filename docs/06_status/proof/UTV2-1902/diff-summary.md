@@ -8,9 +8,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1902-score-gate-smart-form-best-bets
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1630
-Head SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
-Execution SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
-Diff base: 64e9e981c2879bda4e9003c3dc3e3ce9406ea209
+Head SHA: 1410cd437717eb128417818d07fe0a62a14a7d80
+Execution SHA: 1410cd437717eb128417818d07fe0a62a14a7d80
+Diff base: ee0eeb74c5811366389a82297d67e4004bff1bef
 result: pass
 
 ## Git Diff Stat
@@ -24,20 +24,20 @@ result: pass
  ...1-proof-utv2-1923-human-capper-delivery.test.ts |  21 ++
  apps/command-center/src/app/picks/[id]/page.tsx    |  69 ++--
  apps/command-center/src/lib/data/queues.ts         |   3 +
- .../src/lib/promotion-presentation.test.ts         | 110 ++++++
- .../src/lib/promotion-presentation.ts              | 103 ++++++
+ .../src/lib/promotion-presentation.test.ts         | 130 +++++++
+ .../src/lib/promotion-presentation.ts              | 108 ++++++
  docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md    |  27 ++
  docs/06_status/lanes/UTV2-1902.json                |  45 +++
  docs/06_status/proof/UTV2-1902/.gitkeep            |   0
  docs/06_status/proof/UTV2-1902/diff-summary.md     |  73 ++++
- docs/06_status/proof/UTV2-1902/evidence.json       | 179 ++++++++++
- docs/06_status/proof/UTV2-1902/verification.md     | 292 ++++++++++++++++
- 16 files changed, 1401 insertions(+), 406 deletions(-)
+ docs/06_status/proof/UTV2-1902/evidence.json       | 185 ++++++++++
+ docs/06_status/proof/UTV2-1902/verification.md     | 335 ++++++++++++++++++
+ 16 files changed, 1475 insertions(+), 406 deletions(-)
 ```
 
 ## What changed, and why
 
-The implementation now spans two commits: `992a896a8` (the score gate) and `d20b5af93` (the replay-parity fix for Codex review finding P1).
+The implementation now spans three commits: `783ad5e4f` (the score gate), `94af838d6` (the replay-parity fix for Codex review finding P1), and `1410cd437` (the Command Center reads the override basis from the row that set the target, a finding from the independent exact-head review).
 
 PM rule, ratified under UTV2-1900: **intake source never confers promotion.**
 

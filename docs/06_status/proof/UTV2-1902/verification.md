@@ -12,9 +12,9 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1902-score-gate-smart-form-best-bets
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1630
-Head SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
-Execution SHA: d20b5af93b5c99310ba73278ebd97c9380afc23c
-Diff base: 64e9e981c2879bda4e9003c3dc3e3ce9406ea209
+Head SHA: 1410cd437717eb128417818d07fe0a62a14a7d80
+Execution SHA: 1410cd437717eb128417818d07fe0a62a14a7d80
+Diff base: ee0eeb74c5811366389a82297d67e4004bff1bef
 result: pass
 
 > PM rule, ratified under UTV2-1900: intake source never confers promotion. Smart Form picks are
@@ -61,7 +61,7 @@ Each box names a test that asserts it and a mutation that makes that test fail.
 Codex review finding P1 on PR #1630 (`discussion_r4079469671`): `makeSnapshot()` persisted the
 policy's configured confidence floor and no override, while the evaluation had used the waived
 floor and, for a human capper delivery pick, a board suppression. Reproduced on the unfixed
-code at `8786facdf`, then fixed in `d20b5af93`. Both the evaluation input and every snapshot now
+code at `8786facdf`, then fixed in `94af838d6` (`d20b5af93` before the resync onto `ee0eeb74c`). Both the evaluation input and every snapshot now
 take the floor from `effectiveConfidenceFloor()`, and the multi-policy snapshot records the
 override the decision was evaluated with (`boardOverride`).
 
@@ -79,12 +79,32 @@ override the decision was evaluated with (`boardOverride`).
 The tests read the real rows the eager submission path persisted, parse each payload with
 `parsePromotionSnapshot` and run `replayPromotion` on it. They are not helper-level assertions.
 
+**What replay still does not reproduce. This predates this PR and is not fixed here.**
+`replayPromotion` (`packages/domain/src/promotion.ts`) rebuilds the pick from `confidence` alone.
+The snapshot stores no market or sport, so replay skips the market-family score modifiers that the
+live evaluation applied. The replay tests above compare status on MLB moneyline picks whose scores
+sit far from the threshold, so they pass. The independent review reproduced the gap:
+- an eager-path pick on an NBA player prop persisted best-bets `suppressed` at 60.15 and replayed
+  `qualified` at 70.76;
+- an MLB moneyline pick's score drifts from 31.91 to 31.22.
+
+This affects every source, not only Smart Form. It has been there since market modifiers were
+introduced (UTV2-623), and this diff does not touch `packages/domain`. Fixing it means persisting
+market and sport in `PromotionDecisionSnapshot` and reading them in replay. Both are outside this
+lane's pinned file scope. This PR claims replay parity only for the confidence floor and the
+override, the two fields finding P1 named.
+
 ### Command Center tells the truth about promotion
 
 - [x] A human capper pick with no board target renders the absence, not a lane.
 - [x] A `force_promote` history row reads as an override, never as score qualification.
 - [x] An explicit `hasRealEdge: false` wins over a numeric `realEdge`.
-      All three are in `apps/command-center/src/lib/promotion-presentation.test.ts` (7 tests).
+- [x] A legacy force-promoted pick reads as an override even when a tied non-winner row sorts
+      first. The pre-UTV2-1902 path wrote every policy's row with one `decided_at`, so the basis is
+      read from the newest row whose target is the persisted `promotion_target`, not from the
+      newest row. Found by the independent exact-head review and fixed in `1410cd437`.
+      `UTV2-1902: a legacy force-promoted pick reads as an override when a tied non-winner row sorts first`.
+      All four are in `apps/command-center/src/lib/promotion-presentation.test.ts` (8 tests).
 
 ### The rule is canonical
 
@@ -94,8 +114,8 @@ The tests read the real rows the eager submission path persisted, parse each pay
 ## MUTATION CONTROLS:
 
 Every mutation was applied at `2dc79802b`, the pre-resync implementation commit, and reverted with
-`git checkout`. After the resync onto `64e9e981c`, `git diff` of the implementation commit is
-byte-identical (`992a896a8`), and the focused suites re-run 240/240 at the final head, which adds the replay tests. The baseline was
+`git checkout`. After the resyncs onto `64e9e981c` and then `ee0eeb74c`, `git diff` of the implementation commit is
+byte-identical (`783ad5e4f`), and the focused suites re-run 240/240 at the final head, which adds the replay tests. The baseline was
 re-run clean after each.
 
 | Mutation applied | Expected | Observed |
@@ -103,11 +123,12 @@ re-run clean after each.
 | Drop the human capper suppress override in `promotion-service.ts` (`override: undefined`) | the HC board-target control fails | `not ok 94 - UTV2-1902: a human capper delivery pick that meets a board threshold still gets no board target`. 236 pass / 1 fail |
 | Replace the 409 predicate in `override-promotion-controller.ts` with `false` | the refusal control fails | `not ok 93 - UTV2-1902: board force_promote is refused for a human capper delivery pick`. 236 pass / 1 fail |
 | Restore a source-only `forcePromote` for `source === 'smart-form'` in `promotion-service.ts` | every score-gate control fails | 7 failures, including tests 90, 91, 92, 95 and 101 (UTV2-1902) and the exposure-gate and board-capacity tests. 230 pass / 7 fail |
+| Read the override basis from `promotionHistory[0]` again, at `1410cd437` | the tied-row control fails | `not ok 3 - UTV2-1902: a legacy force-promoted pick reads as an override when a tied non-winner row sorts first`. 7 pass / 1 fail; restored 8/8 |
 | `const overridden = false` in `promotion-presentation.ts` | the override-labelling control fails | `not ok 2 - UTV2-1902: a force_promote history row reads as an override, never as score qualification`. 6 pass / 1 fail |
 | Delete the `explicit === false` branch of `readRealEdgePresence` | the explicit-false control fails | `not ok 4 - UTV2-1902: explicit hasRealEdge:false wins over a numeric realEdge`. 6 pass / 1 fail |
 | None (baseline) | all pass | API focused suites 237/237; Command Center 7/7 |
 
-**Replay-parity mutations**, applied at `5c83a6f9c` (byte-identical to `d20b5af93` after the resync) and reverted:
+**Replay-parity mutations**, applied at `5c83a6f9c` (byte-identical to `94af838d6` after the resyncs) and reverted:
 
 | Mutation applied | Expected | Observed |
 |---|---|---|
@@ -117,7 +138,7 @@ re-run clean after each.
 | The override alone dropped from the multi-policy snapshot | the override control fails | `not ok 97`. 97 pass / 1 fail |
 | None (baseline) | all pass | `promotion-edge-integration.test.ts` 98/98 |
 
-Re-run at the final head after the resync onto `64e9e981c`: with `promotion-service.ts` reverted to
+Re-run at the final head (`1410cd437`, on `ee0eeb74c`): with `promotion-service.ts` reverted to
 the unfixed version, `not ok 96` and `not ok 97` (96 pass / 2 fail). Restored, 98/98.
 
 ## RUNTIME EVIDENCE:
@@ -209,7 +230,7 @@ $ gh run view 35834268087 --log   (mutant)
 
 These writes went to staging only. Nothing was written to production.
 
-These staging runs predate the replay fix (`d20b5af93`). That fix changes only what the history
+These staging runs predate the replay fix (`94af838d6`). That fix changes only what the history
 payload records, not the decision, so the persisted status, target and reason in each row are
 unchanged by it. The replay parity itself is proven by the in-process tests above.
 
@@ -231,12 +252,12 @@ EVIDENCE:
 |---|---|---|
 | `pnpm type-check` | 0 | pass: no diagnostics |
 | `pnpm lint` | 0 | pass: no output |
-| `pnpm test` | 0 | pass: **6,964 `ok` lines, 0 `not ok`**, 105 suite blocks each `# fail 0` |
+| `pnpm test` | 0 | pass: **6,965 `ok` lines, 0 `not ok`**, 105 suite blocks each `# fail 0` |
 | `pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts` | 0 | 240 pass / 0 fail |
-| `pnpm exec tsx --test apps/api/src/replayable-scoring.test.ts apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 13 pass / 0 fail |
-| `pnpm exec tsx --test apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 7 pass / 0 fail |
+| `pnpm exec tsx --test apps/api/src/replayable-scoring.test.ts apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 14 pass / 0 fail |
+| `pnpm exec tsx --test apps/command-center/src/lib/promotion-presentation.test.ts` | 0 | 8 pass / 0 fail |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | 0 | `Verdict: PASS`, 16 changed files (the 10 implementation files, the lane manifest and sync file, and the proof bundle), rules matched `promotion-scoring`, `operator-ui` |
-| `pnpm verify` | n/a locally | refuses at `ci:assert-staging` from a developer checkout (deliberate staging isolation). The required `verify` context on PR #1630 **passed** at head `9ed2aaae8c59cffa9bf99c3730b1076f8debd8ca`, including its run-scoped DB-proof receipt check |
+| `pnpm verify` | n/a locally | refuses at `ci:assert-staging` from a developer checkout (deliberate staging isolation). The required `verify` context on PR #1630 **passed** at head `398b1cedfcc56839e028b1244128f504c04a7b38` (run `35880811175`), including its run-scoped DB-proof receipt check. That tree differs from this one only by `main`'s `readiness-score.json`; the context re-runs on this head |
 | `pnpm test:db` | n/a locally | CI `staging-db-proof` job on PR #1630, receipt verified inside `verify` |
 
 ```
@@ -247,7 +268,7 @@ Rules matched: promotion-scoring, operator-ui
 
 $ pnpm test   (tallied from the TAP output)
 exit=0
-ok lines: 6964   not ok lines: 0   suite blocks: 105   blocks with # fail != 0: 0
+ok lines: 6965   not ok lines: 0   suite blocks: 105   blocks with # fail != 0: 0
 
 $ pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts
 # pass 240
@@ -273,6 +294,25 @@ predicate (`isHumanCapperDeliveryAuthorized`) that decides between two fixed ove
 the existing `evaluatePromotionEligibility`. It adds no randomness, clock or I/O. Nothing here
 claims an R2 or R3 artifact was produced.
 
+### Non-required checks that are red, and why
+
+Branch protection on `main` requires `verify`, `Executor Result Validation`, `Merge Gate` and
+`P0 Protocol`. Two other checks are red on this PR. Neither is required, neither is read by
+`merge-gate.yml` or by closeout, and neither is waived here: each is reported as it is.
+
+- **`Lane authority`** (`lane-check.yml`, run `35880811326`) fails with five
+  `outside_allowed_paths` findings: the four Command Center files and
+  `docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md` are outside `.lane/lanes/runtime.yml`'s
+  allowlist. The finding is **correct**: the lane taxonomy has no type that admits API promotion
+  code, its Command Center presentation and the Smart Form contract together. It is not repaired in
+  this PR. Splitting the change would leave the API and its operator presentation disagreeing, and
+  widening `runtime.yml` would be a lane-taxonomy change bundled into a product PR. Admitting these
+  paths is a separate governance registration.
+- **`Shadow Parity Check`** fails at `No mechanically read-only production credential is
+  provisioned.` It needs `SHADOW_PARITY_READ_ONLY_KEY`, which is not provisioned. That is a secret
+  and is reserved. Every recent run of this workflow, on this branch and others, fails at the same
+  step.
+
 ## STOP CONDITIONS ENCOUNTERED:
 
 - **T1 merge authority belongs to Griff.** This PR needs the `t1-approved` label **and** a
@@ -284,7 +324,7 @@ claims an R2 or R3 artifact was produced.
 
 Verifier Identity: Claude Opus 5.5 (1M context), acting as execution orchestrator
 Date: 2026-09-23
-Commit SHA(s): d20b5af93b5c99310ba73278ebd97c9380afc23c
+Commit SHA(s): 1410cd437717eb128417818d07fe0a62a14a7d80
 Related PRs: https://github.com/griff843/Unit-Talk-v2/pull/1630
 
 Nothing in this bundle self-certifies Done.

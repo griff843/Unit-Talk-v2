@@ -7,7 +7,7 @@
   "status": "in_review",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "d20b5af93b5c99310ba73278ebd97c9380afc23c",
+    "verified_source_sha": "1410cd437717eb128417818d07fe0a62a14a7d80",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
@@ -26,7 +26,7 @@
       "local_full_suite": {
         "command": "pnpm test",
         "exit_code": 0,
-        "ok_lines": 6964,
+        "ok_lines": 6965,
         "not_ok_lines": 0,
         "suite_blocks": 105,
         "suite_blocks_with_failures": 0
@@ -36,7 +36,7 @@
   "static_proof": {
     "status": "pass",
     "measured_at": "2026-09-23T05:45:00Z",
-    "measured_against_sha": "d20b5af93b5c99310ba73278ebd97c9380afc23c",
+    "measured_against_sha": "1410cd437717eb128417818d07fe0a62a14a7d80",
     "commands": [
       {
         "command": "pnpm type-check",
@@ -52,7 +52,7 @@
         "command": "pnpm test",
         "exit_code": 0,
         "result": "pass",
-        "ok_lines": 6964,
+        "ok_lines": 6965,
         "not_ok_lines": 0,
         "suite_blocks": 105,
         "suite_blocks_with_failures": 0
@@ -97,6 +97,12 @@
       "result": "fails_on_the_named_condition"
     },
     {
+      "control": "UTV2-1902: a legacy force-promoted pick reads as an override when a tied non-winner row sorts first",
+      "mutation": "read the override basis from promotionHistory[0] in promotion-presentation.ts",
+      "observed": "7 pass / 1 fail (not ok 3); restored 8/8",
+      "result": "fails_on_the_named_condition"
+    },
+    {
       "control": "UTV2-1902: a force_promote history row reads as an override, never as score qualification",
       "mutation": "const overridden = false in promotion-presentation.ts",
       "observed": "6 pass / 1 fail",
@@ -111,7 +117,7 @@
     {
       "control": "unmutated baseline",
       "mutation": "none",
-      "observed": "237/237 and 7/7 (pre-replay-fix); 240/240 after d20b5af93",
+      "observed": "237/237 and 7/7 (pre-replay-fix); 240/240 after 94af838d6",
       "result": "pass"
     },
     {
