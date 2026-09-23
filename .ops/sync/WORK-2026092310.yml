@@ -1,0 +1,161 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092310
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092310
+  objective: WORK-2026092310 — reconcile the mission plan against live truth
+  acceptance_criteria:
+    - >-
+      # WORK-2026092310 — reconcile the mission plan against live truth
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `docs/mission/plan.md` was last reconciled 2026-09-18 against `3a07f41b0`.
+      It is startup context
+
+      for every session, and it has gone false: the deployed release, the drift,
+      the governed cohort
+
+      (7 → 9 picks, two new delivery-eligible), the readiness ledger's blocking
+      dimensions, the open PR
+
+      count, the active lanes, and a deploy run left waiting on approval at a
+      SHA older than the
+
+      running release.
+
+
+      ## Outcome
+
+
+      - `docs/mission/plan.md` is rebuilt from live GitHub, runtime and database
+      measurement taken
+        2026-09-23, not edited forward.
+      - Every figure it states was measured this session; the ones that move are
+      marked re-measure.
+
+      - Decisions surfaced to Griff are current, each with a recommendation.
+
+
+      ## Acceptance
+
+
+      - Docs-only; one file changed.
+
+      - No figure is quoted that was not measured against `origin/main`, the
+      GitHub API or production
+        (read-only) during this lane.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092310 — reconcile the mission plan against live truth
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `docs/mission/plan.md` was last reconciled 2026-09-18 against `3a07f41b0`.
+      It is startup context
+
+      for every session, and it has gone false: the deployed release, the drift,
+      the governed cohort
+
+      (7 → 9 picks, two new delivery-eligible), the readiness ledger's blocking
+      dimensions, the open PR
+
+      count, the active lanes, and a deploy run left waiting on approval at a
+      SHA older than the
+
+      running release.
+
+
+      ## Outcome
+
+
+      - `docs/mission/plan.md` is rebuilt from live GitHub, runtime and database
+      measurement taken
+        2026-09-23, not edited forward.
+      - Every figure it states was measured this session; the ones that move are
+      marked re-measure.
+
+      - Decisions surfaced to Griff are current, each with a recommendation.
+
+
+      ## Acceptance
+
+
+      - Docs-only; one file changed.
+
+      - No figure is quoted that was not measured against `origin/main`, the
+      GitHub API or production
+        (read-only) during this lane.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092310.md
+    title: WORK-2026092310 — reconcile the mission plan against live truth
+    description: >-
+      # WORK-2026092310 — reconcile the mission plan against live truth
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `docs/mission/plan.md` was last reconciled 2026-09-18 against `3a07f41b0`.
+      It is startup context
+
+      for every session, and it has gone false: the deployed release, the drift,
+      the governed cohort
+
+      (7 → 9 picks, two new delivery-eligible), the readiness ledger's blocking
+      dimensions, the open PR
+
+      count, the active lanes, and a deploy run left waiting on approval at a
+      SHA older than the
+
+      running release.
+
+
+      ## Outcome
+
+
+      - `docs/mission/plan.md` is rebuilt from live GitHub, runtime and database
+      measurement taken
+        2026-09-23, not edited forward.
+      - Every figure it states was measured this session; the ones that move are
+      marked re-measure.
+
+      - Decisions surfaced to Griff are current, each with a recommendation.
+
+
+      ## Acceptance
+
+
+      - Docs-only; one file changed.
+
+      - No figure is quoted that was not measured against `origin/main`, the
+      GitHub API or production
+        (read-only) during this lane.
+    captured_at: 2026-09-23T20:43:03.097Z
+    description_sha256: 2457fb675ab6461a328e810e1ddb25cbfd88331b3dee51beba897337ac44862d
+  contract_hash: 157caaadd7ca0ab9bf7610b19df364933fba70a2038854ce82a0aebee922daf2
