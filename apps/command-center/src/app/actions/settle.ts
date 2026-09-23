@@ -7,6 +7,7 @@ import {
 } from '@/lib/server-api';
 import { resolveActorOrRefusal } from '@/lib/require-actor';
 import type { HumanCapperRecapResult } from '@/lib/human-capper-recap';
+import { readApiErrorMessage } from '@/lib/api-error';
 import {
   resolveOperatorGradingContext,
   type OperatorGradingContextInput,
@@ -101,7 +102,7 @@ export async function settlePick(
     const body = await res.json().catch(() => ({}));
     return {
       ok: false,
-      error: (body as { message?: string }).message ?? `API error ${res.status}`,
+      error: readApiErrorMessage(body, res.status),
     };
   }
 
