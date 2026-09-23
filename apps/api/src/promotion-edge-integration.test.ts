@@ -14,7 +14,15 @@ import {
 } from './promotion-service.js';
 import { processSubmission } from './submission-service.js';
 import { overridePromotionController } from './controllers/override-promotion-controller.js';
-import { humanCapperDeliveryAuthorizationVersion } from '@unit-talk/contracts';
+import {
+  bestBetsPromotionPolicy,
+  exclusiveInsightsPromotionPolicy,
+  humanCapperDeliveryAuthorizationVersion,
+  parsePromotionSnapshot,
+  traderInsightsPromotionPolicy,
+  type PromotionPolicy,
+} from '@unit-talk/contracts';
+import { replayPromotion } from '@unit-talk/domain';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
 import {
@@ -22,7 +30,7 @@ import {
   isUnattributedCapper,
   resolveCapperIdentity,
 } from './capper-identity.js';
-import type { PickRepository, SettlementRepository } from '@unit-talk/db';
+import type { PickRepository, PromotionHistoryRecord, SettlementRepository } from '@unit-talk/db';
 
 // ── Unit tests for edge-to-score conversion ──────────────────────────────────
 
@@ -2105,6 +2113,7 @@ async function submitSmartForm1902(
   label: string,
   extraMetadata: Record<string, unknown>,
   promotionScores: Record<string, number>,
+  confidence = 0.4,
 ) {
   const repositories = createInMemoryRepositoryBundle();
   const since = new Date(Date.now() - 60_000).toISOString();
@@ -2115,7 +2124,7 @@ async function submitSmartForm1902(
       market: 'MLB - Moneyline',
       selection: `UTV2-1902 ${label}`,
       odds: -120,
-      confidence: 0.4,
+      confidence,
       metadata: {
         sport: 'MLB',
         eventName: `UTV2-1902 ${label} at Opponent`,
@@ -2243,4 +2252,113 @@ test('UTV2-1902: the same qualifying scores without a delivery authorization do 
   );
   assert.equal(result.pick.promotionStatus, 'qualified');
   assert.equal(result.pick.promotionTarget, 'best-bets');
+});
+
+// ── UTV2-1902: persisted promotion history replays to the recorded decision ──
+//
+// replayPromotion() rebuilds an evaluation from the stored snapshot alone. If the
+// snapshot records a different confidence floor or override than the evaluation
+// actually used, the replay silently re-decides the pick. These tests read the
+// real rows the eager path persisted and replay every one of them.
+
+const REPLAY_POLICIES: Record<string, PromotionPolicy> = {
+  'best-bets': bestBetsPromotionPolicy,
+  'trader-insights': traderInsightsPromotionPolicy,
+  'exclusive-insights': exclusiveInsightsPromotionPolicy,
+};
+
+function replayEveryHistoryRow(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+) {
+  const rows = (repositories.picks as unknown as { promotionHistory: PromotionHistoryRecord[] })
+    .promotionHistory.filter((row) => row.pick_id === pickId);
+  assert.ok(rows.length > 0, 'the eager path persisted promotion history');
+  return rows.map((row) => {
+    const payload = row.payload as Record<string, unknown>;
+    const snapshot = parsePromotionSnapshot(payload);
+    assert.ok(snapshot, `row for ${row.target} carries a replayable snapshot`);
+    const policy = (payload['policy'] as PromotionPolicy | undefined) ?? REPLAY_POLICIES[row.target];
+    assert.ok(policy, `a policy exists for ${row.target}`);
+    const replayed = replayPromotion(snapshot!, policy!, row.decided_at);
+    return { row, snapshot: snapshot!, replayed };
+  });
+}
+
+test('UTV2-1902 replay: a low-confidence Smart Form pick that qualified replays as qualified', async () => {
+  // confidence 0.4 is below the 0.6 policy floor that Smart Form picks are
+  // evaluated without. The snapshot must record the floor the decision used.
+  const { repositories, result } = await submitSmartForm1902('replay-qualifying', {}, {
+    edge: 75,
+    trust: 75,
+    readiness: 80,
+    uniqueness: 75,
+    boardFit: 80,
+  });
+  assert.equal(result.pick.promotionStatus, 'qualified');
+  assert.equal(result.pick.promotionTarget, 'best-bets');
+
+  for (const { row, snapshot, replayed } of replayEveryHistoryRow(repositories, result.pick.id)) {
+    assert.equal(snapshot.gateInputs.confidenceFloor, null, `${row.target}: the waived floor is persisted as waived`);
+    assert.equal(replayed.status, row.status, `${row.target}: replay reproduces the recorded status`);
+    assert.equal(replayed.qualified, row.status === 'qualified', `${row.target}: replay reproduces qualification`);
+  }
+});
+
+test('UTV2-1902 replay: an authorized human capper delivery pick replays with no board qualification', async () => {
+  const { repositories, result } = await submitSmartForm1902(
+    'replay-human-capper',
+    {
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: {
+        version: humanCapperDeliveryAuthorizationVersion,
+        decision: 'authorized',
+        authority: 'server-allowlist',
+        capperId: 'griff843',
+        decidedAt: new Date().toISOString(),
+      },
+    },
+    { edge: 80, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
+    // At or above the 0.6 floor, so nothing but the override keeps this pick off the board.
+    0.75,
+  );
+  assert.equal(result.pick.promotionTarget ?? null, null);
+
+  for (const { row, snapshot, replayed } of replayEveryHistoryRow(repositories, result.pick.id)) {
+    assert.deepEqual(
+      snapshot.override,
+      { suppress: true, reason: HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE },
+      `${row.target}: the suppression the decision applied is persisted`,
+    );
+    assert.equal(replayed.status, row.status, `${row.target}: replay reproduces the recorded status`);
+    assert.equal(replayed.qualified, false, `${row.target}: replay never board-qualifies the pick`);
+  }
+});
+
+test('UTV2-1902 replay: a non-Smart-Form pick still persists and replays with its policy floor', async () => {
+  // Control: the waiver is source-scoped. An API pick keeps its policy floor in
+  // the snapshot, and replay still reproduces the recorded decision.
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'api',
+      submittedBy: 'utv2-1902-replay-control',
+      market: 'MLB - Moneyline',
+      selection: 'UTV2-1902 replay control',
+      odds: -120,
+      confidence: 0.4,
+      metadata: {
+        sport: 'MLB',
+        eventName: 'UTV2-1902 replay control at Opponent',
+        promotionScores: { edge: 75, trust: 75, readiness: 80, uniqueness: 75, boardFit: 80 },
+      },
+    },
+    repositories,
+  );
+  for (const { row, snapshot, replayed } of replayEveryHistoryRow(repositories, result.pick.id)) {
+    const policy = REPLAY_POLICIES[row.target]!;
+    assert.equal(snapshot.gateInputs.confidenceFloor, policy.confidenceFloor ?? null, `${row.target}: policy floor persisted`);
+    assert.equal(snapshot.override, undefined, `${row.target}: no override persisted`);
+    assert.equal(replayed.status, row.status, `${row.target}: replay reproduces the recorded status`);
+  }
 });
