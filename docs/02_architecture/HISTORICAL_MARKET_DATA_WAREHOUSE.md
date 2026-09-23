@@ -1,6 +1,11 @@
 # Historical Market Data Retention and Warehouse Architecture
 
-**Status:** Architecture recommendation (planning-only — no migration, no new infra in this lane)
+**Status:** Architecture recommendation — **implemented** under WORK-2026092101 (2026-09-21).
+The design below stands as written. It is no longer planning-only: the exporter, manifest,
+fail-closed verification, read path and scheduled conveyor now exist in `scripts/warehouse/`,
+and the contract that governs them is
+[`docs/05_operations/WAREHOUSE_ARCHIVE_CONTRACT.md`](../05_operations/WAREHOUSE_ARCHIVE_CONTRACT.md).
+**Still authorizes no data movement and no deletion** — see §11 and the contract's §6.
 **Issue:** UTV2-1237 · **Tier:** T2 · **Date:** 2026-06-11
 **PM position:** Supabase remains the hot operational DB; historical market data needs a cold-storage/warehouse strategy *before* line volume becomes an operational risk. Not required before Production Readiness Audit v2; not a P3 certification lane; not a product feature lane.
 
@@ -10,11 +15,37 @@
 
 Define the hot/cold data boundary, retention windows, export/verification mechanics, and restore/query story for historical market data — so a future implementation lane can execute without re-deriving the design. This doc makes **no CLV / ROI / edge claims** and authorizes **no data movement**.
 
+## 1a. Implementation status (2026-09-21)
+
+| Section | Status | Where it lives |
+|---|---|---|
+| §4 retention windows | implemented as policy data | `DEFAULT_RETENTION_POLICY` in `scripts/warehouse/conveyor.ts` |
+| §5 export pipeline | implemented | `scripts/warehouse/export-partition.ts` |
+| §5 object layout | implemented, `LAYOUT_VERSION = 1` | `scripts/warehouse/object-layout.ts` |
+| §6 manifest | implemented, `schema_version = 1` | `scripts/warehouse/manifest.ts` |
+| §6 verification | implemented, fail-closed | `scripts/warehouse/verify-archive.ts` |
+| §5 daily conveyor | implemented | `scripts/warehouse/conveyor.ts`, `.github/workflows/warehouse-archive-conveyor.yml` |
+| §7 DuckDB query story | implemented | `scripts/warehouse/query.ts` |
+| §5 detach-then-drop | **not implemented, deliberately** | a prune is PM-gated; there is no delete path in this repository |
+| Object storage itself | **not provisioned** | owner action — `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` |
+
+Two things in this document were measured in 2026-06 and have since been contradicted by current
+repo truth. Both are corrected in
+[`docs/05_operations/FIRST_ARCHIVE_CANDIDATE_PACKET.md`](../05_operations/FIRST_ARCHIVE_CANDIDATE_PACKET.md) §2:
+
+1. `provider_offers_legacy_quarantine` is described below as having **zero operational reads**. On
+   current `main` a view (`public.provider_offers`), a replay/proof view (`sgo_replay_coverage`), a
+   live Command Center panel and three operator scripts all read through to it.
+2. The retention table's per-sport partitioning is **not** what the default policy does. A
+   sport-partitioned policy must enumerate its sports, and any row outside that list would then be
+   archived by nothing — so the default writes one object per day per source and leaves sport as a
+   column.
+
 ## 2. Current state (measured 2026-06-11, live DB)
 
 | Table | Size | Notes |
 |---|---|---|
-| `provider_offers_legacy_quarantine` | **6,531 MB** | Quarantined legacy offers; zero operational reads. Largest single object in the DB. |
+| `provider_offers_legacy_quarantine` | **6,531 MB** | Quarantined legacy offers; recorded here as having zero operational reads. **That is contradicted by current repo truth — see §1a.** Largest single object in the DB. |
 | `system_runs` | **1,131 MB** | Operational run log; unbounded growth (~5-min `candidate.scoring` cadence + every subsystem heartbeat). |
 | `provider_offer_current` | 230 MB / ~285k rows | Hot operational; bounded by market churn but growing. |
 | `provider_offer_history_pYYYYMMDD` | ~80–220 MB/day at peak | Daily partitions pre-created through 2026-06-30. |

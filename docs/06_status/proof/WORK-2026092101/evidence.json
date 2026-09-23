@@ -1,0 +1,121 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092101",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ae244e21c74a6f374875bcdec205f94cf7e3879d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "verify": "pass (run 35822642624 job 107059187422 @ ae244e21c)",
+      "writable_db_proof_staging": "pass (run 35822642624 job 107057593577 @ ae244e21c)"
+    },
+    "note": "ae244e21c74a6f374875bcdec205f94cf7e3879d is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092101/. It is the branch-refresh merge commit produced by `ops:merge-wrapper pr-update-branch`, which reconciled the lane onto origin/main 966d9a31b851a67f65864002b8ef5109b2003bfe (the merge of #1629) with no conflict and no overlap. What main brought in since the previous anchor is lane bookkeeping only: docs/06_status/lanes/UTV2-1892.json, docs/06_status/lanes/WORK-2026092302.json, .ops/sync/WORK-2026092302.yml and .ops/work/WORK-2026092302.md; no code, test or config file. The anchor moves because scripts/ci/proof-binding-validator.ts rule 4 compares trees and refuses the two .ops files. Superseded anchors, not withdrawn: e9521eb2e7985bdad2ae1c8ccaf90e0a81621122, 12fb46bc82fbfc9fa8f11a0ad6a00d2ccb93f44b. CI re-ran at the new anchor (run 35822642624); r-level re-measured at the new anchor; the unit-test, warehouse-battery and verify:static figures were measured at e9521eb2e7985bdad2ae1c8ccaf90e0a81621122 and carry forward because the refresh changed no executable file. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6798,
+      "fail": 0,
+      "note": "pnpm test at e9521eb2e7985bdad2ae1c8ccaf90e0a81621122, summed over its TAP blocks inside the local pnpm verify:static run (was 6787 at the superseded anchor; the difference is tests merged in from #1570)."
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "r_level": "PASS; 37 changed files; no R-level artifacts required (re-measured at ae244e21c)",
+    "warehouse_battery": {
+      "suites": [
+        "scripts/warehouse/config.test.ts",
+        "scripts/warehouse/conveyor-workflow.test.ts",
+        "scripts/warehouse/conveyor.test.ts",
+        "scripts/warehouse/db-audit.test.ts",
+        "scripts/warehouse/export-partition.test.ts",
+        "scripts/warehouse/manifest.test.ts",
+        "scripts/warehouse/object-layout.test.ts",
+        "scripts/warehouse/object-store.test.ts",
+        "scripts/warehouse/query.test.ts",
+        "scripts/warehouse/verify-archive.test.ts"
+      ],
+      "pass": 102,
+      "fail": 0,
+      "note": "All ten files are wired into pnpm test:ops, so they run inside pnpm verify rather than only on demand. Re-measured at e9521eb2e: 102/102."
+    },
+    "destructive_reachability_mutation_drill": {
+      "control": "scripts/warehouse/conveyor-workflow.test.ts :: nothing reachable from the schedule can delete production data",
+      "mutation": "appended a real 'run: pnpm warehouse prune --yes' step to .github/workflows/warehouse-archive-conveyor.yml",
+      "result": "fail 1 on mutation ('nothing reachable from the schedule can delete production data'), 8/8 on restore; re-run at e9521eb2e with the workflow restored byte-identical to HEAD"
+    },
+    "full_pnpm_verify": {
+      "result": "verify:static pass at e9521eb2e (7004/7004 tests across 106 TAP blocks, including Command Center and Smart Form); test:live-db deferred to CI",
+      "note": "pnpm verify cannot exit 0 locally: scripts/ci/assert-staging-target.ts refuses any target it cannot identify as the staging project (host=127.0.0.1). CI is the authority and no green local verify is claimed. The lane manifest records t1_live_db_precondition: deferred_to_ci.",
+      "ci_run": "run 35822642624 at ae244e21c (current anchor): Writable DB proof (staging only) job 107057593577 success, verify job 107059187422 success. Previous: run 35815981499 attempt 1 at e9521eb2e: Writable DB proof (staging only) job 107037479107 success 03:51:23Z-03:58:05Z, verify job 107038782350 success 03:58:07Z-04:01:43Z; receipt auditor Verdict: PASS, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0"
+    }
+  },
+  "runtime_proof": {
+    "profile": "object-store-and-duckdb",
+    "note": "No production credential was used and no production statement was issued. Production Supabase was RESTORING for the whole of this lane.",
+    "parquet_export": {
+      "suite": "scripts/warehouse/export-partition.test.ts",
+      "asserted": [
+        "a real 720-row window is written to a zstd Parquet file and its row count, byte size and SHA256 are measured back off the written file",
+        "an empty window still produces a readable object",
+        "a window above the row bound is refused before anything is written",
+        "re-exporting the same window overwrites rather than appends"
+      ]
+    },
+    "fail_closed_verification": {
+      "suite": "scripts/warehouse/verify-archive.test.ts",
+      "pass": 12,
+      "fail": 0,
+      "method": "archive one real 720-row partition into a LocalObjectStore, then break exactly one property per case and assert both the named check fails and decidePrune(...).eligible === false",
+      "cases_broken": [
+        "one flipped byte with the size unchanged -> checksum_match only",
+        "the object deleted -> object_exists",
+        "a short but valid Parquet with size and hash corrected -> row_count_match only",
+        "non-Parquet bytes with a matching checksum -> parquet_readable",
+        "the source drifted after export -> sample_readback_match",
+        "the source unreadable -> a failure, never a skip",
+        "an empty sample on a non-empty partition -> not eligible",
+        "a manifest hand-edited to claim success -> counts_disagree"
+      ]
+    },
+    "duckdb_read_path": {
+      "suite": "scripts/warehouse/query.test.ts",
+      "asserted": [
+        "four partitions (two days x two sports) are written, then read by a separate connection constructed with an empty NodeJS.ProcessEnv",
+        "used_production_database === false",
+        "row_count 4, offer_rows 720 per partition, 2880 rows total, 7 events, 3 markets, 2 books",
+        "the representative query mentions none of clv, roi, edge, units or profit"
+      ]
+    },
+    "conveyor": {
+      "suite": "scripts/warehouse/conveyor.test.ts",
+      "pass": 10,
+      "fail": 0,
+      "asserted": [
+        "a full run archives every planned window and writes the manifest last",
+        "a second run over the same windows reports skipped=2, creates no new object and rewrites none",
+        "an interruption after upload leaves zero orphan manifests, keeps the data objects, records heartbeat_error, and the retry completes",
+        "a corrupting store produces 2 .failed.json and 0 accepted manifests",
+        "the heartbeat is written even when every window fails",
+        "a missing, stale or unparseable heartbeat reads as stale, never as unknown"
+      ]
+    },
+    "read_only_db_audit": {
+      "suite": "scripts/warehouse/db-audit.test.ts",
+      "pass": 12,
+      "fail": 0,
+      "asserted": [
+        "the session is pinned read-only before anything is read and no statement the audit issues can write",
+        "the report states mutated: false",
+        "a restored database reports reset statistics rather than zero bloat",
+        "an assessment never concludes that a relation is safe to prune, including for a 6.8 GB, 8.19M-row, zero-FK relation"
+      ],
+      "not_run_against_production": "Production Supabase was RESTORING. The procedure was rehearsed against staging (517 MB, all relations 0 live / 0 dead, which the audit reports as reset statistics). docs/05_operations/PRODUCTION_DB_SIZING_AUDIT.md section 6 lists the ten outputs that remain unmeasured."
+    },
+    "destructive_actions_taken": "none - no production delete, no partition drop, no prune execution, no provider activation, no containment change"
+  }
+}
