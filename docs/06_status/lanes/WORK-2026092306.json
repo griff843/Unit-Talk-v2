@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092306-effective-settlement-intel",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1634",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/src/lib/data/analytics.test.ts",
@@ -18,7 +18,7 @@
     "docs/06_status/proof/WORK-2026092306/diff-summary.md",
     "docs/06_status/proof/WORK-2026092306/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-23T14:30:57.027Z",
   "heartbeat_at": "2026-09-23T14:30:57.027Z",
   "closed_at": null,
