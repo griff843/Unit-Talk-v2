@@ -70,6 +70,7 @@ export interface PickDetail {
   approvalStatus: string;
   promotionStatus: string;
   promotionTarget: string | null;
+  promotionReason: string | null;
   promotionScore: number | null;
   source: string;
   market: string;
@@ -714,6 +715,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         'metadata',
         'promotion_target',
         'promotion_status',
+        'promotion_reason',
         'sport_display_name',
         'capper_display_name',
         'market_type_display_name',
@@ -856,6 +858,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
       promotionStatus: asString(pickRow['promotion_status']),
       promotionTarget: asStringOrNull(pickRow['promotion_target']),
       promotionScore: asNumberOrNull(pickRow['promotion_score']),
+      promotionReason: asStringOrNull(pickRow['promotion_reason']),
       source: asString(pickRow['source']),
       market: asString(pickRow['market']),
       selection: asString(pickRow['selection']),

@@ -11,6 +11,7 @@ import { getAllowedActions } from '@/lib/pick-actions';
 import { isPickAlreadySettled } from '@/lib/settlement-state';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
+import { buildPromotionPresentation, readRealEdgePresence } from '@/lib/promotion-presentation';
 import { renderClvSummary } from '@/lib/clv-summary';
 import { getPickDetail } from '@/lib/data';
 import { getPickLineMovement } from '@/lib/data/odds-intel';
@@ -116,6 +117,7 @@ interface PickDetail {
   approvalStatus: string;
   promotionStatus: string;
   promotionTarget: string | null;
+  promotionReason: string | null;
   promotionScore: number | null;
   source: string;
   market: string;
@@ -195,7 +197,11 @@ function summarizeScoreMeaning(pick: PickDetail) {
     return `Trader Insights routing score ${formatRoutingScore(pick.promotionScore)} reflects promotion policy fit against an 80+ lane, not a win probability.`;
   }
 
-  return `Best Bets routing score ${formatRoutingScore(pick.promotionScore)} reflects weighted policy fit against a 70+ lane, not a win probability.`;
+  if (pick.promotionTarget === 'best-bets') {
+    return `Best Bets routing score ${formatRoutingScore(pick.promotionScore)} reflects weighted policy fit against a 70+ lane, not a win probability.`;
+  }
+
+  return `Routing score ${formatRoutingScore(pick.promotionScore)} is the weighted model/board policy fit. This pick holds no board target; the score is not a win probability.`;
 }
 
 function summarizeSettlementContext(detail: PickDetailViewResponse) {
@@ -255,18 +261,18 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const domainAnalysis = readObject(pick.metadata['domainAnalysis']);
   const deviggingResult = readObject(pick.metadata['deviggingResult']);
   const kellySizing = readObject(pick.metadata['kellySizing']);
-  const hasRealEdge =
-    typeof domainAnalysis?.['realEdge'] === 'number' ||
-    typeof pick.metadata['realEdge'] === 'number';
-  const edgeSource =
-    typeof domainAnalysis?.['realEdgeSource'] === 'string'
-      ? domainAnalysis['realEdgeSource']
-      : typeof pick.metadata['edgeSource'] === 'string'
-        ? pick.metadata['edgeSource']
-        : null;
+  const realEdgePresence = readRealEdgePresence(pick.metadata);
   const latestSettlementSummary = summarizeSettlementContext(detail);
   const scoreMeaning = summarizeScoreMeaning(pick);
   const scoreInsight = buildScoreInsight(pick.metadata);
+  const promotion = buildPromotionPresentation({
+    promotionStatus: pick.promotionStatus,
+    promotionTarget: pick.promotionTarget,
+    promotionScore: pick.promotionScore,
+    promotionReason: pick.promotionReason,
+    metadata: pick.metadata,
+    promotionHistory: detail.promotionHistory,
+  });
 
   // Line movement (UTV2-1522): resolve identity fail-closed from pick metadata
   // / submission payload (eventId) + settlement-resolved provider market key.
@@ -322,7 +328,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             </div>
             <div className="rounded border border-gray-800 bg-gray-950/60 p-3">
               <p className="text-[11px] uppercase tracking-wide text-gray-500">Promotion</p>
-              <p className="mt-1 text-sm font-semibold text-gray-100">{pick.promotionTarget ?? pick.promotionStatus}</p>
+              <p className="mt-1 text-sm font-semibold text-gray-100">{promotion.boardLabel}</p>
             </div>
             <div className="rounded border border-gray-800 bg-gray-950/60 p-3">
               <p className="text-[11px] uppercase tracking-wide text-gray-500">Settlement</p>
@@ -333,6 +339,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <div className="rounded border border-blue-900/60 bg-blue-950/30 p-3 text-sm text-blue-100">
             <p className="font-medium">Routing score: {formatRoutingScore(pick.promotionScore)}</p>
             <p className="mt-1 text-xs text-blue-200/80">{scoreMeaning}</p>
+            <p className="mt-1 text-xs text-blue-200/80">{promotion.qualificationNote}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <span className={`rounded border px-2 py-1 text-[11px] ${scoreToneClasses(scoreInsight.reliabilityTone)}`}>
                 {scoreInsight.edgeSourceLabel}
@@ -378,11 +385,13 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <KV label="Promotion Status" value={pick.promotionStatus} />
-            <KV label="Promotion Target" value={pick.promotionTarget} />
+            <KV label="Promotion Target" value={pick.promotionTarget ?? 'none'} />
             <KV
               label="Promotion Score"
               value={pick.promotionScore != null ? String(pick.promotionScore) : null}
             />
+            <KV label="Promotion Band" value={promotion.band} />
+            <KV label="Promotion Reason" value={promotion.reason} />
           </div>
           <div className="flex flex-wrap gap-2">
             <InterventionAction
@@ -391,15 +400,22 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               pickId={pickId}
               action="rerun_promotion"
             />
-            <InterventionAction
-              label="Force Promote to Best Bets"
-              variant="secondary"
-              pickId={pickId}
-              action="force_promote"
-              target="best-bets"
-              contextNote={`Current status: ${pick.promotionStatus}. Score: ${pick.promotionScore != null ? pick.promotionScore.toFixed(1) : 'none'}.`}
-            />
+            {promotion.boardOverrideAvailable ? (
+              <InterventionAction
+                label="Force Promote to Best Bets"
+                variant="secondary"
+                pickId={pickId}
+                action="force_promote"
+                target="best-bets"
+                contextNote={`Current status: ${pick.promotionStatus}. Score: ${pick.promotionScore != null ? pick.promotionScore.toFixed(1) : 'none'}. A force promote is an override, not score qualification.`}
+              />
+            ) : null}
           </div>
+          {promotion.humanCapperDelivery ? (
+            <p className="text-xs text-gray-400">
+              Human capper delivery pick. It reaches official-picks through its delivery authorization, not through the board lane, so no board override is offered.
+            </p>
+          ) : null}
         </div>
       </Card>
 
@@ -462,10 +478,12 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             <Th>Version</Th>
             <Th>Decided At</Th>
             <Th>Decided By</Th>
+            <Th>Override</Th>
+            <Th>Reason</Th>
           </TableHead>
           <TableBody>
             {detail.promotionHistory.length === 0 ? (
-              <EmptyRow cols={6} label="No promotion decisions recorded for this pick." />
+              <EmptyRow cols={8} label="No promotion decisions recorded for this pick." />
             ) : (
               detail.promotionHistory.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
@@ -475,6 +493,8 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
                   <Td>{row.version}</Td>
                   <Td>{row.decidedAt}</Td>
                   <Td>{row.decidedBy}</Td>
+                  <Td>{row.overrideAction ?? '—'}</Td>
+                  <Td>{row.reason ?? '—'}</Td>
                 </tr>
               ))
             )}
@@ -546,11 +566,12 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
       <Card title="Score + Metadata">
         <div className="flex flex-col gap-1">
           <KV label="Promotion Status" value={pick.promotionStatus} />
-          <KV label="Promotion Target" value={pick.promotionTarget} />
+          <KV label="Promotion Target" value={pick.promotionTarget ?? 'none'} />
           <KV
             label="Promotion Score"
             value={pick.promotionScore != null ? String(pick.promotionScore) : null}
           />
+          <KV label="Promotion Band" value={promotion.band} />
         </div>
         {promotionScores != null ? (
           <div className="mt-4">
@@ -569,8 +590,8 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
       <Card title="Intelligence Presence">
         <div className="flex flex-col gap-1">
           <KV label="Domain Analysis" value={domainAnalysis ? 'present' : 'missing'} />
-          <KV label="Real Edge" value={hasRealEdge ? 'present' : 'missing'} />
-          <KV label="Edge Source" value={edgeSource} />
+          <KV label="Real Edge" value={realEdgePresence} />
+          <KV label="Edge Source" value={scoreInsight.edgeSource} />
           <KV label="Devigging Result" value={deviggingResult ? 'present' : 'missing'} />
           <KV label="Kelly Sizing" value={kellySizing ? 'present' : 'missing'} />
           <KV label="CLV" value={

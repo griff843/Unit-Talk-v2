@@ -1,3 +1,4 @@
+import { isHumanCapperDeliveryAuthorized } from '@unit-talk/contracts';
 import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { successResponse, errorResponse } from '../http.js';
@@ -51,6 +52,21 @@ export async function overridePromotionController(
 
   if (pick.status === 'settled' || pick.status === 'voided') {
     return errorResponse(400, 'TERMINAL_STATE', `Pick is in terminal state '${pick.status}' — override not allowed`);
+  }
+
+  // UTV2-1902: a human capper delivery pick reaches official-picks through its
+  // delivery authorization, never through the board lane. Force-promoting it
+  // would write a board target onto a pick no scoring decision placed there.
+  // Suppress stays allowed: it removes a board target and grants nothing.
+  if (
+    payload.action === 'force_promote' &&
+    isHumanCapperDeliveryAuthorized(pick.metadata as Record<string, unknown> | null)
+  ) {
+    return errorResponse(
+      409,
+      'HUMAN_CAPPER_DELIVERY_PICK',
+      'A human capper delivery pick has no board promotion lane; force_promote is not applicable',
+    );
   }
 
   const previousStatus = pick.promotion_status;

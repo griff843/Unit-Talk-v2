@@ -15,6 +15,7 @@ import {
   resolveScoringProfile,
   type ExposureGateConfig,
   resolveExposureGateConfig,
+  isHumanCapperDeliveryAuthorized,
 } from '@unit-talk/contracts';
 import {
   applyBandDowngrades,
@@ -48,6 +49,11 @@ import {
 } from './domain-analysis-service.js';
 
 const activeScoringProfile = resolveScoringProfile(process.env['UNIT_TALK_SCORING_PROFILE']);
+
+
+/** UTV2-1902: the persisted reason a human capper delivery pick holds no board target. */
+export const HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE =
+  'human capper delivery pick: board promotion not applicable (delivered via official-picks authorization)';
 
 export interface PromotionEvaluationResult {
   pick: CanonicalPick;
@@ -440,20 +446,16 @@ export async function evaluateAllPoliciesEagerAndPersist(
   );
   const decidedAt = new Date().toISOString();
 
-  if (canonicalPick.source === 'smart-form') {
-    return buildSmartFormQualifiedResult(
-      canonicalPick,
-      scoringPick,
-      pickRecord,
-      actor,
-      pickRepository,
-      auditLogRepository,
-      policies,
-      boardStates,
-      scoreInputs,
-      decidedAt,
-    );
-  }
+  // UTV2-1902 (PM decision 2026-09-23): a human capper delivery pick reaches
+  // official-picks through its delivery authorization, never through the board
+  // lane. It is still scored -- the score, breakdown and band are recorded as
+  // information -- but no score, however high, authorizes a board target for
+  // it. Expressed as a suppression so the reason is explicit in the persisted
+  // decision rather than implied by an absent target.
+  const humanCapperDeliveryPick = isHumanCapperDeliveryAuthorized(canonicalPick.metadata);
+  const boardOverride: PromotionDecisionSnapshot['override'] = humanCapperDeliveryPick
+    ? { suppress: true, reason: HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE }
+    : undefined;
 
   const makeInput = (
     policy: PromotionPolicy,
@@ -473,15 +475,10 @@ export async function evaluateAllPoliciesEagerAndPersist(
              ),
     scoreInputs,
     minimumScore: policy.minimumScore,
-    // Smart Form picks are deliberate human capper submissions — confidence is
-    // analytical metadata only and must never block delivery.
-    confidenceFloor:
-      canonicalPick.source === 'smart-form' || canonicalPick.source === 'alert-agent'
-        ? undefined
-        : policy.confidenceFloor,
+    confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy),
     boardCaps: policy.boardCaps,
     boardState,
-    override: undefined,
+    override: boardOverride,
     decidedAt,
     decidedBy: actor,
     version: policy.version,
@@ -550,7 +547,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
                readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
              ),
-      confidenceFloor: policy.confidenceFloor ?? null,
+      confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy) ?? null,
       pickConfidence: canonicalPick.confidence ?? null,
     },
     boardStateAtDecision: {
@@ -566,6 +563,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
       uniqueness: policy.weights.uniqueness,
       boardFit: policy.weights.boardFit,
     },
+    // UTV2-1902: persist the override the decision was evaluated with, so
+    // replayPromotion() reproduces it rather than re-deciding without it.
+    ...(boardOverride !== undefined ? { override: boardOverride } : {}),
   });
 
   const winnerSnapshot = makeSnapshot(winnerPolicy, winnerBoardState);
@@ -732,291 +732,6 @@ export async function evaluateAllPoliciesEagerAndPersist(
   };
 }
 
-async function buildSmartFormQualifiedResult(
-  canonicalPick: CanonicalPick,
-  scoringPick: CanonicalPick,
-  pickRecord: PickRecord,
-  actor: string,
-  pickRepository: PickRepository,
-  auditLogRepository: AuditLogRepository,
-  policies: readonly PromotionPolicy[],
-  boardStates: Awaited<ReturnType<PickRepository['getPromotionBoardState']>>[],
-  scoreInputs: Awaited<ReturnType<typeof readPromotionScoreInputs>>,
-  decidedAt: string,
-): Promise<EagerPromotionAllPoliciesResult> {
-  const bestBetsPolicy = policies.find((policy) => policy.target === 'best-bets');
-  const bestBetsIndex = policies.findIndex((policy) => policy.target === 'best-bets');
-  if (!bestBetsPolicy || bestBetsIndex < 0) {
-    throw new Error('best-bets policy must be active for smart-form submissions');
-  }
-
-  const makeInput = (
-    policy: PromotionPolicy,
-    boardState: (typeof boardStates)[number],
-    override: BoardPromotionEvaluationInput['override'],
-  ): BoardPromotionEvaluationInput => ({
-    target: policy.target,
-    pick: canonicalPick,
-    approvalStatus: canonicalPick.approvalStatus,
-    hasRequiredFields: hasRequiredFields(canonicalPick),
-    isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
-      && !isEventStarted(canonicalPick),
-    marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-    riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
-             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
-               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
-             ),
-    scoreInputs,
-    minimumScore: policy.minimumScore,
-    confidenceFloor: undefined,
-    boardCaps: policy.boardCaps,
-    boardState,
-    override,
-    decidedAt,
-    decidedBy: actor,
-    version: policy.version,
-  });
-
-  const decisions = policies.map((policy, index) => {
-    const boardState = boardStates[index]!;
-    if (policy.target === 'best-bets') {
-      return evaluatePromotionEligibility(
-        makeInput(policy, boardState, {
-          forcePromote: true,
-          reason: 'smart-form submissions route directly to best-bets',
-        }),
-        policy,
-      );
-    }
-
-    return evaluatePromotionEligibility(
-      makeInput(policy, boardState, {
-        suppress: true,
-        reason: 'smart-form submissions route directly to best-bets',
-      }),
-      policy,
-    );
-  });
-
-  const decisionByTarget = new Map(
-    policies.map((policy, index) => [policy.target, decisions[index]!] as const),
-  );
-
-  // Compute risk score once for this pick (pure fn, same result for all policies)
-  const smartFormRiskResult = computeRiskScore(scoringPick, scoreInputs);
-
-  const makeSnapshot = (
-    policy: PromotionPolicy,
-    boardState: (typeof boardStates)[number],
-    override: BoardPromotionEvaluationInput['override'],
-  ): PromotionDecisionSnapshot => ({
-    scoringProfile: activeScoringProfile.name,
-    policyVersion: policy.version,
-    scoreInputs: {
-      edge: scoreInputs.edge,
-      trust: scoreInputs.trust,
-      readiness: scoreInputs.readiness,
-      uniqueness: scoreInputs.uniqueness,
-      boardFit: scoreInputs.boardFit,
-      edgeSource: scoreInputs.edgeSource,
-      edgeSourceQuality: scoreInputs.edgeSourceQuality,
-      ...(scoreInputs.edgeFallbackReason
-        ? { edgeFallbackReason: scoreInputs.edgeFallbackReason }
-        : {}),
-      edgeMethod: scoreInputs.edgeMethod,
-      providerCoverageState: scoreInputs.providerCoverageState,
-      riskScore: smartFormRiskResult.score,
-      riskComponents: smartFormRiskResult.components,
-      riskModifier: smartFormRiskResult.modifier,
-    },
-    gateInputs: {
-      approvalStatus: canonicalPick.approvalStatus,
-      hasRequiredFields: hasRequiredFields(canonicalPick),
-      isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
-      && !isEventStarted(canonicalPick),
-      marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-      riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
-             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
-               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
-             ),
-      confidenceFloor: null,
-      pickConfidence: canonicalPick.confidence ?? null,
-    },
-    boardStateAtDecision: {
-      currentBoardCount: boardState.currentBoardCount,
-      sameSportCount: boardState.sameSportCount,
-      sameGameCount: boardState.sameGameCount,
-      duplicateCount: boardState.duplicateCount,
-    },
-    weightsUsed: {
-      edge: policy.weights.edge,
-      trust: policy.weights.trust,
-      readiness: policy.weights.readiness,
-      uniqueness: policy.weights.uniqueness,
-      boardFit: policy.weights.boardFit,
-    },
-    ...(toSnapshotOverride(override) ? { override: toSnapshotOverride(override) } : {}),
-  }) as PromotionDecisionSnapshot;
-
-  const winnerDecision = decisions[bestBetsIndex]!;
-  const winnerBoardState = boardStates[bestBetsIndex]!;
-  const winnerBand = computeDeterministicBand(scoringPick, scoreInputs, winnerDecision);
-  const winnerSnapshot = makeSnapshot(bestBetsPolicy, winnerBoardState, {
-    forcePromote: true,
-    reason: 'smart-form submissions route directly to best-bets',
-  });
-  const winnerReason = summarizePromotionReason(winnerDecision);
-
-  const persisted = await pickRepository.persistPromotionDecision({
-    pickId: canonicalPick.id,
-    target: bestBetsPolicy.target,
-    approvalStatus: canonicalPick.approvalStatus,
-    promotionStatus: winnerDecision.status,
-    promotionTarget: 'best-bets',
-    promotionScore: winnerDecision.score,
-    promotionReason: winnerReason,
-    promotionVersion: winnerDecision.version,
-    promotionDecidedAt: winnerDecision.decidedAt,
-    promotionDecidedBy: winnerDecision.decidedBy,
-    overrideAction: 'force_promote',
-    metadataPatch: buildPromotionMetadataPatch(canonicalPick, scoringPick, { band: winnerBand }),
-    payload: {
-      band: winnerBand,
-      ...winnerSnapshot,
-      explanation: winnerDecision.explanation,
-      qualified: winnerDecision.qualified,
-      score: winnerDecision.score,
-      breakdown: winnerDecision.breakdown,
-      policy: bestBetsPolicy,
-    },
-  });
-
-  await auditLogRepository.record({
-    entityType: 'pick_promotion_history',
-    entityId: persisted.history.id,
-    entityRef: canonicalPick.id,
-    action: 'promotion.force_promote',
-    actor,
-    payload: {
-      pickId: canonicalPick.id,
-      target: 'best-bets',
-      status: winnerDecision.status,
-      score: winnerDecision.score,
-      resolvedTarget: 'best-bets',
-      reason: 'smart-form submissions route directly to best-bets',
-    },
-  });
-
-  try {
-    for (let index = 0; index < policies.length; index += 1) {
-      if (index === bestBetsIndex) {
-        continue;
-      }
-
-      const policy = policies[index]!;
-      const decision = decisions[index]!;
-      const boardState = boardStates[index]!;
-      const historyBand = computeDeterministicBand(scoringPick, scoreInputs, decision);
-      const history = await pickRepository.insertPromotionHistoryRow({
-        pickId: canonicalPick.id,
-        target: policy.target,
-        promotionStatus: decision.status,
-        promotionScore: decision.score,
-        promotionReason: summarizePromotionReason(decision),
-        promotionVersion: decision.version,
-        promotionDecidedAt: decision.decidedAt,
-        promotionDecidedBy: decision.decidedBy,
-        overrideAction: null,
-        payload: {
-          band: historyBand,
-          ...makeSnapshot(policy, boardState, {
-            suppress: true,
-            reason: 'smart-form submissions route directly to best-bets',
-          }),
-          explanation: decision.explanation,
-          qualified: decision.qualified,
-          score: decision.score,
-          breakdown: decision.breakdown,
-          policy,
-        },
-      });
-
-      await auditLogRepository.record({
-        entityType: 'pick_promotion_history',
-        entityId: history.id,
-        entityRef: canonicalPick.id,
-        action: 'promotion.suppress',
-        actor,
-        payload: {
-          pickId: canonicalPick.id,
-          target: policy.target,
-          status: decision.status,
-          score: decision.score,
-          resolvedTarget: 'best-bets',
-          reason: 'smart-form submissions route directly to best-bets',
-        },
-      });
-    }
-  } catch (historyError: unknown) {
-    console.error(JSON.stringify({
-      service: 'promotion-service',
-      event: 'promotion.history_insert_failed',
-      pickId: canonicalPick.id,
-      resolvedTarget: 'best-bets',
-      error: historyError instanceof Error ? historyError.message : String(historyError),
-      action: 'executing compensating rollback',
-    }));
-
-    try {
-      await pickRepository.persistPromotionDecision({
-        pickId: canonicalPick.id,
-        target: bestBetsPolicy.target,
-        approvalStatus: canonicalPick.approvalStatus,
-        promotionStatus: 'suppressed',
-        promotionTarget: null,
-        promotionScore: 0,
-        promotionReason: 'compensating-rollback: history insert failure',
-        promotionVersion: winnerDecision.version,
-        promotionDecidedAt: new Date().toISOString(),
-        promotionDecidedBy: 'system:rollback',
-        overrideAction: null,
-        payload: { rollbackReason: 'non-winner history insert failed', originalTarget: 'best-bets' },
-      });
-
-      await auditLogRepository.record({
-        entityType: 'pick_promotion_history',
-        entityId: persisted.history.id,
-        entityRef: canonicalPick.id,
-        action: 'promotion.rollback',
-        actor: 'system:rollback',
-        payload: { pickId: canonicalPick.id, resolvedTarget: 'best-bets', reason: 'non-winner history insert failed after pick update' },
-      });
-    } catch (rollbackError: unknown) {
-      console.error(JSON.stringify({
-        service: 'promotion-service',
-        event: 'promotion.rollback_failed',
-        pickId: canonicalPick.id,
-        resolvedTarget: 'best-bets',
-        error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-        impact: 'Pick may be in inconsistent state — promotion_target set but history incomplete',
-      }));
-    }
-
-    throw historyError;
-  }
-
-  return {
-    pick: mapPickRecordToCanonicalPick(persisted.pick),
-    pickRecord: persisted.pick,
-    resolvedTarget: 'best-bets',
-    exclusiveInsightsDecision: decisionByTarget.get('exclusive-insights')!,
-    traderInsightsDecision: decisionByTarget.get('trader-insights')!,
-    bestBetsDecision: decisionByTarget.get('best-bets')!,
-  };
-}
-
 export async function applyPromotionOverride(
   input: {
     pickId: string;
@@ -1096,10 +811,7 @@ async function persistPromotionDecisionForPick(
              ),
     scoreInputs,
     minimumScore: policy.minimumScore,
-    confidenceFloor:
-      canonicalPick.source === 'smart-form' || canonicalPick.source === 'alert-agent'
-        ? undefined
-        : policy.confidenceFloor,
+    confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy),
     boardCaps: policy.boardCaps,
     boardState,
     override: overrideState,
@@ -1149,7 +861,7 @@ async function persistPromotionDecisionForPick(
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
                readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
              ),
-      confidenceFloor: policy.confidenceFloor ?? null,
+      confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy) ?? null,
       pickConfidence: canonicalPick.confidence ?? null,
     },
     boardStateAtDecision: {
@@ -1711,6 +1423,21 @@ function normalizeConfidenceForScoring(confidence: number | undefined) {
   return confidence;
 }
 
+/**
+ * The confidence floor a policy is actually evaluated with. Smart Form picks are
+ * deliberate human capper submissions and alert-agent picks carry no capper
+ * confidence, so for both the floor is waived. Used for the evaluation input and
+ * for the persisted snapshot alike, so a replay sees the floor the decision saw.
+ */
+function effectiveConfidenceFloor(
+  pick: Pick<CanonicalPick, 'source'>,
+  policy: Pick<PromotionPolicy, 'confidenceFloor'>,
+): number | undefined {
+  return pick.source === 'smart-form' || pick.source === 'alert-agent'
+    ? undefined
+    : policy.confidenceFloor;
+}
+
 function mapOverrideState(
   override:
     | {
@@ -1734,30 +1461,6 @@ function mapOverrideState(
     suppress: true,
     reason: override.reason,
   };
-}
-
-function toSnapshotOverride(
-  override: BoardPromotionEvaluationInput['override'],
-): PromotionDecisionSnapshot['override'] {
-  if (!override) {
-    return undefined;
-  }
-
-  if (override.forcePromote) {
-    return {
-      forcePromote: true,
-      ...(override.reason ? { reason: override.reason } : {}),
-    };
-  }
-
-  if (override.suppress) {
-    return {
-      suppress: true,
-      ...(override.reason ? { reason: override.reason } : {}),
-    };
-  }
-
-  return override.reason ? { reason: override.reason } : undefined;
 }
 
 function summarizePromotionReason(decision: BoardPromotionDecision) {
