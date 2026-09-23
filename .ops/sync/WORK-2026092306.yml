@@ -1,0 +1,172 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092306
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092306
+  objective: WORK-2026092306 — intelligence form windows read the effective
+    settlement, not the superseded original
+  acceptance_criteria:
+    - >-
+      # WORK-2026092306 — intelligence form windows read the effective
+      settlement, not the superseded original
+
+
+      Tier: T2 · Lane type: delivery-ui · Executor: claude
+
+
+      ## Problem
+
+
+      `getIntelligenceData` in `apps/command-center/src/lib/data/analytics.ts`
+      reads
+
+      `settlement_records` with `.is('corrects_id', null)`, which selects each
+      pick's chain **root**.
+
+      Settlement corrections (`corrects_id` → prior record) are written by the
+      delivery plane and by
+
+      operator grading, so every corrected pick's recent-form, score-band and
+      CLV figures show the
+
+      superseded result.
+
+
+      ## Outcome
+
+
+      - Read recent settlement rows and each such pick's full history, then
+      reduce to one effective row
+        per pick with the domain's `resolveEffectiveSettlement` (root → tip).
+      - A chain that does not resolve (orphan correction, multiple roots, cycle,
+      branch) is excluded and
+        counted, never guessed. A `manual_review` tip is not a settlement.
+      - Form windows stay ordered by the chain root's `settled_at`, so a late
+      correction does not move an
+        old game to the front.
+
+      ## Acceptance
+
+
+      - WIN → LOSS correction yields the loss and the correction's payload.
+
+      - Orphan correction and two-root chain are excluded and counted.
+
+      - Mutation: reducing to the root instead of the tip turns the correction
+      test red.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092306 — intelligence form windows read the effective settlement,
+      not the superseded original
+
+      Tier: T2 · Lane type: delivery-ui · Executor: claude
+
+
+      ## Problem
+
+
+      `getIntelligenceData` in `apps/command-center/src/lib/data/analytics.ts`
+      reads
+
+      `settlement_records` with `.is('corrects_id', null)`, which selects each
+      pick's chain **root**.
+
+      Settlement corrections (`corrects_id` → prior record) are written by the
+      delivery plane and by
+
+      operator grading, so every corrected pick's recent-form, score-band and
+      CLV figures show the
+
+      superseded result.
+
+
+      ## Outcome
+
+
+      - Read recent settlement rows and each such pick's full history, then
+      reduce to one effective row
+        per pick with the domain's `resolveEffectiveSettlement` (root → tip).
+      - A chain that does not resolve (orphan correction, multiple roots, cycle,
+      branch) is excluded and
+        counted, never guessed. A `manual_review` tip is not a settlement.
+      - Form windows stay ordered by the chain root's `settled_at`, so a late
+      correction does not move an
+        old game to the front.
+
+      ## Acceptance
+
+
+      - WIN → LOSS correction yields the loss and the correction's payload.
+
+      - Orphan correction and two-root chain are excluded and counted.
+
+      - Mutation: reducing to the root instead of the tip turns the correction
+      test red.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092306.md
+    title: WORK-2026092306 — intelligence form windows read the effective
+      settlement, not the superseded original
+    description: >-
+      # WORK-2026092306 — intelligence form windows read the effective
+      settlement, not the superseded original
+
+
+      Tier: T2 · Lane type: delivery-ui · Executor: claude
+
+
+      ## Problem
+
+
+      `getIntelligenceData` in `apps/command-center/src/lib/data/analytics.ts`
+      reads
+
+      `settlement_records` with `.is('corrects_id', null)`, which selects each
+      pick's chain **root**.
+
+      Settlement corrections (`corrects_id` → prior record) are written by the
+      delivery plane and by
+
+      operator grading, so every corrected pick's recent-form, score-band and
+      CLV figures show the
+
+      superseded result.
+
+
+      ## Outcome
+
+
+      - Read recent settlement rows and each such pick's full history, then
+      reduce to one effective row
+        per pick with the domain's `resolveEffectiveSettlement` (root → tip).
+      - A chain that does not resolve (orphan correction, multiple roots, cycle,
+      branch) is excluded and
+        counted, never guessed. A `manual_review` tip is not a settlement.
+      - Form windows stay ordered by the chain root's `settled_at`, so a late
+      correction does not move an
+        old game to the front.
+
+      ## Acceptance
+
+
+      - WIN → LOSS correction yields the loss and the correction's payload.
+
+      - Orphan correction and two-root chain are excluded and counted.
+
+      - Mutation: reducing to the root instead of the tip turns the correction
+      test red.
+    captured_at: 2026-09-23T14:30:48.201Z
+    description_sha256: dd144e5ec52672e51e5c105b7c5fb5672d3fc205f8e4538949710bbc9dea1bdd
+  contract_hash: 1fda0b523078cdb695fc8a7d1dab1ad8acf62fb34b32610b0379f3a2beb13d9e

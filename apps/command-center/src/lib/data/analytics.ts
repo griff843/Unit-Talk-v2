@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { americanToDecimal, isValidAmericanOdds } from '@unit-talk/contracts';
+import {
+  resolveEffectiveSettlement,
+  type SettlementInput,
+} from '../../../../../packages/domain/dist/outcomes/settlement-downstream.js';
 
 import { getDataClient, isTestFixturePick } from './client';
 import { applyPickPopulation, resolveGovernedPick } from '../governed-population';
@@ -839,6 +843,62 @@ function computeFormWindow(rows: Row[]): FormWindow {
   };
 }
 
+/**
+ * Reduce settlement rows to one effective row per pick.
+ *
+ * A pick's result is the tip of its correction chain (`corrects_id` → prior
+ * record), never the root: reading `corrects_id IS NULL` reports the superseded
+ * result of every corrected pick. A chain that does not resolve -- a correction
+ * whose target is not in the rows, two roots, a cycle -- is excluded and
+ * counted rather than guessed. Only a `settled` tip is returned; a tip in
+ * `manual_review` is not a settlement yet.
+ *
+ * Rows are ordered by the chain ROOT's `settled_at`, newest first, so a late
+ * correction does not move an old game to the front of the recent-form window.
+ */
+export function selectEffectiveSettlementRows(rows: Row[]): { rows: Row[]; unresolvedPickCount: number } {
+  const byPick = new Map<string, Row[]>();
+  for (const row of rows) {
+    const pickId = asString(row['pick_id']);
+    if (pickId === null) continue;
+    const group = byPick.get(pickId);
+    if (group) group.push(row); else byPick.set(pickId, [row]);
+  }
+  const effective: Array<{ row: Row; rootSettledAt: string }> = [];
+  let unresolvedPickCount = 0;
+  for (const [pickId, group] of byPick) {
+    const ids = new Set(group.map((row) => asString(row['id'])));
+    const inputs: SettlementInput[] = [];
+    let wellFormed = true;
+    for (const row of group) {
+      const id = asString(row['id']);
+      const status = asString(row['status']);
+      const settledAt = asString(row['settled_at']);
+      const correctsId = asString(row['corrects_id']);
+      if (id === null || settledAt === null || (status !== 'settled' && status !== 'manual_review')
+        || (correctsId !== null && !ids.has(correctsId))) {
+        wellFormed = false;
+        break;
+      }
+      inputs.push({
+        id, pick_id: pickId, status, result: asString(row['result']),
+        confidence: safeString(row['confidence']), corrects_id: correctsId, settled_at: settledAt,
+      });
+    }
+    const resolved = wellFormed ? resolveEffectiveSettlement(inputs) : null;
+    if (!resolved || !resolved.ok || resolved.settlement.correction_depth + 1 !== group.length) {
+      unresolvedPickCount++;
+      continue;
+    }
+    if (resolved.settlement.status !== 'settled') continue;
+    const tip = group.find((row) => asString(row['id']) === resolved.settlement.effective_record_id)!;
+    const root = inputs.find((input) => input.corrects_id === null)!;
+    effective.push({ row: tip, rootSettledAt: root.settled_at });
+  }
+  effective.sort((a, b) => (a.rootSettledAt < b.rootSettledAt ? 1 : a.rootSettledAt > b.rootSettledAt ? -1 : 0));
+  return { rows: effective.map((e) => e.row), unresolvedPickCount };
+}
+
 const SCORE_BANDS = [
   { range: '0–40', min: 0, max: 40 },
   { range: '40–60', min: 40, max: 60 },
@@ -855,13 +915,13 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
   try {
     const client: Client = await getDataClient();
 
-    // Fetch last 200 settled records (canonical) ordered by settled_at desc for form windows
-    const [settlementResult, holdsResult] = await Promise.all([
+    // The picks behind the last 200 settlement records, most recent first. Only
+    // pick ids are read here: a pick's result is the tip of its correction chain,
+    // so its full history is read below and reduced to one effective row.
+    const [recentResult, holdsResult] = await Promise.all([
       client
         .from('settlement_records')
-        .select('id, pick_id, result, status, payload, created_at, settled_at')
-        .is('corrects_id', null)
-        .eq('status', 'settled')
+        .select('pick_id')
         .order('settled_at', { ascending: false })
         .limit(200),
       client
@@ -870,12 +930,28 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
         .eq('review_decision', 'hold'),
     ]);
 
-    if (settlementResult.error) {
-      console.error('[analytics] getIntelligenceData settlement error:', settlementResult.error);
+    if (recentResult.error) {
+      console.error('[analytics] getIntelligenceData settlement error:', recentResult.error);
       return null;
     }
 
-    const settlementRows = (settlementResult.data ?? []) as Row[];
+    const recentPickIds = [
+      ...new Set(((recentResult.data ?? []) as Row[]).map((r) => asString(r['pick_id'])).filter(Boolean)),
+    ] as string[];
+    const history: Row[] = [];
+    for (let start = 0; start < recentPickIds.length; start += 100) {
+      const historyResult = await client
+        .from('settlement_records')
+        .select('id, pick_id, result, status, confidence, corrects_id, payload, created_at, settled_at')
+        .in('pick_id', recentPickIds.slice(start, start + 100));
+      if (historyResult.error) {
+        console.error('[analytics] getIntelligenceData settlement history error:', historyResult.error);
+        return null;
+      }
+      history.push(...((historyResult.data ?? []) as Row[]));
+    }
+    const effectiveSettlements = selectEffectiveSettlementRows(history);
+    const settlementRows = effectiveSettlements.rows;
     const holdsTotal = holdsResult.count ?? 0;
     const holdsResolvedCount = (holdsResult.data ?? []).filter(
       (r: Row) => safeString(r['status']) === 'settled',
@@ -1106,6 +1182,12 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
     }
 
     const warnings: Array<{ segment: string; message: string }> = [];
+    if (effectiveSettlements.unresolvedPickCount > 0) {
+      warnings.push({
+        segment: 'Settlement History',
+        message: `${effectiveSettlements.unresolvedPickCount} pick(s) excluded — their settlement correction chain does not resolve to one effective result.`,
+      });
+    }
     if (sampleSize < 20) {
       warnings.push({ segment: 'Score Quality', message: 'Sample size is below 20 — score correlation should not be treated as reliable.' });
     }
