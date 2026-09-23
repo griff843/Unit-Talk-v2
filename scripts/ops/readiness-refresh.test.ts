@@ -12,6 +12,7 @@ import {
   probeConstitutionConvergence,
   probeDbTripwires,
   probeDeadLetterCount,
+  SELECT_PAGE_SIZE,
   probeDeploySha,
   probeIngestorHealth,
   probeWorkerOutboxHealth,
@@ -629,6 +630,131 @@ test('the read-only wrapper issues select reads and surfaces errors instead of r
     () => wrapReadOnlyClient(failing as never, 'zfzdnfwdarxucxtaojxm').latestRow('picks', 'id', [], 'id'),
     /permission denied/,
   );
+});
+
+/**
+ * A PostgREST stand-in that behaves like the real one where it matters: every
+ * response is capped at `maxRows` whatever `.limit()` asks for, `range` is
+ * inclusive, a `head` count reports the whole filtered population, and an
+ * unordered read comes back in no stable order (here: rotated per request), as
+ * Postgres promises nothing about row order without `ORDER BY`.
+ */
+function cappedClient(
+  population: Record<string, unknown>[],
+  options: { maxRows?: number; failOnPage?: number } = {},
+) {
+  const maxRows = options.maxRows ?? 1000;
+  const reads: string[] = [];
+  const client = {
+    from() {
+      return {
+        select(_columns: string, selectOptions?: { count?: 'exact'; head?: boolean }) {
+          let rows = [...population];
+          let window: [number, number] | null = null;
+          let limit: number | null = null;
+          let ordered = false;
+          const builder = {
+            eq(column: string, value: string | number) {
+              rows = rows.filter((row) => row[column] === value);
+              return builder;
+            },
+            neq() { return builder; },
+            gt() { return builder; },
+            gte() { return builder; },
+            lt() { return builder; },
+            order(column: string) {
+              rows.sort((a, b) => String(a[column]).localeCompare(String(b[column])));
+              ordered = true;
+              return builder;
+            },
+            limit(count: number) {
+              limit = count;
+              return builder;
+            },
+            range(from: number, to: number) {
+              window = [from, to];
+              return builder;
+            },
+            then<R>(resolve: (value: { data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null }) => R): R {
+              if (selectOptions?.head) return resolve({ data: null, error: null, count: rows.length });
+              reads.push(window ? `range:${window[0]}-${window[1]}` : `limit:${limit}`);
+              if (options.failOnPage !== undefined && reads.length === options.failOnPage) {
+                return resolve({ data: null, error: { message: 'statement timeout' }, count: null });
+              }
+              const [from, to] = window ?? [0, (limit ?? rows.length) - 1];
+              const shift = ordered ? 0 : (reads.length * 337) % Math.max(rows.length, 1);
+              const served = [...rows.slice(shift), ...rows.slice(0, shift)];
+              return resolve({ data: served.slice(from, Math.min(to + 1, from + maxRows)), error: null, count: null });
+            },
+          };
+          return builder;
+        },
+      };
+    },
+  };
+  return { client, reads };
+}
+
+function deadLetters(count: number): Record<string, unknown>[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `dl-${String(index).padStart(5, '0')}`,
+    status: 'dead_letter',
+    attempt_count: 0,
+    last_error: 'stale_pending_operator_review',
+  }));
+}
+
+// Production on 2026-09-23 held 1954 dead letters and the ledger recorded
+// "read 1000 of 1954": one `.limit(20000)` read, silently capped at max-rows.
+test('selectRows reads a population larger than the PostgREST row cap in full', async () => {
+  const population = deadLetters(1954);
+  const { client, reads } = cappedClient(population);
+  const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
+
+  const rows = await db.selectRows('distribution_outbox', 'id', [{ column: 'status', op: 'eq', value: 'dead_letter' }], 20000);
+
+  assert.equal(SELECT_PAGE_SIZE, 1000);
+  assert.equal(rows.length, 1954);
+  assert.equal(new Set(rows.map((row) => row['id'])).size, 1954, 'no row is read twice');
+  assert.deepEqual(reads, ['range:0-999', 'range:1000-1999', 'range:1954-2953']);
+});
+
+test('selectRows still reads everything when the server cap is smaller than a page', async () => {
+  const { client } = cappedClient(deadLetters(1954), { maxRows: 300 });
+  const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
+
+  const rows = await db.selectRows('distribution_outbox', 'id', [], 20000);
+
+  assert.equal(rows.length, 1954);
+  assert.equal(new Set(rows.map((row) => row['id'])).size, 1954);
+});
+
+test('selectRows honours its limit exactly', async () => {
+  const { client, reads } = cappedClient(deadLetters(1954));
+  const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
+
+  const rows = await db.selectRows('distribution_outbox', 'id', [], 1500);
+
+  assert.equal(rows.length, 1500);
+  assert.deepEqual(reads, ['range:0-999', 'range:1000-1499']);
+});
+
+test('a failed page rejects the whole read rather than returning the pages before it', async () => {
+  const { client } = cappedClient(deadLetters(1954), { failOnPage: 2 });
+  const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
+
+  await assert.rejects(() => db.selectRows('distribution_outbox', 'id', [], 20000), /statement timeout/);
+});
+
+test('the dead-letter dimension issues a verdict over a queue larger than the row cap', async () => {
+  const { client } = cappedClient(deadLetters(1954));
+  const result = await probeDeadLetterCount(
+    context({ dbUnavailableReason: null, db: wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm') }),
+  );
+
+  assert.equal(result.status, 'pass');
+  assert.equal(result.unreadable_reason, null);
+  assert.equal(result.measured?.['dead_letter_total'], 1954);
 });
 
 // ── Repo-scanned dimension ───────────────────────────────────────────────────
