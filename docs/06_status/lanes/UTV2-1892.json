@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1892-merge-gate-work-identity",
   "branch": "claude/utv2-1892-merge-gate-work-identity",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2103f721bdf678f4a0e5214a8b09a125b0fef245",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1570",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,7 +20,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1892/evidence.json"
   ],
-  "status": "blocked",
+  "status": "merged",
   "started_at": "2026-09-22T00:13:06.199Z",
   "heartbeat_at": "2026-09-22T00:22:47.034Z",
   "closed_at": null,
@@ -34,6 +34,15 @@
       "merge_sha": null,
       "failures": [
         "heartbeat_at 28.6h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-09-23T05:08:59.917Z",
+      "verdict": "fail",
+      "merge_sha": "2103f721bdf678f4a0e5214a8b09a125b0fef245",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1570 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
     }
