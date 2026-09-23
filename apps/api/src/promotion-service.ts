@@ -482,7 +482,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     boardState,
     override: humanCapperDeliveryPick
       ? { suppress: true, reason: HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE }
-      : undefined,
+      : canonicalPick.source === "smart-form" ? { forcePromote: true, reason: "mutation: source-only" } : undefined,
     decidedAt,
     decidedBy: actor,
     version: policy.version,
