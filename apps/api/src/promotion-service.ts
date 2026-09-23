@@ -453,6 +453,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
   // it. Expressed as a suppression so the reason is explicit in the persisted
   // decision rather than implied by an absent target.
   const humanCapperDeliveryPick = isHumanCapperDeliveryAuthorized(canonicalPick.metadata);
+  const boardOverride: PromotionDecisionSnapshot['override'] = humanCapperDeliveryPick
+    ? { suppress: true, reason: HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE }
+    : undefined;
 
   const makeInput = (
     policy: PromotionPolicy,
@@ -472,17 +475,10 @@ export async function evaluateAllPoliciesEagerAndPersist(
              ),
     scoreInputs,
     minimumScore: policy.minimumScore,
-    // Smart Form picks are deliberate human capper submissions — confidence is
-    // analytical metadata only and must never block delivery.
-    confidenceFloor:
-      canonicalPick.source === 'smart-form' || canonicalPick.source === 'alert-agent'
-        ? undefined
-        : policy.confidenceFloor,
+    confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy),
     boardCaps: policy.boardCaps,
     boardState,
-    override: humanCapperDeliveryPick
-      ? { suppress: true, reason: HUMAN_CAPPER_BOARD_PROMOTION_NOT_APPLICABLE }
-      : undefined,
+    override: boardOverride,
     decidedAt,
     decidedBy: actor,
     version: policy.version,
@@ -551,7 +547,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
                readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
              ),
-      confidenceFloor: policy.confidenceFloor ?? null,
+      confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy) ?? null,
       pickConfidence: canonicalPick.confidence ?? null,
     },
     boardStateAtDecision: {
@@ -567,6 +563,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
       uniqueness: policy.weights.uniqueness,
       boardFit: policy.weights.boardFit,
     },
+    // UTV2-1902: persist the override the decision was evaluated with, so
+    // replayPromotion() reproduces it rather than re-deciding without it.
+    ...(boardOverride !== undefined ? { override: boardOverride } : {}),
   });
 
   const winnerSnapshot = makeSnapshot(winnerPolicy, winnerBoardState);
@@ -812,10 +811,7 @@ async function persistPromotionDecisionForPick(
              ),
     scoreInputs,
     minimumScore: policy.minimumScore,
-    confidenceFloor:
-      canonicalPick.source === 'smart-form' || canonicalPick.source === 'alert-agent'
-        ? undefined
-        : policy.confidenceFloor,
+    confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy),
     boardCaps: policy.boardCaps,
     boardState,
     override: overrideState,
@@ -865,7 +861,7 @@ async function persistPromotionDecisionForPick(
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
                readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
              ),
-      confidenceFloor: policy.confidenceFloor ?? null,
+      confidenceFloor: effectiveConfidenceFloor(canonicalPick, policy) ?? null,
       pickConfidence: canonicalPick.confidence ?? null,
     },
     boardStateAtDecision: {
@@ -1425,6 +1421,21 @@ function normalizeConfidenceForScoring(confidence: number | undefined) {
   }
 
   return confidence;
+}
+
+/**
+ * The confidence floor a policy is actually evaluated with. Smart Form picks are
+ * deliberate human capper submissions and alert-agent picks carry no capper
+ * confidence, so for both the floor is waived. Used for the evaluation input and
+ * for the persisted snapshot alike, so a replay sees the floor the decision saw.
+ */
+function effectiveConfidenceFloor(
+  pick: Pick<CanonicalPick, 'source'>,
+  policy: Pick<PromotionPolicy, 'confidenceFloor'>,
+): number | undefined {
+  return pick.source === 'smart-form' || pick.source === 'alert-agent'
+    ? undefined
+    : policy.confidenceFloor;
 }
 
 function mapOverrideState(
