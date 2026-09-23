@@ -15,12 +15,12 @@
     "docs/06_status/lanes/UTV2-1892.json"
   ],
   "expected_proof_paths": [],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-09-23T05:16:11.948Z",
-  "heartbeat_at": "2026-09-23T05:16:11.948Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-23T19:47:16.354Z",
+  "closed_at": "2026-09-23T19:47:16.354Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092302-release-ghost-runtime-lane.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -31,6 +31,13 @@
         "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1629 merged while manifest status was \"started\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-09-23T19:47:13.808Z",
+      "verdict": "pass",
+      "merge_sha": "966d9a31b851a67f65864002b8ef5109b2003bfe",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],

@@ -1,0 +1,227 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092309
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092309
+  objective: WORK-2026092309 — the readiness reader pages past the PostgREST row cap
+  acceptance_criteria:
+    - >-
+      # WORK-2026092309 — the readiness reader pages past the PostgREST row cap
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `wrapReadOnlyClient().selectRows` in `scripts/ops/readiness-refresh.ts`
+      issues one
+
+      `.limit(limit)` read. PostgREST caps every response at its `max-rows`
+      (1000 on this project)
+
+      whatever `.limit()` asks for, so the read silently returns at most 1000
+      rows.
+
+
+      The blocking `dead_letter_count` dimension reads `distribution_outbox
+      where status='dead_letter'`
+
+      this way with `DEAD_LETTER_READ_LIMIT = 20000`. Production holds 1954 such
+      rows, so it reads 1000.
+
+      Its completeness guard correctly refuses a partial read, and the ledger of
+      2026-09-23T16:30Z
+
+      records `UNREADABLE ... read 1000 of 1954 dead_letter rows (limit 20000)`.
+
+
+      The dimension therefore can never produce a verdict, whatever the queue
+      actually holds. The limit
+
+      constant claims a capacity the reader does not have.
+
+
+      ## Outcome
+
+
+      - `selectRows` reads in pages of at most 1000, ordered by `id`, until a
+      short page or `limit` is
+        reached. The whole population is read, up to the stated limit.
+      - The completeness guard is unchanged. It still fails closed when rows
+      exceed the limit or a page
+        errors.
+
+      ## Acceptance
+
+
+      - A fake PostgREST client that caps each response at 1000 rows over 1954
+      rows returns all 1954,
+        with no duplicates, via ordered `range` reads.
+      - `limit` is still honoured exactly.
+
+      - A page error rejects the read.
+
+      - Mutation: reverting to a single `.limit()` read fails the capped-client
+      test.
+
+
+      ## Containment
+
+
+      - Read-only reader. No production write, migration, deploy or delivery
+      change.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092309 — the readiness reader pages past the PostgREST row cap
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `wrapReadOnlyClient().selectRows` in `scripts/ops/readiness-refresh.ts`
+      issues one
+
+      `.limit(limit)` read. PostgREST caps every response at its `max-rows`
+      (1000 on this project)
+
+      whatever `.limit()` asks for, so the read silently returns at most 1000
+      rows.
+
+
+      The blocking `dead_letter_count` dimension reads `distribution_outbox
+      where status='dead_letter'`
+
+      this way with `DEAD_LETTER_READ_LIMIT = 20000`. Production holds 1954 such
+      rows, so it reads 1000.
+
+      Its completeness guard correctly refuses a partial read, and the ledger of
+      2026-09-23T16:30Z
+
+      records `UNREADABLE ... read 1000 of 1954 dead_letter rows (limit 20000)`.
+
+
+      The dimension therefore can never produce a verdict, whatever the queue
+      actually holds. The limit
+
+      constant claims a capacity the reader does not have.
+
+
+      ## Outcome
+
+
+      - `selectRows` reads in pages of at most 1000, ordered by `id`, until a
+      short page or `limit` is
+        reached. The whole population is read, up to the stated limit.
+      - The completeness guard is unchanged. It still fails closed when rows
+      exceed the limit or a page
+        errors.
+
+      ## Acceptance
+
+
+      - A fake PostgREST client that caps each response at 1000 rows over 1954
+      rows returns all 1954,
+        with no duplicates, via ordered `range` reads.
+      - `limit` is still honoured exactly.
+
+      - A page error rejects the read.
+
+      - Mutation: reverting to a single `.limit()` read fails the capped-client
+      test.
+
+
+      ## Containment
+
+
+      - Read-only reader. No production write, migration, deploy or delivery
+      change.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092309.md
+    title: WORK-2026092309 — the readiness reader pages past the PostgREST row cap
+    description: >-
+      # WORK-2026092309 — the readiness reader pages past the PostgREST row cap
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `wrapReadOnlyClient().selectRows` in `scripts/ops/readiness-refresh.ts`
+      issues one
+
+      `.limit(limit)` read. PostgREST caps every response at its `max-rows`
+      (1000 on this project)
+
+      whatever `.limit()` asks for, so the read silently returns at most 1000
+      rows.
+
+
+      The blocking `dead_letter_count` dimension reads `distribution_outbox
+      where status='dead_letter'`
+
+      this way with `DEAD_LETTER_READ_LIMIT = 20000`. Production holds 1954 such
+      rows, so it reads 1000.
+
+      Its completeness guard correctly refuses a partial read, and the ledger of
+      2026-09-23T16:30Z
+
+      records `UNREADABLE ... read 1000 of 1954 dead_letter rows (limit 20000)`.
+
+
+      The dimension therefore can never produce a verdict, whatever the queue
+      actually holds. The limit
+
+      constant claims a capacity the reader does not have.
+
+
+      ## Outcome
+
+
+      - `selectRows` reads in pages of at most 1000, ordered by `id`, until a
+      short page or `limit` is
+        reached. The whole population is read, up to the stated limit.
+      - The completeness guard is unchanged. It still fails closed when rows
+      exceed the limit or a page
+        errors.
+
+      ## Acceptance
+
+
+      - A fake PostgREST client that caps each response at 1000 rows over 1954
+      rows returns all 1954,
+        with no duplicates, via ordered `range` reads.
+      - `limit` is still honoured exactly.
+
+      - A page error rejects the read.
+
+      - Mutation: reverting to a single `.limit()` read fails the capped-client
+      test.
+
+
+      ## Containment
+
+
+      - Read-only reader. No production write, migration, deploy or delivery
+      change.
+    captured_at: 2026-09-23T20:08:34.562Z
+    description_sha256: 797e9a2c51556679f7ac311ccfbd4bf1f0213354228c1c05927adcb5e1edd073
+  contract_hash: da7c42b77dd25ed2236ac94770fab452642ea8b4f963f6b806806105509c45a3

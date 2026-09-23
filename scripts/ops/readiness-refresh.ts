@@ -190,6 +190,7 @@ export interface ReadOnlyDb {
    * governance dispositions" -- that classification is a prefix/substring rule
    * owned by `classifyDeadLetter`. A probe that needs it has to read the rows
    * and classify them here rather than pushing a weaker predicate to Postgres.
+   * Rows come back in `id` order, so the table must have an `id` column.
    */
   selectRows(
     table: string,
@@ -1292,6 +1293,7 @@ interface FilterBuilder extends PromiseLike<QueryResult> {
   lt(column: string, value: string | number): FilterBuilder;
   order(column: string, options: { ascending: boolean }): FilterBuilder;
   limit(count: number): FilterBuilder;
+  range(from: number, to: number): FilterBuilder;
 }
 interface ReadOnlyClient {
   from(table: string): { select(columns: string, options?: { count?: 'exact'; head?: boolean }): FilterBuilder };
@@ -1314,6 +1316,9 @@ function applyFilters(builder: FilterBuilder, filters: DbFilter[]): FilterBuilde
   }, builder);
 }
 
+/** PostgREST's `max-rows` on this project; no response is ever larger. */
+export const SELECT_PAGE_SIZE = 1000;
+
 export function wrapReadOnlyClient(client: ReadOnlyClient, projectRef: string): ReadOnlyDb {
   return {
     projectRef,
@@ -1333,13 +1338,25 @@ export function wrapReadOnlyClient(client: ReadOnlyClient, projectRef: string): 
       if (count === null || count === undefined) throw new Error(`${table} count returned no value`);
       return count;
     },
+    // PostgREST caps every response at its `max-rows` (1000 here) whatever
+    // `.limit()` asks for, so a single read of a larger population silently
+    // returns its first page. Read it in `id`-ordered pages until an empty page
+    // or `limit`. Stopping only on an empty page keeps this correct under any
+    // smaller cap; the probes' completeness checks still fail closed on overflow.
     async selectRows(table, columns, filters, limit) {
-      const { data, error } = await applyFilters(
-        client.from(table).select(columns),
-        filters,
-      ).limit(limit);
-      if (error) throw new Error(`${table} read failed: ${error.message}`);
-      return (data ?? []) as Record<string, unknown>[];
+      const rows: Record<string, unknown>[] = [];
+      while (rows.length < limit) {
+        const from = rows.length;
+        const to = Math.min(from + SELECT_PAGE_SIZE, limit) - 1;
+        const { data, error } = await applyFilters(client.from(table).select(columns), filters)
+          .order('id', { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(`${table} read failed: ${error.message}`);
+        const page = (data ?? []) as Record<string, unknown>[];
+        rows.push(...page);
+        if (page.length === 0) break;
+      }
+      return rows;
     },
   };
 }

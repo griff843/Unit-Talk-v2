@@ -72,6 +72,13 @@ function mapSettlementRecordToInput(row: SettlementRecord): SettlementInput {
   };
 }
 
+/**
+ * Expects each pick's complete history (see `readSettlementHistory`). A chain is accepted
+ * only when it is complete and reconciles. `resolveEffectiveSettlement` accepts any lone
+ * record without looking at `corrects_id`, and otherwise walks root -> tip ignoring any
+ * row the walk does not reach, so an orphan or branched correction would be counted as
+ * a settlement it cannot be shown to be.
+ */
 function resolveAllEffectiveSettlements(settlements: SettlementRecord[]): EffectiveSettlement[] {
   const grouped = new Map<string, SettlementRecord[]>();
   for (const row of settlements) {
@@ -80,10 +87,29 @@ function resolveAllEffectiveSettlements(settlements: SettlementRecord[]): Effect
   }
   const effective: EffectiveSettlement[] = [];
   for (const rows of grouped.values()) {
+    const ids = new Set(rows.map((row) => row.id));
+    if (rows.some((row) => row.corrects_id !== null && !ids.has(row.corrects_id))) continue;
     const resolved = resolveEffectiveSettlement(rows.map(mapSettlementRecordToInput));
-    if (resolved.ok) effective.push(resolved.settlement);
+    if (resolved.ok && resolved.settlement.correction_depth + 1 === rows.length) effective.push(resolved.settlement);
   }
   return effective;
+}
+
+/**
+ * Every settlement row for the given picks. A `created_at`-ordered window cuts a
+ * correction chain wherever it likes -- two corrections inside it whose root fell out
+ * resolve to `NO_ROOT_RECORD` and the pick vanishes -- so a window only chooses *which*
+ * picks to show, and each chain is then read whole.
+ */
+async function readSettlementHistory(client: Client, pickIds: readonly string[], label: string): Promise<SettlementRecord[]> {
+  const unique = [...new Set(pickIds)];
+  const rows: SettlementRecord[] = [];
+  for (let start = 0; start < unique.length; start += 100) {
+    const result = await client.from('settlement_records').select('*').in('pick_id', unique.slice(start, start + 100));
+    assertQuerySucceeded(result, label);
+    rows.push(...((result.data ?? []) as SettlementRecord[]));
+  }
+  return rows;
 }
 
 function buildEffectiveSettlementResultMap(settlements: SettlementRecord[]) {
@@ -641,8 +667,18 @@ export async function getSnapshotData(filter?: OutboxFilter): Promise<unknown> {
     healthSignals.push({ component: 'worker', status: 'degraded', detail: `${aging.staleProcessing} outbox row(s) stuck in processing > 10min` });
   }
 
-  const picksPipeline = summarizePicksPipeline(recentPicks, recentSettlements, picksPipelineCounts);
-  const recap: SettlementSummary = computeSettlementSummary(resolveAllEffectiveSettlements(recentSettlements));
+  // The recap keeps its population -- the picks with settlement activity in the window --
+  // and the pipeline gets each recent pick's own history, not whatever the window held.
+  const recapPickIds = new Set(recentSettlements.map((row) => row.pick_id));
+  const settlementHistory = await readSettlementHistory(
+    client,
+    [...recapPickIds, ...recentPicks.map((row) => row.id)],
+    'getSnapshotData settlement history',
+  );
+  const picksPipeline = summarizePicksPipeline(recentPicks, settlementHistory, picksPipelineCounts);
+  const recap: SettlementSummary = computeSettlementSummary(
+    resolveAllEffectiveSettlements(settlementHistory.filter((row) => recapPickIds.has(row.pick_id))),
+  );
   const memberTiersData = computeMemberTierCounts(memberTierRows);
   const targetRegistry = resolveTargetRegistry();
   const rolloutConfig = buildRolloutConfig(recentReceipts);
@@ -751,7 +787,7 @@ export async function getPicksPipelineData(filter?: OutboxFilter): Promise<unkno
   const fetchLimit = (filter?.limit ?? 25) + 1;
 
   const [
-    validatedCountResult, queuedCountResult, postedCountResult, settledCountResult, picksResult, settlementsResult,
+    validatedCountResult, queuedCountResult, postedCountResult, settledCountResult, picksResult,
   ] = await Promise.all([
     client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'validated'),
     client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
@@ -763,7 +799,6 @@ export async function getPicksPipelineData(filter?: OutboxFilter): Promise<unkno
       if (filter?.since) q = q.gte('created_at', filter.since);
       return q.order('created_at', { ascending: false }).limit(fetchLimit);
     })(),
-    client.from('settlement_records').select('*').order('created_at', { ascending: false }).limit(fetchLimit),
   ]);
 
   for (const [label, result] of [
@@ -772,13 +807,11 @@ export async function getPicksPipelineData(filter?: OutboxFilter): Promise<unkno
     ['posted picks', postedCountResult],
     ['settled picks', settledCountResult],
     ['recent picks', picksResult],
-    ['recent settlements', settlementsResult],
   ] as const) {
     assertQuerySucceeded(result, `getPicksPipelineData ${label}`);
   }
 
   const recentPicks = (picksResult.data ?? []) as PickRecord[];
-  const recentSettlements = (settlementsResult.data ?? []) as SettlementRecord[];
   const validatedCount = readAuthoritativeCount(validatedCountResult, 'pipeline validated picks');
   const queuedCount = readAuthoritativeCount(queuedCountResult, 'pipeline queued picks');
   const postedCount = readAuthoritativeCount(postedCountResult, 'pipeline posted picks');
@@ -790,7 +823,8 @@ export async function getPicksPipelineData(filter?: OutboxFilter): Promise<unkno
     settled: settledCount,
     total: validatedCount + queuedCount + postedCount + settledCount,
   };
-  const pipeline = summarizePicksPipeline(recentPicks, recentSettlements, picksPipelineCounts);
+  const settlementHistory = await readSettlementHistory(client, recentPicks.map((row) => row.id), 'getPicksPipelineData settlement history');
+  const pipeline = summarizePicksPipeline(recentPicks, settlementHistory, picksPipelineCounts);
 
   return { ok: true, data: { observedAt: new Date().toISOString(), counts: pipeline.counts, recentPicks: pipeline.recentPicks } };
 }
@@ -800,6 +834,7 @@ export async function getRecapData(): Promise<{ ok: true; data: SettlementSummar
   const { data, error } = await client.from('settlement_records').select('*').order('created_at', { ascending: false }).limit(200);
   if (error) throw error;
   const settlements = (data ?? []) as SettlementRecord[];
-  const recap = computeSettlementSummary(resolveAllEffectiveSettlements(settlements));
+  const history = await readSettlementHistory(client, settlements.map((row) => row.pick_id), 'getRecapData settlement history');
+  const recap = computeSettlementSummary(resolveAllEffectiveSettlements(history));
   return { ok: true, data: recap };
 }

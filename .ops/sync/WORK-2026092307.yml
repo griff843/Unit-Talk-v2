@@ -1,0 +1,197 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092307
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092307
+  objective: WORK-2026092307 — dashboard recap and pipeline read whole settlement chains
+  acceptance_criteria:
+    - >-
+      # WORK-2026092307 — dashboard recap and pipeline read whole settlement
+      chains
+
+
+      Tier: T2 · Lane type: delivery-ui · Executor: claude
+
+
+      ## Problem
+
+
+      `apps/command-center/src/lib/data/snapshot.ts` feeds the dashboard's
+      settlement recap and the pick
+
+      pipeline's settlement column from a `created_at`-ordered window of
+      `settlement_records`
+
+      (`getSnapshotData`, `getPicksPipelineData`, `getRecapData`). The window
+      cuts correction chains
+
+      arbitrarily:
+
+
+      - a correction inside the window whose root fell outside it resolves to
+      `NO_ROOT_RECORD`, and the
+        pick silently disappears from the recap's record, hit rate and ROI;
+      - a recent pick whose settlement is older than the independent settlement
+      window shows no result
+        in the pipeline even though it is settled;
+      - a chain that resolves to a record other than its tip (an orphan or
+      branched correction) is
+        accepted as if it reconciled.
+
+      ## Outcome
+
+
+      - The window only chooses *which* picks to show; each chosen pick's full
+      settlement history is then
+        read by `pick_id` and resolved whole.
+      - An effective settlement is accepted only when the chain reconciles
+        (`correction_depth + 1 === rows.length`); otherwise the pick is excluded rather than represented
+        by a superseded record.
+
+      ## Acceptance
+
+
+      - A correction whose root is outside the recap window is counted with the
+      correction's result.
+
+      - A recent pick whose settlement is outside the settlement window shows
+      its effective result.
+
+      - An orphan correction is excluded from the recap.
+
+      - Mutation: removing the history read turns the window tests red; removing
+      the reconcile check turns
+        the orphan test red.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092307 — dashboard recap and pipeline read whole settlement
+      chains
+
+      Tier: T2 · Lane type: delivery-ui · Executor: claude
+
+
+      ## Problem
+
+
+      `apps/command-center/src/lib/data/snapshot.ts` feeds the dashboard's
+      settlement recap and the pick
+
+      pipeline's settlement column from a `created_at`-ordered window of
+      `settlement_records`
+
+      (`getSnapshotData`, `getPicksPipelineData`, `getRecapData`). The window
+      cuts correction chains
+
+      arbitrarily:
+
+
+      - a correction inside the window whose root fell outside it resolves to
+      `NO_ROOT_RECORD`, and the
+        pick silently disappears from the recap's record, hit rate and ROI;
+      - a recent pick whose settlement is older than the independent settlement
+      window shows no result
+        in the pipeline even though it is settled;
+      - a chain that resolves to a record other than its tip (an orphan or
+      branched correction) is
+        accepted as if it reconciled.
+
+      ## Outcome
+
+
+      - The window only chooses *which* picks to show; each chosen pick's full
+      settlement history is then
+        read by `pick_id` and resolved whole.
+      - An effective settlement is accepted only when the chain reconciles
+        (`correction_depth + 1 === rows.length`); otherwise the pick is excluded rather than represented
+        by a superseded record.
+
+      ## Acceptance
+
+
+      - A correction whose root is outside the recap window is counted with the
+      correction's result.
+
+      - A recent pick whose settlement is outside the settlement window shows
+      its effective result.
+
+      - An orphan correction is excluded from the recap.
+
+      - Mutation: removing the history read turns the window tests red; removing
+      the reconcile check turns
+        the orphan test red.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092307.md
+    title: WORK-2026092307 — dashboard recap and pipeline read whole settlement chains
+    description: >-
+      # WORK-2026092307 — dashboard recap and pipeline read whole settlement
+      chains
+
+
+      Tier: T2 · Lane type: delivery-ui · Executor: claude
+
+
+      ## Problem
+
+
+      `apps/command-center/src/lib/data/snapshot.ts` feeds the dashboard's
+      settlement recap and the pick
+
+      pipeline's settlement column from a `created_at`-ordered window of
+      `settlement_records`
+
+      (`getSnapshotData`, `getPicksPipelineData`, `getRecapData`). The window
+      cuts correction chains
+
+      arbitrarily:
+
+
+      - a correction inside the window whose root fell outside it resolves to
+      `NO_ROOT_RECORD`, and the
+        pick silently disappears from the recap's record, hit rate and ROI;
+      - a recent pick whose settlement is older than the independent settlement
+      window shows no result
+        in the pipeline even though it is settled;
+      - a chain that resolves to a record other than its tip (an orphan or
+      branched correction) is
+        accepted as if it reconciled.
+
+      ## Outcome
+
+
+      - The window only chooses *which* picks to show; each chosen pick's full
+      settlement history is then
+        read by `pick_id` and resolved whole.
+      - An effective settlement is accepted only when the chain reconciles
+        (`correction_depth + 1 === rows.length`); otherwise the pick is excluded rather than represented
+        by a superseded record.
+
+      ## Acceptance
+
+
+      - A correction whose root is outside the recap window is counted with the
+      correction's result.
+
+      - A recent pick whose settlement is outside the settlement window shows
+      its effective result.
+
+      - An orphan correction is excluded from the recap.
+
+      - Mutation: removing the history read turns the window tests red; removing
+      the reconcile check turns
+        the orphan test red.
+    captured_at: 2026-09-23T19:20:48.466Z
+    description_sha256: 3767205ea816072d551e12495a2523526b5be70fbb10dd40b14ec6ce77d6c7d7
+  contract_hash: 8a7e1965303a041fe94815bcf97fa76b0c3e89815c82185fcd273697630c18bd
