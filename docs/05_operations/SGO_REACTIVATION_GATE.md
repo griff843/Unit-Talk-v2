@@ -85,7 +85,10 @@ Each item states the artifact that closes it. An item closed by a recollection i
 (`FIRST_ARCHIVE_CANDIDATE_PACKET.md` §2). If that view is auto-updatable, heavy ingestion would
 pour volume into the relation everyone is treating as frozen legacy.
 
-This is read-only to answer and is **UNMEASURED** — production was `RESTORING` for this lane:
+**Answered 2026-09-23: yes.** Production reports `is_updatable = YES`, `is_insertable_into = YES`,
+and the view is a plain `SELECT *` over the quarantine with no triggers. A reactivated ingestor
+writing `provider_offers` would insert into the quarantine. Reactivation must first repoint those
+four writes (or make the view non-insertable) — a precondition, not a follow-up. The query used:
 
 ```sql
 SELECT is_updatable, is_insertable_into
@@ -93,5 +96,5 @@ FROM information_schema.views
 WHERE table_schema = 'public' AND table_name = 'provider_offers';
 ```
 
-No coverage estimate, storage projection or retention plan in this document is sound until it is
-answered.
+No coverage estimate, storage projection or retention plan in this document is sound until those
+writes are repointed.

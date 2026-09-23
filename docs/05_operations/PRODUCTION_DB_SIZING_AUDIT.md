@@ -89,20 +89,51 @@ Every relation reads 0 live / 0 dead — the reset-statistics case, exactly as �
 also holds no meaningful provider offer history, which is why it can rehearse the instrument but
 cannot rehearse the *finding*.
 
-## 6. Still to measure on production — the audit's required outputs
+## 6. Production measurement — `zfzdnfwdarxucxtaojxm`, 2026-09-23 ~04:35Z
 
-All **UNMEASURED**:
+Read-only, through catalog and statistics views; nothing was written, and no `ANALYZE` was run
+(it is a maintenance write). PostgreSQL 17.6. **The postmaster restarted at 2026-09-23 01:46:41Z**
+after the restore, so every `pg_stat_*` counter below covers roughly three hours — this is the §4
+trap, and it is why row counts are taken from `reltuples` and date ranges from the data itself.
 
-1. total database size;
-2. top relations by total bytes;
-3. row counts (estimated, exact only where load-bearing);
-4. partition sizes — particularly `provider_offer_history_pYYYYMMDD`;
-5. oldest and newest window per high-growth relation;
-6. which relations are growing fastest;
-7. autovacuum / analyze state, **after** an `ANALYZE`;
-8. dead tuples and bloat indicators, where safely measurable;
-9. current hot-retention violations;
-10. the nine questions in `FIRST_ARCHIVE_CANDIDATE_PACKET.md` §3.
+| # | Required output | Measured |
+|---|---|---|
+| 1 | Total database size | **18 GB** |
+| 2 | Top relations by total bytes | `provider_offer_history` 8,106 MB (60 partitions) · `provider_offers_legacy_quarantine` 6,531 MB (heap 2,433 / index 4,097) · `system_runs` 1,307 MB · `raw_payloads` 694 MB (684 MB toast) · `odds_snapshots` 427 MB · `provider_offer_current` 401 MB · `pick_promotion_history` 238 MB · `pick_candidates` 195 MB · `audit_log` 142 MB · `syndicate_board` 114 MB · `picks` 91 MB |
+| 3 | Row counts (estimated) | `provider_offer_history` ≈ 13.86 M · quarantine ≈ 8.19 M · `system_runs` ≈ 3.53 M |
+| 4 | Partition sizes | 60 daily UTC partitions `p20260502`–`p20260630` on `snapshot_at timestamptz NOT NULL`. **Only 25 are non-empty**: 05-11, 05-12, 05-13, 05-17, 05-18, 05-21, 06-07, 06-08, 06-10…06-13, 06-17…06-30. Largest `p20260624` 1,613 MB / ≈ 2.74 M rows; 06-26…06-30 ≈ 0.9–1.1 GB each; `p20260619` ≈ 4 MB / 7,948 rows |
+| 5 | Oldest / newest window | `provider_offer_history` 2026-05-11 → 2026-06-30; quarantine `snapshot_at` 2026-04-23 → 2026-04-29 |
+| 6 | Fastest growing | **none** — nothing has landed in `provider_offer_history` since 2026-06-30; ingestion is parked (SGO owner-deferred) |
+| 7 | Autovacuum / analyze state after `ANALYZE` | **UNMEASURED by design** — `ANALYZE` was not run; counters reset at restart |
+| 8 | Dead tuples / bloat | **UNMEASURED** — dead-tuple counters reset at restart; the quarantine's index is 1.7× its heap, which is the only bloat indicator readable without a write |
+| 9 | Hot-retention violations | **every non-empty `provider_offer_history` partition** — all data predates `today − 45` (the conveyor's `hotRetentionDays`). This is archive backlog, not a prune authorization |
+| 10 | `FIRST_ARCHIVE_CANDIDATE_PACKET.md` §3 | answered there, 2026-09-23 |
+
+### The armed nightly prune — found, never succeeded
+
+pg_cron **job 5 `nightly-retention-prune`** (`0 3 * * *`, active) runs one command that calls
+`summarize_provider_offer_history_partition(now − 8d)`, `drop_old_provider_offer_history_partitions(7)`,
+`prune_provider_offers_bounded(7, 5000, 20)`, and then `DELETE`s on `audit_log` (> 90 d),
+`alert_detections` (> 30 d), `submission_events` (> 90 d), delivered outbox (> 7 d), receipts
+(> 7 d) and `line_snapshots` (> 180 d).
+
+**All 136 recorded runs (2026-05-10 → 2026-09-23) failed**, each on `audit_log is immutable`
+(trigger `guard_audit_log_immutability`), so every run rolled back as a unit. The evidence that
+nothing was deleted is in the data: all 60 partitions back to 2026-05-02 survive and the
+quarantine's rows are intact. The run at 03:00Z on 2026-09-23 accounts for the `n_tup_del = 100000`
+on the quarantine — deleted, then rolled back.
+
+This is a live prune that is safe **only because an unrelated trigger happens to make it fail**.
+Fix the trigger, or reorder the statements, and it starts dropping partitions that have never been
+archived. Deactivating it (`cron.unschedule`/`cron.alter_job … active := false`) is a production
+change and is reserved to Griff; it is surfaced, not performed.
+
+### What this means for the conveyor
+
+The scheduled run archives the window `today − 46` days. On 2026-09-23 that is 2026-08-08, which
+has no partition — so the schedule alone would archive **nothing that exists**. The existing
+history is reachable only through `workflow_dispatch` with `window_date`. Every non-empty day is
+under `MAX_WINDOW_ROWS` (20 M).
 
 ## 7. Related
 

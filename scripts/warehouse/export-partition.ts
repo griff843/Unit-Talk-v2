@@ -200,6 +200,57 @@ export function qualifyAttached(alias: string, relation: string): string {
   return [alias, ...qualified].map((p) => quoteIdent(p)).join('.');
 }
 
+/**
+ * The statement that asks the source server whether row-level security filters
+ * `relation` for the role the exporter connected as. It runs on the server
+ * through `postgres_query`, because DuckDB's attached scan cannot see policies.
+ */
+export function buildRowSecurityProbeSql(alias: string, relation: string): string {
+  const inner = `SELECT row_security_active(${quote(requireRelation(relation))}::regclass) AS row_security_active`;
+  return `SELECT * FROM postgres_query(${quote(alias)}, ${quote(inner)})`;
+}
+
+/**
+ * Refuse a source that row-level security would silently filter.
+ *
+ * A role with `SELECT` on a relation that has RLS enabled and no policy for that
+ * role reads zero rows, without an error. The exporter would then write a valid,
+ * checksummed, empty object, and verification would pass it: the source count
+ * and the archive count are both taken through the same filtered view, so the
+ * comparison is 0 = 0. That is the one loss a count comparison cannot detect,
+ * so it is checked before any count is taken.
+ *
+ * Production `provider_offer_history` has RLS enabled on the parent and on all
+ * 60 partitions, with no policy (measured 2026-09-23). The archive role must
+ * therefore bypass RLS. A policy granting every row would also make the read
+ * complete, but `row_security_active` reports the two cases identically, so
+ * only a bypass passes. An answer that is neither true nor false fails closed.
+ */
+export async function assertSourceNotRowFiltered(
+  connection: DuckConnection,
+  alias: string,
+  relation: string,
+): Promise<void> {
+  const rows = await connection.all(buildRowSecurityProbeSql(alias, relation));
+  const active = rows[0]?.row_security_active;
+  if (active === false) {
+    return;
+  }
+  if (active === true) {
+    throw new ExportError(
+      'row_security_filtered',
+      `row-level security is active on ${relation} for the source role, so a read could silently ` +
+        'omit rows and a 0 = 0 count comparison would still pass. Archive with a read-only role that ' +
+        'has BYPASSRLS.',
+    );
+  }
+  throw new ExportError(
+    'row_security_unknown',
+    `could not determine whether row-level security filters ${relation} for the source role ` +
+      `(probe returned ${JSON.stringify(active)}); refusing rather than assuming a complete read.`,
+  );
+}
+
 export interface ExportResult {
   destinationPath: string;
   sourceRowCount: number;

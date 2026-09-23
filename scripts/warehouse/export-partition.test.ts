@@ -18,6 +18,8 @@ import { type DuckConnection, openDuckDb, quote } from './duckdb.js';
 import {
   DEFAULT_ROW_GROUP_SIZE,
   ExportError,
+  assertSourceNotRowFiltered,
+  buildRowSecurityProbeSql,
   type SourceSpec,
   buildCopySql,
   buildCountSql,
@@ -265,5 +267,60 @@ test('re-exporting the same window overwrites rather than appends', async () => 
   } finally {
     await connection.close();
     fs.rmSync(workDir, { recursive: true, force: true });
+  }
+});
+
+// ── Row-level security: the loss a count comparison cannot see ──────────────
+
+function probeConnection(answer: unknown): DuckConnection & { statements: string[] } {
+  const statements: string[] = [];
+  return {
+    statements,
+    async run() {
+      throw new Error('the probe must not issue run()');
+    },
+    async all(sql: string) {
+      statements.push(sql);
+      return answer === undefined ? [] : [{ row_security_active: answer }];
+    },
+    async close() {},
+  };
+}
+
+test('the row-security probe runs server-side through postgres_query, with the relation escaped', () => {
+  assert.equal(
+    buildRowSecurityProbeSql('src', 'public.provider_offer_history'),
+    `SELECT * FROM postgres_query('src', 'SELECT row_security_active(''"public"."provider_offer_history"''::regclass) AS row_security_active')`,
+  );
+});
+
+test('the row-security probe refuses a relation it cannot vouch for', () => {
+  assert.throws(
+    () => buildRowSecurityProbeSql('src', "public.x'); DROP TABLE picks; --"),
+    (error: unknown) => error instanceof ExportError && error.code === 'invalid_relation',
+  );
+});
+
+test('a source role that bypasses row security is admitted', async () => {
+  const connection = probeConnection(false);
+  await assertSourceNotRowFiltered(connection, 'src', 'public.provider_offer_history');
+  assert.equal(connection.statements.length, 1);
+});
+
+test('a source role that row security filters is refused before any count is taken', async () => {
+  const connection = probeConnection(true);
+  await assert.rejects(
+    assertSourceNotRowFiltered(connection, 'src', 'public.provider_offer_history'),
+    (error: unknown) => error instanceof ExportError && error.code === 'row_security_filtered',
+  );
+});
+
+test('an unreadable row-security answer fails closed', async () => {
+  for (const answer of [undefined, null, 't', 1]) {
+    await assert.rejects(
+      assertSourceNotRowFiltered(probeConnection(answer), 'src', 'public.provider_offer_history'),
+      (error: unknown) => error instanceof ExportError && error.code === 'row_security_unknown',
+      `probe answer ${JSON.stringify(answer)} must be refused`,
+    );
   }
 });
