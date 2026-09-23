@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092310
 
-MERGE_SHA: 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2
+MERGE_SHA: f15c3b324d538c3587509ccf86e0a3be6234e69c
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -62,7 +62,7 @@ diff changes no executable file. CI `verify` on the PR head is the binding execu
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: f15c3b324d538c3587509ccf86e0a3be6234e69c
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1638
 Approved PR head: pending merge
 Execution SHA: 35e6c5ba11f5ae95bdfb3d9b3e6534eb97c101f2
