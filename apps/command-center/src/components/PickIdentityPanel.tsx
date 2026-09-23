@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { buildPickIdentity, type PickIdentityInput } from '@/lib/pick-identity';
 
 interface PickIdentityPanelProps {

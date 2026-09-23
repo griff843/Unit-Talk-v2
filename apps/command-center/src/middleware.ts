@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
-  authenticateCommandCenterRequest,
+  resolveCommandCenterAccessConfig,
   logCommandCenterAuthFailure,
   logCommandCenterDevBypass,
   logCommandCenterPrivilegedAction,
 } from './lib/server-api';
+import { authenticateSessionOrHeader } from './lib/session-auth';
+import { signInDocument } from './lib/sign-in-response';
 
 const PUBLIC_PATH_PREFIXES = [
   '/_next/static',
@@ -14,7 +16,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/icon.svg',
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const route = request.nextUrl.pathname;
   if (isPublicPath(route)) {
     return NextResponse.next();
@@ -24,7 +26,7 @@ export function middleware(request: NextRequest) {
     request.headers.get('x-request-id') ??
     request.headers.get('x-correlation-id') ??
     crypto.randomUUID();
-  const auth = authenticateCommandCenterRequest({ headers: request.headers });
+  const auth = await authenticateSessionOrHeader(request.headers);
 
   if (!auth.ok) {
     logCommandCenterAuthFailure({
@@ -33,6 +35,22 @@ export function middleware(request: NextRequest) {
       method: request.method,
       requestId,
     });
+
+    if (request.method === 'GET' && request.headers.get('accept')?.includes('text/html') && !request.headers.has('rsc')) {
+      const nonce = crypto.randomUUID().replace(/-/g, '');
+      const config = resolveCommandCenterAccessConfig();
+      return new NextResponse(signInDocument(nonce, auth.status === 503, Boolean(config.basicUsername && config.basicPassword)), {
+        status: auth.status,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Request-Id': requestId,
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
+        },
+      });
+    }
 
     return new NextResponse(
       JSON.stringify({
@@ -44,7 +62,7 @@ export function middleware(request: NextRequest) {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
-          ...(auth.challenge ? { 'WWW-Authenticate': auth.challenge } : {}),
+          ...(auth.challenge && route !== '/api/session' ? { 'WWW-Authenticate': auth.challenge } : {}),
           'X-Request-Id': requestId,
         },
       },

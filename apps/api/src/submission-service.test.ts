@@ -3390,6 +3390,7 @@ test('UTV2-1842: manual coverage-gap outcome waives the event existence gate', a
   const result = await processSubmission(fallbackPayload, repositories, {
     kind: 'manual-coverage-gap',
     distributionMode: 'track-only',
+    serverAuthorizedHumanDelivery: false,
   });
 
   assert.equal(result.pick.lifecycleState, 'validated');
@@ -3402,6 +3403,7 @@ test('UTV2-1842: structured team fallback outcome waives the event existence gat
   const result = await processSubmission(fallbackPayload, repositories, {
     kind: 'structured-team-fallback',
     distributionMode: 'track-only',
+    serverAuthorizedHumanDelivery: false,
   });
 
   assert.equal(result.pick.lifecycleState, 'validated');
@@ -3419,6 +3421,7 @@ test('UTV2-1842: canonical-event outcome does NOT waive the event existence gate
         kind: 'canonical-event',
         eventId: 'evt-utv2-1842-unrelated',
         distributionMode: 'track-only',
+        serverAuthorizedHumanDelivery: false,
       }),
     (err: unknown) => {
       assert.ok(err instanceof Error);
@@ -3446,12 +3449,17 @@ test('UTV2-1842: not-smart-form outcome does NOT waive the event existence gate'
   );
 });
 
-// The Track Only half of the predicate. Both fallback kinds are exercised, because a waiver
-// that checked the mode for only one of them would still admit the other. An authenticated
-// capper is server-pinned to `track-only` upstream; an operator or service-role caller is
-// not, and a qualified delivery-eligible pick proceeds to the outbox-enqueue path -- so this
-// is the assertion standing between the contained persistence repair and admission of a
-// nonexistent event for member delivery.
+// The delivery-eligible half of the predicate, for a caller the server did NOT authorize.
+// Both fallback kinds are exercised, because a waiver that checked only one of them would
+// still admit the other. An operator or service-role caller is not pinned upstream, and a
+// qualified delivery-eligible pick proceeds to the outbox-enqueue path -- so this is the
+// assertion standing between the contained persistence repair and admission of a nonexistent
+// event for member delivery.
+//
+// UTV2-1938: `serverAuthorizedHumanDelivery: false` is now what makes these refusals hold.
+// It is passed explicitly rather than omitted so that the absence of authorization is a
+// stated fact of each case rather than a default nobody reads. The authorized counterpart --
+// which DOES waive -- is the UTV2-1938 test immediately below.
 for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
   test(`UTV2-1842: a delivery-eligible ${kind} outcome does NOT waive the event existence gate`, async () => {
     const repositories = createInMemoryRepositoryBundle();
@@ -3462,6 +3470,7 @@ for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const)
         processSubmission(fallbackPayload, repositories, {
           kind,
           distributionMode: 'delivery-eligible',
+          serverAuthorizedHumanDelivery: false,
         }),
       (err: unknown) => {
         assert.ok(err instanceof Error);
@@ -3472,21 +3481,78 @@ for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const)
   });
 }
 
+// UTV2-1938: the case UTV2-1842 could not have anticipated, because the caller it describes
+// did not exist yet. UTV2-1923 made the server pin an allow-listed human capper to
+// `delivery-eligible` BEFORE this validator runs, so the Track-Only-only waiver excluded the
+// one caller the human-capper path exists to serve: their structured-team-fallback submission
+// naming no canonical event was refused 422 EVENT_NOT_FOUND and persisted nothing.
+//
+// What distinguishes this caller from the operator in the tests above is not the distribution
+// mode -- both are `delivery-eligible` -- but whether the SERVER wrote an authorization record
+// for them. `isHumanCapperDeliveryAuthorized` reads only that server-authored record, which
+// handlers/submit-pick.ts deletes off the client payload unconditionally before re-authoring it
+// from the env allowlist and the authenticated identity. A client cannot reach this branch by
+// asserting anything.
+for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
+  test(`UTV2-1938: a server-authorized delivery-eligible ${kind} outcome waives the event existence gate`, async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await seedUnrelatedEvent(repositories);
+
+    const result = await processSubmission(fallbackPayload, repositories, {
+      kind,
+      distributionMode: 'delivery-eligible',
+      serverAuthorizedHumanDelivery: true,
+    });
+
+    // Persisted, not refused. Reverting `waivesEventExistenceGate` to its UTV2-1842 body
+    // (`return outcome.distributionMode === 'track-only'`) turns this red and leaves every
+    // refusal test above green -- which is the whole point of adding it here.
+    assert.equal(result.pick.lifecycleState, 'validated');
+  });
+}
+
 test('UTV2-1842: waivesEventExistenceGate is the whole predicate, and it is fail-closed', () => {
   // Read directly rather than through processSubmission so the truth table is exhaustive
   // over every outcome shape rather than over the two the gate tests happen to construct.
   assert.equal(waivesEventExistenceGate(undefined), false, 'an absent outcome must not waive');
   assert.equal(waivesEventExistenceGate({ kind: 'not-smart-form' }), false);
   for (const distributionMode of ['track-only', 'delivery-eligible'] as const) {
-    assert.equal(
-      waivesEventExistenceGate({ kind: 'canonical-event', eventId: 'e1', distributionMode }),
-      false,
-      `canonical-event must never waive (${distributionMode})`,
-    );
+    for (const serverAuthorizedHumanDelivery of [false, true]) {
+      assert.equal(
+        waivesEventExistenceGate({
+          kind: 'canonical-event',
+          eventId: 'e1',
+          distributionMode,
+          serverAuthorizedHumanDelivery,
+        }),
+        false,
+        `canonical-event must never waive (${distributionMode}, authorized=${serverAuthorizedHumanDelivery})`,
+      );
+    }
   }
   for (const kind of ['manual-coverage-gap', 'structured-team-fallback'] as const) {
-    assert.equal(waivesEventExistenceGate({ kind, distributionMode: 'track-only' }), true);
-    assert.equal(waivesEventExistenceGate({ kind, distributionMode: 'delivery-eligible' }), false);
+    // Track Only waives regardless of authorization -- it cannot reach delivery at all.
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'track-only', serverAuthorizedHumanDelivery: false }),
+      true,
+    );
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'track-only', serverAuthorizedHumanDelivery: true }),
+      true,
+    );
+    // UTV2-1938: delivery-eligible now turns on the server's own authorization record, and
+    // on nothing the client sent. Unauthorized stays refused -- that is the UTV2-1842
+    // protection, unchanged.
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'delivery-eligible', serverAuthorizedHumanDelivery: false }),
+      false,
+      `an unauthorized delivery-eligible ${kind} must not waive`,
+    );
+    assert.equal(
+      waivesEventExistenceGate({ kind, distributionMode: 'delivery-eligible', serverAuthorizedHumanDelivery: true }),
+      true,
+      `a server-authorized human-capper ${kind} must waive`,
+    );
   }
 });
 // UTV2-1842 EVENT_GATE_FALLBACK_WAIVER_TESTS_END

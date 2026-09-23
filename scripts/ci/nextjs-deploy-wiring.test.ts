@@ -14,10 +14,12 @@
  *   - the QA authentication bypass reaching production.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { parse as parseYaml } from 'yaml';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 const ROOT = process.cwd();
 const DEPLOY_WORKFLOW_PATH = resolve(ROOT, '.github/workflows/deploy.yml');
@@ -656,15 +658,39 @@ test('the Command Center is off unless a deploy deliberately enables it', () => 
 
   // Every other compose invocation in the workflow must be profile-free, or the
   // surface would start somewhere this test does not describe.
+  //
+  // UTV2-1922 widened this from one step to two, and the second is admitted on
+  // a condition rather than by name alone. The validation step has to resolve
+  // the SAME profile the promotion will use -- a validation that checked a
+  // different configuration than the one about to be applied would prove
+  // nothing -- but it must never be able to start the surface. So it is allowed
+  // to name the profile only while every compose verb it invokes is read-only.
+  const READ_ONLY_PROFILE_STEP = 'Preflight — validate the resolved compose configuration';
   for (const jobId of ['canary', 'promote']) {
     for (const entry of (job(jobId)['steps'] as unknown[]) ?? []) {
       const stepRecord = asRecord(entry);
+      const name = String(stepRecord['name'] ?? '');
       const script = String(stepRecord['run'] ?? '');
       if (!script.includes('--profile')) continue;
+      if (name === READ_ONLY_PROFILE_STEP) {
+        for (const verb of ['up', 'pull', 'run', 'start', 'create', 'down', 'rm', 'stop']) {
+          assert.ok(
+            !new RegExp(`docker compose[^\n]*\\b${verb}\\b`).test(script),
+            `"${name}" activates a compose profile, so it may only read the configuration — ` +
+              `\`docker compose ... ${verb}\` would make the validation step itself mutate the deployment`,
+          );
+        }
+        assert.match(
+          script,
+          /docker compose [^\n]*config/,
+          `"${name}" must resolve the configuration with \`docker compose config\`, which starts nothing`,
+        );
+        continue;
+      }
       assert.equal(
-        stepRecord['name'],
+        name,
         'Promote all production containers',
-        `${jobId} step "${String(stepRecord['name'])}" must not activate a compose profile`,
+        `${jobId} step "${name}" must not activate a compose profile`,
       );
     }
   }
@@ -853,4 +879,980 @@ test('the canary and promote copies of the Command Center wiring do not drift', 
   const health = String(step('promote', 'Verify Next.js surfaces are healthy')['run']);
   assert.match(health, /surfaces="web smart-form"/, 'the always-on surfaces stay unconditional');
   assert.ok(health.includes(CC_ENABLE_GUARD), 'an enabled Command Center must be health-gated too');
+});
+
+/**
+ * UTV2-1920 — every source file a Next.js build can read must decode as UTF-8.
+ *
+ * Next compiles through SWC, which is Rust and refuses a source stream that is
+ * not valid UTF-8 outright: `Failed to read source code from <path>` /
+ * `stream did not contain valid UTF-8`. `tsc` and esbuild accept the same
+ * bytes, so the defect is invisible to `pnpm type-check` and `pnpm test` and
+ * surfaces only inside a Next build — for `apps/command-center`, only inside
+ * the Docker image build that `deploy.yml` runs.
+ *
+ * That is exactly how a lone CP1252 `0x97` in a doc comment sat in
+ * `packages/contracts/src/picks.ts` from `cc1944555` (UTV2-930) until the
+ * first Command Center image build failed on it (Deploy run 35075808951).
+ */
+test('every tracked app and package source file decodes as valid UTF-8', () => {
+  const decode = (bytes: Buffer): { ok: true } | { ok: false; reason: string } => {
+    try {
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
+  // The control comes first: a probe that cannot observe a bad byte would make
+  // the sweep below pass vacuously no matter what is on disk.
+  const cp1252EmDash = Buffer.from([0x2f, 0x2f, 0x20, 0x97, 0x0a]);
+  assert.equal(decode(cp1252EmDash).ok, false, 'the probe must reject a lone CP1252 0x97 byte');
+  assert.equal(decode(Buffer.from('// —\n', 'utf8')).ok, true, 'the probe must accept a UTF-8 em dash');
+
+  const tracked = execFileSync(
+    'git',
+    ['ls-files', '-z', '--', 'apps/**/*.ts', 'apps/**/*.tsx', 'apps/**/*.js', 'apps/**/*.jsx',
+      'apps/**/*.mjs', 'apps/**/*.cjs', 'apps/**/*.json',
+      'packages/**/*.ts', 'packages/**/*.tsx', 'packages/**/*.js', 'packages/**/*.jsx',
+      'packages/**/*.mjs', 'packages/**/*.cjs', 'packages/**/*.json'],
+    { cwd: ROOT, encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
+  )
+    .toString('utf8')
+    .split('\0')
+    .filter((entry) => entry.length > 0);
+
+  assert.ok(tracked.length > 100, `expected a real file list, got ${tracked.length}`);
+
+  const invalid: string[] = [];
+  for (const relativePath of tracked) {
+    const verdict = decode(readFileSync(resolve(ROOT, relativePath)));
+    if (!verdict.ok) invalid.push(`${relativePath}: ${verdict.reason}`);
+  }
+
+  assert.deepEqual(
+    invalid,
+    [],
+    `these files are not valid UTF-8 and will fail any Next.js build that reads them:\n${invalid.join('\n')}`,
+  );
+});
+
+/* ------------------------------------------------------------------------- *
+ * UTV2-1922 — production promotion is transactional.
+ *
+ * On 2026-09-16 a production promotion removed the public edge and then failed,
+ * leaving ports 80 and 443 unserved while `.unit-talk-release` claimed the
+ * release that had never started and the in-flight marker that exists to say
+ * "do not trust this metadata" had already been deleted. Deploy run
+ * 35114935565 is the failure; run 35119502596 is the recovery that restored
+ * service, and is the positive control for what a healthy promotion looks like.
+ *
+ * The literal trigger was one missing variable -- `CC_ENABLED` was absent from
+ * the env-write step's `env:` mapping, so `.env.command-center` was never
+ * written and compose could not parse the file it was pointed at. These tests
+ * deliberately do NOT stop at that variable. Each one names a member of the
+ * incident class: a configuration failure that is knowable while the edge is
+ * still serving must not be discovered after it has been taken down, and
+ * release metadata must never describe a state the host never reached.
+ *
+ * Where a property is about BEHAVIOUR rather than wiring, the test executes the
+ * real script body extracted from `deploy.yml` against a stubbed `docker`,
+ * rather than restating the workflow's logic in the test. A test that
+ * re-implements the thing it checks cannot fail on a real regression.
+ * ------------------------------------------------------------------------- */
+
+const CC_REQUIRED_ENV = [
+  'CC_ENABLED',
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'UNIT_TALK_CC_API_KEY',
+  'COMMAND_CENTER_AUTH_TOKEN',
+  'COMMAND_CENTER_AUTH_USERNAME',
+  'COMMAND_CENTER_AUTH_PASSWORD',
+] as const;
+
+const ENV_WRITE_STEP = 'Write Next.js service env files to server';
+const VALIDATE_STEP = 'Preflight — validate the resolved compose configuration';
+const PROMOTE_STEP = 'Promote all production containers';
+const CANARY_STEP = 'Release API canary';
+
+function stepIndex(jobId: string, name: string): number {
+  const steps = job(jobId)['steps'];
+  assert.ok(Array.isArray(steps), `job ${jobId} must have steps`);
+  const index = steps.findIndex((entry) => asRecord(entry)['name'] === name);
+  assert.ok(index >= 0, `step "${name}" must exist in job ${jobId}`);
+  return index;
+}
+
+/**
+ * The remote script the promote step pipes over ssh, taken from the workflow
+ * rather than retyped. If the heredoc is renamed or removed this throws, which
+ * is the correct outcome: the behavioural tests below would otherwise silently
+ * start proving nothing.
+ */
+function promoteRemoteBody(): string {
+  const run = String(step('promote', PROMOTE_STEP)['run']);
+  const open = "<<'PROMOTE_REMOTE'\n";
+  const close = '\nPROMOTE_REMOTE\n';
+  const start = run.indexOf(open);
+  assert.ok(start >= 0, 'the promote step must ship its remote script as a quoted PROMOTE_REMOTE heredoc');
+  const end = run.indexOf(close, start);
+  assert.ok(end > start, 'the PROMOTE_REMOTE heredoc must be terminated');
+  return run.slice(start + open.length, end);
+}
+
+test('UTV2-1922: both env-write steps receive every value a complete .env.command-center needs', () => {
+  // THE VACUITY THIS CLOSES. The pre-existing Command Center assertions all read
+  // the printf TEXT inside the step body -- which named `$SUPABASE_URL`,
+  // `$UNIT_TALK_CC_API_KEY` and the rest, and looked complete. None of them read
+  // the step's `env:` MAPPING, which is what actually populates those names. On
+  // 2026-09-16 the body was correct and the mapping was empty of all seven, so
+  // the step wrote a file of empty values -- or, for CC_ENABLED, never entered
+  // the branch at all. A test that reads only the text a step contains cannot
+  // see the difference between a variable and an empty string.
+  const canaryEnv = asRecord(step('canary', ENV_WRITE_STEP)['env']);
+  const promoteEnv = asRecord(step('promote', ENV_WRITE_STEP)['env']);
+
+  for (const [label, envMap] of [['canary', canaryEnv], ['promote', promoteEnv]] as const) {
+    for (const name of CC_REQUIRED_ENV) {
+      const value = envMap[name];
+      assert.ok(
+        typeof value === 'string' && value.trim().length > 0,
+        `the ${label} env-write step must pass ${name} through its env: mapping — ` +
+          'naming it in the script body alone writes an empty value',
+      );
+      assert.match(
+        String(value),
+        /^\$\{\{\s*(secrets|vars)\./,
+        `${name} must come from a secret or repository variable, never a literal in the workflow`,
+      );
+    }
+  }
+
+  // The two copies are byte-identical by design; drift between them means the
+  // canary validated one configuration and production wrote another.
+  assert.deepEqual(
+    canaryEnv,
+    promoteEnv,
+    'the canary and promote env-write steps must pass an identical environment',
+  );
+});
+
+test('UTV2-1922: an enabled Command Center with a missing value fails before it writes a partial file', () => {
+  const body = String(step('promote', ENV_WRITE_STEP)['run']);
+  const guardAt = body.indexOf(CC_ENABLE_GUARD);
+  assert.ok(guardAt >= 0, 'the env-write step must gate Command Center config on the enable variable');
+
+  const guarded = body.slice(guardAt);
+  const refusalAt = guarded.indexOf('is empty while the Command Center is enabled');
+  assert.ok(
+    refusalAt >= 0,
+    'an enabled Command Center with an empty required value must refuse explicitly — ' +
+      'writing a file of empty strings is how a config error reaches `docker compose up`',
+  );
+  // The refusal must precede the write, or it refuses a file that already exists.
+  const writeAt = guarded.indexOf(".env.command-center'");
+  assert.ok(writeAt >= 0, 'the guarded block must write .env.command-center');
+  assert.ok(
+    refusalAt < writeAt,
+    'the required-value check must run before the file is written, not after',
+  );
+  assert.match(guarded.slice(refusalAt, writeAt), /exit 1/, 'the refusal must be fatal, not a warning');
+});
+
+test('UTV2-1922: a disabled Command Center removes stale config rather than leaving it to be found', () => {
+  // The pre-UTV2-1922 else-branch only echoed. A `.env.command-center` left over
+  // from an earlier enabled deploy would survive indefinitely, holding the
+  // service-role key and an operator credential at rest, and would be picked up
+  // by the next profile selection -- activating a surface nobody enabled.
+  for (const jobId of ['canary', 'promote']) {
+    const body = String(step(jobId, ENV_WRITE_STEP)['run']);
+    const elseAt = body.indexOf('else', body.indexOf(CC_ENABLE_GUARD));
+    assert.ok(elseAt > 0, `${jobId}: the enable guard must have a disabled branch`);
+    const disabled = body.slice(elseAt, body.indexOf('\n      fi', elseAt) + 1 || undefined);
+    assert.match(
+      disabled,
+      /rm -f '\$DEPLOY_PATH\/\.env\.command-center'/,
+      `${jobId}: the disabled branch must remove any stale .env.command-center`,
+    );
+  }
+
+  // And the surface must stay unselected: no profile is chosen when disabled.
+  const promote = String(step('promote', PROMOTE_STEP)['run']);
+  assert.match(
+    promote,
+    /compose_profile=""/,
+    'the promote step must default to no compose profile when the surface is disabled',
+  );
+});
+
+test('UTV2-1922: compose configuration is validated before anything destructive runs', () => {
+  for (const jobId of ['canary', 'promote']) {
+    const mutation = jobId === 'canary' ? CANARY_STEP : PROMOTE_STEP;
+    const validateAt = stepIndex(jobId, VALIDATE_STEP);
+    const mutationAt = stepIndex(jobId, mutation);
+    assert.ok(
+      validateAt < mutationAt,
+      `${jobId}: the compose configuration must be validated before "${mutation}" runs`,
+    );
+
+    const validate = String(step(jobId, VALIDATE_STEP)['run']);
+    // `config` resolves env_file, interpolation and profiles and starts nothing.
+    // That is precisely the set of failures the 2026-09-16 promotion discovered
+    // from `up`, two commands after the edge had already been removed.
+    assert.match(validate, /docker compose [^\n]*config/, `${jobId}: validation must resolve the configuration`);
+    assert.match(
+      validate,
+      /exit 1/,
+      `${jobId}: validation must fail closed — a warning would leave the promotion running`,
+    );
+    // caddy is the only binder of :80 and :443. A configuration that resolves
+    // without it would remove the edge by omission rather than by error.
+    assert.match(
+      validate,
+      /caddy/,
+      `${jobId}: validation must confirm the resolved configuration still includes caddy`,
+    );
+    assert.match(
+      validate,
+      /command-center/,
+      `${jobId}: validation must confirm a selected profile actually resolves the surface`,
+    );
+  }
+});
+
+test('UTV2-1922: rollback and snapshot cover every env file the deploy overwrites', () => {
+  const rollback = readFileSync(resolve(ROOT, 'deploy/rollback.sh'), 'utf8');
+  for (const file of ['.env.production', '.env.web', '.env.smart-form', '.env.edge']) {
+    assert.ok(rollback.includes(file), `rollback.sh must restore ${file}`);
+  }
+  // `.env.edge` carries the hostnames Caddy parses its own config from, so a
+  // rollback that skipped it restored an edge configured by the release it was
+  // rolling away from.
+  assert.match(
+    rollback,
+    /\.env\.command-center/,
+    'rollback.sh must handle .env.command-center',
+  );
+  // Its absence means something the other files\' absence does not: rolling back
+  // to a release with no Command Center must leave no Command Center config.
+  assert.match(
+    rollback,
+    /rm -f \.env\.command-center/,
+    'rolling back to a tag with no Command Center snapshot must remove stale Command Center config, not keep it',
+  );
+
+  for (const jobId of ['canary', 'promote']) {
+    const snapshot = String(step(jobId, 'Snapshot outgoing configuration for rollback')['run']);
+    for (const file of ['.env.edge', '.env.command-center']) {
+      assert.ok(
+        snapshot.includes(file),
+        `${jobId}: the rollback snapshot must capture ${file}, or rollback has nothing to restore`,
+      );
+    }
+  }
+});
+
+test('UTV2-1922: rollback advances the release record only after it has activated', () => {
+  const rollback = readFileSync(resolve(ROOT, 'deploy/rollback.sh'), 'utf8');
+  const activateAt = rollback.indexOf('docker compose up -d --remove-orphans');
+  const releaseAt = rollback.lastIndexOf("> .unit-talk-release");
+  assert.ok(activateAt > 0 && releaseAt > 0, 'rollback.sh must both activate and record the release');
+  assert.ok(
+    activateAt < releaseAt,
+    'rollback.sh must write .unit-talk-release after activation — writing it first makes a failed ' +
+      'rollback leave the host naming a release it never started',
+  );
+});
+
+/**
+ * Ordering assertions scan a script as text, so a shell COMMENT that happens to
+ * quote a command lands on the wrong side of the line being asserted and makes
+ * the assertion pass or fail for a reason that has nothing to do with what the
+ * script does. Strip comments first. (Found by mutation M7: a comment above the
+ * canary body explaining this very defect quoted `docker compose up`, and the
+ * reverted ordering went undetected.)
+ */
+function executableLines(script: string): string {
+  return script
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+}
+
+test('UTV2-1922: no mutation step advances release metadata before activation succeeds', () => {
+  for (const [jobId, name] of [['canary', CANARY_STEP], ['promote', PROMOTE_STEP]] as const) {
+    const body = executableLines(String(step(jobId, name)['run']));
+    const activateAt = body.indexOf('docker compose');
+    const releaseAt = body.indexOf('> .unit-talk-release');
+    const clearAt = body.indexOf('rm -f .unit-talk-deploy-inflight');
+    assert.ok(activateAt > 0, `${jobId}: the mutation step must invoke compose`);
+    assert.ok(releaseAt > 0, `${jobId}: the mutation step must record the release`);
+    assert.ok(clearAt > 0, `${jobId}: the mutation step must clear the in-flight marker`);
+    assert.ok(
+      activateAt < releaseAt,
+      `${jobId}: .unit-talk-release must be written after activation, never before it`,
+    );
+    assert.ok(
+      activateAt < clearAt,
+      `${jobId}: the in-flight marker must be cleared after activation — clearing it first erases the ` +
+        'one signal that says the metadata on the host cannot be trusted',
+    );
+    // deploy-config-rollback.test.ts additionally requires release-then-clear.
+    assert.ok(releaseAt < clearAt, `${jobId}: the release record must be written before the marker is cleared`);
+  }
+});
+
+test('UTV2-1922: the edge is removed only on a failure that proves a stale container holds it', () => {
+  const remote = executableLines(promoteRemoteBody());
+  const removeAt = remote.indexOf('docker rm -f caddy');
+  assert.ok(removeAt > 0, 'the promote body must retain the stale-container recovery it was given in ecab31704');
+
+  const before = remote.slice(0, removeAt);
+  // Unconditional removal is the defect. The removal must sit downstream of an
+  // activation attempt whose own failure text names a port conflict.
+  assert.match(before, /docker compose \$PROFILE up/, 'activation must be attempted before caddy is removed');
+  assert.match(
+    before,
+    /address already in use|port is already allocated|is already in use by container/,
+    'caddy may only be removed on a failure that identifies a port conflict',
+  );
+  assert.match(remote, /restore_edge/, 'the promote body must define an edge-restoration path');
+});
+
+/* ------------------------------------------------------------------------- *
+ * UTV2-1922 — behavioural proof.
+ *
+ * The assertions above describe the shape of the promote body. These ones run
+ * it. The script under test is extracted from `deploy.yml` by
+ * `promoteRemoteBody()`, so it is the artifact the deploy actually ships, not a
+ * transcription of it, and `docker` is replaced by a stub that can be told to
+ * fail the way the 2026-09-16 promotion failed.
+ *
+ * What each case proves is a state of the HOST after the script exits: whether
+ * the edge is serving, and whether the two release markers describe something
+ * that really happened.
+ * ------------------------------------------------------------------------- */
+
+const DOCKER_STUB = `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$UTV2_1922_LOG"
+mode="$(cat "$UTV2_1922_MODE")"
+case "$1" in
+  ps)
+    # Reports whether caddy is running. The stub keeps a flag file so that a
+    # removal is actually observable rather than assumed.
+    if [ -f "$UTV2_1922_DIR/.caddy-removed" ]; then
+      if [ -f "$UTV2_1922_DIR/.caddy-restored" ]; then printf 'cid\\n'; fi
+    else
+      printf 'cid\\n'
+    fi
+    exit 0
+    ;;
+  rm)
+    : > "$UTV2_1922_DIR/.caddy-removed"
+    exit 0
+    ;;
+  compose)
+    verb=""
+    nodeps=no
+    for a in "$@"; do
+      case "$a" in
+        up) verb=up ;;
+        pull) verb=pull ;;
+        config) verb=config ;;
+        --no-deps) nodeps=yes ;;
+      esac
+    done
+    if [ "$verb" = pull ] || [ "$verb" = config ]; then exit 0; fi
+    if [ "$verb" = up ] && [ "$nodeps" = yes ]; then
+      # Restoring the edge on its pinned image. Always succeeds in these cases;
+      # the case where it cannot is covered by the assertion on its || true.
+      : > "$UTV2_1922_DIR/.caddy-restored"
+      exit 0
+    fi
+    attempt=$(( $(cat "$UTV2_1922_DIR/.attempts" 2>/dev/null || echo 0) + 1 ))
+    printf '%s' "$attempt" > "$UTV2_1922_DIR/.attempts"
+    case "$mode" in
+      ok) exit 0 ;;
+      parse-fail)
+        # \`up --remove-orphans\` reconciles the project before it can discover
+        # every configuration error, so a failing activation can and does leave
+        # containers stopped. Modelling the failure as leaving the edge intact
+        # would make the edge-preservation assertions pass for free.
+        : > "$UTV2_1922_DIR/.caddy-removed"
+        printf 'service "command-center" env_file .env.command-center not found\\n' >&2
+        exit 1
+        ;;
+      port-conflict-then-ok)
+        if [ "$attempt" = 1 ]; then
+          printf 'Error response from daemon: driver failed programming external connectivity on endpoint caddy: Bind for 0.0.0.0:443 failed: port is already allocated\\n' >&2
+          exit 1
+        fi
+        exit 0
+        ;;
+      port-conflict-then-fail)
+        printf 'Error response from daemon: driver failed programming external connectivity on endpoint caddy: Bind for 0.0.0.0:443 failed: port is already allocated\\n' >&2
+        exit 1
+        ;;
+      caddy-name-conflict-then-ok)
+        if [ "$attempt" = 1 ]; then
+          printf 'Error response from daemon: Conflict. The container name "/caddy" is already in use by container "9f2c". You have to remove (or rename) that container to be able to reuse that name.\\n' >&2
+          exit 1
+        fi
+        exit 0
+        ;;
+      foreign-port-conflict)
+        # A port conflict that has nothing to do with the edge. Removing caddy
+        # could not possibly clear :4300, so taking 80/443 down would be pure
+        # collateral damage.
+        : > "$UTV2_1922_DIR/.caddy-removed"
+        printf 'Error response from daemon: driver failed programming external connectivity on endpoint command-center: Bind for 127.0.0.1:4300 failed: port is already allocated\\n' >&2
+        exit 1
+        ;;
+      foreign-name-conflict)
+        # The bare-'Conflict' case the first candidate matched. This is an
+        # ordinary container-name collision on a DIFFERENT service.
+        : > "$UTV2_1922_DIR/.caddy-removed"
+        printf 'Error response from daemon: Conflict. The container name "/api" is already in use by container "4b1a". You have to remove (or rename) that container to be able to reuse that name.\\n' >&2
+        exit 1
+        ;;
+    esac
+    exit 1
+    ;;
+esac
+exit 0
+`;
+
+const OLD_TAG = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const NEW_TAG = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+interface PromoteOutcome {
+  exitCode: number;
+  release: string;
+  inflightPresent: boolean;
+  caddyRemoved: boolean;
+  edgeServing: boolean;
+  output: string;
+}
+
+function runPromote(mode: string, profile = ''): PromoteOutcome {
+  const dir = createTempWorkspace('utv2-1922-');
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  const dockerPath = join(bin, 'docker');
+  writeFileSync(dockerPath, DOCKER_STUB, { mode: 0o755 });
+
+  const host = join(dir, 'host');
+  mkdirSync(host);
+  writeFileSync(join(host, '.unit-talk-release'), `${OLD_TAG}\n`);
+  writeFileSync(join(host, '.unit-talk-deploy-inflight'), '35114935565\n');
+  writeFileSync(join(dir, 'mode'), mode);
+  const logPath = join(dir, 'docker.log');
+  writeFileSync(logPath, '');
+
+  const scriptPath = join(dir, 'promote-remote.sh');
+  writeFileSync(scriptPath, promoteRemoteBody());
+
+  let exitCode = 0;
+  let output = '';
+  try {
+    output = execFileSync('bash', [scriptPath, host, NEW_TAG, profile], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        UTV2_1922_LOG: logPath,
+        UTV2_1922_MODE: join(dir, 'mode'),
+        UTV2_1922_DIR: host,
+      },
+    });
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string; stderr?: string };
+    exitCode = failure.status ?? 1;
+    output = `${failure.stdout ?? ''}${failure.stderr ?? ''}`;
+  }
+
+  const outcome: PromoteOutcome = {
+    exitCode,
+    release: readFileSync(join(host, '.unit-talk-release'), 'utf8').trim(),
+    inflightPresent: existsSync(join(host, '.unit-talk-deploy-inflight')),
+    caddyRemoved: existsSync(join(host, '.caddy-removed')),
+    edgeServing:
+      !existsSync(join(host, '.caddy-removed')) || existsSync(join(host, '.caddy-restored')),
+    output,
+  };
+  rmSync(dir, { recursive: true, force: true });
+  return outcome;
+}
+
+test('UTV2-1922 behaviour: a successful promotion advances both markers and never touches the edge', () => {
+  // The positive control. Deploy run 35119502596 is its production counterpart:
+  // an activation that worked, after which the release record was true.
+  const result = runPromote('ok');
+  assert.equal(result.exitCode, 0, 'a successful activation must exit 0');
+  assert.equal(result.release, NEW_TAG, 'a successful activation must record the new release');
+  assert.equal(result.inflightPresent, false, 'a successful activation must clear the in-flight marker');
+  assert.equal(result.caddyRemoved, false, 'a successful activation must not remove the edge at all');
+  assert.equal(result.edgeServing, true, 'ports 80 and 443 must still be served');
+});
+
+test('UTV2-1922 behaviour: a compose configuration failure cannot leave the edge unserved', () => {
+  // This is the 2026-09-16 sequence exactly: `docker compose up` fails at
+  // config-parse because `.env.command-center` does not exist. Before this
+  // repair the edge was already gone by the time that happened.
+  const result = runPromote('parse-fail', '--profile command-center');
+  assert.equal(result.exitCode, 1, 'a failed activation must fail the step');
+  assert.equal(result.edgeServing, true, 'a failed activation must leave ports 80 and 443 served');
+  // The step is not required to keep caddy running through a failed `up` --
+  // compose owns the project -- but it IS required not to exit while the edge is
+  // down. The acceptance condition is behavioural: ports 80 and 443 served.
+  assert.match(
+    result.output,
+    /edge preserved/,
+    'a failed activation must report the state of the edge rather than exiting silently',
+  );
+  // And the removal that the promote step itself performs stays conditional: a
+  // config-parse failure is not a port conflict, so no retry may be attempted.
+  assert.ok(
+    !/the edge itself is holding ports 80\/443/.test(result.output),
+    'a config-parse failure must not be treated as a port conflict',
+  );
+});
+
+test('UTV2-1922 behaviour: a failed activation leaves release metadata describing reality', () => {
+  const result = runPromote('parse-fail', '--profile command-center');
+  assert.equal(
+    result.release,
+    OLD_TAG,
+    'a failed activation must leave .unit-talk-release naming the release that is actually running',
+  );
+  assert.equal(
+    result.inflightPresent,
+    true,
+    'a failed activation must leave the in-flight marker in place — it is the signal that the ' +
+      'configuration on the host may not match the running release',
+  );
+});
+
+test('UTV2-1922 behaviour: a genuine port conflict is still recovered, and only then', () => {
+  // The removal introduced in ecab31704 exists for a real condition: a stale
+  // caddy container from a prior partial deploy holding :80. Repairing the
+  // unconditional removal must not remove the recovery.
+  const result = runPromote('port-conflict-then-ok');
+  assert.equal(result.exitCode, 0, 'a port conflict that clears on retry must succeed');
+  assert.equal(result.caddyRemoved, true, 'the stale container must be cleared on a port conflict');
+  assert.equal(result.release, NEW_TAG, 'a successful retry must record the new release');
+  assert.equal(result.inflightPresent, false, 'a successful retry must clear the in-flight marker');
+});
+
+test('UTV2-1922 behaviour: a port conflict whose retry also fails still restores the edge', () => {
+  // The one path that genuinely does take the edge down. It must put it back.
+  const result = runPromote('port-conflict-then-fail');
+  assert.equal(result.exitCode, 1, 'a failed retry must fail the step');
+  assert.equal(result.caddyRemoved, true, 'the retry path removed caddy');
+  assert.equal(result.edgeServing, true, 'and must have restored it before exiting');
+  assert.equal(result.release, OLD_TAG, 'a failed retry must not advance the release record');
+  assert.equal(result.inflightPresent, true, 'a failed retry must not clear the in-flight marker');
+});
+
+test('UTV2-1922: this regression suite is non-vacuous and is reachable from required verify', () => {
+  // A mutation control for the behavioural cases. If `promoteRemoteBody()` ever
+  // returned something inert -- an empty string, a comment block -- every
+  // behavioural assertion above would pass against a script that does nothing,
+  // because the markers it never touches are exactly the markers a failure must
+  // not touch. Assert the extracted body really is the promotion.
+  const remote = promoteRemoteBody();
+  assert.ok(remote.trim().length > 0, 'the extracted promote body must not be empty');
+  for (const token of ['docker compose', '.unit-talk-release', '.unit-talk-deploy-inflight', 'restore_edge']) {
+    assert.ok(remote.includes(token), `the extracted promote body must contain ${token}`);
+  }
+  // And the positive control proves the harness can observe a marker CHANGING,
+  // so "unchanged" is a real observation rather than a stub that writes nothing.
+  assert.equal(runPromote('ok').release, NEW_TAG, 'the harness must be able to observe a successful advance');
+
+  // Required-reachable: `pnpm verify` runs `test:ops`, and this file must be in it.
+  const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  assert.match(
+    pkg.scripts['test:ops'] ?? '',
+    /nextjs-deploy-wiring\.test\.ts/,
+    'this suite must stay wired into test:ops, or it stops being a required check',
+  );
+});
+
+// ── UTV2-1922 (PM CHANGES_REQUIRED) ─────────────────────────────────────────
+// Three defects were found in the first candidate at head b6ecf2722. Each is a
+// case where a control was WIDER or NARROWER than the canonical behaviour it
+// was meant to protect, and each repair is proven below by executing the real
+// artifact rather than by reading it.
+
+const CC_AUTH_CONTRACT_MARKER = '# UTV2-1922 (PM CHANGES_REQUIRED, defect 1)';
+
+/**
+ * The whole deploy-time accept/refuse decision starts at the required-value
+ * loop, not at the auth comment. Slicing from the marker instead was a real
+ * vacuity: the first candidate's defect -- the canonical token-only
+ * configuration made undeployable -- lived in this loop's NAME LIST, above the
+ * marker, so a mutation that put the three auth names back into it escaped the
+ * suite entirely. The fragment must therefore begin here.
+ */
+const CC_REQUIRED_VALUE_LOOP = 'for name in SUPABASE_URL';
+
+/**
+ * The deploy-time Command Center auth contract, extracted from the real
+ * env-write step so the assertions below execute the shipped code. The slice
+ * stops before the `printf` that writes the file, so what runs is exactly the
+ * accept/refuse decision and nothing that needs ssh or a host.
+ */
+function ccAuthContractFragment(jobId: string): string {
+  const body = String(step(jobId, ENV_WRITE_STEP)['run']);
+  const start = body.indexOf(CC_REQUIRED_VALUE_LOOP);
+  assert.ok(start >= 0, `${jobId}: the env-write step must carry the required-value loop`);
+  const marker = body.indexOf(CC_AUTH_CONTRACT_MARKER, start);
+  assert.ok(marker > start, `${jobId}: the env-write step must carry the Command Center auth contract`);
+  const end = body.indexOf("printf '%s\\n' \\", marker);
+  assert.ok(end > marker, `${jobId}: the auth contract must precede the file write`);
+  return body.slice(start, end);
+}
+
+/**
+ * The non-auth values the enabled branch requires unconditionally. They are
+ * present in every auth case so that what each case measures is the AUTH
+ * decision; one case blanks one of them to keep the loop itself non-vacuous.
+ * These are obvious placeholders, never real values.
+ */
+const CC_REQUIRED_NON_AUTH_ENV: Record<string, string> = {
+  SUPABASE_URL: 'https://example.invalid',
+  SUPABASE_SERVICE_ROLE_KEY: 'placeholder-not-a-real-key',
+  UNIT_TALK_CC_API_KEY: 'placeholder-not-a-real-key',
+};
+
+interface AuthCase {
+  label: string;
+  env: Record<string, string>;
+  accepted: boolean;
+}
+
+const CC_AUTH_CASES: AuthCase[] = [
+  {
+    label: 'token only — the canonical production configuration',
+    env: { COMMAND_CENTER_AUTH_TOKEN: 'tok' },
+    accepted: true,
+  },
+  {
+    label: 'complete basic auth pair, no token',
+    env: { COMMAND_CENTER_AUTH_USERNAME: 'op', COMMAND_CENTER_AUTH_PASSWORD: 'pw' },
+    accepted: true,
+  },
+  {
+    label: 'token and a complete pair together',
+    env: { COMMAND_CENTER_AUTH_TOKEN: 'tok', COMMAND_CENTER_AUTH_USERNAME: 'op', COMMAND_CENTER_AUTH_PASSWORD: 'pw' },
+    accepted: true,
+  },
+  {
+    label: 'partial pair — username without password',
+    env: { COMMAND_CENTER_AUTH_USERNAME: 'op' },
+    accepted: false,
+  },
+  {
+    label: 'partial pair — password without username',
+    env: { COMMAND_CENTER_AUTH_PASSWORD: 'pw' },
+    accepted: false,
+  },
+  {
+    label: 'no auth material at all',
+    env: {},
+    accepted: false,
+  },
+  {
+    // Keeps the required-value loop itself non-vacuous: complete auth is not
+    // sufficient if a value the file interpolates is missing.
+    label: 'complete auth but a required non-auth value missing',
+    env: { COMMAND_CENTER_AUTH_TOKEN: 'tok', UNIT_TALK_CC_API_KEY: '' },
+    accepted: false,
+  },
+];
+
+function runAuthContract(fragment: string, env: Record<string, string>): { exitCode: number; output: string } {
+  const dir = createTempWorkspace('utv2-1922-auth-');
+  const scriptPath = join(dir, 'auth.sh');
+  writeFileSync(scriptPath, `set -eu\n${fragment}\necho ACCEPTED\n`);
+  try {
+    const output = execFileSync('bash', [scriptPath], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // A clean environment: the names under test must come only from `env`,
+      // never leak in from the runner's own shell.
+      env: { PATH: process.env.PATH ?? '', ...CC_REQUIRED_NON_AUTH_ENV, ...env },
+    });
+    return { exitCode: 0, output };
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string; stderr?: string };
+    return { exitCode: failure.status ?? 1, output: `${failure.stdout ?? ''}${failure.stderr ?? ''}` };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('UTV2-1922 defect 1: deploy-time Command Center auth matches the canonical contract exactly', () => {
+  // THE DEFECT. The first candidate required COMMAND_CENTER_AUTH_TOKEN,
+  // _USERNAME and _PASSWORD all to be non-empty, which made the canonical
+  // token-only production configuration undeployable. A deploy-time refusal
+  // STRICTER than the runtime contract is still a defect: it fails a
+  // configuration the product supports. The runtime contract is stated twice on
+  // main — in deploy/production/nextjs-entrypoint.sh and in
+  // assertCommandCenterAuthConfig — and both accept a token OR a complete
+  // username/password pair, and both refuse a partial pair.
+  for (const jobId of ['canary', 'promote']) {
+    const fragment = ccAuthContractFragment(jobId);
+    for (const testCase of CC_AUTH_CASES) {
+      const result = runAuthContract(fragment, testCase.env);
+      if (testCase.accepted) {
+        assert.equal(
+          result.exitCode,
+          0,
+          `${jobId}: ${testCase.label} must remain deployable — the deploy refused it: ${result.output}`,
+        );
+        assert.match(result.output, /ACCEPTED/, `${jobId}: ${testCase.label} must reach the file write`);
+      } else {
+        assert.equal(
+          result.exitCode,
+          1,
+          `${jobId}: ${testCase.label} must fail closed, not be written to the host`,
+        );
+        assert.ok(
+          !/ACCEPTED/.test(result.output),
+          `${jobId}: ${testCase.label} must not reach the file write`,
+        );
+        assert.match(result.output, /::error::/, `${jobId}: the refusal must be a workflow error`);
+      }
+    }
+  }
+});
+
+test('UTV2-1922 defect 1: the deploy-time contract and the entrypoint agree, so neither can drift alone', () => {
+  // The two halves are written in different files and enforced at different
+  // times. If only one is repaired, a deploy would accept a configuration the
+  // container then refuses to start on — which is an outage with a green
+  // deploy. Assert the same three refusals exist in both.
+  const entrypoint = readFileSync(resolve(ROOT, 'deploy/production/nextjs-entrypoint.sh'), 'utf8');
+  const promoteFragment = ccAuthContractFragment('promote');
+  const pairs: Array<[RegExp, string]> = [
+    [/COMMAND_CENTER_AUTH_USERNAME[^\n]*\n[^\n]*without[^\n]*PASSWORD|USERNAME is set without COMMAND_CENTER_AUTH_PASSWORD/, 'username without password'],
+    [/PASSWORD is set without COMMAND_CENTER_AUTH_USERNAME/, 'password without username'],
+    [/auth is not configured/i, 'neither a token nor a complete pair'],
+  ];
+  for (const [pattern, label] of pairs) {
+    assert.match(entrypoint, pattern, `the entrypoint must still refuse ${label}`);
+    assert.match(promoteFragment, pattern, `the deploy must also refuse ${label}`);
+  }
+  // And neither may demand the token unconditionally.
+  assert.ok(
+    !/COMMAND_CENTER_AUTH_TOKEN[^\n]*\n[^\n]*Refusing to start/.test(entrypoint),
+    'the entrypoint must not require the token unconditionally',
+  );
+});
+
+interface RollbackOutcome {
+  exitCode: number;
+  profiles: string;
+  commandCenterConfigPresent: boolean;
+  release: string;
+  output: string;
+}
+
+const ROLLBACK_STUB = `#!/usr/bin/env bash
+# Records the COMPOSE_PROFILES the rollback actually selected. A rollback that
+# selects \`command-center\` without the env file is the failure under test, so
+# the stub refuses exactly as compose would.
+printf '%s\\n' "profiles=\${COMPOSE_PROFILES-}" >> "$UTV2_1922_DIR/.profiles"
+for a in "$@"; do
+  if [ "$a" = up ] || [ "$a" = pull ]; then
+    if [ "\${COMPOSE_PROFILES-}" = 'command-center' ] && [ ! -f .env.command-center ]; then
+      printf 'service "command-center" env_file .env.command-center not found\\n' >&2
+      exit 1
+    fi
+  fi
+done
+exit 0
+`;
+
+/**
+ * Runs the REAL remote script `deploy/rollback.sh` emits, against a docker stub,
+ * in a temporary directory standing in for the deploy host.
+ */
+function runRollback(options: { commandCenterFlag: boolean; snapshotPresent: boolean }): RollbackOutcome {
+  const tag = 'cccccccccccccccccccccccccccccccccccccccc';
+  const dir = createTempWorkspace('utv2-1922-rb-');
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'docker'), ROLLBACK_STUB, { mode: 0o755 });
+
+  const host = join(dir, 'host');
+  mkdirSync(host);
+  writeFileSync(join(host, '.unit-talk-release'), `${OLD_TAG}\n`);
+  for (const name of ['.env.production', '.env.web', '.env.smart-form', '.env.edge']) {
+    writeFileSync(join(host, `${name}.${tag}`), 'X=1\n');
+  }
+  // A stale Command Center configuration is always present at the start: the
+  // question under test is whether the rollback leaves it, removes it, and
+  // whether it selects a profile that needs it.
+  writeFileSync(join(host, '.env.command-center'), 'STALE=1\n');
+  if (options.snapshotPresent) {
+    writeFileSync(join(host, `.env.command-center.${tag}`), 'CC=1\n');
+  }
+
+  const args = ['deploy/rollback.sh', '--tag', tag, '--path', host, '--dry-run'];
+  if (options.commandCenterFlag) args.splice(3, 0, '--command-center');
+  const dryRun = execFileSync('bash', args, { encoding: 'utf8', cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] });
+  const remote = dryRun.slice(dryRun.indexOf('\n') + 1);
+
+  const scriptPath = join(dir, 'rollback-remote.sh');
+  writeFileSync(scriptPath, remote);
+
+  let exitCode = 0;
+  let output = '';
+  try {
+    // 2>&1 so the WARNING the rollback prints when it declines to honour the
+    // flag is observable: it goes to stderr, and execFileSync returns stdout.
+    output = execFileSync('bash', ['-c', `bash "${scriptPath}" 2>&1`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}`, UTV2_1922_DIR: host },
+    });
+  } catch (error) {
+    const failure = error as { status?: number; stdout?: string; stderr?: string };
+    exitCode = failure.status ?? 1;
+    output = `${failure.stdout ?? ''}${failure.stderr ?? ''}`;
+  }
+
+  const outcome: RollbackOutcome = {
+    exitCode,
+    profiles: existsSync(join(host, '.profiles')) ? readFileSync(join(host, '.profiles'), 'utf8') : '',
+    commandCenterConfigPresent: existsSync(join(host, '.env.command-center')),
+    release: readFileSync(join(host, '.unit-talk-release'), 'utf8').trim(),
+    output,
+  };
+  rmSync(dir, { recursive: true, force: true });
+  return outcome;
+}
+
+test('UTV2-1922 defect 2: rollback to a pre-Command-Center release never selects a profile it cannot run', () => {
+  // THE DEFECT. The first candidate passed `--command-center` whenever the
+  // CURRENT deploy had the surface enabled, and the flag alone selected the
+  // profile. Rolling back from an enabled release to one that predates the
+  // Command Center therefore selected a profile whose env_file the target
+  // release does not have — reintroducing the exact config-parse failure this
+  // lane exists to prevent, on the recovery path, at the moment the edge is
+  // least able to absorb it.
+  const result = runRollback({ commandCenterFlag: true, snapshotPresent: false });
+  assert.equal(result.exitCode, 0, `the rollback must succeed: ${result.output}`);
+  assert.ok(
+    !/profiles=command-center/.test(result.profiles),
+    'the command-center profile must not be selected for a release with no Command Center snapshot',
+  );
+  assert.equal(
+    result.commandCenterConfigPresent,
+    false,
+    'and the stale Command Center configuration must be removed, not left for a later selection',
+  );
+  assert.match(result.output, /profile is NOT selected/, 'the operator must be told the flag was not honoured');
+  // Non-vacuity: the harness must have observed a selection at all, or
+  // "not command-center" would be true of a rollback that never ran compose.
+  assert.match(result.profiles, /profiles=/, 'the harness must actually observe the selection');
+  assert.equal(result.release, 'cccccccccccccccccccccccccccccccccccccccc', 'a successful rollback records the target tag');
+});
+
+test('UTV2-1922 defect 2: rollback to a Command Center release restores it and selects the profile', () => {
+  // The other half. Narrowing the selection must not disable the capability:
+  // a rollback to a release that DID run the Command Center must bring it back.
+  const result = runRollback({ commandCenterFlag: true, snapshotPresent: true });
+  assert.equal(result.exitCode, 0, `the rollback must succeed: ${result.output}`);
+  assert.match(
+    result.profiles,
+    /profiles=command-center/,
+    'the command-center profile must be selected when the target release has its configuration',
+  );
+  assert.equal(result.commandCenterConfigPresent, true, 'and its configuration must be restored from the snapshot');
+  assert.match(result.output, /restored \.env\.command-center/, 'the restore must be reported');
+});
+
+test('UTV2-1922 defect 2: without the flag the profile is never selected, snapshot or not', () => {
+  // Operator intent is still required. The snapshot makes the profile POSSIBLE;
+  // it must not make it automatic, or a routine rollback would start a surface
+  // nobody asked for.
+  for (const snapshotPresent of [true, false]) {
+    const result = runRollback({ commandCenterFlag: false, snapshotPresent });
+    assert.equal(result.exitCode, 0, `the rollback must succeed (snapshot=${snapshotPresent}): ${result.output}`);
+    assert.ok(
+      !/profiles=command-center/.test(result.profiles),
+      `no flag must mean no profile (snapshot=${snapshotPresent})`,
+    );
+    assert.match(result.profiles, /profiles=/, 'the harness must actually observe the selection');
+  }
+});
+
+test('UTV2-1922 defect 3: an unrelated container-name conflict cannot remove the public edge', () => {
+  // THE DEFECT. The first candidate's recovery arm also matched a bare
+  // 'Conflict', which Docker prints for ANY name or resource collision. An
+  // ordinary name clash on `api` or `command-center` would have taken ports 80
+  // and 443 down in the name of "clearing the edge ports" — collateral damage
+  // that cannot possibly clear the conflict it was reacting to.
+  const result = runPromote('foreign-name-conflict');
+  assert.equal(result.exitCode, 1, 'the activation still failed, so the step must fail');
+  assert.ok(
+    !/the edge itself is holding ports 80\/443/.test(result.output),
+    'a conflict on another container must not be treated as an edge port conflict',
+  );
+  assert.match(result.output, /edge preserved/, 'it must take the restore path instead');
+  assert.equal(result.edgeServing, true, 'and ports 80 and 443 must be served when the step exits');
+  assert.equal(result.release, OLD_TAG, 'release metadata must still describe reality');
+  assert.equal(result.inflightPresent, true, 'the in-flight marker must survive a failed activation');
+});
+
+test('UTV2-1922 defect 3: a port conflict on a port the edge does not own cannot remove the edge', () => {
+  // Removing caddy could not free 127.0.0.1:4300. The failure text names a real
+  // port conflict, so the words alone are not enough — the evidence has to name
+  // the edge's own ports.
+  const result = runPromote('foreign-port-conflict', '--profile command-center');
+  assert.equal(result.exitCode, 1, 'the activation still failed, so the step must fail');
+  assert.ok(
+    !/the edge itself is holding ports 80\/443/.test(result.output),
+    'a conflict on :4300 must not be treated as an edge port conflict',
+  );
+  assert.match(result.output, /edge preserved/, 'it must take the restore path instead');
+  assert.equal(result.edgeServing, true, 'and ports 80 and 443 must be served when the step exits');
+});
+
+test('UTV2-1922 defect 3: a stale caddy container by name is still a bounded recovery', () => {
+  // The narrowing must not remove the recovery it was narrowing. Docker's
+  // container-name conflict on `/caddy` is exactly the condition the original
+  // `docker rm -f caddy` was added for in ecab31704.
+  const result = runPromote('caddy-name-conflict-then-ok');
+  assert.equal(result.exitCode, 0, 'a caddy name conflict that clears on retry must succeed');
+  assert.equal(result.caddyRemoved, true, 'the stale caddy container must be cleared');
+  assert.match(result.output, /the edge itself is holding ports 80\/443/, 'and the reason must be stated');
+  assert.equal(result.release, NEW_TAG, 'a successful retry must record the new release');
+  assert.equal(result.inflightPresent, false, 'a successful retry must clear the in-flight marker');
+});
+
+test('UTV2-1922 defect 3: the recovery is bounded to one retry, and the evidence test is not vacuous', () => {
+  // A mutation control for the three cases above. If the narrowed condition
+  // ever matched NOTHING, every "must not remove the edge" assertion would pass
+  // for free. Prove the positive arm still fires, and that the negative cases
+  // differ from it observably rather than by both doing nothing.
+  const recovered = runPromote('port-conflict-then-ok');
+  assert.equal(recovered.caddyRemoved, true, 'a true edge port conflict must still reach the removal');
+  const refused = runPromote('foreign-port-conflict');
+  assert.ok(
+    /edge preserved/.test(refused.output) && !/edge preserved/.test(recovered.output),
+    'the two paths must be distinguishable in the script’s own output, or neither assertion constrains anything',
+  );
+  // Bounded: exactly one retry, never a loop.
+  const exhausted = runPromote('port-conflict-then-fail');
+  assert.equal(exhausted.exitCode, 1, 'a conflict that does not clear must fail rather than retry forever');
+  assert.equal(exhausted.edgeServing, true, 'and must restore the edge before exiting');
 });

@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import {
   DELEGATION_STATE_PATH,
@@ -9,9 +8,10 @@ import {
   requireDelegationActive,
 } from './delegation-state.js';
 import { ROOT } from './shared.js';
+import { createTempWorkspace } from './temp-workspace.js';
 
 function makeTmpStateDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'delegation-state-test-'));
+  return createTempWorkspace('delegation-state-test-');
 }
 
 function writeState(dir: string, contents: string, fileName = 'DELEGATION_STATE.json'): string {

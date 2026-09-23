@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1946",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "4cc955f643c0231742784513dad171e9ff62d5df",
+    "verified_source_sha": "cb8e405828dfb80e64475889a1fc4b425a6b3097",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-19T21:12:38.781Z",
+    "ci_sentinels": {
+      "note": "Pinned to the last commit on this branch carrying code. Every later commit touches only docs/06_status/proof/UTV2-1946/ or is the origin/main merge. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1620 at the current head. post-merge-lane-close.yml rebinds merge_sha.",
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "tests": 6599,
+        "pass": 6599,
+        "fail": 0
+      },
+      "required_contexts_authority": "PR #1620: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-19T20:55:00.000Z",
+    "measured_against_sha": "cb8e405828dfb80e64475889a1fc4b425a6b3097",
+    "commands": [
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 6599,
+        "pass": 6599,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/command-center/src/lib/governed-population.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "13/13, passes from the repo root and from apps/command-center"
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "matched operator-ui; no required artifacts triggered"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "read from the verify required context on PR #1620 at head b2495f89f. Locally ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx."
+      }
+    ]
+  }
+}

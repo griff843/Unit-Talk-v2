@@ -1,10 +1,13 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
-import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow } from '@/lib/data/results-ops';
+import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
-import { describeOperatorFailure } from '@/lib/describe-error';
+import { renderClvSummary, isClvUnresolved } from '@/lib/clv-summary';
 import { SettlementWorkbench } from '@/components/SettlementWorkbench';
 import { getPickDetail } from '@/lib/data';
+import { getDeliveryKillSwitchStatuses } from '@/lib/data/discord-ops';
+import { predictRecapDelivery } from '@/lib/human-capper-recap';
+import { isPickAlreadySettled } from '@/lib/settlement-state';
 
 export const metadata = { title: 'Settlement — Unit Talk Command Center' };
 
@@ -18,6 +21,7 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
           <Th>Pick</Th>
           <Th>Status</Th>
           <Th>Result</Th>
+          <Th>CLV</Th>
           <Th>Source</Th>
           <Th>Confidence</Th>
           <Th>Correction of</Th>
@@ -42,7 +46,16 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
                   <InternalLabelBadge label="Settled" />
                 )}
               </Td>
-              <Td>{row.result ?? '—'}</Td>
+              <Td>{row.result ?? <span className="cc-text-muted">unsettled</span>}</Td>
+              <Td>
+                {isClvUnresolved(row) ? (
+                  <span className="cc-text-muted text-xs" title="Closing-line capture requires a live provider, which is deliberately off.">
+                    {renderClvSummary(row)}
+                  </span>
+                ) : (
+                  <span className="cc-num text-xs text-gray-200">{renderClvSummary(row)}</span>
+                )}
+              </Td>
               <Td>{row.source}</Td>
               <Td>{row.confidence}</Td>
               <Td>{row.correctsId ? <span className="font-mono text-xs">{row.correctsId.slice(0, 8)}…</span> : '—'}</Td>
@@ -59,8 +72,55 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
                     Settle
                   </Link>
                 ) : (
-                  '—'
+                  <Link href={`/settlement?pickId=${row.pickId}`} className="text-xs text-blue-400 hover:underline">Correct settlement</Link>
                 )}
+              </Td>
+            </tr>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function DeliveredAwaitingTable({ rows, nowMs }: { rows: DeliveredAwaitingSettlementRow[]; nowMs: number }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHead>
+          <Th>Pick</Th>
+          <Th>Capper</Th>
+          <Th>Sport</Th>
+          <Th>Market / Selection</Th>
+          <Th>Odds</Th>
+          <Th>Units</Th>
+          <Th>Delivered</Th>
+          <Th>Action</Th>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-b border-gray-800/60">
+              <Td>
+                <Link href={`/picks/${row.id}`} className="font-mono text-xs text-blue-400 hover:underline">
+                  {row.id.slice(0, 8)}…
+                </Link>
+              </Td>
+              <Td>{row.capperId ?? '—'}</Td>
+              <Td>{row.sportDisplayName ?? '—'}</Td>
+              <Td>
+                {row.market ?? '—'}
+                {row.selection ? <span className="cc-text-muted"> · {row.selection}</span> : null}
+              </Td>
+              <Td><span className="cc-num">{row.odds ?? '—'}</span></Td>
+              <Td><span className="cc-num">{row.stakeUnits ?? '—'}</span></Td>
+              <Td>{formatRelativeAge(row.postedAt, nowMs) ?? '—'}</Td>
+              <Td>
+                <Link
+                  href={`/settlement?pickId=${row.id}`}
+                  className="text-xs font-medium text-blue-400 hover:underline"
+                >
+                  Settle
+                </Link>
               </Td>
             </tr>
           ))}
@@ -87,7 +147,23 @@ export default async function SettlementPage({
   try {
     snapshot = await getResultsOpsSnapshot();
   } catch (error) {
-    loadError = describeOperatorFailure(error, 'Settlement truth could not be loaded.');
+    console.error('command_center.settlement_read_failed', error);
+    loadError = 'Settlement history is temporarily unavailable. Refresh to try again or check System Health.';
+  }
+
+  // UTV2-1939: the per-pick recap posts by direct fetch rather than through the
+  // outbox, so `settle-pick-controller.ts` consults the kill switch itself and
+  // silently declines. Reading the switch here lets the operator see that
+  // consequence BEFORE settling instead of discovering it afterwards. A failed
+  // read stays null, and `predictRecapDelivery` fails closed on null -- it
+  // reports the outcome as unknown rather than promising a recap.
+  let officialPicksKilled: boolean | null = null;
+  try {
+    const switches = await getDeliveryKillSwitchStatuses();
+    const official = switches.find((entry) => entry.target === 'official-picks');
+    officialPicksKilled = official ? official.killed : null;
+  } catch {
+    officialPicksKilled = null;
   }
 
   let isAlreadySettled: boolean | null = null;
@@ -98,10 +174,11 @@ export default async function SettlementPage({
       if (!detail) {
         pickLoadError = 'Canonical pick was not found.';
       } else {
-        isAlreadySettled = detail.pick.status === 'settled' || detail.settlements.length > 0;
+        isAlreadySettled = isPickAlreadySettled(detail.pick.status, detail.settlements.length);
       }
     } catch (error) {
-      pickLoadError = describeOperatorFailure(error, 'Canonical pick state could not be loaded.');
+      console.error('command_center.settlement_pick_read_failed', error);
+      pickLoadError = 'This pick could not be loaded. Refresh to try again.';
     }
   }
 
@@ -109,7 +186,7 @@ export default async function SettlementPage({
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
         <p className="text-sm cc-text-muted">
-          Internal settlement truth: throughput, manual-review blockers, corrections, and picks stuck in posted.
+          Settlement history, manual review, corrections, and delivered picks awaiting outcomes. Only governed operator picks are included; test fixtures are excluded.
           Observed {observedAt}.
         </p>
       </div>
@@ -130,24 +207,66 @@ export default async function SettlementPage({
             pickLoadError={pickLoadError}
           />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <StatCard label="Settled (24h)" value={snapshot.counts.settled24h} />
+            <StatCard label="Settlement Records (24h)" value={snapshot.counts.settled24h} />
             <StatCard label="Manual Review Open" value={snapshot.counts.manualReviewOpen} />
             <StatCard label="Corrections" value={snapshot.counts.corrections} />
             <StatCard label="Stuck Posted" value={snapshot.counts.stuckPosted} />
+            <StatCard
+              label="Delivered — Awaiting Settlement"
+              value={snapshot.counts.deliveredAwaitingSettlement}
+            />
             <div className="cc-surface p-5">
               <p className="text-xs font-semibold uppercase tracking-wide cc-text-secondary">Game Results Freshness</p>
               <p className="mt-1 text-lg font-bold text-gray-100">
-                {formatRelativeAge(snapshot.gameResults.latestSourcedAt, nowMs) ?? '—'}
+                {snapshot.gameResults.unavailable ? 'Unavailable' : formatRelativeAge(snapshot.gameResults.latestSourcedAt, nowMs) ?? 'No results recorded'}
               </p>
               <p className="text-xs cc-text-muted" title={snapshot.gameResults.latestSourcedAt ?? undefined}>
-                {snapshot.gameResults.count24h} rows sourced in 24h
+                {snapshot.gameResults.unavailable ? 'Results-feed evidence could not be read. Settlement history is still available.' : `${snapshot.gameResults.count24h} results received in the last 24 hours`}
               </p>
             </div>
           </div>
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Manual Review ({snapshot.manualReview.length})
+              Delivered — Awaiting Settlement ({snapshot.counts.deliveredAwaitingSettlement})
+            </h2>
+            <p className="mb-3 text-xs cc-text-muted">
+              Human-capper picks that carry a server delivery authorization, reached members, and have no
+              settlement record yet. No age threshold applies — a pick delivered today appears here as soon
+              as it is delivered, because the per-pick recap is part of the same transaction.
+            </p>
+            {snapshot.deliveredAwaitingSettlement.length > 0 && (() => {
+              // `hasSentDelivery: true` is sound for this list specifically: the query
+              // filters `status = 'posted'`, and `posted` is the lifecycle state written
+              // only once downstream delivery is confirmed. It is not an assumption about
+              // picks in general.
+              const prediction = predictRecapDelivery({
+                isHumanCapperDelivery: true,
+                officialPicksKilled,
+                hasSentDelivery: true,
+              });
+              return (
+                <p
+                  className={`mb-3 rounded-md border px-3 py-2 text-xs ${
+                    prediction.willAttempt
+                      ? 'border-blue-700 bg-blue-950/50 text-blue-200'
+                      : 'border-amber-600 bg-amber-950/40 text-amber-200'
+                  }`}
+                >
+                  {prediction.summary}
+                </p>
+              );
+            })()}
+            {snapshot.deliveredAwaitingSettlement.length === 0 ? (
+              <EmptyState message="No delivered picks are awaiting settlement." />
+            ) : (
+              <DeliveredAwaitingTable rows={snapshot.deliveredAwaitingSettlement} nowMs={nowMs} />
+            )}
+          </div>
+
+          <div className="cc-surface p-5">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
+              Manual Review ({snapshot.counts.manualReviewOpen})
             </h2>
             {snapshot.manualReview.length === 0 ? (
               <EmptyState message="No settlements pending manual review." />
@@ -158,11 +277,11 @@ export default async function SettlementPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Stuck in Posted ({snapshot.stuckPosted.length})
+              Posted for More Than 24 Hours ({snapshot.counts.stuckPosted})
             </h2>
             <p className="mb-3 text-xs cc-text-muted">
-              Picks in lifecycle status posted for more than 24h. Age-based proxy — event-start join is a pending
-              data-contract improvement (see src/lib/data/results-ops.ts).
+              Picks still in the posted lifecycle state more than 24 hours after posting.
+              This measures time since posting, not time since the game ended. Showing up to 50 oldest picks.
             </p>
             {snapshot.stuckPosted.length === 0 ? (
               <EmptyState message="No picks stuck in posted." />
@@ -205,10 +324,10 @@ export default async function SettlementPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Corrections ({snapshot.corrections.length})
+              Corrections ({snapshot.counts.corrections})
             </h2>
             <p className="mb-3 text-xs cc-text-muted">
-              Settlement records with corrects_id set — originals are never mutated.
+              Corrections preserve the original settlement and record who changed the outcome. Showing up to 50 most recent corrections.
             </p>
             {snapshot.corrections.length === 0 ? (
               <EmptyState message="No correction records." />
@@ -219,7 +338,7 @@ export default async function SettlementPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Recent Settlements ({snapshot.recentSettlements.length})
+              Recent Settlement Records ({snapshot.recentSettlements.length} shown)
             </h2>
             {snapshot.recentSettlements.length === 0 ? (
               <EmptyState message="No settlement records yet." />

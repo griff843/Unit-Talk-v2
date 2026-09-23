@@ -159,6 +159,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | PM verdict schema | `docs/05_operations/schemas/pm-verdict-v1.md` |
 | Proof template | `docs/06_status/proof/PROOF-TEMPLATE.md` |
 | **Smart Form product intent** | `docs/03_product/smart-form/intent.md` |
+| **Command Center product contract** | `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — the sole authority for what Command Center is and must do |
 
 ### Product intent — required reading when you touch a product surface
 
@@ -170,11 +171,17 @@ contracts it indexes, and carry the applicable acceptance criteria into any dele
 | Product | Intent |
 |---|---|
 | Smart Form (operator pick intake) | `docs/03_product/smart-form/intent.md` |
-| Command Center | *written when that product is next worked* |
+| Command Center (operator control plane + intelligence platform) | `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md` — a full product **contract**, not an intent doc. It is required reading, and unlike the intent documents below it is authority. |
 | Pipeline (grading, settlement, CLV) | *written when that product is next worked* |
 
-These are product intent, not gates. They add no check, no approval artifact and no lane type, and
-no work waits on one being written.
+Product *intent* documents are not gates. They add no check, no approval artifact and no lane type,
+and no work waits on one being written.
+
+**Command Center is the exception, and deliberately so.** It is governed by a product *contract*,
+not an intent document, because more than twenty Command Center documents had accumulated on `main`
+and several independently claimed canonical authority over overlapping scope. All of them are now
+archived under `docs/archive/command-center/` and are historical evidence only. Answer "what should
+Command Center do?" from `COMMAND_CENTER_PRODUCT_CONTRACT.md` alone.
 
 ---
 

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDataClient, isTestFixturePick } from './client';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
+import { applyPickPopulation, applyOperatorPickPopulation, readPickPopulation } from '../governed-population';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ export interface ReviewPick {
   marketTypeDisplayName?: string | null;
   settlementResult?: string | null;
   reviewDecision?: string | null;
+  promotionStatus?: string | null;
+  promotionReason?: string | null;
 }
 
 export interface HeldPick {
@@ -57,6 +60,8 @@ export interface HeldPick {
   marketTypeDisplayName?: string | null;
   settlementResult?: string | null;
   reviewDecision?: string | null;
+  promotionStatus?: string | null;
+  promotionReason?: string | null;
 }
 
 export interface PickDetail {
@@ -279,6 +284,10 @@ const QUEUE_SELECT = [
   'metadata',
   'promotion_target',
   'promotion_status',
+  // Dimension 5 requires a suppressed pick to carry a visible reason on every queue that
+  // can show it, not only on the picks explorer. Without this column the review queue can
+  // render a suppression it structurally cannot explain.
+  'promotion_reason',
   'sport_display_name',
   'capper_display_name',
   'market_type_display_name',
@@ -318,6 +327,8 @@ function mapReviewPick(row: JsonObject): ReviewPick {
     marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
     settlementResult: asStringOrNull(row['settlement_result']),
     reviewDecision: asStringOrNull(row['review_decision']),
+    promotionStatus: asStringOrNull(row['promotion_status']),
+    promotionReason: asStringOrNull(row['promotion_reason']),
   };
 }
 
@@ -343,6 +354,13 @@ export async function getReviewQueue(
 
     // Exclude held picks (review_decision = 'hold')
     query = query.or('review_decision.is.null,review_decision.neq.hold');
+
+    // The governed/fixture partition belongs in the query, not after the page.
+    // Filtering a `.range()` window in memory makes `count: 'exact'` count the
+    // fixture corpus while the rendered list counts what survived, so the page
+    // reports "19,796 matching rows" above "0 candidates loaded" and an
+    // operator cannot tell an empty queue from a truncated read.
+    query = applyOperatorPickPopulation(query);
 
     if (source) query = query.eq('source', source);
 
@@ -387,9 +405,16 @@ export async function getHeldQueue(
     // Base query: awaiting_approval OR pending, filtered to ONLY held (review_decision = 'hold')
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'estimated' })
+      // 'exact', not 'estimated': the held queue is small and an operator acts on
+      // its size. An estimate that silently falls back to the loaded page length
+      // would read as a complete count and is indistinguishable from one.
+      .select(QUEUE_SELECT, { count: 'exact' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending')
       .eq('review_decision', 'hold');
+
+    // Same push-down as the review queue: the exact count must describe the
+    // same population the operator is shown.
+    query = applyOperatorPickPopulation(query);
 
     if (source) query = query.eq('source', source);
 
@@ -453,10 +478,16 @@ export async function getHeldQueue(
           marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
           settlementResult: asStringOrNull(row['settlement_result']),
           reviewDecision: asStringOrNull(row['review_decision']),
+          promotionStatus: asStringOrNull(row['promotion_status']),
+          promotionReason: asStringOrNull(row['promotion_reason']),
         };
       });
 
-    return { picks, total: count ?? picks.length, degraded: null };
+    return {
+      picks,
+      total: readAuthoritativeCount({ error, count }, 'held queue picks'),
+      degraded: null,
+    };
   } catch (err) {
     console.error('getHeldQueue exception:', err);
     return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
@@ -465,12 +496,73 @@ export async function getHeldQueue(
 
 // ── searchPicks ───────────────────────────────────────────────────────────────
 
+/**
+ * Columns `picks_current_state` derives from a join rather than from its
+ * `picks` base row.
+ *
+ * Three of the joins are correlated laterals (`pick_promotion_history`,
+ * `settlement_records`, `pick_reviews`), and running them is what made an
+ * unfiltered `count` on the view cost 8,979ms against 47ms on `picks`.
+ * `searchPicks` therefore counts `picks` -- which is only sound while none of
+ * its filters reads a column in this set. `observed-runs.test.ts`' sibling
+ * guard in `queues-count-relation.test.ts` enforces that.
+ */
+export const VIEW_DERIVED_COLUMNS = [
+  'capper_display_name',
+  'sport_display_name',
+  'market_type_display_name',
+  'promotion_status_current',
+  'promotion_target_current',
+  'promotion_score_current',
+  'promotion_decided_at_current',
+  'settlement_result',
+  'settlement_status',
+  'settlement_source',
+  'settlement_recorded_at',
+  'review_decision',
+  'review_decided_by',
+  'review_decided_at',
+] as const;
+
+/**
+ * `searchPicks`' filters, as (query param -> column, operator).
+ *
+ * This table is the single definition: `applyFilters` below is built from it,
+ * and `SEARCH_PICKS_FILTER_COLUMNS` is derived from it. A filter added here
+ * therefore cannot escape the guard in `queues-count-relation.test.ts`, and a
+ * filter added anywhere else is not applied at all.
+ */
+const SEARCH_PICKS_TEXT_COLUMNS = ['market', 'selection', 'source'] as const;
+
+const SEARCH_PICKS_EQ_FILTERS = [
+  { param: 'source', column: 'source' },
+  { param: 'status', column: 'status' },
+  { param: 'approval', column: 'approval_status' },
+] as const;
+
+const SEARCH_PICKS_RANGE_FILTERS = [
+  { param: 'dateFrom', column: 'created_at', op: 'gte' },
+  { param: 'dateTo', column: 'created_at', op: 'lte' },
+] as const;
+
+/** Every column `searchPicks` filters on. Must stay disjoint from the set above. */
+export const SEARCH_PICKS_FILTER_COLUMNS = Array.from(
+  new Set<string>([
+    ...SEARCH_PICKS_TEXT_COLUMNS,
+    ...SEARCH_PICKS_EQ_FILTERS.map((f) => f.column),
+    ...SEARCH_PICKS_RANGE_FILTERS.map((f) => f.column),
+  ]),
+);
+
 export async function searchPicks(
   params: Record<string, string>,
 ): Promise<{ picks: Array<Record<string, unknown>>; total: number; limit: number; offset: number }> {
   const DEFAULT_LIMIT = 25;
-  const limit = Math.min(Math.max(Number(params['limit'] ?? DEFAULT_LIMIT), 1), 200);
-  const offset = Math.max(Number(params['offset'] ?? 0), 0);
+  const rawLimit = Number(params['limit'] ?? DEFAULT_LIMIT);
+  const rawOffset = Number(params['offset'] ?? 0);
+  const limit = Number.isSafeInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : DEFAULT_LIMIT;
+  const offset = Number.isSafeInteger(rawOffset) ? Math.max(rawOffset, 0) : 0;
+  const population = readPickPopulation(params['population']);
 
   try {
     const client: Client = await getDataClient();
@@ -495,55 +587,88 @@ export async function searchPicks(
       'review_decision',
       'promotion_target',
       'promotion_status',
+      // Dimension 5 requires suppression to be explicit: a suppressed pick that
+      // carries no visible reason is indistinguishable from one suppressed by mistake.
+      'promotion_reason',
     ].join(', ');
 
-    let query = client
-      .from('picks_current_state')
-      .select(selectCols, { count: 'exact' });
-
-    // Full-text / substring search on market + selection + source
     const q = params['q']?.trim();
-    if (q) {
-      query = query.or(
-        `market.ilike.%${q}%,selection.ilike.%${q}%,source.ilike.%${q}%`,
-      );
-    }
 
-    // Source filter
-    const source = params['source']?.trim();
-    if (source) query = query.eq('source', source);
+    /**
+     * Apply the caller's filters to a query, driven by the tables above.
+     *
+     * Every predicate here is on a column `picks_current_state` takes straight
+     * from its `picks` base row -- none reads a column the view's three lateral
+     * joins produce. That is what makes the count split below sound, and
+     * `queues-count-relation.test.ts` is what keeps it true.
+     */
+    const applyFilters = <T extends {
+      or: (f: string) => T;
+      eq: (c: string, v: string) => T;
+      gte: (c: string, v: string) => T;
+      lte: (c: string, v: string) => T;
+    }>(base: T): T => {
+      let next = base;
+      if (q) {
+        next = next.or(SEARCH_PICKS_TEXT_COLUMNS.map((c) => `${c}.ilike.${JSON.stringify(`%${q}%`)}`).join(','));
+      }
+      for (const filter of SEARCH_PICKS_EQ_FILTERS) {
+        const value = params[filter.param]?.trim();
+        if (value) next = next.eq(filter.column, value);
+      }
+      for (const filter of SEARCH_PICKS_RANGE_FILTERS) {
+        const value = params[filter.param]?.trim();
+        if (!value) continue;
+        next = filter.op === 'gte' ? next.gte(filter.column, value) : next.lte(filter.column, value);
+      }
+      return next;
+    };
 
-    // Lifecycle status filter
-    const status = params['status']?.trim();
-    if (status) query = query.eq('status', status);
-
-    // Approval status filter
-    const approval = params['approval']?.trim();
-    if (approval) query = query.eq('approval_status', approval);
-
-    // Date range
-    const dateFrom = params['dateFrom']?.trim();
-    if (dateFrom) query = query.gte('created_at', dateFrom);
-
-    const dateTo = params['dateTo']?.trim();
-    if (dateTo) query = query.lte('created_at', dateTo);
-
-    // Sort
-    const sortCol = params['sort'] ?? 'created_at';
+    const requestedSort = params['sort'] ?? 'created_at';
+    const sortCol = ['created_at', 'id', 'selection', 'status'].includes(requestedSort) ? requestedSort : 'created_at';
     const sortAsc = params['sortDir'] === 'asc';
-    query = query
-      .order(sortCol, { ascending: sortAsc })
-      .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
+    const rowBase = applyFilters(client.from('picks_current_state').select(selectCols));
+    const rowQuery = (population === 'governed' ? applyOperatorPickPopulation(rowBase) : applyPickPopulation(rowBase, population))
+      .order(sortCol, { ascending: sortAsc })
+      .order('id', { ascending: sortAsc })
+      .range(offset, offset + limit - 1)
+      .abortSignal(AbortSignal.timeout(8_000));
+
+    // The count is taken against `picks`, not `picks_current_state`.
+    //
+    // Counting the view makes Postgres run its three correlated lateral joins
+    // once per candidate row purely to discard every joined column -- 107,866
+    // times for an unfiltered explorer load. Measured against production that
+    // is 8,979ms, past the 8s `authenticated` statement timeout, so /picks
+    // rendered a raw "canceling statement due to statement timeout" instead of
+    // any data. The identical count on `picks` is an index-only scan: 47ms.
+    //
+    // This is still an exact count, not an estimate -- same predicate, same
+    // rows, same number. Only the relation it is counted over changes. That
+    // equality is structural, not a coincidence to re-check: every join in the
+    // view is a LEFT JOIN (LATERAL ... ON true for the three correlated ones),
+    // so no join can drop a `picks` row or multiply one. Verified against
+    // production on three predicates -- unfiltered 107866/107866,
+    // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
+    const countBase = applyFilters(client.from('picks').select('id', { count: 'exact', head: true }));
+    const countQuery = (population === 'governed' ? applyOperatorPickPopulation(countBase) : applyPickPopulation(countBase, population)).abortSignal(AbortSignal.timeout(8_000));
+
+    const [
+      { data, error },
+      { count, error: countError },
+    ] = await Promise.all([
+      awaitWithTimeoutRetry(() => rowQuery),
+      awaitWithTimeoutRetry(() => countQuery),
+    ]);
 
     assertQuerySucceeded({ error }, 'searchPicks');
+    assertQuerySucceeded({ error: countError }, 'searchPicks count');
 
     const rows = (data ?? []) as JsonObject[];
 
     // Remap snake_case columns to camelCase expected by PickResultRow
     const picks: Array<Record<string, unknown>> = rows
-      .filter((row) => !isFixtureLikePick(row))
       .map((row) => ({
         ...row,
         matchup: eventFieldsFromRow(row).eventName,
@@ -554,7 +679,7 @@ export async function searchPicks(
 
     return {
       picks,
-      total: readAuthoritativeCount({ error, count }, 'active picks'),
+      total: readAuthoritativeCount({ error: countError, count }, 'active picks'),
       limit,
       offset,
     };
@@ -575,6 +700,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
       .from('picks_current_state')
       .select([
         'id',
+        'submission_id',
         'source',
         'market',
         'selection',
@@ -619,7 +745,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 
       client
         .from('pick_promotion_history')
-        .select('id, pick_id, promotion_target, status, score, policy_version, decided_at, decided_by, override_action, reason')
+        .select('id, pick_id, target, status, score, version, decided_at, decided_by, override_action, reason')
         .eq('pick_id', pickId)
         .order('decided_at', { ascending: false }),
 
@@ -664,12 +790,13 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         .eq('entity_ref', pickId)
         .order('created_at', { ascending: false }),
 
-      client
-        .from('submissions')
-        .select('id, pick_id, payload, created_at')
-        .eq('pick_id', pickId)
-        .limit(1)
-        .maybeSingle(),
+      typeof pickRow['submission_id'] === 'string'
+        ? client
+          .from('submissions')
+          .select('id, payload, created_at')
+          .eq('id', pickRow['submission_id'])
+          .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     assertQuerySucceeded(receiptsResult, 'getPickDetail distribution receipts');
@@ -719,10 +846,8 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     // Resolve confidence
     const confidence = asNumberOrNull(metadata['confidence']);
 
-    // Resolve submissionId from pick_id column on submission row
-    const submissionId = submissionRow
-      ? asStringOrNull(submissionRow['id'])
-      : null;
+    // Preserve the canonical submission link even if its row is unavailable.
+    const submissionId = asStringOrNull(pickRow['submission_id']);
 
     const pick: PickDetail = {
       id: asString(pickRow['id']),
@@ -763,14 +888,13 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     }));
 
     // ── Map promotion history ─────────────────────────────────────────────────
-    // promotion_target → target, policy_version → version
 
     const promotionHistory: PromotionHistoryRow[] = promotionHistRows.map((row) => ({
       id: asString(row['id']),
-      target: asString(row['promotion_target']),
+      target: asString(row['target']),
       status: asString(row['status']),
       score: asNumberOrNull(row['score']),
-      version: asString(row['policy_version']),
+      version: asString(row['version']),
       decidedAt: asString(row['decided_at']),
       decidedBy: asString(row['decided_by']),
       overrideAction: asStringOrNull(row['override_action']),

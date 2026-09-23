@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1944",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "eb8a4ca34dc25898f40ecce85308729b2ea9e2b8",
+    "verified_source_sha": "9c46f975632f5229d158cdabcde9fa814a10a3a8",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-19T19:39:21.782Z",
+    "ci_sentinels": {
+      "note": "Pinned to the last commit on this branch carrying code. Every later commit touches only docs/06_status/proof/UTV2-1944/. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1618 at the current head. post-merge-lane-close.yml rebinds merge_sha.",
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "tests": 6592,
+        "pass": 6592,
+        "fail": 0
+      },
+      "required_contexts_authority": "PR #1618: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-19T19:40:00.000Z",
+    "measured_against_sha": "9c46f975632f5229d158cdabcde9fa814a10a3a8",
+    "commands": [
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 6592,
+        "pass": 6592,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/command-center/src/lib/governed-population.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "6/6, passes from the repo root and from apps/command-center"
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "rules matched operator-ui; no required artifacts triggered"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "ci:assert-staging refuses any target that is not xskgrzbteyqdufktjrjx; local.env pins SUPABASE_URL=http://127.0.0.1:1. Correct local outcome, not a defect in this diff. The authoritative full-tree result is the required verify context on PR #1618 at the branch head carrying this bundle."
+      }
+    ]
+  }
+}

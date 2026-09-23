@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1950",
+  "tier": "T2",
+  "proof_profile": "app-runtime",
+  "status": "handoff-checkpoint",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "81db253d5cf649be721753c1e8df70d4b2a1f70e",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "command_center_tests": {
+      "pass": 657,
+      "fail": 0,
+      "skipped": 0
+    },
+    "next_build": "pass",
+    "type_check": "pass",
+    "selected_lint": "pass",
+    "r_level": "PASS operator-ui",
+    "full_pnpm_verify": {
+      "result": "pass",
+      "run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35551270130",
+      "step": "Run complete repository verification against staging"
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "source": "read-only production-data proxy",
+        "relations": [
+          "picks_current_state",
+          "settlement_records",
+          "distribution_outbox",
+          "distribution_receipts",
+          "provider_offer_current",
+          "system_runs"
+        ],
+        "note": "Scoped operator/fixture predicates; independent live counts compared with recovery browser rendering."
+      }
+    ],
+    "row_counts": [
+      {
+        "governed_picks": 8,
+        "settlement_records": 6,
+        "operator_outbox": 2,
+        "operator_receipts": 2,
+        "non_governed_outbox": 3844
+      }
+    ],
+    "playwright": {
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "source": "production Next build with read-only data and disconnected business-write API"
+    },
+    "staging_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35551270130",
+    "staging_status": "Full pnpm verify passed. Browser persisted and independently verified original settlement and actor, then failed because Track Only correction form was missing. UI fix applied; rerun required."
+  },
+  "limitations": [
+    "No production deployment or launch readiness claim",
+    "Unfinished Outbox paging patch retained outside checkpoint",
+    "Rate-volume policy unresolved; source feeds stale",
+    "Remaining work and local proof paths documented in HANDOFF.md"
+  ]
+}

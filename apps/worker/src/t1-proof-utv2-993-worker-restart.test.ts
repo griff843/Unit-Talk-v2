@@ -28,6 +28,7 @@ import type {
   TransitionPickLifecycleAtomicInput,
   TransitionPickLifecycleAtomicResult,
 } from '@unit-talk/db';
+import { isGovernedDeliveryTarget } from '@unit-talk/contracts';
 import type { CanonicalPick, LifecycleEvent } from '@unit-talk/contracts';
 
 import { runWorkerCycles } from './runner.js';
@@ -414,14 +415,47 @@ function makeOutboxEntry(
 
 // ── LIVE-DB: no long-stranded processing rows ──────────────────────────────────
 
-test('LIVE-DB: distribution_outbox has no long-stranded processing rows', async () => {
+/**
+ * A stranded `processing` row is only evidence about the worker if a worker could
+ * ever have claimed it.
+ *
+ * The previous form of this test counted every stranded row, printed the count,
+ * described any it found as a "historical gap (pre-reaper deployment)", and then
+ * asserted `ok(true)`. It therefore passed on every possible input: one stranded
+ * row and ten thousand produced byte-identical verdicts, and the reaper could have
+ * been deleted outright without this control noticing.
+ *
+ * The classification the old comment asserted was also false. `reapStaleClaims`
+ * (`packages/db/src/runtime-repositories.ts`) is deployed and runs per target every
+ * worker cycle from `runner.ts`. The rows that persist are not pre-reaper history:
+ * they sit on targets no worker governs, so no worker polls them, so no worker
+ * claims or reaps them. They cannot drain, and calling them historical hid that.
+ *
+ * So the population is partitioned by the only question that decides a row:
+ * could any worker ever claim it? `isGovernedDeliveryTarget` from
+ * `@unit-talk/contracts` answers it from the same closed set the worker, the kill
+ * switch and the coverage report use — never a literal match here, which is how
+ * `discord:<channelId>` became a delivery lane no control could see (UTV2-1923).
+ *
+ * The assertion is on the claimable partition, and it is a real one: a governed
+ * target stranded past the window means the reaper is not doing its job and this
+ * test fails. Ungoverned rows are reported, named, and counted — they are a
+ * data-hygiene finding, not a worker-health one, and they are never deleted to
+ * make a number look better.
+ *
+ * Mirror image: `scripts/ops/readiness-refresh.ts` reads the same population and
+ * failed a blocking readiness dimension on the same undifferentiated total, so it
+ * could never pass while this test could never fail. Both are fixed by this same
+ * distinction.
+ */
+test('LIVE-DB: no claimable distribution_outbox row is stranded in processing', async () => {
   if (!supabase) {
     console.log('[SKIP] LIVE-DB test skipped — no Supabase credentials');
     return;
   }
 
-  // Rows stuck in processing for > 10 minutes should not exist on a running system.
-  // The stale claim reaper releases any row stuck for > 5 minutes back to pending each cycle.
+  // reapStaleClaims releases a claim older than 5 minutes back to pending each
+  // worker cycle. 10 minutes gives it two cycles of headroom before this fails.
   const staleThreshold = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
   const { data: strandedRows, error } = await supabase
@@ -432,17 +466,39 @@ test('LIVE-DB: distribution_outbox has no long-stranded processing rows', async 
 
   if (error) throw new Error(`distribution_outbox query failed: ${error.message}`);
 
-  const count = strandedRows?.length ?? 0;
-  console.log(`[T1-PROOF] distribution_outbox stranded processing rows (>10min): ${count}`);
+  const rows = strandedRows ?? [];
 
-  if (count > 0) {
-    const oldest = strandedRows!.map((r) => r.claimed_at).sort().at(0);
-    console.log(`[T1-PROOF] oldest stranded claimed_at: ${String(oldest)} — classified as historical gap (pre-reaper deployment)`);
+  // Fail-closed: a row whose target is missing or not a string counts as claimable.
+  // An unreadable target is not evidence that nothing owns the row.
+  const claimable = rows.filter(
+    (row) => typeof row.target !== 'string' || isGovernedDeliveryTarget(row.target),
+  );
+  const unclaimable = rows.filter(
+    (row) => typeof row.target === 'string' && !isGovernedDeliveryTarget(row.target),
+  );
+  const unclaimableTargets = [...new Set(unclaimable.map((row) => String(row.target)))].sort();
+
+  console.log(
+    `[T1-PROOF] stranded processing rows (>10min): ${rows.length} ` +
+      `(claimable=${claimable.length}, unclaimable=${unclaimable.length})`,
+  );
+  if (unclaimable.length > 0) {
+    console.log(
+      `[T1-PROOF] unclaimable stranded rows sit on ungoverned targets: ${unclaimableTargets.join(', ')} — ` +
+        'no worker polls these, so no worker can claim or reap them. Reported, not deleted.',
+    );
   }
 
-  // Any pre-existing rows are classified as historical gap from before stale claim reaper deployment.
-  // New rows drain within one worker cycle (≤ 5 minutes) via reapStaleClaims (proved unit-side in test 4).
-  assert.ok(true, `stale reaper operational; ${count} historical stranded rows classified as gap`);
+  const claimableDetail = claimable
+    .map((row) => `${String(row.id)}@${String(row.target)} claimed ${String(row.claimed_at)}`)
+    .join('; ');
+
+  assert.equal(
+    claimable.length,
+    0,
+    `${claimable.length} governed-target row(s) stranded in processing past the reaper window — ` +
+      `reapStaleClaims is not draining them: ${claimableDetail}`,
+  );
 });
 
 // ── LIVE-DB: circuit state tracking is operational ────────────────────────────

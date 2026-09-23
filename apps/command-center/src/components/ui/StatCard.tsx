@@ -1,12 +1,16 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CounterAnimation } from './CounterAnimation';
 import { MicroSparkline } from './MicroSparkline';
 
 export interface StatCardProps {
   label: string;
-  value: number;
+  /**
+   * `null` means the figure could not be measured for this cohort. It renders as an
+   * em dash, never as 0 — a rendered 0 is indistinguishable from a genuine zero, and
+   * for a money figure like ROI that is the reassuring direction to be wrong in.
+   */
+  value: number | null;
   delta?: number | string;
   unit?: string;
   liveUpdate?: boolean;
@@ -68,12 +72,18 @@ export function StatCard({ label, value, delta, unit, liveUpdate = false, sparkl
       <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-[rgba(148,163,184,0.42)] to-transparent" />
       <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">{label}</p>
       <div className="mt-4 flex items-end gap-3">
-        <CounterAnimation
-          value={value}
-          duration={300}
-          format={(nextValue) => formatPrimary(nextValue, unit)}
-          className="text-4xl font-semibold tracking-[-0.05em] text-[var(--cc-text-primary)]"
-        />
+        {value === null ? (
+          <span
+            className="text-4xl font-semibold tracking-[-0.05em] text-[var(--cc-text-muted)]"
+            title="not measurable for this cohort"
+          >
+            —
+          </span>
+        ) : (
+          <span className="text-4xl font-semibold tracking-[-0.05em] text-[var(--cc-text-primary)]">
+            {formatPrimary(value, unit)}
+          </span>
+        )}
         {deltaMeta ? (
           <span
             className={`inline-flex translate-y-2 items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-medium transition-all duration-[180ms] ${

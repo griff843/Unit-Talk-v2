@@ -4,6 +4,10 @@ Moved verbatim from plan.md to keep session-start context bounded. Read relevant
 entries when needed; this file introduces no authority or new work. Current work
 and decisions remain in [plan.md](plan.md); canonical contracts remain controlling.
 
+This file holds **generalisable operating lessons**. The chronological narrative they were drawn
+from — reconciliation passes, measurement records and superseded sequencing — lives separately in
+[plan-history-2026-09.md](plan-history-2026-09.md), and is deliberately not duplicated here.
+
 ## Learned
 
 - **A lease leaked `active` on a terminal lane *after* the gate that was supposed to close that
@@ -397,3 +401,52 @@ and decisions remain in [plan.md](plan.md); canonical contracts remain controlli
   months and was load-bearing in the readiness contract. One deploy log settled it.
 - **Concurrent terminals on one checkout produce exactly the drift the lane system prevents.** Three
   sessions, one direct-`main` push, two of them iterating the same branches without knowing it.
+
+### Added 2026-09-16 (UTV2-1921), from the eighth and ninth reconciliation passes
+
+These four postdate the 2026-09-12 split that created this file, and are the reason `plan.md` §9
+cites it. Full narrative in [plan-history-2026-09.md](plan-history-2026-09.md).
+
+- **A correction packet derived offline is a prediction, and the cheapest test of it is the live
+  system's own output on an equivalent input.** The 2026-09-14 three-row edge-provenance correction
+  was derived by running `createInMemoryRepositoryBundle()` + `processSubmission()` against the
+  repaired code, and asserted `selectedOffer: present → removed`. PM's sequencing moved verification
+  *ahead of* correction — deploy, take a fresh pick, run the acceptance query, then write. That query
+  measured `jsonb_typeof(metadata->'selectedOffer') = 'null'` on the fresh pick **and** on all three
+  targets: the key is always present with a JSON-null value, on the repaired path and the legacy rows
+  alike. Under the original ordering the correction would have deleted a key the repaired code
+  actually writes, and the corrected rows would have diverged from live behaviour in a way no later
+  reader could distinguish from a code change. The clause was dropped and `selectedOffer` was not
+  touched. Derive against the repaired code if you must; **verify against the running one before
+  writing.** The same pick supplied the confirmation: its inputs matched row 1's corrected inputs and
+  the live system computed `promotion_score = 42.75`, exactly the value derived offline — the method
+  validated by the system rather than by its author.
+
+- **A dependency on unmerged code is a reason to build on the branch, not a reason to wait for the
+  merge.** `plan.md` recorded a staging-database journey suite as a follow-on lane that "cannot be
+  written against `main`" because it imports post-#1567 code. That premise was true and the
+  conclusion drawn from it was wrong: the suite was written *on* #1567 and executed there, running
+  under `Writable DB proof (staging only)` at four successive heads (run `34734250949`, 6 pass /
+  0 fail). The gap the plan called "the largest genuine gap" closed inside the PR the plan said could
+  not close it.
+
+- **An issue's own `file:line` citations are a snapshot, and a lane that implements against them
+  without re-measuring implements against a stale repo.** UTV2-1838's issue text named
+  `truth-check-lib.ts:1860-1864` as a `done`-only guard and `:986`/`:1045`/`:1062` as infra-error
+  early returns. On current `main` those lines are unrelated code, and the defect behind them was
+  **never real** — measured by calling `finalizeWithManifest` with its injectable `writeManifestFn`
+  and counting writes: 0 on a second close of a `done` lane at either exit code, 0 on `infra_error`,
+  0 on `ineligible`, and 1 on a genuine `fail` (the control proving the probe can observe a write).
+  The guards predated the issue by months. It was not fixed recently; it was wrong when written.
+
+- **A metric read naively can invert its own verdict, and an UNKNOWN blocks the gate exactly as a
+  FAIL does.** All three picks in the readiness window carried `metadata.realEdgeSource = 'sgo'`,
+  which reads as 100% attributed and 0% unknown — a pass. `SCORE_PROVENANCE_STANDARD.md` line 34
+  restricts market-backed to `real-edge` and `consensus-edge` only, so the true figure was
+  **0.00%** — a fail. Two related findings from the same measurement: three Dimension 1 metrics have
+  **no instrumentation at all** (across 61 production tables there is no API-latency table and no
+  circuit-breaker-state table, so two p99 thresholds and the breaker-trip count cannot be evaluated
+  by any query — a build item, not a gap in measurement); and the 35 stuck outbox rows are
+  **canary residue from 2026-07-30, not live failures**, yet the metric is written as an absolute
+  snapshot count so it fails as written. Clearing them is reserved and is not requested. A bundle
+  cannot claim a threshold it did not demonstrate.

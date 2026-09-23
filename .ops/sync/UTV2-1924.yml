@@ -1,0 +1,115 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1924
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1924
+  objective: |-
+    W5 plus Human Capper E2E surface truth. The operator- and member-facing surfaces must tell the truth about who made a pick, what it actually returned, and whether it is entering the approval-for-delivery path.
+    Runs in parallel with [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) (T1). This lane owns the **surfaces**; it does not own authorization, delivery, or containment.
+  acceptance_criteria:
+    - |-
+      ## Objective
+
+      W5 plus Human Capper E2E surface truth. The operator- and member-facing surfaces must tell the truth about who made a pick, what it actually returned, and whether it is entering the approval-for-delivery path.
+
+      Runs in parallel with [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) (T1). This lane owns the **surfaces**; it does not own authorization, delivery, or containment.
+
+      ## Measured defects (main @ 6206cbb)
+
+      1. **ROI is a flat −110 assumption.** `apps/command-center/src/lib/data/analytics.ts:207` computes `((wins * 0.909 - losses) / settled) * 100`, ignoring both real `odds` and `stake_units`. `recap-service.ts:214` and `grading-service.ts:801` compute units from real odds and stake — so the same record has two different answers depending on which surface a reader opens.
+      2. **Capper attribution is a heuristic.** `analytics.ts:230-251` classifies source by substring and reads the capper name from `metadata.capper` / `metadata.capperName` / the source field. [griff843/Unit-Talk-v2#1581](https://linear.app/unit-talk-v2/review/utv2-1907-resolve-capper-attribution-from-pickscapper-id-never-from-08ac75d6352d) established that attribution comes from `picks.capper_id` and never from `pick.source`; that rule was applied to a different reader and this one was missed.
+      3. **No delivered/Track-Only separation.** `analytics.ts` applies no `distributionMode` filter, so internal evidence picks and published picks would be blended into one member-facing record.
+      4. **Smart Form posture may be a lie.** Once [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) lands, an authorized capper's submission enters the approval-for-delivery path, but the form would still tell them "Track Only / no member delivery".
+
+      ## Acceptance
+
+      * Canonical `picks.capper_id` attribution.
+      * Real odds + stake units for net units and ROI.
+      * Track Only / internal evidence excluded from published and member-facing statistics.
+      * Capper totals and the Unit Talk aggregate reconcile with recap math — same inputs, same answer, demonstrated rather than asserted.
+      * Statistics are visible through the intended operator/member surface.
+      * Smart Form must not display "Track Only / no member delivery" to a capper whose server-authorized submission is actually entering the approval-for-delivery path.
+      * **The UI may display server truth but may not control delivery authorization.** No client-supplied value may influence whether a pick can be delivered.
+
+      ## Out of scope
+
+      Grading, CLV, SGO, models. CLV fields may be null/unavailable and must not block rendering.
+  guardrails: []
+  non_goals:
+    - Grading, CLV, SGO, models. CLV fields may be null/unavailable and must not
+      block rendering.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Measured defects (main @ 6206cbb)
+      1. **ROI is a flat −110 assumption.** `apps/command-center/src/lib/data/analytics.ts:207` computes `((wins * 0.909 - losses) / settled) * 100`, ignoring both real `odds` and `stake_units`. `recap-service.ts:214` and `grading-service.ts:801` compute units from real odds and stake — so the same record has two different answers depending on which surface a reader opens.
+      2. **Capper attribution is a heuristic.** `analytics.ts:230-251` classifies source by substring and reads the capper name from `metadata.capper` / `metadata.capperName` / the source field. [griff843/Unit-Talk-v2#1581](https://linear.app/unit-talk-v2/review/utv2-1907-resolve-capper-attribution-from-pickscapper-id-never-from-08ac75d6352d) established that attribution comes from `picks.capper_id` and never from `pick.source`; that rule was applied to a different reader and this one was missed.
+      3. **No delivered/Track-Only separation.** `analytics.ts` applies no `distributionMode` filter, so internal evidence picks and published picks would be blended into one member-facing record.
+      4. **Smart Form posture may be a lie.** Once [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) lands, an authorized capper's submission enters the approval-for-delivery path, but the form would still tell them "Track Only / no member delivery".
+    - >-
+      Acceptance
+
+      * Canonical `picks.capper_id` attribution.
+
+      * Real odds + stake units for net units and ROI.
+
+      * Track Only / internal evidence excluded from published and member-facing
+      statistics.
+
+      * Capper totals and the Unit Talk aggregate reconcile with recap math —
+      same inputs, same answer, demonstrated rather than asserted.
+
+      * Statistics are visible through the intended operator/member surface.
+
+      * Smart Form must not display "Track Only / no member delivery" to a
+      capper whose server-authorized submission is actually entering the
+      approval-for-delivery path.
+
+      * **The UI may display server truth but may not control delivery
+      authorization.** No client-supplied value may influence whether a pick can
+      be delivered.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1924/human-capper-e2e-surface-truth-canonical-capper-id-attribution-real
+    title: "Human capper E2E surface truth: canonical capper_id attribution, real
+      odds/stake units and ROI, published stats exclude Track Only, Smart Form
+      shows true delivery posture"
+    description: |-
+      ## Objective
+
+      W5 plus Human Capper E2E surface truth. The operator- and member-facing surfaces must tell the truth about who made a pick, what it actually returned, and whether it is entering the approval-for-delivery path.
+
+      Runs in parallel with [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) (T1). This lane owns the **surfaces**; it does not own authorization, delivery, or containment.
+
+      ## Measured defects (main @ 6206cbb)
+
+      1. **ROI is a flat −110 assumption.** `apps/command-center/src/lib/data/analytics.ts:207` computes `((wins * 0.909 - losses) / settled) * 100`, ignoring both real `odds` and `stake_units`. `recap-service.ts:214` and `grading-service.ts:801` compute units from real odds and stake — so the same record has two different answers depending on which surface a reader opens.
+      2. **Capper attribution is a heuristic.** `analytics.ts:230-251` classifies source by substring and reads the capper name from `metadata.capper` / `metadata.capperName` / the source field. [griff843/Unit-Talk-v2#1581](https://linear.app/unit-talk-v2/review/utv2-1907-resolve-capper-attribution-from-pickscapper-id-never-from-08ac75d6352d) established that attribution comes from `picks.capper_id` and never from `pick.source`; that rule was applied to a different reader and this one was missed.
+      3. **No delivered/Track-Only separation.** `analytics.ts` applies no `distributionMode` filter, so internal evidence picks and published picks would be blended into one member-facing record.
+      4. **Smart Form posture may be a lie.** Once [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) lands, an authorized capper's submission enters the approval-for-delivery path, but the form would still tell them "Track Only / no member delivery".
+
+      ## Acceptance
+
+      * Canonical `picks.capper_id` attribution.
+      * Real odds + stake units for net units and ROI.
+      * Track Only / internal evidence excluded from published and member-facing statistics.
+      * Capper totals and the Unit Talk aggregate reconcile with recap math — same inputs, same answer, demonstrated rather than asserted.
+      * Statistics are visible through the intended operator/member surface.
+      * Smart Form must not display "Track Only / no member delivery" to a capper whose server-authorized submission is actually entering the approval-for-delivery path.
+      * **The UI may display server truth but may not control delivery authorization.** No client-supplied value may influence whether a pick can be delivered.
+
+      ## Out of scope
+
+      Grading, CLV, SGO, models. CLV fields may be null/unavailable and must not block rendering.
+    captured_at: 2026-09-17T01:48:48.352Z
+    description_sha256: b600a6d04e6e2f8c01ce373b17cce5e9fd5c42e088c7420cc8ad316f527164b2
+  contract_hash: 787dc5f8db9dfd1582e344c83303744d7013ea4d38580d9e670b86b52e66156b

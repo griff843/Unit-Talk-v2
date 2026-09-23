@@ -17,7 +17,7 @@ export type PickLifecycleState =
   | 'voided';
 
 /**
- * Canonical lifecycle FSM — single source of truth for all layers (contracts, DB, domain).
+ * Canonical lifecycle FSM â€” single source of truth for all layers (contracts, DB, domain).
  * Terminal states have empty arrays. Regression transitions absent by omission.
  *
  * Phase 7A (UTV2-491): awaiting_approval is the governance brake for non-human producers.

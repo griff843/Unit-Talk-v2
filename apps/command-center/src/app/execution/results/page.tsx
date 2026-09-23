@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { Card, EmptyState, InternalLabelBadge, StatCard, Table, TableHead, TableBody, Th, Td } from '@/components/ui';
 import { getResultsTracking } from '@/lib/data/execution';
 

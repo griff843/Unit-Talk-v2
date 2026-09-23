@@ -1,0 +1,132 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1814",
+  "tier": "T2",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "title": "Governed migration for public.insert_certification_propagation_batch",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-09-18T04:40:00Z",
+  "sha_binding": {
+    "merge_sha": "d122f28372784ebce01d92e3e3ae19f7a7b7c30c",
+    "verified_source_sha": "36b4de331a40c00c4f4163938bf24e3dbaf4e451",
+    "verified_source_note": "The last non-proof commit on this branch. It is the lane-pr-binding bot's own control-plane commit (36b4de331, 'chore(lanes): bind UTV2-1814 to PR #1600'), not a lane-authored change: it writes pr_url into docs/06_status/lanes/UTV2-1814.json and nothing else. The implementation commit c7e3f84d8640aa64ef9db452a018d7f7bd6fe9fe is its parent and is unmodified by it. The anchor is stated as 36b4de331 rather than c7e3f84d because every CI receipt below was produced at 36b4de331 -- the binding commit landed before the first workflow run completed, so receipts at the implementation SHA do not exist. merge_sha stays null pre-merge as the schema-v2 evidence contract requires (CEP-E7); post-merge-lane-close.yml binds it to the real merge commit.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T05:32:03.840Z"
+  },
+  "verdict": "PASS",
+  "runtime_proof": {
+    "head": "36b4de331a40c00c4f4163938bf24e3dbaf4e451",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 35306930500,
+      "job": 105480922878,
+      "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
+      "cases": [
+        "refuses when public.insert_certification_propagation_batch(jsonb, jsonb) pre-exists — raised SQLSTATE 42723",
+        "no DDL ran when public.insert_certification_propagation_batch(jsonb, jsonb) pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.insert_certification_propagation_batch(jsonb, jsonb) case — back to baseline",
+        "applies on an empty scratch schema — created all declared targets: public.insert_certification_propagation_batch(jsonb, jsonb)"
+      ],
+      "drilled": 1,
+      "adversarial_fixtures": "Both of the gate's own fixtures still fail as required at this head: the relation fixture that declares a guard it does not enforce, and the prose-mention classification regression. A routine fixture of the same shape was additionally exercised locally and fails on two cases, including the pg_proc fingerprint assertion this lane added."
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 35306930500,
+      "job": 105480922828,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
+      "detail": "apply -> rollback -> reapply convergence: post-down hash equals the pre-up baseline and the re-up hash equals post-up. Reproduced locally against a scratch postgres:16 seeded from the baseline replay root, where pre-up (6a6f1c70e9…) differs from post-up (fd7f6a7e0a…) — so the hash is demonstrably sensitive to this migration rather than blind to it."
+    },
+    "live_schema_parity": {
+      "result": "PASS",
+      "run": 35306930585,
+      "job": 105480940619,
+      "workflow": "Live Schema Parity / Live Schema Parity",
+      "detail": "PASS at this anchor, and legitimately so before production apply. scripts/ops/compare-databases.ts queries pg_class, information_schema.columns, pg_constraint, pg_indexes, pg_policies, pg_trigger and pg_extension — and no pg_proc. This migration creates a function and no relation, so it produces no parity finding. A relation-creating migration would fail here until applied to production; that ordering constraint does not arise for this lane."
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 35306930508,
+      "job": 105481005611,
+      "workflow": "ci / Writable DB proof (staging only)",
+      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, inside the REQUIRED verify workflow run at this exact head, so the receipt and the required check are the same run and cannot drift apart."
+    },
+    "defect_confirmed_in_production": {
+      "host": "unit-talk-worker-1",
+      "container_state": "Up, health=healthy, RestartCount=0, StartedAt 2026-09-18T00:38:26Z",
+      "autorun_error": "certification propagation batch insert failed: Could not find the function public.insert_certification_propagation_batch(p_events, p_records) in the schema cache",
+      "note": "Container health is structurally blind to this: the process stays up and never polls the outbox."
+    },
+    "object_absence_measured": {
+      "baseline_replay_root": "ABSENT — to_regprocedure returns null on a scratch postgres:16 seeded from 00000000000000_baseline_live_schema.sql",
+      "production_zfzdnfwdarxucxtaojxm": "ABSENT",
+      "staging_xskgrzbteyqdufktjrjx": "ABSENT",
+      "certification_tables_present_in_production": "certification_records and certification_transition_events both exist, so the migration's second precondition is satisfiable there"
+    },
+    "function_semantics": {
+      "happy_path": "{\"records_inserted\": 1, \"events_inserted\": 1}",
+      "atomicity": "a batch whose event carries an invalid certification_domain enum inserted neither the record nor the event; both table counts unchanged",
+      "refusals": [
+        "empty batch -> 'certification propagation batch cannot be empty'",
+        "record/event count mismatch -> 'certification propagation batch record/event count mismatch: records 1, events 0'",
+        "non-array p_records -> 'p_records must be a JSON array'"
+      ],
+      "immutability_unaffected": "UPDATE on certification_records still refused by its append-only trigger"
+    },
+    "acl_proof": {
+      "proacl": "{postgres=X/postgres}",
+      "prosecdef": true,
+      "proconfig": "{search_path=pg_catalog, public}",
+      "detail": "PUBLIC revoked, and anon/authenticated revoked by name where those roles exist. The archived UTV2-1177 text set no ACLs at all, so replaying it would have created a SECURITY DEFINER writer into the certification ledger that is EXECUTE-to-PUBLIC and therefore reachable by anon through PostgREST. REVOKE FROM PUBLIC alone is not sufficient on Supabase."
+    },
+    "reversibility": {
+      "down_script": "db/migrations-rollback/20260918020000_utv2_1814_certification_propagation_rpc.down.sql",
+      "ownership_guard": "running the rollback a second time raises SQLSTATE 42501 rather than dropping an object it did not create",
+      "detail": "The down script drops exactly one function. It owns no rows; certification ledger rows are append-only and survive it."
+    },
+    "production_apply": "NOT YET APPLIED at the time this bundle was generated. Production DDL for this specific migration was authorized by PM on 2026-09-18; the apply follows merge."
+  },
+  "static_proof": {
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm verify",
+        "result": "PASS in CI at this head (required check 'verify'). Locally exit 1 solely from the ci:assert-staging containment refusal, with 0 'not ok' lines and 0 non-zero fail counters."
+      }
+    ],
+    "mutation_control": "Deleting supabase/migrations/20260918020000_utv2_1814_certification_propagation_rpc.sql makes the parity test fail with 'not ok 1 - every runtime client.rpc() dependency is defined by a governed migration'. Restoring it passes 8/8. The allowlist deletion is therefore forced by the suite rather than cosmetic."
+  },
+  "containment": {
+    "track_only_enforcement": "untouched",
+    "member_delivery": "untouched — official-picks kill switch remained killed=true throughout",
+    "ingestor_autorun": "parked, untouched",
+    "syndicate_machine_mode": "parked, untouched",
+    "staged_canary_preserved": "pick 816a84c7-58b8-4585-8e7a-7ad1e036342e queued/delivery-eligible and outbox row 684ba33f-45c4-4a80-adf0-db8286c90815 pending with attempt_count 0 and claimed_by null, unchanged across this lane. runner.ts checks the kill switch before any claim.",
+    "no_provider_activation": "no SGO/provider ingestion, no system picks, nothing else unparked"
+  },
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1814/evidence.json",
+    "docs/06_status/proof/UTV2-1814/verification.md",
+    "docs/06_status/proof/UTV2-1814/diff-summary.md"
+  ],
+  "scope_note": "This lane resolves ONE of the two ungoverned RPCs in UTV2-1814's definition of done. list_provider_offer_history_partition_dates is a name mismatch against UTV2-1736's ..._days and remains open, with its allowlist entry deliberately retained. The issue must not be closed by this lane.",
+  "verification_receipts_bound_to": "All four CEP-E7 receipts (precondition_drill, schema_roundtrip_drill, writable_db_proof_staging, live_schema_parity) were produced at exactly 36b4de331a40c00c4f4163938bf24e3dbaf4e451, the declared verified_source_sha. Confirmed by gh run view --json headSha on runs 35306930500, 35306930585 and 35306930508."
+}

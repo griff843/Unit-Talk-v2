@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1922",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1922-deploy-promotion-transaction",
+  "branch": "claude/utv2-1922-deploy-promotion-transaction",
+  "base_branch": "main",
+  "commit_sha": "3c168746932c4646ee4e5df6b6cda655d658b6e8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1591",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/deploy.yml",
+    ".lane/lanes/runtime.yml",
+    "deploy/rollback.sh",
+    "scripts/ci/nextjs-deploy-wiring.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1922/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-16T17:16:38.539Z",
+  "heartbeat_at": "2026-09-17T00:44:10.180Z",
+  "closed_at": "2026-09-17T00:44:10.180Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-17T00:44:07.634Z",
+      "verdict": "pass",
+      "merge_sha": "3c168746932c4646ee4e5df6b6cda655d658b6e8",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1922-deploy-promotion-transaction",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

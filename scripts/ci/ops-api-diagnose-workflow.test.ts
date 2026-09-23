@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import YAML from 'yaml';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 const DIAGNOSE = path.join(process.cwd(), '.github', 'workflows', 'ops-api-diagnose.yml');
 const CONTAINMENT = path.join(process.cwd(), '.github', 'workflows', 'ops-p0-containment.yml');
@@ -212,7 +212,7 @@ for v in 'false' "$(printf 'false\\r')" '  false  ' '"false"' "'false'" 'true' '
   printf '%s|' "$(normalize_env_value "$v")"
 done
 `;
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'norm-')), 'n.sh');
+  const file = path.join(createTempWorkspace('norm-'), 'n.sh');
   fs.writeFileSync(file, script);
   const out = spawnSync('bash', [file], { encoding: 'utf8' });
   assert.strictEqual(out.status, 0, out.stderr);
@@ -224,7 +224,7 @@ test('both workflows remain valid shell after hardening', () => {
     const { steps } = load(file);
     for (const [index, step] of steps.entries()) {
       if (!step.run) continue;
-      const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wf-')), `s${index}.sh`);
+      const scratch = path.join(createTempWorkspace('wf-'), `s${index}.sh`);
       fs.writeFileSync(scratch, step.run);
       const result = spawnSync('bash', ['-n', scratch], { encoding: 'utf8' });
       assert.strictEqual(result.status, 0, `${path.basename(file)} step ${index}: ${result.stderr}`);
@@ -232,7 +232,7 @@ test('both workflows remain valid shell after hardening', () => {
   }
   // And the remote heredoc bodies, which `bash -n` on the run block never parses.
   for (const [file, delim] of [[DIAGNOSE, 'REMOTE'], [CONTAINMENT, 'REMOTE_SCRIPT']] as const) {
-    const scratch = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'wf-remote-')), 'remote.sh');
+    const scratch = path.join(createTempWorkspace('wf-remote-'), 'remote.sh');
     fs.writeFileSync(scratch, remoteBody(load(file).steps, delim));
     const result = spawnSync('bash', ['-n', scratch], { encoding: 'utf8' });
     assert.strictEqual(result.status, 0, `${path.basename(file)} remote body: ${result.stderr}`);
@@ -311,7 +311,7 @@ classify '99999'
 classify '0'
 classify '65535'
 `;
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'port-')), 'p.sh');
+  const file = path.join(createTempWorkspace('port-'), 'p.sh');
   fs.writeFileSync(file, script);
   const out = spawnSync('bash', [file], { encoding: 'utf8' });
   assert.strictEqual(out.status, 0, out.stderr);

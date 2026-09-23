@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { AppEnv } from '@unit-talk/config';
+import { RuntimeConfigError, type AppEnv } from '@unit-talk/config';
 import type {
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
@@ -1115,7 +1115,8 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
   assert.ok(!fieldNames.includes('State'), 'must NOT show State');
   assert.ok(!fieldNames.includes('Source'), 'must NOT show Source');
   assert.equal(receipt.receiptType, 'discord.message');
-  assert.equal(receipt.channel, outbox.target);
+  // UTV2-1929: the receipt records the resolved destination, not the target.
+  assert.equal(receipt.channel, '1234567890');
   assert.equal(receipt.externalId, 'discord-message-1');
   assert.equal(
     receipt.idempotencyKey,
@@ -1215,6 +1216,48 @@ test('createWorkerRuntimeDependencies fails closed in production when enabled ta
         }),
       }),
     /trader-insights requires discord:trader-insights/,
+  );
+});
+
+test('createWorkerRuntimeDependencies starts a human delivery target with no shared channel mapping', () => {
+  // UTV2-1923 regression. `deploy.yml` refuses to deploy when
+  // `UNIT_TALK_DISCORD_TARGET_MAP` carries a `discord:official-picks` entry,
+  // because official picks route per capper from the pin on the outbox row.
+  // `assertDiscordTargetMapCoversTargets` used to refuse the ABSENCE of that
+  // same entry, so no value of the secret satisfied both guards and the worker
+  // crash-looped on startup in human-capper mode. The human target must start
+  // with the mapping absent.
+  const runtime = createWorkerRuntimeDependencies({
+    environment: makeProductionWorkerEnvironment({
+      UNIT_TALK_ENABLED_TARGETS: 'official-picks',
+      UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:official-picks',
+      UNIT_TALK_DISCORD_TARGET_MAP: JSON.stringify({}),
+    }),
+  });
+
+  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, ['discord:official-picks']);
+});
+
+test('createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping', () => {
+  // The inversion: the exemption above must be scoped to human delivery
+  // targets only. A governed non-human target with no mapping and no literal
+  // channel id has no way to resolve a destination, so it must still fail
+  // closed. If this passes, the exemption has been widened into a hole.
+  assert.throws(
+    () =>
+      createWorkerRuntimeDependencies({
+        environment: makeProductionWorkerEnvironment({
+          UNIT_TALK_ENABLED_TARGETS: 'best-bets',
+          UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:best-bets',
+          UNIT_TALK_DISCORD_TARGET_MAP: JSON.stringify({}),
+        }),
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof RuntimeConfigError);
+      assert.equal(error.code, 'RUNTIME_REQUIRED_ENV_MISSING');
+      assert.match(error.message, /discord:best-bets/);
+      return true;
+    },
   );
 });
 
@@ -1843,7 +1886,8 @@ test('createDiscordDeliveryAdapter classifies 4xx responses as terminal failures
   const result = await adapter(outbox);
 
   assert.equal(result.status, 'terminal-failure');
-  assert.equal(result.channel, outbox.target);
+  // UTV2-1929: the receipt records the resolved destination, not the target.
+  assert.equal(result.channel, '1234567890');
   assert.equal(result.reason, 'HTTP 403: {"message":"Missing Access"}');
 });
 
@@ -1863,7 +1907,8 @@ test('createDiscordDeliveryAdapter classifies 429 responses as retryable failure
   const result = await adapter(outbox);
 
   assert.equal(result.status, 'retryable-failure');
-  assert.equal(result.channel, outbox.target);
+  // UTV2-1929: the receipt records the resolved destination, not the target.
+  assert.equal(result.channel, '1234567890');
   assert.equal(result.reason, 'HTTP 429: {"message":"rate limited"}');
 });
 
@@ -2210,6 +2255,120 @@ test('runWorkerCycles processes normally once the kill switch is released', asyn
   });
 
   assert.notEqual(cycles[0]?.results[0]?.status, 'kill-switch-engaged');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1923 — the raw-channel delivery lane
+// ---------------------------------------------------------------------------
+//
+// `discord:<channelId>` is a real delivery lane: `deploy.yml` falls back to
+// `discord:${DISCORD_CAPPER_CHANNEL_ID}` whenever UNIT_TALK_DISTRIBUTION_TARGETS
+// is unset, and `resolveDiscordChannelId` posts to a numeric target directly.
+// Before this lane the worker derived its registry check AND its kill-switch
+// check from `parsePromotionTargetFromDeliveryTarget`, which answers `null` for
+// a raw channel id -- so neither control could see that lane at all.
+//
+// The two questions are now asked separately, because they have different
+// answers. A raw channel has no registry entry and cannot acquire one, so the
+// registry check stays scoped to governed targets. The kill switch is a
+// different thing: it is the operator's stop, it is keyed by arbitrary string,
+// and there is no reason a delivery to a raw channel should be exempt from it.
+
+test('UTV2-1923: a raw discord:<channelId> target is subject to the kill switch', async () => {
+  const outbox = createOutboxRecord('discord:123456789012345678');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  // No row for this channel at all. `isKilled` is fail-closed, so the absence
+  // of an explicit release is itself the stop -- which is the whole point: the
+  // old code reached the adapter without ever consulting the switch.
+  const cycles = await runWorkerCycles({
+    repositories: { ...repositories, killSwitch },
+    workerId: 'worker-raw-channel-kill-switch',
+    targets: ['discord:123456789012345678'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    persistenceMode: 'in_memory',
+    targetRegistry: [{ target: 'best-bets', enabled: true, rolloutPct: 100 }],
+  });
+
+  assert.equal(cycles[0]?.results[0]?.status, 'kill-switch-engaged');
+  assert.equal(outbox.status, 'pending');
+});
+
+test('UTV2-1923: a released raw channel still delivers — the check is a stop, not a ban', async () => {
+  const outbox = createOutboxRecord('discord:123456789012345678');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  await killSwitch.setKilled({
+    target: '123456789012345678',
+    killed: false,
+    actor: 'test-operator',
+  });
+
+  const cycles = await runWorkerCycles({
+    repositories: { ...repositories, killSwitch },
+    workerId: 'worker-raw-channel-released',
+    targets: ['discord:123456789012345678'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    persistenceMode: 'in_memory',
+    targetRegistry: [{ target: 'best-bets', enabled: true, rolloutPct: 100 }],
+  });
+
+  assert.notEqual(cycles[0]?.results[0]?.status, 'kill-switch-engaged');
+  assert.notEqual(
+    cycles[0]?.results[0]?.status,
+    'target-disabled',
+    'a raw channel has no registry entry; the registry check must not refuse it',
+  );
+});
+
+test('UTV2-1923: the governed human capper target is killed until explicitly released', async () => {
+  const outbox = createOutboxRecord('discord:official-picks');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+
+  const cycles = await runWorkerCycles({
+    repositories: { ...repositories, killSwitch },
+    workerId: 'worker-official-picks',
+    targets: ['discord:official-picks'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    persistenceMode: 'in_memory',
+    targetRegistry: [{ target: 'official-picks', enabled: true, rolloutPct: 100 }],
+  });
+
+  assert.equal(
+    cycles[0]?.results[0]?.status,
+    'kill-switch-engaged',
+    'the shipped posture: even with the registry enabling it, the target has no release row',
+  );
+  assert.equal(outbox.status, 'pending');
+});
+
+test('UTV2-1923: the human capper target is refused by the registry when disabled', async () => {
+  const outbox = createOutboxRecord('discord:official-picks');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  await killSwitch.setKilled({ target: 'official-picks', killed: false, actor: 'test-operator' });
+
+  const cycles = await runWorkerCycles({
+    repositories: { ...repositories, killSwitch },
+    workerId: 'worker-official-picks-disabled',
+    targets: ['discord:official-picks'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    persistenceMode: 'in_memory',
+    targetRegistry: [
+      { target: 'official-picks', enabled: false, disabledReason: 'not activated', rolloutPct: 100 },
+    ],
+  });
+
+  assert.equal(
+    cycles[0]?.results[0]?.status,
+    'target-disabled',
+    'the two controls are independent: releasing the kill switch does not enable the target',
+  );
 });
 
 test('an unknown target with no kill-switch row is treated as killed (fail closed)', async () => {

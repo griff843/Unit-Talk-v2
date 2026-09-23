@@ -9,7 +9,7 @@ export interface RuntimeHealthSummary {
 }
 
 export type CommandCenterAuthRole = 'operator';
-export type CommandCenterAuthMethod = 'basic' | 'bearer' | 'dev_bypass';
+export type CommandCenterAuthMethod = 'basic' | 'bearer' | 'session' | 'dev_bypass';
 
 export interface CommandCenterAccessConfig {
   required: boolean;
@@ -92,6 +92,7 @@ export async function fetchRuntimeTruth(input: {
     method: 'GET',
     headers: resolveCommandCenterApiHeaders(env),
     cache: 'no-store',
+    signal: AbortSignal.timeout(8_000),
   });
 
   if (!response.ok) {
@@ -110,6 +111,7 @@ export async function fetchRuntimeHealth(input: {
   const response = await fetchImpl(`${resolveApiBaseUrl(env)}/health`, {
     method: 'GET',
     cache: 'no-store',
+    signal: AbortSignal.timeout(8_000),
   });
 
   // /health returns 503 when degraded — still has a valid body
@@ -123,8 +125,12 @@ export async function fetchRuntimeHealth(input: {
     queueHealth?: QueueHealthEvaluation | null;
   };
 
+  if (!['healthy', 'degraded', 'down'].includes(String(body.status))) {
+    throw new Error('Runtime health response did not contain a recognized status');
+  }
+
   return {
-    apiStatus: body.status ?? 'down',
+    apiStatus: body.status!,
     warnings: body.warnings ?? [],
     queueHealth: body.queueHealth ?? null,
   };
@@ -420,7 +426,9 @@ function readBasicCredentials(
   }
 
   try {
-    const decoded = globalThis.atob(encoded);
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
+      Uint8Array.from(globalThis.atob(encoded), (char) => char.charCodeAt(0)),
+    );
     const separator = decoded.indexOf(':');
     if (separator === -1) {
       return null;

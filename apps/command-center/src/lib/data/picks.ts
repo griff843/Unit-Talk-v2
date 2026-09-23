@@ -1,10 +1,56 @@
 import { getDataClient, isTestFixturePick } from './client';
-import { assertQuerySucceeded } from '../query-result';
+import { OUTBOX_STATUSES } from './outbox';
+import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
+import {
+  applyPickPopulation,
+  filterDeliveryTargetPopulation,
+  governedOutboxTargetListLiteral,
+  governedOutboxTargets,
+  isHistoricalDeadLetter,
+} from '../governed-population';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
 
 type JsonObject = Record<string, unknown>;
+type OutboxExceptionRow = JsonObject & { target: unknown; status: unknown; updated_at: unknown };
+
+export type DeliveryOutboxRow = JsonObject & {
+  id: string;
+  target: string;
+  status: string;
+  updated_at: string;
+};
+
+export interface ExceptionQueues {
+  counts: {
+    failedDelivery: number;
+    deadLetter: number;
+    historicalDeadLetter: number;
+    pendingManualReview: number;
+    staleValidated: number;
+    awaitingApprovalDrift: number;
+    awaitingApprovalStale: number;
+    rerunCandidates: number;
+    missingBookAliases: number;
+    missingMarketAliases: number;
+  };
+  failedDelivery: JsonObject[];
+  deadLetter: JsonObject[];
+  historicalDeadLetter: JsonObject[];
+  pendingManualReview: JsonObject[];
+  staleValidated: JsonObject[];
+  awaitingApprovalDrift: JsonObject[];
+  rerunCandidates: JsonObject[];
+  missingBookAliases: JsonObject[];
+  missingMarketAliases: JsonObject[];
+}
+
+export interface NonGovernedDeliveryRows {
+  total: number;
+  statusCounts: Record<string, number>;
+  rows: DeliveryOutboxRow[];
+}
 
 const ENRICHMENT_BATCH_SIZE = 100;
 
@@ -147,20 +193,26 @@ function compareIsoDesc(left: string | null, right: string | null) {
   return (right ? Date.parse(right) : 0) - (left ? Date.parse(left) : 0);
 }
 
-export async function getExceptionQueues(filter?: { includeFixtures?: boolean }): Promise<{ ok: true; data: unknown }> {
+export async function getExceptionQueues(filter?: { includeFixtures?: boolean }): Promise<{ ok: true; data: ExceptionQueues }> {
   const client: Client = await getDataClient();
   const includeFixtures = filter?.includeFixtures ?? false;
 
+  // The pick-based exception queues are partitioned by the same positive
+  // predicate the picks explorer uses (UTV2-1944), applied in the query so the
+  // row limit selects from the governed cohort rather than from the ~107k
+  // fixture corpus. `isFixtureLikePick` is a heuristic blocklist and is kept
+  // only as defence in depth on the enrichment map — it is not the partition.
+  const pickPopulation = includeFixtures ? 'fixtures' : 'governed';
   const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const awaitingApprovalStaleMs = 4 * 60 * 60 * 1000;
 
   const [failedResult, deadLetterResult, manualReviewResult, stalePicksResult, awaitingApprovalResult, rerunCandidatesResult, providerOffersResult, bookAliasesResult, marketAliasesResult] = await Promise.all([
-    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'failed').order('updated_at', { ascending: false }).limit(50),
-    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'dead_letter').order('updated_at', { ascending: false }).limit(50),
+    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'failed').in('target', governedOutboxTargets).order('updated_at', { ascending: false }),
+    client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'dead_letter').in('target', governedOutboxTargets).order('updated_at', { ascending: false }),
     client.from('settlement_records').select('id, pick_id, result, status, review_reason, settled_by, created_at').eq('status', 'manual_review').order('created_at', { ascending: false }).limit(50),
-    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold).order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval').order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']).order('created_at', { ascending: false }).limit(50),
+    applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold), pickPopulation).order('created_at', { ascending: true }).limit(50),
+    applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval'), pickPopulation).order('created_at', { ascending: true }).limit(50),
+    applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, promotion_reason, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']), pickPopulation).order('created_at', { ascending: false }).limit(50),
     client.from('provider_offer_current').select('provider_key, provider_market_key, created_at'),
     client.from('provider_book_aliases').select('provider, provider_book_key'),
     client.from('provider_market_aliases').select('provider, provider_market_key, sport_id'),
@@ -180,8 +232,11 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
     assertQuerySucceeded(result, `getExceptionQueues ${label}`);
   }
 
-  const failed = (failedResult.data ?? []) as Array<JsonObject>;
-  const deadLetter = (deadLetterResult.data ?? []) as Array<JsonObject>;
+  const failed = filterDeliveryTargetPopulation((failedResult.data ?? []) as OutboxExceptionRow[], 'governed');
+  const deadLetterRows = filterDeliveryTargetPopulation((deadLetterResult.data ?? []) as OutboxExceptionRow[], 'governed');
+  const nowMs = Date.now();
+  const deadLetter = deadLetterRows.filter((row) => !isHistoricalDeadLetter(row, nowMs));
+  const historicalDeadLetter = deadLetterRows.filter((row) => isHistoricalDeadLetter(row, nowMs));
   const manualReview = (manualReviewResult.data ?? []) as Array<JsonObject>;
 
   const stale = (await enrichPickRowsWithIdentity(client, (stalePicksResult.data ?? []) as Array<JsonObject>))
@@ -196,7 +251,7 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
   const marketAliases = (marketAliasesResult.data ?? []) as Array<JsonObject>;
 
   // Enrich outbox rows with pick context
-  const allOutboxPickIds = [...new Set([...failed, ...deadLetter].map((r) => r['pick_id'] as string))];
+  const allOutboxPickIds = [...new Set([...failed, ...deadLetter, ...historicalDeadLetter].map((r) => r['pick_id'] as string))];
   const pickMap = new Map<string, JsonObject>();
   if (allOutboxPickIds.length > 0) {
     const picksResult = await client.from('picks').select('id, submission_id, participant_id, market, selection, source, status, line, odds, sport_id, metadata').in('id', allOutboxPickIds);
@@ -300,6 +355,7 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
       counts: {
         failedDelivery: failed.length,
         deadLetter: deadLetter.length,
+        historicalDeadLetter: historicalDeadLetter.length,
         pendingManualReview: manualReview.length,
         staleValidated: stale.length,
         awaitingApprovalDrift: awaitingApprovalDrift.length,
@@ -310,6 +366,7 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
       },
       failedDelivery: enrichOutbox(failed),
       deadLetter: enrichOutbox(deadLetter),
+      historicalDeadLetter: enrichOutbox(historicalDeadLetter),
       pendingManualReview: manualReview,
       staleValidated: enrichStale(stale),
       awaitingApprovalDrift,
@@ -320,5 +377,47 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
       missingBookAliases: missingBookRows,
       missingMarketAliases: missingMarketRows,
     },
+  };
+}
+
+/**
+ * Diagnostic inventory only. Non-governed rows are intentionally kept out of
+ * getExceptionQueues so no caller can accidentally present them as operator
+ * exceptions.
+ */
+export async function getNonGovernedDeliveryRows(): Promise<NonGovernedDeliveryRows> {
+  const client: Client = await getDataClient();
+  // Count the complete population at the database; the display sample is
+  // deliberately bounded and cannot supply a total or status histogram.
+  const [result, countResults] = await Promise.all([
+    client
+      .from('distribution_outbox')
+      .select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at')
+      .not('target', 'in', governedOutboxTargetListLiteral())
+      .order('updated_at', { ascending: false })
+      .limit(50),
+    Promise.all(OUTBOX_STATUSES.map((status) => client
+      .from('distribution_outbox')
+      .select('id', { count: 'exact', head: true })
+      .not('target', 'in', governedOutboxTargetListLiteral())
+      .eq('status', status))),
+  ]);
+  assertQuerySucceeded(result, 'getNonGovernedDeliveryRows outbox');
+
+  const rows = filterDeliveryTargetPopulation(
+    (result.data ?? []) as DeliveryOutboxRow[],
+    'non-governed',
+  );
+  const statusCounts: Record<string, number> = {};
+  for (const [index, status] of OUTBOX_STATUSES.entries()) {
+    statusCounts[status] = readAuthoritativeCount(
+      countResults[index], `getNonGovernedDeliveryRows ${status}`,
+    );
+  }
+
+  return {
+    total: Object.values(statusCounts).reduce((sum, count) => sum + count, 0),
+    statusCounts,
+    rows,
   };
 }

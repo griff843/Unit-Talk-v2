@@ -1,0 +1,322 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1922",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "3c168746932c4646ee4e5df6b6cda655d658b6e8",
+    "verified_source_sha": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-17T00:44:05.794Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-16T21:55:00Z",
+    "head": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+    "note": "Measured locally on the lane head. `pnpm verify` exits 1 only at `ci:assert-staging`, which refuses by design outside the staging-ci GitHub environment (host=127.0.0.1, expected=xskgrzbteyqdufktjrjx); the TAP stream it produced contains 0 `not ok`. CI's required `verify` check on this head is the binding authority.",
+    "gates": [
+      {
+        "command": "tsx --test scripts/ci/deploy-config-rollback.test.ts scripts/ci/deploy-parked-mode.test.ts scripts/ci/nextjs-deploy-wiring.test.ts",
+        "tests": 87,
+        "pass": 87,
+        "fail": 0,
+        "baseline_before_change": 64,
+        "note": "43 of the 87 are scripts/ci/nextjs-deploy-wiring.test.ts"
+      },
+      {
+        "command": "tsx scripts/deploy-check.ts",
+        "not_ok": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm verify",
+        "not_ok": 0,
+        "exit_code": 1,
+        "result": "pass_with_known_local_refusal",
+        "refusal": "ci:assert-staging REFUSED: writable-DB verification requires the staging-ci GitHub environment"
+      }
+    ],
+    "mutation_battery": {
+      "command": "scratchpad mutation-battery-1922-v2.py",
+      "applied": 21,
+      "caught": 21,
+      "escaped": 0,
+      "baseline_green_asserted": true,
+      "restore_green_asserted": true,
+      "note": "Each mutation was caught by the assertion it was designed to target. Three mutations escaped on first run and each exposed a vacuity in the new tests rather than a gap in the workflow: M7 (a comment quoting the command an ordering assertion indexed for), M9 (a behavioural test that passed for free because nothing in that stub mode removed the edge), and -- in this PM CHANGES_REQUIRED round -- M13, which is the PM's own defect: the auth-contract fragment was sliced from its comment marker while the 'require all three' shape lives in the required-value loop above it, so reintroducing the defect was invisible to the suite. All three were repaired and the reason recorded in code comments; the 21/21 result is post-repair.",
+      "cases": [
+        {
+          "id": "M1",
+          "mutates": "deploy.yml env-write step drops CC_ENABLED from the env: mapping",
+          "caught_by": "every Command Center value the env file interpolates is mapped into the step"
+        },
+        {
+          "id": "M2",
+          "mutates": "deploy.yml removes the fail-closed required-value loop",
+          "caught_by": "an empty required Command Center value refuses the write"
+        },
+        {
+          "id": "M3",
+          "mutates": "deploy.yml disabled branch no longer removes .env.command-center",
+          "caught_by": "a disabled Command Center leaves no configuration behind"
+        },
+        {
+          "id": "M4",
+          "mutates": "deploy.yml promote job loses its preflight validation step",
+          "caught_by": "compose configuration is validated before anything destructive runs"
+        },
+        {
+          "id": "M5",
+          "mutates": "deploy.yml validation step moved after the mutation step",
+          "caught_by": "compose configuration is validated before anything destructive runs"
+        },
+        {
+          "id": "M6",
+          "mutates": "promote advances .unit-talk-release before activation",
+          "caught_by": "no mutation step advances the release markers before activation"
+        },
+        {
+          "id": "M7",
+          "mutates": "canary advances markers before activation",
+          "caught_by": "no mutation step advances the release markers before activation (via executableLines())"
+        },
+        {
+          "id": "M8",
+          "mutates": "promote removes caddy unconditionally instead of on a proven port conflict",
+          "caught_by": "the edge is removed only on a proven port conflict"
+        },
+        {
+          "id": "M9",
+          "mutates": "promote's generic failure path no longer calls restore_edge",
+          "caught_by": "a configuration failure cannot leave the edge unserved (behavioural, docker stub)"
+        },
+        {
+          "id": "M10",
+          "mutates": "rollback.sh drops .env.edge from the restore loop",
+          "caught_by": "rollback restores every env file the running stack reads"
+        },
+        {
+          "id": "M11",
+          "mutates": "rollback.sh advances .unit-talk-release before activation",
+          "caught_by": "rollback advances the release record only after activation"
+        },
+        {
+          "id": "M12",
+          "mutates": "the Command Center auth contract is deleted from both env-write steps",
+          "caught_by": "deploy-time Command Center auth matches the canonical contract exactly"
+        },
+        {
+          "id": "M13",
+          "mutates": "token-only made undeployable again -- the exact defect the PM identified, reintroduced",
+          "caught_by": "deploy-time Command Center auth matches the canonical contract exactly (token-only must remain deployable)"
+        },
+        {
+          "id": "M14",
+          "mutates": "the partial-pair refusal (username without password) is dropped",
+          "caught_by": "the deploy-time contract and the entrypoint agree, so neither can drift alone"
+        },
+        {
+          "id": "M15",
+          "mutates": "rollback selects the command-center profile from the flag alone, ignoring the snapshot",
+          "caught_by": "rollback to a pre-Command-Center release never selects a profile it cannot run"
+        },
+        {
+          "id": "M16",
+          "mutates": "rollback never selects the profile, even for a release that needs it",
+          "caught_by": "rollback to a Command Center release restores it and selects the profile"
+        },
+        {
+          "id": "M17",
+          "mutates": "rollback selects the profile from the snapshot alone, ignoring operator intent",
+          "caught_by": "without the flag the profile is never selected, snapshot or not"
+        },
+        {
+          "id": "M18",
+          "mutates": "a bare container-name Conflict is treated as an edge conflict again",
+          "caught_by": "an unrelated container-name conflict cannot remove the public edge"
+        },
+        {
+          "id": "M19",
+          "mutates": "the port evidence is dropped, so a conflict on any port removes the edge",
+          "caught_by": "a port conflict on a port the edge does not own cannot remove the edge"
+        },
+        {
+          "id": "M20",
+          "mutates": "the stale-caddy-container recovery is removed entirely",
+          "caught_by": "a stale caddy container by name is still a bounded recovery"
+        },
+        {
+          "id": "M21",
+          "mutates": "the bounded recovery is disabled, so a true edge port conflict is never cleared",
+          "caught_by": "a genuine port conflict is still recovered, and only then"
+        }
+      ]
+    },
+    "incident_binding": {
+      "failure_run": "35114935565",
+      "positive_control_run": "35119502596",
+      "claim": "The three defects the failure run combined -- an unmapped Command Center env write, --remove-orphans reconciling before the configuration error surfaced, and release markers advanced ahead of activation -- are each now refused by a named assertion in scripts/ci/nextjs-deploy-wiring.test.ts, and each refusal was mutation-proven."
+    }
+  },
+  "runtime_proof_pending": {
+    "status": "pending_merge_harvest",
+    "reason": "CEP-E7 requires a populated runtime_proof block for the app-runtime profile, and the only sanctioned source is ci-db-proof-receipt/v2 from CI's `Writable DB proof (staging only)` job. That receipt binds exactly to the SHA its run was triggered by, which pre-merge is the merge-preview commit, not the PR head: harvestCiDbProofForMergeSha(ff4ff627c...) returns receipt_invalid with 'downloaded receipt sha=89f7d3644f085ab969efb5b4187cb7e154f4dc1e does not equal the merge SHA ... its run was triggered by'. The block is therefore unpopulatable before the merge exists, and is harvested by post-merge-lane-close.yml at closeout.",
+    "not_fabricated": "No runtime_proof was hand-authored. Populating it from anything other than the verified receipt would be exactly the fabrication the harvest module exists to prevent.",
+    "precedent": "UTV2-1918 (#1587) merged with Close Eligibility Preflight red on the same CEP-E7 failure at pre-merge head cbef15236 (runtime_proof absent), and main's UTV2-1918 bundle carries a harvested runtime_proof today.",
+    "ci_evidence_that_the_run_is_green": "`Writable DB proof (staging only)` passes on PR head ff4ff627c5284eea19782a763e126a64791b336b.",
+    "required_check": false
+  },
+  "pm_changes_required_round": {
+    "verdict_head": "b6ecf2722baa3683f99c3bf1ff9fcb761471e008",
+    "repairs_head": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+    "main_moved": true,
+    "main": "37062b2b26d018c84009de88a10ce5c65c0edc39",
+    "merge_base_equals_origin_main": true,
+    "resync_or_reproof_required": true,
+    "defect_1": {
+      "statement": "Command Center auth handling conflicted with the canonical behaviour: token-only was refused.",
+      "closed_by": "the deploy-time check now mirrors deploy/production/nextjs-entrypoint.sh and assertCommandCenterAuthConfig -- a token OR a complete username/password pair; a partial pair and no auth at all are both refused before anything is written",
+      "behavioural_evidence": "the real auth fragment is extracted from BOTH env-write steps and executed against six configurations in a clean environment; token-only, a complete pair, and both together are accepted, and the three incomplete shapes fail closed with ::error::",
+      "mutation_evidence": [
+        "M12",
+        "M13",
+        "M14"
+      ]
+    },
+    "defect_2": {
+      "statement": "Rollback could select the Command Center profile for a target release without the configuration needed to run it.",
+      "closed_by": "the profile is now decided on the remote host from the target release's own restored snapshot; --command-center is intent, and a requested-but-unrunnable profile is refused with an operator warning rather than selected",
+      "behavioural_evidence": "deploy/rollback.sh --dry-run's real remote command is executed against a docker stub that refuses the command-center profile when .env.command-center is absent, across flag x snapshot combinations",
+      "mutation_evidence": [
+        "M15",
+        "M16",
+        "M17"
+      ]
+    },
+    "defect_3": {
+      "statement": "The Caddy-removal recovery condition was too broad: a generic Docker conflict removed the public edge.",
+      "closed_by": "removal now requires evidence the edge itself is blocking -- a port conflict naming 80 or 443, or a container-name conflict naming the caddy container; every other failure restores the edge and exits 1, and the bounded one-retry recovery for a genuine edge conflict is preserved",
+      "behavioural_evidence": "the real PROMOTE_REMOTE heredoc is executed against docker stubs in four conflict modes: a foreign container-name conflict and a conflict on a port the edge does not own both leave the edge served; a genuine 80/443 conflict and a stale caddy container are both recovered in one retry; a failed retry still restores the edge",
+      "mutation_evidence": [
+        "M18",
+        "M19",
+        "M20",
+        "M21"
+      ]
+    },
+    "unchanged": "containment, the internal-only Command Center posture, the production-transaction protections introduced by this PR, and the release/inflight marker ordering are all unchanged by this round.",
+    "resync": {
+      "reason": "main moved from 68103b6065d9ec232a2cd55c73086446ca5da3c0 to 37062b2b26d018c84009de88a10ce5c65c0edc39 (the automated readiness-ledger refresh) after the review packet was returned.",
+      "method": "pnpm ops:merge-wrapper git-merge-main -- the sanctioned verb for a branch carrying a proof bundle. main-sync refused to choose a history-rewriting verb on its own (UTV2-1678), and a rebase would have rewritten every commit SHA on this branch.",
+      "pre_sync_head": "7cc1098db52dd9f13a24c09f70186593a40cc03d",
+      "merge_head": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+      "files_the_merge_brought_in": [
+        "docs/06_status/readiness/readiness-score.json"
+      ],
+      "implementation_unchanged": "verified by blob hash, not by inspection: .github/workflows/deploy.yml b6419fbbd91b, deploy/rollback.sh 94d0f6cc7bd7 and scripts/ci/nextjs-deploy-wiring.test.ts bacf277322f1 are identical at the pre-sync head and at the merged head. No conflict occurred and nothing was resolved.",
+      "rebind_reason": "scripts/ci/proof-binding-validator.ts rule 4 requires every commit between verified_source_sha and HEAD to touch only docs/06_status/proof/ or docs/06_status/lanes/. The merge commit and the ledger refresh touch docs/06_status/readiness/, which is not a proof path, so the binding moves to the merge commit.",
+      "reproved_on_the_merged_tree": {
+        "three_deploy_suites": "87 pass, 0 fail",
+        "mutation_battery": "21 applied, 21 caught, 0 escaped, baseline-green and restore-green asserted"
+      }
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 4538.48ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 3886.06ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 3940.32ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 4455.18ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 137.74ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 4452.24ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 5359.36ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 12,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 4,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-17T00:31:55.870Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 35166884239, job 105029851011), which ran immediately before the smoke-test step in the same job, on head 3c168746932c4646ee4e5df6b6cda655d658b6e8. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 35166884239,
+      "run_attempt": 1,
+      "job_id": 105029851011,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35166884239/job/105029851011",
+      "target_head_sha": "3c168746932c4646ee4e5df6b6cda655d658b6e8",
+      "target_merge_sha": "3c168746932c4646ee4e5df6b6cda655d658b6e8",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  }
+}

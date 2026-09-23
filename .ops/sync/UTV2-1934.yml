@@ -1,0 +1,112 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1934
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1934
+  objective: Startup context states a containment posture that is measurably false
+  acceptance_criteria:
+    - |-
+      `docs/mission/plan.md` is injected into every session as startup context. Three of its claims about the running system are false as of 2026-09-18, and they are the kind that change what an agent decides to do.
+
+      **1. "Containment is binary" — false.** `plan.md:204-208` says `deploy.yml` admits `active | parked | exit 1` only, and concludes *"a request to unpark ingestion is a request to activate delivery. There is no bounded unpark."* [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) added a third mode. The `case` statement in `.github/workflows/deploy.yml` (\~`:540`) admits four outcomes:
+
+      | mode | `SYNDICATE_MACHINE_ENABLED` | ingestor autorun | worker autorun | targets |
+      | -- | -- | -- | -- | -- |
+      | `active` | true | true | true | `best-bets` fallback |
+      | `parked` | false | false | false | forced `none` |
+      | `human-capper` | false | false | **true** | forced literally to `official-picks` |
+      | anything else | `exit 1` |  |  |  |
+
+      `human-capper` is precisely the bounded unpark the page says does not exist.
+
+      **2. "**`SYNDICATE_MACHINE_MODE` **is** `parked`**" is true of the variable and misleading about the runtime.** There is no `SYNDICATE_MACHINE_MODE` repo variable at all; it defaults to `parked` and a *separate* variable promotes it:
+
+      ```sh
+      if [ "$syndicate_machine_mode" = "parked" ] && [ "${VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-}" = "true" ]; then
+        syndicate_machine_mode=human-capper
+      ```
+
+      `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=true` (non-secret, `gh variable list`), so the effective mode is `human-capper` and **the worker is running**. Deploy run `35289985486` logged `{"event":"syndicate_machine_mode.validated","mode":"human-capper"}`. `plan.md:35` and the `worker_outbox_health` row at `:77` both read the posture from the wrong name.
+
+      **Why this one matters beyond tidiness.** "Unparking ingestion is activating delivery" was the stated reason runtime health could not be measured without a member-delivery decision. Under `human-capper` it can: worker uptime, outbox delivery success, queue depth and circuit-breaker state are all observable with provider ingestion still off. The false sentence suppresses provider-independent readiness work — which is exactly the work now prioritised.
+
+      **3.** `READINESS_MEASUREMENT_2026-09-14.md:110-121` **fails Dimension 5 on the grounds that the Command Center is not deployed.** It is deployed and enabled (`UNIT_TALK_COMMAND_CENTER_ENABLED=true`). Dimension 5 still fails, but for different and now-actionable reasons — the surfaces render placeholders where the contract names required fields ([UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator)). Record the real cause; do not flip the verdict.
+
+      **Scope:** `docs/mission/plan.md` and `docs/05_operations/READINESS_MEASUREMENT_2026-09-14.md`. Docs only — no code, no workflow, no containment change. Re-measure each corrected claim against `deploy.yml`, `gh variable list` and the latest successful Deploy run rather than editing this description's text forward into the file.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      `docs/mission/plan.md` is injected into every session as startup context. Three of its claims about the running system are false as of 2026-09-18, and they are the kind that change what an agent decides to do.
+
+      **1. "Containment is binary" — false.** `plan.md:204-208` says `deploy.yml` admits `active | parked | exit 1` only, and concludes *"a request to unpark ingestion is a request to activate delivery. There is no bounded unpark."* [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) added a third mode. The `case` statement in `.github/workflows/deploy.yml` (\~`:540`) admits four outcomes:
+
+      | mode | `SYNDICATE_MACHINE_ENABLED` | ingestor autorun | worker autorun | targets |
+      | -- | -- | -- | -- | -- |
+      | `active` | true | true | true | `best-bets` fallback |
+      | `parked` | false | false | false | forced `none` |
+      | `human-capper` | false | false | **true** | forced literally to `official-picks` |
+      | anything else | `exit 1` |  |  |  |
+
+      `human-capper` is precisely the bounded unpark the page says does not exist.
+
+      **2. "**`SYNDICATE_MACHINE_MODE` **is** `parked`**" is true of the variable and misleading about the runtime.** There is no `SYNDICATE_MACHINE_MODE` repo variable at all; it defaults to `parked` and a *separate* variable promotes it:
+
+      ```sh
+      if [ "$syndicate_machine_mode" = "parked" ] && [ "${VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-}" = "true" ]; then
+        syndicate_machine_mode=human-capper
+      ```
+
+      `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=true` (non-secret, `gh variable list`), so the effective mode is `human-capper` and **the worker is running**. Deploy run `35289985486` logged `{"event":"syndicate_machine_mode.validated","mode":"human-capper"}`. `plan.md:35` and the `worker_outbox_health` row at `:77` both read the posture from the wrong name.
+
+      **Why this one matters beyond tidiness.** "Unparking ingestion is activating delivery" was the stated reason runtime health could not be measured without a member-delivery decision. Under `human-capper` it can: worker uptime, outbox delivery success, queue depth and circuit-breaker state are all observable with provider ingestion still off. The false sentence suppresses provider-independent readiness work — which is exactly the work now prioritised.
+
+      **3.** `READINESS_MEASUREMENT_2026-09-14.md:110-121` **fails Dimension 5 on the grounds that the Command Center is not deployed.** It is deployed and enabled (`UNIT_TALK_COMMAND_CENTER_ENABLED=true`). Dimension 5 still fails, but for different and now-actionable reasons — the surfaces render placeholders where the contract names required fields ([UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator)). Record the real cause; do not flip the verdict.
+
+      **Scope:** `docs/mission/plan.md` and `docs/05_operations/READINESS_MEASUREMENT_2026-09-14.md`. Docs only — no code, no workflow, no containment change. Re-measure each corrected claim against `deploy.yml`, `gh variable list` and the latest successful Deploy run rather than editing this description's text forward into the file.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1934/startup-context-states-a-containment-posture-that-is-measurably-false
+    title: Startup context states a containment posture that is measurably false
+    description: |-
+      `docs/mission/plan.md` is injected into every session as startup context. Three of its claims about the running system are false as of 2026-09-18, and they are the kind that change what an agent decides to do.
+
+      **1. "Containment is binary" — false.** `plan.md:204-208` says `deploy.yml` admits `active | parked | exit 1` only, and concludes *"a request to unpark ingestion is a request to activate delivery. There is no bounded unpark."* [UTV2-1923](https://linear.app/unit-talk-v2/issue/UTV2-1923/human-capper-official-picks-delivery-transaction-authorized-capper) added a third mode. The `case` statement in `.github/workflows/deploy.yml` (\~`:540`) admits four outcomes:
+
+      | mode | `SYNDICATE_MACHINE_ENABLED` | ingestor autorun | worker autorun | targets |
+      | -- | -- | -- | -- | -- |
+      | `active` | true | true | true | `best-bets` fallback |
+      | `parked` | false | false | false | forced `none` |
+      | `human-capper` | false | false | **true** | forced literally to `official-picks` |
+      | anything else | `exit 1` |  |  |  |
+
+      `human-capper` is precisely the bounded unpark the page says does not exist.
+
+      **2. "**`SYNDICATE_MACHINE_MODE` **is** `parked`**" is true of the variable and misleading about the runtime.** There is no `SYNDICATE_MACHINE_MODE` repo variable at all; it defaults to `parked` and a *separate* variable promotes it:
+
+      ```sh
+      if [ "$syndicate_machine_mode" = "parked" ] && [ "${VAR_HUMAN_CAPPER_DELIVERY_ENABLED:-}" = "true" ]; then
+        syndicate_machine_mode=human-capper
+      ```
+
+      `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED=true` (non-secret, `gh variable list`), so the effective mode is `human-capper` and **the worker is running**. Deploy run `35289985486` logged `{"event":"syndicate_machine_mode.validated","mode":"human-capper"}`. `plan.md:35` and the `worker_outbox_health` row at `:77` both read the posture from the wrong name.
+
+      **Why this one matters beyond tidiness.** "Unparking ingestion is activating delivery" was the stated reason runtime health could not be measured without a member-delivery decision. Under `human-capper` it can: worker uptime, outbox delivery success, queue depth and circuit-breaker state are all observable with provider ingestion still off. The false sentence suppresses provider-independent readiness work — which is exactly the work now prioritised.
+
+      **3.** `READINESS_MEASUREMENT_2026-09-14.md:110-121` **fails Dimension 5 on the grounds that the Command Center is not deployed.** It is deployed and enabled (`UNIT_TALK_COMMAND_CENTER_ENABLED=true`). Dimension 5 still fails, but for different and now-actionable reasons — the surfaces render placeholders where the contract names required fields ([UTV2-1932](https://linear.app/unit-talk-v2/issue/UTV2-1932/command-center-dimension-5-render-the-contracts-required-operator)). Record the real cause; do not flip the verdict.
+
+      **Scope:** `docs/mission/plan.md` and `docs/05_operations/READINESS_MEASUREMENT_2026-09-14.md`. Docs only — no code, no workflow, no containment change. Re-measure each corrected claim against `deploy.yml`, `gh variable list` and the latest successful Deploy run rather than editing this description's text forward into the file.
+    captured_at: 2026-09-18T12:53:55.314Z
+    description_sha256: f8e78ff923d9833d202ded3ac62e141817993619a2e0ed54d8b681302a25861d
+  contract_hash: afd58617e6e852a864396cdbe8c7f1d94400b2c944ea13e79cbd793a2e3ed3bf

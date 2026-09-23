@@ -1,0 +1,274 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1948
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1948
+  objective: Command Center global health blanks out in production —
+    anon-connection throw discards an already-fetched pipeline health snapshot
+  acceptance_criteria:
+    - >-
+      ## Defect
+
+
+      Measured in the deployed production Command Center (release `92a7e5d32`)
+      through the real authenticated operator browser path on 2026-09-19.
+
+
+      `getPipelineHealthSnapshot()`
+      (`apps/command-center/src/lib/data/pipeline-health.ts`) performs every one
+      of its real reads successfully with the working service-role client. It
+      then, at `:41-42`, builds a **second, anon** connection purely to hand
+      `url`/`key` to `createPipelineLiveConfig`:
+
+
+      ```ts
+
+      const env = loadEnvironment();
+
+      const anonConnection = createDatabaseConnectionConfig({ env,
+      useServiceRole: false });
+
+      ```
+
+
+      `SUPABASE_ANON_KEY` is **not present** in the deployed
+      `unit-talk-command-center-1` container (`SUPABASE_URL` len 40 PRESENT,
+      `SUPABASE_SERVICE_ROLE_KEY` len 219 PRESENT, `SUPABASE_ANON_KEY` MISSING).
+      So `createDatabaseConnectionConfig` throws `SUPABASE_URL and
+      SUPABASE_ANON_KEY are required for Supabase anon access`, and the throw
+      **discards the entire pipeline-health snapshot that had already been
+      fetched successfully**.
+
+
+      `createPipelineLiveConfig`
+      (`apps/command-center/src/lib/pipeline-health.ts:168-175`) is already
+      written to handle exactly this: `if (!supabaseUrl || !supabaseAnonKey)
+      return null;`. The optional realtime config was designed to be absent. The
+      throw happens one call earlier and prevents that graceful path from ever
+      being reached.
+
+
+      ## Observed operator impact
+
+
+      * `/` Overview: `GLOBAL HEALTH unavailable`, `API HEALTH Down`, `2 of 6
+      lifecycle signals degraded`
+
+      * `/exceptions`: `PARTIAL DATA — System Health pipeline health:
+      SUPABASE_URL and SUPABASE_ANON_KEY are required for Supabase anon access`
+
+      * Health reads as broken across every page that renders the global header
+
+
+      This is a false negative. The underlying reads succeed; only the optional
+      realtime-subscription config is unavailable.
+
+
+      ## Required repair
+
+
+      Resolve the anon url/key defensively and pass `null` when they are absent,
+      so `createPipelineLiveConfig` returns `null` as designed and the fetched
+      snapshot is preserved. Health must render from the data that was actually
+      read.
+
+
+      Out of scope: adding `SUPABASE_ANON_KEY` to production (a reserved secrets
+      decision, and not required — the graceful path already exists), any
+      containment change, any delivery change.
+
+
+      ## Acceptance
+
+
+      * A test proves the snapshot survives an unavailable anon connection and
+      that `liveConfig` is `null` rather than the call throwing.
+
+      * A mutation control proves the test fails if the graceful handling is
+      removed.
+
+      * Deployed-browser proof: global health renders a real state rather than
+      `unavailable`/`Down`, and `/exceptions` no longer shows the `PARTIAL DATA`
+      banner for pipeline health.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Defect
+
+      Measured in the deployed production Command Center (release `92a7e5d32`)
+      through the real authenticated operator browser path on 2026-09-19.
+
+
+      `getPipelineHealthSnapshot()`
+      (`apps/command-center/src/lib/data/pipeline-health.ts`) performs every one
+      of its real reads successfully with the working service-role client. It
+      then, at `:41-42`, builds a **second, anon** connection purely to hand
+      `url`/`key` to `createPipelineLiveConfig`:
+
+
+      ```ts
+
+      const env = loadEnvironment();
+
+      const anonConnection = createDatabaseConnectionConfig({ env,
+      useServiceRole: false });
+
+      ```
+
+
+      `SUPABASE_ANON_KEY` is **not present** in the deployed
+      `unit-talk-command-center-1` container (`SUPABASE_URL` len 40 PRESENT,
+      `SUPABASE_SERVICE_ROLE_KEY` len 219 PRESENT, `SUPABASE_ANON_KEY` MISSING).
+      So `createDatabaseConnectionConfig` throws `SUPABASE_URL and
+      SUPABASE_ANON_KEY are required for Supabase anon access`, and the throw
+      **discards the entire pipeline-health snapshot that had already been
+      fetched successfully**.
+
+
+      `createPipelineLiveConfig`
+      (`apps/command-center/src/lib/pipeline-health.ts:168-175`) is already
+      written to handle exactly this: `if (!supabaseUrl || !supabaseAnonKey)
+      return null;`. The optional realtime config was designed to be absent. The
+      throw happens one call earlier and prevents that graceful path from ever
+      being reached.
+    - >-
+      Observed operator impact
+
+      * `/` Overview: `GLOBAL HEALTH unavailable`, `API HEALTH Down`, `2 of 6
+      lifecycle signals degraded`
+
+      * `/exceptions`: `PARTIAL DATA — System Health pipeline health:
+      SUPABASE_URL and SUPABASE_ANON_KEY are required for Supabase anon access`
+
+      * Health reads as broken across every page that renders the global header
+
+
+      This is a false negative. The underlying reads succeed; only the optional
+      realtime-subscription config is unavailable.
+    - >-
+      Required repair
+
+      Resolve the anon url/key defensively and pass `null` when they are absent,
+      so `createPipelineLiveConfig` returns `null` as designed and the fetched
+      snapshot is preserved. Health must render from the data that was actually
+      read.
+
+
+      Out of scope: adding `SUPABASE_ANON_KEY` to production (a reserved secrets
+      decision, and not required — the graceful path already exists), any
+      containment change, any delivery change.
+    - >-
+      Acceptance
+
+      * A test proves the snapshot survives an unavailable anon connection and
+      that `liveConfig` is `null` rather than the call throwing.
+
+      * A mutation control proves the test fails if the graceful handling is
+      removed.
+
+      * Deployed-browser proof: global health renders a real state rather than
+      `unavailable`/`Down`, and `/exceptions` no longer shows the `PARTIAL DATA`
+      banner for pipeline health.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1948/command-center-global-health-blanks-out-in-production-anon-connection
+    title: Command Center global health blanks out in production — anon-connection
+      throw discards an already-fetched pipeline health snapshot
+    description: >-
+      ## Defect
+
+
+      Measured in the deployed production Command Center (release `92a7e5d32`)
+      through the real authenticated operator browser path on 2026-09-19.
+
+
+      `getPipelineHealthSnapshot()`
+      (`apps/command-center/src/lib/data/pipeline-health.ts`) performs every one
+      of its real reads successfully with the working service-role client. It
+      then, at `:41-42`, builds a **second, anon** connection purely to hand
+      `url`/`key` to `createPipelineLiveConfig`:
+
+
+      ```ts
+
+      const env = loadEnvironment();
+
+      const anonConnection = createDatabaseConnectionConfig({ env,
+      useServiceRole: false });
+
+      ```
+
+
+      `SUPABASE_ANON_KEY` is **not present** in the deployed
+      `unit-talk-command-center-1` container (`SUPABASE_URL` len 40 PRESENT,
+      `SUPABASE_SERVICE_ROLE_KEY` len 219 PRESENT, `SUPABASE_ANON_KEY` MISSING).
+      So `createDatabaseConnectionConfig` throws `SUPABASE_URL and
+      SUPABASE_ANON_KEY are required for Supabase anon access`, and the throw
+      **discards the entire pipeline-health snapshot that had already been
+      fetched successfully**.
+
+
+      `createPipelineLiveConfig`
+      (`apps/command-center/src/lib/pipeline-health.ts:168-175`) is already
+      written to handle exactly this: `if (!supabaseUrl || !supabaseAnonKey)
+      return null;`. The optional realtime config was designed to be absent. The
+      throw happens one call earlier and prevents that graceful path from ever
+      being reached.
+
+
+      ## Observed operator impact
+
+
+      * `/` Overview: `GLOBAL HEALTH unavailable`, `API HEALTH Down`, `2 of 6
+      lifecycle signals degraded`
+
+      * `/exceptions`: `PARTIAL DATA — System Health pipeline health:
+      SUPABASE_URL and SUPABASE_ANON_KEY are required for Supabase anon access`
+
+      * Health reads as broken across every page that renders the global header
+
+
+      This is a false negative. The underlying reads succeed; only the optional
+      realtime-subscription config is unavailable.
+
+
+      ## Required repair
+
+
+      Resolve the anon url/key defensively and pass `null` when they are absent,
+      so `createPipelineLiveConfig` returns `null` as designed and the fetched
+      snapshot is preserved. Health must render from the data that was actually
+      read.
+
+
+      Out of scope: adding `SUPABASE_ANON_KEY` to production (a reserved secrets
+      decision, and not required — the graceful path already exists), any
+      containment change, any delivery change.
+
+
+      ## Acceptance
+
+
+      * A test proves the snapshot survives an unavailable anon connection and
+      that `liveConfig` is `null` rather than the call throwing.
+
+      * A mutation control proves the test fails if the graceful handling is
+      removed.
+
+      * Deployed-browser proof: global health renders a real state rather than
+      `unavailable`/`Down`, and `/exceptions` no longer shows the `PARTIAL DATA`
+      banner for pipeline health.
+    captured_at: 2026-09-19T23:03:27.535Z
+    description_sha256: a0d7fb6cf76d8762e1ec3b90f12a10f317f4702cfefd1d8ab8c8babf78b48b07
+  contract_hash: df3aee760ee54310595f3d477a605f234faa6081ea54c697c1d280969a10b837

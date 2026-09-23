@@ -1,0 +1,172 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1946
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1946
+  objective: >-
+    Partition with the existing shared predicate `isGovernedDeliveryTarget()`.
+    Import it; do not re-express the target list in the Command Center.
+
+    Governed exceptions are the default surface. Non-governed rows remain
+    reachable behind an explicit, labelled control and are never presented as
+    operational exceptions.
+
+    An empty governed exception list renders as a truthful empty state, not as a
+    zero that looks like a failed query.
+
+    Historical governed dead letters are distinguished from live exceptions — a
+    `dead_letter` row from 2026-07-30 is not an incident today.
+
+    Counts and rows apply the same predicate, so the count is true of what is
+    shown.
+  acceptance_criteria:
+    - |-
+      Band 1 defect against `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`. The Exceptions surface must be "based on real canonical populations, not heuristics that classify everything the same way."
+
+      ## Measured, production `zfzdnfwdarxucxtaojxm`, 2026-09-19 (read-only)
+
+      `distribution_outbox` partitioned by `isGovernedDeliveryTarget()` (`packages/contracts/src/promotion.ts:47` — `promotionTargets` ∪ `humanDeliveryTargets`):
+
+      | status | governed target | rows | targets |
+      | -- | -- | -- | -- |
+      | sent | yes | 1,565 | `discord:best-bets`, `discord:official-picks`, `discord:trader-insights` |
+      | dead_letter | yes | 340 | `discord:best-bets`, all ≤ 2026-07-30 |
+      | sent | no | 2,195 | 10 variants incl. `discord:canary`, `discord:recaps`, `discord:<numeric-id>` |
+      | dead_letter | no | 1,614 | `discord:canary` |
+      | processing | no | 32 | 4 × `utv2-1497-canary-*` |
+      | pending | no | 3 | `discord:canary` |
+
+      **Zero governed rows are stuck in** `processing` **or** `pending`**.** A correctly partitioned queue therefore shows **no live exceptions** and 340 historical governed dead letters. The surface today shows 1,954 + 32 rows, every one of which is non-governed noise at the live level.
+
+      ## Required outcome
+
+      1. Partition with the existing shared predicate `isGovernedDeliveryTarget()`. Import it; do not re-express the target list in the Command Center.
+      2. Governed exceptions are the default surface. Non-governed rows remain reachable behind an explicit, labelled control and are never presented as operational exceptions.
+      3. An empty governed exception list renders as a truthful empty state, not as a zero that looks like a failed query.
+      4. Historical governed dead letters are distinguished from live exceptions — a `dead_letter` row from 2026-07-30 is not an incident today.
+      5. Counts and rows apply the same predicate, so the count is true of what is shown.
+
+      ## Out of scope / prohibited
+
+      * **The 32** `processing` **rows on** `utv2-1497-canary-*` **targets must not be deleted.** They are the evidence that the classification behind a blocking readiness dimension is wrong (`docs/mission/plan.md` §9). Deleting them would turn a readiness number green by destroying evidence.
+      * No schema change, no migration, no write path, no delivery activation, no kill-switch change, no Smart Form change. Read-path predicate and presentation only.
+      * `isGovernedDeliveryTarget()` partitioning already landed for the readiness ledger and the worker test under [UTV2-1933](https://linear.app/unit-talk-v2/issue/UTV2-1933/dimension-1s-stranded-outbox-control-asserts-true-and-cannot-fail) ([griff843/Unit-Talk-v2#1607](https://linear.app/unit-talk-v2/review/utv2-1933-partition-stale-outbox-rows-by-whether-any-worker-could-81c2033e8843), merged). Reuse it; do not rebuild it.
+
+      ## Acceptance
+
+      Not "the page renders". Prove against production read-only that the default Exceptions population equals the governed partition measured above, and that the non-governed rows are reachable only under the explicit labelled mode.
+  guardrails: []
+  non_goals:
+    - "**The 32** `processing` **rows on** `utv2-1497-canary-*` **targets must
+      not be deleted.** They are the evidence that the classification behind a
+      blocking readiness dimension is wrong (`docs/mission/plan.md` §9).
+      Deleting them would turn a readiness number green by destroying evidence."
+    - No schema change, no migration, no write path, no delivery activation, no
+      kill-switch change, no Smart Form change. Read-path predicate and
+      presentation only.
+    - "`isGovernedDeliveryTarget()` partitioning already landed for the
+      readiness ledger and the worker test under
+      [UTV2-1933](https://linear.app/unit-talk-v2/issue/UTV2-1933/dimension-1s-\
+      stranded-outbox-control-asserts-true-and-cannot-fail)
+      ([griff843/Unit-Talk-v2#1607](https://linear.app/unit-talk-v2/review/utv2\
+      -1933-partition-stale-outbox-rows-by-whether-any-worker-could-81c2033e884\
+      3), merged). Reuse it; do not rebuild it."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Band 1 defect against
+      `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`. The Exceptions
+      surface must be "based on real canonical populations, not heuristics that
+      classify everything the same way."
+    - >-
+      Measured, production `zfzdnfwdarxucxtaojxm`, 2026-09-19 (read-only)
+
+      `distribution_outbox` partitioned by `isGovernedDeliveryTarget()`
+      (`packages/contracts/src/promotion.ts:47` — `promotionTargets` ∪
+      `humanDeliveryTargets`):
+
+
+      | status | governed target | rows | targets |
+
+      | -- | -- | -- | -- |
+
+      | sent | yes | 1,565 | `discord:best-bets`, `discord:official-picks`,
+      `discord:trader-insights` |
+
+      | dead_letter | yes | 340 | `discord:best-bets`, all ≤ 2026-07-30 |
+
+      | sent | no | 2,195 | 10 variants incl. `discord:canary`,
+      `discord:recaps`, `discord:<numeric-id>` |
+
+      | dead_letter | no | 1,614 | `discord:canary` |
+
+      | processing | no | 32 | 4 × `utv2-1497-canary-*` |
+
+      | pending | no | 3 | `discord:canary` |
+
+
+      **Zero governed rows are stuck in** `processing` **or** `pending`**.** A
+      correctly partitioned queue therefore shows **no live exceptions** and 340
+      historical governed dead letters. The surface today shows 1,954 + 32 rows,
+      every one of which is non-governed noise at the live level.
+    - >-
+      Acceptance
+
+      Not "the page renders". Prove against production read-only that the
+      default Exceptions population equals the governed partition measured
+      above, and that the non-governed rows are reachable only under the
+      explicit labelled mode.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1946/command-center-exceptions-presents-3984-non-governed-rows-as
+    title: Command Center Exceptions presents 3,984 non-governed rows as operational
+      exceptions
+    description: |-
+      Band 1 defect against `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`. The Exceptions surface must be "based on real canonical populations, not heuristics that classify everything the same way."
+
+      ## Measured, production `zfzdnfwdarxucxtaojxm`, 2026-09-19 (read-only)
+
+      `distribution_outbox` partitioned by `isGovernedDeliveryTarget()` (`packages/contracts/src/promotion.ts:47` — `promotionTargets` ∪ `humanDeliveryTargets`):
+
+      | status | governed target | rows | targets |
+      | -- | -- | -- | -- |
+      | sent | yes | 1,565 | `discord:best-bets`, `discord:official-picks`, `discord:trader-insights` |
+      | dead_letter | yes | 340 | `discord:best-bets`, all ≤ 2026-07-30 |
+      | sent | no | 2,195 | 10 variants incl. `discord:canary`, `discord:recaps`, `discord:<numeric-id>` |
+      | dead_letter | no | 1,614 | `discord:canary` |
+      | processing | no | 32 | 4 × `utv2-1497-canary-*` |
+      | pending | no | 3 | `discord:canary` |
+
+      **Zero governed rows are stuck in** `processing` **or** `pending`**.** A correctly partitioned queue therefore shows **no live exceptions** and 340 historical governed dead letters. The surface today shows 1,954 + 32 rows, every one of which is non-governed noise at the live level.
+
+      ## Required outcome
+
+      1. Partition with the existing shared predicate `isGovernedDeliveryTarget()`. Import it; do not re-express the target list in the Command Center.
+      2. Governed exceptions are the default surface. Non-governed rows remain reachable behind an explicit, labelled control and are never presented as operational exceptions.
+      3. An empty governed exception list renders as a truthful empty state, not as a zero that looks like a failed query.
+      4. Historical governed dead letters are distinguished from live exceptions — a `dead_letter` row from 2026-07-30 is not an incident today.
+      5. Counts and rows apply the same predicate, so the count is true of what is shown.
+
+      ## Out of scope / prohibited
+
+      * **The 32** `processing` **rows on** `utv2-1497-canary-*` **targets must not be deleted.** They are the evidence that the classification behind a blocking readiness dimension is wrong (`docs/mission/plan.md` §9). Deleting them would turn a readiness number green by destroying evidence.
+      * No schema change, no migration, no write path, no delivery activation, no kill-switch change, no Smart Form change. Read-path predicate and presentation only.
+      * `isGovernedDeliveryTarget()` partitioning already landed for the readiness ledger and the worker test under [UTV2-1933](https://linear.app/unit-talk-v2/issue/UTV2-1933/dimension-1s-stranded-outbox-control-asserts-true-and-cannot-fail) ([griff843/Unit-Talk-v2#1607](https://linear.app/unit-talk-v2/review/utv2-1933-partition-stale-outbox-rows-by-whether-any-worker-could-81c2033e8843), merged). Reuse it; do not rebuild it.
+
+      ## Acceptance
+
+      Not "the page renders". Prove against production read-only that the default Exceptions population equals the governed partition measured above, and that the non-governed rows are reachable only under the explicit labelled mode.
+    captured_at: 2026-09-19T20:00:22.821Z
+    description_sha256: 2d9f19d4e24261c07dbd6efa2c7791e8d6995322a8d0716971bed2a40534544d
+  contract_hash: 7edaa96e22e5dfebeaadb8e1c145675723cc67dfdfa778852c7de627bfd92048

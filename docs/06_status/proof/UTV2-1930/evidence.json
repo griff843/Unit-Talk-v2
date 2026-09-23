@@ -1,0 +1,173 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1930",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "17b3f964fb04faa4060fa43fc095531a4f8e8942",
+    "verified_source_sha": "17b3f964fb04faa4060fa43fc095531a4f8e8942",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T08:43:33.483Z",
+    "ci_sentinels": {
+      "note": "Re-anchored 2026-09-18. The original verified_source_sha 4b7957935 was the last non-proof commit on the UTV2-1930 implementation branch; #1602 was squash-merged, so that commit is not in main's history and is not an ancestor of any later head. The squash commit 17b3f964fb04faa4060fa43fc095531a4f8e8942 carries exactly the tree this evidence was executed against, so it is the stable anchor. Every commit after it on this branch touches only docs/06_status/lanes/** and docs/06_status/proof/**. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1602 at that head. post-merge-lane-close.yml rebinds merge_sha.",
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "required_contexts_authority": "PR #1602: verify, Executor Result Validation, Merge Gate, P0 Protocol",
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "tests": 6527,
+        "pass": 6527,
+        "fail": 0
+      }
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T07:47:13.000Z",
+    "measured_against_sha": "4b7957935c657b82b4394485a1858357d364a5f1",
+    "commands": [
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "tsc -b tsconfig.json, no diagnostics"
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "eslint, no output"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 6527,
+        "pass": 6527,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/seed-operator-event.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "13 pass / 0 fail, all 13 new"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 5 changed files; no rules matched, no R-level artifacts required"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": null,
+        "result": "delegated_to_ci",
+        "note": "ci:assert-staging-env requires CI-only staging credentials, so verify cannot exit 0 in a local worktree. Its constituent local steps (type-check, lint, test) all exit 0 above; the authoritative run is the required verify context on PR #1602."
+      }
+    ],
+    "new_coverage": [
+      {
+        "file": "scripts/ops/seed-operator-event.test.ts",
+        "tests": 13,
+        "pass": 13,
+        "fail": 0,
+        "new_tests": 13,
+        "mutation_controls": 3
+      }
+    ],
+    "mutation_controls": [
+      {
+        "control": "a provider-ingested event is never overwritten by operator-asserted metadata",
+        "mutation": "neuter assertNotProviderOwned in scripts/ops/seed-operator-event.ts (if (existing) return)",
+        "observed": "not ok 6, 9, 10, 11 of 13",
+        "result": "fails_on_the_named_condition",
+        "proves": "the refusal is coupled to the condition it names; the collateral failures are the same guard's null check, which the mutation also removes"
+      },
+      {
+        "control": "the event and BOTH event_participants rows are written together",
+        "mutation": "omit the away eventParticipants.upsert call",
+        "observed": "not ok 10, 11 of 13",
+        "result": "fails_on_the_named_condition",
+        "proves": "the assertion reads both rows, so the hand-seeded 'teams': [] shape cannot pass through this path"
+      },
+      {
+        "control": "a participant with no canonical external_id cannot anchor an event identity",
+        "mutation": "tolerate null in requireParticipantExternalId (?? 'UNKNOWN', guard disabled)",
+        "observed": "not ok 5 of 13",
+        "result": "fails_on_the_named_condition",
+        "proves": "the refusal prevents the ...:null@null identity that would collide across every such pair"
+      },
+      {
+        "control": "unmutated baseline",
+        "mutation": "none",
+        "observed": "13/13",
+        "result": "pass"
+      }
+    ],
+    "note": "Two of the 13 tests found real defects in the first draft rather than confirming it: a fixture helper coalesced an explicit null away, making one assertion vacuous; and createInMemoryRepositoryBundle() always seeds team fixtures, so the catalog_empty branch was unreachable and that test was silently exercising participant_not_found. Both were fixed before this bundle was written. After each fix the source was restored byte-identical, verified with diff."
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T07:47:13.000Z",
+    "note": "Read-only only. No production write was performed by this lane, deliberately: DB_ENVIRONMENT_OPERATOR_POLICY.md (RATIFIED) sets production agent write access to 'No - operator only'. This lane ships the governed path, not an execution of it. Containment was not changed and no runtime flag was touched.",
+    "queries": [
+      {
+        "name": "the hand-seeded canary event has no stable identity and no participants",
+        "method": "read-only SELECT against production zfzdnfwdarxucxtaojxm on events left-joined to a count of event_participants, for every event with event_date >= 2026-07-01",
+        "result": "event 16924899-2a8c-4f90-9c0c-1f45e3230d79 ('Lions @ Bills', 2026-09-17, metadata.source='operator-manual-entry'): external_id NULL, 0 event_participants rows. All 19 other rows in the window are metadata.source='sgo' with a non-null external_id and exactly 2 event_participants rows each.",
+        "significance": "Both defects this tool prevents are present on the one event the hand-seeded path produced, and absent from every event the governed producer produced. A NULL external_id leaves no stable identity to upsert against; 0 participant rows make /api/reference-data/matchups return 'teams': [] so no side is pickable."
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "operator_seeded_events_in_window",
+        "value": 1
+      },
+      {
+        "name": "operator_seeded_events_with_external_id",
+        "value": 0
+      },
+      {
+        "name": "operator_seeded_events_with_two_participants",
+        "value": 0
+      },
+      {
+        "name": "provider_ingested_events_in_window",
+        "value": 19
+      },
+      {
+        "name": "provider_ingested_events_with_two_participants",
+        "value": 19
+      }
+    ],
+    "observations": [
+      {
+        "what": "the defect is real and on the live path",
+        "evidence": "production event 16924899 has external_id NULL and zero event_participants"
+      },
+      {
+        "what": "the governed producer does not exhibit it",
+        "evidence": "19/19 provider-ingested events in the same window carry an external_id and exactly two participant rows"
+      },
+      {
+        "what": "no production write was made by this lane",
+        "evidence": "production agent write access is operator-only per DB_ENVIRONMENT_OPERATOR_POLICY.md; the operator invocation and its non-secret success criterion are recorded in verification.md"
+      },
+      {
+        "what": "containment held throughout",
+        "evidence": "read-only queries only; no runtime flag, provider, ingestion or delivery setting was touched"
+      }
+    ]
+  }
+}

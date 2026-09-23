@@ -1,0 +1,111 @@
+name: Warehouse Archive Conveyor
+
+# WORK-2026092101 — scheduled historical archive conveyor.
+#
+# One closed daily window per configured source per run, exported to Parquet +
+# zstd and uploaded to the private archive bucket. The conveyor VERIFIES what it
+# uploaded and writes a manifest only when that verification passes.
+#
+# Guardrails, all mechanical rather than stated:
+#   * There is no prune step here, and `scripts/warehouse/cli.ts` has no prune
+#     subcommand. A destructive production prune is a separate, PM-authorized
+#     action (docs/05_operations/FIRST_ARCHIVE_CANDIDATE_PACKET.md).
+#   * The job reads the source database through a READ_ONLY DuckDB attachment.
+#   * With no archive credentials configured the run exits cleanly after
+#     reporting that it is not configured — it never falls back to a local
+#     directory or a public bucket.
+#   * Secrets reach the process only as environment variables from the GitHub
+#     secret store, are never echoed, and every error message is redacted
+#     through `redactSecrets` before it is printed.
+
+on:
+  schedule:
+    # 04:17 UTC daily: after the day being archived has fully closed in every
+    # league timezone, and off the hour so it does not queue behind the fleet.
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      window_date:
+        description: 'Backfill one specific UTC day (YYYY-MM-DD). Blank = the day that just left hot retention.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Plan only: print the windows that would be archived and exit.'
+        required: false
+        type: boolean
+        default: false
+
+# One conveyor at a time. Two runs over the same window would be idempotent by
+# construction, but serializing them keeps the object store from serving a
+# half-written read to the verifier of the other run.
+concurrency:
+  group: warehouse-archive-conveyor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  conveyor:
+    name: Archive one closed window per source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Report archive configuration (presence only, never values)
+        env:
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY }}
+          UNIT_TALK_WAREHOUSE_SOURCE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_SOURCE_DSN }}
+        run: pnpm -s warehouse doctor
+
+      - name: Plan the windows
+        env:
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+        run: pnpm -s warehouse plan ${{ inputs.window_date && format('--window-date {0}', inputs.window_date) || '' }}
+
+      - name: Run the conveyor
+        if: ${{ inputs.dry_run != true }}
+        env:
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY }}
+          UNIT_TALK_WAREHOUSE_SOURCE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_SOURCE_DSN }}
+          WAREHOUSE_EXPORTER_REPO_SHA: ${{ github.sha }}
+        run: pnpm -s warehouse conveyor ${{ inputs.window_date && format('--window-date {0}', inputs.window_date) || '' }}
+
+      - name: Report conveyor staleness
+        # Runs even when the conveyor failed: "failing" and "not running" are
+        # different states, and the heartbeat is what distinguishes them.
+        if: ${{ always() && inputs.dry_run != true }}
+        env:
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY }}
+        run: pnpm -s warehouse staleness

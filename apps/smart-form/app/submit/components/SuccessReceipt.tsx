@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import type { SubmitPickResult } from '@/lib/api-client';
 import type { BetFormValues } from '@/lib/form-schema';
+import { resolveDeliveryDisposition } from '@/lib/delivery-disposition';
 import { buildSelectionString } from '@/lib/form-utils';
 import { getMarketTypeLabel } from '@/lib/market-types';
 
@@ -24,6 +25,11 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: SuccessReceiptProps) {
   const v = submittedValues;
+  // UTV2-1925: read from `result` -- what the SERVER determined -- never from
+  // `v.trackOnly`, which is a client form value that defaults to true and knows
+  // nothing about what happened. The old line stated "no member delivery" to a
+  // capper whose submission was entering the approval-for-delivery path.
+  const disposition = resolveDeliveryDisposition(result);
   const selection = buildSelectionString(v);
   const marketLabel = getMarketTypeLabel(v.marketType);
   const oddsDisplay = v.odds > 0 ? `+${v.odds}` : String(v.odds);
@@ -34,9 +40,9 @@ export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: Suc
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
-          <h2 className="text-lg font-semibold text-foreground">Pick Saved</h2>
+          <h2 className="text-lg font-semibold text-foreground">{disposition.headline}</h2>
         </div>
-        <p className="text-sm text-muted-foreground pl-4">{v.trackOnly ? 'Saved to your internal record. Track Only — no member delivery.' : 'Your pick is saved. Delivery remains subject to approval and routing checks.'}</p>
+        <p className="text-sm text-muted-foreground pl-4" data-testid="delivery-disposition" data-disposition={disposition.kind}>{disposition.detail}</p>
       </div>
 
       <Separator className="bg-border/50" />

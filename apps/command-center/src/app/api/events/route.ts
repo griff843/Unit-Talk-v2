@@ -4,7 +4,7 @@ import { authenticateHeaderBag } from '@/lib/request-auth';
 
 export function createEventsHandler(readEvents = getEventStream) {
   return async function events(request: Request) {
-    const auth = authenticateHeaderBag(request.headers);
+    const auth = await authenticateHeaderBag(request.headers);
     if (!auth.ok) {
       return NextResponse.json(
         {

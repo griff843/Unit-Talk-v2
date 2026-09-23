@@ -1,6 +1,6 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { StatCard, SeverityBadge, Table, TableHead, TableBody, Th, Td, DegradedState } from '@/components/ui';
-import { getExceptionQueues } from '@/lib/data/picks';
+import { getExceptionQueues, getNonGovernedDeliveryRows, type DeliveryOutboxRow, type ExceptionQueues, type NonGovernedDeliveryRows } from '@/lib/data/picks';
 import { getProviderCycleHealth } from '@/lib/data/provider-cycle-health';
 import { getPipelineHealthSnapshot } from '@/lib/data/pipeline-health';
 import { getRuntimeHealth } from '@/lib/data/runtime-truth';
@@ -11,7 +11,6 @@ import {
   buildFireBoard,
   countBySeverity,
   formatRelativeAge,
-  type FireBoardExceptionCounts,
   type FireBoardItem,
   type FireBoardInputs,
   type FireBoardSeverity,
@@ -26,21 +25,26 @@ const SEVERITY_SECTIONS: Array<{ severity: FireBoardSeverity; heading: string }>
   { severity: 'info', heading: 'Info — watch' },
 ];
 
-async function loadFireBoardInputs(): Promise<{ inputs: FireBoardInputs; loadErrors: string[] }> {
+async function loadFireBoardInputs(showNonGoverned: boolean): Promise<{
+  inputs: FireBoardInputs;
+  loadErrors: string[];
+  governedDelivery: { live: number; historicalDeadLetters: number } | null;
+  nonGovernedDelivery: NonGovernedDeliveryRows | null;
+}> {
   const nowMs = Date.now();
   const loadErrors: string[] = [];
 
-  const [exceptionsSettled, providerSettled, pipelineSettled, runtimeSettled] = await Promise.allSettled([
+  const [exceptionsSettled, providerSettled, pipelineSettled, runtimeSettled, nonGovernedSettled] = await Promise.allSettled([
     getExceptionQueues(),
     getProviderCycleHealth(),
     getPipelineHealthSnapshot(),
     getRuntimeHealth(),
+    showNonGoverned ? getNonGovernedDeliveryRows() : Promise.resolve(null),
   ]);
 
-  let exceptions: FireBoardExceptionCounts | null = null;
+  let exceptionQueues: ExceptionQueues | null = null;
   if (exceptionsSettled.status === 'fulfilled') {
-    const data = exceptionsSettled.value.data as { counts: FireBoardExceptionCounts & Record<string, number> };
-    exceptions = data.counts;
+    exceptionQueues = exceptionsSettled.value.data;
   } else {
     loadErrors.push(`exception queues: ${describeOperatorFailure(exceptionsSettled.reason)}`);
   }
@@ -75,10 +79,14 @@ async function loadFireBoardInputs(): Promise<{ inputs: FireBoardInputs; loadErr
   }
 
   const runtime = runtimeSettled.status === 'fulfilled' ? runtimeSettled.value : null;
+  const nonGovernedDelivery = nonGovernedSettled.status === 'fulfilled' ? nonGovernedSettled.value : null;
+  if (showNonGoverned && nonGovernedSettled.status === 'rejected') {
+    loadErrors.push(`non-governed delivery rows: ${describeOperatorFailure(nonGovernedSettled.reason)}`);
+  }
 
   return {
     inputs: {
-      exceptions,
+      exceptions: exceptionQueues?.counts ?? null,
       providerCycle,
       pipeline,
       runtime: runtime ? { apiStatus: runtime.apiStatus, warnings: runtime.warnings } : null,
@@ -86,7 +94,35 @@ async function loadFireBoardInputs(): Promise<{ inputs: FireBoardInputs; loadErr
       nowMs,
     },
     loadErrors,
+    governedDelivery: exceptionQueues ? {
+      live: exceptionQueues.counts.failedDelivery + exceptionQueues.counts.deadLetter,
+      historicalDeadLetters: exceptionQueues.counts.historicalDeadLetter,
+    } : null,
+    nonGovernedDelivery,
   };
+}
+
+function DeliveryRowsTable({ rows }: { rows: DeliveryOutboxRow[] }) {
+  return (
+    <Table>
+      <TableHead>
+        <Th>Target</Th>
+        <Th>Status</Th>
+        <Th>Attempts</Th>
+        <Th>Last updated</Th>
+      </TableHead>
+      <TableBody>
+        {rows.map((row) => (
+          <tr key={row.id} className="border-b border-gray-800/60">
+            <Td>{row.target}</Td>
+            <Td>{row.status}</Td>
+            <Td>{String(row.attempt_count ?? '—')}</Td>
+            <Td>{row.updated_at}</Td>
+          </tr>
+        ))}
+      </TableBody>
+    </Table>
+  );
 }
 
 function FireBoardTable({ items, nowMs }: { items: FireBoardItem[]; nowMs: number }) {
@@ -129,15 +165,25 @@ function FireBoardTable({ items, nowMs }: { items: FireBoardItem[]; nowMs: numbe
   );
 }
 
-export default async function ExceptionsPage() {
+export default async function ExceptionsPage({
+  searchParams: searchParamsPromise,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const searchParams = await searchParamsPromise;
+  const showNonGoverned = searchParams?.['deliveryPopulation'] === 'non-governed';
   let inputs: FireBoardInputs | null = null;
   let loadErrors: string[] = [];
   let fatalError: string | null = null;
+  let governedDelivery: { live: number; historicalDeadLetters: number } | null = null;
+  let nonGovernedDelivery: NonGovernedDeliveryRows | null = null;
 
   try {
-    const loaded = await loadFireBoardInputs();
+    const loaded = await loadFireBoardInputs(showNonGoverned);
     inputs = loaded.inputs;
     loadErrors = loaded.loadErrors;
+    governedDelivery = loaded.governedDelivery;
+    nonGovernedDelivery = loaded.nonGovernedDelivery;
   } catch (error) {
     fatalError = describeOperatorFailure(error, 'Exception sources could not be loaded.');
   }
@@ -167,7 +213,53 @@ export default async function ExceptionsPage() {
         <p className="text-sm cc-text-muted">
           What is broken and what matters most, ranked by severity. Observed {observedAt}.
         </p>
+        <p className="text-xs cc-text-muted">
+          Delivery exceptions use governed targets only. Non-governed delivery traffic is diagnostic data, not an operational exception.
+        </p>
       </div>
+
+      <div className="cc-surface p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-100">Governed delivery exceptions</h2>
+            {governedDelivery?.live === 0 ? (
+              <p className="mt-1 text-sm text-gray-300">
+                No live governed delivery exceptions. This is an empty queue, not an unavailable query.
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-gray-300">
+                {governedDelivery?.live} live governed delivery exception{governedDelivery?.live === 1 ? '' : 's'}.
+              </p>
+            )}
+            {governedDelivery && governedDelivery.historicalDeadLetters > 0 ? (
+              <p className="mt-1 text-xs cc-text-muted">
+                {governedDelivery.historicalDeadLetters} governed dead letter{governedDelivery.historicalDeadLetters === 1 ? '' : 's'} older than 24 hours are historical delivery records, not live incidents.
+              </p>
+            ) : null}
+          </div>
+          <Link
+            href={showNonGoverned ? '/exceptions' : '/exceptions?deliveryPopulation=non-governed'}
+            className="text-sm text-blue-400 hover:underline"
+          >
+            {showNonGoverned ? 'Hide non-governed delivery rows' : 'Show non-governed delivery rows'}
+          </Link>
+        </div>
+      </div>
+
+      {showNonGoverned && nonGovernedDelivery ? (
+        <div className="cc-surface p-5">
+          <h2 className="text-sm font-semibold text-gray-100">Non-governed delivery rows — diagnostic only</h2>
+          <p className="mt-1 text-sm text-gray-300">
+            {nonGovernedDelivery.total} rows are outside the governed delivery registry and are not operational exceptions.
+          </p>
+          <p className="mt-1 text-xs cc-text-muted">
+            {Object.entries(nonGovernedDelivery.statusCounts).map(([status, count]) => `${status}: ${count}`).join(' · ')}. Showing the 50 most recently updated rows.
+          </p>
+          <div className="mt-4 overflow-x-auto">
+            <DeliveryRowsTable rows={nonGovernedDelivery.rows} />
+          </div>
+        </div>
+      ) : null}
 
       {loadErrors.length === 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

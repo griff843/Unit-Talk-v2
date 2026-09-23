@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { americanToDecimal, isValidAmericanOdds } from '@unit-talk/contracts';
+
 import { getDataClient, isTestFixturePick } from './client';
+import { applyPickPopulation, resolveGovernedPick } from '../governed-population';
+import { getPerformanceCohort } from './performance-cohort';
 
 type Client = any;
 type Row = Record<string, unknown>;
@@ -15,7 +19,21 @@ export interface Stats {
   losses: number;
   pushes: number;
   hitRatePct: number;
-  roiPct: number;
+  /**
+   * Net units returned per unit staked, as a percentage, computed from the real
+   * American price and the real stake on each decided pick.
+   *
+   * `null` means nothing in this cohort could be priced. That is NOT 0 -- a
+   * break-even record and an unmeasurable one are different facts, and reporting
+   * the unmeasurable one as 0.0% is the reassuring direction.
+   */
+  roiPct: number | null;
+  /** Total units risked across the priced picks. `null` when nothing was priced. */
+  unitsStaked: number | null;
+  /** Net units won or lost across the priced picks. `null` when nothing was priced. */
+  unitsNet: number | null;
+  /** Decided picks that carried no usable odds or stake, so contributed no units. */
+  unpriced: number;
   avgScore: number | null;
   avgClvPct: number | null;
   avgStakeUnits: number | null;
@@ -23,7 +41,7 @@ export interface Stats {
 
 interface NamedInsight {
   name: string;
-  roiPct: number;
+  roiPct: number | null;
   sampleSize: number;
 }
 
@@ -32,13 +50,26 @@ export interface PerformanceData {
   bySource: { capper: Stats; system: Stats };
   bySport: Record<string, Stats>;
   byIndividualSource: Record<string, Stats>;
+  /** Published statistics per canonical `picks.capper_id`. Track Only excluded. */
+  byCapper: Record<string, Stats>;
+  /**
+   * The Unit Talk aggregate over exactly the rows `byCapper` and `bySource`
+   * partition. Every per-capper figure reconciles against this by construction:
+   * same cohort, same function.
+   */
+  unitTalkAggregate: Stats;
+  /**
+   * Internal Track Only evidence, reported separately and never folded into any
+   * published figure above.
+   */
+  trackOnly: { stats: Stats; byCapper: Record<string, Stats> };
   decisions: { approved: Stats; denied: Stats; held: Stats; heldCount: number };
   insights: {
-    capperRoiPct: number;
-    systemRoiPct: number;
-    approvedRoiPct: number;
-    deniedRoiPct: number;
-    approvedVsDeniedDelta: number;
+    capperRoiPct: number | null;
+    systemRoiPct: number | null;
+    approvedRoiPct: number | null;
+    deniedRoiPct: number | null;
+    approvedVsDeniedDelta: number | null;
     topCapper: NamedInsight;
     worstSegment: NamedInsight;
     strongestSport: NamedInsight;
@@ -47,13 +78,17 @@ export interface PerformanceData {
 }
 
 export interface LeaderboardRow {
+  /** Canonical `picks.capper_id`. Never derived from `picks.source` or metadata. */
   capper: string;
   total: number;
   wins: number;
   losses: number;
   pushes: number;
   hitRatePct: number;
-  roiPct: number;
+  roiPct: number | null;
+  unitsStaked: number | null;
+  unitsNet: number | null;
+  unpriced: number;
   avgClvPct: number | null;
 }
 
@@ -79,7 +114,7 @@ export interface MiniStats {
   losses: number;
   pushes: number;
   hitRatePct: number;
-  roiPct: number;
+  roiPct: number | null;
   streak: string;
 }
 
@@ -96,7 +131,7 @@ export interface ScoreBand {
   losses: number;
   pushes: number;
   hitRatePct: number;
-  roiPct: number;
+  roiPct: number | null;
 }
 
 export interface FeedbackEntry {
@@ -133,7 +168,7 @@ export interface IntelligenceData {
   decisionQuality: {
     approvedWinRate: number | null;
     deniedWouldHaveWonRate: number | null;
-    approvedVsDeniedRoiDelta: number;
+    approvedVsDeniedRoiDelta: number | null;
     holdsResolvedCount: number;
     holdsTotal: number;
   };
@@ -168,11 +203,45 @@ function safeString(value: unknown, fallback = ''): string {
 }
 
 /**
- * Flat-bet -110 ROI: win = +0.909 units, loss = -1 unit.
- * ROI% = ((wins * 0.909 - losses) / settled_count) * 100
- * Hit rate = wins / (wins + losses) * 100 (exclude pushes)
+ * Profit in units for one decided pick, priced from the real American odds and
+ * the real stake.
+ *
+ * This is the same arithmetic the settled Track Only reporter uses
+ * (`scripts/ops/track-only/stats.ts` -> `profitUnits`), expressed through the
+ * canonical contracts primitive instead of a second odds conversion:
+ * `stake * (decimal - 1)` equals `stake * odds/100` for a positive price and
+ * `stake * 100/|odds|` for a negative one.
+ *
+ * Returns `null` when the pick cannot be priced. A null is never coerced to 0:
+ * "we could not price this" and "this broke even" are different facts, and only
+ * one of them is reassuring.
  */
-function computeStats(rows: Row[]): Stats {
+export function pickProfitUnits(
+  result: 'win' | 'loss' | 'push',
+  odds: unknown,
+  stakeUnits: unknown,
+): number | null {
+  if (typeof stakeUnits !== 'number' || !Number.isFinite(stakeUnits) || stakeUnits <= 0) {
+    return null;
+  }
+  if (!isValidAmericanOdds(odds)) return null;
+  if (result === 'push') return 0;
+  if (result === 'loss') return -stakeUnits;
+  return stakeUnits * (americanToDecimal(odds) - 1);
+}
+
+function round4(value: number): number {
+  return Math.round(value * 10000) / 10000;
+}
+
+/**
+ * Cohort statistics over settlement rows that have been enriched with their
+ * pick's real `odds` and `stake_units`.
+ *
+ * Hit rate excludes pushes. ROI is units-weighted over the picks that could
+ * actually be priced, and is `null` -- not 0 -- when none could.
+ */
+export function computeStats(rows: Row[]): Stats {
   const total = rows.length;
   let wins = 0;
   let losses = 0;
@@ -183,9 +252,14 @@ function computeStats(rows: Row[]): Stats {
   let scoreCount = 0;
   let stakeSum = 0;
   let stakeCount = 0;
+  let unitsStaked = 0;
+  let unitsNet = 0;
+  let priced = 0;
+  let unpriced = 0;
 
   for (const row of rows) {
     const result = safeString(row['result']).toLowerCase();
+    const decided = result === 'win' || result === 'loss' || result === 'push';
     if (result === 'win') wins++;
     else if (result === 'loss') losses++;
     else if (result === 'push') pushes++;
@@ -199,12 +273,22 @@ function computeStats(rows: Row[]): Stats {
 
     const stake = asNumber(row['stake_units']);
     if (stake !== null) { stakeSum += stake; stakeCount++; }
+
+    if (!decided) continue;
+    const profit = pickProfitUnits(result as 'win' | 'loss' | 'push', row['odds'], stake);
+    if (profit === null || stake === null) {
+      unpriced++;
+      continue;
+    }
+    unitsStaked += stake;
+    unitsNet += profit;
+    priced++;
   }
 
   const settled = wins + losses + pushes;
   const hitDenominator = wins + losses;
   const hitRatePct = hitDenominator > 0 ? (wins / hitDenominator) * 100 : 0;
-  const roiPct = settled > 0 ? ((wins * 0.909 - losses) / settled) * 100 : 0;
+  const hasUnits = priced > 0 && unitsStaked > 0;
   const avgClvPct = clvCount > 0 ? clvSum / clvCount : null;
   const avgScore = scoreCount > 0 ? scoreSum / scoreCount : null;
   const avgStakeUnits = stakeCount > 0 ? stakeSum / stakeCount : null;
@@ -216,7 +300,10 @@ function computeStats(rows: Row[]): Stats {
     losses,
     pushes,
     hitRatePct: Math.round(hitRatePct * 10) / 10,
-    roiPct: Math.round(roiPct * 10) / 10,
+    roiPct: hasUnits ? Math.round((unitsNet / unitsStaked) * 1000) / 10 : null,
+    unitsStaked: hasUnits ? round4(unitsStaked) : null,
+    unitsNet: hasUnits ? round4(unitsNet) : null,
+    unpriced,
     avgScore,
     avgClvPct,
     avgStakeUnits,
@@ -224,14 +311,34 @@ function computeStats(rows: Row[]): Stats {
 }
 
 /**
- * Source classification: picks where source contains 'capper' or doesn't
- * contain 'system'/'scanner'/'board' are 'capper'; else 'system'.
+ * Canonical capper attribution: `picks.capper_id`, and nothing else.
+ *
+ * UTV2-1907 established that a pick belongs to a capper when and only when it
+ * carries a `capper_id`. `picks.source` names the intake path (`smart-form`,
+ * `board-construction`, ...), not a person, so a substring match on it invents
+ * an attribution. Returns `null` for a pick with no capper -- which is a fact,
+ * not an "unknown" capper to be given a leaderboard row of its own.
  */
-function classifySource(source: string): 'capper' | 'system' {
-  const s = source.toLowerCase();
-  if (s.includes('capper')) return 'capper';
-  if (s.includes('system') || s.includes('scanner') || s.includes('board')) return 'system';
-  return 'capper';
+export function resolveCapperId(pick: Row): string | null {
+  return asString(pick['capper_id']);
+}
+
+/**
+ * A pick is attributed to a capper iff it carries a canonical `capper_id`.
+ * Everything else is system/board output.
+ */
+export function classifyAttribution(pick: Row): 'capper' | 'system' {
+  return resolveCapperId(pick) === null ? 'system' : 'capper';
+}
+
+/**
+ * Track Only picks are internal evidence. They persist, they grade, and they
+ * settle -- but they were never shown to a member, so they must not appear in
+ * any published or member-facing figure. Excluding them is a truthfulness
+ * requirement, not a display preference.
+ */
+export function isTrackOnlyPick(pick: Row): boolean {
+  return safeString(asRecord(pick['metadata'])['distributionMode']) === 'track-only';
 }
 
 /**
@@ -239,19 +346,6 @@ function classifySource(source: string): 'capper' | 'system' {
  */
 function extractSport(metadata: Row): string {
   return safeString(metadata['sport'] ?? metadata['league'], 'unknown');
-}
-
-/**
- * Extract capper name from metadata or source field.
- */
-function extractCapperName(row: Row): string {
-  const metadata = asRecord(row['metadata']);
-  return (
-    asString(metadata['capper']) ??
-    asString(metadata['capperName']) ??
-    asString(row['source']) ??
-    'unknown'
-  );
 }
 
 /**
@@ -277,22 +371,31 @@ function daysAgoIso(days: number): string {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
+/**
+ * Best or worst named segment by ROI.
+ *
+ * A segment whose ROI is `null` -- nothing in it could be priced -- is not a
+ * candidate at all. Previously an unpriceable segment presented as 0.0% and
+ * could win "worst" against genuinely profitable ones, or "best" against
+ * genuinely losing ones, purely because nothing was measured.
+ */
 function namedInsightFromMap(
   map: Map<string, Row[]>,
   pick: 'best' | 'worst',
 ): NamedInsight {
-  let best: NamedInsight = { name: '—', roiPct: 0, sampleSize: 0 };
+  let best: NamedInsight | null = null;
   for (const [name, rows] of map.entries()) {
     const stats = computeStats(rows);
+    if (stats.roiPct === null) continue;
     if (
-      best.sampleSize === 0 ||
-      (pick === 'best' && stats.roiPct > best.roiPct) ||
-      (pick === 'worst' && stats.roiPct < best.roiPct)
+      best === null ||
+      (pick === 'best' && stats.roiPct > best.roiPct!) ||
+      (pick === 'worst' && stats.roiPct < best.roiPct!)
     ) {
       best = { name, roiPct: stats.roiPct, sampleSize: stats.settled };
     }
   }
-  return best;
+  return best ?? { name: '—', roiPct: null, sampleSize: 0 };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -301,73 +404,26 @@ function namedInsightFromMap(
 
 export async function getPerformanceData(): Promise<PerformanceData | null> {
   try {
-    const client: Client = await getDataClient();
-
-    // Fetch canonical settled records joined with picks (last 30 days is the widest window)
-    // We always fetch the widest window and filter in-memory for sub-windows.
+    const cohort = await getPerformanceCohort();
     const cutoff30d = daysAgoIso(30);
     const todayStart = todayUtcStart();
     const cutoff7d = daysAgoIso(7);
     const mtdStart = monthStartUtc();
-
-    const [settlementResult, heldCountResult] = await Promise.all([
-      client
-        .from('settlement_records')
-        .select('id, pick_id, result, status, payload, created_at, settled_at')
-        .is('corrects_id', null)
-        .eq('status', 'settled')
-        .gte('created_at', cutoff30d),
-      client
-        .from('picks_current_state')
-        .select('id', { count: 'exact', head: true })
-        .eq('review_decision', 'hold')
-        .neq('status', 'settled')
-        .neq('status', 'voided'),
-    ]);
-
-    if (settlementResult.error) {
-      console.error('[analytics] getPerformanceData settlement query error:', settlementResult.error);
-      return null;
-    }
-
-    const settlementRows = (settlementResult.data ?? []) as Row[];
-    const heldCount = heldCountResult.count ?? 0;
-
-    // Collect pick IDs to fetch associated picks data
-    const pickIds = [...new Set(settlementRows.map((r) => asString(r['pick_id'])).filter(Boolean))] as string[];
-
+    const widestStart = cutoff30d < mtdStart ? cutoff30d : mtdStart;
+    const settlementRows: Row[] = cohort.settlements.filter((row) => row.status === 'settled' && row.settled_at >= widestStart);
+    const heldCount = cohort.picks.filter((pick) => pick.review_decision === 'hold' && pick.status !== 'settled' && pick.status !== 'voided').length;
     const picksMap = new Map<string, Row>();
-    if (pickIds.length > 0) {
-      const picksResult = await client
-        .from('picks')
-        .select('id, source, market, selection, stake_units, promotion_score, metadata, status, created_at')
-        .in('id', pickIds);
-      if (!picksResult.error) {
-        for (const row of (picksResult.data ?? []) as Row[]) {
-          const id = asString(row['id']);
-          if (id) picksMap.set(id, row);
-        }
-      }
-    }
-
-    // Fetch picks_current_state for review_decision grouping
     const pcsMap = new Map<string, Row>();
-    if (pickIds.length > 0) {
-      const pcsResult = await client
-        .from('picks_current_state')
-        .select('id, review_decision, settlement_result')
-        .in('id', pickIds);
-      if (!pcsResult.error) {
-        for (const row of (pcsResult.data ?? []) as Row[]) {
-          const id = asString(row['id']);
-          if (id) pcsMap.set(id, row);
-        }
-      }
+    for (const pick of cohort.picks) {
+      if (pick.id) { picksMap.set(pick.id, pick); pcsMap.set(pick.id, pick); }
     }
 
     // Enrich settlement rows with pick data
     interface EnrichedRow extends Row {
       _source: string;
+      _capperId: string | null;
+      _attribution: 'capper' | 'system';
+      _trackOnly: boolean;
       _sport: string;
       _score: number | null;
       _stakeUnits: number | null;
@@ -377,7 +433,12 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
 
     const enriched: EnrichedRow[] = settlementRows.flatMap((sr) => {
       const pickId = asString(sr['pick_id']) ?? '';
-      const pick = picksMap.get(pickId) ?? {};
+      // Governed membership is the driving predicate, not a join enrichment.
+      // picksMap holds only governed rows, so a settlement whose pick is absent
+      // belongs to the fixture corpus and is dropped -- never carried forward as
+      // an `unknown` source with null units, which would silently distort ROI.
+      const pick = resolveGovernedPick(picksMap, pickId);
+      if (pick === null) return [];
       if (isTestFixturePick(pick)) return [];
       const pcs = pcsMap.get(pickId) ?? {};
       const metadata = asRecord(pick['metadata']);
@@ -386,7 +447,13 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
         ...sr,
         promotion_score: asNumber(pick['promotion_score']),
         stake_units: asNumber(pick['stake_units']),
+        // The pick's real price, carried onto the settlement row so computeStats
+        // can weight ROI by units instead of assuming a flat -110 book.
+        odds: asNumber(pick['odds']),
         _source: safeString(pick['source'], 'unknown'),
+        _capperId: resolveCapperId(pick),
+        _attribution: classifyAttribution(pick),
+        _trackOnly: isTrackOnlyPick(pick),
         _sport: extractSport(metadata),
         _score: asNumber(pick['promotion_score']),
         _stakeUnits: asNumber(pick['stake_units']),
@@ -396,24 +463,31 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
       }];
     });
 
+    // Track Only picks are internal evidence and never reached a member, so
+    // every published figure below is computed over `published` -- the cohort
+    // with the Track Only rows removed. The Track Only cohort is reported
+    // separately and by name rather than being silently dropped.
+    const trackOnlyRows = enriched.filter((r) => r._trackOnly);
+    const published = enriched.filter((r) => !r._trackOnly);
+
     // Time-window partitioning
     function inWindow(row: EnrichedRow, from: string): boolean {
-      const ts = safeString(row['created_at']);
+      const ts = row._settledAt ?? '';
       return ts >= from;
     }
 
-    const rowsToday = enriched.filter((r) => inWindow(r, todayStart));
-    const rows7d = enriched.filter((r) => inWindow(r, cutoff7d));
-    const rows30d = enriched; // already filtered to 30d
-    const rowsMtd = enriched.filter((r) => inWindow(r, mtdStart));
+    const rowsToday = published.filter((r) => inWindow(r, todayStart));
+    const rows7d = published.filter((r) => inWindow(r, cutoff7d));
+    const rows30d = published.filter((r) => inWindow(r, cutoff30d));
+    const rowsMtd = published.filter((r) => inWindow(r, mtdStart));
 
     // bySource grouping
-    const capperRows = enriched.filter((r) => classifySource(r._source) === 'capper');
-    const systemRows = enriched.filter((r) => classifySource(r._source) === 'system');
+    const capperRows = published.filter((r) => r._attribution === 'capper');
+    const systemRows = published.filter((r) => r._attribution === 'system');
 
     // bySport grouping
     const sportMap = new Map<string, EnrichedRow[]>();
-    for (const row of enriched) {
+    for (const row of published) {
       const sport = row._sport;
       if (!sportMap.has(sport)) sportMap.set(sport, []);
       sportMap.get(sport)!.push(row);
@@ -421,16 +495,16 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
 
     // byIndividualSource grouping
     const sourceMap = new Map<string, EnrichedRow[]>();
-    for (const row of enriched) {
+    for (const row of published) {
       const src = row._source;
       if (!sourceMap.has(src)) sourceMap.set(src, []);
       sourceMap.get(src)!.push(row);
     }
 
     // decisions grouping
-    const approvedRows = enriched.filter((r) => r._reviewDecision === 'approve');
-    const deniedRows = enriched.filter((r) => r._reviewDecision === 'deny');
-    const heldRows = enriched.filter((r) => r._reviewDecision === 'hold');
+    const approvedRows = published.filter((r) => r._reviewDecision === 'approve');
+    const deniedRows = published.filter((r) => r._reviewDecision === 'deny');
+    const heldRows = published.filter((r) => r._reviewDecision === 'hold');
 
     const bySport: Record<string, Stats> = {};
     for (const [sport, rows] of sportMap.entries()) {
@@ -453,7 +527,42 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
     const strongestSport = namedInsightFromMap(sportMap as Map<string, Row[]>, 'best');
     const weakestSport = namedInsightFromMap(sportMap as Map<string, Row[]>, 'worst');
 
-    const approvedVsDeniedDelta = Math.round((approvedStats.roiPct - deniedStats.roiPct) * 10) / 10;
+    // A delta between two ROIs only exists when both were measured. Treating an
+    // unmeasured cohort as 0 would manufacture a delta out of missing data.
+    const approvedVsDeniedDelta =
+      approvedStats.roiPct !== null && deniedStats.roiPct !== null
+        ? Math.round((approvedStats.roiPct - deniedStats.roiPct) * 10) / 10
+        : null;
+
+    // Per-capper published statistics, partitioned on the canonical capper_id,
+    // plus the Unit Talk aggregate over the same rows. Both come from the same
+    // computeStats over the same cohort, so a per-capper total that disagrees
+    // with the aggregate is a defect in one of them, not two opinions.
+    const capperIdMap = new Map<string, EnrichedRow[]>();
+    for (const row of capperRows) {
+      const id = row._capperId;
+      if (id === null) continue;
+      if (!capperIdMap.has(id)) capperIdMap.set(id, []);
+      capperIdMap.get(id)!.push(row);
+    }
+    const byCapper: Record<string, Stats> = {};
+    for (const [id, rows] of capperIdMap.entries()) byCapper[id] = computeStats(rows);
+
+    const trackOnly = {
+      stats: computeStats(trackOnlyRows),
+      byCapper: (() => {
+        const map = new Map<string, EnrichedRow[]>();
+        for (const row of trackOnlyRows) {
+          const id = row._capperId;
+          if (id === null) continue;
+          if (!map.has(id)) map.set(id, []);
+          map.get(id)!.push(row);
+        }
+        const out: Record<string, Stats> = {};
+        for (const [id, rows] of map.entries()) out[id] = computeStats(rows);
+        return out;
+      })(),
+    };
 
     return {
       windows: {
@@ -468,6 +577,9 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
       },
       bySport,
       byIndividualSource,
+      byCapper,
+      unitTalkAggregate: computeStats(published),
+      trackOnly,
       decisions: {
         approved: approvedStats,
         denied: deniedStats,
@@ -504,64 +616,38 @@ export interface LeaderboardResult {
 
 export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
   try {
-    const client: Client = await getDataClient();
+    const cohort = await getPerformanceCohort();
     const cutoff = daysAgoIso(days);
-
-    const settlementResult = await client
-      .from('settlement_records')
-      .select('id, pick_id, result, payload, created_at')
-      .is('corrects_id', null)
-      .eq('status', 'settled')
-      .gte('created_at', cutoff);
-
-    if (settlementResult.error) {
-      console.error('[analytics] getLeaderboard settlement query error:', settlementResult.error);
-      return { rows: [], error: `settlement query failed: ${asString(settlementResult.error.message) ?? 'unknown'}` };
-    }
-
-    const settlementRows = (settlementResult.data ?? []) as Row[];
-    const pickIds = [...new Set(settlementRows.map((r) => asString(r['pick_id'])).filter(Boolean))] as string[];
-
-    if (pickIds.length === 0) return { rows: [], error: null };
-
-    // Chunk the id list — an unbounded .in() blows the PostgREST URL length
-    // once the settled-pick set grows past a few hundred ids.
+    const settlementRows: Row[] = cohort.settlements.filter((row) => row.status === 'settled' && row.settled_at >= cutoff);
     const picksMap = new Map<string, Row>();
-    const CHUNK = 100;
-    for (let i = 0; i < pickIds.length; i += CHUNK) {
-      const chunk = pickIds.slice(i, i + CHUNK);
-      const picksResult = await client
-        .from('picks')
-        .select('id, source, metadata')
-        .in('id', chunk);
+    for (const pick of cohort.picks) if (pick.id) picksMap.set(pick.id, pick);
 
-      if (picksResult.error) {
-        console.error('[analytics] getLeaderboard picks query error:', picksResult.error);
-        return { rows: [], error: `picks query failed: ${asString(picksResult.error.message) ?? 'unknown'}` };
-      }
-
-      for (const row of (picksResult.data ?? []) as Row[]) {
-        const id = asString(row['id']);
-        if (id) picksMap.set(id, row);
-      }
-    }
-
-    // Group by capper name
+    // Group by the canonical capper_id. A pick with no capper_id has no capper,
+    // so it produces no leaderboard row at all -- it is not filed under a made-up
+    // name derived from its intake `source`. Track Only picks are internal
+    // evidence and are excluded from this published board.
     const capperMap = new Map<string, { rows: Row[]; clvSum: number; clvCount: number }>();
 
     for (const sr of settlementRows) {
       const pickId = asString(sr['pick_id']) ?? '';
-      const pick = picksMap.get(pickId) ?? {};
+      // Same driving predicate as getPerformanceData: picksMap is governed-only,
+      // so an absent pick is a fixture settlement and produces no board row.
+      const pick = resolveGovernedPick(picksMap, pickId);
+      if (pick === null) continue;
       if (isTestFixturePick(pick)) continue;
-      const capperName = extractCapperName(pick);
+      if (isTrackOnlyPick(pick)) continue;
+      const capperId = resolveCapperId(pick);
+      if (capperId === null) continue;
       const payload = asRecord(sr['payload']);
       const clv = asNumber(payload['clvPercent']);
 
-      if (!capperMap.has(capperName)) {
-        capperMap.set(capperName, { rows: [], clvSum: 0, clvCount: 0 });
+      if (!capperMap.has(capperId)) {
+        capperMap.set(capperId, { rows: [], clvSum: 0, clvCount: 0 });
       }
-      const entry = capperMap.get(capperName)!;
-      entry.rows.push(sr);
+      const entry = capperMap.get(capperId)!;
+      // Carry the pick's real price and stake onto the settlement row so the
+      // board's ROI is units-weighted rather than a flat -110 assumption.
+      entry.rows.push({ ...sr, odds: asNumber(pick['odds']), stake_units: asNumber(pick['stake_units']) });
       if (clv !== null) { entry.clvSum += clv; entry.clvCount++; }
     }
 
@@ -577,16 +663,20 @@ export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
         pushes: stats.pushes,
         hitRatePct: stats.hitRatePct,
         roiPct: stats.roiPct,
+        unitsStaked: stats.unitsStaked,
+        unitsNet: stats.unitsNet,
+        unpriced: stats.unpriced,
         avgClvPct,
       });
     }
 
-    // Sort by ROI descending
-    result.sort((a, b) => b.roiPct - a.roiPct);
+    // Sort by ROI descending. An unpriceable capper sorts last rather than
+    // ranking as if they had broken even.
+    result.sort((a, b) => (b.roiPct ?? -Infinity) - (a.roiPct ?? -Infinity));
     return { rows: result, error: null };
   } catch (err) {
     console.error('[analytics] getLeaderboard error:', err);
-    return { rows: [], error: err instanceof Error ? err.message : String(err) };
+    return { rows: [], error: 'Performance records could not be reconciled. Refresh to retry.' };
   }
 }
 
@@ -716,10 +806,10 @@ function computeMiniStats(rows: Row[]): MiniStats {
     else if (result === 'push') pushes++;
   }
 
-  const settled = wins + losses + pushes;
   const hitDenominator = wins + losses;
   const hitRatePct = hitDenominator > 0 ? Math.round((wins / hitDenominator) * 1000) / 10 : 0;
-  const roiPct = settled > 0 ? Math.round(((wins * 0.909 - losses) / settled) * 1000) / 10 : 0;
+  // Units-weighted, from the same real odds and stake the cohort statistics use.
+  const roiPct = computeStats(rows).roiPct;
 
   // Compute streak from rows (assumed ordered by settled_at desc)
   let streakCount = 0;
@@ -799,10 +889,10 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
 
     if (pickIds.length > 0) {
       const [picksResult, pcsResult] = await Promise.all([
-        client
+        applyPickPopulation(client
           .from('picks')
-          .select('id, source, metadata, promotion_score')
-          .in('id', pickIds),
+          .select('id, source, capper_id, odds, stake_units, metadata, promotion_score')
+          .in('id', pickIds), 'governed'),
         client
           .from('picks_current_state')
           .select('id, review_decision, settlement_result')
@@ -826,6 +916,8 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
     // Enrich settlement rows
     interface IntelRow extends Row {
       _source: string;
+      _attribution: 'capper' | 'system';
+      _trackOnly: boolean;
       _sport: string;
       _score: number | null;
       _reviewDecision: string | null;
@@ -833,31 +925,44 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
 
     const enriched: IntelRow[] = settlementRows.flatMap((sr) => {
       const pickId = asString(sr['pick_id']) ?? '';
-      const pick = picksMap.get(pickId) ?? {};
+      // Governed membership is the driving predicate, not a join enrichment.
+      // picksMap holds only governed rows, so a settlement whose pick is absent
+      // belongs to the fixture corpus and is dropped -- never carried forward as
+      // an `unknown` source with null units, which would silently distort ROI.
+      const pick = resolveGovernedPick(picksMap, pickId);
+      if (pick === null) return [];
       if (isTestFixturePick(pick)) return [];
       const pcs = pcsMap.get(pickId) ?? {};
       const metadata = asRecord(pick['metadata']);
       return [{
         ...sr,
+        odds: asNumber(pick['odds']),
+        stake_units: asNumber(pick['stake_units']),
         _source: safeString(pick['source'], 'unknown'),
+        _attribution: classifyAttribution(pick),
+        _trackOnly: isTrackOnlyPick(pick),
         _sport: extractSport(metadata),
         _score: asNumber(pick['promotion_score']),
         _reviewDecision: asString(pcs['review_decision']),
       }];
     });
 
-    // Recent form — overall
-    const overallForm = computeFormWindow(enriched);
+    // Track Only evidence never reached a member, so it is out of every figure
+    // this surface publishes -- including recent form and the score bands.
+    const publishedIntel = enriched.filter((r) => !r._trackOnly);
 
-    // By source classification
-    const capperEnriched = enriched.filter((r) => classifySource(r._source) === 'capper');
-    const systemEnriched = enriched.filter((r) => classifySource(r._source) === 'system');
-    const approvedEnriched = enriched.filter((r) => r._reviewDecision === 'approve');
-    const deniedEnriched = enriched.filter((r) => r._reviewDecision === 'deny');
+    // Recent form — overall
+    const overallForm = computeFormWindow(publishedIntel);
+
+    // Attribution is the canonical capper_id, never a substring of `source`.
+    const capperEnriched = publishedIntel.filter((r) => r._attribution === 'capper');
+    const systemEnriched = publishedIntel.filter((r) => r._attribution === 'system');
+    const approvedEnriched = publishedIntel.filter((r) => r._reviewDecision === 'approve');
+    const deniedEnriched = publishedIntel.filter((r) => r._reviewDecision === 'deny');
 
     // By sport
     const sportGroups = new Map<string, IntelRow[]>();
-    for (const row of enriched) {
+    for (const row of publishedIntel) {
       const sport = row._sport;
       if (!sport || sport === 'unknown') continue;
       if (!sportGroups.has(sport)) sportGroups.set(sport, []);
@@ -866,7 +971,7 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
 
     // By individual source
     const srcGroups = new Map<string, IntelRow[]>();
-    for (const row of enriched) {
+    for (const row of publishedIntel) {
       const src = row._source;
       if (!src || src === 'unknown') continue;
       if (!srcGroups.has(src)) srcGroups.set(src, []);
@@ -885,7 +990,7 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
 
     // Score quality bands — use all settled with a score
     const scoreBands: ScoreBand[] = SCORE_BANDS.map(({ range, min, max }) => {
-      const bandRows = enriched.filter((r) => {
+      const bandRows = publishedIntel.filter((r) => {
         const score = r._score;
         return score !== null && score >= min && score < max;
       });
@@ -902,7 +1007,7 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
     });
 
     // Score vs outcome correlation
-    const scoredRows = enriched.filter((r) => r._score !== null);
+    const scoredRows = publishedIntel.filter((r) => r._score !== null);
     const scoredWins = scoredRows.filter((r) => safeString(r['result']).toLowerCase() === 'win');
     const scoredLosses = scoredRows.filter((r) => safeString(r['result']).toLowerCase() === 'loss');
     const avgScoreWins = scoredWins.length > 0
@@ -949,10 +1054,14 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
 
     const approvedStats = computeStats(approvedEnriched);
     const deniedStats = computeStats(deniedEnriched);
-    const approvedVsDeniedRoiDelta = Math.round((approvedStats.roiPct - deniedStats.roiPct) * 10) / 10;
+    // Only a delta between two measured ROIs is a delta. Null in, null out.
+    const approvedVsDeniedRoiDelta =
+      approvedStats.roiPct !== null && deniedStats.roiPct !== null
+        ? Math.round((approvedStats.roiPct - deniedStats.roiPct) * 10) / 10
+        : null;
 
     // Feedback loop — last 50 settled picks
-    const feedbackLoop: FeedbackEntry[] = enriched.slice(0, 50).map((row) => {
+    const feedbackLoop: FeedbackEntry[] = publishedIntel.slice(0, 50).map((row) => {
       const result = safeString(row['result']).toLowerCase();
       const score = row._score;
       const reviewDecision = row._reviewDecision;
@@ -987,8 +1096,10 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
     });
 
     // Insights
+    // A band whose ROI could not be measured is not the best band.
     let bestScoreBand: { range: string; roiPct: number } | null = null;
     for (const band of scoreBands) {
+      if (band.roiPct === null) continue;
       if (band.total >= 5 && (bestScoreBand === null || band.roiPct > bestScoreBand.roiPct)) {
         bestScoreBand = { range: band.range, roiPct: band.roiPct };
       }
@@ -1001,7 +1112,7 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
     if (correlation === 'negative') {
       warnings.push({ segment: 'Score Quality', message: 'Score-outcome correlation is negative — the promotion score may not be predictive of wins.' });
     }
-    if (approvedStats.roiPct < 0 && approvedSettled.length >= 10) {
+    if (approvedStats.roiPct !== null && approvedStats.roiPct < 0 && approvedSettled.length >= 10) {
       warnings.push({ segment: 'Approved Picks', message: `Approved picks have negative ROI (${approvedStats.roiPct.toFixed(1)}%) over the observed window.` });
     }
     if (deniedWouldHaveWonRate !== null && deniedWouldHaveWonRate > 55) {

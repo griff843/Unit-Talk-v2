@@ -1,0 +1,197 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1936
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1936
+  objective: "Fixture guard never matches: isTestFixturePick tests testRun ===
+    true against 60,206 string-valued rows, so 10,871 fixtures reach the
+    operator queue"
+  acceptance_criteria:
+    - Both guards treat the *presence* of `testRun` as the fixture marker,
+      consistent with the four sibling markers.
+    - "Both tests assert the real production shape (`testRun: '<run-id>'`, a
+      string) and not only the fabricated boolean. A mutation reverting either
+      guard to `=== true` must fail the corresponding test."
+    - ~~The duplicated copy in ~~`~~apps/api/src/alert-query-service.ts~~`~~ is
+      fixed in the same change as the Command Center copy.~~ **Superseded
+      2026-09-18.** No lane type admits both `apps/command-center/**` and
+      `apps/api/src/**`, so `Lane authority` refused the combined change on PR
+      [griff843/Unit-Talk-v2#1609](https://linear.app/unit-talk-v2/review/utv2-1936-presence-check-testrun-so-the-fixture-guard-matches-a-real-c3ec3eb5a587)
+      with `outside_allowed_paths` — correctly, and it is not a required check,
+      so merging through it would have been a bypass. The `apps/api` copy is now
+      [UTV2-1937](https://linear.app/unit-talk-v2/issue/UTV2-1937/appsapi-istestfixturepick-presence-check-testrun-the-duplicated-copy)
+      under a `runtime` lane. Splitting here satisfies a real isolation control,
+      not tracker bookkeeping.
+    - "Runtime proof, read-only against production, shows the caught-fixture
+      count moving 19,365 → 79,571 and the approval-scope operator survivors
+      10,871 → **2,284**. **Corrected 2026-09-18:** this criterion originally
+      said \"→ 0\", which is wrong and unachievable by this change. Measured
+      live, 2,284 rows survive the corrected guard, and every one is
+      `system-pick-scanner` output created 2026-05-12..2026-07-23 — real
+      pre-containment pipeline rows carrying no fixture marker of any kind.
+      Whether stale scanner output belongs in an operator queue is a separate
+      disposition question this issue does not decide. What does hold is that
+      **zero genuine governed picks are excluded**: the governed cohort
+      (`metadata ? 'distributionMode'`) in approval scope is 0 rows, and none of
+      the 7 governed picks repo-wide carries any of the five markers."
+    - No production data is modified. The repair belongs in the classification,
+      never in the data.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Measured against production zfzdnfwdarxucxtaojxm on 2026-09-18, read-only, 0 rows written. Also recorded as evidence on [UTV2-1508](https://linear.app/unit-talk-v2/issue/UTV2-1508/phase-1-product-truth-acceptance-gate-no-fixtures-null-truth-fields-or); the prior canonical owner UTV2-1399 no longer exists in Linear.
+    - >-
+      The defect
+
+      `isTestFixturePick` (`apps/command-center/src/lib/data/client.ts:91`)
+      tests `metadata['testRun'] === true`. In production, **60,206 picks
+      carry** `testRun`**, all 60,206 as a JSON string** (an 8-char run id such
+      as `"00006391"`), and **zero as a boolean**. That clause has never matched
+      a single row.
+
+
+      Its four sibling markers (`proof_issue`, `proof_fixture_id`,
+      `proof_script`, `test_key`) are presence-checked (`!= null`). Only
+      `testRun` is value-checked. That inconsistency is the entire bug.
+    - >-
+      Magnitude
+
+      | Measure | Value |
+
+      | -- | -- |
+
+      | picks total | 107,865 |
+
+      | fixtures caught today | 19,365 |
+
+      | fixtures caught after presence-check | 79,571 |
+
+      | rows recovered | 60,206 |
+
+      | genuine governed picks (`metadata ? 'distributionMode'`) | 7 |
+
+
+      **Operator-facing:** in approval scope (`status = 'awaiting_approval' OR
+      approval_status = 'pending'`) there are 21,871 rows. The guard excludes
+      8,716; **10,871 survive to the operator, of which zero are genuine.** The
+      Command Center review queue is 100% fixtures — contradicting the
+      function's own docstring: *"Test and proof rows … must never contribute to
+      operator-facing production metrics or queues."*
+    - >-
+      Blast radius
+
+      Seven call sites, so this is not only the review queue:
+
+
+      * `apps/command-center/src/lib/data/queues.ts:266`
+
+      * `apps/command-center/src/lib/data/picks.ts:132`
+
+      * `apps/command-center/src/lib/data/analytics.ts:485`, `:713`, `:1005` —
+      performance/analytics figures
+
+
+      A **duplicated copy with the identical defect** lives at
+      `apps/api/src/alert-query-service.ts:261`, polluting alert signal quality.
+      Fixing one copy silently leaves the other.
+    - >-
+      Why it survived review
+
+      Every writer of `testRun` in the repo is a test file, and all write
+      `testRun: RUN_ID` — a string, exactly the production shape. The *only* two
+      places producing `testRun: true` are the two tests of the guards
+      themselves (`client.test.ts:49`, `alert-query-service.test.ts:236`).
+
+
+      Guards and tests agree with each other; neither agrees with any writer.
+      This is a self-consistent artifact that no assertion constrains. **The
+      tests must be corrected to the real shape, or the repair re-passes
+      vacuously.**
+    - >-
+      Safety
+
+      Presence-checking is safe: **no production code path writes** `testRun`
+      **at all**, and none of the 7 genuine governed picks carries the key.
+    - >-
+      Readiness consequences (both provider-independent)
+
+      * `T1_PRODUCTION_READINESS_CONTRACT.md` **Dimension 5** cannot pass while
+      operators are looking at fixtures.
+
+      * **Dimension 4**'s *"suppression always explicit — 100%"* is
+      **unmeasurable** rather than failing: there is no genuine population in
+      approval scope to measure against.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1936/fixture-guard-never-matches-istestfixturepick-tests-testrun-true
+    title: "Fixture guard never matches: isTestFixturePick tests testRun === true
+      against 60,206 string-valued rows, so 10,871 fixtures reach the operator
+      queue"
+    description: |-
+      Measured against production zfzdnfwdarxucxtaojxm on 2026-09-18, read-only, 0 rows written. Also recorded as evidence on [UTV2-1508](https://linear.app/unit-talk-v2/issue/UTV2-1508/phase-1-product-truth-acceptance-gate-no-fixtures-null-truth-fields-or); the prior canonical owner UTV2-1399 no longer exists in Linear.
+
+      ## The defect
+
+      `isTestFixturePick` (`apps/command-center/src/lib/data/client.ts:91`) tests `metadata['testRun'] === true`. In production, **60,206 picks carry** `testRun`**, all 60,206 as a JSON string** (an 8-char run id such as `"00006391"`), and **zero as a boolean**. That clause has never matched a single row.
+
+      Its four sibling markers (`proof_issue`, `proof_fixture_id`, `proof_script`, `test_key`) are presence-checked (`!= null`). Only `testRun` is value-checked. That inconsistency is the entire bug.
+
+      ## Magnitude
+
+      | Measure | Value |
+      | -- | -- |
+      | picks total | 107,865 |
+      | fixtures caught today | 19,365 |
+      | fixtures caught after presence-check | 79,571 |
+      | rows recovered | 60,206 |
+      | genuine governed picks (`metadata ? 'distributionMode'`) | 7 |
+
+      **Operator-facing:** in approval scope (`status = 'awaiting_approval' OR approval_status = 'pending'`) there are 21,871 rows. The guard excludes 8,716; **10,871 survive to the operator, of which zero are genuine.** The Command Center review queue is 100% fixtures — contradicting the function's own docstring: *"Test and proof rows … must never contribute to operator-facing production metrics or queues."*
+
+      ## Blast radius
+
+      Seven call sites, so this is not only the review queue:
+
+      * `apps/command-center/src/lib/data/queues.ts:266`
+      * `apps/command-center/src/lib/data/picks.ts:132`
+      * `apps/command-center/src/lib/data/analytics.ts:485`, `:713`, `:1005` — performance/analytics figures
+
+      A **duplicated copy with the identical defect** lives at `apps/api/src/alert-query-service.ts:261`, polluting alert signal quality. Fixing one copy silently leaves the other.
+
+      ## Why it survived review
+
+      Every writer of `testRun` in the repo is a test file, and all write `testRun: RUN_ID` — a string, exactly the production shape. The *only* two places producing `testRun: true` are the two tests of the guards themselves (`client.test.ts:49`, `alert-query-service.test.ts:236`).
+
+      Guards and tests agree with each other; neither agrees with any writer. This is a self-consistent artifact that no assertion constrains. **The tests must be corrected to the real shape, or the repair re-passes vacuously.**
+
+      ## Acceptance criteria
+
+      1. Both guards treat the *presence* of `testRun` as the fixture marker, consistent with the four sibling markers.
+      2. Both tests assert the real production shape (`testRun: '<run-id>'`, a string) and not only the fabricated boolean. A mutation reverting either guard to `=== true` must fail the corresponding test.
+      3. ~~The duplicated copy in ~~`~~apps/api/src/alert-query-service.ts~~`~~ is fixed in the same change as the Command Center copy.~~ **Superseded 2026-09-18.** No lane type admits both `apps/command-center/**` and `apps/api/src/**`, so `Lane authority` refused the combined change on PR [griff843/Unit-Talk-v2#1609](https://linear.app/unit-talk-v2/review/utv2-1936-presence-check-testrun-so-the-fixture-guard-matches-a-real-c3ec3eb5a587) with `outside_allowed_paths` — correctly, and it is not a required check, so merging through it would have been a bypass. The `apps/api` copy is now [UTV2-1937](https://linear.app/unit-talk-v2/issue/UTV2-1937/appsapi-istestfixturepick-presence-check-testrun-the-duplicated-copy) under a `runtime` lane. Splitting here satisfies a real isolation control, not tracker bookkeeping.
+      4. Runtime proof, read-only against production, shows the caught-fixture count moving 19,365 → 79,571 and the approval-scope operator survivors 10,871 → **2,284**. **Corrected 2026-09-18:** this criterion originally said "→ 0", which is wrong and unachievable by this change. Measured live, 2,284 rows survive the corrected guard, and every one is `system-pick-scanner` output created 2026-05-12..2026-07-23 — real pre-containment pipeline rows carrying no fixture marker of any kind. Whether stale scanner output belongs in an operator queue is a separate disposition question this issue does not decide. What does hold is that **zero genuine governed picks are excluded**: the governed cohort (`metadata ? 'distributionMode'`) in approval scope is 0 rows, and none of the 7 governed picks repo-wide carries any of the five markers.
+      5. No production data is modified. The repair belongs in the classification, never in the data.
+
+      ## Safety
+
+      Presence-checking is safe: **no production code path writes** `testRun` **at all**, and none of the 7 genuine governed picks carries the key.
+
+      ## Readiness consequences (both provider-independent)
+
+      * `T1_PRODUCTION_READINESS_CONTRACT.md` **Dimension 5** cannot pass while operators are looking at fixtures.
+      * **Dimension 4**'s *"suppression always explicit — 100%"* is **unmeasurable** rather than failing: there is no genuine population in approval scope to measure against.
+    captured_at: 2026-09-18T15:39:30.202Z
+    description_sha256: 39fe3c822358205ec41cf1da3b07d4ccae8a958f6af17370249f466292ca0429
+  contract_hash: d258845b51195bad46d15e16071f590413d3dbf260dde36fa14c35c2dd5d3386

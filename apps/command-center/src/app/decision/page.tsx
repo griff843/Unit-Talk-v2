@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { getWorkspaceRoutes } from '@/lib/command-center-nav';
 
 export const metadata = { title: 'Decision — Unit Talk Command Center' };

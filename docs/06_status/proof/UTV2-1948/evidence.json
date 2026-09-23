@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1948",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "8f0e8f53826de67b60412a223b05d2391c207df9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "source": "CI",
+    "verified_sha": "8f0e8f53826de67b60412a223b05d2391c207df9",
+    "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/35478975600",
+    "note": "verify and Writable DB proof succeeded at this exact reviewed source. This bookkeeping correction requires new exact-head CI. Local full verify refused the contained DB target."
+  },
+  "acceptance_gaps": [
+    "Post-deployment authenticated Overview and /exceptions proof remains pending; existing screenshots are before-state only."
+  ]
+}

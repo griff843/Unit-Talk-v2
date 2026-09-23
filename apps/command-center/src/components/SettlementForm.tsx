@@ -3,6 +3,10 @@
 import { useState, useTransition } from 'react';
 import { settlePick } from '@/app/actions/settle';
 import type { OperatorGradingContextInput } from '@/lib/operator-grading-context';
+import {
+  describeRecapOutcome,
+  type HumanCapperRecapResult,
+} from '@/lib/human-capper-recap';
 import { Button } from '@/components/ui/Button';
 
 type ResultType = 'win' | 'loss' | 'push' | 'void';
@@ -31,7 +35,9 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
   const [selected, setSelected] = useState<ResultType | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
+  const [outcome, setOutcome] = useState<
+    { ok: boolean; message: string; recap?: HumanCapperRecapResult } | null
+  >(null);
 
   const [outcomeBasis, setOutcomeBasis] = useState('');
   const [resultSourceUrl, setResultSourceUrl] = useState('');
@@ -73,7 +79,11 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
     startTransition(async () => {
       const res = await settlePick(pickId, selected, attestation);
       if (res.ok) {
-        setOutcome({ ok: true, message: `Settled. Record ID: ${res.settlementRecordId}` });
+        setOutcome({
+          ok: true,
+          message: `Settled. Record ID: ${res.settlementRecordId}`,
+          ...(res.recap === undefined ? {} : { recap: res.recap }),
+        });
       } else {
         setOutcome({ ok: false, message: res.error });
       }
@@ -82,10 +92,34 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
   }
 
   if (outcome?.ok) {
+    // UTV2-1939: settling a delivered human-capper pick has TWO outcomes -- the
+    // record was written, and members either were or were not told. Rendering
+    // one green panel for both is how canary 816a84c7's suppressed recap went
+    // unnoticed. The recap gets its own panel, and a suppressed one is never
+    // green.
+    const recapVerdict = describeRecapOutcome(outcome.recap);
     return (
-      <div className="rounded-md border border-emerald-700 bg-emerald-950 p-4">
-        <p className="text-sm font-medium text-emerald-300">Settlement recorded.</p>
-        <p className="mt-1 font-mono text-xs text-emerald-500">{outcome.message}</p>
+      <div className="flex flex-col gap-3">
+        <div className="rounded-md border border-emerald-700 bg-emerald-950 p-4">
+          <p className="text-sm font-medium text-emerald-300">Settlement recorded.</p>
+          <p className="mt-1 font-mono text-xs text-emerald-500">{outcome.message}</p>
+        </div>
+
+        {recapVerdict.kind === 'posted' && (
+          <div className="rounded-md border border-emerald-700 bg-emerald-950 p-4">
+            <p className="text-sm font-medium text-emerald-300">{recapVerdict.headline}</p>
+          </div>
+        )}
+
+        {(recapVerdict.kind === 'suppressed' || recapVerdict.kind === 'unresolved') && (
+          <div className="rounded-md border border-amber-600 bg-amber-950/60 p-4">
+            <p className="text-sm font-medium text-amber-200">{recapVerdict.headline}</p>
+            <p className="mt-1 text-xs text-amber-300/90">{recapVerdict.detail}</p>
+            <p className="mt-2 font-mono text-[11px] text-amber-400/80">
+              reason: {recapVerdict.reason}
+            </p>
+          </div>
+        )}
       </div>
     );
   }

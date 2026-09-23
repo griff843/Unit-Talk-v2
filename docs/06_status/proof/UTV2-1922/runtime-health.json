@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1922",
+  "branch": "claude/utv2-1922-deploy-promotion-transaction",
+  "head_sha": "3e20a5ffa77f8b1215e029fab01d59dd787617b7",
+  "evaluated_at": "2026-09-16T21:55:00.000Z",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "scope_note": "Deployment wiring only. Measured: 0 files under apps/** or packages/** are changed by this lane, so no running service behaves differently. What changes is the order and failure handling of the production promotion sequence, and what deploy/rollback.sh restores.",
+  "incident_binding": {
+    "failure_run": "35114935565",
+    "positive_control_run": "35119502596",
+    "what_failed": "The promote step ran `docker compose up -d --remove-orphans` against a compose configuration that could not resolve, after the release markers had already been advanced. --remove-orphans reconciled the project and took caddy down; the public edge stayed down, and the host's .unit-talk-release named a release it had never started.",
+    "three_defects_closed": [
+      "the Command Center env file was written from variables the step never mapped, producing empty values with no failure",
+      "the configuration error surfaced only from the mutating command, after it had already removed the edge",
+      "release markers were advanced before activation, so the host's own metadata could not describe what was running"
+    ]
+  },
+  "containment": {
+    "syndicate_machine_case_statement": "byte_identical",
+    "syndicate_lines_added_or_changed": 0,
+    "ingestor_autorun_changed": false,
+    "ingestor_scheduling_changed": false,
+    "worker_autorun_changed": false,
+    "enabled_targets_changed": false,
+    "delivery_kill_switches_changed": false,
+    "caddyfile_changed": false,
+    "caddy_site_blocks_added": 0,
+    "public_hostname_added": false,
+    "migrations_added": 0,
+    "apps_or_packages_files_changed": 0,
+    "secret_values_printed": 0,
+    "secrets_read_or_set": 0,
+    "deploy_dispatched": false
+  },
+  "promotion_transaction": {
+    "order": [
+      "pull the new images (long, non-destructive)",
+      "activate with caddy up",
+      "on a failure whose text proves the EDGE ITSELF is blocking (a port conflict naming 80 or 443, or a container-name conflict naming caddy): docker rm -f caddy, then retry exactly once",
+      "on any other failure, or a failed retry: restore_edge brings caddy back on the release the host still records, then exit 1",
+      "only on success: advance .unit-talk-release, then clear .unit-talk-deploy-inflight"
+    ],
+    "port_conflict_signatures_matched": {
+      "edge_blocking_requires_two_facts": true,
+      "port_conflict": {
+        "outer": [
+          "address already in use",
+          "port is already allocated"
+        ],
+        "inner_port_evidence": [
+          ":80 ",
+          ":80:",
+          ":443 ",
+          ":443:"
+        ]
+      },
+      "name_conflict": {
+        "outer": [
+          "is already in use by container"
+        ],
+        "inner_name_evidence": [
+          "\"/caddy\"",
+          "'/caddy'"
+        ]
+      },
+      "bare_Conflict_no_longer_qualifies": true
+    },
+    "marker_order_preserved_for_existing_gate": "release advanced before inflight cleared, as deploy-config-rollback.test.ts already required",
+    "health_timeout_path": "restores the edge before failing, and passes --command-center to rollback.sh when the Command Center is enabled"
+  },
+  "compose_validation": {
+    "method": "docker compose [--profile command-center] config --services over ssh, read-only",
+    "read_only_validation_sites": 2,
+    "read_only_sites": [
+      "canary job, immediately before the mutation step",
+      "promote job, immediately before the mutation step"
+    ],
+    "mutating_profile_selection_sites": 1,
+    "mutating_site": "promote job, inside the UNIT_TALK_COMMAND_CENTER_ENABLED guard",
+    "asserts": [
+      "caddy is present",
+      "command-center is present when the profile is selected"
+    ],
+    "starts_anything": false
+  },
+  "rollback_repair": {
+    "env_files_restored_before": [
+      ".env.production",
+      ".env.web",
+      ".env.smart-form"
+    ],
+    "env_files_restored_after": [
+      ".env.production",
+      ".env.web",
+      ".env.smart-form",
+      ".env.edge",
+      ".env.command-center"
+    ],
+    "env_edge_reason": ".env.edge carries the three hostnames Caddy needs to parse its own config, so a rollback that skipped it restored an edge configured by the release it was rolling away from",
+    "command_center_absent_snapshot_behaviour": "removed, not left in place -- a stale 0600 file holding the service-role key and an operator credential must not survive a rollback to a release that did not run the Command Center",
+    "release_record_advanced": "after activation only",
+    "default_profile_selection": "unselected; byte-identical to pre-UTV2-1922 behaviour",
+    "closes_known_gap_recorded_by": "docs/06_status/proof/UTV2-1918/runtime-health.json -> known_gap",
+    "profile_selection": "determined on the remote host from the target release's own capability: COMPOSE_PROFILES='command-center' only when --command-center was passed AND the restored snapshot contains .env.command-center"
+  },
+  "static_gates": {
+    "deploy_test_files": [
+      "scripts/ci/deploy-config-rollback.test.ts",
+      "scripts/ci/deploy-parked-mode.test.ts",
+      "scripts/ci/nextjs-deploy-wiring.test.ts"
+    ],
+    "tests_before": 64,
+    "tests_after": 87,
+    "fail": 0,
+    "deploy_check_not_ok": 0,
+    "pnpm_verify_not_ok": 0,
+    "pnpm_verify_exit_code": 1,
+    "pnpm_verify_exit_reason": "ci:assert-staging refuses outside the staging-ci GitHub environment by design; CI's required verify check is the binding authority",
+    "tests_after_note": "43 of the 87 are scripts/ci/nextjs-deploy-wiring.test.ts"
+  },
+  "mutation_battery": {
+    "mutations": 21,
+    "caught": 21,
+    "escaped": 0,
+    "baseline_green_asserted": true,
+    "restore_green_asserted": true,
+    "self_found_vacuities": [
+      "M7 escaped first because a UTV2-1922 comment in the canary body quoted `docker compose up` ahead of the markers, so the ordering assertion's indexOf found the comment. Fixed by executableLines(), which strips comment lines before every ordering assertion.",
+      "M9 escaped first because the behavioural test was vacuous: in parse-fail mode nothing removed caddy, so the edge read as served for free. Fixed by making the stub remove caddy in that mode and asserting the script's own 'edge preserved' output.",
+      "M13 escaped on the first run of the extended battery and is the PM's own defect: the auth-contract fragment was sliced from its comment marker, while the 'require all three' shape lives in the required-value loop ABOVE that marker, so putting the three auth names back into the loop was invisible to the suite. Fixed by starting the extracted fragment at the loop, supplying the non-auth required values in every case, and adding a case that keeps the loop itself non-vacuous. Re-run: 21/21 caught."
+    ],
+    "detail": [
+      "drop CC_ENABLED from the env: mapping -> 'every Command Center value the env file interpolates is mapped into the step'",
+      "remove the fail-closed required-value loop -> 'an empty required Command Center value refuses the write'",
+      "disabled branch stops removing .env.command-center -> 'a disabled Command Center leaves no configuration behind'",
+      "promote job loses its preflight validation step -> 'compose configuration is validated before anything destructive runs'",
+      "validation step moved after the mutation step -> same assertion",
+      "promote advances .unit-talk-release before activation -> 'no mutation step advances the release markers before activation'",
+      "canary advances markers before activation -> same assertion, via executableLines()",
+      "caddy removed unconditionally rather than on a proven conflict -> 'the edge is removed only on a proven port conflict'",
+      "generic failure path no longer calls restore_edge -> 'a configuration failure cannot leave the edge unserved' (behavioural, docker stub)",
+      "rollback.sh drops .env.edge from the restore loop -> 'rollback restores every env file the running stack reads'",
+      "rollback.sh advances the release record before activation -> 'rollback advances the release record only after activation'",
+      "the Command Center auth contract deleted from both env-write steps -> 'deploy-time Command Center auth matches the canonical contract exactly'",
+      "token-only made undeployable again (all three auth values required) -> same assertion (the PM-identified defect, reintroduced)",
+      "the partial-pair refusal dropped -> 'the deploy-time contract and the entrypoint agree, so neither can drift alone'",
+      "rollback selects the profile from the flag alone -> 'rollback to a pre-Command-Center release never selects a profile it cannot run'",
+      "rollback never selects the profile -> 'rollback to a Command Center release restores it and selects the profile'",
+      "rollback selects from the snapshot alone, ignoring intent -> 'without the flag the profile is never selected, snapshot or not'",
+      "bare Conflict restored as an edge conflict -> 'an unrelated container-name conflict cannot remove the public edge'",
+      "port evidence dropped so any port conflict removes the edge -> 'a port conflict on a port the edge does not own cannot remove the edge'",
+      "the stale-caddy-container recovery removed -> 'a stale caddy container by name is still a bounded recovery'",
+      "the bounded recovery disabled -> 'a genuine port conflict is still recovered, and only then'"
+    ]
+  },
+  "behavioural_execution": {
+    "method": "the real PROMOTE_REMOTE heredoc is extracted from .github/workflows/deploy.yml and executed against a bash docker stub in a temporary directory",
+    "cases": [
+      "a successful promotion advances both markers and never touches the edge",
+      "a configuration failure cannot leave the edge unserved",
+      "a failed activation leaves release metadata describing reality",
+      "a genuine port conflict is still recovered",
+      "a port conflict whose retry fails still restores the edge",
+      "the extracted deploy-time auth contract is executed against six configurations: token-only, complete pair, both, username without password, password without username, and no auth at all",
+      "the real rollback remote command is executed against a docker stub that refuses the command-center profile when .env.command-center is absent, with and without --command-center and with and without a snapshot",
+      "an unrelated container-name conflict and a conflict on a port the edge does not own both leave the edge served"
+    ],
+    "non_vacuity_control": "the extracted body is asserted non-empty and to contain docker compose, .unit-talk-release, .unit-talk-deploy-inflight and restore_edge, and the harness is shown able to observe a successful advance"
+  },
+  "scope_expansion": {
+    "file": "deploy/rollback.sh",
+    "admitted_to": ".lane/lanes/runtime.yml",
+    "form": "one exact path, deliberately not a deploy/** glob",
+    "justification": "promotion calls rollback as its recovery path, so the two halves are one transaction and cannot be repaired in separate lanes",
+    "precedents_in_file": [
+      "UTV2-1671",
+      "UTV2-1842",
+      "packages/contracts/src/promotion.ts"
+    ]
+  },
+  "reserved_not_taken": {
+    "deploy_dispatched": false,
+    "containment_changed": false,
+    "command_center_enabled": false,
+    "secrets_read_or_set": 0,
+    "required_operator_inputs": [
+      "a Deploy dispatch (reserved decision 8) is the only way to exercise this change in production"
+    ],
+    "non_secret_success_criterion": "on the next Deploy dispatch, the promote job logs 'resolving compose configuration for tag <sha>' and the step succeeds before any mutation runs; on a failure, the job logs 'edge preserved' and the host's .unit-talk-release still names the previously running release"
+  },
+  "pm_changes_required_round": {
+    "verdict_head": "b6ecf2722baa3683f99c3bf1ff9fcb761471e008",
+    "repairs": {
+      "defect_1_command_center_auth": {
+        "was": "the deploy required COMMAND_CENTER_AUTH_TOKEN, _USERNAME and _PASSWORD all non-empty, which made the canonical token-only production configuration undeployable",
+        "now": "the three values the file always needs (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, UNIT_TALK_CC_API_KEY) stay in the fail-closed loop; auth is validated as a choice -- a token, OR a complete username/password pair -- with a partial pair and no auth at all both refused before anything is written",
+        "canonical_sources_mirrored": [
+          "deploy/production/nextjs-entrypoint.sh",
+          "apps/command-center/src/lib/server-api.ts assertCommandCenterAuthConfig"
+        ],
+        "applied_to_both_env_write_steps": true
+      },
+      "defect_2_rollback_profile": {
+        "was": "--command-center selected the command-center compose profile for any target release, including one with no .env.command-center to run it from",
+        "now": "--command-center is operator INTENT; the profile is selected on the remote host only when the target release's restored snapshot actually contains .env.command-center, and the operator is warned on stderr when a requested flag was not honoured",
+        "without_the_flag": "the profile is never selected, snapshot present or not -- byte-identical to pre-UTV2-1922 behaviour"
+      },
+      "defect_3_caddy_removal": {
+        "was": "any activation failure whose text contained 'Conflict' (among other wide matches) removed the public edge",
+        "now": "the edge is removed only when the failure evidence establishes the edge itself is blocking: a port conflict whose text names port 80 or 443, or a container-name conflict that names the caddy container. Every other failure restores the edge and exits 1.",
+        "bounded_recovery_preserved": "one retry, then restore_edge and exit 1"
+      }
+    },
+    "resynced_onto_main": "37062b2b26d018c84009de88a10ce5c65c0edc39",
+    "implementation_unchanged_by_the_resync": true
+  }
+}

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import YAML from 'yaml';
+import { createTempWorkspace } from '../ops/temp-workspace.js';
 
 const workflowPath = path.join(process.cwd(), '.github', 'workflows', 'ops-p0-containment.yml');
 
@@ -246,7 +246,7 @@ test('the remote script body is itself syntax-checked', () => {
   // A quoted heredoc (<<'REMOTE_SCRIPT') is literal data to the outer shell, so
   // `bash -n` on the run: block never parses the remote script — the highest-risk
   // code in this workflow. It must be extracted and checked on its own.
-  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'p0-remote-')), 'remote.sh');
+  const file = path.join(createTempWorkspace('p0-remote-'), 'remote.sh');
   fs.writeFileSync(file, remote);
   const result = spawnSync('bash', ['-n', file], { encoding: 'utf8' });
   assert.strictEqual(result.status, 0, `remote script is not valid shell:\n${result.stderr}`);
@@ -502,7 +502,7 @@ test('every run block is valid shell', () => {
 
   for (const [index, step] of steps.entries()) {
     if (!step.run) continue;
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'p0-contain-')), `step-${index}.sh`);
+    const file = path.join(createTempWorkspace('p0-contain-'), `step-${index}.sh`);
     fs.writeFileSync(file, step.run);
     const result = spawnSync('bash', ['-n', file], { encoding: 'utf8' });
     assert.strictEqual(

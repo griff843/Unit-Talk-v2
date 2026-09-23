@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import type { AlignmentRegistry } from './system-alignment-check.js';
+import { createTempWorkspace } from './temp-workspace.js';
 
 const requireFromTest = createRequire(import.meta.url);
 const {
@@ -17,7 +17,7 @@ const {
 } = requireFromTest('./system-alignment-check.ts') as typeof import('./system-alignment-check.js');
 
 function tempRoot(): string {
-  return mkdtempSync(join(tmpdir(), 'utv2-alignment-'));
+  return createTempWorkspace('utv2-alignment-');
 }
 
 function write(root: string, relativePath: string, content: string): string {

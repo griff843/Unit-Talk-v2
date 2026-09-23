@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1949",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1949-tmp-workspace-leak",
+  "branch": "claude/utv2-1949-tmp-workspace-leak",
+  "base_branch": "main",
+  "commit_sha": "47868a7e701b6bf294a37d152fdb5b883b2e4506",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1623",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1949.yml",
+    "apps/ingestor/src/provider-offer-replay.test.ts",
+    "docs/06_status/lanes/UTV2-1949.json",
+    "docs/06_status/proof/UTV2-1949/diff-summary.md",
+    "docs/06_status/proof/UTV2-1949/evidence.json",
+    "docs/06_status/proof/UTV2-1949/verification.md",
+    "package.json",
+    "scripts/audits/utv2-1382-scoring-validation.test.ts",
+    "scripts/ci/direct-main-push-guard.test.ts",
+    "scripts/ci/nextjs-deploy-wiring.test.ts",
+    "scripts/ci/ops-api-diagnose-workflow.test.ts",
+    "scripts/ci/ops-p0-containment-workflow.test.ts",
+    "scripts/ci/temp-workspace-allocations.ts",
+    "scripts/ci/temp-workspace-cleanup-guard.test.ts",
+    "scripts/ci/workflow-production-credential-guard.test.ts",
+    "scripts/edge-fallback-report/run-edge-fallback-report.test.ts",
+    "scripts/ops/automation-coverage-check.test.ts",
+    "scripts/ops/delegation-state.test.ts",
+    "scripts/ops/executable-wiring.test.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/proof-check.test.ts",
+    "scripts/ops/proof-repair.test.ts",
+    "scripts/ops/system-alignment-check.test.ts",
+    "scripts/ops/temp-workspace.test.ts",
+    "scripts/ops/temp-workspace.ts",
+    "scripts/ops/update-record.test.ts",
+    "scripts/proof-check.test.ts",
+    "scripts/ut-cli/ut-cli.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1949/diff-summary.md",
+    "docs/06_status/proof/UTV2-1949/evidence.json",
+    "docs/06_status/proof/UTV2-1949/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-20T00:41:55.439Z",
+  "heartbeat_at": "2026-09-20T06:36:11.740Z",
+  "closed_at": "2026-09-20T06:36:11.740Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-20T06:36:09.827Z",
+      "verdict": "pass",
+      "merge_sha": "47868a7e701b6bf294a37d152fdb5b883b2e4506",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1949-tmp-workspace-leak",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

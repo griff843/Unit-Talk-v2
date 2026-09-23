@@ -1,6 +1,6 @@
 # Internal Pick Approval Protocol
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Active  
 **Milestone:** M4 — Internal Evidence-Flow Proof  
 **Governing issue:** UTV2-1340  
@@ -11,6 +11,8 @@
 ## Purpose
 
 This protocol defines the non-public internal process by which a pick advances from the `awaiting_approval` lifecycle state to a live delivery attempt. It applies exclusively to the internal evidence-flow path and explicitly prohibits any public (Discord, external webhook, API consumer) delivery until Phase 9 governing conditions are met.
+
+**It governs system-generated and automated picks only.** A pick that never enters `awaiting_approval` is outside this protocol entirely — see Applicability below.
 
 ---
 
@@ -27,6 +29,41 @@ This protocol does NOT govern:
 - P3/P4/P5 picks (not certified)
 - CLV or ROI certification (not in scope)
 - External consumer access
+- **Authorized human capper submissions** — see Applicability below
+
+---
+
+## Applicability
+
+`awaiting_approval` is the Phase 7A governance brake for **non-human producers**. That is the
+canonical contract's own wording (`packages/contracts/src/picks.ts`), and the brake's membership is
+enumerated mechanically in `GOVERNANCE_BRAKE_SOURCES` (`apps/api/src/distribution-service.ts`):
+
+| Pick source | Enters `awaiting_approval` | Governed by this protocol |
+|---|---|---|
+| `system-pick-scanner` | yes | yes |
+| `alert-agent` | yes | yes |
+| `model-driven` | yes | yes |
+| `board-construction` | yes | yes |
+| an authorized human capper's submission | **no** | **no** |
+
+Three rules follow, and none of them is a new gate — each states what the shipped code already does.
+
+1. **Approval is reserved for system-generated and automated picks.** `isGovernanceBrakeSource()`
+   is keyed on `source` alone. A human capper's submission is not a member of that set and is not
+   braked. `automated-write-boundary.ts` asserts at module load that every source it classifies as
+   automated is a member, so the two mechanisms cannot silently drift apart.
+
+2. **Delivery eligibility is not a reason to require approval.** A human capper submission must not
+   be routed into `awaiting_approval` merely because it is eligible for delivery. Eligibility and
+   approval are independent; conflating them would park a pick this protocol was never written to
+   govern, in a state whose only exits are `queued` and `voided`.
+
+3. **A fail-closed refusal is not "awaiting approval".** If the official-picks delivery target is
+   killed, disabled, unmapped or malformed, delivery must fail closed with zero member delivery and
+   the pick must stay where it is. That refusal must never be reinterpreted as, recorded as, or
+   surfaced to an operator as a pick needing approval. A refusal means the system could not prove
+   where the pick belonged; approval would assert a judgement no one made.
 
 ---
 
@@ -124,7 +161,7 @@ Internal evidence-flow picks MUST be isolated from public delivery paths. This i
 
 1. **Outbox routing:** Internal picks receive `delivery_channel = 'internal'` in the outbox row. The delivery adapter MUST NOT route `internal` channel rows to Discord, webhooks, or any external consumer.
 
-2. **Governance brake:** Phase 7A `awaiting_approval` brake remains active. No autonomous pick advancement past `awaiting_approval` without explicit PM or orchestrator gate passage.
+2. **Governance brake:** Phase 7A `awaiting_approval` brake remains active for the `GOVERNANCE_BRAKE_SOURCES` enumerated under Applicability. No autonomous pick advancement past `awaiting_approval` without explicit PM or orchestrator gate passage. The brake does not apply to an authorized human capper's submission, which never enters that state.
 
 3. **Proof bundle:** Each internal evidence-flow run produces a `docs/06_status/proof/internal/<timestamp>/` bundle. The bundle must confirm `external_delivery: false` for every attempt.
 

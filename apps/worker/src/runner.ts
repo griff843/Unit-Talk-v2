@@ -1,5 +1,10 @@
 import type { OutboxRecord, RepositoryBundle, SystemRunRecord } from '@unit-talk/db';
-import { isTargetEnabled, resolveTargetRegistry, type TargetRegistryEntry } from '@unit-talk/contracts';
+import {
+  isTargetEnabled,
+  parseGovernedTargetFromDeliveryTarget,
+  resolveTargetRegistry,
+  type TargetRegistryEntry,
+} from '@unit-talk/contracts';
 import {
   queueHealthLogFields,
   recordQueueHealthMetrics,
@@ -241,9 +246,39 @@ export async function runWorkerCycles(
         await completeCircuitRun(options.repositories, runId, target, 'cooldown-expired');
       }
 
-      const promotionTarget = target.startsWith('discord:') ? target.slice('discord:'.length) : null;
-      const isGoverned = promotionTarget === 'best-bets' || promotionTarget === 'trader-insights' || promotionTarget === 'exclusive-insights';
-      if (isGoverned && !isTargetEnabled(promotionTarget, registry)) {
+      // UTV2-1923 WORKER_GOVERNED_TARGET_DERIVATION_GUARD_START
+      // Two controls follow, and they used to share ONE gate: three hardcoded
+      // string comparisons against the promotion target names. That was wrong
+      // in two different ways, and they are fixed separately because they are
+      // different questions.
+      //
+      // 1. The REGISTRY check asks "is this named destination enabled?". Only
+      //    a destination the registry knows about can answer it, so it stays
+      //    scoped to the canonical governed-target list -- now derived from
+      //    @unit-talk/contracts rather than written out here, so adding a
+      //    governed destination there brings this control with it and cannot
+      //    forget one.
+      //
+      // 2. The KILL SWITCH asks "has an operator stopped delivery here?". That
+      //    question is meaningful for EVERY Discord destination, and gating it
+      //    on the promotion-name list meant `discord:<channelId>` -- a legal,
+      //    reachable value of `UNIT_TALK_DISTRIBUTION_TARGETS` -- was delivered
+      //    with the kill switch never consulted. A live member-facing channel
+      //    id would have had no stop control at all. It is now consulted for
+      //    every `discord:` target, and `isKilled` is fail-closed for a target
+      //    it has no row for, so an unrecognised destination is stopped rather
+      //    than waved through.
+      //
+      //    `discord:canary` is the one exemption: `resolveDeliveryTarget`
+      //    rewrites every local-env delivery to it precisely so nothing can
+      //    reach a live lane, and it is not a member-facing destination.
+      const governedTarget = parseGovernedTargetFromDeliveryTarget(target);
+      const killSwitchTarget =
+        target.startsWith('discord:') && target !== 'discord:canary'
+          ? target.slice('discord:'.length)
+          : null;
+      // UTV2-1923 WORKER_GOVERNED_TARGET_DERIVATION_GUARD_END
+      if (governedTarget !== null && !isTargetEnabled(governedTarget, registry)) {
         const disabledResult: WorkerProcessTargetDisabledResult = {
           status: 'target-disabled',
           target,
@@ -260,8 +295,8 @@ export async function runWorkerCycles(
       // this check rather than fail-closing, to avoid silently breaking pre-existing
       // callers. `DeliveryKillSwitchRepository.isKilled()` itself is fail-closed for
       // any target it does know about (missing row or read error → true).
-      if (isGoverned && options.repositories.killSwitch) {
-        const killed = await options.repositories.killSwitch.isKilled(promotionTarget);
+      if (killSwitchTarget !== null && options.repositories.killSwitch) {
+        const killed = await options.repositories.killSwitch.isKilled(killSwitchTarget);
         if (killed) {
           const killSwitchResult: WorkerProcessKillSwitchEngagedResult = {
             status: 'kill-switch-engaged',

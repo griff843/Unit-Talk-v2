@@ -3,12 +3,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { before, after } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   RuntimeConfigError,
   assertProductionRuntimeConfig,
   createRuntimeConfigFailureLogFields,
   loadEnvironment,
   parseSyndicateMachineMode,
+  requireSupabaseEnvironment,
   type AppEnv,
 } from './env.js';
 
@@ -393,3 +395,204 @@ function makeProductionEnv(): AppEnv {
     UNIT_TALK_DISCORD_BOT_RUNTIME_MODE: 'fail_closed',
   };
 }
+
+// ---------------------------------------------------------------------------
+// UTV2-1923 -- Command Center production configuration
+//
+// Production Command Center could not start from the env file `deploy.yml`
+// writes for it. The failure was serial and silent: the container reported one
+// missing variable, and on being handed it reported the next. Six values were
+// demanded in total, and the surface reads none of them.
+//
+// Five were workspace metadata (`UNIT_TALK_LEGACY_WORKSPACE`, `LINEAR_TEAM_*`,
+// `NOTION_WORKSPACE_NAME`, `SLACK_WORKSPACE_NAME`) that no runtime service
+// reads. The sixth was `SUPABASE_ANON_KEY`, demanded by the credential check
+// even for a caller that opens the connection with the service-role key --
+// while `deploy/production/nextjs-entrypoint.sh` states the opposite intent in
+// its own comment: "the anon key is not a substitute and is not used".
+// ---------------------------------------------------------------------------
+
+const COMMAND_CENTER_ENV_ISOLATION = [
+  'UNIT_TALK_LEGACY_WORKSPACE',
+  'LINEAR_TEAM_KEY',
+  'LINEAR_TEAM_NAME',
+  'NOTION_WORKSPACE_NAME',
+  'SLACK_WORKSPACE_NAME',
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+];
+
+/**
+ * Runs `body` with process.env holding exactly `values` for the keys above and
+ * nothing else, then restores. The repo's own local.env is commonly sourced in
+ * the shell that runs these tests, so without this a real
+ * `UNIT_TALK_LEGACY_WORKSPACE` leaks in and the assertion passes for the wrong
+ * reason -- the same ambient-env trap the header of this file describes.
+ */
+function withOnly(values: Record<string, string>, body: () => void): void {
+  const saved: Record<string, string | undefined> = {};
+  for (const key of COMMAND_CENTER_ENV_ISOLATION) {
+    saved[key] = process.env[key];
+    delete process.env[key];
+  }
+  for (const [key, value] of Object.entries(values)) {
+    process.env[key] = value;
+  }
+
+  try {
+    body();
+  } finally {
+    for (const key of COMMAND_CENTER_ENV_ISOLATION) {
+      const value = saved[key];
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    for (const key of Object.keys(values)) {
+      if (!COMMAND_CENTER_ENV_ISOLATION.includes(key)) {
+        delete process.env[key];
+      }
+    }
+  }
+}
+
+function emptyRoot(label: string): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), `unit-talk-env-${label}-`));
+}
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
+/**
+ * The keys `deploy.yml` actually writes into `.env.command-center`, read out of
+ * the workflow rather than restated here.
+ *
+ * Restating them would make this test agree with itself and prove nothing: the
+ * defect was precisely that the file the workflow writes and the file the app
+ * needs had drifted apart. Parsing the workflow is what couples the two, so
+ * deleting a key from the printf below breaks this test.
+ */
+function commandCenterEnvKeysWrittenByDeployWorkflow(): string[] {
+  const workflow = fs.readFileSync(
+    path.join(REPO_ROOT, '.github', 'workflows', 'deploy.yml'),
+    'utf8',
+  );
+
+  const blocks = workflow
+    .split("cat > '$DEPLOY_PATH/.env.command-center'")
+    .slice(0, -1)
+    .map((chunk) => chunk.slice(chunk.lastIndexOf("printf '%s\\n' \\")));
+
+  assert.ok(
+    blocks.length >= 2,
+    'expected deploy.yml to write .env.command-center in both the canary and promote jobs',
+  );
+
+  const keySets = blocks.map((block) =>
+    [...block.matchAll(/^\s*"([A-Z0-9_]+)=/gm)].map((match) => match[1] as string),
+  );
+
+  // The canary and promote writers must not drift apart either -- that exact
+  // divergence between two steps of one job was the 2026-09-16 edge outage.
+  for (const keys of keySets) {
+    assert.deepEqual(keys, keySets[0]);
+  }
+
+  return keySets[0] as string[];
+}
+
+test('the env file deploy.yml writes is sufficient for the Command Center data client', () => {
+  const keys = commandCenterEnvKeysWrittenByDeployWorkflow();
+  const rootDir = emptyRoot('cc-deploy-contract');
+
+  // Every key the workflow writes, and nothing else. A container has no
+  // local.env/.env/.env.example at its workspace root, so an empty rootDir is
+  // the honest fixture: whatever the file does not carry does not exist.
+  const written: Record<string, string> = {};
+  for (const key of keys) {
+    written[key] = key === 'SUPABASE_URL' ? 'https://example.supabase.co' : `value-for-${key}`;
+  }
+
+  try {
+    withOnly(written, () => {
+      const env = loadEnvironment(rootDir);
+      const connection = requireSupabaseEnvironment(env, 'service_role');
+
+      assert.equal(connection.role, 'service_role');
+      assert.equal(connection.url, 'https://example.supabase.co');
+      assert.equal(connection.key, written['SUPABASE_SERVICE_ROLE_KEY']);
+    });
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+
+  // The contract this test defends is that the workflow need not ship the anon
+  // key to this surface. If that key is ever added to the writer, the entrypoint
+  // comment saying it "is not used" has gone stale and both must be revisited.
+  assert.ok(
+    !keys.includes('SUPABASE_ANON_KEY'),
+    'Command Center opens its connection with the service-role key; do not distribute the anon key to it',
+  );
+});
+
+test('loadEnvironment does not demand workspace metadata no runtime service reads', () => {
+  const rootDir = emptyRoot('cc-workspace-metadata');
+
+  try {
+    withOnly(
+      {
+        SUPABASE_URL: 'https://example.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+      },
+      () => {
+        const env = loadEnvironment(rootDir);
+
+        assert.equal(env.UNIT_TALK_LEGACY_WORKSPACE, undefined);
+        assert.equal(env.LINEAR_TEAM_KEY, undefined);
+        assert.equal(env.LINEAR_TEAM_NAME, undefined);
+        assert.equal(env.NOTION_WORKSPACE_NAME, undefined);
+        assert.equal(env.SLACK_WORKSPACE_NAME, undefined);
+      },
+    );
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});
+
+test('requireSupabaseEnvironment still fails closed on the credential each role uses', () => {
+  const base: AppEnv = makeProductionEnv();
+
+  // Service role: missing service-role key refuses, and the anon key present
+  // alongside it is not accepted as a substitute.
+  assert.throws(
+    () =>
+      requireSupabaseEnvironment(
+        { ...base, SUPABASE_SERVICE_ROLE_KEY: undefined },
+        'service_role',
+      ),
+    /SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required/,
+  );
+
+  // Anon role: unchanged, and the service-role key is likewise no substitute.
+  assert.throws(
+    () => requireSupabaseEnvironment({ ...base, SUPABASE_ANON_KEY: undefined }, 'anon'),
+    /SUPABASE_URL and SUPABASE_ANON_KEY are required/,
+  );
+
+  // A missing URL refuses for either role.
+  for (const role of ['anon', 'service_role'] as const) {
+    assert.throws(
+      () => requireSupabaseEnvironment({ ...base, SUPABASE_URL: undefined }, role),
+      /SUPABASE_URL and SUPABASE_/,
+    );
+  }
+
+  // Each role returns its own key, never the other's.
+  assert.equal(requireSupabaseEnvironment(base, 'anon').key, base.SUPABASE_ANON_KEY);
+  assert.equal(
+    requireSupabaseEnvironment(base, 'service_role').key,
+    base.SUPABASE_SERVICE_ROLE_KEY,
+  );
+});

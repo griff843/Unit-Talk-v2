@@ -4,13 +4,27 @@ export interface AppEnv {
   NODE_ENV: 'development' | 'test' | 'production';
   UNIT_TALK_APP_ENV: 'local' | 'ci' | 'staging' | 'production';
   UNIT_TALK_ACTIVE_WORKSPACE: string;
-  UNIT_TALK_LEGACY_WORKSPACE: string;
+  // UTV2-1923: workspace metadata naming the tracker/wiki/chat this repository
+  // is administered from. No runtime service reads any of these five -- they
+  // are used only by `scripts/` tooling, which reads them from the developer
+  // workspace and validates them there (`scripts/validate-env.mjs`, still
+  // unchanged and still requiring them of a developer/CI checkout).
+  //
+  // They were nonetheless `requireEnv` in the runtime loader below, so every
+  // containerised service had to be handed five values it never reads. Two
+  // callers already fabricated them to get past it --
+  // `apps/smart-form/playwright.config.ts` literally supplies
+  // 'unused-by-smart-form-e2e' -- and Command Center, whose production env file
+  // does not carry them, could not start at all. A required value that every
+  // caller satisfies with a fake string validates nothing; it only decides who
+  // is forced to invent one.
+  UNIT_TALK_LEGACY_WORKSPACE?: string | undefined;
   LINEAR_API_TOKEN?: string | undefined;
   LINEAR_TEAM_ID?: string | undefined;
-  LINEAR_TEAM_KEY: string;
-  LINEAR_TEAM_NAME: string;
-  NOTION_WORKSPACE_NAME: string;
-  SLACK_WORKSPACE_NAME: string;
+  LINEAR_TEAM_KEY?: string | undefined;
+  LINEAR_TEAM_NAME?: string | undefined;
+  NOTION_WORKSPACE_NAME?: string | undefined;
+  SLACK_WORKSPACE_NAME?: string | undefined;
   SUPABASE_PROJECT_REF?: string | undefined;
   SUPABASE_URL?: string | undefined;
   SUPABASE_ANON_KEY?: string | undefined;
@@ -201,13 +215,13 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     NODE_ENV: normalizeNodeEnv(readEnvValue('NODE_ENV', merged)),
     UNIT_TALK_APP_ENV: normalizeAppEnv(readEnvValue('UNIT_TALK_APP_ENV', merged)),
     UNIT_TALK_ACTIVE_WORKSPACE: optionalEnv('UNIT_TALK_ACTIVE_WORKSPACE', merged) ?? 'unit-talk-v2',
-    UNIT_TALK_LEGACY_WORKSPACE: requireEnv('UNIT_TALK_LEGACY_WORKSPACE', merged),
+    UNIT_TALK_LEGACY_WORKSPACE: optionalEnv('UNIT_TALK_LEGACY_WORKSPACE', merged),
     LINEAR_API_TOKEN: optionalEnv('LINEAR_API_TOKEN', merged),
     LINEAR_TEAM_ID: optionalEnv('LINEAR_TEAM_ID', merged),
-    LINEAR_TEAM_KEY: requireEnv('LINEAR_TEAM_KEY', merged),
-    LINEAR_TEAM_NAME: requireEnv('LINEAR_TEAM_NAME', merged),
-    NOTION_WORKSPACE_NAME: requireEnv('NOTION_WORKSPACE_NAME', merged),
-    SLACK_WORKSPACE_NAME: requireEnv('SLACK_WORKSPACE_NAME', merged),
+    LINEAR_TEAM_KEY: optionalEnv('LINEAR_TEAM_KEY', merged),
+    LINEAR_TEAM_NAME: optionalEnv('LINEAR_TEAM_NAME', merged),
+    NOTION_WORKSPACE_NAME: optionalEnv('NOTION_WORKSPACE_NAME', merged),
+    SLACK_WORKSPACE_NAME: optionalEnv('SLACK_WORKSPACE_NAME', merged),
     SUPABASE_PROJECT_REF: optionalEnv('SUPABASE_PROJECT_REF', merged),
     SUPABASE_URL: optionalEnv('SUPABASE_URL', merged),
     SUPABASE_ANON_KEY: optionalEnv('SUPABASE_ANON_KEY', merged),
@@ -344,18 +358,36 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
   return env;
 }
 
-export function requireSupabaseEnvironment(env: AppEnv) {
-  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY || !env.SUPABASE_SERVICE_ROLE_KEY) {
+export type SupabaseRole = 'anon' | 'service_role';
+
+/**
+ * The credential a caller will actually open the connection with, and the
+ * assertion that it is present.
+ *
+ * UTV2-1923: this demanded all three values regardless of which one the caller
+ * would use. A service-role consumer was therefore refused for lacking an anon
+ * key it never reads -- which is what stopped Command Center starting from its
+ * canonical production env file. `deploy/production/nextjs-entrypoint.sh` states
+ * the intent this now matches: "Both halves are required; the anon key is not a
+ * substitute and is not used."
+ *
+ * This narrows *which* credential is demanded, never *whether* one is. Each role
+ * still fails closed on a missing URL or a missing key of its own role, and the
+ * key for a role is never substituted by the key for the other. The effect is
+ * that a service-role-only surface is no longer handed an anon key it has no use
+ * for -- a smaller secret distribution, not a weaker check.
+ */
+export function requireSupabaseEnvironment(env: AppEnv, role: SupabaseRole) {
+  const key = role === 'service_role' ? env.SUPABASE_SERVICE_ROLE_KEY : env.SUPABASE_ANON_KEY;
+  const keyName = role === 'service_role' ? 'SUPABASE_SERVICE_ROLE_KEY' : 'SUPABASE_ANON_KEY';
+
+  if (!env.SUPABASE_URL || !key) {
     throw new Error(
-      'SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SERVICE_ROLE_KEY are required for Supabase access.',
+      `SUPABASE_URL and ${keyName} are required for Supabase ${role} access.`,
     );
   }
 
-  return {
-    url: env.SUPABASE_URL,
-    anonKey: env.SUPABASE_ANON_KEY,
-    serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
-  };
+  return { url: env.SUPABASE_URL, key, role };
 }
 
 export type RuntimeMode = 'fail_open' | 'fail_closed';
@@ -685,15 +717,6 @@ function readEnvString(env: AppEnv, key: string) {
   const value = (env as unknown as Record<string, string | string[] | undefined>)[key];
   if (Array.isArray(value)) {
     return value.length > 0 ? value.join(',') : undefined;
-  }
-
-  return value;
-}
-
-function requireEnv(key: string, merged: Map<string, string>) {
-  const value = readEnvValue(key, merged);
-  if (!value) {
-    throw new Error(`Missing required env var: ${key}`);
   }
 
   return value;

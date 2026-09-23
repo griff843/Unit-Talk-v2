@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { RecapStatusPanel } from '@/components/RecapStatusPanel';
 import { Card } from '@/components/ui/Card';
 import { DegradedState } from '@/components/ui';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
@@ -6,9 +8,10 @@ import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
-import { describeOperatorFailure } from '@/lib/describe-error';
+import { isPickAlreadySettled } from '@/lib/settlement-state';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
+import { renderClvSummary } from '@/lib/clv-summary';
 import { getPickDetail } from '@/lib/data';
 import { getPickLineMovement } from '@/lib/data/odds-intel';
 import { LineMovementChart } from '@/components/LineMovementChart';
@@ -212,32 +215,6 @@ function summarizeSettlementContext(detail: PickDetailViewResponse) {
   return latest.result ?? latest.status;
 }
 
-function renderClvSummary(settlement: SettlementRow | undefined) {
-  if (!settlement) {
-    return 'missing';
-  }
-
-  if (settlement.clvPercent != null) {
-    const lineVerdict =
-      settlement.beatsClosingLine == null
-        ? 'CLV present'
-        : settlement.beatsClosingLine
-          ? 'beats line'
-          : 'behind line';
-    const fallbackSuffix = settlement.isOpeningLineFallback ? ' via opening fallback' : '';
-    return `${settlement.clvPercent.toFixed(2)}% (${lineVerdict}${fallbackSuffix})`;
-  }
-
-  if (settlement.clvUnavailableReason) {
-    return `missing (${settlement.clvUnavailableReason})`;
-  }
-
-  if (settlement.clvStatus) {
-    return settlement.clvStatus;
-  }
-
-  return settlement.hasClv ? 'present' : 'missing';
-}
 
 export async function generateMetadata({ params }: PickDetailPageProps) {
   const { id } = await params;
@@ -250,11 +227,12 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   try {
     detail = await getPickDetail(pickId) as PickDetailViewResponse | null;
   } catch (error) {
+    console.error('Pick detail unavailable', error);
     return (
       <DegradedState
         severity="critical"
         title="Pick detail unavailable"
-        causes={[describeOperatorFailure(error, 'Canonical pick history could not be loaded. Governed actions are disabled.')]}
+        causes={['Canonical pick history could not be loaded. Try again shortly. Governed actions are disabled.']}
         action={{ label: 'Active Picks', href: '/picks' }}
       />
     );
@@ -267,6 +245,12 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const { pick } = detail;
   const allowedActions = getAllowedActions(pick.status);
   const corrections = detail.settlements.filter((settlement) => settlement.correctsId != null);
+  // Read from the settlement plane, not from the lifecycle status. A Track Only
+  // pick is never `posted`, so it can never be advanced to `settled` and stays
+  // `validated` while carrying a real settlement record — the normal internal
+  // case, not an edge case. `/settlement` has always derived this; this page
+  // passed a literal `false` and told the operator a settled pick was unsettled.
+  const alreadySettled = isPickAlreadySettled(pick.status, detail.settlements.length);
   const promotionScores = readObject(pick.metadata['promotionScores']);
   const domainAnalysis = readObject(pick.metadata['domainAnalysis']);
   const deviggingResult = readObject(pick.metadata['deviggingResult']);
@@ -361,13 +345,30 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </div>
       </Card>
 
+      <Card title="Distribution mode">
+        <p className="text-sm text-gray-100">
+          {pick.metadata['distributionMode'] === 'track-only'
+            ? 'Track Only'
+            : pick.metadata['distributionMode'] === 'delivery-eligible'
+              ? 'Delivery eligible'
+              : 'Distribution mode not recorded'}
+        </p>
+        {pick.metadata['distributionMode'] === 'track-only' && (
+          <p className="mt-2 text-sm text-gray-400">
+            {detail.outboxRows.length === 0 && detail.receipts.length === 0
+              ? 'Verified: no outbox row, no receipt, no delivery attempt.'
+              : 'Unexpected delivery records exist for this Track Only pick. Inspect the delivery history below.'}
+          </p>
+        )}
+      </Card>
+
       <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
         {allowedActions.length === 0 ? (
           <p className="text-sm text-gray-400">Pick is {pick.status}; no further action available.</p>
-        ) : allowedActions.includes('correct') ? (
+        ) : allowedActions.includes('correct') || (alreadySettled && allowedActions.includes('settle')) ? (
           <CorrectionForm pickId={pickId} />
         ) : allowedActions.includes('settle') ? (
-          <SettlementForm pickId={pickId} isAlreadySettled={false} />
+          <SettlementForm pickId={pickId} isAlreadySettled={alreadySettled} />
         ) : (
           <p className="text-sm text-gray-400">No actions available for this pick.</p>
         )}
@@ -537,6 +538,10 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </div>
         </div>
       </Card>
+
+      <Suspense fallback={<Card title="Settlement recap"><p>Loading recap evidence…</p></Card>}>
+        <RecapStatusPanel pickId={pick.id} settlements={detail.settlements} verifiedNoDelivery={detail.outboxRows.length === 0 && detail.receipts.length === 0} />
+      </Suspense>
 
       <Card title="Score + Metadata">
         <div className="flex flex-col gap-1">

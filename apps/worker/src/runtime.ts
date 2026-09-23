@@ -23,6 +23,8 @@ import {
 import {
   evaluateWorkerTargetCoverage,
   formatWorkerTargetCoverageError,
+  isHumanDeliveryTarget,
+  parseGovernedTargetFromDeliveryTarget,
   resolveTargetRegistry,
   type WorkerTargetCoverageReport,
 } from '@unit-talk/contracts';
@@ -276,9 +278,28 @@ function assertDiscordTargetMapCoversTargets(
   distributionTargets: readonly string[],
 ) {
   const targetMap = readDiscordTargetMap(environment.UNIT_TALK_DISCORD_TARGET_MAP);
-  const missingTargets = distributionTargets.filter(
-    (target) => !targetMap[target] && !/^discord:\d+$/.test(target),
-  );
+  const missingTargets = distributionTargets.filter((target) => {
+    // UTV2-1923: a human capper's official pick resolves its destination per
+    // capper from the pin the server writes onto the outbox row, and REFUSES
+    // rather than falling back to the shared channel map -- see the
+    // WORKER_PINNED_DESTINATION_GUARD block in `delivery-adapters.ts`. Falling
+    // back would send every capper's picks to one channel, which is exactly
+    // what that routing replaced. `deploy.yml` refuses to write a shared
+    // mapping for the human target for the same reason.
+    //
+    // This assertion predates that route and demanded a mapping the delivery
+    // path is designed never to read, so the two guards became mutually
+    // unsatisfiable: the deploy refused the mapping when present, and this
+    // crash-looped the worker when absent. Human-capper mode could not start.
+    // The predicate is the canonical one rather than a new literal, so a
+    // target cannot be exempt here and governed elsewhere.
+    const governedTarget = parseGovernedTargetFromDeliveryTarget(target);
+    if (governedTarget !== null && isHumanDeliveryTarget(governedTarget)) {
+      return false;
+    }
+
+    return !targetMap[target] && !/^discord:\d+$/.test(target);
+  });
 
   if (missingTargets.length > 0) {
     throw new RuntimeConfigError({

@@ -6,13 +6,26 @@ import {
   resolveCommandCenterApiHeaders,
 } from '@/lib/server-api';
 import { resolveActorOrRefusal } from '@/lib/require-actor';
+import type { HumanCapperRecapResult } from '@/lib/human-capper-recap';
 import {
   resolveOperatorGradingContext,
   type OperatorGradingContextInput,
 } from '@/lib/operator-grading-context';
 
 export type SettleResult =
-  | { ok: true; settlementRecordId: string }
+  | {
+      ok: true;
+      settlementRecordId: string;
+      /**
+       * UTV2-1939: present only when the API treated this pick as a
+       * human-capper delivery. `settle-pick-controller.ts` computes it
+       * deliberately -- "an operator who settles a delivered pick needs to know
+       * whether members were told" -- and this action used to drop it, so a
+       * suppressed recap rendered as unqualified success. Absent means the
+       * pick is not a human-capper delivery, which is NOT a suppressed recap.
+       */
+      recap?: HumanCapperRecapResult;
+    }
   | { ok: false; error: string };
 
 /**
@@ -93,13 +106,19 @@ export async function settlePick(
   }
 
   const body = (await res.json()) as {
-    data?: { settlementRecordId?: string };
+    data?: {
+      settlementRecordId?: string;
+      humanCapperRecap?: HumanCapperRecapResult;
+    };
   };
 
   revalidatePath('/');
 
+  const recap = body.data?.humanCapperRecap;
+
   return {
     ok: true,
     settlementRecordId: body.data?.settlementRecordId ?? '',
+    ...(recap === undefined ? {} : { recap }),
   };
 }

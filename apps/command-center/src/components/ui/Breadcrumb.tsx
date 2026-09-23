@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 
 interface BreadcrumbItem {
   label: string;

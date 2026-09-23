@@ -1,0 +1,254 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1938",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "4eb4d9a3fd14d1c57abb509ad0188543979eff44",
+    "verified_source_sha": "af490ecd4bb1354e7e337e8faca8bef64205572d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. GitHub check-run ids are not knowable at commit time; the authoritative result is the set of required contexts on PR #1611 at this head. post-merge-lane-close.yml rebinds merge_sha.",
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "tests": 6557,
+        "pass": 6557,
+        "fail": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      "required_contexts_authority": "PR #1611: verify, Executor Result Validation, Merge Gate, P0 Protocol"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-18T20:21:02.128Z"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T19:45:00Z",
+    "measured_against_sha": "af490ecd4bb1354e7e337e8faca8bef64205572d",
+    "commands": [
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "eslint . --cache, no output"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "pnpm exec tsc -b tsconfig.json, no diagnostics"
+      },
+      {
+        "command": "pnpm build",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "pnpm exec tsc -b tsconfig.json"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 6557,
+        "pass": 6557,
+        "fail": 0,
+        "suite_blocks": 104,
+        "suite_blocks_with_failures": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/smart-form-validation.test.ts apps/api/src/submission-service.test.ts apps/api/src/controllers/submit-pick-controller.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "193 tests, 193 pass, 0 fail across the three directly affected suites"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 6 changed files; no R-level artifacts required for this diff"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ops/proof-auditor-gate.ts --proof-dir docs/06_status/proof/UTV2-1938 --sha af490ecd --require-executed-command \"pnpm test:db\"",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "verdict PASS, 0 failures. One warning: writable-DB execution is not auditable from proof text; enforcement is the CI-produced ci-db-proof-receipt/v2 inside the required verify context."
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "Its ci:assert-staging step refuses any target that is not xskgrzbteyqdufktjrjx, and this checkout pins the containment placeholder SUPABASE_URL=http://127.0.0.1:1. That is the correct local outcome and is not a defect in this diff. Its four constituent gates are measured individually above. The authoritative full-tree result is the required verify context on PR #1611, which runs inside the staging-ci GitHub environment and is also where this lane's live-DB proof executes."
+      }
+    ],
+    "new_coverage": [
+      {
+        "file": "apps/api/src/submission-service.test.ts",
+        "tests": 98,
+        "pass": 98,
+        "fail": 0,
+        "new_tests": 2,
+        "note": "Two UTV2-1938 tests asserting that a server-authorized delivery-eligible fallback persists, plus the existing exhaustive waiver truth table extended over the new dimension."
+      },
+      {
+        "file": "apps/api/src/smart-form-validation.test.ts",
+        "tests": 82,
+        "pass": 82,
+        "fail": 0,
+        "new_tests": 4,
+        "note": "Fix where serverAuthorizedHumanDelivery comes from: absent record, authorized record, refused record, malformed record."
+      },
+      {
+        "file": "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
+        "tests": null,
+        "new_tests": 1,
+        "note": "The live-DB half: armTheGate('server-authorized') then a server-authorized delivery-eligible fallback submission. Cannot execute from this containment-isolated checkout; see runtime_proof.limitations."
+      }
+    ],
+    "mutation_controls": [
+      {
+        "control": "the waiver turns on the server's authorization, not on the distribution mode",
+        "mutation": "restore the UTV2-1842 body: return outcome.distributionMode === 'track-only'",
+        "observed": "3 of 98 tests fail in submission-service.test.ts (not ok 96, 97, 98); every UTV2-1842 refusal test stays green",
+        "result": "fails_on_the_named_condition",
+        "proves": "the new tests are sensitive to exactly this change, and the protections the change preserves are demonstrably not what is carrying them"
+      },
+      {
+        "control": "an unauthorized delivery-eligible fallback is still refused",
+        "mutation": "none needed -- asserted directly, both through processSubmission and in the exhaustive truth table",
+        "observed": "refused with EVENT_NOT_FOUND, persists nothing",
+        "result": "pass",
+        "proves": "the UTV2-1842 protection is preserved rather than traded away"
+      },
+      {
+        "control": "a forged authorization record does not read as authorization",
+        "mutation": "supply { decision: 'authorized' } and nothing else the reader requires",
+        "observed": "serverAuthorizedHumanDelivery is false",
+        "result": "pass",
+        "proves": "the fact is read through readHumanCapperDeliveryAuthorization's version/authority/decidedAt checks, not off any single client-settable key"
+      },
+      {
+        "control": "unmutated baseline",
+        "mutation": "none",
+        "observed": "6557 pass / 0 fail across 104 suite blocks",
+        "result": "pass"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-18T19:50:00Z",
+    "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no containment setting, kill switch, delivery target or deploy was touched. This block establishes that the defect is real in production and that the waiver's current boundary is exactly where the code says it is -- it does not claim the repair is deployed.",
+    "queries": [
+      {
+        "name": "the event-existence gate is ARMED in production",
+        "method": "read-only SELECT count(*) FROM events, and count(*) WHERE event_date BETWEEN current_date - 90 AND current_date + 90",
+        "result": "790 events total, 178 inside the window EventRepository.listUpcoming(undefined, 90) actually reads, 0 with event_date >= current_date, newest event_date 2026-09-17",
+        "significance": "checkEventExistenceGate returns early only when listUpcoming is empty. It is not empty, so the gate fires on every submission. The 178 are all expired -- listUpcoming is misnamed and reads today-90 through today+90 -- which is why an operator sees no selectable game and still meets an armed gate."
+      },
+      {
+        "name": "every no-match submission that persisted is Track Only -- none is delivery-eligible",
+        "method": "read-only correlated count over picks WHERE metadata ? 'distributionMode', partitioned by distributionMode, counting those whose metadata.participantResolution.eventName matches ZERO rows in events (case-insensitive, the same comparison EventRepository.listByName makes)",
+        "result": "track-only: 5. delivery-eligible: 0.",
+        "significance": "This is the defect, measured rather than argued. The UTV2-1842 waiver demonstrably works -- five Track Only picks naming no catalogued event are persisted in production. Not one delivery-eligible pick is, because the waiver excluded that caller. UTV2-1923 pins an allow-listed capper to delivery-eligible, so that caller is precisely the one who cannot submit."
+      },
+      {
+        "name": "the one delivery-eligible pick that DID persist had a real event match, so it never needed the waiver",
+        "method": "read-only join of the four newest governed picks against events on lower(event_name)",
+        "result": "816a84c7 (delivery-eligible, 'Lions @ Bills') -> 1 matching event row. b7b34a7f (track-only, 'Lions @ Bills') -> 1. 5c527e5e (track-only, 'Padres @ Rockies') -> 0. 04174f12 (track-only, 'Broncos @ Chiefs') -> 0.",
+        "significance": "Rules out the alternative explanation that delivery-eligible submissions work fine. The only one that succeeded satisfied the gate outright; the two that needed the waiver were both Track Only. A delivery-eligible submission naming no catalogued event has never persisted in this database."
+      },
+      {
+        "name": "submission has stopped since the last event match expired",
+        "method": "read-only count of picks created in the last 24 hours",
+        "result": "3 governed picks in the last 24h, the newest at 2026-09-18 01:36:52Z; none since",
+        "significance": "Consistent with a pre-persistence refusal rather than a partial write: the operator's later attempts produced no row at all, which is what a 422 at submission-service.ts before any insert looks like from the database side."
+      },
+      {
+        "name": "containment is unchanged by this proof",
+        "method": "read-only SELECT target, killed FROM delivery_kill_switch",
+        "result": "best-bets=true, exclusive-insights=true, official-picks=true, trader-insights=true (t1-proof-utv2-1427-kill-switch=false is a test fixture target, not a governed one)",
+        "significance": "Every governed delivery target is killed, before and after this proof. The repair admits a pick to persistence; it grants no delivery, and the control that would have to be released to deliver one is untouched."
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "events_total",
+        "value": 790
+      },
+      {
+        "name": "events_in_listupcoming_90_day_band",
+        "value": 178
+      },
+      {
+        "name": "events_today_or_future",
+        "value": 0
+      },
+      {
+        "name": "governed_pick_cohort",
+        "value": 7
+      },
+      {
+        "name": "delivery_eligible_picks_with_no_matching_event",
+        "value": 0
+      },
+      {
+        "name": "track_only_picks_with_no_matching_event",
+        "value": 5
+      },
+      {
+        "name": "governed_picks_created_last_24h",
+        "value": 3
+      },
+      {
+        "name": "governed_delivery_targets_killed",
+        "value": 4
+      },
+      {
+        "name": "rows_written_updated_or_deleted_by_this_proof",
+        "value": 0
+      }
+    ],
+    "observations": [
+      {
+        "what": "the defect is a collision between two correct lanes, not a defect in either",
+        "evidence": "UTV2-1842's predicate was exact when written, because handlers/submit-pick.ts pinned every authenticated capper to track-only. UTV2-1923 changed the pin for an allow-listed capper to delivery-eligible. Neither diff is wrong in isolation; the 0-vs-5 partition above is what the pair produces together."
+      },
+      {
+        "what": "the waiver's scope is persistence, not delivery",
+        "evidence": "all four governed delivery targets remain killed=true; the repair touches neither the registry target gate nor the kill switch, and the live-DB test asserts the delivery outcome in both directions rather than assuming one"
+      },
+      {
+        "what": "the authorization fact cannot be supplied by a client",
+        "evidence": "handlers/submit-pick.ts deletes humanCapperDeliveryAuthorizationKey off the incoming payload unconditionally on every branch, then re-authors it from the env allow-list and the authenticated identity; the malformed-record unit test asserts the reader refuses a forged copy"
+      },
+      {
+        "what": "a second, separate defect was found and deliberately NOT repaired here",
+        "evidence": "EventRepository.listUpcoming(sportId, windowDays) reads today-windowDays through today+windowDays, so 178 expired rows arm a gate named for upcoming events. Recorded rather than bundled into a lane whose stated purpose is something else."
+      }
+    ],
+    "limitations": [
+      {
+        "what": "the new live-DB test could not be executed from this checkout",
+        "why": "this worktree is containment-isolated -- SUPABASE_URL=http://127.0.0.1:1, SUPABASE_PROJECT_REF=containmentlocal0000 -- so t1-proof-utv2-1842-fallback-event-gate.test.ts skips itself with 'SUPABASE_SERVICE_ROLE_KEY not configured'",
+        "where_it_does_execute": "inside the required verify context on PR #1611, in the staging-ci GitHub environment, which is the authority for this file; post-merge-lane-close.yml harvests that receipt into this bundle at closeout"
+      },
+      {
+        "what": "the production measurements establish the defect, not the fix",
+        "why": "the repair is on this branch and is not deployed; production is running an earlier release",
+        "where_it_does_execute": "the red/green for the repair itself is the mutation drill in static_proof.mutation_controls plus the armed-gate live-DB test above"
+      }
+    ]
+  }
+}

@@ -8,6 +8,8 @@ import {
   getPrimaryRouteForPath,
   getRouteMeta,
   getWorkspaceRoutes,
+  COMMAND_CENTER_WORKSPACES,
+  getActiveWorkspace,
 } from './command-center-nav.js';
 
 const APP_DIR = resolve(process.cwd(), 'src/app');
@@ -37,7 +39,7 @@ test('the route registry classifies every page exactly once', () => {
   assert.ok(COMMAND_CENTER_ROUTES.every((route) => route.classificationReason.trim().length > 0));
 });
 
-test('only the six authorized operator workflows are primary navigation', () => {
+test('launch navigation includes delivery and governed performance as required by the product contract', () => {
   assert.deepEqual(
     getPrimaryCommandCenterRoutes().map(({ href, label }) => ({ href, label })),
     [
@@ -47,9 +49,23 @@ test('only the six authorized operator workflows are primary navigation', () => 
       { href: '/settlement', label: 'Settlement' },
       { href: '/exceptions', label: 'Exceptions' },
       { href: '/api-health', label: 'System Health' },
+      { href: '/performance', label: 'Performance' },
+      { href: '/operations/discord', label: 'Delivery' },
+      { href: '/operations/outbox', label: 'Delivery Outbox' },
     ],
   );
   assert.ok(COMMAND_CENTER_ROUTES.filter((route) => !route.primary).every((route) => route.primaryIcon === undefined));
+});
+
+test('the four canonical workspaces retain future capabilities without linking unfinished primary destinations', () => {
+  assert.deepEqual(COMMAND_CENTER_WORKSPACES.map((workspace) => workspace.label), ['Operations', 'Decision', 'Intelligence', 'Research']);
+  assert.deepEqual(COMMAND_CENTER_WORKSPACES.filter((workspace) => workspace.available).map((workspace) => workspace.id), ['operations', 'intelligence']);
+  assert.equal(getActiveWorkspace('/picks/real-pick'), 'operations');
+  assert.equal(getActiveWorkspace('/operations/discord'), 'operations');
+  assert.equal(getActiveWorkspace('/performance'), 'intelligence');
+  assert.equal(getActiveWorkspace('/intelligence/attribution'), 'intelligence');
+  assert.equal(getActiveWorkspace('/decision/scores'), 'decision');
+  assert.equal(getActiveWorkspace('/research/players'), 'research');
 });
 
 test('detail, duplicate, and stub routes resolve to their authoritative parent', () => {

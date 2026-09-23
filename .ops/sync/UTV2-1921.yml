@@ -1,0 +1,278 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1921
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1921
+  objective: Rebuild the mission plan as a compact startup document — plan.md
+    exceeds the 150k session-load ceiling
+  acceptance_criteria:
+    - >-
+      `docs/mission/plan.md` is **155,373 characters** and is mandatory
+      session-start context via `CLAUDE.md` § "Mission — mandatory context". It
+      exceeds Claude's 150k loader ceiling, so the document that is supposed to
+      establish current state cannot be reliably loaded at session start.
+
+
+      The file's own contract says: *"Rewritten as reality changes. Not a log,
+      not a backlog, not Linear in Markdown."* It has instead accumulated
+      chronological "ninth pass / eighth pass / seventh pass" narrative plus
+      historical evidence, defeating that contract.
+
+
+      ## Scope
+
+
+      Rebuild `plan.md` from current live evidence (not by trimming the old
+      document), answering only what a session needs at start:
+
+
+      1. Current Truth
+
+      2. Production Position
+
+      3. Active Work
+
+      4. Blockers
+
+      5. Decisions Required From Griff
+
+      6. Recommended / Executable Next Wave
+
+      7. Containment / production-safety state
+
+      8. Pointers to authoritative evidence/contracts
+
+      9. Only lessons that materially change current execution
+
+
+      ## History preservation
+
+
+      * reusable operating lessons → `docs/mission/plan-lessons.md`
+
+      * chronological narrative/evidence worth keeping →
+      `docs/mission/plan-history-2026-09.md` (read-on-demand)
+
+      * facts already in canonical proof/acceptance/readiness docs → replaced by
+      a pointer
+
+      * superseded claims with no continuing value → removed
+
+
+      No duplication of the same narrative across the two archives.
+
+
+      ## Out of scope — explicitly unchanged
+
+
+      `intent.md` intent, `spec.md` outcome requirements, production-readiness
+      definitions, standing guardrails, containment policy, lane/merge controls,
+      product scope, SGO state, member-delivery state. This is information
+      architecture and context budget, not policy.
+
+
+      ## Acceptance
+
+
+      * `plan.md` comfortably below 50k characters (target 20k–30k)
+
+      * loads without the >150k warning
+
+      * no active blocker, current Griff decision, current product objective, or
+      containment fact lost
+
+      * old chronology archived and read-on-demand, not mandatory
+
+      * no stale historical SHAs/runs presented as current truth
+
+      * all pointers resolve
+
+      * diff docs-only
+
+
+      Mechanical tier classifier returns `T3` (no matches) for
+      `docs/mission/plan.md`, `plan-lessons.md`, `plan-history-2026-09.md`.
+  guardrails: []
+  non_goals:
+    - "`intent.md` intent, `spec.md` outcome requirements, production-readiness
+      definitions, standing guardrails, containment policy, lane/merge controls,
+      product scope, SGO state, member-delivery state. This is information
+      architecture and context budget, not policy."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      `docs/mission/plan.md` is **155,373 characters** and is mandatory
+      session-start context via `CLAUDE.md` § "Mission — mandatory context". It
+      exceeds Claude's 150k loader ceiling, so the document that is supposed to
+      establish current state cannot be reliably loaded at session start.
+
+
+      The file's own contract says: *"Rewritten as reality changes. Not a log,
+      not a backlog, not Linear in Markdown."* It has instead accumulated
+      chronological "ninth pass / eighth pass / seventh pass" narrative plus
+      historical evidence, defeating that contract.
+    - >-
+      Scope
+
+      Rebuild `plan.md` from current live evidence (not by trimming the old
+      document), answering only what a session needs at start:
+
+
+      1. Current Truth
+
+      2. Production Position
+
+      3. Active Work
+
+      4. Blockers
+
+      5. Decisions Required From Griff
+
+      6. Recommended / Executable Next Wave
+
+      7. Containment / production-safety state
+
+      8. Pointers to authoritative evidence/contracts
+
+      9. Only lessons that materially change current execution
+    - >-
+      History preservation
+
+      * reusable operating lessons → `docs/mission/plan-lessons.md`
+
+      * chronological narrative/evidence worth keeping →
+      `docs/mission/plan-history-2026-09.md` (read-on-demand)
+
+      * facts already in canonical proof/acceptance/readiness docs → replaced by
+      a pointer
+
+      * superseded claims with no continuing value → removed
+
+
+      No duplication of the same narrative across the two archives.
+    - >-
+      Acceptance
+
+      * `plan.md` comfortably below 50k characters (target 20k–30k)
+
+      * loads without the >150k warning
+
+      * no active blocker, current Griff decision, current product objective, or
+      containment fact lost
+
+      * old chronology archived and read-on-demand, not mandatory
+
+      * no stale historical SHAs/runs presented as current truth
+
+      * all pointers resolve
+
+      * diff docs-only
+
+
+      Mechanical tier classifier returns `T3` (no matches) for
+      `docs/mission/plan.md`, `plan-lessons.md`, `plan-history-2026-09.md`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1921/rebuild-the-mission-plan-as-a-compact-startup-document-planmd-exceeds
+    title: Rebuild the mission plan as a compact startup document — plan.md exceeds
+      the 150k session-load ceiling
+    description: >-
+      `docs/mission/plan.md` is **155,373 characters** and is mandatory
+      session-start context via `CLAUDE.md` § "Mission — mandatory context". It
+      exceeds Claude's 150k loader ceiling, so the document that is supposed to
+      establish current state cannot be reliably loaded at session start.
+
+
+      The file's own contract says: *"Rewritten as reality changes. Not a log,
+      not a backlog, not Linear in Markdown."* It has instead accumulated
+      chronological "ninth pass / eighth pass / seventh pass" narrative plus
+      historical evidence, defeating that contract.
+
+
+      ## Scope
+
+
+      Rebuild `plan.md` from current live evidence (not by trimming the old
+      document), answering only what a session needs at start:
+
+
+      1. Current Truth
+
+      2. Production Position
+
+      3. Active Work
+
+      4. Blockers
+
+      5. Decisions Required From Griff
+
+      6. Recommended / Executable Next Wave
+
+      7. Containment / production-safety state
+
+      8. Pointers to authoritative evidence/contracts
+
+      9. Only lessons that materially change current execution
+
+
+      ## History preservation
+
+
+      * reusable operating lessons → `docs/mission/plan-lessons.md`
+
+      * chronological narrative/evidence worth keeping →
+      `docs/mission/plan-history-2026-09.md` (read-on-demand)
+
+      * facts already in canonical proof/acceptance/readiness docs → replaced by
+      a pointer
+
+      * superseded claims with no continuing value → removed
+
+
+      No duplication of the same narrative across the two archives.
+
+
+      ## Out of scope — explicitly unchanged
+
+
+      `intent.md` intent, `spec.md` outcome requirements, production-readiness
+      definitions, standing guardrails, containment policy, lane/merge controls,
+      product scope, SGO state, member-delivery state. This is information
+      architecture and context budget, not policy.
+
+
+      ## Acceptance
+
+
+      * `plan.md` comfortably below 50k characters (target 20k–30k)
+
+      * loads without the >150k warning
+
+      * no active blocker, current Griff decision, current product objective, or
+      containment fact lost
+
+      * old chronology archived and read-on-demand, not mandatory
+
+      * no stale historical SHAs/runs presented as current truth
+
+      * all pointers resolve
+
+      * diff docs-only
+
+
+      Mechanical tier classifier returns `T3` (no matches) for
+      `docs/mission/plan.md`, `plan-lessons.md`, `plan-history-2026-09.md`.
+    captured_at: 2026-09-16T12:44:20.777Z
+    description_sha256: 90f1a6d4bcc1a73b8fdb786c81547bd1f1485ef537d930e9d8f276f76442d793
+  contract_hash: 5325643d9165b84c7c9a721c3a8b869418e04e26833b9976847748c03f43e463

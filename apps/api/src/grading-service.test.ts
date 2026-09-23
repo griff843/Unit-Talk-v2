@@ -10,6 +10,8 @@ import {
   readEventStartTime,
   postSettlementRecapIfPossible,
   classifyMarketFamilyForGrading,
+  classifyGradingOutcome,
+  GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
   type GradingRetryState,
 } from './grading-service.js';
 import { recordEvidenceSettlement, recordGradedSettlement } from './settlement-service.js';
@@ -282,6 +284,152 @@ test('runGradingPass grades a posted over pick and records grading settlement', 
   assert.equal(settlements.length, 1);
   assert.equal(settlements[0]?.source, 'grading');
   assert.equal(settlements[0]?.result, 'win');
+});
+
+/**
+ * UTV2-1929: the production receipt shape for a human capper delivery.
+ *
+ * `channel` holds the LOGICAL target, which is what the worker wrote before
+ * this lane and what every `discord.message` receipt in production still
+ * carries. `payload.channelId` holds the numeric destination the adapter
+ * actually POSTed to, resolved from the capper's pinned channel.
+ */
+async function seedHumanCapperDistributionReceipt(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+  logicalTarget: string,
+  resolvedChannelId: string,
+) {
+  const outboxRecord = await repositories.outbox.enqueue({
+    pickId,
+    target: logicalTarget,
+    payload: {},
+    idempotencyKey: `outbox:${pickId}:${logicalTarget}`,
+  });
+  await repositories.outbox.markSent(outboxRecord.id);
+  await repositories.receipts.record({
+    outboxId: outboxRecord.id,
+    receiptType: 'discord.message',
+    status: 'sent',
+    channel: logicalTarget,
+    externalId: `message:${pickId}`,
+    payload: {
+      adapter: 'discord',
+      route: 'capper-pinned',
+      target: logicalTarget,
+      channelId: resolvedChannelId,
+      destinationSource: 'cappers.metadata.discord.picksChannelId',
+    },
+  });
+}
+
+test('UTV2-1929: the settlement recap resolves the pinned channel from the receipt payload', async () => {
+  // Reproduces production outbox 684ba33f-45c4-4a80-adf0-db8286c90815: a human
+  // capper pick delivered to a pinned channel, whose receipt names the logical
+  // target. `normalizeDiscordChannelId` cannot resolve `official-picks` -- it
+  // is not numeric, and UTV2-1923 exempts human delivery targets from the
+  // shared target map -- so before this lane the recap refused with
+  // `no_receipt_channel_or_resolvable_outbox_target` and no human capper pick
+  // could ever be told to members how it finished.
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedHumanCapperDistributionReceipt(
+    repositories,
+    pickId,
+    'discord:official-picks',
+    '1384052464189440120',
+  );
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  let capturedUrl = '';
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async (input) => {
+    capturedUrl = String(input);
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1);
+    const [recapRun] = await repositories.runs.listByType('recap.post');
+    assert.equal(recapRun?.status, 'succeeded');
+    assert.deepEqual(recapRun?.details, { recapKind: 'settlement-pick', pickId, settlementRecordId: (await repositories.settlements.listByPick(pickId))[0]?.id, pickCount: 1, posted: true, channel: '1384052464189440120', messageId: 'message-1' });
+    assert.equal(
+      capturedUrl,
+      'https://discord.com/api/v10/channels/1384052464189440120/messages',
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+});
+
+test('UTV2-1929: a non-numeric payload channelId is not a destination', async () => {
+  // The payload read must not become a second way to guess a destination. A
+  // channel NAME where an id belongs falls through to the receipt column and
+  // then to the outbox target, both of which also fail to resolve, and the
+  // recap refuses rather than posting somewhere it inferred.
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedHumanCapperDistributionReceipt(
+    repositories,
+    pickId,
+    'discord:official-picks',
+    '#griff-official-picks',
+  );
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  let called = false;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async () => {
+    called = true;
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await runGradingPass(repositories);
+    assert.equal(result.graded, 1);
+    assert.equal(called, false);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
 });
 
 test('runGradingPass posts a settlement recap embed for a graded pick with CLV', async () => {
@@ -1604,16 +1752,197 @@ test('runGradingPass writes a grading.run system_runs row on completion', async 
     actualValue: 30,
   });
 
-  await runGradingPass(repositories);
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-03-27T01:00:00.000Z'),
+  });
 
   const runs = await repositories.runs.listByType('grading.run');
   assert.equal(runs.length, 1);
   assert.equal(runs[0]?.run_type, 'grading.run');
+  assert.equal(runs[0]?.status, 'succeeded');
+  assert.equal(result.outcomeClass, 'succeeded_with_work');
   assert.equal(
     (runs[0]?.details as Record<string, unknown>)?.['picksGraded'],
     1,
   );
   assert.equal((runs[0]?.details as Record<string, unknown>)?.['failed'], 0);
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)?.['outcome_class'],
+    'succeeded_with_work',
+  );
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)?.['graded_count'],
+    1,
+  );
+});
+
+test('fresh empty grading input is a no-op, never successful work', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedGameResult(repositories, {
+    eventId: 'unrelated-fresh-event',
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 210,
+    sourcedAt: '2026-09-19T11:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-09-19T12:00:00.000Z'),
+  });
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+
+  assert.equal(result.attempted, 0);
+  assert.equal(result.outcomeClass, 'no_op_no_input');
+  assert.equal(run?.status, 'succeeded');
+  assert.equal(details['outcome_class'], 'no_op_no_input');
+  assert.equal(details['rows_scanned'], 0);
+  assert.equal(details['gradeable_rows'], 0);
+  assert.equal(details['graded_count'], 0);
+  assert.deepEqual(details['skipped_reasons'], {});
+  assert.equal(
+    details['newest_game_result_sourced_at'],
+    '2026-09-19T11:00:00.000Z',
+  );
+  assert.equal(
+    (details['input_freshness'] as Record<string, unknown>)['status'],
+    'fresh',
+  );
+});
+
+test('stale data-dependent skips produce degraded_stale_input and failed status', async () => {
+  const { repositories, pickId } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'rebounds-all-game-ou',
+    actualValue: 8,
+    sourcedAt: '2026-09-19T04:59:59.999Z',
+  });
+
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-09-19T12:00:00.000Z'),
+  });
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.outcomeClass, 'degraded_stale_input');
+  assert.equal(run?.status, 'failed');
+  assert.equal(details['outcome_class'], 'degraded_stale_input');
+  assert.equal(details['data_dependent_skipped_count'], 1);
+  assert.deepEqual(details['skipped_reasons'], { game_result_not_found: 1 });
+  assert.equal(details['freshness_threshold_hours'], 6);
+  assert.equal(
+    (details['input_freshness'] as Record<string, unknown>)['status'],
+    'stale',
+  );
+  assert.equal(
+    (details['input_freshness'] as Record<string, unknown>)['threshold_ms'],
+    GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+  );
+});
+
+test('a skips-only pass is nothing-gradeable, never succeeded_with_work and never no-input', async () => {
+  const { repositories } = await createPostedPickFixture({
+    market: 'unsupported-proof-market',
+  });
+
+  const result = await runGradingPass(repositories, {
+    now: () => new Date('2026-09-19T12:00:00.000Z'),
+  });
+  const [run] = await repositories.runs.listByType('grading.run');
+  const details = run?.details as Record<string, unknown>;
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.outcomeClass, 'no_op_nothing_gradeable');
+  assert.notEqual(result.outcomeClass, 'succeeded_with_work');
+  // This is the whole point of the lane. A pass that examined rows and graded
+  // none must not be recorded with a class that positively asserts there was no
+  // input -- otherwise it is byte-identical to a pass that examined zero.
+  assert.notEqual(result.outcomeClass, 'no_op_no_input');
+  assert.equal(details['outcome_class'], 'no_op_nothing_gradeable');
+  assert.ok((details['rows_scanned'] as number) > 0);
+  assert.equal(run?.status, 'succeeded');
+});
+
+test('examined-and-skipped and examined-nothing are distinguishable at the class, not only in the histogram', () => {
+  const fresh = {
+    status: 'fresh' as const,
+    newestSourcedAt: '2026-09-19T11:00:00.000Z',
+    ageMs: 60 * 60 * 1000,
+    thresholdMs: GRADING_INPUT_FRESHNESS_THRESHOLD_MS,
+  };
+
+  const examinedManySkippedAll = classifyGradingOutcome({
+    graded: 0,
+    errors: 0,
+    rowsScanned: 15_000,
+    skipped: 15_000,
+    dataDependentSkipped: 0,
+    inputFreshness: fresh,
+  });
+  const examinedNothing = classifyGradingOutcome({
+    graded: 0,
+    errors: 0,
+    rowsScanned: 0,
+    skipped: 0,
+    dataDependentSkipped: 0,
+    inputFreshness: fresh,
+  });
+
+  assert.equal(examinedManySkippedAll, 'no_op_nothing_gradeable');
+  assert.equal(examinedNothing, 'no_op_no_input');
+  assert.notEqual(examinedManySkippedAll, examinedNothing);
+
+  // A data-dependent skip on stale input still outranks both, and errors
+  // outrank everything.
+  assert.equal(
+    classifyGradingOutcome({
+      graded: 0,
+      errors: 0,
+      rowsScanned: 10,
+      skipped: 10,
+      dataDependentSkipped: 10,
+      inputFreshness: { ...fresh, status: 'stale' },
+    }),
+    'degraded_stale_input',
+  );
+  assert.equal(
+    classifyGradingOutcome({
+      graded: 5,
+      errors: 1,
+      rowsScanned: 10,
+      skipped: 4,
+      dataDependentSkipped: 0,
+      inputFreshness: fresh,
+    }),
+    'failed',
+  );
+});
+
+test("production grading proof requires grader identity and game-result linkage, not source='grading' alone", () => {
+  const rows = [
+    { id: 'production-row', source: 'grading', settled_by: 'grading-service', evidence_ref: 'game-result:real-result-id' },
+    { id: 'test-actor-row', source: 'grading', settled_by: 't1-proof-grader', evidence_ref: 'game-result:test-result-id' },
+    { id: 'test-evidence-row', source: 'grading', settled_by: 'grading-service', evidence_ref: 'test-fixture:result-id' },
+  ];
+
+  const productionEvidence = rows.filter(
+    (row) =>
+      row.source === 'grading' &&
+      row.settled_by === 'grading-service' &&
+      row.evidence_ref.startsWith('game-result:'),
+  );
+
+  assert.deepEqual(productionEvidence.map((row) => row.id), ['production-row']);
+  assert.equal(rows.filter((row) => row.source === 'grading').length, 3);
 });
 
 // UTV2-1886: overriding a repository method has to preserve the prototype chain --
@@ -1663,15 +1992,24 @@ test('UTV2-1886: a failed settlement prefetch rejects the pass instead of readin
   };
 
   // An empty map is indistinguishable from "nothing is settled", so a prefetch that
-  // fails must stop the pass rather than hand the loop a map it can misread. Nothing
-  // is recorded, because the run row is only opened once the loop has finished.
+  // fails must stop the pass rather than hand the loop a map it can misread. The
+  // run row is opened fail-closed first so the execution failure remains visible.
   await assert.rejects(
     () => runGradingPass(brokenRepos as typeof repositories),
     /forced settlement prefetch error/,
   );
 
   const runs = await repositories.runs.listByType('grading.run');
-  assert.equal(runs.length, 0);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]?.status, 'failed');
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)['outcome_class'],
+    'failed',
+  );
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)['error_count'],
+    1,
+  );
 });
 
 test('UTV2-1886: the settlement lookup is one batched read, not one read per pick', async () => {
@@ -2796,7 +3134,7 @@ function recapHarness(stakeUnits: unknown) {
       findLatestByPick: async () => ({ id: 'outbox-1', target: '123456789012345678' }),
     },
     receipts: { findLatestByOutboxId: async () => null },
-    runs: {},
+    runs: createInMemoryRepositoryBundle().runs,
   } as unknown as Parameters<typeof postSettlementRecapIfPossible>[2];
 
   const warnings: string[] = [];

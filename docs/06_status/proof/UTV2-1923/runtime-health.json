@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1923",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "measured_at": "2026-09-17T23:23:33Z",
+  "measured_against_sha": "5194341b7576eadf97776b04d12190559487bb2c",
+  "claim": "Two startup defects on the human-capper activation path are repaired: the worker can start in bounded human-capper mode, and Command Center can start from its canonical deploy-written env file with no manual host patch. Nothing about inertness changes -- the target is still killed, still registry-disabled, and the delivery posture flag is still false.",
+  "note": "Increment 3. Measured against the RUNNING production system and against an image built at this head. The canonical deploy was not dispatched; that is reserved to Griff, and Human Capper activation stays OFF until this merges and is separately deployed.",
+  "delivery_posture": {
+    "target": "official-picks",
+    "delivery_target": "discord:official-picks",
+    "is_promotion_target": false,
+    "in_governed_target_list": true,
+    "registry_enabled_as_shipped": false,
+    "registry_disabled_reason": "Human capper official picks delivery is not activated",
+    "has_bootstrap_kill_switch_row": false,
+    "kill_switch_state_without_row": "killed",
+    "kill_switch_contract": "DeliveryKillSwitchRepository.isKilled() returns true for an unknown target",
+    "operator_kill_switch_route_accepts_target": true,
+    "worker_target_coverage_includes_target": true,
+    "destination_routing": {
+      "resolved_from": "cappers.metadata.discord.picksChannelId",
+      "resolved_where": "server-side, in the release transaction, before any outbox write",
+      "client_can_supply_or_override": false,
+      "hard_coded_channel_ids_in_source": 0,
+      "outbox_target_unchanged": "discord:official-picks",
+      "why_target_unchanged": "parseGovernedTargetFromDeliveryTarget returns null for a raw discord:<channelId> target, which would skip the registry check and make the kill switch key on the channel id. The governed target is kept and the per-capper channel is pinned in the payload instead -- the same shape discord:game-threads already uses.",
+      "discussion_channel_deliverable": false,
+      "discussion_channel_refusal": "picks-channel-is-discussion-channel, raised inside readCapperDiscordRouting before either id is returned",
+      "reserved_global_channel_refused": true,
+      "reserved_global_channel_env": "DISCORD_CAPPER_CHANNEL_ID",
+      "guild_must_match_env": "DISCORD_GUILD_ID",
+      "missing_mapping_behaviour": "refuse; 0 outbox rows; pick stays validated; NOT parked in awaiting_approval",
+      "malformed_mapping_behaviour": "refuse by name; never defaulted",
+      "absent_capper_reader_behaviour": "refuse (capper-routing-unavailable) -- an unprovable destination delivers nowhere",
+      "refusal_reasons": [
+        "capper-row-missing",
+        "capper-metadata-not-an-object",
+        "discord-routing-absent",
+        "discord-routing-not-an-object",
+        "guild-id-missing-or-malformed",
+        "picks-channel-missing-or-malformed",
+        "discussion-channel-malformed",
+        "picks-channel-is-discussion-channel",
+        "no-capper-identity",
+        "capper-routing-unavailable",
+        "expected-guild-unset",
+        "guild-mismatch",
+        "picks-channel-is-reserved-global-channel"
+      ],
+      "worker_falls_back_to_shared_map": false,
+      "worker_refusal_without_pin": "Human capper delivery for outbox <id> carries no pinned destination; refusing to fall back to a shared channel mapping.",
+      "deploy_refuses_shared_target_map_entry": true
+    }
+  },
+  "authorization": {
+    "keys_required": 2,
+    "key_one": {
+      "name": "server allow-list",
+      "env": "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST",
+      "posture_env": "UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED",
+      "default_state": "unset",
+      "unset_behaviour": "refuse",
+      "reachable_from_request": false,
+      "refusal_reasons": [
+        "no-capper-identity",
+        "human-delivery-posture-off",
+        "allowlist-unset",
+        "capper-not-allowlisted"
+      ],
+      "every_decision_audited": true,
+      "allowlist_contents_recorded": false
+    },
+    "key_one_is_the_only_authorization": true,
+    "operator_approval": {
+      "scope": "autonomous producers only",
+      "braked_sources": [
+        "model-driven",
+        "board-construction",
+        "system-pick-scanner",
+        "alert-agent"
+      ],
+      "human_capper_requires_approval": false,
+      "asserted_by": "distribution-service.ts humanCapperDeliveryRequiresOperatorApproval / requiresOperatorApprovalBeforeDelivery",
+      "recovery_door": {
+        "surface": "review-pick-controller",
+        "transition": "awaiting_approval -> queued",
+        "atomic_with_outbox_write": true,
+        "note": "not the canonical human capper path; reachable only for a pick an operator deliberately parked"
+      }
+    },
+    "human_capper_delivery": {
+      "surface": "submit-pick-controller",
+      "transition": "validated -> queued",
+      "atomic_with_outbox_write": true,
+      "operator_step": null,
+      "refused_posture": "delivery-refused; pick stays validated; NOT parked in awaiting_approval"
+    }
+  },
+  "chokepoints": {
+    "submit_handler_forgery_strip": "CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD",
+    "submit_handler_track_only_pin": "UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD",
+    "controller_request_integrity": "HUMAN_DELIVERY_REQUEST_INTEGRITY_GUARD",
+    "controller_immediate_delivery": "HUMAN_DELIVERY_IMMEDIATE_GUARD",
+    "enqueue_authorization": "HUMAN_DELIVERY_ENQUEUE_AUTHORIZATION_GUARD",
+    "enqueue_target_exclusivity": "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD",
+    "atomic_enqueue": "HUMAN_DELIVERY_ATOMIC_GUARD",
+    "release": "HUMAN_DELIVERY_RELEASE_GUARD",
+    "approval_key": "HUMAN_DELIVERY_APPROVAL_KEY_GUARD",
+    "requeue": "REQUEUE_HUMAN_DELIVERY_GUARD",
+    "settlement_recap": "HUMAN_CAPPER_RECAP_GUARD",
+    "worker_target_derivation": "WORKER_GOVERNED_TARGET_DERIVATION_GUARD",
+    "release_destination": "HUMAN_DELIVERY_DESTINATION_GUARD",
+    "worker_pinned_destination": "WORKER_PINNED_DESTINATION_GUARD"
+  },
+  "mutation_controls": [
+    {
+      "control": "human delivery target starts with no shared channel mapping",
+      "observed": "not ok 17 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "non-human target still refuses with no channel mapping",
+      "observed": "not ok 18 (1 fail / 71 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "deploy.yml key set is sufficient for the Command Center data client",
+      "observed": "not ok 11 (1 fail / 12 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "loadEnvironment does not demand unread workspace metadata",
+      "observed": "not ok 11 + not ok 12 (2 fail / 11 pass)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "unmutated baseline",
+      "observed": "worker 72/72, config 13/13",
+      "result": "pass"
+    }
+  ],
+  "containment": {
+    "measured_against": "production zfzdnfwdarxucxtaojxm and the running containers, read-only",
+    "official_picks_kill_switch_killed": true,
+    "official_picks_kill_switch_updated_at": "2026-09-17T21:24:35.602039+00:00",
+    "official_picks_outbox_rows": 0,
+    "outbox_rows_total": 5747,
+    "outbox_newest_created_at": "2026-07-30T20:04:41.893448+00:00",
+    "outbox_rows_sent_today": 0,
+    "governed_picks": 6,
+    "governed_picks_not_track_only": 0,
+    "human_capper_delivery_enabled": false,
+    "syndicate_machine_enabled": false,
+    "worker_autorun": false,
+    "enabled_targets": "none",
+    "ingestor_autorun": false,
+    "command_center_port_binding": "127.0.0.1:4300",
+    "command_center_public_routes": 0,
+    "member_delivery_occurred": false
+  },
+  "known_residue": [
+    {
+      "observation": "The scoring lane stamps picks.promotion_target on a human capper pick at submission time, for a pick no model was asked to score.",
+      "status": "recorded, not repaired",
+      "why_safe": "HUMAN_DELIVERY_TARGET_EXCLUSIVITY_GUARD refuses delivery of an authorized human pick to any board target, so the value cannot be acted on. Repairing the write itself means changing promotion persistence, which is outside this lane's scope."
+    }
+  ],
+  "activation_sequence_remaining": [
+    "PM: scope-override/v1 for the three out-of-scope paths, pm-verdict/v1 APPROVED, t1-approved label",
+    "merge this increment",
+    "re-attempt the human-capper deploy (reserved: Griff)",
+    "release the official-picks kill switch (reserved: Griff; the single remaining control capable of member delivery)"
+  ],
+  "result": "pass",
+  "increment": 3,
+  "defect_repaired": [
+    {
+      "symptom": "worker container in Restarting (1); RuntimeConfigError RUNTIME_REQUIRED_ENV_MISSING at apps/worker/src/runtime.ts:284",
+      "mechanism": "deploy.yml:612/1411 refuse UNIT_TALK_DISCORD_TARGET_MAP containing discord:official-picks; assertDiscordTargetMapCoversTargets refused its absence. No value of the secret satisfied both.",
+      "why_the_assertion_was_wrong": "delivery-adapters.ts WORKER_PINNED_DESTINATION_GUARD resolves a human delivery target from the per-capper pin on the outbox row and refuses rather than falling back to the shared map, so the assertion demanded a mapping the delivery path never reads.",
+      "fix": "exempt human delivery targets via the canonical isHumanDeliveryTarget predicate; the deploy-time refusal is unchanged.",
+      "escape_hatch_note": "parked mode starts only because its target discord:1296531122234327100 matches ^discord:\\d+$; discord:official-picks has no such form."
+    },
+    {
+      "symptom": "Command Center unreachable in production; served only via a hand-patched /opt/unit-talk/.env.command-center that the next deploy erases",
+      "mechanism": "loadEnvironment required five workspace-metadata names with zero runtime readers, and requireSupabaseEnvironment required SUPABASE_ANON_KEY even for a service-role caller that discards it. The deploy-written file carries none of the six, so startup failed one variable at a time.",
+      "fix": "workspace metadata is optional in the runtime loader (requireEnv deleted -- those five were its only callers); the Supabase credential check is role-aware. deploy.yml is unchanged: its ten keys were already correct.",
+      "not_done": "the six values were NOT added to deploy.yml; that would institutionalize fake dependencies and ship an unused credential"
+    }
+  ]
+}

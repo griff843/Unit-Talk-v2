@@ -1,5 +1,5 @@
 import { Card, EmptyState } from '@/components/ui';
-import Link from 'next/link';
+import Link from '@/components/OperatorLink';
 import { getPropOffers, getMarketUniverseStalenessByMarketKey, formatRelativeTime } from '@/lib/data';
 
 export const metadata = { title: 'Props Explorer — Unit Talk Command Center' };

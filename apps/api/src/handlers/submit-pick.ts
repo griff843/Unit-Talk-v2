@@ -1,10 +1,14 @@
-import type { SubmissionPayload } from '@unit-talk/contracts';
+import {
+  humanCapperDeliveryAuthorizationKey,
+  type SubmissionPayload,
+} from '@unit-talk/contracts';
+import { evaluateCapperDeliveryAuthorization } from '../capper-delivery-authorization.js';
 import type { RepositoryBundle } from '@unit-talk/db';
 import { ApiError, normalizeApiError } from '../errors.js';
 import type { ApiResponse } from '../http.js';
 import { errorResponse } from '../http.js';
 import type { AuthContext } from '../auth.js';
-import { submitPickController } from '../controllers/index.js';
+import { submitPickController, type SubmitPickControllerResult } from '../controllers/index.js';
 import {
   type Logger,
 } from '@unit-talk/observability';
@@ -18,11 +22,15 @@ export interface SubmitPickRequest {
   logger?: Logger | undefined;
 }
 
-export type SubmitPickResponse = ApiResponse<{
-  submissionId: string;
-  pickId: string;
-  lifecycleState: string;
-}>;
+/**
+ * UTV2-1923: the handler now carries the controller's own result shape rather
+ * than a hand-written subset of it. The subset predated `promotionStatus`,
+ * `outboxEnqueued` and `deliveryPosture`, so every caller that went through the
+ * handler -- which is every HTTP caller -- was typed as if the delivery posture
+ * the controller had just decided did not exist. Widening it is what lets the
+ * Smart Form show server truth instead of a hardcoded Track Only label.
+ */
+export type SubmitPickResponse = ApiResponse<SubmitPickControllerResult>;
 
 export async function handleSubmitPick(
   request: SubmitPickRequest,
@@ -90,7 +98,23 @@ function coerceSubmissionPayload(
   }
   const metadata = isRecord(payload.metadata) ? { ...payload.metadata } : {};
 
+  // UTV2-1923 CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD_START
+  // The authorization record is server-authored, for EVERY source, without
+  // exception. Deleting a client-supplied key here is what makes
+  // `readHumanCapperDeliveryAuthorization` a statement about what the server
+  // decided rather than about what the caller typed. It runs before the
+  // decision below so a forged record cannot survive into `metadata` on any
+  // branch, including the ones that throw.
+  delete metadata[humanCapperDeliveryAuthorizationKey];
+  // UTV2-1923 CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD_END
+
   // UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD_START
+  // UTV2-1923: extended, not relaxed. The refusal below is unchanged -- a
+  // client still cannot ask for anything but Track Only -- and an unauthorized
+  // capper is still pinned to Track Only exactly as before. What is new is
+  // that an authorized capper is pinned to `delivery-eligible` INSTEAD, by the
+  // server, on the strength of a server-side allow-list the client cannot
+  // reach. Client intent never widens the outcome in either direction.
   if (isAuthenticatedCapper) {
     if (metadata['distributionMode'] !== undefined && metadata['distributionMode'] !== 'track-only') {
       throw new ApiError(
@@ -99,9 +123,15 @@ function coerceSubmissionPayload(
         'Authenticated capper submissions are restricted to Track Only internal tracking.',
       );
     }
+    const deliveryAuthorization = evaluateCapperDeliveryAuthorization({
+      capperId: auth?.capperId,
+      isAuthenticatedCapper,
+    });
     // Server authority, not client intent, decides whether a capper pick can
     // produce delivery work during the recovery phase.
-    metadata['distributionMode'] = 'track-only';
+    metadata['distributionMode'] =
+      deliveryAuthorization.decision === 'authorized' ? 'delivery-eligible' : 'track-only';
+    metadata[humanCapperDeliveryAuthorizationKey] = deliveryAuthorization;
   }
   // UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD_END
 

@@ -17,6 +17,16 @@
  * PR: and Head SHA: are looked up anywhere in the remaining lines (not a
  * fixed position), since real verdict comments include free-form scope-of-
  * approval text between the header fields.
+ *
+ * UTV2-1926: `bounce` carries the canonical `Bounce:` field, which
+ * docs/05_operations/schemas/pm-verdict-v1.md validation rule 6 REQUIRES on a
+ * CHANGES_REQUIRED verdict and requires to be numeric. It is `null` when the
+ * field is absent, non-numeric, negative, or otherwise malformed -- i.e. when
+ * the comment is not a valid bounce declaration under the schema. Parsing
+ * still succeeds in that case, because an invalid CHANGES_REQUIRED must keep
+ * BLOCKING via the latest-verdict rule; what it must not do is contribute to
+ * the bounce limit. Refusing to parse it here would turn a PM refusal into a
+ * silent pass, which is the opposite failure.
  */
 function parseVerdict(body) {
   if (!body) return null;
@@ -27,7 +37,7 @@ function parseVerdict(body) {
   const verdictMatch = lines[0].replace(/^\$/, '').match(/^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i);
   if (!verdictMatch) return null;
   if (lines[1] !== 'schema: pm-verdict/v1') return null;
-  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+)$/i);
+  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI|WORK)-\d+)$/i);
   if (!issueMatch) return null;
 
   const field = (name) => {
@@ -41,11 +51,19 @@ function parseVerdict(body) {
   const prNumber = prMatch ? Number(prMatch[1]) : null;
   const headSha = field('Head SHA');
 
+  // UTV2-1926: the whole field must be a non-negative integer. `Bounce: 2 of
+  // 3`, `Bounce: two`, `Bounce: -1` and `Bounce:` are all malformed, and a
+  // malformed declaration is not a bounce.
+  const bounceField = field('Bounce');
+  const bounceIsNumeric = typeof bounceField === 'string' && /^\d+$/.test(bounceField);
+  const bounce = bounceIsNumeric ? Number(bounceField) : null;
+
   return {
     verdict: verdictMatch[1].toUpperCase(),
     issueId: issueMatch[1],
     prNumber: Number.isFinite(prNumber) ? prNumber : null,
     headSha: headSha || null,
+    bounce: Number.isInteger(bounce) ? bounce : null,
   };
 }
 
@@ -119,13 +137,41 @@ function validateT1Verdicts(verdicts, ctx) {
     }
   }
 
-  // Bounce limit check -- counted over authorized verdicts only. Otherwise
-  // an unauthorized commenter could spam CHANGES_REQUIRED-shaped comments to
-  // force a false bounce-limit trip, the same trust boundary as above.
+  // Bounce limit check.
+  //
+  // Two independent rules, and conflating them was UTV2-1926:
+  //
+  //   1. TRUST. Only authorized verdicts are considered at all. Otherwise an
+  //      unauthorized commenter could spam CHANGES_REQUIRED-shaped comments to
+  //      force a false bounce-limit trip -- the same trust boundary as above.
+  //   2. SCHEMA. Bounce state is whatever the PM DECLARED in the canonical
+  //      `Bounce:` field, never the lifetime count of CHANGES_REQUIRED-shaped
+  //      comments. docs/05_operations/schemas/pm-verdict-v1.md makes that field
+  //      required and numeric on a CHANGES_REQUIRED verdict (validation rule 6)
+  //      and makes bounce 3 the trigger for Failed / PM triage. A comment with
+  //      no `Bounce:` field, or a malformed one, is not a valid bounce
+  //      declaration and contributes nothing here.
+  //
+  // The counting implementation this replaces made a PR unmergeable on ANY
+  // verdict once three CHANGES_REQUIRED-shaped comments existed, because the
+  // check runs unconditionally -- a later APPROVED clears the latest-verdict
+  // error and leaves this one standing. On #1592 three such comments existed
+  // and none carried a Bounce field at all.
+  //
+  // MAX, not latest: a PM who later posts `Bounce: 1` on a PR already at
+  // bounce 3 must not thereby reset the freeze. The freeze is a ratchet.
+  //
+  // An invalid CHANGES_REQUIRED still BLOCKS -- via the latest-verdict rule
+  // above, which this does not touch. Excluding it here narrows the freeze,
+  // never the refusal.
   const changesRequested = authorized.filter((v) => v.parsed.verdict === 'CHANGES_REQUIRED');
-  if (changesRequested.length >= 3) {
+  const declaredBounces = changesRequested
+    .map((v) => v.parsed.bounce)
+    .filter((n) => Number.isInteger(n) && n >= 1);
+  const bounceState = declaredBounces.length > 0 ? Math.max(...declaredBounces) : 0;
+  if (bounceState >= 3) {
     errors.push(
-      `Bounce limit exceeded (${changesRequested.length} CHANGES_REQUIRED verdicts). Issue should be moved to Failed for PM triage.`,
+      `Bounce limit exceeded (PM declared Bounce: ${bounceState}). Issue should be moved to Failed for PM triage.`,
     );
   }
 
