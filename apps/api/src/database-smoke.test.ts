@@ -464,3 +464,117 @@ test(
   },
 );
 
+
+// ── UTV2-1902 live-DB: Smart Form promotion is score-gated, persisted ────────
+// Staging proof of the UTV2-1902 rule against the real schema: the promotion
+// decision is read back from picks and pick_promotion_history, not from the
+// in-memory result object.
+
+async function submitSmartForm1902Live(
+  label: string,
+  extraMetadata: Record<string, unknown>,
+  promotionScores: Record<string, number>,
+) {
+  const environment = loadEnvironment();
+  const connection = createServiceRoleDatabaseConnectionConfig(environment);
+  const client = createDatabaseClientFromConnection(connection);
+  const repositories = createDatabaseRepositoryBundle(connection);
+  const runId = randomUUID();
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'MLB - Moneyline',
+      selection: `UTV2-1902 live ${label} ${runId}`,
+      odds: -120,
+      confidence: 0.4,
+      metadata: {
+        sport: 'MLB',
+        eventName: `UTV2-1902 live ${label} ${runId} at Opponent`,
+        capper: 'griff843',
+        promotionScores,
+        ...extraMetadata,
+      },
+    },
+    repositories,
+  );
+  const pickId = result.pick.id;
+  const { data: pick, error: pickError } = await client
+    .from('picks')
+    .select('id, source, promotion_status, promotion_target, promotion_score, promotion_reason')
+    .eq('id', pickId)
+    .single();
+  assert.equal(pickError, null, `picks read: ${pickError?.message}`);
+  const { data: history, error: historyError } = await client
+    .from('pick_promotion_history')
+    .select('target, status, score, override_action, reason')
+    .eq('pick_id', pickId);
+  assert.equal(historyError, null, `pick_promotion_history read: ${historyError?.message}`);
+  const { data: outbox, error: outboxError } = await client
+    .from('distribution_outbox')
+    .select('id')
+    .eq('pick_id', pickId);
+  assert.equal(outboxError, null, `distribution_outbox read: ${outboxError?.message}`);
+  console.log(
+    `UTV2-1902 live-DB ${label}: ${JSON.stringify({ pick, history, outboxRows: outbox?.length ?? null })}`,
+  );
+  return { pick: pick!, history: history ?? [], outbox: outbox ?? [] };
+}
+
+const liveSkip1902 = hasSupabaseSmokeEnvironment()
+  ? false
+  : 'SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY not configured';
+
+test('UTV2-1902 live-DB: a below-threshold Smart Form pick persists with no board target and no force_promote', { skip: liveSkip1902 }, async () => {
+  const { pick, history, outbox } = await submitSmartForm1902Live('below', {}, {
+    edge: 30, trust: 35, readiness: 40, uniqueness: 30, boardFit: 35,
+  });
+  assert.equal(pick.source, 'smart-form');
+  assert.notEqual(pick.promotion_status, 'qualified', 'source alone must never qualify a pick');
+  assert.equal(pick.promotion_target, null);
+  assert.ok(history.length > 0, 'the promotion decision is still recorded');
+  for (const row of history) {
+    assert.notEqual(row.override_action, 'force_promote', `no source-only force_promote on ${row.target}`);
+    assert.notEqual(row.status, 'qualified', `no board qualified row on ${row.target}`);
+    assert.doesNotMatch(row.reason ?? '', /route directly to best-bets/);
+  }
+  assert.equal(outbox.length, 0);
+});
+
+test('UTV2-1902 live-DB: a qualifying Smart Form pick persists as qualified for best-bets by score', { skip: liveSkip1902 }, async () => {
+  const { pick, history } = await submitSmartForm1902Live('qualifying', {}, {
+    edge: 75, trust: 75, readiness: 80, uniqueness: 75, boardFit: 80,
+  });
+  assert.equal(pick.promotion_status, 'qualified');
+  assert.equal(pick.promotion_target, 'best-bets');
+  const bestBets = history.find((row) => row.target === 'best-bets');
+  assert.ok(bestBets, 'a best-bets decision row exists');
+  assert.equal(bestBets!.status, 'qualified');
+  assert.equal(bestBets!.override_action, null, 'qualified by score, not by override');
+});
+
+test('UTV2-1902 live-DB: a human capper delivery pick that meets a board threshold persists with no board target', { skip: liveSkip1902 }, async () => {
+  const { pick, history, outbox } = await submitSmartForm1902Live(
+    'human-capper',
+    {
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: {
+        version: 'human-capper-delivery/v1',
+        decision: 'authorized',
+        authority: 'server-allowlist',
+        capperId: 'griff843',
+        decidedAt: new Date().toISOString(),
+      },
+    },
+    { edge: 80, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
+  );
+  assert.notEqual(pick.promotion_status, 'qualified');
+  assert.equal(pick.promotion_target, null);
+  assert.match(pick.promotion_reason ?? '', /board promotion not applicable/);
+  assert.ok(Number(pick.promotion_score ?? 0) >= 70, `score retained as information: ${pick.promotion_score}`);
+  for (const row of history) {
+    assert.notEqual(row.status, 'qualified', `no board qualified row on ${row.target}`);
+    assert.notEqual(row.override_action, 'force_promote');
+  }
+  assert.equal(outbox.length, 0, 'promotion evaluation writes no outbox row');
+});
