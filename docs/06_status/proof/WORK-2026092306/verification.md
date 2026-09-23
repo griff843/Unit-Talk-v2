@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092306
 
-MERGE_SHA: 57d752471e18a13035dac1e9606d1f99db4d4646
+MERGE_SHA: a10a6cc1ab9b6ad57fe94614e9e41e76f102d6ee
 
 Generated at: 2026-09-23T14:37:26.000Z
 Issue: WORK-2026092306
@@ -118,6 +118,6 @@ is pure and fully covered above; the two PostgREST reads it feeds on (`select pi
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: a10a6cc1ab9b6ad57fe94614e9e41e76f102d6ee
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1634
 Execution SHA: 57d752471e18a13035dac1e9606d1f99db4d4646

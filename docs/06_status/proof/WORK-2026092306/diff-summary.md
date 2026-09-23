@@ -7,7 +7,7 @@ Lane type: delivery-ui
 Branch: claude/work-2026092306-effective-settlement-intel
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1634
 Head SHA: 57d752471e18a13035dac1e9606d1f99db4d4646
-Merge SHA: pending merge
+Merge SHA: a10a6cc1ab9b6ad57fe94614e9e41e76f102d6ee
 Diff base: 4fe09e4d5500373baeb070a53b56186ad5533064
 Diff target: 57d752471e18a13035dac1e9606d1f99db4d4646
 
@@ -32,4 +32,4 @@ A	docs/06_status/proof/WORK-2026092306/.gitkeep
 
 ## SHA Binding
 Head SHA: 57d752471e18a13035dac1e9606d1f99db4d4646
-Merge SHA: pending merge
+Merge SHA: a10a6cc1ab9b6ad57fe94614e9e41e76f102d6ee
