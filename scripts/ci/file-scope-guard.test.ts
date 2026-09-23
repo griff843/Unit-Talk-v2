@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   evaluateFileScopeGuard,
   matchesLockPattern,
+  laneLifecycleScopePatterns,
   resolveTrustedManifests,
   type GitManifestSource,
 } from './file-scope-guard.js';
@@ -1218,4 +1219,220 @@ test('UTV2-1762: the guard hash matches scripts/ops/shared.ts hashFileScopeLock'
       `duplicated hash must agree for ${JSON.stringify(lock)}`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1892 -- repository-owned WORK identities are recognised as lane identity.
+//
+// `docs/mission/intent.md` ("Execution must not depend on the tracker",
+// ratified 2026-09-05) requires that an ordinary task proceed without a
+// tracker issue ID, carrying scope and traceability on a repository-owned
+// work identity instead. This guard's two identity patterns were UTV2-only,
+// so a WORK lane was structurally unable to pass: `laneLifecycleScopePatterns`
+// returned [] for its own issue ID, and the lane's own manifest, sync file and
+// proof directory -- the three files `ops:lane-start` itself creates and the
+// lane procedure requires committing -- were reported as cross-lane bleed.
+//
+// That is the same failure class UTV2-1759 fixed for UTV2 lanes: a lane could
+// not pass a gate by doing exactly what the lane procedure told it to do.
+//
+// What these tests must ALSO pin is what did NOT change. Admitting `WORK` here
+// widens no path scope, grants no authority and makes `WORK` no kind of
+// tracker reference; the namespace set stays closed; and every existing
+// refusal -- another lane's manifest, an undeclared ordinary file, a
+// cross-lane lock conflict -- still fires for a WORK lane exactly as it does
+// for a UTV2 one.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1892: a WORK lane is granted its own lifecycle bookkeeping paths', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/work-2026092101-historical-data-warehouse',
+    changedFiles: [
+      '.ops/sync/WORK-2026092101.yml',
+      'docs/06_status/lanes/WORK-2026092101.json',
+      'docs/06_status/proof/WORK-2026092101/evidence.json',
+      'scripts/warehouse/conveyor.ts',
+    ],
+    manifests: [
+      {
+        issue_id: 'WORK-2026092101',
+        branch: 'claude/work-2026092101-historical-data-warehouse',
+        status: 'started',
+        file_scope_lock: ['scripts/warehouse/**'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.outside_scope, []);
+});
+
+test('UTV2-1892: laneLifecycleScopePatterns keys every admitted namespace, and only those', () => {
+  for (const issueId of ['WORK-2026092101', 'UTV2-1892', 'UNI-42']) {
+    assert.deepEqual(
+      laneLifecycleScopePatterns(issueId),
+      [
+        `.ops/sync/${issueId}.yml`,
+        `docs/06_status/lanes/${issueId}.json`,
+        `docs/06_status/proof/${issueId}/**`,
+      ],
+      `${issueId} must key its own lifecycle paths`,
+    );
+  }
+
+  // The set is closed and the refusal is a grant of nothing, not a grant of
+  // everything. `bootstrap/*` keeps its own separate mechanism; a malformed or
+  // near-miss identity is simply unrecognised.
+  for (const rejected of [
+    'BOOTSTRAP-1',
+    'FOO-1',
+    'WORK-abc',
+    'WORK-123abc',
+    'HOMEWORK-123',
+    'WORK',
+    '',
+    null,
+    undefined,
+  ]) {
+    assert.deepEqual(laneLifecycleScopePatterns(rejected), [], `${String(rejected)} must receive no grant`);
+  }
+});
+
+test('UTV2-1892: a WORK lane still cannot carry another lane’s manifest', () => {
+  // EXACT-LANE ONLY. Admitting the namespace must not have turned the grant
+  // into a `docs/06_status/lanes/**` directory exemption -- that would be the
+  // cross-lane scope bleed this guard exists to catch.
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/work-2026092101-historical-data-warehouse',
+    changedFiles: [
+      'docs/06_status/lanes/WORK-2026092102.json',
+      '.ops/sync/UTV2-1892.yml',
+      'docs/06_status/proof/UTV2-1892/evidence.json',
+    ],
+    manifests: [
+      {
+        issue_id: 'WORK-2026092101',
+        branch: 'claude/work-2026092101-historical-data-warehouse',
+        status: 'started',
+        file_scope_lock: ['scripts/warehouse/**'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.deepEqual(
+    result.outside_scope.map((entry) => entry.file),
+    [
+      'docs/06_status/lanes/WORK-2026092102.json',
+      '.ops/sync/UTV2-1892.yml',
+      'docs/06_status/proof/UTV2-1892/evidence.json',
+    ],
+  );
+});
+
+test('UTV2-1892: a WORK lane still enforces its file_scope_lock on ordinary files', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/work-2026092101-historical-data-warehouse',
+    changedFiles: ['apps/api/src/index.ts'],
+    manifests: [
+      {
+        issue_id: 'WORK-2026092101',
+        branch: 'claude/work-2026092101-historical-data-warehouse',
+        status: 'started',
+        file_scope_lock: ['scripts/warehouse/**'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.deepEqual(result.outside_scope, [
+    {
+      file: 'apps/api/src/index.ts',
+      branch: 'claude/work-2026092101-historical-data-warehouse',
+      issue_id: 'WORK-2026092101',
+    },
+  ]);
+});
+
+test('UTV2-1892: an active WORK lane’s lock blocks a UTV2 lane, and the reverse', () => {
+  // Conflict detection is the half that protects OTHER lanes. Before this
+  // change a WORK lane was invisible to it in one direction and unable to
+  // resolve itself in the other.
+  const workBlocksUtv2 = evaluateFileScopeGuard({
+    prBranch: 'claude/utv2-1495-hard-file-scope-lock-enforcement',
+    changedFiles: ['scripts/warehouse/conveyor.ts'],
+    manifests: [
+      {
+        issue_id: 'UTV2-1495',
+        branch: 'claude/utv2-1495-hard-file-scope-lock-enforcement',
+        status: 'started',
+        file_scope_lock: ['scripts/warehouse/conveyor.ts'],
+      },
+      {
+        issue_id: 'WORK-2026092101',
+        branch: 'claude/work-2026092101-historical-data-warehouse',
+        status: 'in_progress',
+        file_scope_lock: ['scripts/warehouse/**'],
+      },
+    ],
+  });
+
+  assert.equal(workBlocksUtv2.verdict, 'FAIL');
+  assert.deepEqual(workBlocksUtv2.conflicts, [
+    {
+      file: 'scripts/warehouse/conveyor.ts',
+      locked_by: 'WORK-2026092101',
+      lane_branch: 'claude/work-2026092101-historical-data-warehouse',
+      lock_pattern: 'scripts/warehouse/**',
+    },
+  ]);
+
+  const utv2BlocksWork = evaluateFileScopeGuard({
+    prBranch: 'claude/work-2026092101-historical-data-warehouse',
+    changedFiles: ['scripts/warehouse/conveyor.ts'],
+    manifests: [
+      {
+        issue_id: 'WORK-2026092101',
+        branch: 'claude/work-2026092101-historical-data-warehouse',
+        status: 'started',
+        file_scope_lock: ['scripts/warehouse/**'],
+      },
+      {
+        issue_id: 'UTV2-1495',
+        branch: 'claude/utv2-1495-hard-file-scope-lock-enforcement',
+        status: 'in_progress',
+        file_scope_lock: ['scripts/warehouse/conveyor.ts'],
+      },
+    ],
+  });
+
+  assert.equal(utv2BlocksWork.verdict, 'FAIL');
+  assert.deepEqual(utv2BlocksWork.conflicts, [
+    {
+      file: 'scripts/warehouse/conveyor.ts',
+      locked_by: 'UTV2-1495',
+      lane_branch: 'claude/utv2-1495-hard-file-scope-lock-enforcement',
+      lock_pattern: 'scripts/warehouse/conveyor.ts',
+    },
+  ]);
+});
+
+test('UTV2-1892: an unrecognised namespace branch still fails closed with no own manifest', () => {
+  // `bootstrap/*` is authorised, where it is authorised at all, by its own
+  // dedicated mechanism (scripts/ops/bootstrap-authorization.ts) -- not by
+  // being silently admitted here.
+  const result = evaluateFileScopeGuard({
+    prBranch: 'bootstrap/boot-1-some-change',
+    changedFiles: ['docs/06_status/lanes/BOOT-1.json'],
+    manifests: [
+      {
+        issue_id: 'BOOT-1',
+        branch: 'bootstrap/boot-1-some-change',
+        status: 'started',
+        file_scope_lock: ['scripts/ci/file-scope-guard.ts'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'FAIL');
 });

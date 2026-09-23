@@ -1,0 +1,103 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1892
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1892
+  objective: Admit repo-minted WORK identities in the trusted Merge Gate issue
+    extraction and pm-verdict/v1 parser
+  acceptance_criteria:
+    - |-
+      ## Why
+
+      PM final-packet review on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (comment 5651878285, 2026-09-13) reproduced the integration blocker: at trusted base `e0c8f812d`, `scripts/ops/merge-gate-verdict.cjs:30` accepts only `(?:UTV2|UNI)-\d+`, so a correctly identified exact-head `pm-verdict/v1` for `WORK-2026091001` parses to `null` while a control `UTV2-1889` verdict parses. `merge-gate.yml` checks out `pull_request.base.sha` (line 91) and requires that base module (line 112), so widening the workflow's own issue extraction does not widen the trusted verdict parser. PM directed: the bounded trusted-base repair must include BOTH the WORK identifier extraction in `merge-gate.yml` and WORK acceptance in `merge-gate-verdict.cjs`, with regression coverage preserving author/PR/head validation, landed through the tracker-keyed integration route.
+
+      This is a change to a merge-authority input (reserved decision 7). It is prepared here as a PR and merges only on a CODEOWNERS `pm-verdict/v1` plus `t1-approved` at the exact head. Nothing in it changes required checks, branch protection, CODEOWNERS or `AUTHORIZED_REVIEWERS`.
+
+      ## Scope (three files, byte-identical hunks to the versions already independently reviewed on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309))
+
+      * `.github/workflows/merge-gate.yml` — issue-id alternation `(?:utv2|uni|work)-\d+` in the gate's branch/title extraction and in the WFR-v2 validators' branch extraction
+      * `scripts/ops/merge-gate-verdict.cjs` — `Issue:` line accepts `(?:UTV2|UNI|WORK)-\d+`
+      * `scripts/ops/merge-gate-verdict.test.ts` — WORK/UTV2/UNI identities all keep exact-head, PR-number and authorized-author validation; plus a drift lock asserting the workflow's alternation and the parser's alternation admit the same namespaces
+
+      ## Do not touch
+
+      `AUTHORIZED_REVIEWERS`, CODEOWNERS, branch protection, required-check configuration, the T1 approval rule (label AND exact-head verdict), the bootstrap identity path, any other file.
+
+      ## Acceptance
+
+      * `parseVerdict` on the exact-head APPROVED body for `WORK-2026091001` returns a parsed object; a stale-head, wrong-PR, or non-CODEOWNERS WORK verdict still fails `validateT1Verdicts`.
+      * `UTV2-`/`UNI-` behaviour unchanged (existing tests untouched and green).
+      * `pnpm verify` green on the branch and on the merge SHA.
+      * After it lands, [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) resyncs once, verifies, and returns for its final verdict.
+
+      Parent: [UTV2-1879](https://linear.app/unit-talk-v2/issue/UTV2-1879/bootstrap-trusted-main-work-identity-admission-before-tracker). Related: [UTV2-1882](https://linear.app/unit-talk-v2/issue/UTV2-1882/executor-result-validator-rejects-the-work-repository-minted-namespace) (ERV half, done), [UTV2-1887](https://linear.app/unit-talk-v2/issue/UTV2-1887/widen-the-file-scope-authorization-surface-to-repo-minted-work) (scope-auth half).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why
+      PM final-packet review on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (comment 5651878285, 2026-09-13) reproduced the integration blocker: at trusted base `e0c8f812d`, `scripts/ops/merge-gate-verdict.cjs:30` accepts only `(?:UTV2|UNI)-\d+`, so a correctly identified exact-head `pm-verdict/v1` for `WORK-2026091001` parses to `null` while a control `UTV2-1889` verdict parses. `merge-gate.yml` checks out `pull_request.base.sha` (line 91) and requires that base module (line 112), so widening the workflow's own issue extraction does not widen the trusted verdict parser. PM directed: the bounded trusted-base repair must include BOTH the WORK identifier extraction in `merge-gate.yml` and WORK acceptance in `merge-gate-verdict.cjs`, with regression coverage preserving author/PR/head validation, landed through the tracker-keyed integration route.
+
+      This is a change to a merge-authority input (reserved decision 7). It is prepared here as a PR and merges only on a CODEOWNERS `pm-verdict/v1` plus `t1-approved` at the exact head. Nothing in it changes required checks, branch protection, CODEOWNERS or `AUTHORIZED_REVIEWERS`.
+    - |-
+      Scope (three files, byte-identical hunks to the versions already independently reviewed on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309))
+      * `.github/workflows/merge-gate.yml` — issue-id alternation `(?:utv2|uni|work)-\d+` in the gate's branch/title extraction and in the WFR-v2 validators' branch extraction
+      * `scripts/ops/merge-gate-verdict.cjs` — `Issue:` line accepts `(?:UTV2|UNI|WORK)-\d+`
+      * `scripts/ops/merge-gate-verdict.test.ts` — WORK/UTV2/UNI identities all keep exact-head, PR-number and authorized-author validation; plus a drift lock asserting the workflow's alternation and the parser's alternation admit the same namespaces
+    - >-
+      Do not touch
+
+      `AUTHORIZED_REVIEWERS`, CODEOWNERS, branch protection, required-check
+      configuration, the T1 approval rule (label AND exact-head verdict), the
+      bootstrap identity path, any other file.
+    - |-
+      Acceptance
+      * `parseVerdict` on the exact-head APPROVED body for `WORK-2026091001` returns a parsed object; a stale-head, wrong-PR, or non-CODEOWNERS WORK verdict still fails `validateT1Verdicts`.
+      * `UTV2-`/`UNI-` behaviour unchanged (existing tests untouched and green).
+      * `pnpm verify` green on the branch and on the merge SHA.
+      * After it lands, [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) resyncs once, verifies, and returns for its final verdict.
+
+      Parent: [UTV2-1879](https://linear.app/unit-talk-v2/issue/UTV2-1879/bootstrap-trusted-main-work-identity-admission-before-tracker). Related: [UTV2-1882](https://linear.app/unit-talk-v2/issue/UTV2-1882/executor-result-validator-rejects-the-work-repository-minted-namespace) (ERV half, done), [UTV2-1887](https://linear.app/unit-talk-v2/issue/UTV2-1887/widen-the-file-scope-authorization-surface-to-repo-minted-work) (scope-auth half).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1892/admit-repo-minted-work-identities-in-the-trusted-merge-gate-issue
+    title: Admit repo-minted WORK identities in the trusted Merge Gate issue
+      extraction and pm-verdict/v1 parser
+    description: |-
+      ## Why
+
+      PM final-packet review on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) (comment 5651878285, 2026-09-13) reproduced the integration blocker: at trusted base `e0c8f812d`, `scripts/ops/merge-gate-verdict.cjs:30` accepts only `(?:UTV2|UNI)-\d+`, so a correctly identified exact-head `pm-verdict/v1` for `WORK-2026091001` parses to `null` while a control `UTV2-1889` verdict parses. `merge-gate.yml` checks out `pull_request.base.sha` (line 91) and requires that base module (line 112), so widening the workflow's own issue extraction does not widen the trusted verdict parser. PM directed: the bounded trusted-base repair must include BOTH the WORK identifier extraction in `merge-gate.yml` and WORK acceptance in `merge-gate-verdict.cjs`, with regression coverage preserving author/PR/head validation, landed through the tracker-keyed integration route.
+
+      This is a change to a merge-authority input (reserved decision 7). It is prepared here as a PR and merges only on a CODEOWNERS `pm-verdict/v1` plus `t1-approved` at the exact head. Nothing in it changes required checks, branch protection, CODEOWNERS or `AUTHORIZED_REVIEWERS`.
+
+      ## Scope (three files, byte-identical hunks to the versions already independently reviewed on [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309))
+
+      * `.github/workflows/merge-gate.yml` — issue-id alternation `(?:utv2|uni|work)-\d+` in the gate's branch/title extraction and in the WFR-v2 validators' branch extraction
+      * `scripts/ops/merge-gate-verdict.cjs` — `Issue:` line accepts `(?:UTV2|UNI|WORK)-\d+`
+      * `scripts/ops/merge-gate-verdict.test.ts` — WORK/UTV2/UNI identities all keep exact-head, PR-number and authorized-author validation; plus a drift lock asserting the workflow's alternation and the parser's alternation admit the same namespaces
+
+      ## Do not touch
+
+      `AUTHORIZED_REVIEWERS`, CODEOWNERS, branch protection, required-check configuration, the T1 approval rule (label AND exact-head verdict), the bootstrap identity path, any other file.
+
+      ## Acceptance
+
+      * `parseVerdict` on the exact-head APPROVED body for `WORK-2026091001` returns a parsed object; a stale-head, wrong-PR, or non-CODEOWNERS WORK verdict still fails `validateT1Verdicts`.
+      * `UTV2-`/`UNI-` behaviour unchanged (existing tests untouched and green).
+      * `pnpm verify` green on the branch and on the merge SHA.
+      * After it lands, [griff843/Unit-Talk-v2#1556](https://linear.app/unit-talk-v2/review/work-2026091001-tracker-free-execution-and-trusted-evaluator-2a4ab78a3309) resyncs once, verifies, and returns for its final verdict.
+
+      Parent: [UTV2-1879](https://linear.app/unit-talk-v2/issue/UTV2-1879/bootstrap-trusted-main-work-identity-admission-before-tracker). Related: [UTV2-1882](https://linear.app/unit-talk-v2/issue/UTV2-1882/executor-result-validator-rejects-the-work-repository-minted-namespace) (ERV half, done), [UTV2-1887](https://linear.app/unit-talk-v2/issue/UTV2-1887/widen-the-file-scope-authorization-surface-to-repo-minted-work) (scope-auth half).
+    captured_at: 2026-09-13T07:45:17.773Z
+    description_sha256: 16546f65fdc378d82344741920b8fb619cf47fcad361e72cf0c6b8d3a0b2c514
+  contract_hash: ce2398f29442c2963daf7265686af37a276e3b68d77e0ec85c0cf2d417df0772
