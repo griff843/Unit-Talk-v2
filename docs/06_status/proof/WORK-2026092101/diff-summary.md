@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092101-historical-data-warehouse
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1627
 Head SHA: ae244e21c74a6f374875bcdec205f94cf7e3879d
-Merge SHA: N/A
+Merge SHA: 8151a55c3a62e387818cbb36a47b20fd23b84b55
 Diff base: 966d9a31b851a67f65864002b8ef5109b2003bfe (origin/main after the branch refresh)
 Diff target: ae244e21c74a6f374875bcdec205f94cf7e3879d
 
@@ -99,4 +99,4 @@ A	scripts/warehouse/verify-archive.ts
 
 ## SHA Binding
 Head SHA: ae244e21c74a6f374875bcdec205f94cf7e3879d
-Merge SHA: N/A
+Merge SHA: 8151a55c3a62e387818cbb36a47b20fd23b84b55
