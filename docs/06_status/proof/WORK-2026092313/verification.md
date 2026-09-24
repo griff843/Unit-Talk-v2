@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092313
 
-MERGE_SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
+MERGE_SHA: aa4c5840001ebeda732f475979481b7756f0fce5
 
 Generated at: 2026-09-23T22:19:30.000Z
 Issue: WORK-2026092313
@@ -101,7 +101,7 @@ The next scheduled `db-health-tripwire.yml` run is where the change becomes obse
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: aa4c5840001ebeda732f475979481b7756f0fce5
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1641
 Execution SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
 

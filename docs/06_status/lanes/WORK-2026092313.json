@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092313-tripwire-partition-size",
   "branch": "claude/work-2026092313-tripwire-partition-size",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "aa4c5840001ebeda732f475979481b7756f0fce5",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1641",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,22 @@
     "docs/06_status/proof/WORK-2026092313/diff-summary.md",
     "docs/06_status/proof/WORK-2026092313/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-23T22:12:50.411Z",
-  "heartbeat_at": "2026-09-23T22:12:50.411Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-24T19:14:58.551Z",
+  "closed_at": "2026-09-24T19:14:58.551Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092313-tripwire-partition-size.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-24T19:14:56.169Z",
+      "verdict": "pass",
+      "merge_sha": "aa4c5840001ebeda732f475979481b7756f0fce5",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

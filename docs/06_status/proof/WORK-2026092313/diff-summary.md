@@ -1,6 +1,6 @@
 # WORK-2026092313 Diff Summary
 
-MERGE_SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
+MERGE_SHA: aa4c5840001ebeda732f475979481b7756f0fce5
 
 Generated at: 2026-09-23T22:19:30.000Z
 Issue: WORK-2026092313
@@ -9,7 +9,7 @@ Lane type: governance
 Branch: claude/work-2026092313-tripwire-partition-size
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1641
 Head SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
-Merge SHA: pending merge
+Merge SHA: aa4c5840001ebeda732f475979481b7756f0fce5
 Diff base: 7159bcdeb2141b4b620f3335122df63fa0d39721
 Diff target: 1715e1c0347c3de75500f69311b58f116bc42a63
 
