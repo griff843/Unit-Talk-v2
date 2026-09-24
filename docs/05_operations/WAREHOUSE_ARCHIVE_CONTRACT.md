@@ -167,6 +167,12 @@ no CLV, ROI or edge claim, and a test asserts it never acquires one.
   unnoticed. Staleness is read from the bucket, so it is answerable without a database credential
   and without access to the runner. A missing heartbeat is stale, never unknown.
 - **Alerting** — a run with any failed window exits non-zero and carries an `alert` payload.
+- **Unprovisioned is red, and says so** — `warehouse doctor` classifies the configuration as
+  `not_provisioned` (no archive key set), `incomplete` (something set, but a key is missing or a
+  placeholder) or `ready`, and exits 0 only for `ready`. A scheduled run before provisioning therefore
+  fails at `doctor`, and its job summary states that no window was exported, uploaded, verified or
+  manifested and that nothing became prune-eligible. It never exits cleanly: an archive that is not
+  running is stale, never unknown.
 
 ## 9. What this contract does not do
 

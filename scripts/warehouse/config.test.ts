@@ -13,9 +13,11 @@ import test from 'node:test';
 import {
   SECRET_ENV_KEYS,
   WAREHOUSE_ENV_KEYS,
+  classifyArchiveState,
   classifyPresence,
   describeConfig,
   redactSecrets,
+  renderDoctorSummary,
   resolveObjectStoreConfig,
   resolveSourceDsn,
 } from './config.js';
@@ -123,4 +125,73 @@ test('redactSecrets still strips inline credentials when nothing is configured',
   const redacted = redactSecrets('postgres://someone:letmein@host:5432/db', {});
   assert.equal(redacted.includes('letmein'), false);
   assert.ok(redacted.includes('[redacted]'));
+});
+
+// A scheduled run's configuration is one of three states, and only one may run.
+// The two that may not must still be told apart: "nothing is provisioned yet" is
+// an owner action, "half-provisioned" is a misconfiguration to fix.
+const SOURCE_DSN = 'postgresql://warehouse_reader:pw-value-9f2@db.example.test:5432/postgres';
+
+test('no archive key set at all is not_provisioned', () => {
+  assert.equal(classifyArchiveState({}), 'not_provisioned');
+  assert.equal(classifyArchiveState({ [WAREHOUSE_ENV_KEYS.bucket]: '   ' }), 'not_provisioned');
+  // The local-development root is not an archive key and must not look like provisioning.
+  assert.equal(classifyArchiveState({ [WAREHOUSE_ENV_KEYS.localRoot]: '/tmp/wh' }), 'not_provisioned');
+});
+
+test('a partial configuration is incomplete, whichever half is present', () => {
+  assert.equal(classifyArchiveState(completeEnv()), 'incomplete', 'object store without source DSN');
+  assert.equal(
+    classifyArchiveState({ [WAREHOUSE_ENV_KEYS.sourceDsn]: SOURCE_DSN }),
+    'incomplete',
+    'source DSN without object store',
+  );
+  assert.equal(
+    classifyArchiveState(completeEnv({ [WAREHOUSE_ENV_KEYS.sourceDsn]: SOURCE_DSN, [WAREHOUSE_ENV_KEYS.region]: undefined })),
+    'incomplete',
+  );
+});
+
+test('a placeholder is never counted as provisioned', () => {
+  assert.equal(classifyArchiveState({ [WAREHOUSE_ENV_KEYS.bucket]: 'your-bucket' }), 'incomplete');
+  assert.equal(
+    classifyArchiveState(completeEnv({ [WAREHOUSE_ENV_KEYS.sourceDsn]: 'CHANGEME' })),
+    'incomplete',
+  );
+});
+
+test('only a complete object store plus source is ready', () => {
+  const env = completeEnv({ [WAREHOUSE_ENV_KEYS.sourceDsn]: SOURCE_DSN });
+  assert.equal(classifyArchiveState(env), 'ready');
+  assert.equal(describeConfig(env).archive_state, 'ready');
+  assert.equal(describeConfig({}).archive_state, 'not_provisioned');
+});
+
+test('every non-ready summary says nothing was archived, and none prints a value', () => {
+  const envs: NodeJS.ProcessEnv[] = [
+    {},
+    completeEnv(),
+    { [WAREHOUSE_ENV_KEYS.bucket]: 'your-bucket', [WAREHOUSE_ENV_KEYS.sourceDsn]: SOURCE_DSN },
+  ];
+  for (const env of envs) {
+    const description = describeConfig(env);
+    assert.notEqual(description.archive_state, 'ready');
+    const summary = renderDoctorSummary(description);
+    assert.match(summary, /No window was exported, uploaded, verified or manifested/);
+    assert.match(summary, /nothing became prune-eligible/);
+    assert.equal(/archived successfully|archive complete/i.test(summary), false);
+    for (const value of Object.values(env)) {
+      if (value) assert.equal(summary.includes(value), false, 'the summary must never carry a configured value');
+    }
+  }
+  assert.match(renderDoctorSummary(describeConfig({})), /NOT PROVISIONED/);
+  const incomplete = renderDoctorSummary(describeConfig(completeEnv()));
+  assert.match(incomplete, /CONFIGURATION INCOMPLETE/);
+  assert.ok(incomplete.includes(`- \`${WAREHOUSE_ENV_KEYS.sourceDsn}\`: missing`));
+});
+
+test('the ready summary does not claim an archive happened', () => {
+  const summary = renderDoctorSummary(describeConfig(completeEnv({ [WAREHOUSE_ENV_KEYS.sourceDsn]: SOURCE_DSN })));
+  assert.match(summary, /configuration ready/);
+  assert.match(summary, /reported by the conveyor step, not by this check/);
 });
