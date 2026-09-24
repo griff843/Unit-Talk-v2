@@ -6,10 +6,10 @@ Tier: T1
 Lane type: governance
 Branch: claude/work-2026092401-conveyor-unprovisioned-state
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1643
-Head SHA: fdacdda21abfc2efef7f0e532f6fb7c9563b19ff
+Head SHA: 16727dd07d7a9556f4a5e9ac259e1032d1ee6364
 Merge SHA: pending merge
 Diff base: decd67afaf99eeb41320c40eca14a9d9e9cf92a6 (origin/main)
-Diff target: fdacdda21abfc2efef7f0e532f6fb7c9563b19ff
+Diff target: 16727dd07d7a9556f4a5e9ac259e1032d1ee6364
 
 ## Git Diff Stat
 ```
