@@ -13,7 +13,8 @@
  *   by clv-feedback.ts and analytics.ts).
  */
 
-import type { PickRepository, SettlementRepository } from '@unit-talk/db';
+import type { PickRepository, SettlementRecord, SettlementRepository } from '@unit-talk/db';
+import { resolveEffectiveSettlement, type SettlementInput } from '@unit-talk/domain';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -77,6 +78,13 @@ export interface ModelPerformanceReport {
   totalSettledPicks: number;
   /** Picks whose market string is empty and cannot be classified. Excluded from breakdown buckets. */
   unknownMarketPickCount: number;
+  /**
+   * Picks with settlement records whose correction chain does not resolve to one
+   * effective record (an orphan correction, two roots, two corrections of one
+   * record, a cycle). They are not counted as settled -- and are counted here so
+   * the exclusion is never silent.
+   */
+  unresolvedSettlementPickCount: number;
   filters: {
     sport: string | null;
     tier: string | null;
@@ -120,6 +128,37 @@ function deriveMarketFamily(market: string): string {
     .replace(/_under$/, '')
     .replace(/_ml$/, '')
     .replace(/_spread$/, '');
+}
+
+/** A correction chain is complete when every `corrects_id` targets a row in the set. */
+function isChainComplete(rows: SettlementRecord[]): boolean {
+  const ids = new Set(rows.map((row) => row.id));
+  return rows.every((row) => row.corrects_id === null || ids.has(row.corrects_id));
+}
+
+/**
+ * The effective settlement record for one pick: the tip of its correction chain
+ * (`corrects_id` -> prior record), never the root. Returns null -- fail closed --
+ * when the chain does not resolve to exactly one path covering every row.
+ */
+function resolveEffectiveRecord(rows: SettlementRecord[]): SettlementRecord | null {
+  if (!isChainComplete(rows)) return null;
+  if (rows.some((row) => row.status !== 'settled' && row.status !== 'manual_review')) return null;
+  const resolved = resolveEffectiveSettlement(
+    rows.map(
+      (row): SettlementInput => ({
+        id: row.id,
+        pick_id: row.pick_id,
+        status: row.status as SettlementInput['status'],
+        result: row.result,
+        confidence: row.confidence,
+        corrects_id: row.corrects_id,
+        settled_at: row.settled_at,
+      }),
+    ),
+  );
+  if (!resolved.ok || resolved.settlement.correction_depth + 1 !== rows.length) return null;
+  return rows.find((row) => row.id === resolved.settlement.effective_record_id) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,16 +215,32 @@ export async function getModelPerformanceReport(
   const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const recentSettlements = await repositories.settlements.listRecent(5000, since30d);
 
-  // Build a map: pick_id → latest settlement (canonical — corrects_id is null = canonical)
-  const settlementMap = new Map<string, (typeof recentSettlements)[0]>();
+  // Build a map: pick_id → effective settlement. A pick's result is the tip of
+  // its correction chain, never the root: keeping only corrects_id-null rows
+  // reported every corrected pick with its superseded result and CLV. A chain
+  // whose root predates the read window is completed from the pick's full
+  // history; one that still does not resolve is excluded and counted.
+  const rowsByPick = new Map<string, SettlementRecord[]>();
   for (const sr of recentSettlements) {
-    if (sr.status !== 'settled') continue;
-    // Skip correction rows — only keep canonical originals
-    if (sr.corrects_id !== null) continue;
-    const existing = settlementMap.get(sr.pick_id);
-    if (!existing || sr.settled_at > existing.settled_at) {
-      settlementMap.set(sr.pick_id, sr);
+    const group = rowsByPick.get(sr.pick_id);
+    if (group) group.push(sr);
+    else rowsByPick.set(sr.pick_id, [sr]);
+  }
+
+  const reportedPickIds = new Set(filteredPicks.map((p) => p.id));
+  const settlementMap = new Map<string, SettlementRecord>();
+  let unresolvedSettlementPickCount = 0;
+  for (const [pickId, windowRows] of rowsByPick) {
+    if (!reportedPickIds.has(pickId)) continue;
+    const rows = isChainComplete(windowRows)
+      ? windowRows
+      : await repositories.settlements.listByPick(pickId);
+    const effective = resolveEffectiveRecord(rows);
+    if (effective === null) {
+      unresolvedSettlementPickCount++;
+      continue;
     }
+    if (effective.status === 'settled') settlementMap.set(pickId, effective);
   }
 
   // 3. Build enriched rows
@@ -378,6 +433,7 @@ export async function getModelPerformanceReport(
     totalPostedPicks,
     totalSettledPicks,
     unknownMarketPickCount,
+    unresolvedSettlementPickCount,
     filters: {
       sport: filterSport,
       tier: filterTier,

@@ -921,6 +921,9 @@ export async function probeDeadLetterCount(ctx: ProbeContext): Promise<Readiness
   }
 }
 
+/** The db-health-tripwire.yml step whose failure alone means a tripwire fired. */
+export const DB_TRIPWIRE_VERDICT_STEP = 'Report DB health verdict';
+
 export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDimension> {
   const base = {
     id: 'db_tripwires',
@@ -929,7 +932,7 @@ export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDime
     method: {
       kind: 'github_api' as const,
       source: 'github:actions/runs/db-health-tripwire.yml',
-      query: 'latest completed run of db-health-tripwire.yml (conclusion, completed_at)',
+      query: 'latest completed run of db-health-tripwire.yml (conclusion, completed_at, failed steps)',
     },
   };
 
@@ -968,16 +971,37 @@ export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDime
       };
     }
 
-    // A red observer run is genuinely ambiguous from the outside: "the checks ran
-    // and a tripwire fired" and "the observer could not run at all" both conclude
-    // "failure". Verified on 2026-07-30 — run 30573430796 reports its failing step
-    // as "Run DB health checks", which reads like a fired tripwire, while the log
-    // shows exit 127: the step's `tsx` binary was not on PATH and no check ever
-    // executed. A step-name heuristic would have published that as a production
-    // DB failure. So a red observer yields `unknown`, with the failed steps
-    // recorded — absence of tripwires is only provable from a green observer, and
-    // a real tripwire is alerted by the observer's own workflow.
+    // A red run's conclusion alone is ambiguous: "the checks ran and a tripwire
+    // fired" and "the observer could not run at all" both conclude "failure".
+    // Verified on 2026-07-30: run 30573430796 failed at "Run DB health checks"
+    // with exit 127, before any check executed.
+    //
+    // The workflow now splits its outcomes across steps. `DB_TRIPWIRE_VERDICT_STEP`
+    // has no `if:`, so it runs only after the harness step and the execution-proof
+    // step both succeeded. When it is the ONLY failed step, the checks executed and
+    // a tripwire fired, and that is a measured failure, not an unknown. Every other
+    // red shape, including the 2026-07-30 one, stays `unknown`, with the failed
+    // steps recorded. The test suite pins this step name and its lack of a
+    // condition to the workflow file.
     const failedSteps = await github.failedSteps(run.id);
+    if (failedSteps.length === 1 && failedSteps[0] === DB_TRIPWIRE_VERDICT_STEP) {
+      return {
+        ...base,
+        status: 'fail',
+        observed_at: ctx.now.toISOString(),
+        evidence:
+          `db-health-tripwire.yml run ${run.html_url} executed its checks and failed only at "${DB_TRIPWIRE_VERDICT_STEP}" ` +
+          `at ${run.updated_at} (${ageHours}h ago): at least one tripwire fired. The run's receipt artifact names the checks.`,
+        measured: {
+          run_url: run.html_url,
+          conclusion: run.conclusion,
+          completed_at: run.updated_at,
+          age_hours: ageHours,
+          failed_steps: failedSteps,
+        },
+        unreadable_reason: null,
+      };
+    }
     return unreadable(
       base,
       `db-health-tripwire.yml run ${run.html_url} concluded "${run.conclusion}" (failed step(s): ${failedSteps.join(', ') || 'unreported'}) — ` +
