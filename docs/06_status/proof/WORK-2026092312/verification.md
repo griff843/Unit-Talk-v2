@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092312
 
-MERGE_SHA: ecbf8a39a4d91ede498cb7b9f68e25ed97895e0e
+MERGE_SHA: 3bf6bd91b08c98e55193a341d2318d9c299e0774
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -57,7 +57,7 @@ exit 0 (sync-check, env, lint, type-check)
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3bf6bd91b08c98e55193a341d2318d9c299e0774
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1640
 Approved PR head: pending merge
 Execution SHA: ecbf8a39a4d91ede498cb7b9f68e25ed97895e0e
