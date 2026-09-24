@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092405-warehouse-backfill-credentials",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1646",
   "files_changed": [],
   "file_scope_lock": [
     "docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md",
@@ -20,7 +20,7 @@
     "docs/06_status/proof/WORK-2026092405/diff-summary.md",
     "docs/06_status/proof/WORK-2026092405/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-24T14:31:54.605Z",
   "heartbeat_at": "2026-09-24T14:31:54.605Z",
   "closed_at": null,
