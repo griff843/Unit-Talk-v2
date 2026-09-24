@@ -1,0 +1,217 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092405
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092405
+  objective: WORK-2026092405 — the warehouse backfill and least-privilege
+    credentials are specified before anything runs
+  acceptance_criteria:
+    - >-
+      # WORK-2026092405 — the warehouse backfill and least-privilege credentials
+      are specified before anything runs
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      PM decisions of 2026-09-24 settled the archive scope: 45-day hot
+      retention; both
+
+      `provider_offer_history` (2026-05-11 → 06-30) and
+      `provider_offers_legacy_quarantine`
+
+      (2026-04-23 → 04-29) are archived; the quarantine is not pruned even after
+      verification; nothing
+
+      is prune-eligible without a verified archive. The repository still says
+      otherwise in places: the
+
+      architecture doc calls the quarantine "export then prune", the
+      provisioning doc names a bucket
+
+      that does not exist (`unit-talk-archive`, live bucket is
+      `unit-talk-prod-warehouse`) and specifies
+
+      no bucket policy, and no document specifies how the existing history
+      reaches the warehouse — the
+
+      daily conveyor only ever archives `today - 46`, which is empty, so without
+      a bounded backfill the
+
+      existing 2026-05/06 history is never archived. `plan.md` still describes
+      cron job 5 as active; Griff
+
+      deactivated it 2026-09-24.
+
+
+      ## Outcome (documentation only — no code, no production action)
+
+
+      - `WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`: bounded, oldest-first,
+      deterministic, verified,
+        manifest-backed, idempotent, stop-on-first-failure backfill for both sources, with the measured
+        per-day windows, the quarantine prune hold, and the implementation that waits on #1642/#1643/#1644.
+      - `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`: the approved least-privilege
+      credential design —
+        keys-only Hetzner project, the exact bucket policy, the verification matrix (reader Put/Delete
+        must fail; neither key reaches `unit-talk-prod-backups`), the measured cost finding, and the
+        `warehouse-archive` environment design.
+      - `HISTORICAL_MARKET_DATA_WAREHOUSE.md`: the quarantine disposition
+      corrected to the PM decision.
+
+      - `plan.md`: job 5 inactive, stale deploy run rejected, decisions updated.
+
+
+      ## Not in scope
+
+      No credential is created, no secret set, no DDL, no data moved or deleted,
+      no job re-enabled.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092405 — the warehouse backfill and least-privilege credentials
+      are specified before anything runs
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      PM decisions of 2026-09-24 settled the archive scope: 45-day hot
+      retention; both
+
+      `provider_offer_history` (2026-05-11 → 06-30) and
+      `provider_offers_legacy_quarantine`
+
+      (2026-04-23 → 04-29) are archived; the quarantine is not pruned even after
+      verification; nothing
+
+      is prune-eligible without a verified archive. The repository still says
+      otherwise in places: the
+
+      architecture doc calls the quarantine "export then prune", the
+      provisioning doc names a bucket
+
+      that does not exist (`unit-talk-archive`, live bucket is
+      `unit-talk-prod-warehouse`) and specifies
+
+      no bucket policy, and no document specifies how the existing history
+      reaches the warehouse — the
+
+      daily conveyor only ever archives `today - 46`, which is empty, so without
+      a bounded backfill the
+
+      existing 2026-05/06 history is never archived. `plan.md` still describes
+      cron job 5 as active; Griff
+
+      deactivated it 2026-09-24.
+
+
+      ## Outcome (documentation only — no code, no production action)
+
+
+      - `WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`: bounded, oldest-first,
+      deterministic, verified,
+        manifest-backed, idempotent, stop-on-first-failure backfill for both sources, with the measured
+        per-day windows, the quarantine prune hold, and the implementation that waits on #1642/#1643/#1644.
+      - `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`: the approved least-privilege
+      credential design —
+        keys-only Hetzner project, the exact bucket policy, the verification matrix (reader Put/Delete
+        must fail; neither key reaches `unit-talk-prod-backups`), the measured cost finding, and the
+        `warehouse-archive` environment design.
+      - `HISTORICAL_MARKET_DATA_WAREHOUSE.md`: the quarantine disposition
+      corrected to the PM decision.
+
+      - `plan.md`: job 5 inactive, stale deploy run rejected, decisions updated.
+
+
+      ## Not in scope
+
+      No credential is created, no secret set, no DDL, no data moved or deleted,
+      no job re-enabled.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092405.md
+    title: WORK-2026092405 — the warehouse backfill and least-privilege credentials
+      are specified before anything runs
+    description: >-
+      # WORK-2026092405 — the warehouse backfill and least-privilege credentials
+      are specified before anything runs
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      PM decisions of 2026-09-24 settled the archive scope: 45-day hot
+      retention; both
+
+      `provider_offer_history` (2026-05-11 → 06-30) and
+      `provider_offers_legacy_quarantine`
+
+      (2026-04-23 → 04-29) are archived; the quarantine is not pruned even after
+      verification; nothing
+
+      is prune-eligible without a verified archive. The repository still says
+      otherwise in places: the
+
+      architecture doc calls the quarantine "export then prune", the
+      provisioning doc names a bucket
+
+      that does not exist (`unit-talk-archive`, live bucket is
+      `unit-talk-prod-warehouse`) and specifies
+
+      no bucket policy, and no document specifies how the existing history
+      reaches the warehouse — the
+
+      daily conveyor only ever archives `today - 46`, which is empty, so without
+      a bounded backfill the
+
+      existing 2026-05/06 history is never archived. `plan.md` still describes
+      cron job 5 as active; Griff
+
+      deactivated it 2026-09-24.
+
+
+      ## Outcome (documentation only — no code, no production action)
+
+
+      - `WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`: bounded, oldest-first,
+      deterministic, verified,
+        manifest-backed, idempotent, stop-on-first-failure backfill for both sources, with the measured
+        per-day windows, the quarantine prune hold, and the implementation that waits on #1642/#1643/#1644.
+      - `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`: the approved least-privilege
+      credential design —
+        keys-only Hetzner project, the exact bucket policy, the verification matrix (reader Put/Delete
+        must fail; neither key reaches `unit-talk-prod-backups`), the measured cost finding, and the
+        `warehouse-archive` environment design.
+      - `HISTORICAL_MARKET_DATA_WAREHOUSE.md`: the quarantine disposition
+      corrected to the PM decision.
+
+      - `plan.md`: job 5 inactive, stale deploy run rejected, decisions updated.
+
+
+      ## Not in scope
+
+      No credential is created, no secret set, no DDL, no data moved or deleted,
+      no job re-enabled.
+    captured_at: 2026-09-24T14:31:44.925Z
+    description_sha256: e375906dd771d9b24e369767babc2153560bb1f657b8872367ae925c4a20448b
+  contract_hash: 2020df67ee109cb68b9eb51b28f9c862f6fa7ff82042b41ea5897cede20c72bc
