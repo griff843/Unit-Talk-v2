@@ -43,6 +43,22 @@ A7 cannot be closed as written, because neither retention path is both working a
   accident**: remove or reorder the `audit_log` DELETE and the next 03:00 UTC run drops every history
   partition older than seven days, none of which is archived. Deactivating job 5 is a production
   change and is recommended in `PRODUCTION_DB_SIZING_AUDIT.md` and `FIRST_ARCHIVE_CANDIDATE_PACKET.md`.
+- **The repository does not describe job 5 as it runs, and one repository file would arm it.**
+  The live body was read from `cron.job` on 2026-09-23 and contains the `audit_log` DELETE. It
+  matches the migration ledger's copy,
+  `supabase/migrations_archive/ledger/20260509160906_202605090001_utv2_862_cron_fix_partition_lifecycle.sql`.
+  Two other repository files disagree with it:
+  - `supabase/migrations_archive/202605090001_utv2_862_cron_fix_partition_lifecycle.sql` is the
+    same migration **without** the `audit_log` DELETE. It was edited after it was applied.
+  - `supabase/migrations_archive/202605130001_utv2_921_audit_log_retention_immutability.sql`
+    reschedules job 5 without the `audit_log` DELETE "so retention must not attempt destructive
+    operations against it". It is **absent from the ledger**, so it was never applied. Its stated
+    intent was for the job to succeed. The failure is therefore not a designed safety control.
+    Applying that file by hand, or re-applying the edited 862 copy, removes the only statement
+    that makes every run roll back.
+
+  Neither file is in `supabase/migrations/`, so no migration push reaches them. The hazard
+  needs a manual act, and it is not imminent.
 - **The ingestor's retention** (`apps/ingestor/src/ingestor-runner.ts:494`,
   `provider-offer-history-retention.ts`, default `retentionDays` 7). It runs once *after* the cycle
   loop ends, and `apps/ingestor/src/index.ts:130` wires it in the production runtime. The production
