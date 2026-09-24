@@ -26,6 +26,7 @@ import {
   computeUniquenessWithMeta,
   DEFAULT_BANKROLL_CONFIG,
   evaluatePromotionEligibility,
+  promotionScoringContextForPick,
   generatePickNarrative,
   initialBandAssignment,
 } from '@unit-talk/domain';
@@ -566,6 +567,8 @@ export async function evaluateAllPoliciesEagerAndPersist(
     // UTV2-1902: persist the override the decision was evaluated with, so
     // replayPromotion() reproduces it rather than re-deciding without it.
     ...(boardOverride !== undefined ? { override: boardOverride } : {}),
+    // UTV2-1954: the market and sport makeInput() scored from.
+    scoringContext: promotionScoringContextForPick(canonicalPick),
   });
 
   const winnerSnapshot = makeSnapshot(winnerPolicy, winnerBoardState);
@@ -878,6 +881,8 @@ async function persistPromotionDecisionForPick(
       boardFit: policy.weights.boardFit,
     },
     ...(overrideState !== undefined ? { override: overrideState } : {}),
+    // UTV2-1954: the market and sport the evaluation above scored from.
+    scoringContext: promotionScoringContextForPick(canonicalPick),
   };
 
   const persisted = await pickRepository.persistPromotionDecision({

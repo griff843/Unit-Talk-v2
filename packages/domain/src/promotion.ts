@@ -9,6 +9,9 @@ import {
   type PromotionScoreBreakdown,
   type PromotionScoreInputs,
   type PromotionScoreWeights,
+  type PromotionScoringContext,
+  parsePromotionSnapshot,
+  readPromotionScoringContext,
 } from '@unit-talk/contracts';
 import { createHash } from 'node:crypto';
 import { applyPromotionModifiers, type ScoreProvenance } from './scoring/promotion-weight-profiles.js';
@@ -480,12 +483,7 @@ function calculateScore(
     boardFit: b * weights.boardFit,
   };
 
-  const market = input.pick.market ?? '';
-  const sport =
-    input.pick.metadata &&
-    typeof input.pick.metadata['sport'] === 'string'
-      ? input.pick.metadata['sport']
-      : null;
+  const { market, sport } = promotionScoringContextForPick(input.pick);
 
   // Risk modifier: 1.0 when absent (pre-v3 compat), otherwise 0.85–1.0
   const riskModifier =
@@ -527,6 +525,20 @@ function calculateScore(
     total: modified.total * riskModifier,
     provenance: modified.provenance,
   };
+}
+
+/**
+ * UTV2-1954: the market and sport calculateScore reads from a pick. Snapshot
+ * writers persist exactly this, so a replay scores from the same context the
+ * live evaluation did.
+ */
+export function promotionScoringContextForPick(
+  pick: Pick<CanonicalPick, 'market' | 'metadata'>,
+): PromotionScoringContext {
+  const sport = pick.metadata && typeof pick.metadata['sport'] === 'string'
+    ? pick.metadata['sport']
+    : null;
+  return { market: pick.market ?? '', sport };
 }
 
 function normalizeScore(value: number) {
@@ -690,10 +702,22 @@ export function replayPromotion(
   policy: PromotionPolicy,
   decidedAt?: string,
 ): BoardPromotionDecisionWithProvenance {
+  // UTV2-1954: score from the market and sport the decision was scored with.
+  // Without them the market-family modifiers and caps are skipped, which is
+  // the documented pre-UTV2-623 semantics and is only meaningful for
+  // counterfactuals; replayRecordedPromotion() refuses to call that a
+  // reproduction.
+  const scoringContext = readPromotionScoringContext(snapshot);
   const input: BoardPromotionEvaluationInput = {
     target: policy.target,
     pick: {
       confidence: snapshot.gateInputs.pickConfidence ?? undefined,
+      ...(scoringContext
+        ? {
+            market: scoringContext.market,
+            metadata: scoringContext.sport !== null ? { sport: scoringContext.sport } : {},
+          }
+        : {}),
     } as CanonicalPick,
     approvalStatus: snapshot.gateInputs.approvalStatus as ApprovalStatus,
     hasRequiredFields: snapshot.gateInputs.hasRequiredFields,
@@ -718,4 +742,101 @@ export function replayPromotion(
   };
 
   return evaluatePromotionEligibility(input, policy);
+}
+
+/** UTV2-1954: why a recorded promotion decision cannot be reproduced. */
+export type PromotionReplayUnavailableReason =
+  /** The payload carries no score inputs (e.g. a stale-data or exposure-gate row). */
+  | 'snapshot-missing'
+  /** Written before UTV2-1954: the market and sport the score used were not persisted. */
+  | 'scoring-context-missing'
+  /** The payload does not carry the policy the decision was evaluated against. */
+  | 'policy-missing'
+  /** The payload does not carry the score that was recorded. */
+  | 'recorded-score-missing';
+
+export type RecordedPromotionReplay =
+  | { outcome: 'not-reproducible'; reason: PromotionReplayUnavailableReason }
+  | {
+      outcome: 'replayed';
+      decision: BoardPromotionDecisionWithProvenance;
+      recordedScore: number;
+      recordedStatus: string;
+      scoreMatches: boolean;
+      statusMatches: boolean;
+      /** True only when both the score and the status reproduce. */
+      agrees: boolean;
+    };
+
+/** Scores are recomputed from the same doubles; anything beyond float noise is a real difference. */
+const REPLAY_SCORE_TOLERANCE = 1e-9;
+
+function readRecordedPolicy(value: unknown): PromotionPolicy | null {
+  if (!isRecord(value)) return null;
+  const weights = value['weights'];
+  const boardCaps = value['boardCaps'];
+  if (
+    typeof value['target'] !== 'string' ||
+    typeof value['version'] !== 'string' ||
+    typeof value['minimumScore'] !== 'number' ||
+    typeof value['minimumEdge'] !== 'number' ||
+    typeof value['minimumTrust'] !== 'number' ||
+    !isRecord(weights) ||
+    !isRecord(boardCaps)
+  ) {
+    return null;
+  }
+  for (const key of ['edge', 'trust', 'readiness', 'uniqueness', 'boardFit']) {
+    if (typeof weights[key] !== 'number') return null;
+  }
+  for (const key of ['perSlate', 'perSport', 'perGame']) {
+    if (typeof boardCaps[key] !== 'number') return null;
+  }
+  return value as unknown as PromotionPolicy;
+}
+
+/**
+ * UTV2-1954: replay one persisted pick_promotion_history row and say whether it
+ * reproduces. Uses only what the row recorded: the snapshot, its scoring
+ * context and the saved policy -- never the caller's current policy. A row
+ * written before the scoring context was persisted is reported as
+ * not-reproducible instead of being silently re-decided without its market
+ * modifiers.
+ *
+ * @param payload  - pick_promotion_history.payload
+ * @param recorded - the row's persisted status and decided_at
+ */
+export function replayRecordedPromotion(
+  payload: unknown,
+  recorded: { status: string; decidedAt: string },
+): RecordedPromotionReplay {
+  const snapshot = parsePromotionSnapshot(payload);
+  if (!snapshot) {
+    return { outcome: 'not-reproducible', reason: 'snapshot-missing' };
+  }
+  if (!readPromotionScoringContext(snapshot)) {
+    return { outcome: 'not-reproducible', reason: 'scoring-context-missing' };
+  }
+  const record = payload as Record<string, unknown>;
+  const policy = readRecordedPolicy(record['policy']);
+  if (!policy) {
+    return { outcome: 'not-reproducible', reason: 'policy-missing' };
+  }
+  const recordedScore = record['score'];
+  if (typeof recordedScore !== 'number' || !Number.isFinite(recordedScore)) {
+    return { outcome: 'not-reproducible', reason: 'recorded-score-missing' };
+  }
+
+  const decision = replayPromotion(snapshot, policy, recorded.decidedAt);
+  const scoreMatches = Math.abs(decision.score - recordedScore) <= REPLAY_SCORE_TOLERANCE;
+  const statusMatches = decision.status === recorded.status;
+  return {
+    outcome: 'replayed',
+    decision,
+    recordedScore,
+    recordedStatus: recorded.status,
+    scoreMatches,
+    statusMatches,
+    agrees: scoreMatches && statusMatches,
+  };
 }

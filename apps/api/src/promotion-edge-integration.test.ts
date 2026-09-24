@@ -22,7 +22,7 @@ import {
   traderInsightsPromotionPolicy,
   type PromotionPolicy,
 } from '@unit-talk/contracts';
-import { replayPromotion } from '@unit-talk/domain';
+import { replayPromotion, replayRecordedPromotion } from '@unit-talk/domain';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
 import {
@@ -2361,4 +2361,241 @@ test('UTV2-1902 replay: a non-Smart-Form pick still persists and replays with it
     assert.equal(snapshot.override, undefined, `${row.target}: no override persisted`);
     assert.equal(replayed.status, row.status, `${row.target}: replay reproduces the recorded status`);
   }
+});
+
+// ── UTV2-1954: replay reproduces the market-adjusted score ────────────────────
+//
+// The score a pick is persisted with includes the market-family multipliers
+// and caps, which depend on the pick's market and sport. Before UTV2-1954 the
+// snapshot stored neither, so replay scored without them and could re-decide a
+// pick. These tests drive the real eager path, then replay every persisted row
+// with nothing but what the row recorded.
+
+type InMemoryBundle = ReturnType<typeof createInMemoryRepositoryBundle>;
+
+function historyRowsFor(repositories: InMemoryBundle, pickId: string) {
+  const rows = (repositories.picks as unknown as { promotionHistory: PromotionHistoryRecord[] })
+    .promotionHistory.filter((row) => row.pick_id === pickId);
+  assert.ok(rows.length > 0, 'the path under test persisted promotion history');
+  return rows;
+}
+
+function assertEveryRowReproduces(repositories: InMemoryBundle, pickId: string) {
+  const rows = historyRowsFor(repositories, pickId);
+  for (const row of rows) {
+    const replay = replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at });
+    assert.equal(replay.outcome, 'replayed', `${row.target}: the row is reproducible`);
+    if (replay.outcome !== 'replayed') continue;
+    assert.equal(replay.decision.score, row.score, `${row.target}: replay reproduces the recorded score exactly`);
+    assert.equal(replay.decision.status, row.status, `${row.target}: replay reproduces the recorded status`);
+    assert.equal(replay.agrees, true, `${row.target}: replay agrees with the recorded decision`);
+  }
+  return rows;
+}
+
+// Reported by the independent exact-head review of #1630: an eager-path NBA
+// player prop persisted best-bets `suppressed` at 60.15 and replayed `qualified`
+// at 70.76. 70.76 x 0.85 = 60.15 -- the `unknown` market-family multiplier the
+// replay skipped. Every input is 72.5 so the unmodified score is 72.5 x the
+// 0.976 risk modifier = 70.76, above best-bets' minimum of 70.
+const UTV2_1954_NBA_PROP = {
+  market: 'NBA - Player Points',
+  sport: 'NBA',
+  scores: { edge: 72.5, trust: 72.5, readiness: 72.5, uniqueness: 72.5, boardFit: 72.5 },
+} as const;
+
+async function submitNbaProp1954(source: 'smart-form' | 'api', label: string) {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source,
+      submittedBy: 'griff843',
+      market: UTV2_1954_NBA_PROP.market,
+      selection: `UTV2-1954 ${label} Over 25.5`,
+      odds: -110,
+      confidence: 0.7,
+      metadata: {
+        sport: UTV2_1954_NBA_PROP.sport,
+        eventName: `UTV2-1954 ${label} Away at Home`,
+        capper: 'griff843',
+        promotionScores: { ...UTV2_1954_NBA_PROP.scores },
+      },
+    },
+    repositories,
+  );
+  return { repositories, result };
+}
+
+test('UTV2-1954: the reported NBA prop, suppressed at 60.15, does not replay as qualified at 70.76', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'nba-prop');
+  const bestBets = historyRowsFor(repositories, result.pick.id).find((row) => row.target === 'best-bets');
+  assert.ok(bestBets, 'the eager path persisted a best-bets row');
+
+  // The recorded decision is the reported one, and it was suppressed for its
+  // score -- not by a gate that a replay would also hit for another reason.
+  assert.equal(bestBets.status, 'suppressed');
+  assert.equal(Number(bestBets.score!.toFixed(2)), 60.15);
+  const recordedReasons = (bestBets.payload as { explanation: { suppressionReasons: string[] } })
+    .explanation.suppressionReasons;
+  assert.equal(recordedReasons.length, 1, `exactly one suppression reason: ${JSON.stringify(recordedReasons)}`);
+  assert.equal(recordedReasons[0], 'promotion score 60.15 is below threshold 70.00');
+
+  // The snapshot carries the context the score was computed from.
+  const snapshot = parsePromotionSnapshot(bestBets.payload)!;
+  assert.deepEqual(snapshot.scoringContext, { market: 'NBA - Player Points', sport: 'NBA' });
+
+  const replay = replayRecordedPromotion(bestBets.payload, { status: bestBets.status, decidedAt: bestBets.decided_at });
+  assert.equal(replay.outcome, 'replayed');
+  if (replay.outcome !== 'replayed') return;
+  assert.equal(replay.decision.status, 'suppressed', 'replay reproduces the suppression');
+  assert.equal(replay.decision.qualified, false);
+  assert.equal(Number(replay.decision.score.toFixed(2)), 60.15, 'replay reproduces 60.15, not 70.76');
+  assert.deepEqual(replay.decision.explanation.suppressionReasons, recordedReasons, 'for the same reason');
+  assert.equal(replay.agrees, true);
+
+  // Control: the same snapshot without its context is exactly the defect --
+  // the pre-UTV2-1954 replay qualifies it at 70.76. This is what makes the
+  // assertions above able to fail.
+  const { scoringContext: _dropped, ...legacySnapshot } = snapshot;
+  const legacy = replayPromotion(legacySnapshot, bestBetsPromotionPolicy, bestBets.decided_at);
+  assert.equal(legacy.status, 'qualified');
+  assert.equal(Number(legacy.score.toFixed(2)), 70.76);
+});
+
+test('UTV2-1954: a snapshot written before the scoring context is reported not reproducible, never re-decided', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'legacy');
+  for (const row of historyRowsFor(repositories, result.pick.id)) {
+    const { scoringContext: _dropped, ...legacyPayload } = row.payload as Record<string, unknown>;
+    const replay = replayRecordedPromotion(legacyPayload, { status: row.status, decidedAt: row.decided_at });
+    assert.deepEqual(replay, { outcome: 'not-reproducible', reason: 'scoring-context-missing' }, row.target);
+  }
+});
+
+test('UTV2-1954: replay uses the saved policy, not a caller-supplied one', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'saved-policy');
+  const bestBets = historyRowsFor(repositories, result.pick.id).find((row) => row.target === 'best-bets')!;
+  // A row whose saved policy is gone cannot be replayed against a guessed one.
+  const { policy: _dropped, ...withoutPolicy } = bestBets.payload as Record<string, unknown>;
+  assert.deepEqual(
+    replayRecordedPromotion(withoutPolicy, { status: bestBets.status, decidedAt: bestBets.decided_at }),
+    { outcome: 'not-reproducible', reason: 'policy-missing' },
+  );
+  // A saved policy with a lower minimum is honoured: the replay follows the
+  // record, and reports the disagreement with the recorded status explicitly.
+  const lowered = {
+    ...(bestBets.payload as Record<string, unknown>),
+    policy: { ...bestBetsPromotionPolicy, minimumScore: 50 },
+  };
+  const replay = replayRecordedPromotion(lowered, { status: bestBets.status, decidedAt: bestBets.decided_at });
+  assert.equal(replay.outcome, 'replayed');
+  if (replay.outcome !== 'replayed') return;
+  assert.equal(replay.decision.status, 'qualified');
+  assert.equal(replay.scoreMatches, true);
+  assert.equal(replay.statusMatches, false);
+  assert.equal(replay.agrees, false);
+});
+
+test('UTV2-1954: a replay that reaches a different score is reported as a disagreement', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'tampered');
+  const row = historyRowsFor(repositories, result.pick.id)[0]!;
+  const tampered = { ...(row.payload as Record<string, unknown>), score: (row.score ?? 0) + 1 };
+  const replay = replayRecordedPromotion(tampered, { status: row.status, decidedAt: row.decided_at });
+  assert.equal(replay.outcome, 'replayed');
+  if (replay.outcome !== 'replayed') return;
+  assert.equal(replay.scoreMatches, false);
+  assert.equal(replay.agrees, false);
+});
+
+test('UTV2-1954: rows without score inputs are not reproducible', () => {
+  assert.deepEqual(
+    replayRecordedPromotion({ staleDataBlock: true, qualified: false, score: 0 }, { status: 'suppressed', decidedAt: '2026-09-24T00:00:00.000Z' }),
+    { outcome: 'not-reproducible', reason: 'snapshot-missing' },
+  );
+});
+
+// Cover the sources and outcomes the eager path produces: qualified,
+// suppressed and not_eligible rows; game lines, canonical player props and an
+// unclassified market; a supported and an unsupported sport.
+const UTV2_1954_MATRIX: Array<{
+  label: string;
+  source: 'smart-form' | 'api' | 'discord-bot' | 'alert-agent' | 'model-driven';
+  market: string;
+  sport: string;
+  scores: Record<string, number>;
+}> = [
+  { label: 'smart-form-nba-prop-qualified', source: 'smart-form', market: 'player.points', sport: 'NBA', scores: { edge: 80, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 } },
+  { label: 'api-mlb-moneyline-suppressed', source: 'api', market: 'moneyline', sport: 'MLB', scores: { edge: 30, trust: 30, readiness: 35, uniqueness: 30, boardFit: 35 } },
+  { label: 'api-nba-prop-raw-string', source: 'api', market: 'NBA - Player Points', sport: 'NBA', scores: UTV2_1954_NBA_PROP.scores },
+  { label: 'discord-bot-nfl-spread', source: 'discord-bot', market: 'spread', sport: 'NFL', scores: { edge: 76, trust: 74, readiness: 80, uniqueness: 70, boardFit: 78 } },
+  { label: 'alert-agent-team-total', source: 'alert-agent', market: 'team_total', sport: 'NHL', scores: { edge: 70, trust: 72, readiness: 75, uniqueness: 70, boardFit: 72 } },
+  { label: 'model-driven-unsupported-sport', source: 'model-driven', market: 'moneyline', sport: 'WNBA', scores: { edge: 85, trust: 85, readiness: 85, uniqueness: 85, boardFit: 85 } },
+];
+
+for (const entry of UTV2_1954_MATRIX) {
+  test(`UTV2-1954: every eager-path row reproduces -- ${entry.label}`, async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    const result = await processSubmission(
+      {
+        source: entry.source,
+        submittedBy: 'griff843',
+        market: entry.market,
+        selection: `UTV2-1954 ${entry.label}`,
+        odds: -110,
+        confidence: 0.75,
+        metadata: {
+          sport: entry.sport,
+          eventName: `UTV2-1954 ${entry.label} Away at Home`,
+          capper: 'griff843',
+          promotionScores: entry.scores,
+        },
+      },
+      repositories,
+    );
+    const rows = assertEveryRowReproduces(repositories, result.pick.id);
+    for (const row of rows) {
+      const snapshot = parsePromotionSnapshot(row.payload)!;
+      assert.equal(snapshot.scoringContext?.sport, entry.sport, `${row.target}: sport persisted`);
+      assert.equal(typeof snapshot.scoringContext?.market, 'string', `${row.target}: market persisted`);
+    }
+  });
+}
+
+test('UTV2-1954: the matrix exercises every eager-path outcome', async () => {
+  const statuses = new Set<string>();
+  for (const entry of UTV2_1954_MATRIX) {
+    const repositories = createInMemoryRepositoryBundle();
+    const result = await processSubmission(
+      {
+        source: entry.source,
+        submittedBy: 'griff843',
+        market: entry.market,
+        selection: `UTV2-1954 outcomes ${entry.label}`,
+        odds: -110,
+        confidence: 0.75,
+        metadata: {
+          sport: entry.sport,
+          eventName: `UTV2-1954 outcomes ${entry.label} Away at Home`,
+          capper: 'griff843',
+          promotionScores: entry.scores,
+        },
+      },
+      repositories,
+    );
+    for (const row of historyRowsFor(repositories, result.pick.id)) statuses.add(row.status);
+  }
+  for (const status of ['qualified', 'suppressed', 'not_eligible']) {
+    assert.ok(statuses.has(status), `some row is ${status}: saw ${[...statuses].join(', ')}`);
+  }
+});
+
+test('UTV2-1954: an operator override row reproduces too', async () => {
+  const { repositories, result } = await submitNbaProp1954('api', 'override');
+  const suppressed = await overridePromotionController(
+    result.pick.id,
+    { action: 'suppress', reason: 'UTV2-1954 override replay', actor: 'operator:test' },
+    repositories,
+  );
+  assert.equal(suppressed.status, 200);
+  const rows = assertEveryRowReproduces(repositories, result.pick.id);
+  assert.ok(rows.some((row) => row.override_action === 'suppress'), 'the override row was replayed');
 });
