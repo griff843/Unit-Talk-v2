@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092314
 
-MERGE_SHA: f7b9eadb8e0101c19867bd5fd268071f7127864e
+MERGE_SHA: a3cbca7497929046a2ebbb91a1126f2a4332cd16
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -55,7 +55,7 @@ $ pnpm exec tsx --test scripts/warehouse/*.test.ts
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: a3cbca7497929046a2ebbb91a1126f2a4332cd16
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1642
 Approved PR head: pending merge
 Execution SHA: f7b9eadb8e0101c19867bd5fd268071f7127864e
