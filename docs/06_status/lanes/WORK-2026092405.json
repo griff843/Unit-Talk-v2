@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092405",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092405-warehouse-backfill-credentials",
+  "branch": "claude/work-2026092405-warehouse-backfill-credentials",
+  "base_branch": "main",
+  "commit_sha": "79a148dfa62d8c0b7d2313a4c039dfee39203c0a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1646",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md",
+    "docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md",
+    "docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md",
+    "docs/mission/plan.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092405/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092405/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-24T14:31:54.605Z",
+  "heartbeat_at": "2026-09-24T20:11:57.079Z",
+  "closed_at": "2026-09-24T20:11:57.079Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-24T20:11:54.928Z",
+      "verdict": "pass",
+      "merge_sha": "79a148dfa62d8c0b7d2313a4c039dfee39203c0a",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092405-warehouse-backfill-credentials",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

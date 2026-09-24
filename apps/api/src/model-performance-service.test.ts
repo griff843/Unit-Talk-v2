@@ -70,9 +70,9 @@ interface SeedSettlementOptions {
 async function seedSettlement(
   repos: Repositories,
   opts: SeedSettlementOptions,
-): Promise<void> {
+) {
   const settledAt = opts.settledAt ?? new Date().toISOString();
-  await repos.settlements.record({
+  return repos.settlements.record({
     pickId: opts.pickId,
     status: opts.status ?? 'settled',
     result: opts.result ?? 'win',
@@ -294,39 +294,82 @@ test('getModelPerformanceReport: sport/market breakdown groups correctly', async
   assert.equal(assistsGroup!.totalPicks, 1);
 });
 
-test('getModelPerformanceReport: correction rows (corrects_id set) are excluded from join', async () => {
+test('getModelPerformanceReport: a corrected pick reports the correction, not the superseded original', async () => {
   const repos = createInMemoryRepositoryBundle();
-
   const p1 = await seedPick(repos);
 
-  // Seed original settlement
-  await seedSettlement(repos, { pickId: p1, result: 'loss', clvPercent: -1.0 });
+  const original = await seedSettlement(repos, { pickId: p1, result: 'win', clvPercent: 2.5 });
+  await seedSettlement(repos, { pickId: p1, result: 'loss', clvPercent: -1.0, correctsId: original.id });
 
-  // Seed correction row — corrects_id points to the original
-  await repos.settlements.record({
-    pickId: p1,
-    status: 'settled',
-    result: 'win',
-    source: 'grading',
-    confidence: 'confirmed',
-    evidenceRef: `correction-${p1}`,
-    settledBy: 'operator',
-    settledAt: new Date().toISOString(),
-    correctsId: 'some-prior-settlement-id',
-    payload: { clvPercent: 3.0 },
-  });
+  const report = await getModelPerformanceReport({ picks: repos.picks, settlements: repos.settlements });
 
-  // The service filters to corrects_id === null (canonical rows only)
-  const report = await getModelPerformanceReport({
-    picks: repos.picks,
-    settlements: repos.settlements,
-  });
-
-  // Only the original (corrects_id null) settlement should count
+  // One pick, one contribution -- never one per record.
   assert.equal(report.totalSettledPicks, 1);
-  // The canonical (original) row was a loss
+  assert.equal(report.unresolvedSettlementPickCount, 0);
   const nullBucket = report.tierPerformance.find((b) => b.tier === null);
   assert.ok(nullBucket);
-  assert.equal(nullBucket!.losses, 1);
-  assert.equal(nullBucket!.wins, 0);
+  assert.equal(nullBucket.losses, 1, 'the correction is a loss');
+  assert.equal(nullBucket.wins, 0, 'the superseded win must not be reported');
+  assert.equal(nullBucket.avgClv, -1.0, "CLV is the correction's, not the original's");
+});
+
+test('getModelPerformanceReport: a chain whose root predates the read window is completed, not dropped', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const p1 = await seedPick(repos);
+
+  const original = await seedSettlement(repos, { pickId: p1, result: 'win' });
+  const correction = await seedSettlement(repos, { pickId: p1, result: 'loss', correctsId: original.id });
+
+  // listRecent is bounded to 30 days on created_at; model the root falling
+  // outside that window so the read returns only the correction.
+  const settlements = Object.create(repos.settlements) as typeof repos.settlements;
+  settlements.listRecent = async () => [correction];
+
+  const report = await getModelPerformanceReport({ picks: repos.picks, settlements });
+
+  assert.equal(report.totalSettledPicks, 1);
+  assert.equal(report.unresolvedSettlementPickCount, 0);
+  const nullBucket = report.tierPerformance.find((b) => b.tier === null);
+  assert.ok(nullBucket);
+  assert.equal(nullBucket.losses, 1);
+  assert.equal(nullBucket.wins, 0);
+});
+
+test('getModelPerformanceReport: a correction whose target cannot be read is excluded and counted', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const p1 = await seedPick(repos);
+
+  const original = await seedSettlement(repos, { pickId: p1, result: 'win', clvPercent: 3.0 });
+  const correction = await seedSettlement(repos, {
+    pickId: p1,
+    result: 'loss',
+    clvPercent: -1.0,
+    correctsId: original.id,
+  });
+
+  // The repository guard refuses to WRITE an orphan, so model one being READ:
+  // neither the window nor the pick's full history returns the chain root.
+  const settlements = Object.create(repos.settlements) as typeof repos.settlements;
+  settlements.listRecent = async () => [correction];
+  settlements.listByPick = async () => [correction];
+
+  const report = await getModelPerformanceReport({ picks: repos.picks, settlements });
+
+  // An unanchored correction is not a trustworthy result -- it is neither
+  // counted as settled nor silently dropped.
+  assert.equal(report.totalSettledPicks, 0);
+  assert.equal(report.unresolvedSettlementPickCount, 1);
+});
+
+test('getModelPerformanceReport: a chain whose tip is in manual review is not a settlement', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const p1 = await seedPick(repos);
+
+  const original = await seedSettlement(repos, { pickId: p1, result: 'win' });
+  await seedSettlement(repos, { pickId: p1, status: 'manual_review', correctsId: original.id });
+
+  const report = await getModelPerformanceReport({ picks: repos.picks, settlements: repos.settlements });
+
+  assert.equal(report.totalSettledPicks, 0);
+  assert.equal(report.unresolvedSettlementPickCount, 0, 'a pending review is a known state, not a broken chain');
 });

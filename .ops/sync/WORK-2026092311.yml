@@ -1,0 +1,195 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092311
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092311
+  objective: WORK-2026092311 — the readiness ledger reads a fired DB tripwire as a failure
+  acceptance_criteria:
+    - >-
+      # WORK-2026092311 — the readiness ledger reads a fired DB tripwire as a
+      failure
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `probeDbTripwires` in `scripts/ops/readiness-refresh.ts` scores every red
+      `db-health-tripwire.yml`
+
+      run as `unknown`. That rule predates UTV2-1632. The workflow now splits
+      its three outcomes across
+
+      three steps, so the name of the failing step says which outcome happened.
+      `Report DB health
+
+      verdict` has no `if:`, so it runs only when `Run DB health checks` and
+      `Prove the checks executed`
+
+      both succeeded. Its failure alone therefore means the checks executed and
+      a tripwire fired.
+
+
+      The three most recent runs (35883573778, 35848637817, 35809621873) are
+      exactly that case. The
+
+      blocking dimension still reports "tripwire state is unproven", although
+      the tripwires were
+
+      measured and fired.
+
+
+      ## Outcome
+
+
+      - A run whose only failed step is `Report DB health verdict` scores
+      `fail`, with evidence naming
+        the step.
+      - Every other red run stays `unknown`, exactly as before.
+
+      - A test pins the step's name, and its lack of an `if:`, to the workflow
+      file. A rename or a
+        condition added there then fails the test rather than silently changing the classification.
+
+      ## Acceptance
+
+
+      - The existing `unknown` tests still pass unchanged.
+
+      - A mutation that drops the new branch turns the new test red.
+
+      - No threshold changes, and no dimension can move toward `pass`.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092311 — the readiness ledger reads a fired DB tripwire as a
+      failure
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `probeDbTripwires` in `scripts/ops/readiness-refresh.ts` scores every red
+      `db-health-tripwire.yml`
+
+      run as `unknown`. That rule predates UTV2-1632. The workflow now splits
+      its three outcomes across
+
+      three steps, so the name of the failing step says which outcome happened.
+      `Report DB health
+
+      verdict` has no `if:`, so it runs only when `Run DB health checks` and
+      `Prove the checks executed`
+
+      both succeeded. Its failure alone therefore means the checks executed and
+      a tripwire fired.
+
+
+      The three most recent runs (35883573778, 35848637817, 35809621873) are
+      exactly that case. The
+
+      blocking dimension still reports "tripwire state is unproven", although
+      the tripwires were
+
+      measured and fired.
+
+
+      ## Outcome
+
+
+      - A run whose only failed step is `Report DB health verdict` scores
+      `fail`, with evidence naming
+        the step.
+      - Every other red run stays `unknown`, exactly as before.
+
+      - A test pins the step's name, and its lack of an `if:`, to the workflow
+      file. A rename or a
+        condition added there then fails the test rather than silently changing the classification.
+
+      ## Acceptance
+
+
+      - The existing `unknown` tests still pass unchanged.
+
+      - A mutation that drops the new branch turns the new test red.
+
+      - No threshold changes, and no dimension can move toward `pass`.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092311.md
+    title: WORK-2026092311 — the readiness ledger reads a fired DB tripwire as a
+      failure
+    description: >-
+      # WORK-2026092311 — the readiness ledger reads a fired DB tripwire as a
+      failure
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `probeDbTripwires` in `scripts/ops/readiness-refresh.ts` scores every red
+      `db-health-tripwire.yml`
+
+      run as `unknown`. That rule predates UTV2-1632. The workflow now splits
+      its three outcomes across
+
+      three steps, so the name of the failing step says which outcome happened.
+      `Report DB health
+
+      verdict` has no `if:`, so it runs only when `Run DB health checks` and
+      `Prove the checks executed`
+
+      both succeeded. Its failure alone therefore means the checks executed and
+      a tripwire fired.
+
+
+      The three most recent runs (35883573778, 35848637817, 35809621873) are
+      exactly that case. The
+
+      blocking dimension still reports "tripwire state is unproven", although
+      the tripwires were
+
+      measured and fired.
+
+
+      ## Outcome
+
+
+      - A run whose only failed step is `Report DB health verdict` scores
+      `fail`, with evidence naming
+        the step.
+      - Every other red run stays `unknown`, exactly as before.
+
+      - A test pins the step's name, and its lack of an `if:`, to the workflow
+      file. A rename or a
+        condition added there then fails the test rather than silently changing the classification.
+
+      ## Acceptance
+
+
+      - The existing `unknown` tests still pass unchanged.
+
+      - A mutation that drops the new branch turns the new test red.
+
+      - No threshold changes, and no dimension can move toward `pass`.
+    captured_at: 2026-09-23T20:51:55.494Z
+    description_sha256: b99cd6305d635a0b638274c1656a7dee4aa0cfa0366bc4556e96e406f800b361
+  contract_hash: f4e74c6ea21d0662e952994fd5cce95337b17424bdc86f64edaad909e08c0ecb
