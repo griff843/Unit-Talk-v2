@@ -11,6 +11,7 @@ import {
   measureProofCoverage,
   probeConstitutionConvergence,
   probeDbTripwires,
+  DB_TRIPWIRE_VERDICT_STEP,
   probeDeadLetterCount,
   SELECT_PAGE_SIZE,
   probeDeploySha,
@@ -475,6 +476,71 @@ test('a red tripwire observer records the failed steps and stays unknown', async
   assert.equal(result.status, 'unknown');
   assert.match(result.unreadable_reason ?? '', /Run DB health checks/);
   assert.match(result.unreadable_reason ?? '', /cannot distinguish/);
+});
+
+test('a run that failed only at the verdict step is a measured tripwire failure, not unknown', async () => {
+  const result = await probeDbTripwires(
+    context({
+      githubUnavailableReason: null,
+      github: stubGithub({
+        async latestRun() {
+          return run({ conclusion: 'failure' });
+        },
+        async failedSteps() {
+          return [DB_TRIPWIRE_VERDICT_STEP];
+        },
+      }),
+    }),
+  );
+  assert.equal(result.status, 'fail');
+  assert.equal(result.unreadable_reason, null);
+  assert.match(result.evidence, /executed its checks/);
+  assert.match(result.evidence, /Report DB health verdict/);
+  assert.deepEqual(result.measured?.failed_steps, [DB_TRIPWIRE_VERDICT_STEP]);
+});
+
+test('the verdict step failing alongside another step stays unknown', async () => {
+  for (const steps of [
+    ['Prove the checks executed', DB_TRIPWIRE_VERDICT_STEP],
+    ['Run DB health checks', DB_TRIPWIRE_VERDICT_STEP],
+    [],
+  ]) {
+    const result = await probeDbTripwires(
+      context({
+        githubUnavailableReason: null,
+        github: stubGithub({
+          async latestRun() {
+            return run({ conclusion: 'failure' });
+          },
+          async failedSteps() {
+            return steps;
+          },
+        }),
+      }),
+    );
+    assert.equal(result.status, 'unknown', `failed steps ${JSON.stringify(steps)}`);
+  }
+});
+
+test('the verdict step exists in db-health-tripwire.yml, unconditioned, after the harness and proof steps', () => {
+  // The classification above is sound only while this step runs solely after
+  // every earlier step succeeded. A rename or an added `if:` must fail here.
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github/workflows/db-health-tripwire.yml'),
+    'utf8',
+  );
+  const steps = workflow.split(/\n\s*- name: /).slice(1).map((block) => {
+    const [name = '', ...rest] = block.split('\n');
+    return { name: name.trim(), body: rest.join('\n') };
+  });
+  const names = steps.map((step) => step.name);
+  const verdictIndex = names.indexOf(DB_TRIPWIRE_VERDICT_STEP);
+  assert.ok(verdictIndex >= 0, `no step named "${DB_TRIPWIRE_VERDICT_STEP}" in db-health-tripwire.yml`);
+  assert.ok(verdictIndex > names.indexOf('Run DB health checks'), 'verdict step must follow the harness step');
+  assert.ok(verdictIndex > names.indexOf('Prove the checks executed'), 'verdict step must follow the proof step');
+  assert.ok(names.indexOf('Run DB health checks') >= 0 && names.indexOf('Prove the checks executed') >= 0);
+  const verdictBody = steps[verdictIndex]!.body.split(/\n\s*- (?:name|uses):/)[0]!;
+  assert.doesNotMatch(verdictBody, /^\s*if:/m, 'verdict step must not carry an if: condition');
 });
 
 test('a tripwire observer that has not run recently cannot prove anything', async () => {

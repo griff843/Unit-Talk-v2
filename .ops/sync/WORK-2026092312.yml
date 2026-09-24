@@ -1,0 +1,185 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092312
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092312
+  objective: WORK-2026092312 — the SGO reactivation gate names the unarchived-drop paths
+  acceptance_criteria:
+    - >-
+      # WORK-2026092312 — the SGO reactivation gate names the unarchived-drop
+      paths
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `docs/05_operations/SGO_REACTIVATION_GATE.md` A7 asks for
+      `provider_offer_history` retention to be
+
+      "proven working". Measured on 2026-09-23, production has two drop paths
+      and neither is safe:
+
+
+      - pg_cron job 5 `nightly-retention-prune` is active. It drops history
+      partitions older than 7 days
+        and bounded-prunes the quarantine, followed by DELETEs on audit_log and five other tables. All 136
+        runs have failed ("audit_log is immutable"), and because pg_cron runs the command as one
+        transaction, nothing was deleted. That protection is accidental.
+      - The ingestor's retention (7-day default) runs only after a finite cycle
+      loop. Production sets
+        `UNIT_TALK_INGESTOR_MAX_CYCLES=0`, so the resident daemon never reaches it. Any finite-cycle run
+        does reach it.
+
+      Neither path checks for a verified archive manifest. The gate also says
+      nothing about the scheduled
+
+      conveyor failing red daily while its credentials are unprovisioned.
+
+
+      ## Outcome
+
+
+      The gate adds items stating that no partition may be dropped before its
+      archive verifies, names
+
+      both drop paths with their measured state, corrects what A7 can currently
+      prove, and records the
+
+      unconfigured conveyor behaviour. Documentation only; no runtime, schedule,
+      or data change.
+
+
+      ## Acceptance
+
+
+      - Every new claim cites its measurement or `file:line`.
+
+      - The document still authorizes nothing.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092312 — the SGO reactivation gate names the unarchived-drop
+      paths
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `docs/05_operations/SGO_REACTIVATION_GATE.md` A7 asks for
+      `provider_offer_history` retention to be
+
+      "proven working". Measured on 2026-09-23, production has two drop paths
+      and neither is safe:
+
+
+      - pg_cron job 5 `nightly-retention-prune` is active. It drops history
+      partitions older than 7 days
+        and bounded-prunes the quarantine, followed by DELETEs on audit_log and five other tables. All 136
+        runs have failed ("audit_log is immutable"), and because pg_cron runs the command as one
+        transaction, nothing was deleted. That protection is accidental.
+      - The ingestor's retention (7-day default) runs only after a finite cycle
+      loop. Production sets
+        `UNIT_TALK_INGESTOR_MAX_CYCLES=0`, so the resident daemon never reaches it. Any finite-cycle run
+        does reach it.
+
+      Neither path checks for a verified archive manifest. The gate also says
+      nothing about the scheduled
+
+      conveyor failing red daily while its credentials are unprovisioned.
+
+
+      ## Outcome
+
+
+      The gate adds items stating that no partition may be dropped before its
+      archive verifies, names
+
+      both drop paths with their measured state, corrects what A7 can currently
+      prove, and records the
+
+      unconfigured conveyor behaviour. Documentation only; no runtime, schedule,
+      or data change.
+
+
+      ## Acceptance
+
+
+      - Every new claim cites its measurement or `file:line`.
+
+      - The document still authorizes nothing.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092312.md
+    title: WORK-2026092312 — the SGO reactivation gate names the unarchived-drop paths
+    description: >-
+      # WORK-2026092312 — the SGO reactivation gate names the unarchived-drop
+      paths
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `docs/05_operations/SGO_REACTIVATION_GATE.md` A7 asks for
+      `provider_offer_history` retention to be
+
+      "proven working". Measured on 2026-09-23, production has two drop paths
+      and neither is safe:
+
+
+      - pg_cron job 5 `nightly-retention-prune` is active. It drops history
+      partitions older than 7 days
+        and bounded-prunes the quarantine, followed by DELETEs on audit_log and five other tables. All 136
+        runs have failed ("audit_log is immutable"), and because pg_cron runs the command as one
+        transaction, nothing was deleted. That protection is accidental.
+      - The ingestor's retention (7-day default) runs only after a finite cycle
+      loop. Production sets
+        `UNIT_TALK_INGESTOR_MAX_CYCLES=0`, so the resident daemon never reaches it. Any finite-cycle run
+        does reach it.
+
+      Neither path checks for a verified archive manifest. The gate also says
+      nothing about the scheduled
+
+      conveyor failing red daily while its credentials are unprovisioned.
+
+
+      ## Outcome
+
+
+      The gate adds items stating that no partition may be dropped before its
+      archive verifies, names
+
+      both drop paths with their measured state, corrects what A7 can currently
+      prove, and records the
+
+      unconfigured conveyor behaviour. Documentation only; no runtime, schedule,
+      or data change.
+
+
+      ## Acceptance
+
+
+      - Every new claim cites its measurement or `file:line`.
+
+      - The document still authorizes nothing.
+    captured_at: 2026-09-23T21:47:50.759Z
+    description_sha256: 5af32058629058e317dbd395fa44c3c43ac01c95f9d01ca6e9b8cf8f13463d36
+  contract_hash: a9fbb78c9290015162c1689401b1987efa43304173cabdbcf5e9e983787c9b09

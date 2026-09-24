@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092311",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092311-tripwire-verdict",
+  "branch": "claude/work-2026092311-tripwire-verdict",
+  "base_branch": "main",
+  "commit_sha": "53ed8ff9a651be515abdaf0a5cab05cedd6b66c5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1639",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/readiness-refresh.test.ts",
+    "scripts/ops/readiness-refresh.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092311/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092311/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-23T20:52:04.014Z",
+  "heartbeat_at": "2026-09-24T18:44:18.965Z",
+  "closed_at": "2026-09-24T18:44:18.965Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-24T18:44:16.196Z",
+      "verdict": "pass",
+      "merge_sha": "53ed8ff9a651be515abdaf0a5cab05cedd6b66c5",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092311-tripwire-verdict",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

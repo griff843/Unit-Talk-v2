@@ -1,0 +1,167 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092313
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092313
+  objective: WORK-2026092313 — the DB size tripwire counts partitions
+  acceptance_criteria:
+    - >-
+      # WORK-2026092313 — the DB size tripwire counts partitions
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `scripts/ops/db-health-tripwire.ts` sizes each hot table with
+      `pg_total_relation_size(relid)`. For a
+
+      partitioned parent that is 0, because the data lives in the partitions. On
+      2026-09-23 the tripwire
+
+      (run 35918291130) reported `provider_offer_history | 0 MB | 300 MB | env |
+      PASS`, while the parent
+
+      and its 60 partitions hold 8,499,781,632 bytes. So the largest high-growth
+      relation is invisible to
+
+      the size tripwire that feeds the blocking `db_tripwires` readiness
+      dimension.
+
+
+      ## Outcome
+
+
+      - The size query sums `pg_relation_size` and `pg_total_relation_size` over
+      the relation plus every
+        member of `pg_partition_tree`, so a plain table measures exactly as before and a partitioned
+        table measures its partitions.
+      - The SQL lives in `db-health-checks.ts` as an exported constant, and the
+      tripwire executes that
+        constant, so the tested text is the executed text.
+
+      ## Acceptance
+
+
+      - Tests pin that the constant walks `pg_partition_tree`, includes the
+      relation itself, and is what
+        the tripwire executes. Mutations removing either turn a named test red.
+      - Read-only execution of the exact constant against production returns the
+      same bytes as the old
+        query for the four plain tables, and 8,499,781,632 bytes for `provider_offer_history`.
+      - No threshold changes.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092313 — the DB size tripwire counts partitions
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `scripts/ops/db-health-tripwire.ts` sizes each hot table with
+      `pg_total_relation_size(relid)`. For a
+
+      partitioned parent that is 0, because the data lives in the partitions. On
+      2026-09-23 the tripwire
+
+      (run 35918291130) reported `provider_offer_history | 0 MB | 300 MB | env |
+      PASS`, while the parent
+
+      and its 60 partitions hold 8,499,781,632 bytes. So the largest high-growth
+      relation is invisible to
+
+      the size tripwire that feeds the blocking `db_tripwires` readiness
+      dimension.
+
+
+      ## Outcome
+
+
+      - The size query sums `pg_relation_size` and `pg_total_relation_size` over
+      the relation plus every
+        member of `pg_partition_tree`, so a plain table measures exactly as before and a partitioned
+        table measures its partitions.
+      - The SQL lives in `db-health-checks.ts` as an exported constant, and the
+      tripwire executes that
+        constant, so the tested text is the executed text.
+
+      ## Acceptance
+
+
+      - Tests pin that the constant walks `pg_partition_tree`, includes the
+      relation itself, and is what
+        the tripwire executes. Mutations removing either turn a named test red.
+      - Read-only execution of the exact constant against production returns the
+      same bytes as the old
+        query for the four plain tables, and 8,499,781,632 bytes for `provider_offer_history`.
+      - No threshold changes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092313.md
+    title: WORK-2026092313 — the DB size tripwire counts partitions
+    description: >-
+      # WORK-2026092313 — the DB size tripwire counts partitions
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      `scripts/ops/db-health-tripwire.ts` sizes each hot table with
+      `pg_total_relation_size(relid)`. For a
+
+      partitioned parent that is 0, because the data lives in the partitions. On
+      2026-09-23 the tripwire
+
+      (run 35918291130) reported `provider_offer_history | 0 MB | 300 MB | env |
+      PASS`, while the parent
+
+      and its 60 partitions hold 8,499,781,632 bytes. So the largest high-growth
+      relation is invisible to
+
+      the size tripwire that feeds the blocking `db_tripwires` readiness
+      dimension.
+
+
+      ## Outcome
+
+
+      - The size query sums `pg_relation_size` and `pg_total_relation_size` over
+      the relation plus every
+        member of `pg_partition_tree`, so a plain table measures exactly as before and a partitioned
+        table measures its partitions.
+      - The SQL lives in `db-health-checks.ts` as an exported constant, and the
+      tripwire executes that
+        constant, so the tested text is the executed text.
+
+      ## Acceptance
+
+
+      - Tests pin that the constant walks `pg_partition_tree`, includes the
+      relation itself, and is what
+        the tripwire executes. Mutations removing either turn a named test red.
+      - Read-only execution of the exact constant against production returns the
+      same bytes as the old
+        query for the four plain tables, and 8,499,781,632 bytes for `provider_offer_history`.
+      - No threshold changes.
+    captured_at: 2026-09-23T22:12:40.108Z
+    description_sha256: 05d26459799810ce30e8a237453da398686ab21e401e28b57bcbb83395d98f0f
+  contract_hash: 9ad935aa22c6b94862736db3a95e76d0854d6d6e5353bcad3a3efd46a868e5fd
