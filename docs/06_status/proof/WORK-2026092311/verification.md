@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092311
 
-MERGE_SHA: 4de92c9a3bb621e774c487b9b764b2ee7968dec8
+MERGE_SHA: d7effabe6a8f6ce8d6ef49c81152a44b5e2802f4
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -12,8 +12,8 @@ Tier: T2
 Lane type: governance
 Branch: claude/work-2026092311-tripwire-verdict
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1639
-Head SHA: 4de92c9a3bb621e774c487b9b764b2ee7968dec8
-Execution SHA: 4de92c9a3bb621e774c487b9b764b2ee7968dec8
+Head SHA: d7effabe6a8f6ce8d6ef49c81152a44b5e2802f4
+Execution SHA: d7effabe6a8f6ce8d6ef49c81152a44b5e2802f4
 Diff base: df071f24b11d9988f830a6ee56bec6b2c03a31db
 result: pass
 
@@ -112,4 +112,10 @@ already blocking and red; it stays red.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1639
 Approved PR head: pending merge
-Execution SHA: 4de92c9a3bb621e774c487b9b764b2ee7968dec8
+Execution SHA: d7effabe6a8f6ce8d6ef49c81152a44b5e2802f4
+
+### Re-anchor to `d7effabe6a8f6ce8d6ef49c81152a44b5e2802f4`
+
+Branch refreshed from origin/main `1ac61adf0` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092314.yml`, `.ops/sync/WORK-2026092405.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092314.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092314/diff-summary.md`, `docs/06_status/proof/WORK-2026092314/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/query.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `4de92c9a3bb621e774c487b9b764b2ee7968dec8`. `verify` re-runs on the new head.
