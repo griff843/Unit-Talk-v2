@@ -5,11 +5,15 @@ import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-s
 import { recordQueueHealthMetrics } from '@unit-talk/observability';
 import { isProductionLikeRuntime } from '@unit-talk/config';
 import { isTrackOnlyPickMetadata, type PickLifecycleState } from '@unit-talk/contracts';
+import { POSTGREST_MAX_ROWS, type PromotedPickCandidate } from '@unit-talk/db';
+import { isTestFixturePick } from '../fixture-pick.js';
 
 const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
 const ZOMBIE_PICK_LIFECYCLE_STATES: PickLifecycleState[] = ['draft', 'validated'];
 const ZOMBIE_PICK_PROMOTION_STATUSES = new Set(['qualified', 'promoted']);
 const ZOMBIE_PICK_OUTBOX_STATUSES = ['pending', 'sent', 'delivered'] as const;
+const ZOMBIE_OUTBOX_LOOKUP_CONCURRENCY = 8;
+const SCHEMA_DRIFT_CACHE_MS = 60_000;
 
 /**
  * Probes DB connectivity by issuing a lightweight query through the picks
@@ -57,8 +61,68 @@ interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
 export interface ZombiePickHealth {
   status: 'healthy' | 'down';
   count: number;
+  /**
+   * Stranded picks that are CI / proof fixtures. Reported so they stay
+   * visible, never counted in `count`: a fixture is owed no delivery, and
+   * requeueing one would enqueue delivery work for synthetic data.
+   */
+  fixtureCount: number;
   checkedAt: string;
   remediation: string | null;
+}
+
+/**
+ * The whole candidate population, never one capped page. The repository's
+ * dedicated read filters server-side and pages on a total order. The fallback
+ * serves narrow repository fakes that do not implement it; it pages too, so a
+ * fake can never reintroduce the 1,000-row truncation.
+ */
+async function listZombieCandidates(
+  runtime: ApiRuntimeDependencies,
+): Promise<PromotedPickCandidate[]> {
+  const picks = runtime.repositories.picks;
+  if (picks.listPromotedByLifecycleStates) {
+    return picks.listPromotedByLifecycleStates(
+      ZOMBIE_PICK_LIFECYCLE_STATES,
+      [...ZOMBIE_PICK_PROMOTION_STATUSES],
+    );
+  }
+  const candidates: PromotedPickCandidate[] = [];
+  for (let offset = 0; ; offset += POSTGREST_MAX_ROWS) {
+    const page = await picks.listByLifecycleStates(
+      ZOMBIE_PICK_LIFECYCLE_STATES,
+      POSTGREST_MAX_ROWS,
+      offset,
+    );
+    candidates.push(
+      ...page.filter(
+        (pick) =>
+          ZOMBIE_PICK_PROMOTION_STATUSES.has(pick.promotion_status) &&
+          pick.promotion_target != null,
+      ),
+    );
+    if (page.length < POSTGREST_MAX_ROWS) {
+      return candidates;
+    }
+  }
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index] as T);
+    }
+  });
+  await Promise.all(workers);
+  return results;
 }
 
 export async function checkZombiePickHealth(
@@ -76,11 +140,9 @@ export async function checkZombiePickHealth(
    *       AND o.status IN ('pending', 'sent', 'delivered')
    *   );
    */
-  const candidates = await runtime.repositories.picks.listByLifecycleStates(
-    ZOMBIE_PICK_LIFECYCLE_STATES,
-  );
+  const candidates = await listZombieCandidates(runtime);
 
-  let count = 0;
+  const awaitingDelivery: PromotedPickCandidate[] = [];
   for (const pick of candidates) {
     if (
       !ZOMBIE_PICK_PROMOTION_STATUSES.has(pick.promotion_status) ||
@@ -106,21 +168,46 @@ export async function checkZombiePickHealth(
     }
     // UTV2-1672 ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD_END
 
-    const target = `discord:${pick.promotion_target}`;
-    const activeOutbox = await runtime.repositories.outbox.findByPickAndTarget(
-      pick.id,
-      target,
-      ZOMBIE_PICK_OUTBOX_STATUSES,
-    );
+    awaitingDelivery.push(pick);
+  }
 
-    if (!activeOutbox) {
-      count += 1;
+  // One outbox lookup per candidate, run concurrently: serially they dominated
+  // /health latency against production.
+  const stranded = await mapWithConcurrency(
+    awaitingDelivery,
+    ZOMBIE_OUTBOX_LOOKUP_CONCURRENCY,
+    async (pick) => {
+      const activeOutbox = await runtime.repositories.outbox.findByPickAndTarget(
+        pick.id,
+        `discord:${pick.promotion_target}`,
+        ZOMBIE_PICK_OUTBOX_STATUSES,
+      );
+      return activeOutbox ? null : pick;
+    },
+  );
+
+  let count = 0;
+  let fixtureCount = 0;
+  for (const pick of stranded) {
+    if (!pick) continue;
+    // WORK-2026092404 ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD_START
+    // Production holds CI proof fixtures from before staging isolation. A
+    // complete read finds stranded ones (8 on 2026-09-24, every one a fixture),
+    // and counting them would hold /health at 503 on synthetic data and
+    // prescribe a requeue that enqueues delivery for it. They are reported in
+    // fixtureCount instead, so they stay visible without masking a real zombie.
+    if (isTestFixturePick(pick)) {
+      fixtureCount += 1;
+      continue;
     }
+    // WORK-2026092404 ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD_END
+    count += 1;
   }
 
   return {
     status: count > 0 ? 'down' : 'healthy',
     count,
+    fixtureCount,
     checkedAt,
     remediation: count > 0
       ? 'Operator recovery: POST /api/picks/:id/requeue for each zombie pick. The requeue path checks for existing active outbox rows before enqueueing, so replay repairs missing work without duplicate delivery.'
@@ -139,12 +226,37 @@ function formatQueueAlertWarning(alert: NonNullable<ApiRuntimeDependencies['queu
   return detailParts.length > 0 ? `${alert.message} [${detailParts.join(' | ')}]` : alert.message;
 }
 
+// Per runtime, so one server's cached result can never answer for another.
+const schemaDriftCache = new WeakMap<
+  ApiRuntimeDependencies,
+  { at: number; result: SchemaDriftCheckResult }
+>();
+
+/**
+ * Schema drift changes on a migration or a PostgREST schema reload, not per
+ * request. Probing every canonical table on every /health call made the probe
+ * the dominant cost of the endpoint, so a successful result is reused for
+ * SCHEMA_DRIFT_CACHE_MS. A failed check is never cached.
+ */
+async function readSchemaDriftCached(
+  runtime: ApiRuntimeDependencies,
+): Promise<SchemaDriftCheckResult> {
+  const now = runtime.now();
+  const cached = schemaDriftCache.get(runtime);
+  if (cached && now - cached.at < SCHEMA_DRIFT_CACHE_MS) {
+    return cached.result;
+  }
+  const result = await checkSchemaDrift({ logger: runtime.logger });
+  schemaDriftCache.set(runtime, { at: now, result });
+  return result;
+}
+
 export async function handleHealth(response: ServerResponse, runtime: ApiRuntimeDependencies): Promise<void> {
   const dbReachable = await probeDbConnectivity(runtime);
   const schemaDrift = await (async () => {
     if (runtime.persistenceMode !== 'database' || !dbReachable) return null;
     try {
-      return await checkSchemaDrift({ logger: runtime.logger });
+      return await readSchemaDriftCached(runtime);
     } catch (err: unknown) {
       // Supabase credentials unavailable in this environment — skip drift check.
       runtime.logger.warn(
@@ -160,12 +272,14 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
     ? await checkZombiePickHealth(runtime).catch(() => ({
         status: 'healthy' as const,
         count: 0,
+        fixtureCount: 0,
         checkedAt: new Date(runtime.now()).toISOString(),
         remediation: null,
       }))
     : {
         status: 'healthy' as const,
         count: 0,
+        fixtureCount: 0,
         checkedAt: new Date(runtime.now()).toISOString(),
         remediation: null,
       };
@@ -205,6 +319,11 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
     ...(zombiePicks.status === 'down'
       ? [
           `zombie picks detected: count=${zombiePicks.count} [remediation=${zombiePicks.remediation}]`,
+        ]
+      : []),
+    ...(zombiePicks.fixtureCount > 0
+      ? [
+          `stranded test-fixture picks (not counted as zombies, not to be requeued): count=${zombiePicks.fixtureCount}`,
         ]
       : []),
     ...(opsAlertWebhookMissing
