@@ -30,6 +30,24 @@ This lane is a proof repair. Each box is checkable against the diff or the CI ru
 - [x] `pnpm verify:static` (`package.json`) contains `pnpm type-check` and `pnpm test`, and it is
       what `ci.yml`'s "Verify (static)" step runs.
 
+## EVIDENCE:
+
+```
+$ gh run view 36028634010 --json headSha,conclusion
+head=79a148dfa62d8c0b7d2313a4c039dfee39203c0a conclusion=success
+  job verify (107733848362)                          success   runs pnpm verify:static
+  job Writable DB proof (staging only) (107731452357) success
+$ grep -cE 'pnpm type-check|pnpm test\b|pnpm verify\b' docs/06_status/proof/WORK-2026092405/verification.md
+7
+```
+
+Closeout refusal that this repairs (post-merge-lane-close.yml run 36029971073):
+
+```
+[FAIL] P12 verification log must reference pnpm type-check and pnpm test
+[FAIL] P13 verification log must reference pnpm verify
+```
+
 ## Verification
 
 - `pnpm verify:quick` passed at lane preflight (PX1). `pnpm type-check` (PB1) and `pnpm test` (PB2)
