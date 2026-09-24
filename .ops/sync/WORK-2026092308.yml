@@ -1,0 +1,190 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092308
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092308
+  objective: WORK-2026092308 — model-performance report counts the effective
+    settlement, not the superseded original
+  acceptance_criteria:
+    - >-
+      # WORK-2026092308 — model-performance report counts the effective
+      settlement, not the superseded original
+
+
+      Tier: T1 · Lane type: runtime · Executor: claude
+
+
+      ## Problem
+
+
+      `apps/api/src/model-performance-service.ts` builds its pick → settlement
+      map by skipping every
+
+      settlement row whose `corrects_id` is set, keeping only the chain root.
+      Settlement corrections
+
+      (`corrects_id` → prior record) are already written by the delivery plane
+      and, after the evidence-plane
+
+      correction repair, by operator grading. A corrected pick is therefore
+      reported with its **superseded**
+
+      result and CLV, so the calibration report disagrees with the settlement
+      plane it reads.
+
+
+      ## Outcome
+
+
+      - Group each pick's settlement rows and resolve the effective record with
+      the domain's
+        `resolveEffectiveSettlement` (root → tip via `corrects_id`).
+      - A chain that is incomplete inside the 30-day read window is completed
+      from `listByPick` before
+        resolution — a correction whose root is older than the window is not dropped.
+      - A chain that still cannot be resolved (orphan correction, multiple
+      roots, cycle) fails closed: the
+        pick is not counted as settled, and the report states how many were excluded
+        (`unresolvedSettlementPickCount`), never silently.
+      - A pick whose effective record is `manual_review` is not counted as
+      settled.
+
+
+      ## Acceptance
+
+
+      - WIN → LOSS correction reports the loss and the correction's CLV.
+
+      - Correction whose root is outside the window resolves to the correction.
+
+      - Orphan correction is excluded and counted.
+
+      - Mutation: restoring the root-only filter turns the correction test red.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092308 — model-performance report counts the effective
+      settlement, not the superseded original
+
+      Tier: T1 · Lane type: runtime · Executor: claude
+
+
+      ## Problem
+
+
+      `apps/api/src/model-performance-service.ts` builds its pick → settlement
+      map by skipping every
+
+      settlement row whose `corrects_id` is set, keeping only the chain root.
+      Settlement corrections
+
+      (`corrects_id` → prior record) are already written by the delivery plane
+      and, after the evidence-plane
+
+      correction repair, by operator grading. A corrected pick is therefore
+      reported with its **superseded**
+
+      result and CLV, so the calibration report disagrees with the settlement
+      plane it reads.
+
+
+      ## Outcome
+
+
+      - Group each pick's settlement rows and resolve the effective record with
+      the domain's
+        `resolveEffectiveSettlement` (root → tip via `corrects_id`).
+      - A chain that is incomplete inside the 30-day read window is completed
+      from `listByPick` before
+        resolution — a correction whose root is older than the window is not dropped.
+      - A chain that still cannot be resolved (orphan correction, multiple
+      roots, cycle) fails closed: the
+        pick is not counted as settled, and the report states how many were excluded
+        (`unresolvedSettlementPickCount`), never silently.
+      - A pick whose effective record is `manual_review` is not counted as
+      settled.
+
+
+      ## Acceptance
+
+
+      - WIN → LOSS correction reports the loss and the correction's CLV.
+
+      - Correction whose root is outside the window resolves to the correction.
+
+      - Orphan correction is excluded and counted.
+
+      - Mutation: restoring the root-only filter turns the correction test red.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092308.md
+    title: WORK-2026092308 — model-performance report counts the effective
+      settlement, not the superseded original
+    description: >-
+      # WORK-2026092308 — model-performance report counts the effective
+      settlement, not the superseded original
+
+
+      Tier: T1 · Lane type: runtime · Executor: claude
+
+
+      ## Problem
+
+
+      `apps/api/src/model-performance-service.ts` builds its pick → settlement
+      map by skipping every
+
+      settlement row whose `corrects_id` is set, keeping only the chain root.
+      Settlement corrections
+
+      (`corrects_id` → prior record) are already written by the delivery plane
+      and, after the evidence-plane
+
+      correction repair, by operator grading. A corrected pick is therefore
+      reported with its **superseded**
+
+      result and CLV, so the calibration report disagrees with the settlement
+      plane it reads.
+
+
+      ## Outcome
+
+
+      - Group each pick's settlement rows and resolve the effective record with
+      the domain's
+        `resolveEffectiveSettlement` (root → tip via `corrects_id`).
+      - A chain that is incomplete inside the 30-day read window is completed
+      from `listByPick` before
+        resolution — a correction whose root is older than the window is not dropped.
+      - A chain that still cannot be resolved (orphan correction, multiple
+      roots, cycle) fails closed: the
+        pick is not counted as settled, and the report states how many were excluded
+        (`unresolvedSettlementPickCount`), never silently.
+      - A pick whose effective record is `manual_review` is not counted as
+      settled.
+
+
+      ## Acceptance
+
+
+      - WIN → LOSS correction reports the loss and the correction's CLV.
+
+      - Correction whose root is outside the window resolves to the correction.
+
+      - Orphan correction is excluded and counted.
+
+      - Mutation: restoring the root-only filter turns the correction test red.
+    captured_at: 2026-09-23T19:33:40.069Z
+    description_sha256: 2bbb82c552a4e2fd026b8bc910f7ee82f3bed50e13f91ca0f9bd28a0ad9fc064
+  contract_hash: 89f38aa01bdb8e605adf95e576ea51117b59bd8f8540b28dbd3996fab74b0a9e

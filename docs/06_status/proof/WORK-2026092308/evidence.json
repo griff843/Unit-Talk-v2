@@ -1,0 +1,127 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092308",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "588f0c77e74d84d3bee448fb003ae9c78caee7d9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "588f0c77e74d84d3bee448fb003ae9c78caee7d9 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092308/ and the lane manifest. It is the merge of origin/main decd67afa into this branch (ledger refresh only, docs/06_status/readiness/readiness-score.json; no code), on top of the earlier merge of 7159bcdeb. What main brought in since the previous anchor is docs, lane bookkeeping and the readiness ledger only (docs/mission/plan.md, docs/06_status/readiness/readiness-score.json, docs/06_status/lanes/WORK-2026092310.json, docs/06_status/proof/WORK-2026092310/*); no code, test or config file, so the lane's implementation tree and every static measurement taken at 056f9b575b4251bbb67bac3fbf1752e1dc66e563 carry forward unchanged. Superseded anchor, not withdrawn: 056f9b575b4251bbb67bac3fbf1752e1dc66e563. Previous note: 056f9b575b4251bbb67bac3fbf1752e1dc66e563 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092308/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree. It is the merge of main into this branch; the lane's own implementation files are byte-identical to 88afdea24 (git diff 88afdea24 056f9b575b4251bbb67bac3fbf1752e1dc66e563 -- apps/api is empty), and the only non-proof paths the merge changed are main's own (apps/command-center/src/lib/data/snapshot.ts, scripts/ops/readiness-refresh.ts and their tests)."
+  },
+  "what_this_lane_repairs": {
+    "defect": "getModelPerformanceReport built its pick -> settlement map by skipping every settlement_records row whose corrects_id is set, keeping only each chain's root. A corrected pick was therefore reported with its superseded result and CLV. The in-memory test that covered the path asserted the inverted behaviour ('correction rows excluded').",
+    "repair": "Each pick's rows are resolved to the chain tip with resolveEffectiveSettlement. A chain incomplete inside the 30-day listRecent window is completed from listByPick. A chain that still does not resolve -- orphan correction, two roots, a branch, a cycle -- is not counted as settled and is counted in unresolvedSettlementPickCount. A pick whose effective record is manual_review is not counted as settled.",
+    "why_the_reconcile_check": "resolveEffectiveSettlement accepts any lone record without reading corrects_id and otherwise ignores rows its root-to-tip walk does not reach. A chain is accepted only when every corrects_id target is present and correction_depth + 1 equals its row count.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/model-performance-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 13,
+          "pass": 13,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The inverted 'correction rows excluded' test is replaced by four: (10) a corrected pick reports the correction's loss and CLV -1.0, not the original win; (11) a chain whose root predates the read window is completed from listByPick, not dropped; (12) a correction whose target cannot be read is excluded and counted in unresolvedSettlementPickCount; (13) a chain whose tip is manual_review is not a settlement and not unresolved."
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6833,
+          "pass": 6833,
+          "fail": 0,
+          "not_ok_lines": 0
+        },
+        "label": "Full workspace unit suite on this tree."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint apps/api/src/model-performance-service.ts apps/api/src/model-performance-service.test.ts apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: ci:assert-staging refuses the containment placeholder SUPABASE_URL. This lane carries t1_live_db_precondition: deferred_to_ci, so verify and Writable DB proof (staging only) are obtained from CI on the merge SHA, which G6 enforces at closeout."
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied to apps/api/src/model-performance-service.ts alone, the suite run, then the file restored from a pre-mutation copy (cmp-checked).",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "Return the chain root (corrects_id null) instead of the resolved tip -- main's behaviour.",
+          "observed": "3 failures: tests 10, 11 and 13."
+        },
+        {
+          "id": "M2",
+          "mutation": "Never complete an incomplete window chain from listByPick.",
+          "observed": "1 failure: test 11."
+        },
+        {
+          "id": "M3",
+          "mutation": "Drop the completeness guard (every corrects_id target present).",
+          "observed": "1 failure: test 12."
+        },
+        {
+          "id": "M4",
+          "mutation": "Count a manual_review tip as settled.",
+          "observed": "1 failure: test 13."
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test apps/api/src/model-performance-service.test.ts",
+        "pass": 13,
+        "fail": 0
+      }
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PENDING_CI",
+    "job": "Writable DB proof (staging only)",
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "suite": "apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "note": "Filled at closeout by autoHarvestCiDbProofIntoEvidence from the merge-SHA run. Deliberately not hand-filled: the workstation cannot reach a writable database under containment. Locally the five tests in the file fail identically with 'Failed to save submission: TypeError: fetch failed' -- the four pre-existing ones included -- which is the containment placeholder, not a defect.",
+    "what_the_added_test_proves": [
+      "A real root (win, clvPercent 2.5) and a real correction (loss, clvPercent -1, corrects_id -> root) are written to Postgres through the database repository.",
+      "The report is given a 30-day window holding only the correction, so the root 'fell out'. It must complete the chain through the real listByPick against Postgres -- asserted as exactly one history read.",
+      "The report counts the pick as settled once, with 0 wins, 1 loss, avgClv -1, and unresolvedSettlementPickCount 0.",
+      "Candidate picks and the window are narrowed to the test pick because staging is shared and a 5000-row window is not the test's to fill; every row the report resolves is a real row read back from Postgres."
+    ]
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off -- unchanged",
+    "member_delivery": "disabled -- unchanged",
+    "files_changed": 3,
+    "note": "Three files inside the pinned file_scope_lock. No migration, no schema change, no new test file, no package.json edit."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1636"
+}
