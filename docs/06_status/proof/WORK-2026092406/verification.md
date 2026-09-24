@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092406
 
-MERGE_SHA: 9089fd2a778544330a9b170ee4677600d008c658
+MERGE_SHA: 5248668400002b7108ad85c69b4a6b09e6193194
 
 > Pre-merge, this row holds the last non-proof commit. The Execution SHA row carries the verified
 > implementation identity. `post-merge-lane-close.yml` rebinds merge authority only after GitHub
@@ -12,8 +12,8 @@ Tier: T3
 Lane type: hygiene
 Branch: claude/work-2026092406-proof-2405-verify-mentions
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1648
-Head SHA: 9089fd2a778544330a9b170ee4677600d008c658
-Execution SHA: 9089fd2a778544330a9b170ee4677600d008c658
+Head SHA: 5248668400002b7108ad85c69b4a6b09e6193194
+Execution SHA: 5248668400002b7108ad85c69b4a6b09e6193194
 Diff base: f02f3e2452b2ca2cb7646e82acd3e226c50470f6
 result: pass
 
@@ -42,3 +42,9 @@ This lane is a proof repair. Each box is checkable against the diff or the CI ru
 
 Dispatch `post-merge-lane-close.yml -f issue_id=WORK-2026092405` without the `pr` input, so
 #1646's lane re-runs truth-check against the repaired proof.
+
+### Re-anchor to `5248668400002b7108ad85c69b4a6b09e6193194`
+
+Branch refreshed from origin/main `59f1c9e95` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092311.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092313.yml`, `.ops/sync/WORK-2026092314.yml`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/06_status/lanes/WORK-2026092311.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092313.json`, `docs/06_status/lanes/WORK-2026092314.json`, `docs/06_status/proof/WORK-2026092311/diff-summary.md`, `docs/06_status/proof/WORK-2026092311/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092313/diff-summary.md`, `docs/06_status/proof/WORK-2026092313/verification.md`, `docs/06_status/proof/WORK-2026092314/diff-summary.md`, `docs/06_status/proof/WORK-2026092314/verification.md`, `scripts/ops/db-health-checks.ts`, `scripts/ops/db-health-tripwire.ts`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/readiness-refresh.ts`, `scripts/ops/workflow-hardening.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/query.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `9089fd2a778544330a9b170ee4677600d008c658`. `verify` re-runs on the new head.
