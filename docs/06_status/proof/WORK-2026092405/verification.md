@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092405
 
-MERGE_SHA: 725ea081d97b8318fc341c2feb18b6df6ad2353a
+MERGE_SHA: 7cf645ebd23d11cfdd111933f393e68ca28e2bfe
 
 Generated at: 2026-09-24T14:38:26.000Z
 Issue: WORK-2026092405
@@ -8,8 +8,8 @@ Tier: T2
 Lane type: governance
 Branch: claude/work-2026092405-warehouse-backfill-credentials
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1646
-Head SHA: 725ea081d97b8318fc341c2feb18b6df6ad2353a
-Execution SHA: 725ea081d97b8318fc341c2feb18b6df6ad2353a
+Head SHA: 7cf645ebd23d11cfdd111933f393e68ca28e2bfe
+Execution SHA: 7cf645ebd23d11cfdd111933f393e68ca28e2bfe
 Diff base: decd67afaf99eeb41320c40eca14a9d9e9cf92a6
 result: pass
 
@@ -78,8 +78,14 @@ Changed files: 7
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
-### Re-anchor to `725ea081d97b8318fc341c2feb18b6df6ad2353a`
+### Re-anchor to `7cf645ebd23d11cfdd111933f393e68ca28e2bfe`
 
 Branch refreshed from origin/main `c76de5440` after #1636 merged. The merge brings in only main's own
 changes: `.ops/sync/WORK-2026092308.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
 withdrawn: `cbdc08e3f01817ad5f0e35b4487b1c5d72654639`. `verify` re-runs on the new head.
+
+### Re-anchor to `7cf645ebd23d11cfdd111933f393e68ca28e2bfe`
+
+Branch refreshed from origin/main `c5ff4854f` after #1636 merged. The merge brings in only main's own
+changes: `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `725ea081d97b8318fc341c2feb18b6df6ad2353a`. `verify` re-runs on the new head.
