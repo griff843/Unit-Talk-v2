@@ -31,6 +31,46 @@ export const HOT_TABLES = [
 ] as const;
 export const TOAST_BLOAT_TABLES = ['raw_payloads', 'odds_snapshots'] as const;
 
+/**
+ * The `table_size` query. A partitioned table holds no rows itself, so
+ * `pg_total_relation_size` of its parent is 0 however large the partitions
+ * are. The query therefore sums each hot table together with every member of
+ * its `pg_partition_tree`. For a plain table the tree is empty and the sum is
+ * the table alone, so plain tables measure exactly as before.
+ *
+ * The table list is interpolated from `HOT_TABLES`, a closed constant in this
+ * module, and each name is checked against a plain-identifier pattern, so the
+ * text carries no caller input. Keeping it a constant means the executed text
+ * is the tested text.
+ */
+export const TABLE_SIZE_SQL = (() => {
+  for (const table of HOT_TABLES) {
+    if (!/^[a-z_][a-z0-9_]*$/.test(table)) {
+      throw new Error(`HOT_TABLES entry is not a plain identifier: ${table}`);
+    }
+  }
+  const list = HOT_TABLES.map((table) => `'${table}'`).join(', ');
+  return `
+      SELECT
+        c.relname,
+        pg_size_pretty(sum(pg_relation_size(t.relid))) AS table_size,
+        pg_size_pretty(sum(pg_total_relation_size(t.relid))) AS total_size,
+        sum(pg_total_relation_size(t.relid))::text AS total_bytes
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL (
+        SELECT c.oid::regclass AS relid
+        UNION
+        SELECT pt.relid FROM pg_partition_tree(c.oid) pt
+      ) t
+      WHERE n.nspname = 'public'
+        AND c.relkind IN ('r', 'p')
+        AND c.relname = ANY(ARRAY[${list}])
+      GROUP BY c.relname
+      ORDER BY c.relname
+    `;
+})();
+
 export type TableName = (typeof HOT_TABLES)[number];
 
 // ---------------------------------------------------------------------------

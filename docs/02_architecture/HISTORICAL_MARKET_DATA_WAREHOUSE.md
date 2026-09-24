@@ -41,6 +41,15 @@ repo truth. Both are corrected in
    archived by nothing — so the default writes one object per day per source and leaves sport as a
    column.
 
+**PM decisions of 2026-09-24 supersede the quarantine disposition below.** Wherever §3, §4, §9 or
+§10 says `provider_offers_legacy_quarantine` is "export then prune", read instead: it is
+**archived, and not pruned** — not even after its archive verifies. Hot retention for
+`provider_offer_history` is **45 days**, and no row or partition is prune-eligible without a
+written and independently verified archive. Cron job 5 `nightly-retention-prune`, which dropped
+history partitions after 7 days and pruned the quarantine, was deactivated by Griff the same day.
+How the existing history and the quarantine reach the warehouse:
+[`docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`](../05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md).
+
 ## 2. Current state (measured 2026-06-11, live DB)
 
 | Table | Size | Notes |
@@ -63,7 +72,7 @@ Risk trajectory: at peak-season ingest (~200 MB/day of offer history), offer his
 
 **Cold (exported to object storage as Parquet):**
 1. `provider_offer_history` partitions older than the hot window — the dominant volume.
-2. `provider_offers_legacy_quarantine` — one-time export then prune (6.5 GB immediate recovery; zero read dependency).
+2. `provider_offers_legacy_quarantine` — one-time archive, **not pruned** (PM 2026-09-24, §1a). It still has read dependencies (§1a), and PM holds the prune.
 3. `raw_payloads` older than the hot window (provider forensics rarely needed past a few weeks).
 4. `system_runs` older than retention (or aggregate-then-prune; it is observability, not market data — but it is the #2 object and must not be exempt from retention).
 
@@ -75,7 +84,7 @@ Risk trajectory: at peak-season ingest (~200 MB/day of offer history), offer his
 |---|---|---|
 | `provider_offer_history` partitions | **45 days** (covers CLV joins, recent-form models, monitor lookbacks) | Indefinite (Parquet) |
 | `raw_payloads` | 21 days | 1 year (Parquet), then delete |
-| `provider_offers_legacy_quarantine` | 0 (export + prune) | Indefinite |
+| `provider_offers_legacy_quarantine` | **Indefinite — PM prune hold (2026-09-24)**; archived once | Indefinite |
 | `system_runs` | 90 days | 1 year (Parquet) |
 | All settlement / promotion / audit / cert tables | Indefinite hot | n/a (revisit at 1 GB each) |
 
@@ -131,11 +140,11 @@ One manifest JSON per exported partition, stored alongside the Parquet files **a
 
 ## 9. Risk assessment — continuing Supabase-only short term
 
-Acceptable for roughly the next 60–90 days: current total is dominated by one 6.5 GB dead table; live growth is ~2–6 GB/month seasonal. The observed `raw_payloads` statement timeout shows pressure is real but not yet systemic. The cheapest immediate win needs no warehouse at all: **export + prune `provider_offers_legacy_quarantine`** and adopt a `system_runs` retention job. Recommend doing those as the first implementation slice while the full conveyor is built.
+Acceptable for roughly the next 60–90 days: current total is dominated by one 6.5 GB dead table; live growth is ~2–6 GB/month seasonal. The observed `raw_payloads` statement timeout shows pressure is real but not yet systemic. The 2026-06 recommendation to **export + prune `provider_offers_legacy_quarantine`** first is superseded: PM decided on 2026-09-24 to archive it and keep it (§1a). A `system_runs` retention job remains a separate proposal.
 
 ## 10. Candidate follow-up lanes
 
-1. **T2** — legacy-quarantine export + verified prune (one-time, biggest payoff, exercises the manifest gate end-to-end).
+1. **T2** — legacy-quarantine one-time archive, **no prune** (PM 2026-09-24; see the backfill plan).
 2. **T2** — `system_runs` retention/rollup job.
 3. **T2** — daily offer-history Parquet conveyor + `archive_manifests` table + prune gate (the core of this doc).
 4. **T3** — replay tooling reads cold storage transparently (DuckDB adapter).

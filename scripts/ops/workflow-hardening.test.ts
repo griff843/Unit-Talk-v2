@@ -1224,7 +1224,9 @@ import {
   scanDocument as scanWorkflowDocument,
 } from '../ci/workflow-bare-binary-guard.js';
 import {
+  HOT_TABLES,
   RECEIPT_SCHEMA,
+  TABLE_SIZE_SQL,
   countChecks,
   deriveOutcome,
   evaluateAutovacuumRow,
@@ -1413,6 +1415,49 @@ test('UTV2-1632: table_size evaluates the measured value against the threshold',
   // The boundary is strictly greater-than, so a table exactly at the threshold
   // does not alert.
   assert.strictEqual(evaluateSizeRow(sizeRow('system_runs', 500), thresholds).status, 'pass');
+});
+
+// --- table_size measures a partitioned table by its partitions --------------
+
+test('WORK-2026092313: the size query sums each table with its partition tree', () => {
+  const sql = TABLE_SIZE_SQL.replace(/\s+/g, ' ');
+  // A partitioned parent is 0 bytes itself; the data is in pg_partition_tree.
+  assert.match(sql, /pg_partition_tree\(c\.oid\)/, 'the query must walk the partition tree');
+  // A plain table has an empty tree, so the relation itself must be in the set
+  // or every plain table would disappear from the check.
+  assert.match(sql, /SELECT c\.oid::regclass AS relid UNION SELECT pt\.relid/, 'the relation itself must be summed');
+  assert.match(sql, /sum\(pg_total_relation_size\(t\.relid\)\)::text AS total_bytes/);
+  assert.match(sql, /c\.relkind IN \('r', 'p'\)/, 'partitioned parents (relkind p) must be eligible');
+  assert.match(sql, /GROUP BY c\.relname/);
+});
+
+test('WORK-2026092313: the size query names exactly the hot tables', () => {
+  const listed = [...TABLE_SIZE_SQL.matchAll(/ARRAY\[([^\]]*)\]/g)].map((m) => m[1]);
+  assert.strictEqual(listed.length, 1);
+  const names = listed[0]!.split(',').map((part) => part.trim().replace(/^'|'$/g, ''));
+  assert.deepStrictEqual(names, [...HOT_TABLES]);
+});
+
+test('WORK-2026092313: the tripwire executes the tested size query, not its own', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts/ops/db-health-tripwire.ts'), 'utf8');
+  assert.match(source, /const sizeRows = await tx\.unsafe<SizeRow\[\]>\(TABLE_SIZE_SQL\);/);
+  // The pre-fix query sized each relation from pg_stat_user_tables alone,
+  // which reads a partitioned parent as 0 MB.
+  assert.doesNotMatch(source, /pg_total_relation_size\(relid\)/);
+});
+
+test('WORK-2026092313: a partitioned table measured by its partitions trips the size check', () => {
+  // Production 2026-09-23: provider_offer_history summed over 61 relations
+  // was 8,499,781,632 bytes, where the parent alone read 0 MB and passed.
+  const thresholds = resolveThresholds({ PROVIDER_OFFER_HISTORY_SIZE_THRESHOLD_MB: '300' });
+  const partitioned = evaluateSizeRow(
+    { relname: 'provider_offer_history', table_size: '4165 MB', total_size: '8106 MB', total_bytes: '8499781632' },
+    thresholds,
+  );
+  assert.strictEqual(partitioned.status, 'tripped');
+  assert.strictEqual(partitioned.severity, 'critical');
+  const parentOnly = evaluateSizeRow(sizeRow('provider_offer_history', 0), thresholds);
+  assert.strictEqual(parentOnly.status, 'pass', 'the pre-fix parent-only reading passed');
 });
 
 test('UTV2-1632: lowering the threshold trips a table that otherwise passes', () => {

@@ -26,6 +26,74 @@ Each item states the artifact that closes it. An item closed by a recollection i
 | A5 | Storage headroom is measured against the projected ingestion rate, not against today's size | audit `database.total_bytes` plus a per-sport daily growth estimate |
 | A6 | Autovacuum state is readable and not pathological | audit `autovacuum`. A restored database reports zero live/dead tuples for everything, which is **reset statistics, not health** — the audit says so explicitly, and this item is not closed until `ANALYZE` has run |
 | A7 | `provider_offer_history` partition creation and retention are proven working | `apps/ingestor/src/provider-offer-history-retention.ts` exercised against the restored database |
+| A8 | No `provider_offer_history` partition, and no quarantine row, can be dropped before its archive has verified | every drop path below either removed or gated on a verified manifest (`decidePrune(...).eligible === true`); a drop path that merely *fails* does not close this item |
+| A9 | Every relation the tripwire sizes is measured including its partitions | `scripts/ops/db-health-tripwire.ts` `table_size` for `provider_offer_history` reports the sum of its partitions, not the empty parent |
+
+### The drop paths that exist today (measured 2026-09-23, read-only)
+
+A7 cannot be closed as written, because neither retention path is both working and safe:
+
+- **pg_cron job 5 `nightly-retention-prune`** (`0 3 * * *`, `active = true`). One command:
+  `summarize_provider_offer_history_partition(now − 8d)`,
+  `drop_old_provider_offer_history_partitions(7)`, `prune_provider_offers_bounded(7, 5000, 20)`, then
+  DELETEs on `audit_log`, `alert_detections`, `submission_events`, delivered outbox rows,
+  `distribution_receipts` and `line_snapshots`. **All 136 runs from 2026-05-10 to 2026-09-23 failed**
+  — mostly `audit_log is immutable`, some `job startup timeout` — and pg_cron runs the command as a
+  single transaction, so every partition drop in it rolled back. Nothing has been lost, **by
+  accident**: remove or reorder the `audit_log` DELETE and the next 03:00 UTC run drops every history
+  partition older than seven days, none of which is archived. Deactivating job 5 is a production
+  change and is recommended in `PRODUCTION_DB_SIZING_AUDIT.md` and `FIRST_ARCHIVE_CANDIDATE_PACKET.md`.
+- **The repository does not describe job 5 as it runs, and one repository file would arm it.**
+  The live body was read from `cron.job` on 2026-09-23 and contains the `audit_log` DELETE. It
+  matches the migration ledger's copy,
+  `supabase/migrations_archive/ledger/20260509160906_202605090001_utv2_862_cron_fix_partition_lifecycle.sql`.
+  Two other repository files disagree with it:
+  - `supabase/migrations_archive/202605090001_utv2_862_cron_fix_partition_lifecycle.sql` is the
+    same migration **without** the `audit_log` DELETE. It was edited after it was applied.
+  - `supabase/migrations_archive/202605130001_utv2_921_audit_log_retention_immutability.sql`
+    reschedules job 5 without the `audit_log` DELETE "so retention must not attempt destructive
+    operations against it". It is **absent from the ledger**, so it was never applied. Its stated
+    intent was for the job to succeed. The failure is therefore not a designed safety control.
+    Applying that file by hand, or re-applying the edited 862 copy, removes the only statement
+    that makes every run roll back.
+
+  Neither file is in `supabase/migrations/`, so no migration push reaches them. The hazard
+  needs a manual act, and it is not imminent.
+- **The ingestor's retention** (`apps/ingestor/src/ingestor-runner.ts:494`,
+  `provider-offer-history-retention.ts`, default `retentionDays` 7). It runs once *after* the cycle
+  loop ends, and `apps/ingestor/src/index.ts:130` wires it in the production runtime. The production
+  daemon never reaches it: `deploy.yml` sets `UNIT_TALK_INGESTOR_MAX_CYCLES=0`, which
+  `index.ts:64` turns into an infinite loop. **Any finite-cycle run does reach it** — a one-shot or
+  bounded run against production drops every history partition older than seven days, unarchived.
+
+The consequence for reactivation is two-sided. A reactivated ingestor writes roughly 1–1.7 GB of
+history per day (the 2026-06-24 → 06-30 partitions, MLB alone), and the only scheduled drop path
+fails every night. Either nothing is ever dropped and the hot database fills, or the failure is
+"fixed" and unarchived history is dropped. A8 is the precondition that makes the fix safe.
+
+### The conveyor reports red until it is provisioned
+
+`.github/workflows/warehouse-archive-conveyor.yml` is scheduled `17 4 * * *`. With no
+`UNIT_TALK_WAREHOUSE_*` secret configured, `pnpm warehouse doctor` returns 1
+(`scripts/warehouse/cli.ts:149`: `return description.object_store_ready ? 0 : 1`), so every scheduled run
+fails at its first real step. That is the correct fail-closed signal, and D6 depends on it. The
+workflow's header (line 14) says the unconfigured run "exits cleanly"; the header is wrong, not the
+behaviour. The schedule also only ever targets `today − hotRetentionDays − 1`, so the existing
+2026-05-02 → 06-30 history is reached only by a dispatched `window_date` backfill.
+
+### A6 and A9, measured
+
+- **A6.** About 20 hours after the 2026-09-23 01:46 UTC restart, `pg_stat_user_tables` reports
+  `autovacuum_count = 0` and `autoanalyze_count = 0` for **every** table. The autovacuum launcher is
+  running, no transaction is older than a few minutes, and `system_runs` holds 12,142 dead tuples
+  against 12,224 live — far past its own table-level trigger
+  (`autovacuum_vacuum_threshold=100`, `scale_factor=0.02`). The read-only role cannot see why. A6
+  stays open, and the tripwire's `autovacuum_staleness` findings on 2026-09-23 are real, not
+  reset-statistics noise.
+- **A9.** `scripts/ops/db-health-tripwire.ts:177` sizes each relation with
+  `pg_total_relation_size(relid)`, which is 0 for a partitioned parent. The 2026-09-23 run reported
+  `provider_offer_history` as `0 MB … PASS` while its 60 partitions hold roughly 7.6 GB. The largest
+  high-growth relation is invisible to the size tripwire.
 
 ## B. The archive destination exists and is private
 
