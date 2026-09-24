@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092313
 
-MERGE_SHA: cf91c44c53a986b1a6ec3cea845da922d1afa592
+MERGE_SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
 
 Generated at: 2026-09-23T22:19:30.000Z
 Issue: WORK-2026092313
@@ -8,8 +8,8 @@ Tier: T2
 Lane type: governance
 Branch: claude/work-2026092313-tripwire-partition-size
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1641
-Head SHA: cf91c44c53a986b1a6ec3cea845da922d1afa592
-Execution SHA: cf91c44c53a986b1a6ec3cea845da922d1afa592
+Head SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
+Execution SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
 Diff base: 7159bcdeb2141b4b620f3335122df63fa0d39721
 result: pass
 
@@ -78,7 +78,7 @@ pass 6847, fail 0
 ### R-level
 
 ```
-$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head cf91c44c53a986b1a6ec3cea845da922d1afa592
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head 1715e1c0347c3de75500f69311b58f116bc42a63
 Verdict: PASS
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
@@ -103,4 +103,10 @@ The next scheduled `db-health-tripwire.yml` run is where the change becomes obse
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1641
-Execution SHA: cf91c44c53a986b1a6ec3cea845da922d1afa592
+Execution SHA: 1715e1c0347c3de75500f69311b58f116bc42a63
+
+### Re-anchor to `1715e1c0347c3de75500f69311b58f116bc42a63`
+
+Branch refreshed from origin/main `353274ae6` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092311.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092314.yml`, `.ops/sync/WORK-2026092405.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092311.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092314.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092311/diff-summary.md`, `docs/06_status/proof/WORK-2026092311/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092314/diff-summary.md`, `docs/06_status/proof/WORK-2026092314/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/readiness-refresh.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/query.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `cf91c44c53a986b1a6ec3cea845da922d1afa592`. `verify` re-runs on the new head.
