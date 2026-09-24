@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092403",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "a435e7a9de1df5793bed08d54aa53ab9b2bc77a3",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "a435e7a9de1df5793bed08d54aa53ab9b2bc77a3 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 9bdd0e87f into this branch. It brings in only main's own changes (`docs/06_status/readiness/readiness-score.json`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor b4d499b14d7d6e74cebdc5ccc7279f875ee1c96f. CI re-runs verify on the new head. Previous note: a435e7a9de1df5793bed08d54aa53ab9b2bc77a3 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 2f5c14811 into this branch. It brings in only main's own changes (`.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092311.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092313.yml`, `.ops/sync/WORK-2026092314.yml`, `.ops/sync/WORK-2026092405.yml`, `.ops/sync/WORK-2026092406.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092311.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092313.json`, `docs/06_status/lanes/WORK-2026092314.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/lanes/WORK-2026092406.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092311/diff-summary.md`, `docs/06_status/proof/WORK-2026092311/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092313/diff-summary.md`, `docs/06_status/proof/WORK-2026092313/verification.md`, `docs/06_status/proof/WORK-2026092314/diff-summary.md`, `docs/06_status/proof/WORK-2026092314/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/proof/WORK-2026092406/diff-summary.md`, `docs/06_status/proof/WORK-2026092406/verification.md`, `docs/06_status/proof/WORK-2026092406/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`, `scripts/ops/db-health-checks.ts`, `scripts/ops/db-health-tripwire.ts`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/readiness-refresh.ts`, `scripts/ops/workflow-hardening.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/query.test.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor 9ed381b0ec6ebf1b7631c2e7247693d298e1e42b. CI re-runs verify on the new head. Previous note: a435e7a9de1df5793bed08d54aa53ab9b2bc77a3 is the only implementation commit on this lane; the lane-manifest commit sits between it and origin/main decd67afaf99eeb41320c40eca14a9d9e9cf92a6. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "what_this_lane_repairs": {
+    "defect": "The production host kept every release image it pulled (398 images, 141.2 GB, 79.96 GB reclaimable on 2026-09-24), logged every container with no rotation (loki 5.07 GB), and installed two monitoring cron jobs whose /var/log redirect the deploy user cannot open, so neither ever ran.",
+    "repair": "Post-promote reclaim of superseded Unit Talk release images keyed to the host's own release and snapshot records; json-file rotation on every service; cron logs under DEPLOY_PATH/logs.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6848,
+      "fail": 0,
+      "note": "pnpm test at a435e7a9de1df5793bed08d54aa53ab9b2bc77a3"
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level": "PASS; 7 changed files; no R-level artifacts required",
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "keep set drops .unit-talk-release.previous",
+        "observed": "red: keep-set test"
+      },
+      {
+        "id": "M2",
+        "mutation": "keep set drops .env.production snapshots",
+        "observed": "red: keep-set test"
+      },
+      {
+        "id": "M3",
+        "mutation": "namespace filter removed",
+        "observed": "red: keep-set test"
+      },
+      {
+        "id": "M4",
+        "mutation": "continue-on-error removed",
+        "observed": "red: placement test"
+      },
+      {
+        "id": "M5",
+        "mutation": "caddy logging removed",
+        "observed": "red: rotation test"
+      },
+      {
+        "id": "M6",
+        "mutation": "cron redirected to /var/log",
+        "observed": "red: cron test"
+      }
+    ],
+    "verify": {
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. t1_live_db_precondition: deferred_to_ci."
+    }
+  },
+  "runtime_proof": {
+    "profile": "shell-execution",
+    "status": "pass",
+    "method": "The RECLAIM_REMOTE heredoc is extracted from deploy.yml and executed with bash -s against real release-marker files and a stub docker that records image rm calls.",
+    "hosted_live_db": {
+      "status": "PENDING_CI",
+      "job": "Writable DB proof (staging only)"
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "secrets_or_environments_changed": false,
+    "deploy_dispatched": false,
+    "files_changed": 4
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1645"
+}
