@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092308
 
-MERGE_SHA: pending merge
+MERGE_SHA: c76de54409ae1d188ff2d6bbdb041f2e014b7937
 
 > Pre-merge, the merge row is intentionally a placeholder. The Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -116,7 +116,7 @@ tests, which is how the failure is known to be the containment placeholder rathe
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: c76de54409ae1d188ff2d6bbdb041f2e014b7937
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1636
 Approved PR head: pending merge
 Execution SHA: 588f0c77e74d84d3bee448fb003ae9c78caee7d9
