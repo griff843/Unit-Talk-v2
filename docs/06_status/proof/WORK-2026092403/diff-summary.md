@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092403-host-disk-hygiene
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1645
 Head SHA: a435e7a9de1df5793bed08d54aa53ab9b2bc77a3
-Merge SHA: pending merge
+Merge SHA: fee65acf9f2346652cfd4f7067ec722def293e78
 Diff base: decd67afaf99eeb41320c40eca14a9d9e9cf92a6 (origin/main)
 Diff target: a435e7a9de1df5793bed08d54aa53ab9b2bc77a3
 
