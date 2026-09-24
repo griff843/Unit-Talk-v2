@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092314
 
-MERGE_SHA: 13c0ad82023802cde7fca9dae7860b3981bf04d7
+MERGE_SHA: f7b9eadb8e0101c19867bd5fd268071f7127864e
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -12,8 +12,8 @@ Tier: T3
 Lane type: governance
 Branch: claude/work-2026092314-warehouse-vacuous-tests
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1642
-Head SHA: 13c0ad82023802cde7fca9dae7860b3981bf04d7
-Execution SHA: 13c0ad82023802cde7fca9dae7860b3981bf04d7
+Head SHA: f7b9eadb8e0101c19867bd5fd268071f7127864e
+Execution SHA: f7b9eadb8e0101c19867bd5fd268071f7127864e
 Diff base: 7159bcdeb2141b4b620f3335122df63fa0d39721
 result: pass
 
@@ -48,7 +48,7 @@ $ pnpm exec tsx --test scripts/warehouse/*.test.ts
 
 ## Verification
 
-- `pnpm type-check` exit 0 on 13c0ad82023802cde7fca9dae7860b3981bf04d7
+- `pnpm type-check` exit 0 on f7b9eadb8e0101c19867bd5fd268071f7127864e
 - `pnpm exec eslint` on the 2 changed files: exit 0
 - `ops:preflight WORK-2026092314` VERDICT PASS (38 checks)
 - CI `verify` on the PR head
@@ -58,4 +58,10 @@ $ pnpm exec tsx --test scripts/warehouse/*.test.ts
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1642
 Approved PR head: pending merge
-Execution SHA: 13c0ad82023802cde7fca9dae7860b3981bf04d7
+Execution SHA: f7b9eadb8e0101c19867bd5fd268071f7127864e
+
+### Re-anchor to `f7b9eadb8e0101c19867bd5fd268071f7127864e`
+
+Branch refreshed from origin/main `893cc0667` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092405.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `13c0ad82023802cde7fca9dae7860b3981bf04d7`. `verify` re-runs on the new head.
