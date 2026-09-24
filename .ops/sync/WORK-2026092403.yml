@@ -1,0 +1,154 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092403
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092403
+  objective: WORK-2026092403 — the production host stops accumulating disk it
+    never reclaims
+  acceptance_criteria:
+    - >-
+      # WORK-2026092403 — the production host stops accumulating disk it never
+      reclaims
+
+
+      Tier: T1 (workflow files). Executor: claude.
+
+
+      ## Measured problem (2026-09-24, read-only on unit-talk-prod-app-1)
+
+      - `/` 140G of 226G used. Docker images 141.2GB across 398 images, 79.96GB
+      reclaimable: 68 generations each of api/worker/ingestor/discord-bot.
+      Nothing removes a superseded release image.
+
+      - No container log rotation: every container uses json-file with an empty
+      Config. The loki container's log is 5.07GB.
+
+      - The hourly disk alert and the 2-minute container-health watcher never
+      run their scripts: cron redirects into /var/log (root:syslog 0775), which
+      the deploy user cannot create files in, so the redirect fails before the
+      script starts. Neither log file exists.
+
+
+      ## Change
+
+      1. deploy.yml: after a successful promote, remove Unit Talk release images
+      whose tag is neither the current release, the previous release, nor a SHA
+      the host still keeps a configuration snapshot for. Never touch third-party
+      images. Non-fatal.
+
+      2. deploy/production/docker-compose.yml: json-file rotation on every
+      service.
+
+      3. deploy-monitoring.yml: cron logs under $DEPLOY_PATH/logs, which the
+      deploy user owns.
+
+
+      ## Not in scope
+
+      No deploy is dispatched, no host command is run, nothing is deleted by
+      this lane. Takes effect only at Griff's next Deploy / Deploy Monitoring
+      dispatch.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092403 — the production host stops accumulating disk it never
+      reclaims
+
+      Tier: T1 (workflow files). Executor: claude.
+
+
+      ## Measured problem (2026-09-24, read-only on unit-talk-prod-app-1)
+
+      - `/` 140G of 226G used. Docker images 141.2GB across 398 images, 79.96GB
+      reclaimable: 68 generations each of api/worker/ingestor/discord-bot.
+      Nothing removes a superseded release image.
+
+      - No container log rotation: every container uses json-file with an empty
+      Config. The loki container's log is 5.07GB.
+
+      - The hourly disk alert and the 2-minute container-health watcher never
+      run their scripts: cron redirects into /var/log (root:syslog 0775), which
+      the deploy user cannot create files in, so the redirect fails before the
+      script starts. Neither log file exists.
+
+
+      ## Change
+
+      1. deploy.yml: after a successful promote, remove Unit Talk release images
+      whose tag is neither the current release, the previous release, nor a SHA
+      the host still keeps a configuration snapshot for. Never touch third-party
+      images. Non-fatal.
+
+      2. deploy/production/docker-compose.yml: json-file rotation on every
+      service.
+
+      3. deploy-monitoring.yml: cron logs under $DEPLOY_PATH/logs, which the
+      deploy user owns.
+
+
+      ## Not in scope
+
+      No deploy is dispatched, no host command is run, nothing is deleted by
+      this lane. Takes effect only at Griff's next Deploy / Deploy Monitoring
+      dispatch.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092403.md
+    title: WORK-2026092403 — the production host stops accumulating disk it never
+      reclaims
+    description: >-
+      # WORK-2026092403 — the production host stops accumulating disk it never
+      reclaims
+
+
+      Tier: T1 (workflow files). Executor: claude.
+
+
+      ## Measured problem (2026-09-24, read-only on unit-talk-prod-app-1)
+
+      - `/` 140G of 226G used. Docker images 141.2GB across 398 images, 79.96GB
+      reclaimable: 68 generations each of api/worker/ingestor/discord-bot.
+      Nothing removes a superseded release image.
+
+      - No container log rotation: every container uses json-file with an empty
+      Config. The loki container's log is 5.07GB.
+
+      - The hourly disk alert and the 2-minute container-health watcher never
+      run their scripts: cron redirects into /var/log (root:syslog 0775), which
+      the deploy user cannot create files in, so the redirect fails before the
+      script starts. Neither log file exists.
+
+
+      ## Change
+
+      1. deploy.yml: after a successful promote, remove Unit Talk release images
+      whose tag is neither the current release, the previous release, nor a SHA
+      the host still keeps a configuration snapshot for. Never touch third-party
+      images. Non-fatal.
+
+      2. deploy/production/docker-compose.yml: json-file rotation on every
+      service.
+
+      3. deploy-monitoring.yml: cron logs under $DEPLOY_PATH/logs, which the
+      deploy user owns.
+
+
+      ## Not in scope
+
+      No deploy is dispatched, no host command is run, nothing is deleted by
+      this lane. Takes effect only at Griff's next Deploy / Deploy Monitoring
+      dispatch.
+    captured_at: 2026-09-24T13:52:09.956Z
+    description_sha256: bc99c715fbd2d936d3611f685be7d7a4ebea68ad7f2b6b838c77afa6b21f7235
+  contract_hash: bdbda071aa088845326c5c4c7e34bbdd8401d6914d30b0bd6bf7bb1a54a7e074
