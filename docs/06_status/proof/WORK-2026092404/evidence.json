@@ -1,0 +1,176 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092404",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1647",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "76a63ffc350888129fe7f9e95e8b9326cce4c4f8",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "76a63ffc350888129fe7f9e95e8b9326cce4c4f8 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092404/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree."
+  },
+  "what_this_lane_repairs": {
+    "defects": [
+      "Zombie-pick detection read picks in draft/validated with select * and no limit. 38,939 rows qualify in production; PostgREST returns 1,000, so the check silently saw a fraction of the population.",
+      "API /health took ~13.9s against Command Center's ~8s health timeout: 39 serial schema-drift HEAD requests (a new client per call) and one serial outbox lookup per candidate."
+    ],
+    "repair": "PickRepository.listPromotedByLifecycleStates filters server-side on promotion status and target, orders created_at then id, and pages past the cap with readAllOrderedPages. Repositories without it fall back to paging listByLifecycleStates. Stranded CI proof fixtures are reported in fixtureCount and a warning, never counted as zombies; a real zombie still makes /health 503. Outbox lookups and schema-drift probes run with bounded concurrency (8); a successful drift result is reused for 60s per runtime, and a failed one is never cached.",
+    "why_the_fixture_classification": "A complete read finds 8 stranded picks in production, every one a CI proof fixture. Counting them would hold /health -- and the api container healthcheck that probes it -- at 503 on synthetic data, and prescribe a requeue that enqueues delivery work for fixtures. The markers are the ones Command Center's isTestFixturePick already applies.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 60,
+          "pass": 60,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Seven new tests: fixture reported not counted (54); a real zombie beside a fixture still fails (55); mutation control on the fixture guard (56); detection pages past 1,000 through the fallback (57); readAllOrderedPages reads capped pages and needs a short page to stop (58); it refuses a page size above the cap and surfaces a page error (59); schema-drift probes run concurrently and keep order (60). The existing Track Only mutation control still passes with the generalised guard-marker regex."
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/model-health-scanner.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "pass": 12,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/fault-injection.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "pass": 74,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6850,
+          "pass": 6850,
+          "fail": 0,
+          "not_ok_lines": 0
+        },
+        "label": "Full workspace unit suite on this tree."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: ci:assert-staging refuses the containment placeholder SUPABASE_URL. This lane carries t1_live_db_precondition: deferred_to_ci, so verify and Writable DB proof (staging only) are obtained from CI on the merge SHA, which G6 enforces at closeout."
+    },
+    "pre_existing_failure_outside_pnpm_test": {
+      "file": "apps/api/src/server.http.test.ts",
+      "test": "POST /api/submissions with valid body returns 201 and pick id",
+      "observed": "400 'Request body must be valid JSON.'",
+      "same_on_main": "c5ff4854f",
+      "touches_lane_files": false
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied alone, apps/api/src/server.test.ts run, then the file restored from a pre-mutation copy (cmp-checked).",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "health.ts fallback returns after the first page (the truncation).",
+          "observed": "1 failure: test 57."
+        },
+        {
+          "id": "M2",
+          "mutation": "readAllOrderedPages returns after the first page.",
+          "observed": "2 failures: tests 58 and 59."
+        },
+        {
+          "id": "M3",
+          "mutation": "Schema-drift probe concurrency defaults to 1 (serial).",
+          "observed": "1 failure: test 60."
+        },
+        {
+          "id": "M4",
+          "mutation": "Fixture exclusion removed from checkZombiePickHealth.",
+          "observed": "3 failures: tests 54, 55 and 56."
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
+        "pass": 60,
+        "fail": 0
+      }
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    }
+  },
+  "production_read_only_measurement": {
+    "project": "zfzdnfwdarxucxtaojxm",
+    "measured_at": "2026-09-24T16:31:08Z",
+    "writes": 0,
+    "new_read": {
+      "statement": "select id,status,promotion_status,promotion_target,metadata,selection,created_at from public.picks where status in ('draft','validated') and promotion_status in ('qualified','promoted') and promotion_target is not null order by created_at asc, id asc limit 1000 offset 0",
+      "plan": "Index Scan using picks_promotion_target_idx",
+      "rows": 37,
+      "execution_ms": 24.628
+    },
+    "previous_read_population": 38939,
+    "classification": {
+      "candidates": 37,
+      "track_only": 6,
+      "with_active_outbox": 23,
+      "stranded_fixture": 8,
+      "stranded_real_zombie": 0
+    },
+    "stranded_fixture_ids": [
+      "8ff6dd60-750b-46e3-a78a-de9cfef0adb1",
+      "e33f5253-9178-4327-8149-eed56ddba3c8",
+      "4725244b-07b6-4082-9d09-9a520e67ba4e",
+      "e99501e5-cf03-4999-9acc-38b3cc2ccd89",
+      "3da6e348-a9a0-42d6-b275-f457bbdea010",
+      "e250b64f-46c9-4d5f-bec4-dcb8045289f6",
+      "05deb7b1-907e-4b8d-81ae-b3772fccb4d4",
+      "517b90d4-04c2-4581-85be-044440ffed63"
+    ]
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PENDING_CI",
+    "job": "Writable DB proof (staging only)",
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "suite": "pnpm test:db via pnpm verify",
+    "note": "Filled at closeout by autoHarvestCiDbProofIntoEvidence from the merge-SHA run. Deliberately not hand-filled. That suite does not call listPromotedByLifecycleStates -- the pinned file scope admits no live-DB test file -- so the production read-only measurement above is the runtime evidence for the new read."
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off -- unchanged",
+    "member_delivery": "disabled -- unchanged",
+    "files_changed": 6,
+    "note": "Six files inside the pinned file_scope_lock (one new: apps/api/src/fixture-pick.ts). No migration, no schema change, no new test file, no package.json edit. No requeue of the fixtures."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ]
+}
