@@ -1,6 +1,6 @@
 # WORK-2026092405 Diff Summary
 
-MERGE_SHA: 7cf645ebd23d11cfdd111933f393e68ca28e2bfe
+MERGE_SHA: 79a148dfa62d8c0b7d2313a4c039dfee39203c0a
 
 Generated at: 2026-09-24T14:38:26.000Z
 Issue: WORK-2026092405
@@ -10,7 +10,7 @@ Branch: claude/work-2026092405-warehouse-backfill-credentials
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1646
 Head SHA: 7cf645ebd23d11cfdd111933f393e68ca28e2bfe
 Execution SHA: 7cf645ebd23d11cfdd111933f393e68ca28e2bfe
-Merge SHA: pending merge
+Merge SHA: 79a148dfa62d8c0b7d2313a4c039dfee39203c0a
 Diff base: decd67afaf99eeb41320c40eca14a9d9e9cf92a6
 Diff target: 7cf645ebd23d11cfdd111933f393e68ca28e2bfe
 
