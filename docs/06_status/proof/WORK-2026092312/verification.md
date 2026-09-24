@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092312
 
-MERGE_SHA: 7501e5a17fee7ec2f9ac70fd4cb22a4ca05ab943
+MERGE_SHA: a6df96e717106fc68fe9651199d8cf0389398d59
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -12,8 +12,8 @@ Tier: T3
 Lane type: governance
 Branch: claude/work-2026092312-reactivation-gate-drop-paths
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1640
-Head SHA: 7501e5a17fee7ec2f9ac70fd4cb22a4ca05ab943
-Execution SHA: 7501e5a17fee7ec2f9ac70fd4cb22a4ca05ab943
+Head SHA: a6df96e717106fc68fe9651199d8cf0389398d59
+Execution SHA: a6df96e717106fc68fe9651199d8cf0389398d59
 Diff base: 7159bcdeb2141b4b620f3335122df63fa0d39721
 result: pass
 
@@ -34,12 +34,16 @@ the diff or re-running the measurement it cites.
       and `system_runs` shows 12,142 dead tuples against 12,224 live.
 - [x] The conveyor citations resolve: `cli.ts:149` returns 1 without object-store config, and
       the workflow header's line 14 says "exits cleanly".
+- [x] The document records that the repository misdescribes job 5. The ledger's 862 copy matches
+      the live body, including its `audit_log` DELETE. The archive 862 copy was edited to drop that
+      DELETE, and the 921 migration that would remove it was never applied. Either one, applied by
+      hand, would arm job 5's drops.
 - [x] The document still authorizes nothing. No workflow, schedule, script, schema or data is changed.
 
 ## EVIDENCE:
 
 ```
-$ git diff --name-only 7159bcdeb2141b4b620f3335122df63fa0d39721 7501e5a17fee7ec2f9ac70fd4cb22a4ca05ab943 | grep -cv -E '^(docs/|\.ops/)'
+$ git diff --name-only 7159bcdeb2141b4b620f3335122df63fa0d39721 a6df96e717106fc68fe9651199d8cf0389398d59 | grep -cv -E '^(docs/|\.ops/)'
 0
 $ pnpm verify:quick
 exit 0 (sync-check, env, lint, type-check)
@@ -47,7 +51,7 @@ exit 0 (sync-check, env, lint, type-check)
 
 ## Verification
 
-- `pnpm verify:quick` exit 0 on 7501e5a17fee7ec2f9ac70fd4cb22a4ca05ab943
+- `pnpm verify:quick` exit 0 on a6df96e717106fc68fe9651199d8cf0389398d59
 - `ops:preflight WORK-2026092312` VERDICT PASS (38 checks)
 - CI `verify` on the PR head
 
@@ -56,4 +60,4 @@ exit 0 (sync-check, env, lint, type-check)
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1640
 Approved PR head: pending merge
-Execution SHA: 7501e5a17fee7ec2f9ac70fd4cb22a4ca05ab943
+Execution SHA: a6df96e717106fc68fe9651199d8cf0389398d59
