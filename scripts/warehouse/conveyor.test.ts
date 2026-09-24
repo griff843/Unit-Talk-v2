@@ -28,7 +28,8 @@ import {
   runConveyor,
 } from './conveyor.js';
 import { type DuckConnection, openDuckDb } from './duckdb.js';
-import { parseManifest } from './manifest.js';
+import { computeManifestId, parseManifest } from './manifest.js';
+import { manifestObjectKey, parseDataObjectKey } from './object-layout.js';
 import { LocalObjectStore, type ObjectStore } from './object-store.js';
 import { decidePrune } from './verify-archive.js';
 
@@ -244,10 +245,17 @@ test('an interruption after upload leaves no manifest, and the retry completes i
     const dataKeys = await h.store.list('canonical/');
     assert.equal(dataKeys.length, 2, 'the uploaded bytes are still there, invisible to the prune gate');
 
-    // Nothing in the bucket can be pruned on the strength of that state.
+    // Nothing in the bucket can be pruned on the strength of that state. Each
+    // data key is resolved to its manifest exactly as the conveyor resolves it,
+    // and that lookup must not come back eligible.
     for (const key of dataKeys) {
-      assert.equal(decidePrune(null).eligible, false);
-      assert.ok(key.endsWith('.parquet'));
+      const parsed = parseDataObjectKey(key);
+      assert.ok(parsed, `${key} must parse as a data object key`);
+      const manifestKey = manifestObjectKey(parsed.target, computeManifestId(key));
+      const body = await h.store.get(manifestKey);
+      const manifest = body === null ? null : parseManifest(body.toString('utf8'));
+      assert.equal(manifest, null, `${key} has a manifest although it was never verified`);
+      assert.equal(decidePrune(manifest).eligible, false, `${key} must not be prune-eligible`);
     }
 
     // The retry finishes the job and produces the manifests.
