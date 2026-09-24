@@ -1,8 +1,8 @@
 # PROOF: WORK-2026092402
 
-MERGE_SHA: baa99d774ee51ff5e1fde07a3066d0667eebee28
+MERGE_SHA: pending merge
 
-> Pre-merge, the merge row carries the execution SHA, the last commit on this lane that changes
+> Pre-merge, the merge row is intentionally a placeholder. The Execution SHA row carries the last commit on this lane that changes
 > anything outside `docs/06_status/proof/WORK-2026092402/` and the lane manifest.
 > `post-merge-lane-close.yml` rebinds merge authority only after GitHub supplies the merged-PR
 > attestation.
