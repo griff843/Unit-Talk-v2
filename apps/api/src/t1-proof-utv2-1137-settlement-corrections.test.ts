@@ -8,6 +8,8 @@
  *   2. Single-approver correction rejected by DB CHECK constraint
  *   3. Dual-authorized correction succeeds and settlement_corrections record is created
  *   4. PnL reproduced through correction chain via resolveEffectiveSettlement
+ *   5. The model-performance report counts the correction, not the superseded
+ *      original, completing a chain whose root is outside its read window
  *
  * Gated on SUPABASE_SERVICE_ROLE_KEY. Test rows are NOT deleted.
  *
@@ -29,6 +31,7 @@ import {
   validateDualAuthorization,
   validateSettlementCorrectionInput,
 } from '@unit-talk/domain';
+import { getModelPerformanceReport } from './model-performance-service.js';
 
 function hasSupabaseEnv(): boolean {
   try {
@@ -309,4 +312,70 @@ test('T1 Proof 4 — PnL reproduces through correction chain', { skip: skipReaso
     },
   });
   assert.ok(inputValidation.ok, 'Domain validation must pass');
+});
+
+// ── Test 5: model-performance report reads the effective settlement ──────────
+
+test('T1 Proof 5 — model-performance report counts the correction, completing a chain from Postgres', { skip: skipReason }, async () => {
+  const pickId = await createTestPick('model-performance');
+  const now = new Date().toISOString();
+
+  const original = await repositories.settlements.record({
+    pickId,
+    status: 'settled',
+    result: 'win',
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: `ref-${RUN_ID}-mp-original`,
+    settledBy: `test-${RUN_ID}`,
+    settledAt: now,
+    payload: { testRun: RUN_ID, clvPercent: 2.5 },
+  });
+  const correction = await repositories.settlements.record({
+    pickId,
+    status: 'settled',
+    result: 'loss',
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: `ref-${RUN_ID}-mp-correction`,
+    settledBy: `test-${RUN_ID}`,
+    settledAt: now,
+    correctsId: original.id,
+    payload: { testRun: RUN_ID, correction: true, clvPercent: -1 },
+  });
+
+  const pick = await repositories.picks.findPickById(pickId);
+  assert.ok(pick, 'test pick must read back');
+  const tier = `utv2-1137-mp-${RUN_ID}`;
+
+  // The report's candidate picks and its 30-day window are narrowed to this
+  // pick, because staging is shared and a 5000-row window is not ours to fill.
+  // The window holds only the correction -- the root "fell out" -- so the
+  // report must complete the chain through the real listByPick against
+  // Postgres. Everything the report resolves comes from real rows.
+  const settlements = Object.create(repositories.settlements) as typeof repositories.settlements;
+  let historyReads = 0;
+  settlements.listRecent = async () => {
+    const rows = await repositories.settlements.listByPick(pickId);
+    return rows.filter((row) => row.id === correction.id);
+  };
+  settlements.listByPick = async (id: string) => {
+    historyReads++;
+    return repositories.settlements.listByPick(id);
+  };
+  const picks = Object.create(repositories.picks) as typeof repositories.picks;
+  picks.listByLifecycleState = async () => [
+    { ...pick, metadata: { ...(pick.metadata as Record<string, unknown>), model_tier: tier } },
+  ];
+
+  const report = await getModelPerformanceReport({ picks, settlements }, { tier });
+
+  assert.equal(historyReads, 1, 'the incomplete window must be completed from the pick history');
+  assert.equal(report.totalSettledPicks, 1);
+  assert.equal(report.unresolvedSettlementPickCount, 0);
+  const bucket = report.tierPerformance.find((row) => row.tier === tier);
+  assert.ok(bucket, 'the test tier must be reported');
+  assert.equal(bucket.wins, 0, 'the superseded win must not be counted');
+  assert.equal(bucket.losses, 1, 'the correction loss must be counted');
+  assert.equal(bucket.avgClv, -1, "the correction's CLV must be reported, not the original's");
 });
