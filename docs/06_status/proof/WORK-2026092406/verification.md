@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092406
 
-MERGE_SHA: 5248668400002b7108ad85c69b4a6b09e6193194
+MERGE_SHA: 4f6bbaca8168758a42094318209c08e469eef84d
 
 > Pre-merge, this row holds the last non-proof commit. The Execution SHA row carries the verified
 > implementation identity. `post-merge-lane-close.yml` rebinds merge authority only after GitHub

@@ -7,21 +7,29 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092406-proof-2405-verify-mentions",
   "branch": "claude/work-2026092406-proof-2405-verify-mentions",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "4f6bbaca8168758a42094318209c08e469eef84d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1648",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/WORK-2026092405/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-24T16:55:08.565Z",
-  "heartbeat_at": "2026-09-24T16:55:08.565Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-24T20:11:04.052Z",
+  "closed_at": "2026-09-24T20:11:04.052Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092406-proof-2405-verify-mentions.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-24T20:11:01.625Z",
+      "verdict": "pass",
+      "merge_sha": "4f6bbaca8168758a42094318209c08e469eef84d",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
