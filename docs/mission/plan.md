@@ -21,7 +21,8 @@ Measured 2026-09-23 against `origin/main`, the GitHub API and production `zfzdnf
 | `main` | `df071f24b` |
 | Deployed release | `6685f171c` — `Deploy` run `35807774504`, succeeded 2026-09-23T01:47Z. Five successful deploys since 2026-09-18. |
 | Drift `deployed..main` | **23 commits, 99 files, 0 migrations, 9 runtime source files** — re-measure, never quote |
-| A deploy run is **still waiting for approval** | `Deploy` run `35596690418`, dispatched 2026-09-21 at `28c0c79af`, is `waiting` on the `canary` environment. That SHA is **older** than the deployed release. See §5 decision 1. |
+| Stale deploy run `35596690418` | **Rejected** 2026-09-24 by PM decision. It targeted `28c0c79af`, older than the running release. `canary` approval shows `rejected`; the run is `completed`/`failure` with no pending deployments. It can no longer deploy. |
+| Cron job 5 `nightly-retention-prune` | **Inactive** since 2026-09-24 14:22Z. Griff authorized the deactivation (`cron.alter_job(5, active := false)`). It had failed 137 of 137 runs, which is the only reason it never dropped unarchived history. Row counts on every table it touches were identical before and after. **Do not re-enable it** without PM approval of a verified replacement retention design; the rollback is `cron.alter_job(5, active := true)`. |
 | Governed pick cohort (`metadata ? 'distributionMode'`) | **9** — 6 `track-only` (all `validated`); 3 `delivery-eligible` (`816a84c7` settled, `ed0ed43c` posted, `2cc92f4b` queued) |
 | Settlement records for that cohort | **6**, every one `source = operator`, `confidence = confirmed`, and none is a correction. Unsettled: `dfcd9486` (the Milestone 1 pick), `ed0ed43c` and `2cc92f4b`. |
 | Outbox rows for that cohort | **3**, all `discord:official-picks`: `816a84c7` and `ed0ed43c` `sent` (2026-09-18); `2cc92f4b` **`pending` since 2026-09-23 02:21**, `attempt_count = 0` |
@@ -153,7 +154,7 @@ operator submission. Identify genuine submissions *positively*.
 | **A second data source cannot be admitted by an agent** | any non-SGO route to schedules or results | `PROVIDER_AUTHORITY_LOCK.md` is an active T1 rule; amending it is PM-owned |
 | **The canonical reference bootstrap is unowned** — #1484 was closed, not merged | routine reference-data seeding beyond the operator CLI | nobody; a gap, not a resolution |
 | **`P0 Protocol` is still blind to `WORK-###`** | tracker-independence exit condition 1 | reserved (merge authority). #1570 taught the **Merge Gate** and the file-scope guard WORK identities; it did not touch P0. |
-| **The warehouse is built but not provisioned** | archiving market data off Supabase; the prune that follows it | owner actions in `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` — §5 decision 10 |
+| **The warehouse is built but not provisioned**, and its default policy cannot produce an object key (`season: 'all'` fails the layout's `YYYY` rule; backfill plan §7) | archiving market data off Supabase; any prune, which also waits on a verified replacement for job 5 | owner actions in `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` — §5 decision 10 |
 
 **No longer a blocker**, each verified rather than inferred:
 
@@ -168,7 +169,7 @@ operator submission. Identify genuine submissions *positively*.
 
 | # | Decision | Reserved under | Blocks |
 |---|---|---|---|
-| 1 | **Reject the stale waiting deploy run `35596690418`** (`28c0c79af`, waiting on `canary` since 2026-09-21). **Recommended.** Approving it would deploy a SHA **older** than the running `6685f171c`, which rolls back everything between them. Then, if wanted, **dispatch `Deploy` at `origin/main`**: 8 runtime files, no migration, no containment change. **Success criterion:** the deployed release SHA equals `origin/main`, and `deploy_sha_alignment` passes at the next ledger refresh. | reserved action 8 | `deploy_sha_alignment`; the Command Center and best-bets work in §2 |
+| 1 | The stale run `35596690418` was **rejected 2026-09-24**. What remains is whether to **dispatch `Deploy` at `origin/main`**: 8 runtime files, no migration, no containment change. **Success criterion:** the deployed release SHA equals `origin/main`, and `deploy_sha_alignment` passes at the next ledger refresh. | reserved action 8 | `deploy_sha_alignment`; the Command Center and best-bets work in §2 |
 | 1a | **Whether to release delivery-eligible pick `2cc92f4b`**, which has waited `pending` on `official-picks` since 2026-09-23 02:21 behind `killed = true`. The alternative is to leave it queued; it will not deliver on its own. | member-delivery activation (2) | that one pick's delivery |
 | 1b | **Settle `ed0ed43c`** (delivered 2026-09-18, still `posted`) through the Command Center once its game is final | operator action, not reserved | condition 4's completeness for the delivered cohort |
 | 2 | **SGO — OWNER-DEFERRED 2026-09-18.** SGO stays intentionally off, to be activated near the end as a bounded data-input dependency. **Do not re-raise** until provider-independent work is exhausted. The prepared packet (`RESULTS_BACKFILL_AUTHORIZATION_PACKET.md`) stays valid. | secrets (4) / paid provider (3) | automated grading, CLV, provider-fed reference and result supply — **deferred, not failed** |
@@ -177,7 +178,7 @@ operator submission. Identify genuine submissions *positively*.
 | 7 | **#1491 / #1492 architecture review** | merge authority | those two PRs only |
 | 8 | **#1451** — production DDL, `verify` red | production DDL (1) | #1451 only |
 | 9 | **Direct-`main` prevention control** | branch protection | nothing; the prohibition is already in force |
-| 10 | **Warehouse provisioning**: create the bucket and the `UNIT_TALK_WAREHOUSE_*` secrets, create the `warehouse_reader` role and DSN, and decide on pg_cron job 5 `nightly-retention-prune` — all specified in `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` and `PRODUCTION_DB_SIZING_AUDIT.md` | secrets (4), production DDL (1) | the warehouse conveyor's first real run |
+| 10 | **Warehouse provisioning.** The design is approved in principle (2026-09-24): a keys-only Hetzner project, a writer and a reader, and a bucket policy on the existing `unit-talk-prod-warehouse`. The owner sequence and its verification matrix are in `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` §6. Then the `warehouse_reader` role (DDL), and the `warehouse-archive` environment's secrets. Job 5 is already deactivated. The historical backfill (`WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`) is a separate reserved start. | secrets (4), production DDL (1) | the conveyor's first real run; the backfill |
 
 Decision 6 of the previous edition is gone because it was resolved (#1570 merged). The other
 numbers are kept stable, so "decision 5" still means #1589.

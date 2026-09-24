@@ -79,6 +79,7 @@ import {
   HarnessError,
   LINEAR_ISSUE_ID,
   RECEIPT_SCHEMA,
+  TABLE_SIZE_SQL,
   TOAST_BLOAT_TABLES,
   countChecks,
   deriveOutcome,
@@ -170,16 +171,7 @@ async function runDatabaseChecks(
       }
     }
 
-    const sizeRows = await tx<SizeRow[]>`
-      SELECT
-        relname,
-        pg_size_pretty(pg_relation_size(relid)) AS table_size,
-        pg_size_pretty(pg_total_relation_size(relid)) AS total_size,
-        pg_total_relation_size(relid)::text AS total_bytes
-      FROM pg_stat_user_tables
-      WHERE relname = ANY(${tx.array(HOT_TABLES as unknown as string[])})
-      ORDER BY relname
-    `;
+    const sizeRows = await tx.unsafe<SizeRow[]>(TABLE_SIZE_SQL);
     const sizeSeen = new Set(sizeRows.map((row) => row.relname));
     for (const row of sizeRows) checks.push(evaluateSizeRow(row, thresholds));
     for (const table of HOT_TABLES) {
@@ -188,7 +180,7 @@ async function runDatabaseChecks(
           notRunCheck(
             'table_size',
             table,
-            `${table} has no row in pg_stat_user_tables; size could not be measured`,
+            `${table} has no public table or partitioned table in pg_class; size could not be measured`,
           ),
         );
       }
