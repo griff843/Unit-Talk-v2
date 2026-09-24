@@ -8,13 +8,13 @@
   "branch": "claude/work-2026092406-proof-2405-verify-mentions",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1648",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/WORK-2026092405/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-24T16:55:08.565Z",
   "heartbeat_at": "2026-09-24T16:55:08.565Z",
   "closed_at": null,
