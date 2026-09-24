@@ -13,7 +13,7 @@ Tier: T1
 Lane type: governance
 Branch: claude/work-2026092402-tier-label-work-identity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1644
-Head SHA: baa99d774ee51ff5e1fde07a3066d0667eebee28
+Head SHA: e4f99465f4d5c8efc0b458006d21f4cf63df2657
 result: pass
 
 ## ASSERTIONS:
@@ -32,7 +32,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured at `baa99d774ee51ff5e1fde07a3066d0667eebee28` in the lane worktree.
+Measured at `e4f99465f4d5c8efc0b458006d21f4cf63df2657` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test scripts/ci/tier-label-workflow.test.ts
@@ -52,7 +52,7 @@ $ pnpm test
 # fail 0
 rc=0
 
-$ pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092402 --base origin/main --head baa99d774ee51ff5e1fde07a3066d0667eebee28
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092402 --base origin/main --head e4f99465f4d5c8efc0b458006d21f4cf63df2657
 Verdict: PASS
 Changed files: 7
 Rules matched: (none) — no R-level artifacts required for this diff
@@ -77,7 +77,7 @@ Restore check: 6/6.
       containment placeholder target by design. The lane manifest records
       `t1_live_db_precondition: deferred_to_ci`, so `verify` and `Writable DB proof (staging only)`
       come from CI on this PR and on the merge SHA.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092402 --base origin/main --head baa99d774ee51ff5e1fde07a3066d0667eebee28`: PASS, 7 changed files, no R-level artifacts required
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092402 --base origin/main --head e4f99465f4d5c8efc0b458006d21f4cf63df2657`: PASS, 7 changed files, no R-level artifacts required
 
 ## Runtime Verification
 
@@ -86,7 +86,7 @@ out of the committed workflow files, compiles them, and runs them against branch
 It does not compare against a copy.
 
 The live proof is GitHub's own execution of this PR's workflow copy. `Sync tier label` in run
-36001060825 at `baa99d774ee51ff5e1fde07a3066d0667eebee28` resolved `WORK-2026092402`, read the lane manifest's tier, and reported the
+36001060825 at `e4f99465f4d5c8efc0b458006d21f4cf63df2657` resolved `WORK-2026092402`, read the lane manifest's tier, and reported the
 label consistent. Over the 100 runs before this change, 62 of 62 on non-UTV2 branches had failed
 with "No issue ID found in PR branch or title".
 
@@ -94,12 +94,18 @@ with "No issue ID found in PR branch or title".
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1644
-Execution SHA: baa99d774ee51ff5e1fde07a3066d0667eebee28
+Execution SHA: e4f99465f4d5c8efc0b458006d21f4cf63df2657
 
-Execution anchor: `baa99d774ee51ff5e1fde07a3066d0667eebee28` is the only implementation commit on this lane. Its parent is
+Execution anchor: `e4f99465f4d5c8efc0b458006d21f4cf63df2657` is the only implementation commit on this lane. Its parent is
 `origin/main` `decd67afaf99eeb41320c40eca14a9d9e9cf92a6`.
 
 `work-order.md` in this directory is a copy of the repository-owned work order
 `.ops/work/WORK-2026092402.md`, which exists only as an uncommitted file. It is kept here because
 the lane's own proof directory is the one path that the closeout scope check (S1) and the
 file-scope guard both admit without widening `file_scope_lock`.
+
+### Re-anchor to `e4f99465f4d5c8efc0b458006d21f4cf63df2657`
+
+Branch refreshed from origin/main `2f5c14811` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092311.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092313.yml`, `.ops/sync/WORK-2026092314.yml`, `.ops/sync/WORK-2026092405.yml`, `.ops/sync/WORK-2026092406.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092311.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092313.json`, `docs/06_status/lanes/WORK-2026092314.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/lanes/WORK-2026092406.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092311/diff-summary.md`, `docs/06_status/proof/WORK-2026092311/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092313/diff-summary.md`, `docs/06_status/proof/WORK-2026092313/verification.md`, `docs/06_status/proof/WORK-2026092314/diff-summary.md`, `docs/06_status/proof/WORK-2026092314/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/proof/WORK-2026092406/diff-summary.md`, `docs/06_status/proof/WORK-2026092406/verification.md`, `docs/06_status/proof/WORK-2026092406/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`, `scripts/ops/db-health-checks.ts`, `scripts/ops/db-health-tripwire.ts`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/readiness-refresh.ts`, `scripts/ops/workflow-hardening.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/query.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `baa99d774ee51ff5e1fde07a3066d0667eebee28`. `verify` re-runs on the new head.
