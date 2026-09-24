@@ -89,3 +89,18 @@ withdrawn: `cbdc08e3f01817ad5f0e35b4487b1c5d72654639`. `verify` re-runs on the n
 Branch refreshed from origin/main `c5ff4854f` after #1636 merged. The merge brings in only main's own
 changes: `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
 withdrawn: `725ea081d97b8318fc341c2feb18b6df6ad2353a`. `verify` re-runs on the new head.
+
+### Merge-SHA verification (added by WORK-2026092406)
+
+The sections above record only `pnpm test:ops`. This section adds what CI ran on the merge SHA
+`79a148dfa62d8c0b7d2313a4c039dfee39203c0a` (#1646). Each line names the run and job that executed
+it; none of these ran locally for this lane.
+
+- `pnpm verify` — CI splits it across two jobs of `ci.yml` run 36028634010, both `success`:
+  - job `verify` (107733848362) runs its static half, `pnpm verify:static`;
+  - job `Writable DB proof (staging only)` (107731452357) runs its live half, `pnpm test:live-db`, and `verify` checks that job's receipt.
+- `pnpm type-check` — runs inside `pnpm verify:static` in job 107733848362, `success`.
+- `pnpm test` — runs inside `pnpm verify:static` in job 107733848362, `success`.
+
+The lane changed documentation only (four Markdown files), so none of these results depends on
+its diff. They are recorded because the T2 closeout gate requires the evidence to be named.
