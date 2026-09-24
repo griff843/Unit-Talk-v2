@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092312 Diff Summary
 
-MERGE_SHA: a6df96e717106fc68fe9651199d8cf0389398d59
+MERGE_SHA: 65f11353397da5e9f34bb27bda2d0bd33292a16c
 
 Generated at: 2026-09-23T21:48:56.000Z
 Issue: WORK-2026092312
@@ -8,8 +8,8 @@ Tier: T3
 Lane type: governance
 Branch: claude/work-2026092312-reactivation-gate-drop-paths
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1640
-Head SHA: a6df96e717106fc68fe9651199d8cf0389398d59
-Execution SHA: a6df96e717106fc68fe9651199d8cf0389398d59
+Head SHA: 65f11353397da5e9f34bb27bda2d0bd33292a16c
+Execution SHA: 65f11353397da5e9f34bb27bda2d0bd33292a16c
 Diff base: 7159bcdeb2141b4b620f3335122df63fa0d39721
 result: pass
 

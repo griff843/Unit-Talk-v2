@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092312
 
-MERGE_SHA: a6df96e717106fc68fe9651199d8cf0389398d59
+MERGE_SHA: 65f11353397da5e9f34bb27bda2d0bd33292a16c
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -12,8 +12,8 @@ Tier: T3
 Lane type: governance
 Branch: claude/work-2026092312-reactivation-gate-drop-paths
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1640
-Head SHA: a6df96e717106fc68fe9651199d8cf0389398d59
-Execution SHA: a6df96e717106fc68fe9651199d8cf0389398d59
+Head SHA: 65f11353397da5e9f34bb27bda2d0bd33292a16c
+Execution SHA: 65f11353397da5e9f34bb27bda2d0bd33292a16c
 Diff base: 7159bcdeb2141b4b620f3335122df63fa0d39721
 result: pass
 
@@ -43,7 +43,7 @@ the diff or re-running the measurement it cites.
 ## EVIDENCE:
 
 ```
-$ git diff --name-only 7159bcdeb2141b4b620f3335122df63fa0d39721 a6df96e717106fc68fe9651199d8cf0389398d59 | grep -cv -E '^(docs/|\.ops/)'
+$ git diff --name-only 7159bcdeb2141b4b620f3335122df63fa0d39721 65f11353397da5e9f34bb27bda2d0bd33292a16c | grep -cv -E '^(docs/|\.ops/)'
 0
 $ pnpm verify:quick
 exit 0 (sync-check, env, lint, type-check)
@@ -51,7 +51,7 @@ exit 0 (sync-check, env, lint, type-check)
 
 ## Verification
 
-- `pnpm verify:quick` exit 0 on a6df96e717106fc68fe9651199d8cf0389398d59
+- `pnpm verify:quick` exit 0 on 65f11353397da5e9f34bb27bda2d0bd33292a16c
 - `ops:preflight WORK-2026092312` VERDICT PASS (38 checks)
 - CI `verify` on the PR head
 
@@ -60,4 +60,10 @@ exit 0 (sync-check, env, lint, type-check)
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1640
 Approved PR head: pending merge
-Execution SHA: a6df96e717106fc68fe9651199d8cf0389398d59
+Execution SHA: 65f11353397da5e9f34bb27bda2d0bd33292a16c
+
+### Re-anchor to `65f11353397da5e9f34bb27bda2d0bd33292a16c`
+
+Branch refreshed from origin/main `79a148dfa` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092405.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `a6df96e717106fc68fe9651199d8cf0389398d59`. `verify` re-runs on the new head.
