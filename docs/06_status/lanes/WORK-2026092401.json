@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092401-conveyor-unprovisioned-state",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1643",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/warehouse-archive-conveyor.yml",
@@ -21,7 +21,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026092401/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-24T12:25:03.533Z",
   "heartbeat_at": "2026-09-24T12:25:03.533Z",
   "closed_at": null,

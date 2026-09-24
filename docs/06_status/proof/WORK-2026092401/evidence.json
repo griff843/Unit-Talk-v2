@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092401",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fdacdda21abfc2efef7f0e532f6fb7c9563b19ff",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "fdacdda21abfc2efef7f0e532f6fb7c9563b19ff is the only implementation commit on this lane; its parent is origin/main decd67afaf99eeb41320c40eca14a9d9e9cf92a6. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "what_this_lane_repairs": {
+    "defect": "The conveyor workflow header claimed an unconfigured run exits cleanly; the only scheduled run (35980767152) failed at warehouse doctor with exit 1, and every unprovisioned or half-provisioned state printed the same generic text. doctor also exited 0 whenever the object store resolved, even with no source DSN.",
+    "repair": "describeConfig reports archive_state (not_provisioned | incomplete | ready); doctor exits 0 only for ready and writes a job summary saying nothing was exported, uploaded, verified or manifested and nothing became prune-eligible; the header states the real behaviour.",
+    "why_red_stays_red": "WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md section 3 says a misconfigured run fails; WAREHOUSE_ARCHIVE_CONTRACT.md section 8 says a missing heartbeat is stale, never unknown.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6851,
+      "fail": 0,
+      "note": "pnpm test at fdacdda21abfc2efef7f0e532f6fb7c9563b19ff"
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level": "PASS; 9 changed files; no R-level artifacts required",
+    "warehouse_battery": {
+      "pass": 116,
+      "fail": 0
+    },
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "doctor exits 0 for not_provisioned",
+        "observed": "red: doctor exit test"
+      },
+      {
+        "id": "M2",
+        "mutation": "ready when every key is non-missing (placeholder counts)",
+        "observed": "red: placeholder test and doctor exit test"
+      },
+      {
+        "id": "M3",
+        "mutation": "old object_store_ready exit rule",
+        "observed": "red: doctor exit test"
+      },
+      {
+        "id": "M4",
+        "mutation": "workflow header reverted",
+        "observed": "red: header test"
+      },
+      {
+        "id": "M5",
+        "mutation": "placeholder-only reads not_provisioned",
+        "observed": "red: placeholder test"
+      }
+    ],
+    "verify": {
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. t1_live_db_precondition: deferred_to_ci."
+    }
+  },
+  "runtime_proof": {
+    "profile": "cli-process",
+    "status": "pass",
+    "method": "conveyor-workflow.test.ts spawns scripts/warehouse/cli.ts doctor as a child process per configuration and asserts exit status, archive_state and absence of secret values in stdout.",
+    "cases": [
+      {
+        "config": "nothing set",
+        "exit": 1,
+        "archive_state": "not_provisioned"
+      },
+      {
+        "config": "object store only",
+        "exit": 1,
+        "archive_state": "incomplete"
+      },
+      {
+        "config": "complete with placeholder bucket",
+        "exit": 1,
+        "archive_state": "incomplete"
+      },
+      {
+        "config": "complete",
+        "exit": 0,
+        "archive_state": "ready"
+      }
+    ],
+    "hosted_live_db": {
+      "status": "PENDING_CI",
+      "job": "Writable DB proof (staging only)"
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "secrets_or_environments_changed": false,
+    "archive_performed": false,
+    "files_changed": 5
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1643"
+}
