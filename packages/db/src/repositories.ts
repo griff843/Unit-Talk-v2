@@ -124,6 +124,11 @@ export interface SubmissionRepository {
   processSubmissionAtomic(input: SubmissionAtomicInput): Promise<SubmissionAtomicResult>;
 }
 
+export type PromotedPickCandidate = Pick<
+  PickRecord,
+  'id' | 'status' | 'promotion_status' | 'promotion_target' | 'metadata' | 'selection' | 'created_at'
+>;
+
 export interface PickRepository {
   savePick(pick: CanonicalPick, idempotencyKey?: string | null): Promise<PickRecord>;
   saveLifecycleEvent(event: LifecycleEvent): Promise<PickLifecycleRecord>;
@@ -149,6 +154,17 @@ export interface PickRepository {
     source: CanonicalPick['source'],
     limit?: number | undefined,
   ): Promise<PickRecord[]>;
+  /**
+   * Every pick in `lifecycleStates` whose promotion status is in
+   * `promotionStatuses` and whose promotion target is set -- the population a
+   * delivery-health check must see in full. Implementations return the whole
+   * population, never a single capped page. Optional so that narrow test fakes
+   * need not implement it; callers fall back to paging `listByLifecycleStates`.
+   */
+  listPromotedByLifecycleStates?(
+    lifecycleStates: readonly CanonicalPick['lifecycleState'][],
+    promotionStatuses: readonly string[],
+  ): Promise<PromotedPickCandidate[]>;
   persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult>;
