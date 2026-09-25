@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092503",
+  "origin_issue": "UTV2-1952",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "pr_url": "PR_URL_BINDING",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092503/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree."
+  },
+  "what_this_lane_repairs": {
+    "defects": [
+      "When the worker skipped an outbox row because the kill switch was engaged or the target was registry-disabled, it wrote nothing. The row is never claimed, so attempt_count stays 0: a stopped lane and a dead worker were indistinguishable from outside."
+    ],
+    "repair": "runWorkerCycles logs one structured line per deliberate skip per cycle (worker.delivery-skipped-kill-switch / worker.delivery-skipped-target-disabled) with workerId, target, cycle, reason and outboxClaimed: false, immediately before the unchanged result push and continue.",
+    "behaviour_change": "logging only; no claim, status change, attempt increment, kill-switch or registry semantics change",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 75,
+          "pass": 75,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Three new tests: kill-switch skip logs and never claims (73); registry-disabled skip logs and never claims (74); attempted delivery emits no skip line and does claim (75)."
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6873,
+          "pass": 6873,
+          "fail": 0,
+          "not_ok_lines": 0
+        },
+        "label": "Full workspace unit suite on this tree."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: ci:assert-staging refuses the containment placeholder SUPABASE_URL. This lane carries t1_live_db_precondition: deferred_to_ci, so verify and Writable DB proof (staging only) are obtained from CI on the merge SHA, which G6 enforces at closeout."
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied alone, apps/worker/src/worker-runtime.test.ts run, then runner.ts restored from a pre-mutation copy.",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "Delete the logDeliberateDeliverySkip(worker.delivery-skipped-kill-switch) call.",
+          "observed": "1 failure: test 73."
+        },
+        {
+          "id": "M2",
+          "mutation": "Delete the logDeliberateDeliverySkip(worker.delivery-skipped-target-disabled) call.",
+          "observed": "1 failure: test 74."
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts",
+        "pass": 75,
+        "fail": 0
+      }
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": [
+        "lifecycle-fsm"
+      ],
+      "advisory_missing": [
+        "r4-fault-report [PM-gated]"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PENDING_CI",
+    "job": "Writable DB proof (staging only)",
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "suite": "pnpm test:db via pnpm verify",
+    "note": "Filled at closeout by autoHarvestCiDbProofIntoEvidence from the merge-SHA run. Deliberately not hand-filled. The change adds no DB read or write; its runtime behaviour (a stdout line) is proven against the real runWorkerCycles loop."
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off -- unchanged",
+    "member_delivery": "disabled -- unchanged",
+    "files_changed": 2,
+    "note": "Two files inside the pinned file_scope_lock. No migration, no schema change, no package.json edit."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ]
+}
