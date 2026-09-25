@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092401
 
-MERGE_SHA: pending merge
+MERGE_SHA: cf768dfa9ed8e32aa0a2b05432b88e50aa7bd3f6
 
 > Pre-merge, the merge row is intentionally a placeholder. The Execution SHA row carries the last commit on this lane that changes
 > anything outside `docs/06_status/proof/WORK-2026092401/` and the lane manifest.
@@ -114,7 +114,7 @@ exits cleanly. No production database, bucket or credential was touched to produ
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: cf768dfa9ed8e32aa0a2b05432b88e50aa7bd3f6
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1643
 Execution SHA: f83e46b8f15954c510150f303d5173dce48a5d20
 

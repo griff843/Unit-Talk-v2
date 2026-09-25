@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092401-conveyor-unprovisioned-state
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1643
 Head SHA: f83e46b8f15954c510150f303d5173dce48a5d20
-Merge SHA: pending merge
+Merge SHA: cf768dfa9ed8e32aa0a2b05432b88e50aa7bd3f6
 Diff base: decd67afaf99eeb41320c40eca14a9d9e9cf92a6 (origin/main)
 Diff target: f83e46b8f15954c510150f303d5173dce48a5d20
 
