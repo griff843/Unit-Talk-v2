@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092501-tier-c-hook-abs-paths",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1649",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/hooks/tier-c-path-guard.sh",
@@ -18,9 +18,9 @@
     "docs/06_status/proof/WORK-2026092501/diff-summary.md",
     "docs/06_status/proof/WORK-2026092501/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-25T17:51:22.485Z",
-  "heartbeat_at": "2026-09-25T17:51:22.485Z",
+  "heartbeat_at": "2026-09-25T17:54:07.190Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026092501-tier-c-hook-abs-paths.json",
