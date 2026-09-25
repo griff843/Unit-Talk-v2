@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092501
 
-MERGE_SHA: 57edbc280734978aa45f97e7f22e589d9c665a0e
+MERGE_SHA: 77af7cd9b71085acb38998d2e6287d52032bc788
 
 Generated at: 2026-09-25T17:58:17.000Z
 Issue: WORK-2026092501
@@ -81,7 +81,7 @@ There is no runtime or database surface, and no live-DB proof is claimed.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 77af7cd9b71085acb38998d2e6287d52032bc788
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1649
 Execution SHA: 57edbc280734978aa45f97e7f22e589d9c665a0e
 

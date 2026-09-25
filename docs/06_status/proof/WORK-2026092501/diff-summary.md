@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092501-tier-c-hook-abs-paths
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1649
 Head SHA: 57edbc280734978aa45f97e7f22e589d9c665a0e
-Merge SHA: pending merge
+Merge SHA: 77af7cd9b71085acb38998d2e6287d52032bc788
 Diff base: d4253e8c59a43c42d9ce31714cbd47030504f660
 Diff target: 57edbc280734978aa45f97e7f22e589d9c665a0e
 
@@ -32,4 +32,4 @@ M	scripts/ops/workflow-hardening.test.ts
 
 ## SHA Binding
 Head SHA: 57edbc280734978aa45f97e7f22e589d9c665a0e
-Merge SHA: pending merge
+Merge SHA: 77af7cd9b71085acb38998d2e6287d52032bc788
