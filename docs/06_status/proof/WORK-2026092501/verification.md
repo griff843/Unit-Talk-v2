@@ -1,13 +1,13 @@
 # PROOF: WORK-2026092501
 
-MERGE_SHA: 17bade59b215906d66b116fa93e832fb2f487be6
+MERGE_SHA: 57edbc280734978aa45f97e7f22e589d9c665a0e
 
 Generated at: 2026-09-25T17:58:17.000Z
 Issue: WORK-2026092501
 Tier: T2
 Lane type: governance
 Branch: claude/work-2026092501-tier-c-hook-abs-paths
-Head SHA: 17bade59b215906d66b116fa93e832fb2f487be6
+Head SHA: 57edbc280734978aa45f97e7f22e589d9c665a0e
 result: pass
 
 ## ASSERTIONS:
@@ -25,7 +25,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on `17bade59b215906d66b116fa93e832fb2f487be6` in the lane worktree.
+Measured on `57edbc280734978aa45f97e7f22e589d9c665a0e` in the lane worktree.
 
 ### 1. Mutation drill
 
@@ -83,4 +83,10 @@ There is no runtime or database surface, and no live-DB proof is claimed.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1649
-Execution SHA: 17bade59b215906d66b116fa93e832fb2f487be6
+Execution SHA: 57edbc280734978aa45f97e7f22e589d9c665a0e
+
+### Re-anchor to `57edbc280734978aa45f97e7f22e589d9c665a0e`
+
+Branch refreshed from origin/main `d0c4bbc6c` after main advanced. The merge brings in only main's own
+changes: `.github/workflows/tier-label-apply.yml`, `.github/workflows/tier-label-check.yml`, `.ops/sync/WORK-2026092402.yml`, `docs/06_status/lanes/WORK-2026092402.json`, `docs/06_status/proof/WORK-2026092402/diff-summary.md`, `docs/06_status/proof/WORK-2026092402/evidence.json`, `docs/06_status/proof/WORK-2026092402/verification.md`, `docs/06_status/proof/WORK-2026092402/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `package.json`, `scripts/ci/tier-label-workflow.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `17bade59b215906d66b116fa93e832fb2f487be6`. `verify` re-runs on the new head.
