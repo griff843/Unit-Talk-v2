@@ -12,8 +12,8 @@ Tier: T1
 Lane type: runtime
 Branch: claude/work-2026092503-worker-skip-visibility
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1651
-Execution SHA: ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7
-Head SHA: ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7
+Execution SHA: bc9375f152e909bf3c48fffbc377703970bb85c9
+Head SHA: bc9375f152e909bf3c48fffbc377703970bb85c9
 result: pass
 
 ## ASSERTIONS:
@@ -33,7 +33,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on `ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7` in the lane worktree.
+Measured on `bc9375f152e909bf3c48fffbc377703970bb85c9` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts
@@ -109,3 +109,9 @@ the real `runWorkerCycles` loop with the in-memory repository bundle and the rea
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1651
+
+### Re-anchor to `bc9375f152e909bf3c48fffbc377703970bb85c9`
+
+Branch refreshed from origin/main `5b193aedb` after main advanced. The merge brings in only main's own
+changes: `.claude/hooks/tier-c-path-guard.sh`, `.github/workflows/tier-label-apply.yml`, `.github/workflows/tier-label-check.yml`, `.ops/sync/WORK-2026092402.yml`, `.ops/sync/WORK-2026092501.yml`, `docs/06_status/lanes/WORK-2026092402.json`, `docs/06_status/lanes/WORK-2026092501.json`, `docs/06_status/proof/WORK-2026092402/diff-summary.md`, `docs/06_status/proof/WORK-2026092402/evidence.json`, `docs/06_status/proof/WORK-2026092402/verification.md`, `docs/06_status/proof/WORK-2026092402/work-order.md`, `docs/06_status/proof/WORK-2026092501/diff-summary.md`, `docs/06_status/proof/WORK-2026092501/verification.md`, `docs/06_status/proof/WORK-2026092501/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `package.json`, `scripts/ci/tier-label-workflow.test.ts`, `scripts/ops/workflow-hardening.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7`. `verify` re-runs on the new head.

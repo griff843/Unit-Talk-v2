@@ -9,11 +9,11 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1651",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7",
+    "verified_source_sha": "bc9375f152e909bf3c48fffbc377703970bb85c9",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092503/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree."
+    "note": "bc9375f152e909bf3c48fffbc377703970bb85c9 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 5b193aedb into this branch. It brings in only main's own changes (`.claude/hooks/tier-c-path-guard.sh`, `.github/workflows/tier-label-apply.yml`, `.github/workflows/tier-label-check.yml`, `.ops/sync/WORK-2026092402.yml`, `.ops/sync/WORK-2026092501.yml`, `docs/06_status/lanes/WORK-2026092402.json`, `docs/06_status/lanes/WORK-2026092501.json`, `docs/06_status/proof/WORK-2026092402/diff-summary.md`, `docs/06_status/proof/WORK-2026092402/evidence.json`, `docs/06_status/proof/WORK-2026092402/verification.md`, `docs/06_status/proof/WORK-2026092402/work-order.md`, `docs/06_status/proof/WORK-2026092501/diff-summary.md`, `docs/06_status/proof/WORK-2026092501/verification.md`, `docs/06_status/proof/WORK-2026092501/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `package.json`, `scripts/ci/tier-label-workflow.test.ts`, `scripts/ops/workflow-hardening.test.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7. CI re-runs verify on the new head. Previous note: bc9375f152e909bf3c48fffbc377703970bb85c9 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092503/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree."
   },
   "what_this_lane_repairs": {
     "defects": [
