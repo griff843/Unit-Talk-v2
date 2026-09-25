@@ -11,10 +11,15 @@
 # pre-authorized for that lane. The warning is still emitted (exit 2) but
 # includes authorization context so Claude can proceed without PM confirmation.
 # Authorization requirements:
-#   1. docs/06_status/lanes/UTV2-NNN.json exists with status != done/closed
+#   1. docs/06_status/lanes/{UTV2,UNI,WORK}-*.json exists with status != done/closed
 #   2. The file path appears in file_scope_lock
 #   3. The branch matches the lane's branch field
 # All three must be true; otherwise the standard Tier C warning applies.
+#
+# PATH RESOLUTION (WORK-2026092501): Claude Code passes absolute paths. The repo
+# root is resolved from the target itself (its nearest existing ancestor), so a
+# write inside a lane worktree is checked against that worktree's branch and
+# manifests, not the hook's cwd. A path outside any git repository is allowed.
 
 input=$(cat)
 
@@ -37,8 +42,35 @@ fi
 
 [ -z "$file_path" ] && exit 0
 
-# Normalize: forward slashes, strip leading ./ and repo-root prefix
-file_path=$(echo "$file_path" | sed 's|\\|/|g' | sed 's|^\./||' | sed 's|^.*/Unit-Talk-v2-main/||')
+# Normalize: forward slashes, strip leading ./
+file_path=$(echo "$file_path" | sed 's|\\|/|g' | sed 's|^\./||')
+
+# Resolve the repo root the target belongs to. Relative paths resolve from cwd.
+repo_root=""
+case "$file_path" in
+  /*|[A-Za-z]:/*)
+    probe=$(dirname "$file_path")
+    while [ -n "$probe" ] && [ ! -d "$probe" ]; do
+      parent=$(dirname "$probe")
+      [ "$parent" = "$probe" ] && break
+      probe="$parent"
+    done
+    [ -d "$probe" ] && repo_root=$(git -C "$probe" rev-parse --show-toplevel 2>/dev/null)
+    if [ -n "$repo_root" ] && [ "${file_path#"$repo_root"/}" != "$file_path" ]; then
+      file_path="${file_path#"$repo_root"/}"
+    else
+      # Legacy Windows checkout layout, then: not inside a repository we know.
+      stripped=$(echo "$file_path" | sed 's|^.*/Unit-Talk-v2-main/||')
+      [ "$stripped" = "$file_path" ] && exit 0
+      file_path="$stripped"
+      repo_root=""
+    fi
+    ;;
+  *)
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    ;;
+esac
+[ -z "$repo_root" ] && repo_root="."
 
 matched=""
 reason=""
@@ -86,18 +118,22 @@ echo "$file_path" | grep -qE '^\.github/workflows/proof-coverage-guard\.yml$' \
 if [ -n "$matched" ]; then
   # Check for manifest-authorized bypass before emitting full Tier C warning.
   # Requires: active lane manifest on current branch with file in file_scope_lock.
-  current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+  current_branch=$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
   manifest_authorized=false
 
   if [ -n "$current_branch" ] && command -v python3 >/dev/null 2>&1; then
-    manifest_authorized=$(python3 - "$file_path" "$current_branch" <<'PYEOF'
+    manifest_authorized=$(python3 - "$file_path" "$current_branch" "$repo_root" <<'PYEOF'
 import sys, json, os, glob
 
 target_file = sys.argv[1]
 current_branch = sys.argv[2]
-lanes_dir = "docs/06_status/lanes"
+lanes_dir = os.path.join(sys.argv[3], "docs/06_status/lanes")
 
-for manifest_path in glob.glob(f"{lanes_dir}/UTV2-*.json"):
+manifests = []
+for prefix in ("UTV2", "UNI", "WORK"):
+    manifests.extend(glob.glob(os.path.join(lanes_dir, f"{prefix}-*.json")))
+
+for manifest_path in manifests:
     try:
         with open(manifest_path) as f:
             m = json.load(f)

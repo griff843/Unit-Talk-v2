@@ -1966,3 +1966,82 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
     'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
   );
 });
+
+// WORK-2026092501: Claude Code hands PreToolUse hooks absolute paths. The Tier C guard
+// must classify those, and its manifest bypass must read the worktree the target lives in.
+const TIER_C_GUARD = path.join(ROOT, '.claude', 'hooks', 'tier-c-path-guard.sh');
+
+function runTierCGuard(filePath: string, cwd: string): number | null {
+  const result = spawnSync('bash', [TIER_C_GUARD], {
+    cwd,
+    input: JSON.stringify({ tool_input: { file_path: filePath } }),
+    encoding: 'utf8',
+  });
+  return result.status;
+}
+
+function makeLaneRepo(manifest: Record<string, unknown> | null): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier-c-guard-'));
+  const git = (...args: string[]) => {
+    const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, `git ${args.join(' ')} failed: ${r.stderr}`);
+  };
+  git('init', '-q', '-b', 'claude/work-2099010101-guard');
+  fs.mkdirSync(path.join(dir, 'supabase', 'migrations'), { recursive: true });
+  if (manifest) {
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'docs', '06_status', 'lanes', `${String(manifest.issue_id)}.json`),
+      JSON.stringify(manifest),
+    );
+  }
+  // A lane worktree always has a commit; without one HEAD has no branch name to read.
+  git('-c', 'user.email=t@example.invalid', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init');
+  return dir;
+}
+
+test('tier-c-path-guard classifies an absolute Tier C path, not only a relative one', () => {
+  const dir = makeLaneRepo(null);
+  try {
+    assert.strictEqual(runTierCGuard(path.join(dir, 'supabase', 'migrations', 'x.sql'), os.tmpdir()), 2);
+    assert.strictEqual(runTierCGuard('supabase/migrations/x.sql', dir), 2);
+    assert.strictEqual(runTierCGuard(path.join(dir, 'apps', 'api', 'src', 'server.ts'), os.tmpdir()), 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('tier-c-path-guard allows a path outside any git repository', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier-c-guard-norepo-'));
+  try {
+    assert.strictEqual(runTierCGuard(path.join(dir, 'supabase', 'migrations', 'x.sql'), os.tmpdir()), 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('tier-c-path-guard honours a WORK lane manifest from the target worktree, and only an open one on its branch', () => {
+  const lane = {
+    issue_id: 'WORK-2099010101',
+    status: 'in_progress',
+    branch: 'claude/work-2099010101-guard',
+    file_scope_lock: ['supabase/migrations/x.sql'],
+  };
+  const cases: Array<[Record<string, unknown>, number]> = [
+    [lane, 0],
+    [{ ...lane, status: 'done' }, 2],
+    [{ ...lane, branch: 'claude/work-2099010101-other' }, 2],
+  ];
+  for (const [manifest, expected] of cases) {
+    const dir = makeLaneRepo(manifest);
+    try {
+      assert.strictEqual(
+        runTierCGuard(path.join(dir, 'supabase', 'migrations', 'x.sql'), os.tmpdir()),
+        expected,
+        `manifest ${JSON.stringify(manifest)} must yield exit ${expected}`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
