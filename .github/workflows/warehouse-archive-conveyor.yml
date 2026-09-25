@@ -11,9 +11,12 @@ name: Warehouse Archive Conveyor
 #     subcommand. A destructive production prune is a separate, PM-authorized
 #     action (docs/05_operations/FIRST_ARCHIVE_CANDIDATE_PACKET.md).
 #   * The job reads the source database through a READ_ONLY DuckDB attachment.
-#   * With no archive credentials configured the run exits cleanly after
-#     reporting that it is not configured — it never falls back to a local
-#     directory or a public bucket.
+#   * With no archive credentials configured the run FAILS at `warehouse
+#     doctor`, whose job summary names the state (`not_provisioned` or
+#     `incomplete`) and says that nothing was archived. It never falls back to
+#     a local directory or a public bucket, and it never reports success for an
+#     archive that did not happen: an archive that is not running is stale,
+#     never unknown (WAREHOUSE_ARCHIVE_CONTRACT.md §8).
 #   * Secrets reach the process only as environment variables from the GitHub
 #     secret store, are never echoed, and every error message is redacted
 #     through `redactSecrets` before it is printed.

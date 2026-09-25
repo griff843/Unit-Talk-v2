@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { describeConfig, redactSecrets, resolveSourceDsn } from './config.js';
+import { describeConfig, redactSecrets, renderDoctorSummary, resolveSourceDsn } from './config.js';
 import { openDuckDb } from './duckdb.js';
 import {
   CONVEYOR_HEARTBEAT_KEY,
@@ -146,7 +146,14 @@ async function main(): Promise<number> {
     case 'doctor': {
       const description = describeConfig();
       emit({ command: 'doctor', ...description });
-      return description.object_store_ready ? 0 : 1;
+      const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+      if (summaryPath) {
+        fs.appendFileSync(summaryPath, renderDoctorSummary(description));
+      }
+      if (description.archive_state !== 'ready') {
+        process.stderr.write(`warehouse archive: ${description.archive_state} -- nothing was archived\n`);
+      }
+      return description.archive_state === 'ready' ? 0 : 1;
     }
 
     case 'plan': {

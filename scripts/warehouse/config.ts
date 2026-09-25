@@ -131,11 +131,44 @@ export function resolveSourceDsn(
   return { ok: true, config: { dsn: dsn! } };
 }
 
+/**
+ * What a scheduled archive run can do with the configuration it was given.
+ *
+ *   - `not_provisioned` -- no archive key is set at all. The owner has not yet
+ *     provisioned the bucket, keys and source DSN.
+ *   - `incomplete` -- something is set but the run still cannot archive: a key
+ *     is missing, or holds a placeholder. This is a misconfiguration, not a
+ *     pending provisioning step.
+ *   - `ready` -- the object store and the read-only source both resolve.
+ *
+ * Only `ready` may run. The other two differ in what a reader should do next,
+ * never in whether anything was archived: in both, nothing was.
+ */
+export type ArchiveState = 'not_provisioned' | 'incomplete' | 'ready';
+
+const ARCHIVE_RUN_KEYS: readonly string[] = [
+  WAREHOUSE_ENV_KEYS.endpoint,
+  WAREHOUSE_ENV_KEYS.region,
+  WAREHOUSE_ENV_KEYS.bucket,
+  WAREHOUSE_ENV_KEYS.accessKeyId,
+  WAREHOUSE_ENV_KEYS.secretAccessKey,
+  WAREHOUSE_ENV_KEYS.sourceDsn,
+];
+
+export function classifyArchiveState(env: NodeJS.ProcessEnv = process.env): ArchiveState {
+  if (resolveObjectStoreConfig(env).ok && resolveSourceDsn(env).ok) return 'ready';
+  // A placeholder is a value someone set, so it makes the state `incomplete`
+  // rather than `not_provisioned` -- and it is never counted as provisioned.
+  const anySet = ARCHIVE_RUN_KEYS.some((key) => classifyPresence(readEnv(env, key)) !== 'missing');
+  return anySet ? 'incomplete' : 'not_provisioned';
+}
+
 export interface ConfigDescription {
   layout_version: number;
   keys: Array<{ key: string; secret: boolean; presence: PresenceClass }>;
   object_store_ready: boolean;
   source_ready: boolean;
+  archive_state: ArchiveState;
 }
 
 /**
@@ -154,7 +187,49 @@ export function describeConfig(env: NodeJS.ProcessEnv = process.env): ConfigDesc
     keys,
     object_store_ready: resolveObjectStoreConfig(env).ok,
     source_ready: resolveSourceDsn(env).ok,
+    archive_state: classifyArchiveState(env),
   };
+}
+
+/**
+ * The Markdown job summary `warehouse doctor` writes for a scheduled run. It is
+ * built from a `ConfigDescription`, which carries presence classes and never a
+ * value, so it cannot leak one. Every non-`ready` state says, in words, that no
+ * archive happened: a red run must not be readable as "archived, with warnings".
+ */
+export function renderDoctorSummary(description: ConfigDescription): string {
+  const unusable = description.keys
+    .filter((entry) => entry.presence !== 'present' && ARCHIVE_RUN_KEYS.includes(entry.key))
+    .map((entry) => `- \`${entry.key}\`: ${entry.presence}`);
+  const nothingArchived =
+    'No window was exported, uploaded, verified or manifested, and nothing became prune-eligible.';
+
+  switch (description.archive_state) {
+    case 'ready':
+      return '### Warehouse archive: configuration ready\n\nThe object store and the read-only source both resolve. Whether a window was archived is reported by the conveyor step, not by this check.\n';
+    case 'not_provisioned':
+      return [
+        '### Warehouse archive: NOT PROVISIONED',
+        '',
+        'No archive key is set. The bucket, keys and source DSN are owner actions in `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`.',
+        '',
+        nothingArchived,
+        '',
+        'This run fails on purpose: an archive that is not running is stale, never unknown.',
+        '',
+      ].join('\n');
+    case 'incomplete':
+      return [
+        '### Warehouse archive: CONFIGURATION INCOMPLETE',
+        '',
+        'Some archive keys are set, but the run cannot archive with them:',
+        '',
+        ...unusable,
+        '',
+        nothingArchived,
+        '',
+      ].join('\n');
+  }
 }
 
 /**
