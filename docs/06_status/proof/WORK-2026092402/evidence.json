@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092402",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "f13271ef5fdcdd0e06c3b6e43c0921b134ccd0e1",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "f13271ef5fdcdd0e06c3b6e43c0921b134ccd0e1 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 49ea57e3a into this branch. It brings in only main's own changes (`docs/06_status/readiness/readiness-score.json`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor eac8c9d68a32c7787bf7bee8106f83b36a726d0d. CI re-runs verify on the new head. Previous note: f13271ef5fdcdd0e06c3b6e43c0921b134ccd0e1 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main d4253e8c5 into this branch. It brings in only main's own changes (`.github/workflows/deploy-monitoring.yml`, `.github/workflows/deploy.yml`, `.github/workflows/warehouse-archive-conveyor.yml`, `.ops/sync/WORK-2026092401.yml`, `.ops/sync/WORK-2026092403.yml`, `.ops/sync/WORK-2026092404.yml`, `apps/api/src/fixture-pick.ts`, `apps/api/src/model-health-scanner.ts`, `apps/api/src/routes/health.ts`, `apps/api/src/server.test.ts`, `deploy/production/docker-compose.yml`, `docs/05_operations/WAREHOUSE_ARCHIVE_CONTRACT.md`, `docs/06_status/lanes/WORK-2026092401.json`, `docs/06_status/lanes/WORK-2026092403.json`, `docs/06_status/lanes/WORK-2026092404.json`, `docs/06_status/proof/WORK-2026092401/diff-summary.md`, `docs/06_status/proof/WORK-2026092401/evidence.json`, `docs/06_status/proof/WORK-2026092401/verification.md`, `docs/06_status/proof/WORK-2026092401/work-order.md`, `docs/06_status/proof/WORK-2026092403/diff-summary.md`, `docs/06_status/proof/WORK-2026092403/evidence.json`, `docs/06_status/proof/WORK-2026092403/verification.md`, `docs/06_status/proof/WORK-2026092403/work-order.md`, `docs/06_status/proof/WORK-2026092404/evidence.json`, `docs/06_status/proof/WORK-2026092404/verification.md`, `docs/06_status/proof/WORK-2026092404/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `packages/db/src/repositories.ts`, `packages/db/src/runtime-repositories.ts`, `scripts/ci/deploy-config-rollback.test.ts`, `scripts/warehouse/cli.ts`, `scripts/warehouse/config.test.ts`, `scripts/warehouse/config.ts`, `scripts/warehouse/conveyor-workflow.test.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor e4f99465f4d5c8efc0b458006d21f4cf63df2657. CI re-runs verify on the new head. Previous note: f13271ef5fdcdd0e06c3b6e43c0921b134ccd0e1 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 2f5c14811 into this branch. It brings in only main's own changes (`.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092311.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092313.yml`, `.ops/sync/WORK-2026092314.yml`, `.ops/sync/WORK-2026092405.yml`, `.ops/sync/WORK-2026092406.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092311.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092313.json`, `docs/06_status/lanes/WORK-2026092314.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/lanes/WORK-2026092406.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092311/diff-summary.md`, `docs/06_status/proof/WORK-2026092311/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092313/diff-summary.md`, `docs/06_status/proof/WORK-2026092313/verification.md`, `docs/06_status/proof/WORK-2026092314/diff-summary.md`, `docs/06_status/proof/WORK-2026092314/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/proof/WORK-2026092406/diff-summary.md`, `docs/06_status/proof/WORK-2026092406/verification.md`, `docs/06_status/proof/WORK-2026092406/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`, `scripts/ops/db-health-checks.ts`, `scripts/ops/db-health-tripwire.ts`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/readiness-refresh.ts`, `scripts/ops/workflow-hardening.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/query.test.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor baa99d774ee51ff5e1fde07a3066d0667eebee28. CI re-runs verify on the new head. Previous note: f13271ef5fdcdd0e06c3b6e43c0921b134ccd0e1 is the only implementation commit on this lane; its parent is origin/main decd67afaf99eeb41320c40eca14a9d9e9cf92a6. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "what_this_lane_repairs": {
+    "defect": "tier-label-check.yml and tier-label-apply.yml accepted only UTV2/UNI identities; 62 of 62 runs on non-UTV2 branches failed with 'No issue ID found in PR branch or title'.",
+    "repair": "Both use merge-gate.yml's bounded UTV2|UNI|WORK grammar; tier source, label allowlist and token isolation unchanged.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6849,
+      "fail": 0,
+      "note": "pnpm test at f13271ef5fdcdd0e06c3b6e43c0921b134ccd0e1"
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level": "PASS; 7 changed files; no R-level artifacts required",
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "branch grammar reverted",
+        "observed": "red: tests 1 and 4"
+      },
+      {
+        "id": "M2",
+        "mutation": "title grammar unbounded",
+        "observed": "red: tests 3 and 4"
+      },
+      {
+        "id": "M3",
+        "mutation": "apply validator reverted",
+        "observed": "red: test 5"
+      },
+      {
+        "id": "M4",
+        "mutation": "check validator widened",
+        "observed": "red: test 5"
+      }
+    ],
+    "verify": {
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. t1_live_db_precondition: deferred_to_ci."
+    }
+  },
+  "runtime_proof": {
+    "profile": "github-actions-execution",
+    "status": "pass",
+    "run": "36001060825",
+    "observed": "Tier label consistent: tier:T1 mirrors lane manifest for WORK-2026092402.",
+    "hosted_live_db": {
+      "status": "PENDING_CI",
+      "job": "Writable DB proof (staging only)"
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "secrets_or_environments_changed": false,
+    "labels_or_approvals_authored": false,
+    "files_changed": 4
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    },
+    {
+      "check": "Return review packet",
+      "cause": "return-review-packet.yml infers only UTV2 ids from the branch; the same defect class as this lane, outside its file_scope_lock. Not required."
+    }
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1644"
+}

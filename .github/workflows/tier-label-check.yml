@@ -34,8 +34,11 @@ jobs:
             const fs = require('fs');
             const pr = context.payload.pull_request;
             const labels = pr.labels.map(l => l.name).filter(Boolean);
-            const issueMatch = pr.head.ref.match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
-              (pr.title || '').match(/((?:UTV2|UNI)-\d+)/i);
+            // Same identity grammar as merge-gate.yml: the tracker ids and the
+            // repository-owned WORK id, bounded at both ends so `homework-123`
+            // and `work-123abc` do not resolve as WORK-123.
+            const issueMatch = pr.head.ref.match(/(?:^|\/)((?:utv2|uni|work)-\d+)(?![a-z0-9])/i) ||
+              (pr.title || '').match(/(?:^|[^a-z0-9])((?:UTV2|UNI|WORK)-\d+)(?![a-z0-9])/i);
             const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
 
             if (!issueId) {
@@ -116,7 +119,7 @@ jobs:
               core.setFailed('Internal error: computed a non-tier label. Refusing to emit label plan.');
               return;
             }
-            if (!/^(?:UTV2|UNI)-\d+$/.test(issueId)) {
+            if (!/^(?:UTV2|UNI|WORK)-\d+$/.test(issueId)) {
               core.setFailed('Internal error: issueId failed strict format validation.');
               return;
             }
