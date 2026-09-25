@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092402
 
-MERGE_SHA: pending merge
+MERGE_SHA: d0c4bbc6cce7c395a88213750cf606327f91fce6
 
 > Pre-merge, the merge row is intentionally a placeholder. The Execution SHA row carries the last commit on this lane that changes
 > anything outside `docs/06_status/proof/WORK-2026092402/` and the lane manifest.
@@ -92,7 +92,7 @@ with "No issue ID found in PR branch or title".
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d0c4bbc6cce7c395a88213750cf606327f91fce6
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1644
 Execution SHA: f13271ef5fdcdd0e06c3b6e43c0921b134ccd0e1
 
