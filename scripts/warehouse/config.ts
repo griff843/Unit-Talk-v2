@@ -22,6 +22,8 @@ export const WAREHOUSE_ENV_KEYS = {
   bucket: 'UNIT_TALK_WAREHOUSE_S3_BUCKET',
   accessKeyId: 'UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID',
   secretAccessKey: 'UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY',
+  readAccessKeyId: 'UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID',
+  readSecretAccessKey: 'UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY',
   forcePathStyle: 'UNIT_TALK_WAREHOUSE_S3_FORCE_PATH_STYLE',
   sourceDsn: 'UNIT_TALK_WAREHOUSE_SOURCE_DSN',
   localRoot: 'UNIT_TALK_WAREHOUSE_LOCAL_ROOT',
@@ -31,7 +33,34 @@ export const WAREHOUSE_ENV_KEYS = {
 export const SECRET_ENV_KEYS: readonly string[] = [
   WAREHOUSE_ENV_KEYS.accessKeyId,
   WAREHOUSE_ENV_KEYS.secretAccessKey,
+  WAREHOUSE_ENV_KEYS.readAccessKeyId,
+  WAREHOUSE_ENV_KEYS.readSecretAccessKey,
   WAREHOUSE_ENV_KEYS.sourceDsn,
+];
+
+/**
+ * Credentials a research or read command refuses to start alongside: the
+ * archive writer, the operational source, and the production database
+ * credentials the rest of the repository uses. A research job run with any of
+ * them present can write to the archive or reach production, so it does not
+ * run at all -- refusing, rather than ignoring, is the control
+ * (WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md §3).
+ */
+export const RESEARCH_FORBIDDEN_ENV_KEYS: readonly string[] = [
+  WAREHOUSE_ENV_KEYS.accessKeyId,
+  WAREHOUSE_ENV_KEYS.secretAccessKey,
+  WAREHOUSE_ENV_KEYS.sourceDsn,
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_DB_URL',
+  'SUPABASE_DB_POOLER_URL',
+  'SUPABASE_ACCESS_TOKEN',
+  'DATABASE_URL',
+  'POSTGRES_URL',
+];
+
+/** Everything `redactSecrets` substitutes: the warehouse secrets and the production credentials. */
+const REDACTED_ENV_KEYS: readonly string[] = [
+  ...new Set([...SECRET_ENV_KEYS, ...RESEARCH_FORBIDDEN_ENV_KEYS]),
 ];
 
 export interface ObjectStoreConfig {
@@ -73,12 +102,27 @@ function readEnv(env: NodeJS.ProcessEnv, key: string): string | undefined {
 export function resolveObjectStoreConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ConfigResolution<ObjectStoreConfig> {
+  return resolveStoreWith(env, {
+    endpoint: WAREHOUSE_ENV_KEYS.endpoint,
+    region: WAREHOUSE_ENV_KEYS.region,
+    bucket: WAREHOUSE_ENV_KEYS.bucket,
+    accessKeyId: WAREHOUSE_ENV_KEYS.accessKeyId,
+    secretAccessKey: WAREHOUSE_ENV_KEYS.secretAccessKey,
+  });
+}
+
+type StoreKeyNames = Record<'endpoint' | 'region' | 'bucket' | 'accessKeyId' | 'secretAccessKey', string>;
+
+function resolveStoreWith(
+  env: NodeJS.ProcessEnv,
+  names: StoreKeyNames,
+): ConfigResolution<ObjectStoreConfig> {
   const required = ['endpoint', 'region', 'bucket', 'accessKeyId', 'secretAccessKey'] as const;
   const missing: string[] = [];
   const values: Partial<Record<(typeof required)[number], string>> = {};
 
   for (const field of required) {
-    const key = WAREHOUSE_ENV_KEYS[field];
+    const key = names[field];
     const value = readEnv(env, key);
     if (classifyPresence(value) !== 'present') {
       missing.push(key);
@@ -112,6 +156,71 @@ export function resolveObjectStoreConfig(
       forcePathStyle: (readEnv(env, WAREHOUSE_ENV_KEYS.forcePathStyle) ?? 'true') !== 'false',
     },
   };
+}
+
+/** The production and writer credential names present in `env`. Names only, never values. */
+export function researchForbiddenPresent(env: NodeJS.ProcessEnv = process.env): string[] {
+  return RESEARCH_FORBIDDEN_ENV_KEYS.filter((key) => classifyPresence(readEnv(env, key)) !== 'missing');
+}
+
+export type ResearchConfigResolution =
+  | ConfigResolution<ObjectStoreConfig>
+  | {
+      ok: false;
+      code: 'warehouse_research_credential_forbidden';
+      forbidden: string[];
+      missing: string[];
+      message: string;
+    };
+
+/**
+ * Refuse to start a research or read command when a writer or production
+ * credential is in its environment. The message names each variable and never
+ * carries a value.
+ */
+export function assertResearchEnvironment(env: NodeJS.ProcessEnv = process.env): void {
+  const forbidden = researchForbiddenPresent(env);
+  if (forbidden.length > 0) {
+    throw new Error(researchRefusalMessage(forbidden));
+  }
+}
+
+function researchRefusalMessage(forbidden: string[]): string {
+  return (
+    `Refusing to start a warehouse research command: ${forbidden.join(', ')} ` +
+    `${forbidden.length === 1 ? 'is' : 'are'} set in this environment. Research runs with the reader key ` +
+    `only (${WAREHOUSE_ENV_KEYS.readAccessKeyId}, ${WAREHOUSE_ENV_KEYS.readSecretAccessKey}); ` +
+    'unset the writer and production credentials and run it again. ' +
+    'See docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md §3.'
+  );
+}
+
+/**
+ * The object-store configuration for research and read commands: the reader
+ * key under its own `_READ_` names, and the shared endpoint, region and bucket.
+ * It never falls back to the writer names, and it refuses outright when the
+ * writer or a production credential is present.
+ */
+export function resolveResearchObjectStoreConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): ResearchConfigResolution {
+  const forbidden = researchForbiddenPresent(env);
+  if (forbidden.length > 0) {
+    return {
+      ok: false,
+      code: 'warehouse_research_credential_forbidden',
+      forbidden,
+      missing: [],
+      message: researchRefusalMessage(forbidden),
+    };
+  }
+  return resolveStoreWith(env, {
+    endpoint: WAREHOUSE_ENV_KEYS.endpoint,
+    region: WAREHOUSE_ENV_KEYS.region,
+    bucket: WAREHOUSE_ENV_KEYS.bucket,
+    accessKeyId: WAREHOUSE_ENV_KEYS.readAccessKeyId,
+    secretAccessKey: WAREHOUSE_ENV_KEYS.readSecretAccessKey,
+  });
 }
 
 export function resolveSourceDsn(
@@ -169,6 +278,10 @@ export interface ConfigDescription {
   object_store_ready: boolean;
   source_ready: boolean;
   archive_state: ArchiveState;
+  /** The reader key resolves and no writer or production credential is present. */
+  research_ready: boolean;
+  /** Names of the credentials that make a research command refuse. Never values. */
+  research_forbidden_present: string[];
 }
 
 /**
@@ -188,6 +301,8 @@ export function describeConfig(env: NodeJS.ProcessEnv = process.env): ConfigDesc
     object_store_ready: resolveObjectStoreConfig(env).ok,
     source_ready: resolveSourceDsn(env).ok,
     archive_state: classifyArchiveState(env),
+    research_ready: resolveResearchObjectStoreConfig(env).ok,
+    research_forbidden_present: researchForbiddenPresent(env),
   };
 }
 
@@ -239,7 +354,7 @@ export function renderDoctorSummary(description: ConfigDescription): string {
  */
 export function redactSecrets(text: string, env: NodeJS.ProcessEnv = process.env): string {
   let out = text;
-  for (const key of SECRET_ENV_KEYS) {
+  for (const key of REDACTED_ENV_KEYS) {
     const value = env[key];
     if (typeof value === 'string' && value.trim().length >= 8) {
       out = out.split(value.trim()).join(`[redacted:${key}]`);

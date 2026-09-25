@@ -67,8 +67,42 @@ export interface RetentionPolicyEntry {
   sports: string[];
   /** Deterministic export ordering. */
   orderBy: string[];
-  /** Season label for the layout, or a function of the window date. */
+  /**
+   * Season label for the layout: a literal `YYYY` / `YYYY-YY`, or
+   * {@link WINDOW_YEAR_SEASON} to file each window under its own year.
+   *
+   * A string rather than a function so a `--policy` JSON file can say it too.
+   */
   season: string;
+  /**
+   * File the export under `raw/{provider}/` instead of `canonical/{domain}/`.
+   *
+   * For a source whose shape is not the canonical domain's: two tables with
+   * different columns under one prefix would put two tables' objects at one
+   * key whenever their dates met. A separate namespace makes that collision
+   * impossible by construction rather than merely absent from today's dates.
+   */
+  target?: { kind: 'raw'; provider: string } | null;
+  /**
+   * A standing PM prune hold. A held source is archived and verified like any
+   * other, and is **never** reported prune-eligible, whatever its manifest
+   * says. It is data in the policy so that a prune implementation that forgets
+   * the hold fails a test rather than silently deleting the table.
+   */
+  pruneHold?: boolean;
+}
+
+/**
+ * Season mode that derives the layout season from the window: `2026-06-24`
+ * files under `2026`. A source that is not sport-partitioned has no league
+ * season to name, and the literal `'all'` this replaced is not a season the
+ * layout accepts -- `dataObjectKey` refused it for every window.
+ */
+export const WINDOW_YEAR_SEASON = 'window-year';
+
+/** The layout season for one window of a policy entry. */
+export function resolveSeason(entry: Pick<RetentionPolicyEntry, 'season'>, date: string): string {
+  return entry.season === WINDOW_YEAR_SEASON ? requireIsoDate(date).slice(0, 4) : entry.season;
 }
 
 /**
@@ -93,7 +127,7 @@ export const DEFAULT_RETENTION_POLICY: RetentionPolicyEntry[] = [
     sportColumn: null,
     sports: ['all'],
     orderBy: ['snapshot_at', 'id'],
-    season: 'all',
+    season: WINDOW_YEAR_SEASON,
   },
 ];
 
@@ -102,6 +136,8 @@ export interface ConveyorPlanItem {
   source: SourceSpec;
   relation: string;
   date: string;
+  /** Carried from the policy entry; see {@link RetentionPolicyEntry.pruneHold}. */
+  pruneHold: boolean;
 }
 
 export interface ConveyorPlan {
@@ -149,17 +185,17 @@ export function planConveyorRun(input: {
       ? requireIsoDate(input.windowDate)
       : addDays(today, -(entry.hotRetentionDays + 1));
 
+    const season = resolveSeason(entry, date);
     for (const sport of entry.sports) {
+      const target: ArchiveTarget =
+        entry.target?.kind === 'raw'
+          ? { kind: 'raw', provider: entry.target.provider, sport, season, date }
+          : { kind: 'canonical', domain: entry.domain, sport, season, date };
       items.push({
         relation: entry.relation,
         date,
-        target: {
-          kind: 'canonical',
-          domain: entry.domain,
-          sport,
-          season: entry.season,
-          date,
-        },
+        pruneHold: entry.pruneHold === true,
+        target,
         source: {
           relation: entry.relation,
           window: {
@@ -178,17 +214,129 @@ export function planConveyorRun(input: {
   return { run_date: today, items };
 }
 
+export interface RetentionDecision {
+  eligible: boolean;
+  /** Every refusal, named. Empty only when `eligible`. */
+  reasons: string[];
+  window_date: string;
+  data_key: string | null;
+  manifest_key: string | null;
+  policy: string;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The retention boundary a future prune must satisfy. **It deletes nothing.**
+ * There is no prune path in this repository; this is the decision such a path
+ * would have to obey, written down as a pure function so it can be tested now.
+ *
+ * A window is eligible only when all of these hold at evaluation time:
+ *
+ *   - the source carries no prune hold;
+ *   - the window is older than `hotRetentionDays` on `today`;
+ *   - a manifest for **that exact window** exists -- the key, the relation and
+ *     the half-open bounds all agree with what the policy plans for the day;
+ *   - `decidePrune(manifest).eligible` is true now, not when the upload ran.
+ *
+ * Every failed condition is recorded, not only the first, so a refusal says
+ * everything an operator would have to fix.
+ */
+export function decideRetentionEligibility(input: {
+  entry: RetentionPolicyEntry;
+  windowDate: string;
+  /** The day the decision is taken: when a prune would run. */
+  today: string;
+  /** The object stored at the window's manifest key, or `null` when absent. */
+  manifest: unknown;
+  /** Required only when the entry emits more than one sport per window. */
+  sport?: string;
+}): RetentionDecision {
+  const reasons: string[] = [];
+  const windowDate = requireIsoDate(input.windowDate);
+  const today = requireIsoDate(input.today);
+  let dataKey: string | null = null;
+  let manifestKey: string | null = null;
+
+  if (input.entry.pruneHold === true) {
+    reasons.push('prune_hold');
+  }
+
+  const ageDays = (Date.parse(`${today}T00:00:00.000Z`) - Date.parse(`${windowDate}T00:00:00.000Z`)) / DAY_MS;
+  if (!(ageDays > input.entry.hotRetentionDays)) {
+    reasons.push('within_hot_retention');
+  }
+
+  const sport = input.sport ?? (input.entry.sports.length === 1 ? input.entry.sports[0] : undefined);
+  const item =
+    sport === undefined
+      ? undefined
+      : planConveyorRun({ policy: [input.entry], today, windowDate }).items.find(
+          (candidate) => 'sport' in candidate.target && candidate.target.sport === sport,
+        );
+
+  if (!item) {
+    reasons.push(sport === undefined ? 'sport_required' : 'sport_not_in_policy');
+  } else {
+    try {
+      dataKey = dataObjectKey(item.target);
+      manifestKey = manifestObjectKey(item.target, computeManifestId(dataKey));
+    } catch (error) {
+      reasons.push(`invalid_target:${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (input.manifest === null || input.manifest === undefined) {
+    reasons.push('no_manifest');
+  } else {
+    const verdict = decidePrune(input.manifest);
+    reasons.push(...verdict.reasons.map((reason) => `manifest_not_verified:${reason}`));
+    // Structurally valid or not, the manifest must be for this window. A
+    // verified manifest for a different day, table or bound vouches for
+    // nothing here.
+    const m = input.manifest as Partial<ArchiveManifestV1>;
+    const window = m.source?.window;
+    const exact =
+      item !== undefined &&
+      dataKey !== null &&
+      m.object?.data_key === dataKey &&
+      m.object?.manifest_key === manifestKey &&
+      m.source?.relation === input.entry.relation &&
+      window?.column === item.source.window.column &&
+      window?.start === item.source.window.start &&
+      window?.end === item.source.window.end;
+    if (!exact) {
+      reasons.push('manifest_window_mismatch');
+    }
+  }
+
+  return {
+    eligible: reasons.length === 0,
+    reasons,
+    window_date: windowDate,
+    data_key: dataKey,
+    manifest_key: manifestKey,
+    policy:
+      'A window is prune-eligible only when its source carries no prune hold, it is older than the ' +
+      'hot-retention window, and a manifest for that exact window passes decidePrune at the time of ' +
+      'evaluation. This function decides; nothing in this repository deletes.',
+  };
+}
+
 export type ConveyorItemStatus = 'skipped_already_verified' | 'archived' | 'failed';
 
 export interface ConveyorItemResult {
-  data_key: string;
+  /** `null` only when the item's key could not be constructed at all. */
+  data_key: string | null;
   relation: string;
   date: string;
   status: ConveyorItemStatus;
   source_row_count: number | null;
   exported_row_count: number | null;
   byte_size: number | null;
+  /** Verified, and not under a prune hold. Never true for a held source. */
   prune_eligible: boolean;
+  prune_hold: boolean;
   failures: string[];
 }
 
@@ -223,6 +371,12 @@ export interface ConveyorRunOptions {
   sampleSize?: number;
   now?: () => Date;
   log?: (event: Record<string, unknown>) => void;
+  /**
+   * Where this run's heartbeat goes. Defaults to the scheduled conveyor's own
+   * key. A backfill passes its own, so a backfill running does not make a dead
+   * daily conveyor read as alive.
+   */
+  heartbeatKey?: string;
 }
 
 async function readExistingManifest(
@@ -257,10 +411,8 @@ export async function runConveyor(options: ConveyorRunOptions): Promise<Conveyor
 
   try {
     for (const item of options.plan.items) {
-      const dataKey = dataObjectKey(item.target);
-      const relationExpr = options.relationExpr(item);
       const result: ConveyorItemResult = {
-        data_key: dataKey,
+        data_key: null,
         relation: item.relation,
         date: item.date,
         status: 'failed',
@@ -268,10 +420,20 @@ export async function runConveyor(options: ConveyorRunOptions): Promise<Conveyor
         exported_row_count: null,
         byte_size: null,
         prune_eligible: false,
+        prune_hold: item.pruneHold,
         failures: [],
       };
 
+      // Assigned inside the `try`: a target whose key cannot be built (a bad
+      // season, a bad slug) is a failed window, recorded like any other. Were
+      // it computed above the `try`, the throw would escape the run, and the
+      // run would end with no failed-item result and no heartbeat.
+      let dataKey: string | null = null;
       try {
+        dataKey = dataObjectKey(item.target);
+        result.data_key = dataKey;
+        const relationExpr = options.relationExpr(item);
+
         // --- idempotency ------------------------------------------------
         // The manifest key is a pure function of the target, so a previous run
         // for this window wrote it here. If that run already proved the window,
@@ -283,7 +445,7 @@ export async function runConveyor(options: ConveyorRunOptions): Promise<Conveyor
           result.source_row_count = existing.source.row_count;
           result.exported_row_count = existing.export.exported_row_count;
           result.byte_size = existing.object.byte_size;
-          result.prune_eligible = true;
+          result.prune_eligible = !item.pruneHold;
           results.push(result);
           log({ event: CONVEYOR_EVENT, phase: 'skip', data_key: dataKey, reason: 'already_verified' });
           continue;
@@ -336,7 +498,7 @@ export async function runConveyor(options: ConveyorRunOptions): Promise<Conveyor
 
         const verified = applyVerification(manifest, report);
         const decision = decidePrune(verified);
-        result.prune_eligible = decision.eligible;
+        result.prune_eligible = decision.eligible && !item.pruneHold;
         result.failures = report.failures;
 
         if (!report.passed) {
@@ -426,7 +588,7 @@ export async function runConveyor(options: ConveyorRunOptions): Promise<Conveyor
   // written. A failed heartbeat degrades to "stale", which is the correct and
   // conservative reading, and says so on the run.
   try {
-    await writeHeartbeat(options.store, run);
+    await writeHeartbeat(options.store, run, options.heartbeatKey);
   } catch (error) {
     run.heartbeat_error = error instanceof Error ? error.message : String(error);
     log({ event: CONVEYOR_EVENT, phase: 'heartbeat_failed', error: run.heartbeat_error });
@@ -448,6 +610,7 @@ export interface ConveyorHeartbeat {
 export async function writeHeartbeat(
   store: ObjectStore,
   run: ConveyorRunResult,
+  key: string = CONVEYOR_HEARTBEAT_KEY,
 ): Promise<ConveyorHeartbeat> {
   const heartbeat: ConveyorHeartbeat = {
     event: CONVEYOR_EVENT,
@@ -459,7 +622,7 @@ export async function writeHeartbeat(
     failed: run.failed,
   };
   await store.put(
-    CONVEYOR_HEARTBEAT_KEY,
+    key,
     Buffer.from(`${JSON.stringify(heartbeat, null, 2)}\n`, 'utf8'),
     'application/json',
   );

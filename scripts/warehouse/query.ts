@@ -1,5 +1,5 @@
 import { configureS3, type DuckConnection, openDuckDb, quote } from './duckdb.js';
-import { resolveObjectStoreConfig } from './config.js';
+import { assertResearchEnvironment, resolveResearchObjectStoreConfig } from './config.js';
 import { readGlob } from './object-layout.js';
 import type { ObjectStore } from './object-store.js';
 
@@ -86,13 +86,16 @@ export async function runWarehouseQuery(
   }
 
   const env = options.env ?? process.env;
+  // Before anything opens: a read path that starts with the writer or a
+  // production credential in reach is a read path that can write.
+  assertResearchEnvironment(env);
   const ownsConnection = options.connection === undefined;
   const connection = options.connection ?? (await openDuckDb());
 
   try {
     const description = options.store.describe();
     if (description.kind === 's3') {
-      const resolved = resolveObjectStoreConfig(env);
+      const resolved = resolveResearchObjectStoreConfig(env);
       if (!resolved.ok) {
         throw new Error(resolved.message);
       }

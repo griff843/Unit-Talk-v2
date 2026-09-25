@@ -16,6 +16,9 @@ import {
   classifyArchiveState,
   classifyPresence,
   describeConfig,
+  RESEARCH_FORBIDDEN_ENV_KEYS,
+  assertResearchEnvironment,
+  resolveResearchObjectStoreConfig,
   redactSecrets,
   renderDoctorSummary,
   resolveObjectStoreConfig,
@@ -85,6 +88,8 @@ test('the source DSN is required for anything that reads the operational databas
 test('describeConfig reports presence and never a value', () => {
   const env = completeEnv({
     [WAREHOUSE_ENV_KEYS.sourceDsn]: 'postgresql://reader:hunter2@db.example/postgres',
+    [WAREHOUSE_ENV_KEYS.readAccessKeyId]: 'READERKEYID00000001',
+    [WAREHOUSE_ENV_KEYS.readSecretAccessKey]: 'reader-s3cr3t-value-0001',
   });
   const description = describeConfig(env);
   const serialized = JSON.stringify(description);
@@ -194,4 +199,92 @@ test('the ready summary does not claim an archive happened', () => {
   const summary = renderDoctorSummary(describeConfig(completeEnv({ [WAREHOUSE_ENV_KEYS.sourceDsn]: SOURCE_DSN })));
   assert.match(summary, /configuration ready/);
   assert.match(summary, /reported by the conveyor step, not by this check/);
+});
+
+// The research reader. A research job that runs with the writer present can
+// write, so the read path refuses to start rather than ignoring the writer.
+const WRITER_SECRET = 'wr1ter-s3cr3t-value-must-not-print';
+
+function readerEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  return {
+    [WAREHOUSE_ENV_KEYS.endpoint]: 'https://fsn1.your-objectstorage.com',
+    [WAREHOUSE_ENV_KEYS.region]: 'fsn1',
+    [WAREHOUSE_ENV_KEYS.bucket]: 'unit-talk-archive',
+    [WAREHOUSE_ENV_KEYS.readAccessKeyId]: 'READERKEYID00000001',
+    [WAREHOUSE_ENV_KEYS.readSecretAccessKey]: 'reader-s3cr3t-value-0001',
+    ...overrides,
+  } as NodeJS.ProcessEnv;
+}
+
+test('research resolves the reader key from its own names, never the writer names', () => {
+  const resolved = resolveResearchObjectStoreConfig(readerEnv());
+  assert.equal(resolved.ok, true);
+  assert.ok(resolved.ok && resolved.config.accessKeyId === 'READERKEYID00000001');
+  assert.ok(resolved.ok && resolved.config.secretAccessKey === 'reader-s3cr3t-value-0001');
+  assert.doesNotThrow(() => assertResearchEnvironment(readerEnv()));
+
+  // The writer names alone do not satisfy the reader: no fallback.
+  const writerOnly = resolveResearchObjectStoreConfig(
+    readerEnv({
+      [WAREHOUSE_ENV_KEYS.readAccessKeyId]: undefined,
+      [WAREHOUSE_ENV_KEYS.readSecretAccessKey]: undefined,
+    }),
+  );
+  assert.equal(writerOnly.ok, false);
+  assert.ok(!writerOnly.ok && writerOnly.missing.includes(WAREHOUSE_ENV_KEYS.readAccessKeyId));
+});
+
+test('research refuses to start with the writer present, naming it and never its value', () => {
+  for (const key of [WAREHOUSE_ENV_KEYS.accessKeyId, WAREHOUSE_ENV_KEYS.secretAccessKey]) {
+    const env = readerEnv({ [key]: WRITER_SECRET });
+    const resolved = resolveResearchObjectStoreConfig(env);
+    assert.equal(resolved.ok, false, `${key} present must refuse`);
+    assert.ok(!resolved.ok && resolved.code === 'warehouse_research_credential_forbidden');
+    assert.ok(!resolved.ok && resolved.message.includes(key), 'the refusal names the variable');
+    assert.equal(JSON.stringify(resolved).includes(WRITER_SECRET), false, 'and never its value');
+    assert.throws(
+      () => assertResearchEnvironment(env),
+      (error: Error) => error.message.includes(key) && !error.message.includes(WRITER_SECRET),
+    );
+    const description = describeConfig(env);
+    assert.equal(description.research_ready, false);
+    assert.deepEqual(description.research_forbidden_present, [key]);
+    assert.equal(JSON.stringify(description).includes(WRITER_SECRET), false);
+  }
+});
+
+test('research refuses beside any production database credential', () => {
+  for (const key of RESEARCH_FORBIDDEN_ENV_KEYS) {
+    const resolved = resolveResearchObjectStoreConfig(readerEnv({ [key]: 'production-credential-value' }));
+    assert.equal(resolved.ok, false, `${key} present must refuse`);
+    assert.ok(!resolved.ok && resolved.message.includes(key));
+  }
+  // A placeholder is still something someone set beside the reader: refused too.
+  assert.equal(resolveResearchObjectStoreConfig(readerEnv({ SUPABASE_SERVICE_ROLE_KEY: 'CHANGEME' })).ok, false);
+  assert.ok(RESEARCH_FORBIDDEN_ENV_KEYS.includes('SUPABASE_SERVICE_ROLE_KEY'));
+  assert.ok(RESEARCH_FORBIDDEN_ENV_KEYS.includes(WAREHOUSE_ENV_KEYS.sourceDsn));
+});
+
+test('doctor reads the writer and the reader configurations apart', () => {
+  // The conveyor's environment is archive-ready and, by construction, not a
+  // research environment; the reader's is the reverse.
+  const writer = describeConfig(completeEnv({ [WAREHOUSE_ENV_KEYS.sourceDsn]: SOURCE_DSN }));
+  assert.equal(writer.archive_state, 'ready');
+  assert.equal(writer.research_ready, false);
+
+  // The shared endpoint, region and bucket are archive keys too, so a reader
+  // environment is an incomplete archive environment -- never a ready one.
+  const reader = describeConfig(readerEnv());
+  assert.equal(reader.archive_state, 'incomplete');
+  assert.equal(reader.research_ready, true);
+  assert.deepEqual(reader.research_forbidden_present, []);
+  assert.ok(reader.keys.find((k) => k.key === WAREHOUSE_ENV_KEYS.readSecretAccessKey)?.secret);
+  assert.equal(JSON.stringify(reader).includes('reader-s3cr3t-value-0001'), false);
+});
+
+test('redactSecrets also removes the reader key and production credentials', () => {
+  const env = readerEnv({ SUPABASE_SERVICE_ROLE_KEY: 'service-role-value-123' });
+  const redacted = redactSecrets('reader-s3cr3t-value-0001 and service-role-value-123', env);
+  assert.equal(redacted.includes('reader-s3cr3t-value-0001'), false);
+  assert.equal(redacted.includes('service-role-value-123'), false);
 });

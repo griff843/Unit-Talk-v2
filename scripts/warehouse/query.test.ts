@@ -156,3 +156,38 @@ test('the representative query makes no CLV, ROI or edge claim', () => {
   }
   assert.ok(REPRESENTATIVE_QUERY.includes(SOURCE_PLACEHOLDER));
 });
+
+test('the read path refuses to start with the writer key present, and runs with the reader alone', async () => {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-warehouse-query-'));
+  try {
+    const store = new LocalObjectStore(path.join(workDir, 'bucket'), 'archive');
+    const reader = {
+      UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID: 'READERKEYID00000001',
+      UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY: 'reader-s3cr3t-value-0001',
+    };
+    const writerSecret = 'wr1ter-s3cr3t-value-must-not-print';
+    await assert.rejects(
+      () =>
+        runWarehouseQuery({
+          store,
+          prefix: 'canonical/markets',
+          sql: `SELECT 1 AS one -- ${SOURCE_PLACEHOLDER}`,
+          env: { ...reader, UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: writerSecret },
+        }),
+      (error: Error) =>
+        error.message.includes('UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY') && !error.message.includes(writerSecret),
+    );
+
+    // Reader only: the same call proceeds. The source stands in a comment, so
+    // the query runs without an archived object to glob over.
+    const result = await runWarehouseQuery({
+      store,
+      prefix: 'canonical/markets',
+      sql: `SELECT 1 AS one -- ${SOURCE_PLACEHOLDER}`,
+      env: reader,
+    });
+    assert.equal(result.row_count, 1);
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+});
