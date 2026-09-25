@@ -9,9 +9,21 @@ configs:
           url: http://loki:3100
           isDefault: true
 
+# WORK-2026092403: every container logged through json-file with no size
+# limit. On 2026-09-24 the loki container's log alone was 5.07 GB and
+# container logs totalled 4.8 GB. Rotation bounds each container at 50 MB
+# (5 files x 10 MB). It applies when a container is next created, so the
+# first deploy after this change recreates every service once.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   api:
     image: ghcr.io/griff843/unit-talk-v2/api:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     env_file:
       - .env.production
     environment:
@@ -35,6 +47,7 @@ services:
 
   worker:
     image: ghcr.io/griff843/unit-talk-v2/worker:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     env_file:
       - .env.production
     environment:
@@ -59,6 +72,7 @@ services:
 
   ingestor:
     image: ghcr.io/griff843/unit-talk-v2/ingestor:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     env_file:
       - .env.production
     environment:
@@ -88,6 +102,7 @@ services:
 
   discord-bot:
     image: ghcr.io/griff843/unit-talk-v2/discord-bot:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     env_file:
       - .env.production
     environment:
@@ -112,6 +127,7 @@ services:
 
   grading-cron:
     image: ghcr.io/griff843/unit-talk-v2/api:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     command: ["node_modules/.bin/tsx", "apps/api/src/grading-cron.ts"]
     env_file:
       - .env.production
@@ -137,6 +153,7 @@ services:
 
   loki:
     image: grafana/loki:3.0.0
+    logging: *default-logging
     container_name: loki
     ports:
       - "127.0.0.1:3100:3100"
@@ -155,6 +172,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.0.0
+    logging: *default-logging
     container_name: grafana
     ports:
       - "127.0.0.1:3200:3000"
@@ -183,6 +201,7 @@ services:
     # deploy/production/Dockerfile.nextjs; see that file for why one image serves
     # both Next.js applications.
     image: ghcr.io/griff843/unit-talk-v2/web:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     # Deliberately NOT .env.production: the public website has no reason to hold
     # the Supabase service-role key, Discord bot token or SGO keys, and a
     # browser-facing Next.js process is the worst place to keep them.
@@ -208,6 +227,7 @@ services:
   smart-form:
     # Authenticated capper intake surface (apps/smart-form).
     image: ghcr.io/griff843/unit-talk-v2/smart-form:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     # Narrow env file: Auth.js/Google credentials and the capper allow-list, and
     # nothing else. GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET and
     # ALLOWED_CAPPER_EMAILS stay server-side in this container only.
@@ -254,6 +274,7 @@ services:
     #      `{"ok":true,"service":"command-center"}` — liveness without leaking
     #      privileged health detail, which the authenticated branch returns.
     image: ghcr.io/griff843/unit-talk-v2/command-center:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    logging: *default-logging
     profiles:
       - command-center
     # Narrow env file: operator auth material and the service-role Supabase
@@ -282,6 +303,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
+    logging: *default-logging
     container_name: caddy
     # CADDY_DOMAIN, UNIT_TALK_WEB_DOMAIN and UNIT_TALK_SMART_FORM_DOMAIN must
     # reach the container for the {$...} site addresses in the Caddyfile;

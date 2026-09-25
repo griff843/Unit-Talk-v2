@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092404",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092404-cc-health-runtime",
+  "branch": "claude/work-2026092404-cc-health-runtime",
+  "base_branch": "main",
+  "commit_sha": "03fd0f3e108868e6258e608ab63cdb0b15d87939",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1647",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/fixture-pick.ts",
+    "apps/api/src/model-health-scanner.test.ts",
+    "apps/api/src/model-health-scanner.ts",
+    "apps/api/src/routes/health.ts",
+    "apps/api/src/server.test.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.test.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092404/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-24T16:26:41.295Z",
+  "heartbeat_at": "2026-09-25T00:49:18.808Z",
+  "closed_at": "2026-09-25T00:49:18.808Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-25T00:49:16.190Z",
+      "verdict": "pass",
+      "merge_sha": "03fd0f3e108868e6258e608ab63cdb0b15d87939",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092404-cc-health-runtime",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

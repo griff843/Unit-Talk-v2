@@ -76,6 +76,7 @@ import type {
   ParticipantRepository,
   ParticipantUpsertInput,
   PickRepository,
+  PromotedPickCandidate,
   PlayerSearchResult,
   ProviderCycleStatusUpsertInput,
   ProviderOfferMergeInput,
@@ -488,6 +489,40 @@ export class InMemorySubmissionRepository implements SubmissionRepository {
   }
 }
 
+/** PostgREST `max-rows` on this project: the most rows any single response carries. */
+export const POSTGREST_MAX_ROWS = 1000;
+
+/**
+ * Reads every row of an ordered query by requesting consecutive
+ * `[from, to]` ranges of `pageSize` until a page comes back short. The caller
+ * must order on a total order, or rows can move between pages mid-read.
+ * `pageSize` must not exceed the server cap: a capped page would read as short
+ * and end the read early, which is exactly the truncation this exists to stop.
+ */
+export async function readAllOrderedPages<T>(
+  fetchPage: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+  pageSize: number = POSTGREST_MAX_ROWS,
+): Promise<T[]> {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > POSTGREST_MAX_ROWS) {
+    throw new Error(`pageSize must be an integer from 1 to ${POSTGREST_MAX_ROWS}; received ${pageSize}`);
+  }
+  const rows: T[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await fetchPage(from, from + pageSize - 1);
+    if (error) {
+      throw new Error(error.message);
+    }
+    const page = (data ?? []) as T[];
+    rows.push(...page);
+    if (page.length < pageSize) {
+      return rows;
+    }
+  }
+}
+
 export class InMemoryPickRepository implements PickRepository {
   private readonly picks = new Map<string, PickRecord>();
   private readonly lifecycleEvents: PickLifecycleRecord[] = [];
@@ -593,6 +628,23 @@ export class InMemoryPickRepository implements PickRepository {
       .sort((left, right) => left.created_at.localeCompare(right.created_at))
       .slice(start);
     return limit === undefined ? sorted : sorted.slice(0, limit);
+  }
+
+  async listPromotedByLifecycleStates(
+    lifecycleStates: readonly CanonicalPick['lifecycleState'][],
+    promotionStatuses: readonly string[],
+  ): Promise<PromotedPickCandidate[]> {
+    return Array.from(this.picks.values())
+      .filter(
+        (pick) =>
+          lifecycleStates.includes(pick.status as CanonicalPick['lifecycleState']) &&
+          promotionStatuses.includes(pick.promotion_status) &&
+          pick.promotion_target != null,
+      )
+      .sort(
+        (left, right) =>
+          left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id),
+      );
   }
 
   async listBySource(
@@ -3395,6 +3447,31 @@ export class DatabasePickRepository implements PickRepository {
     }
 
     return data ?? [];
+  }
+
+  async listPromotedByLifecycleStates(
+    lifecycleStates: readonly CanonicalPick['lifecycleState'][],
+    promotionStatuses: readonly string[],
+  ): Promise<PromotedPickCandidate[]> {
+    // PostgREST returns at most POSTGREST_MAX_ROWS rows per response whatever
+    // `.limit()` asks for, so a single read silently truncates. Page on a total
+    // order (`created_at`, then `id`) so a page boundary can neither skip nor
+    // repeat a row.
+    return readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
+      this.client
+        .from('picks')
+        .select('id,status,promotion_status,promotion_target,metadata,selection,created_at')
+        .in('status', [...lifecycleStates])
+        .in('promotion_status', [...promotionStatuses])
+        .not('promotion_target', 'is', null)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    ).catch((error: unknown) => {
+      throw new Error(
+        `Failed to list promoted picks by lifecycle states: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
   }
 
   async listBySource(

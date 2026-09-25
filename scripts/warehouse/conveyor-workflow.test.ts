@@ -10,6 +10,7 @@
  * repository.
  */
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -117,4 +118,43 @@ test('the conveyor refuses a row-security-filtered source before exporting anyth
   assert.ok(guard > 0, 'the conveyor path must call assertSourceNotRowFiltered');
   assert.ok(guard < exportRun, 'the row-security guard must run before runConveyor');
   assert.match(conveyorCase, /new Set\(plan\.items\.map\(\(item\) => item\.relation\)\)/);
+});
+
+test('the header never claims an unconfigured run exits cleanly', () => {
+  // The header once said an unconfigured run "exits cleanly". It never did, and
+  // the contract says it must not: an archive that is not running is stale.
+  const header = workflow.slice(0, workflow.indexOf('on:'));
+  assert.equal(/exits? cleanly/i.test(header), false);
+  assert.match(header, /FAILS at `warehouse\s+#?\s*doctor`/);
+});
+
+test('warehouse doctor exits 0 only when the archive configuration is ready', () => {
+  const runDoctor = (extra: Record<string, string>) =>
+    spawnSync(process.execPath, ['--import', 'tsx', CLI_PATH, 'doctor'], {
+      cwd: REPO_ROOT,
+      env: { PATH: process.env.PATH ?? '', ...extra },
+      encoding: 'utf8',
+    });
+  const objectStore = {
+    UNIT_TALK_WAREHOUSE_S3_ENDPOINT: 'https://fsn1.your-objectstorage.com',
+    UNIT_TALK_WAREHOUSE_S3_REGION: 'fsn1',
+    UNIT_TALK_WAREHOUSE_S3_BUCKET: 'unit-talk-archive',
+    UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID: 'AKIAEXAMPLEKEYID0001',
+    UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: 's3cr3t-value-not-a-placeholder',
+  };
+  const dsn = { UNIT_TALK_WAREHOUSE_SOURCE_DSN: 'postgresql://r:pw-value-9f2@db.example.test:5432/postgres' };
+
+  const cases: Array<[string, Record<string, string>, number, string]> = [
+    ['nothing set', {}, 1, 'not_provisioned'],
+    ['object store only', objectStore, 1, 'incomplete'],
+    ['placeholder bucket', { ...objectStore, ...dsn, UNIT_TALK_WAREHOUSE_S3_BUCKET: 'your-bucket' }, 1, 'incomplete'],
+    ['complete', { ...objectStore, ...dsn }, 0, 'ready'],
+  ];
+  for (const [label, env, expectedStatus, expectedState] of cases) {
+    const result = runDoctor(env);
+    assert.equal(result.status, expectedStatus, `${label}: exit ${result.status}, stderr ${result.stderr}`);
+    assert.equal(JSON.parse(result.stdout).archive_state, expectedState, label);
+    assert.equal(result.stdout.includes('s3cr3t-value'), false, `${label}: doctor printed a secret`);
+    assert.equal(result.stdout.includes('pw-value-9f2'), false, `${label}: doctor printed the DSN password`);
+  }
 });
