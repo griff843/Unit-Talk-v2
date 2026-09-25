@@ -11,7 +11,7 @@ Origin: UTV2-1952
 Tier: T1
 Lane type: runtime
 Branch: claude/work-2026092503-worker-skip-visibility
-PR URL: PR_URL_BINDING
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1651
 Execution SHA: ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7
 Head SHA: ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7
 result: pass
@@ -108,4 +108,4 @@ the real `runWorkerCycles` loop with the in-memory repository bundle and the rea
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: PR_URL_BINDING
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1651

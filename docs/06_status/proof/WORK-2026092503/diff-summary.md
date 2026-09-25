@@ -5,7 +5,7 @@ Origin: UTV2-1952
 Tier: T1
 Lane type: runtime
 Branch: claude/work-2026092503-worker-skip-visibility
-PR URL: PR_URL_BINDING
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1651
 Head SHA: ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7
 Diff base: d4253e8c59a43c42d9ce31714cbd47030504f660 (origin/main)
 Diff target: ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7

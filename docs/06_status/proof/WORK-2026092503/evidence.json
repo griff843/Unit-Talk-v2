@@ -6,7 +6,7 @@
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
-  "pr_url": "PR_URL_BINDING",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1651",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "ea6697ed3e99c17458d3f6c3490b3c7ce26a10b7",
