@@ -13,7 +13,7 @@ Tier: T1
 Lane type: governance
 Branch: claude/work-2026092401-conveyor-unprovisioned-state
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1643
-Head SHA: 16727dd07d7a9556f4a5e9ac259e1032d1ee6364
+Head SHA: 351a5b49178ab051d2fdd39a6aa5811828a46dff
 result: pass
 
 ## ASSERTIONS:
@@ -39,7 +39,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured at `16727dd07d7a9556f4a5e9ac259e1032d1ee6364` in the lane worktree.
+Measured at `351a5b49178ab051d2fdd39a6aa5811828a46dff` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test scripts/warehouse/config.test.ts scripts/warehouse/conveyor-workflow.test.ts
@@ -64,7 +64,7 @@ $ pnpm test
 # fail 0
 rc=0
 
-$ pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092401 --base origin/main --head 16727dd07d7a9556f4a5e9ac259e1032d1ee6364
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092401 --base origin/main --head 351a5b49178ab051d2fdd39a6aa5811828a46dff
 Verdict: PASS
 Changed files: 9
 Rules matched: (none) — no R-level artifacts required for this diff
@@ -90,7 +90,7 @@ Restore check: 26/26.
       containment placeholder target by design. The lane manifest records
       `t1_live_db_precondition: deferred_to_ci`, so `verify` and `Writable DB proof (staging only)`
       come from CI on this PR and on the merge SHA.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092401 --base origin/main --head 16727dd07d7a9556f4a5e9ac259e1032d1ee6364`: PASS, 9 changed files, no R-level artifacts required
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092401 --base origin/main --head 351a5b49178ab051d2fdd39a6aa5811828a46dff`: PASS, 9 changed files, no R-level artifacts required
 
 ## Runtime Verification
 
@@ -116,9 +116,9 @@ exits cleanly. No production database, bucket or credential was touched to produ
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1643
-Execution SHA: 16727dd07d7a9556f4a5e9ac259e1032d1ee6364
+Execution SHA: 351a5b49178ab051d2fdd39a6aa5811828a46dff
 
-Execution anchor: `16727dd07d7a9556f4a5e9ac259e1032d1ee6364` is the only implementation commit on this lane. Its parent is
+Execution anchor: `351a5b49178ab051d2fdd39a6aa5811828a46dff` is the only implementation commit on this lane. Its parent is
 `origin/main` `decd67afaf99eeb41320c40eca14a9d9e9cf92a6`.
 
 `work-order.md` in this directory is a byte-identical copy of the repository-owned work order
@@ -126,8 +126,14 @@ Execution anchor: `16727dd07d7a9556f4a5e9ac259e1032d1ee6364` is the only impleme
 the lane's own proof directory is the one path that the closeout scope check (S1) and the
 file-scope guard both admit without widening `file_scope_lock`.
 
-### Re-anchor to `16727dd07d7a9556f4a5e9ac259e1032d1ee6364`
+### Re-anchor to `351a5b49178ab051d2fdd39a6aa5811828a46dff`
 
 Branch refreshed from origin/main `2f5c14811` after main advanced. The merge brings in only main's own
 changes: `.ops/sync/WORK-2026092308.yml`, `.ops/sync/WORK-2026092311.yml`, `.ops/sync/WORK-2026092312.yml`, `.ops/sync/WORK-2026092313.yml`, `.ops/sync/WORK-2026092314.yml`, `.ops/sync/WORK-2026092405.yml`, `.ops/sync/WORK-2026092406.yml`, `apps/api/src/model-performance-service.test.ts`, `apps/api/src/model-performance-service.ts`, `apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts`, `docs/02_architecture/HISTORICAL_MARKET_DATA_WAREHOUSE.md`, `docs/05_operations/SGO_REACTIVATION_GATE.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092308.json`, `docs/06_status/lanes/WORK-2026092311.json`, `docs/06_status/lanes/WORK-2026092312.json`, `docs/06_status/lanes/WORK-2026092313.json`, `docs/06_status/lanes/WORK-2026092314.json`, `docs/06_status/lanes/WORK-2026092405.json`, `docs/06_status/lanes/WORK-2026092406.json`, `docs/06_status/proof/WORK-2026092308/evidence.json`, `docs/06_status/proof/WORK-2026092308/verification.md`, `docs/06_status/proof/WORK-2026092311/diff-summary.md`, `docs/06_status/proof/WORK-2026092311/verification.md`, `docs/06_status/proof/WORK-2026092312/.gitkeep`, `docs/06_status/proof/WORK-2026092312/diff-summary.md`, `docs/06_status/proof/WORK-2026092312/verification.md`, `docs/06_status/proof/WORK-2026092313/diff-summary.md`, `docs/06_status/proof/WORK-2026092313/verification.md`, `docs/06_status/proof/WORK-2026092314/diff-summary.md`, `docs/06_status/proof/WORK-2026092314/verification.md`, `docs/06_status/proof/WORK-2026092405/diff-summary.md`, `docs/06_status/proof/WORK-2026092405/verification.md`, `docs/06_status/proof/WORK-2026092405/work-order.md`, `docs/06_status/proof/WORK-2026092406/diff-summary.md`, `docs/06_status/proof/WORK-2026092406/verification.md`, `docs/06_status/proof/WORK-2026092406/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `docs/mission/plan.md`, `scripts/ops/db-health-checks.ts`, `scripts/ops/db-health-tripwire.ts`, `scripts/ops/readiness-refresh.test.ts`, `scripts/ops/readiness-refresh.ts`, `scripts/ops/workflow-hardening.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/query.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
 withdrawn: `fdacdda21abfc2efef7f0e532f6fb7c9563b19ff`. `verify` re-runs on the new head.
+
+### Re-anchor to `351a5b49178ab051d2fdd39a6aa5811828a46dff`
+
+Branch refreshed from origin/main `75800eba9` after main advanced. The merge brings in only main's own
+changes: `.github/workflows/deploy-monitoring.yml`, `.github/workflows/deploy.yml`, `.ops/sync/WORK-2026092403.yml`, `.ops/sync/WORK-2026092404.yml`, `apps/api/src/fixture-pick.ts`, `apps/api/src/model-health-scanner.ts`, `apps/api/src/routes/health.ts`, `apps/api/src/server.test.ts`, `deploy/production/docker-compose.yml`, `docs/06_status/lanes/WORK-2026092403.json`, `docs/06_status/lanes/WORK-2026092404.json`, `docs/06_status/proof/WORK-2026092403/diff-summary.md`, `docs/06_status/proof/WORK-2026092403/evidence.json`, `docs/06_status/proof/WORK-2026092403/verification.md`, `docs/06_status/proof/WORK-2026092403/work-order.md`, `docs/06_status/proof/WORK-2026092404/evidence.json`, `docs/06_status/proof/WORK-2026092404/verification.md`, `docs/06_status/proof/WORK-2026092404/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `packages/db/src/repositories.ts`, `packages/db/src/runtime-repositories.ts`, `scripts/ci/deploy-config-rollback.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `16727dd07d7a9556f4a5e9ac259e1032d1ee6364`. `verify` re-runs on the new head.
