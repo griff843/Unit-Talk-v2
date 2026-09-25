@@ -79,10 +79,17 @@ Every other route still refuses an unauthenticated request, as §22 criterion A1
 3. After you sign in in a browser, `/picks`, `/review`, `/exceptions` and `/settlement` render
    production data.
 
-Measured on 2026-09-24 against deployed release `6685f171c`:
+Measured results:
 
-- Step 1 returned `ok`.
-- Step 2 returned `401` for all four routes, each in about 1.5 s over the bridge.
+- **Step 1, re-measured 2026-09-25T23:07:57Z** with the version of the bridge in this runbook's
+  commit, from the operator workstation against host alias `unit-talk-prod`. It was one
+  unauthenticated `GET /api/health`. It printed
+  `{"check":"command-center-bridge","host":"unit-talk-prod","ok":true,"reason":"command-center reports ok"}`
+  and exited `0` at 23:08:01Z.
+- **Step 2, not re-measured.** On 2026-09-24, against deployed release `6685f171c`, an earlier
+  draft of the bridge returned `401` for `/picks`, `/review`, `/exceptions` and `/settlement`, each
+  in about 1.5 s. That result predates the current code and has not been repeated with it.
+- **Step 3 has not been performed.** It must be performed before `cc-proxy` is retired.
 
 ## Retiring `cc-proxy`
 
