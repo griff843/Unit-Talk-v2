@@ -397,3 +397,146 @@ for (const jobId of DEPLOY_JOBS) {
     }
   });
 }
+
+// WORK-2026092403 — the production host kept every release image it ever
+// pulled (398 images, 141 GB on 2026-09-24), logged every container without
+// rotation, and installed two monitoring cron jobs that could never start.
+// The image reclaim is executed for real against a stub `docker`, because a
+// structural assertion would pass against a reclaim that removes the image a
+// rollback needs.
+const RECLAIM_STEP = 'Reclaim superseded release images';
+const IMAGE_NAMESPACE = 'ghcr.io/griff843/unit-talk-v2';
+
+function reclaimStep(): WorkflowStep {
+  const step = jobSteps('promote').find((candidate) => candidate && candidate['name'] === RECLAIM_STEP);
+  assert.ok(step, `promote must contain the "${RECLAIM_STEP}" step`);
+  return step as WorkflowStep;
+}
+
+function reclaimRemoteBody(): string {
+  const run = reclaimStep()['run'];
+  assert.equal(typeof run, 'string', `"${RECLAIM_STEP}" must be a run step`);
+  const match = (run as string).match(/<<'RECLAIM_REMOTE'\n([\s\S]*?)\nRECLAIM_REMOTE/);
+  assert.ok(match, `"${RECLAIM_STEP}" must send a quoted RECLAIM_REMOTE heredoc`);
+  return match![1];
+}
+
+// A stand-in for the docker CLI: `image ls` lists IMAGES, `image rm` records
+// the reference it was asked to remove and refuses any reference in IN_USE,
+// exactly as the real CLI refuses an image a container references.
+function runReclaim(dir: string, images: string[], inUse: string[]) {
+  const bin = join(dir, 'bin');
+  spawnSync('mkdir', ['-p', bin]);
+  writeFileSync(join(dir, 'images.txt'), images.join('\n') + '\n');
+  writeFileSync(join(dir, 'in-use.txt'), inUse.join('\n') + '\n');
+  writeFileSync(
+    join(bin, 'docker'),
+    [
+      '#!/usr/bin/env bash',
+      `STATE='${dir}'`,
+      'case "$1 $2" in',
+      '  "image ls") cat "$STATE/images.txt" ;;',
+      '  "image rm")',
+      '    if grep -qxF "$3" "$STATE/in-use.txt"; then exit 1; fi',
+      '    echo "$3" >> "$STATE/removed.txt" ;;',
+      '  "system df"*) echo "Images: 1GB (0B reclaimable)" ;;',
+      '  *) exit 0 ;;',
+      'esac',
+      '',
+    ].join('\n'),
+  );
+  chmodSync(join(bin, 'docker'), 0o755);
+  const result = spawnSync('bash', ['-s', '--', dir, IMAGE_NAMESPACE], {
+    input: reclaimRemoteBody(),
+    encoding: 'utf8',
+    cwd: dir,
+    env: { ...process.env, PATH: `${bin}:${process.env['PATH'] ?? ''}` },
+  });
+  let removed: string[] = [];
+  try {
+    removed = readFileSync(join(dir, 'removed.txt'), 'utf8').split('\n').filter(Boolean);
+  } catch {
+    removed = [];
+  }
+  return { result, removed };
+}
+
+test('promote reclaims images only after every production check, and cannot fail the deploy', () => {
+  const steps = jobSteps('promote');
+  const index = stepIndex('promote', RECLAIM_STEP);
+  assert.ok(index >= 0, `promote must contain "${RECLAIM_STEP}"`);
+  assert.equal(index, steps.length - 1, 'the reclaim must be the last promote step, after every check passed');
+  assert.equal(reclaimStep()['continue-on-error'], true, 'a failed reclaim must never fail a deploy');
+  assert.doesNotMatch(reclaimRemoteBody(), /--force|\s-f\s|prune -a|system prune/, 'the reclaim must never force-remove');
+});
+
+test('reclaim keeps the running release, the previous one and every snapshotted release', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'work-2026092403-'));
+  const current = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const previous = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const snapshotted = 'cccccccccccccccccccccccccccccccccccccccc';
+  const stale = 'dddddddddddddddddddddddddddddddddddddddd';
+  const staleInUse = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+  try {
+    writeFileSync(join(dir, '.unit-talk-release'), `${current}\n`);
+    writeFileSync(join(dir, '.unit-talk-release.previous'), `${previous}\n`);
+    writeFileSync(join(dir, `.env.production.${snapshotted}`), 'X=1\n');
+    const images = [
+      ...[current, previous, snapshotted, stale].map((tag) => `${IMAGE_NAMESPACE}/api:${tag}`),
+      `${IMAGE_NAMESPACE}/worker:${stale}`,
+      `${IMAGE_NAMESPACE}/api:${staleInUse}`,
+      'louislam/uptime-kuma:1',
+      `grafana/grafana:${stale}`,
+    ];
+    const { result, removed } = runReclaim(dir, images, [`${IMAGE_NAMESPACE}/api:${staleInUse}`]);
+    assert.equal(result.status, 0, `reclaim body failed: ${result.stderr}`);
+    assert.deepEqual(
+      removed.sort(),
+      [`${IMAGE_NAMESPACE}/api:${stale}`, `${IMAGE_NAMESPACE}/worker:${stale}`].sort(),
+      'only superseded Unit Talk release images may be removed',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('reclaim removes nothing when the host records no release', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'work-2026092403-'));
+  try {
+    const { result, removed } = runReclaim(dir, [`${IMAGE_NAMESPACE}/api:${'d'.repeat(40)}`], []);
+    assert.equal(result.status, 0, `reclaim body failed: ${result.stderr}`);
+    assert.deepEqual(removed, [], 'with no release record there is nothing it can prove safe to remove');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('every production container rotates its log', () => {
+  const compose = parseYaml(
+    readFileSync(resolve(REPO_ROOT, 'deploy/production/docker-compose.yml'), 'utf8'),
+    { merge: true },
+  ) as WorkflowRecord;
+  const services = compose['services'] as Record<string, WorkflowRecord>;
+  const names = Object.keys(services);
+  assert.ok(names.length >= 11, 'the production compose file must define its services');
+  for (const name of names) {
+    const logging = services[name]!['logging'] as WorkflowRecord | undefined;
+    assert.ok(logging, `${name} must declare logging`);
+    assert.equal(logging['driver'], 'json-file', `${name} must use the json-file driver`);
+    const options = logging['options'] as Record<string, string>;
+    assert.ok(options?.['max-size'], `${name} must bound its log size`);
+    assert.ok(Number(options?.['max-file']) >= 1, `${name} must bound its log file count`);
+  }
+});
+
+test('monitoring cron jobs log where the deploy user can write', () => {
+  const source = readFileSync(resolve(REPO_ROOT, '.github/workflows/deploy-monitoring.yml'), 'utf8');
+  const cronLines = source.split('\n').filter((line) => /\* \* \* \*/.test(line));
+  assert.ok(cronLines.length >= 2, 'both monitoring cron jobs must still be installed');
+  for (const line of cronLines) {
+    assert.doesNotMatch(line, />>\s*\/var\/log\//, `cron must not redirect into /var/log: ${line.trim()}`);
+    assert.match(line, />> \$\{LOG_PATH\}\//, `cron must redirect under LOG_PATH: ${line.trim()}`);
+  }
+  assert.match(source, /LOG_PATH="\$\{DEPLOY_PATH\}\/logs"/, 'LOG_PATH must live under DEPLOY_PATH');
+  assert.match(source, /mkdir -p '\$\{LOG_PATH\}'/, 'the log directory must be created before cron uses it');
+});

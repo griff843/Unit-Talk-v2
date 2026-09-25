@@ -85,6 +85,8 @@ export interface SchemaDriftCheckOptions {
   client?: UnitTalkSupabaseClient;
   logger?: Pick<Console, 'warn' | 'error'>;
   probeTableCount?: (table: string) => Promise<SchemaDriftProbeResult>;
+  /** Maximum probes in flight at once. Defaults to 8. */
+  probeConcurrency?: number;
 }
 
 export interface SchemaDriftCheckResult {
@@ -102,6 +104,8 @@ export interface SchemaDriftCheckResult {
 
 // Default sports to scan when no explicit slices are provided.
 const DEFAULT_SPORTS = ['NBA', 'NFL', 'MLB', 'NHL'] as const;
+
+const SCHEMA_DRIFT_PROBE_CONCURRENCY = 8;
 
 const SCHEMA_DRIFT_REMEDIATION =
   'Reload the PostgREST schema cache before re-enabling candidate materialization. If the drift persists, verify the canonical table still exists and the service-role key can query it.';
@@ -126,33 +130,46 @@ export async function checkSchemaDrift(options: SchemaDriftCheckOptions = {}): P
       options.client ??
         createDatabaseClientFromConnection(createServiceRoleDatabaseConnectionConfig(loadEnvironment())),
     );
-  const tables: SchemaDriftTableStatus[] = [];
-
-  for (const table of tableNames) {
+  const probeOne = async (table: string): Promise<SchemaDriftTableStatus> => {
     try {
       const probe = await probeTableCount(table);
       const error = probe.error ?? null;
 
-      tables.push({
+      return {
         table,
         reachable: error === null,
         rowCount: error === null ? probe.count ?? 0 : null,
         status: error === null ? 'ok' : 'unreachable',
         errorCode: error?.code ?? null,
         errorMessage: error?.message ?? null,
-      });
+      };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      tables.push({
+      return {
         table,
         reachable: false,
         rowCount: null,
         status: 'unreachable',
         errorCode: null,
         errorMessage,
-      });
+      };
     }
-  }
+  };
+
+  // Probes are independent HEAD requests; run them in bounded parallel rather
+  // than one after another. Results keep canonical-table order.
+  const concurrency = Math.max(1, options.probeConcurrency ?? SCHEMA_DRIFT_PROBE_CONCURRENCY);
+  const tables = new Array<SchemaDriftTableStatus>(tableNames.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, tableNames.length) }, async () => {
+      while (next < tableNames.length) {
+        const index = next;
+        next += 1;
+        tables[index] = await probeOne(tableNames[index] as string);
+      }
+    }),
+  );
 
   const unreachableTables = tables.filter((table) => !table.reachable);
   const warnings =

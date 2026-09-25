@@ -2293,6 +2293,56 @@ jobs:
           printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s","releaseTag":"%s","killSwitchEngaged":true}\n' \
             "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" "$RELEASE_TAG"
 
+      # WORK-2026092403: nothing ever removed a superseded release image. On
+      # 2026-09-24 the host held 398 images (141 GB, 80 GB reclaimable) --
+      # 68 generations each of api, worker, ingestor and discord-bot -- and
+      # the backup it is snapshotted into grew with them.
+      #
+      # This runs only after the release is activated and every check above
+      # passed, and it cannot fail the deploy: a leftover image costs disk, a
+      # failed promote costs production. What it keeps:
+      #   * the release now running (.unit-talk-release);
+      #   * the release before it (.unit-talk-release.previous);
+      #   * every release the host still holds a configuration snapshot for
+      #     (.env.production.<sha>) -- exactly the set a rollback can restore
+      #     configuration for, so no restorable release loses its image.
+      # It removes only images under IMAGE_NAMESPACE, never a third-party
+      # image, and uses `docker image rm` without --force, so an image a
+      # container still references is refused rather than removed. A rollback
+      # to a pruned tag still works: rollback.sh pulls before it activates.
+      - name: Reclaim superseded release images
+        continue-on-error: true
+        run: |
+          set -eu
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$DEPLOY_PATH' '$IMAGE_NAMESPACE'" <<'RECLAIM_REMOTE'
+          set -u
+          cd "$1"
+          NAMESPACE="$2"
+          keep="$(
+            { cat .unit-talk-release .unit-talk-release.previous 2>/dev/null || true
+              ls -1 .env.production.* 2>/dev/null | sed 's/^\.env\.production\.//' || true
+            } | grep -E '^[0-9a-f]{7,40}$' | sort -u
+          )"
+          if [ -z "$keep" ]; then
+            echo "no release record on the host; refusing to reclaim anything"
+            exit 0
+          fi
+          echo "keeping release tags:"; printf '  %s\n' $keep
+          docker image ls --format '{{.Repository}}:{{.Tag}}' \
+            | grep -F "$NAMESPACE/" \
+            | while IFS= read -r ref; do
+                tag="${ref##*:}"
+                if printf '%s\n' "$keep" | grep -qxF "$tag"; then continue; fi
+                if docker image rm "$ref" >/dev/null 2>&1; then
+                  echo "removed $ref"
+                else
+                  echo "kept $ref (in use or not removable)"
+                fi
+              done
+          docker system df --format '{{.Type}}: {{.Size}} ({{.Reclaimable}} reclaimable)' | head -1
+          df -h / | awk 'NR==2 {print "root filesystem: " $3 " used, " $4 " free (" $5 ")"}'
+          RECLAIM_REMOTE
+
   smoke:
     name: Post-deploy functional smoke
     needs: promote
