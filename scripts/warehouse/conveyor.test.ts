@@ -593,6 +593,20 @@ test('a pruneHold entry is never reported prune-eligible, whatever its manifest 
     assert.equal(rerun.items[0].status, 'skipped_already_verified');
     assert.equal(rerun.items[0].prune_hold, true);
     assert.equal(rerun.items[0].prune_eligible, false);
+
+    // A first run that archives and verifies a fresh window is held too.
+    const fresh = await runConveyor({
+      plan: planConveyorRun({ policy: [HELD], today: TODAY, windowDate: '2026-05-12' }),
+      connection: ws.connection,
+      store: ws.store,
+      relationExpr: () => 'offers',
+      exporterRepoSha: '0'.repeat(40),
+      now: () => BACKFILL_NOW,
+      log: () => {},
+    });
+    assert.equal(fresh.items[0].status, 'archived', JSON.stringify(fresh.items[0].failures));
+    assert.equal(fresh.items[0].prune_hold, true);
+    assert.equal(fresh.items[0].prune_eligible, false);
   } finally {
     await ws.close();
   }
