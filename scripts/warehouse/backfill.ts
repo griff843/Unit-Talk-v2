@@ -63,6 +63,9 @@ function dailyConveyorEntry(relation: string): RetentionPolicyEntry {
 
 export const BACKFILL_SOURCES = {
   provider_offer_history: dailyConveyorEntry('public.provider_offer_history'),
+  raw_payloads: dailyConveyorEntry('public.raw_payloads'),
+  odds_snapshots: dailyConveyorEntry('public.odds_snapshots'),
+  system_runs: dailyConveyorEntry('public.system_runs'),
   provider_offers_legacy_quarantine: {
     relation: 'public.provider_offers_legacy_quarantine',
     domain: 'markets',

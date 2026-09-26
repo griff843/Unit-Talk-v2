@@ -427,12 +427,37 @@ test('DEFAULT_RETENTION_POLICY produces a valid key for the window it plans', ()
   // the conveyor tests used `season: '2026'` while the only real entry said
   // `'all'`, which the layout refuses.
   const plan = planConveyorRun({ policy: DEFAULT_RETENTION_POLICY, today: '2026-09-24' });
-  assert.equal(plan.items.length, 1);
-  const [item] = plan.items;
-  assert.equal(item.date, '2026-08-09', 'today - 45 - 1');
-  const key = dataObjectKey(item.target);
-  assert.equal(key, 'canonical/markets/all/2026/2026-08-09/part-0000.parquet');
-  assert.deepEqual(parseDataObjectKey(key)?.target, item.target, 'the key round-trips');
+  assert.deepEqual(
+    plan.items.map((item) => [item.relation, item.date, dataObjectKey(item.target)]),
+    [
+      // today - hotRetentionDays - 1, each under its own namespace
+      ['public.provider_offer_history', '2026-08-09', 'canonical/markets/all/2026/2026-08-09/part-0000.parquet'],
+      ['public.raw_payloads', '2026-09-02', 'raw/raw_payloads/all/2026/2026-09-02/part-0000.parquet'],
+      ['public.odds_snapshots', '2026-08-09', 'raw/odds_snapshots/all/2026/2026-08-09/part-0000.parquet'],
+      ['public.system_runs', '2026-06-25', 'raw/system_runs/all/2026/2026-06-25/part-0000.parquet'],
+    ],
+  );
+  for (const item of plan.items) {
+    const key = dataObjectKey(item.target);
+    assert.deepEqual(parseDataObjectKey(key)?.target, item.target, `${key} round-trips`);
+    assert.equal(item.pruneHold, false, `${item.relation} carries no hold`);
+  }
+  const runs = plan.items.find((item) => item.relation === 'public.system_runs')!;
+  assert.equal(runs.source.window.column, 'started_at', 'run telemetry windows on started_at, never the nullable finished_at');
+  assert.deepEqual(runs.source.orderBy, ['started_at', 'id']);
+});
+
+test('every archived table is backfillable, and a backfilled day is the conveyor day', () => {
+  for (const entry of DEFAULT_RETENTION_POLICY) {
+    const source = Object.entries(BACKFILL_SOURCES).find(([, candidate]) => candidate.relation === entry.relation);
+    assert.ok(source, `${entry.relation} is archived daily but cannot be backfilled`);
+    assert.equal(source[1], entry, `${entry.relation}: the backfill must use the conveyor's own entry`);
+  }
+});
+
+test('a canonical entry without a domain is refused rather than filed under a guessed one', () => {
+  const orphan: RetentionPolicyEntry = { ...DEFAULT_RETENTION_POLICY[0], domain: null };
+  assert.throws(() => planConveyorRun({ policy: [orphan], today: '2026-09-24' }), /names no domain/);
 });
 
 test('the default policy files a window under its own year, not the run year', () => {
@@ -677,39 +702,99 @@ test('each source is filed under the key the plan names', () => {
   assert.equal(quarantine.relation, 'public.provider_offers_legacy_quarantine');
 });
 
-test('history and quarantine keys never collide, for any date', () => {
-  // Four whole years, both directions: no data key and no manifest key of one
-  // source is ever a key of the other. And history is exactly the key the daily
+test('no two archived sources ever share a key, for any date', () => {
+  // Four whole years: no data key and no manifest key of one source is ever a
+  // key of another. And every non-held source is exactly the key the daily
   // conveyor computes, so a backfilled day and a conveyor day are one archive.
   const keysFor = (entry: RetentionPolicyEntry, date: string) => {
     const [item] = planConveyorRun({ policy: [entry], today: TODAY, windowDate: date }).items;
     const data = dataObjectKey(item.target);
     return { data, manifest: manifestObjectKey(item.target, computeManifestId(data)) };
   };
-  const history = new Set<string>();
-  const quarantine = new Set<string>();
+  const owner = new Map<string, string>();
   const start = Date.parse('2024-01-01T00:00:00.000Z');
   for (let day = 0; day < 4 * 366; day += 1) {
     const date = new Date(start + day * 86_400_000).toISOString().slice(0, 10);
-    const h = keysFor(BACKFILL_SOURCES.provider_offer_history, date);
-    const q = keysFor(BACKFILL_SOURCES.provider_offers_legacy_quarantine, date);
-    history.add(h.data).add(h.manifest);
-    quarantine.add(q.data).add(q.manifest);
-
-    const daily = planConveyorRun({ policy: DEFAULT_RETENTION_POLICY, today: TODAY, windowDate: date }).items[0];
-    assert.equal(h.data, dataObjectKey(daily.target), `${date}: backfill and conveyor disagree`);
+    const daily = planConveyorRun({ policy: DEFAULT_RETENTION_POLICY, today: TODAY, windowDate: date }).items;
+    for (const [name, entry] of Object.entries(BACKFILL_SOURCES)) {
+      const keys = keysFor(entry, date);
+      for (const key of [keys.data, keys.manifest]) {
+        const previous = owner.get(key);
+        assert.ok(previous === undefined, `${key} is claimed by both ${previous} and ${name}`);
+        owner.set(key, name);
+      }
+      const conveyed = daily.find((item) => item.relation === entry.relation);
+      if (conveyed) {
+        assert.equal(keys.data, dataObjectKey(conveyed.target), `${date} ${name}: backfill and conveyor disagree`);
+      }
+    }
   }
-  assert.equal(history.size, 2 * 4 * 366);
-  assert.equal(quarantine.size, 2 * 4 * 366);
-  for (const key of quarantine) {
-    assert.equal(history.has(key), false, `${key} is claimed by both sources`);
-  }
+  assert.equal(owner.size, Object.keys(BACKFILL_SOURCES).length * 2 * 4 * 366);
 });
 
-test('the quarantine is the only held source, and history is not held', () => {
+test('the quarantine is the only held source, and nothing else is held', () => {
   assert.equal(isPruneHeldRelation('public.provider_offers_legacy_quarantine'), true);
-  assert.equal(isPruneHeldRelation('public.provider_offer_history'), false);
+  for (const relation of [
+    'public.provider_offer_history',
+    'public.raw_payloads',
+    'public.odds_snapshots',
+    'public.system_runs',
+  ]) {
+    assert.equal(isPruneHeldRelation(relation), false, relation);
+  }
   assert.equal(BACKFILL_SOURCES.provider_offers_legacy_quarantine.pruneHold, true);
+});
+
+/** Run telemetry and raw payloads carry a JSON document column; it must survive the round trip. */
+async function seedTelemetry(connection: DuckConnection): Promise<void> {
+  await connection.run(`
+    CREATE TABLE runs AS
+    SELECT
+      ('00000000-0000-4000-8000-' || lpad(CAST(i AS VARCHAR), 12, '0'))::UUID      AS id,
+      CASE WHEN i % 3 = 0 THEN 'worker.heartbeat' ELSE 'grading.run' END            AS run_type,
+      TIMESTAMPTZ '2026-05-11 00:00:00+00' + INTERVAL (i * 20) MINUTE               AS started_at,
+      CASE WHEN i % 5 = 0 THEN NULL
+           ELSE TIMESTAMPTZ '2026-05-11 00:00:01+00' + INTERVAL (i * 20) MINUTE END AS finished_at,
+      json_object('attempt', i, 'note', 'run ' || CAST(i AS VARCHAR))              AS details
+    FROM range(0, 144) tbl(i)
+  `);
+}
+
+test('run telemetry archives under raw/system_runs, JSON column and open runs included', async () => {
+  const ws = await workspace(seedTelemetry);
+  try {
+    const plan = planBackfill({ source: 'system_runs', from: '2026-05-11', to: '2026-05-12', today: TODAY });
+    const result = await backfill(ws, plan, { relationExpr: () => 'runs' });
+    assert.equal(result.ok, true, JSON.stringify(result.windows));
+    assert.deepEqual(await ws.store.list('canonical/'), [], 'telemetry never lands under canonical/');
+
+    let total = 0;
+    for (const window of plan.windows) {
+      assert.match(window.data_key, /^raw\/system_runs\/all\/2026\//);
+      const manifest = parseManifest((await ws.store.get(window.manifest_key))!.toString('utf8'));
+      assert.equal(manifest.source.relation, 'public.system_runs');
+      assert.equal(manifest.source.row_count, manifest.export.exported_row_count);
+      assert.equal(manifest.verification.passed, true);
+      total += manifest.source.row_count;
+    }
+    // 144 runs every 20 minutes from 2026-05-11 00:00: 72 per day, and the
+    // runs with no finished_at (open runs) are windowed on started_at like any other.
+    assert.equal(total, 144);
+
+    const [first] = plan.windows;
+    const localCopy = path.join(ws.workDir, 'first.parquet');
+    fs.writeFileSync(localCopy, (await ws.store.get(first.data_key))!);
+    const rows = await ws.connection.all(
+      `SELECT count(*) AS n, count(*) FILTER (WHERE finished_at IS NULL) AS open_runs,
+              max(json_extract_string(details, '$.note')) AS note
+         FROM read_parquet('${localCopy.replace(/'/g, "''")}')`,
+    );
+    assert.equal(Number(rows[0].n), 72);
+    assert.ok(Number(rows[0].open_runs) > 0, 'open runs are archived, not dropped');
+    assert.match(String(rows[0].note), /^run \d+$/, 'the JSON document column reads back');
+  } finally {
+    await ws.close();
+  }
 });
 
 // --- the driver ---------------------------------------------------------------
