@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092503",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092503-worker-skip-visibility",
+  "branch": "claude/work-2026092503-worker-skip-visibility",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1651",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/worker/src/runner.ts",
+    "apps/worker/src/worker-runtime.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092503/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-25T20:37:32.789Z",
+  "heartbeat_at": "2026-09-25T20:37:32.789Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026092503-worker-skip-visibility.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092503-worker-skip-visibility",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
