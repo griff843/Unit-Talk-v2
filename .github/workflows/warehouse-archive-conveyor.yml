@@ -57,6 +57,9 @@ on:
         options:
           - provider_offer_history
           - provider_offers_legacy_quarantine
+          - raw_payloads
+          - odds_snapshots
+          - system_runs
         default: provider_offer_history
       from:
         description: 'Backfill mode: first UTC day, inclusive (YYYY-MM-DD).'

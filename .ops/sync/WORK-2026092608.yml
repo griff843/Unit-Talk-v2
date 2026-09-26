@@ -1,0 +1,124 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092608
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092608
+  objective: >-
+    Remove the three measured causes of post-merge closeout refusals and
+    follow-up repair lanes that originate at lane start, without weakening any
+    gate.
+
+    Measured (post-merge-lane-close, last 40 runs): P3/C4 x2 and P11 x1, plus
+    three whole repair lanes (WORK-2026092601, -2603, -2604) spent only on proof
+    paths and anchors; L3 x3 (UTV2-1954 needed two attempts); leases leak on
+    every closeout because CI releases a registry that only exists locally.
+  acceptance_criteria:
+    - "`defaultProofPaths` declares `diff-summary.md`, `evidence.json` and
+      `verification.md` for every tier, which is what closeout P11/P3 already
+      demand. Existing manifests are not rewritten."
+    - "`ops:lane-start` scaffolds `diff-summary.md` and `verification.md` with a
+      `Merge SHA: pending merge` anchor the closeout rebinder rewrites, instead
+      of an empty `.gitkeep`. It never writes a merge SHA."
+    - "When the lane has a tracker issue, `ops:lane-start` attempts to move it
+      to a started state after preflight has passed. A tracker failure is a
+      warning and never fails the start (intent.md: tracker sync is optional and
+      non-blocking). L3 itself is unchanged."
+    - Terminal lanes' local leases (manifest on `origin/main` is
+      `done`/`closed`) are released by a sweep that lane-start runs before its
+      lease check, so a leaked lease no longer refuses the next start.
+    - Each behavior has a test that fails without the change (mutation-checked).
+  guardrails:
+    - No change to truth-check gates, merge-gate, required checks, CODEOWNERS or
+      branch protection.
+    - "`apps/command-center/**` out of scope."
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI; closeout through `post-merge-lane-close.yml`.
+  unmapped_sections:
+    - >-
+      WORK-2026092608 — lane-start produces a lane that can close first time
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092608.md
+    title: WORK-2026092608 — lane-start produces a lane that can close first time
+    description: >-
+      # WORK-2026092608 — lane-start produces a lane that can close first time
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      Remove the three measured causes of post-merge closeout refusals and
+      follow-up repair lanes that originate at lane start, without weakening any
+      gate.
+
+
+      Measured (post-merge-lane-close, last 40 runs): P3/C4 x2 and P11 x1, plus
+      three whole repair lanes (WORK-2026092601, -2603, -2604) spent only on
+      proof paths and anchors; L3 x3 (UTV2-1954 needed two attempts); leases
+      leak on every closeout because CI releases a registry that only exists
+      locally.
+
+
+      ## Acceptance Criteria
+
+
+      1. `defaultProofPaths` declares `diff-summary.md`, `evidence.json` and
+      `verification.md` for every tier, which is what closeout P11/P3 already
+      demand. Existing manifests are not rewritten.
+
+      2. `ops:lane-start` scaffolds `diff-summary.md` and `verification.md` with
+      a `Merge SHA: pending merge` anchor the closeout rebinder rewrites,
+      instead of an empty `.gitkeep`. It never writes a merge SHA.
+
+      3. When the lane has a tracker issue, `ops:lane-start` attempts to move it
+      to a started state after preflight has passed. A tracker failure is a
+      warning and never fails the start (intent.md: tracker sync is optional and
+      non-blocking). L3 itself is unchanged.
+
+      4. Terminal lanes' local leases (manifest on `origin/main` is
+      `done`/`closed`) are released by a sweep that lane-start runs before its
+      lease check, so a leaked lease no longer refuses the next start.
+
+      5. Each behavior has a test that fails without the change
+      (mutation-checked).
+
+
+      ## Guardrails
+
+
+      - No change to truth-check gates, merge-gate, required checks, CODEOWNERS
+      or branch protection.
+
+      - `apps/command-center/**` out of scope.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI; closeout through `post-merge-lane-close.yml`.
+    captured_at: 2026-09-26T16:44:57.118Z
+    description_sha256: 0abe1146739d3dde4a7cfbb51d61151f0fcc0ec5278e80c29e2a510ac225fcbd
+  contract_hash: bd0129442d94f3539818a34f03afd55ec9268465481b34058c4e3485e2024da9

@@ -7,7 +7,7 @@ Lane type: delivery-ui
 Branch: codex/work-2026092605-cc-outbox-pagination
 PR URL: N/A
 Head SHA: 51932bee766dd47db1e6200377fcb57ff997d6a9
-Merge SHA: N/A
+Merge SHA: eb5559426b790e694b38a1de85ec99891790d238
 Diff base: 744ff2f6a98e837daa779b989b56b091b4fbb3e2
 Diff target: 51932bee766dd47db1e6200377fcb57ff997d6a9
 
@@ -39,4 +39,4 @@ A	docs/06_status/proof/WORK-2026092605/.gitkeep
 
 ## SHA Binding
 Head SHA: 51932bee766dd47db1e6200377fcb57ff997d6a9
-Merge SHA: N/A
+Merge SHA: eb5559426b790e694b38a1de85ec99891790d238
