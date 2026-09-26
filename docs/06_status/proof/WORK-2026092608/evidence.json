@@ -1,0 +1,172 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092608",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "479b7b134f396b6d85177de8539d57d3af3ebb86",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "note": "479b7b134f396b6d85177de8539d57d3af3ebb86 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main cb2f347f0 into this branch. It brings in only main's own changes (`.github/workflows/warehouse-archive-conveyor.yml`, `.ops/sync/WORK-2026092605.yml`, `.ops/sync/WORK-2026092607.yml`, `apps/command-center/e2e/recovery/delivery-truth.spec.ts`, `apps/command-center/src/app/operations/outbox/page.tsx`, `apps/command-center/src/lib/data/delivery-population.test.ts`, `apps/command-center/src/lib/data/outbox.ts`, `docs/05_operations/WAREHOUSE_ARCHIVE_CONTRACT.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092605.json`, `docs/06_status/lanes/WORK-2026092607.json`, `docs/06_status/proof/WORK-2026092605/.gitkeep`, `docs/06_status/proof/WORK-2026092605/diff-summary.md`, `docs/06_status/proof/WORK-2026092605/evidence.json`, `docs/06_status/proof/WORK-2026092605/model-routing.json`, `docs/06_status/proof/WORK-2026092605/verification.md`, `docs/06_status/proof/WORK-2026092607/diff-summary.md`, `docs/06_status/proof/WORK-2026092607/evidence.json`, `docs/06_status/proof/WORK-2026092607/verification.md`, `docs/06_status/proof/WORK-2026092607/work-order.md`, `scripts/warehouse/README.md`, `scripts/warehouse/backfill.ts`, `scripts/warehouse/conveyor-workflow.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/conveyor.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor 28907a15e92785636e7565e5e69cab1dadb95781. CI re-runs verify on the new head. Previous note: 479b7b134f396b6d85177de8539d57d3af3ebb86 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the orchestrator review fixes (T3 bundle-free, reopened-lane lease). Superseded anchor 12dc5458001478aa1dbcec9bb18d4e3e07b645bb. Previous note: "
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_on": "479b7b134f396b6d85177de8539d57d3af3ebb86",
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 133,
+          "pass": 133,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 73,
+          "pass": 73,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/lease-registry.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 42,
+          "pass": 42,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 158,
+          "pass": 158,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/lane-manifest.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 35,
+          "pass": 35,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm test:ops",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 3452,
+          "pass": 3452,
+          "fail": 0
+        }
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint <7 touched files>",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "ci:assert-staging refuses the workstation target; verify comes from CI on the PR head."
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied alone, named test file run, file restored from a pre-mutation copy; checksums identical after; restore rerun green.",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "defaultProofPaths back to tier-shaped",
+          "observed": "shared.test full-bundle test and truth-check-lib P11 test red"
+        },
+        {
+          "id": "M2",
+          "mutation": "drop Merge SHA anchor from diff-summary scaffold",
+          "observed": "scaffold anchor test red"
+        },
+        {
+          "id": "M3",
+          "mutation": "scaffold writes .gitkeep instead of template",
+          "observed": "11 red incl. scaffold test and readmission G20/G21/G27/G28/G36/G41/G48-G50"
+        },
+        {
+          "id": "M4",
+          "mutation": "new-lane path skips runTrackerStartTransition",
+          "observed": "tracker call-order test red"
+        },
+        {
+          "id": "M5",
+          "mutation": "return advanced without issueUpdate",
+          "observed": "advance test and warnings test red"
+        },
+        {
+          "id": "M6",
+          "mutation": "allow moving issue out of any state type",
+          "observed": "no-move test red"
+        },
+        {
+          "id": "M7",
+          "mutation": "rethrow tracker errors",
+          "observed": "warnings test red"
+        },
+        {
+          "id": "M8",
+          "mutation": "ignore resolveTrackerRef",
+          "observed": "no-tracker skip test red"
+        },
+        {
+          "id": "M9",
+          "mutation": "lane-start skips runLeaseSweep",
+          "observed": "sweep-before-lease-check test red"
+        },
+        {
+          "id": "M10",
+          "mutation": "sweep ignores lane status",
+          "observed": "non-terminal retention test red"
+        },
+        {
+          "id": "M11",
+          "mutation": "sweep never releases",
+          "observed": "leaked done lease test and closed-states test red"
+        },
+        {
+          "id": "M12",
+          "mutation": "merged added to sweepable set",
+          "observed": "non-terminal retention test red"
+        },
+        {
+          "id": "M13",
+          "mutation": "registry read error propagates",
+          "observed": "unreadable-registry test red"
+        }
+      ]
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "files_changed": 7,
+    "gates_changed": "none: no truth-check gate, merge-gate, required check, CODEOWNERS or branch protection edit; L3 unchanged"
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1660"
+}

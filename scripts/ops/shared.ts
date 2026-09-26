@@ -1092,16 +1092,33 @@ export function normalizeRepoRelativePaths(pathsToNormalize: string[]): string[]
   return [...seen].sort((left, right) => left.localeCompare(right));
 }
 
-export function defaultProofPaths(issueId: string, tier: LaneTier): string[] {
-  const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId);
-  if (tier === 'T1') {
-    return [`${proofRoot}/evidence.json`];
-  }
-  if (tier === 'T2') {
-    return [`${proofRoot}/diff-summary.md`, `${proofRoot}/verification.md`];
-  }
+/**
+ * The proof files a NEW T1 or T2 lane declares at start.
+ *
+ * WORK-2026092608. These used to differ (T1: evidence.json only; T2:
+ * diff-summary.md + verification.md), but the post-merge closeout demands
+ * more than either set: truth-check P11 wants a diff
+ * summary, P3/C4 want every declared file to carry the merge SHA, and
+ * proof-generate binds evidence.json and verification.md. Lanes therefore
+ * ended up needing all three anyway, and the gap between what lane-start
+ * declared and what closeout demanded was paid for in whole repair lanes
+ * (WORK-2026092601, -2603, -2604) that touched nothing but proof paths.
+ *
+ * T3 still declares nothing: its proof is green CI on the merge SHA, not a
+ * bundle (truth-check M7 and the tier table), and giving it a bundle would be
+ * a tier-policy change, not a repair.
+ *
+ * Only the declaration made at lane start changes. Manifests already on disk
+ * keep exactly the expected_proof_paths they were written with.
+ */
+export const DEFAULT_PROOF_FILE_NAMES = ['diff-summary.md', 'evidence.json', 'verification.md'] as const;
 
-  return [];
+export function defaultProofPaths(issueId: string, tier: LaneTier): string[] {
+  if (tier === 'T3') {
+    return [];
+  }
+  const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId);
+  return DEFAULT_PROOF_FILE_NAMES.map((fileName) => `${proofRoot}/${fileName}`);
 }
 
 export function git(args: string[], cwd = ROOT): { ok: boolean; stdout: string; stderr: string } {
