@@ -11,7 +11,7 @@ Tier: T2
 Lane type: governance
 Branch: claude/work-2026092607-warehouse-telemetry-coverage
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1659
-Head SHA: 386c008dbcd0e8171526bd31fa5f6bbad74478b5
+Head SHA: aaa5b846567a6c7a3ea1b4a684c0247d1074db45
 result: pass
 
 ## ASSERTIONS:
@@ -30,7 +30,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured at `386c008dbcd0e8171526bd31fa5f6bbad74478b5` in the lane worktree.
+Measured at `aaa5b846567a6c7a3ea1b4a684c0247d1074db45` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test scripts/warehouse/*.test.ts
@@ -80,7 +80,7 @@ and non-heartbeat run detail plus a 29,470-row heartbeat sample: zero hits.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1659
-Execution SHA: 386c008dbcd0e8171526bd31fa5f6bbad74478b5
+Execution SHA: aaa5b846567a6c7a3ea1b4a684c0247d1074db45
 
 ## Runtime Verification
 
@@ -88,3 +88,9 @@ The conveyor and backfill tests run the real `runConveyor` / `runBackfill` again
 DuckDB source and an in-memory object store, export real Parquet and verify each object by reading
 it back. No production bucket or credential was touched. Starting a production backfill and the
 reader grants remain PM-reserved.
+
+### Re-anchor to `aaa5b846567a6c7a3ea1b4a684c0247d1074db45`
+
+Branch refreshed from origin/main `eb5559426` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092605.yml`, `apps/command-center/e2e/recovery/delivery-truth.spec.ts`, `apps/command-center/src/app/operations/outbox/page.tsx`, `apps/command-center/src/lib/data/delivery-population.test.ts`, `apps/command-center/src/lib/data/outbox.ts`, `docs/06_status/lanes/WORK-2026092605.json`, `docs/06_status/proof/WORK-2026092605/.gitkeep`, `docs/06_status/proof/WORK-2026092605/diff-summary.md`, `docs/06_status/proof/WORK-2026092605/evidence.json`, `docs/06_status/proof/WORK-2026092605/model-routing.json`, `docs/06_status/proof/WORK-2026092605/verification.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `386c008dbcd0e8171526bd31fa5f6bbad74478b5`. `verify` re-runs on the new head.
