@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092607
 
-MERGE_SHA: pending merge
+MERGE_SHA: 1a1c707619f4c223189a4eeb20f7b401f84bac08
 
 > Pre-merge, merge authority does not exist yet. `post-merge-lane-close.yml` binds the merge
 > SHA after GitHub supplies the merged-PR attestation.
@@ -78,7 +78,7 @@ and non-heartbeat run detail plus a 29,470-row heartbeat sample: zero hits.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1a1c707619f4c223189a4eeb20f7b401f84bac08
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1659
 Execution SHA: aaa5b846567a6c7a3ea1b4a684c0247d1074db45
 

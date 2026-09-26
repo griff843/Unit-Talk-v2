@@ -5,13 +5,13 @@
   "lane_type": "governance",
   "proof_profile": "static",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1a1c707619f4c223189a4eeb20f7b401f84bac08",
     "verified_source_sha": "aaa5b846567a6c7a3ea1b4a684c0247d1074db45",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
     "note": "aaa5b846567a6c7a3ea1b4a684c0247d1074db45 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main eb5559426 into this branch. It brings in only main's own changes (`.ops/sync/WORK-2026092605.yml`, `apps/command-center/e2e/recovery/delivery-truth.spec.ts`, `apps/command-center/src/app/operations/outbox/page.tsx`, `apps/command-center/src/lib/data/delivery-population.test.ts`, `apps/command-center/src/lib/data/outbox.ts`, `docs/06_status/lanes/WORK-2026092605.json`, `docs/06_status/proof/WORK-2026092605/.gitkeep`, `docs/06_status/proof/WORK-2026092605/diff-summary.md`, `docs/06_status/proof/WORK-2026092605/evidence.json`, `docs/06_status/proof/WORK-2026092605/model-routing.json`, `docs/06_status/proof/WORK-2026092605/verification.md`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor 386c008dbcd0e8171526bd31fa5f6bbad74478b5. CI re-runs verify on the new head. Previous note: aaa5b846567a6c7a3ea1b4a684c0247d1074db45 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
-    "bound_at": "2026-09-26T17:04:14.000Z"
+    "bound_at": "2026-09-26T18:02:15.288Z"
   },
   "what_this_lane_delivers": {
     "defect": "The conveyor archived only provider_offer_history; system_runs (1.3 GB), raw_payloads (694 MB) and odds_snapshots (427 MB) had no archive path and stayed hot indefinitely.",

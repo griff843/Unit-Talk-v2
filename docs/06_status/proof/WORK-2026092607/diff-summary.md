@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092607-warehouse-telemetry-coverage
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1659
 Head SHA: aaa5b846567a6c7a3ea1b4a684c0247d1074db45
-Merge SHA: pending merge
+Merge SHA: 1a1c707619f4c223189a4eeb20f7b401f84bac08
 Diff base: 5710c8fe4a8838910a2277316f216a6497db5fd4 (origin/main)
 Diff target: aaa5b846567a6c7a3ea1b4a684c0247d1074db45
 
