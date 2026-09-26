@@ -15,6 +15,12 @@ import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  formatUnresolvedSummary,
+  loadEffectiveSettlements,
+  type ReadClient,
+  type UnresolvedPick,
+} from './effective-settlements.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -31,9 +37,9 @@ function loadEnv() {
   }
 }
 
-type Band = 'A+' | 'A' | 'B' | 'C' | 'SUPPRESS' | null;
+export type Band = 'A+' | 'A' | 'B' | 'C' | 'SUPPRESS' | null;
 
-interface BandRow {
+export interface BandRow {
   result: string | null;
   band: Band;
   sport: string | null;
@@ -54,6 +60,51 @@ function flatBetROI(wins: number, losses: number): string {
   return `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
 }
 
+export interface BandFetchResult {
+  rows: BandRow[];
+  unresolved: UnresolvedPick[];
+}
+
+/**
+ * Band rows for every pick whose ROOT settlement is on/after `afterDate`, each
+ * carrying its EFFECTIVE result (the tip of its correction chain). Picks whose
+ * chain does not resolve are returned as unresolved, not counted.
+ */
+export async function fetchBandRows(client: ReadClient, afterDate: string): Promise<BandFetchResult> {
+  const load = await loadEffectiveSettlements(
+    client,
+    { dateColumn: 'settled_at', after: afterDate },
+    'picks!inner(metadata)',
+  );
+  const rows: BandRow[] = load.effective.map(r => {
+    const pickValue = r.raw['picks'];
+    const pick = (Array.isArray(pickValue) ? pickValue[0] : pickValue) as
+      | { metadata?: Record<string, unknown> | null }
+      | null
+      | undefined;
+    return {
+      result: r.result,
+      band: (pick?.metadata?.['band'] as Band) ?? null,
+      sport: (pick?.metadata?.['sport'] as string) ?? null,
+      settled_at: r.settled_at,
+    };
+  });
+  return { rows, unresolved: load.unresolved };
+}
+
+/** Wins and losses per band (null band included), from effective results. */
+export function summarizeBands(rows: BandRow[]): Map<Band, { settled: number; wins: number; losses: number }> {
+  const summary = new Map<Band, { settled: number; wins: number; losses: number }>();
+  for (const row of rows) {
+    const entry = summary.get(row.band) ?? { settled: 0, wins: 0, losses: 0 };
+    entry.settled += 1;
+    if (row.result === 'win') entry.wins += 1;
+    if (row.result === 'loss') entry.losses += 1;
+    summary.set(row.band, entry);
+  }
+  return summary;
+}
+
 async function main() {
   loadEnv();
 
@@ -69,39 +120,18 @@ async function main() {
   console.log(`Query window: settled_at >= ${afterDate}`);
   console.log(`Generated: ${new Date().toISOString()}\n`);
 
-  const { data: rows, error } = await sb
-    .from('settlement_records')
-    .select(`
-      result,
-      settled_at,
-      picks!inner(metadata)
-    `)
-    .gte('settled_at', afterDate)
-    .is('corrects_id', null) as {
-      data: Array<{
-        result: string | null;
-        settled_at: string;
-        picks: { metadata: Record<string, unknown> } | null;
-      }> | null;
-      error: unknown;
-    };
-
-  if (error || !rows) {
+  let fetched: BandFetchResult;
+  try {
+    fetched = await fetchBandRows(sb as unknown as ReadClient, afterDate);
+  } catch (error) {
     console.error('Failed to fetch:', error);
     process.exit(1);
   }
 
-  const mapped: BandRow[] = rows.map(r => ({
-    result: r.result,
-    band: (r.picks?.metadata?.['band'] as Band) ?? null,
-    sport: (r.picks?.metadata?.['sport'] as string) ?? null,
-    settled_at: r.settled_at,
-  }));
-
-  printReport(mapped, afterDate);
+  printReport(fetched.rows, afterDate, fetched.unresolved);
 }
 
-function printReport(rows: BandRow[], afterDate: string) {
+function printReport(rows: BandRow[], afterDate: string, unresolved: readonly UnresolvedPick[]) {
   const total = rows.length;
   const withBand = rows.filter(r => r.band !== null);
   const nullBand = rows.filter(r => r.band === null);
@@ -110,6 +140,7 @@ function printReport(rows: BandRow[], afterDate: string) {
   console.log(`| Metric | Value |`);
   console.log(`|--------|-------|`);
   console.log(`| Total settled (since ${afterDate}) | ${total} |`);
+  console.log(`| Unresolved correction chains (excluded) | ${formatUnresolvedSummary(unresolved)} |`);
   console.log(`| Picks with band data | ${withBand.length} (${pct(withBand.length, total)}) |`);
   console.log(`| Picks with null band | ${nullBand.length} (${pct(nullBand.length, total)}) |`);
 
@@ -135,18 +166,16 @@ function printReport(rows: BandRow[], afterDate: string) {
   console.log(`| Band | Settled | Wins | Win% | Losses | ROI (-110 assumption) |`);
   console.log(`|------|---------|------|------|--------|-----------------------|`);
 
+  const bandSummary = summarizeBands(rows);
   for (const band of presentBands) {
-    const bandRows = withBand.filter(r => r.band === band);
-    const wins = bandRows.filter(r => r.result === 'win').length;
-    const losses = bandRows.filter(r => r.result === 'loss').length;
-    console.log(`| ${String(band).padEnd(4)} | ${String(bandRows.length).padEnd(7)} | ${String(wins).padEnd(4)} | ${pct(wins, bandRows.length).padEnd(4)} | ${String(losses).padEnd(6)} | ${flatBetROI(wins, losses)} |`);
+    const { settled, wins, losses } = bandSummary.get(band)!;
+    console.log(`| ${String(band).padEnd(4)} | ${String(settled).padEnd(7)} | ${String(wins).padEnd(4)} | ${pct(wins, settled).padEnd(4)} | ${String(losses).padEnd(6)} | ${flatBetROI(wins, losses)} |`);
   }
 
   // Unclassified null-band rows if mixed
   if (nullBand.length > 0) {
-    const wins = nullBand.filter(r => r.result === 'win').length;
-    const losses = nullBand.filter(r => r.result === 'loss').length;
-    console.log(`| null | ${String(nullBand.length).padEnd(7)} | ${String(wins).padEnd(4)} | ${pct(wins, nullBand.length).padEnd(4)} | ${String(losses).padEnd(6)} | ${flatBetROI(wins, losses)} |`);
+    const { settled, wins, losses } = bandSummary.get(null)!;
+    console.log(`| null | ${String(settled).padEnd(7)} | ${String(wins).padEnd(4)} | ${pct(wins, settled).padEnd(4)} | ${String(losses).padEnd(6)} | ${flatBetROI(wins, losses)} |`);
   }
 
   // By sport × band (if data exists)
@@ -177,4 +206,6 @@ function printNotes(afterDate: string) {
   console.log(`- After UTV2-906 is deployed: re-run for first band-sliced accuracy report`);
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(e => { console.error(e); process.exit(1); });
+}

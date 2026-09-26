@@ -6,17 +6,13 @@ import { loadEnvironment } from '@unit-talk/config'
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-
-const env = loadEnvironment()
-const url = env.SUPABASE_URL ?? ''
-const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-if (!url || !key) { console.error('FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
-
-const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
-
-const args = process.argv.slice(2)
-const jsonMode = args.includes('--json')
-const saveFlag = args.includes('--save')
+import { fileURLToPath } from 'node:url'
+import {
+  formatUnresolvedSummary,
+  loadEffectiveSettlements,
+  type EffectiveSettlementLoad,
+  type ReadClient,
+} from './effective-settlements.js'
 
 const RED = '\x1b[31m', YELLOW = '\x1b[33m', GREEN = '\x1b[32m', CYAN = '\x1b[36m', RESET = '\x1b[0m', BOLD = '\x1b[1m', DIM = '\x1b[2m'
 
@@ -43,6 +39,7 @@ interface ChampionReport {
   high_score_pct: number
   settlement_win_rate: number | null
   clv_beat_rate: number | null
+  unresolved_settlement_picks: number
   stability_signal: string
 }
 
@@ -68,7 +65,63 @@ interface Decision {
   owner: string
 }
 
+/** Settlement sample cap for the champion/coverage sections (newest root first). */
+const SETTLEMENT_SAMPLE_PICKS = 500
+
+export interface SettlementSampleRow {
+  pick_id: string
+  result: string | null
+  payload: unknown
+}
+
+/**
+ * Effective settlements (tip of each correction chain) for picks whose ROOT
+ * settlement was created on/after `periodStartIso`, newest first, capped.
+ */
+export async function fetchPeriodSettlements(
+  client: ReadClient,
+  periodStartIso: string,
+): Promise<EffectiveSettlementLoad> {
+  return loadEffectiveSettlements(
+    client,
+    { dateColumn: 'created_at', after: periodStartIso, maxPicks: SETTLEMENT_SAMPLE_PICKS },
+    'payload',
+  )
+}
+
+export function toSettlementSampleRows(load: EffectiveSettlementLoad): SettlementSampleRow[] {
+  return load.effective.map(r => ({ pick_id: r.pick_id, result: r.result, payload: r.raw['payload'] ?? null }))
+}
+
+export function summarizeChampionSettlements(settlRows: SettlementSampleRow[]) {
+  const wins = settlRows.filter(r => r.result === 'win').length
+  const losses = settlRows.filter(r => r.result === 'loss').length
+  const winRate = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : null
+
+  const withCLV = settlRows.filter(r => {
+    const p = r.payload as Record<string,unknown> | null
+    return p && ('beatsClosingLine' in p || 'clvRaw' in p)
+  })
+  const beatCLV = withCLV.filter(r => {
+    const p = r.payload as Record<string,unknown>
+    return p.beatsClosingLine === true
+  })
+  const clvBeatRate = withCLV.length > 0 ? Math.round((beatCLV.length / withCLV.length) * 100) : null
+  return { wins, losses, winRate, withCLV, beatCLV, clvBeatRate }
+}
+
 async function main() {
+  const env = loadEnvironment()
+  const url = env.SUPABASE_URL ?? ''
+  const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  if (!url || !key) { console.error('FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
+
+  const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
+
+  const args = process.argv.slice(2)
+  const jsonMode = args.includes('--json')
+  const saveFlag = args.includes('--save')
+
   const now = new Date()
   const periodStart = new Date(now)
   periodStart.setDate(now.getDate() - 30)
@@ -110,27 +163,9 @@ async function main() {
   const highScore = promoRows.filter(r => (r.promotion_score ?? 0) > 0.7)
   const highScorePct = promoRows.length > 0 ? Math.round((highScore.length / promoRows.length) * 100) : 0
 
-  const { data: settlements } = await db
-    .from('settlement_records')
-    .select('id, pick_id, result, payload')
-    .is('corrects_id', null)
-    .gte('created_at', periodStart.toISOString())
-    .limit(500)
-
-  const settlRows = settlements ?? []
-  const wins = settlRows.filter(r => r.result === 'win').length
-  const losses = settlRows.filter(r => r.result === 'loss').length
-  const winRate = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : null
-
-  const withCLV = settlRows.filter(r => {
-    const p = r.payload as Record<string,unknown> | null
-    return p && ('beatsClosingLine' in p || 'clvRaw' in p)
-  })
-  const beatCLV = withCLV.filter(r => {
-    const p = r.payload as Record<string,unknown>
-    return p.beatsClosingLine === true
-  })
-  const clvBeatRate = withCLV.length > 0 ? Math.round((beatCLV.length / withCLV.length) * 100) : null
+  const settlementLoad = await fetchPeriodSettlements(db as unknown as ReadClient, periodStart.toISOString())
+  const settlRows = toSettlementSampleRows(settlementLoad)
+  const { wins, losses, winRate, withCLV, beatCLV, clvBeatRate } = summarizeChampionSettlements(settlRows)
 
   const stabilitySignal = winRate === null ? 'UNKNOWN — no settled picks in period'
     : winRate >= 55 ? 'STRONG — win rate above threshold'
@@ -143,6 +178,7 @@ async function main() {
     high_score_pct: highScorePct,
     settlement_win_rate: winRate,
     clv_beat_rate: clvBeatRate,
+    unresolved_settlement_picks: settlementLoad.unresolved.length,
     stability_signal: stabilitySignal,
   }
 
@@ -289,6 +325,7 @@ async function main() {
   console.log(`  Scored picks: ${champion.total_picks_with_score} (high-score ≥0.7: ${champion.high_score_picks}, ${champion.high_score_pct}%)`)
   console.log(`  Settlement win rate: ${champion.settlement_win_rate !== null ? `${champion.settlement_win_rate}%` : 'N/A'} (wins=${wins}, losses=${losses})`)
   console.log(`  CLV beat rate: ${champion.clv_beat_rate !== null ? `${champion.clv_beat_rate}%` : 'N/A'} (${beatCLV.length}/${withCLV.length} with CLV data)`)
+  console.log(`  Unresolved correction chains (excluded): ${formatUnresolvedSummary(settlementLoad.unresolved)}`)
   const stabColor = stabilitySignal.startsWith('STRONG') ? GREEN : stabilitySignal.startsWith('WEAK') ? RED : YELLOW
   console.log(`  Signal: ${stabColor}${champion.stability_signal}${RESET}\n`)
 
@@ -339,4 +376,6 @@ function savePacket(packet: PortfolioPacket): string {
   return outPath
 }
 
-main().catch(e => { console.error(e); process.exit(1) })
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(e => { console.error(e); process.exit(1) })
+}
