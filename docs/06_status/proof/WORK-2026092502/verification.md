@@ -115,7 +115,7 @@ production backfill remains PM-reserved (`WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`
 ## PM Bounce Repairs
 
 Two safety repairs required by the PM review of #1650. Scope: `scripts/warehouse/config.ts`,
-`backfill.ts`, `cli.ts` and three existing test files. `package.json` is unchanged.
+`backfill.ts`, `conveyor.ts`, `cli.ts` and three existing test files. `package.json` is unchanged.
 
 **1. One fail-closed redaction boundary for log output.** `redactLogEvent` in `config.ts`
 redacts every string in a log event at any depth (keys, arrays, `Error` values) through
@@ -123,11 +123,16 @@ redacts every string in a log event at any depth (keys, arrays, `Error` values) 
 the fixed `REDACTION_FAILED_EVENT` and the original event is withheld, never emitted raw.
 `runBackfill` wraps its sink with it, so the `stopped`, `ledger_failed` and final-result events,
 and the conveyor's per-window lines that receive the same wrapper, carry no raw failure text. The
-CLI writes every JSON document through `formatRedactedJson`, passes a redacting `log` to both
+conveyor's own default sink, used when a caller passes no `log`, also writes only redacted
+events. The CLI writes every JSON document through `formatRedactedJson`, passes a redacting `log` to both
 `runConveyor` and `runBackfill`, and writes error text through `redactMessage`. `redactSecrets`
 now removes URI userinfo, `password=` / `key=` / `secret=` / `token=` style pairs, Bearer
 tokens, JWTs, AWS-style access key ids and Supabase keys, and substitutes the value of every
 inventory alias, and of any credential-named variable, present in the environment.
+
+Not changed, and outside the PM item: the backfill ledger object written to the warehouse bucket
+still records each window's raw `failures`. That object is not workflow stdout; it lives in the
+writer-only bucket.
 
 **2. Complete production credential inventory.** `PRODUCTION_CREDENTIAL_ENV_KEYS` in `config.ts`
 is the single list; `RESEARCH_FORBIDDEN_ENV_KEYS` and the redactor both derive from it. Added:
@@ -139,10 +144,10 @@ never in the list.
 
 ```
 $ pnpm exec tsx --test scripts/warehouse/<each>.test.ts
-config 28, conveyor-workflow 22, conveyor 31, db-audit 12, export-partition 18,
+config 28, conveyor-workflow 22, conveyor 32, db-audit 12, export-partition 18,
 manifest 13, object-layout 12, object-store 9, query 5, verify-archive 12
-# tests 162
-# pass 162
+# tests 163
+# pass 163
 # fail 0
 
 $ pnpm type-check
@@ -168,6 +173,7 @@ the file was restored; all suites were green after restore.
 | R9 | `redactLogEvent` fails open | redactLogEvent fails closed to fixed text when redaction throws |
 | R10 | URI userinfo pass removed | 3 `redactSecrets` / `redactLogEvent` tests |
 | R11 | CLI stderr bypasses `redactMessage` | the static CLI boundary test; a CLI error carrying a connection string reaches stderr redacted |
+| R12 | conveyor default sink writes raw JSON | redaction: the conveyor with no log sink writes only redacted events to stdout |
 
 ## Merge SHA Binding
 
