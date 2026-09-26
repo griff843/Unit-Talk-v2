@@ -1,6 +1,6 @@
 # PROOF: UTV2-1954
 
-MERGE_SHA: pending merge
+MERGE_SHA: c8546977676b1e07dbc0398fe7dd446a5a473d2a
 
 > Pre-merge, the merge row is intentionally left unbound. The Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -297,7 +297,7 @@ this workstation. The failure is the containment `SUPABASE_URL`, not a defect.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: c8546977676b1e07dbc0398fe7dd446a5a473d2a
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1654
 Approved PR head: pending merge
 Execution SHA: 27f6392f751474d2ab29d9afc0e90a541d94e4c7

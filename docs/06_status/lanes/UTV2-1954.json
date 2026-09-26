@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1954-replay-fidelity",
   "branch": "claude/utv2-1954-replay-fidelity",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "c8546977676b1e07dbc0398fe7dd446a5a473d2a",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1654",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1954/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-26T02:34:54.827Z",
-  "heartbeat_at": "2026-09-26T02:49:03.552Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-26T13:00:54.653Z",
+  "closed_at": "2026-09-26T13:00:54.653Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1954-replay-fidelity.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-26T13:00:51.811Z",
+      "verdict": "pass",
+      "merge_sha": "c8546977676b1e07dbc0398fe7dd446a5a473d2a",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
