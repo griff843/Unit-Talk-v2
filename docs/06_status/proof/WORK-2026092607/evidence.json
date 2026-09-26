@@ -1,0 +1,74 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092607",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "386c008dbcd0e8171526bd31fa5f6bbad74478b5",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "386c008dbcd0e8171526bd31fa5f6bbad74478b5 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-26T17:04:14.000Z"
+  },
+  "what_this_lane_delivers": {
+    "defect": "The conveyor archived only provider_offer_history; system_runs (1.3 GB), raw_payloads (694 MB) and odds_snapshots (427 MB) had no archive path and stayed hot indefinitely.",
+    "repair": "raw/{table}/ policy entries at 21/45/90-day hot retention, the same entries as backfill sources, workflow choices bound to BACKFILL_SOURCES, domain required for canonical entries.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6983,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level": "PASS; 12 changed files; no R-level artifacts required",
+    "warehouse_battery": {
+      "pass": 169,
+      "fail": 0
+    },
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "system_runs removed from workflow source choices",
+        "observed": "red"
+      },
+      {
+        "id": "M2",
+        "mutation": "system_runs removed from BACKFILL_SOURCES",
+        "observed": "red"
+      },
+      {
+        "id": "M3",
+        "mutation": "requireDomain guesses a domain",
+        "observed": "red"
+      },
+      {
+        "id": "M4",
+        "mutation": "system_runs windowed on finished_at",
+        "observed": "red"
+      }
+    ],
+    "verify": {
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. CI runs verify."
+    }
+  },
+  "runtime_proof": {
+    "profile": "cli-process",
+    "status": "pass",
+    "method": "runConveyor/runBackfill against in-process DuckDB and an in-memory store with read-back verification, including a JSON-column telemetry table."
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "secrets_or_environments_changed": false,
+    "archive_performed": false,
+    "grants_applied": false
+  },
+  "pr_url": "PR_URL_TBD"
+}
