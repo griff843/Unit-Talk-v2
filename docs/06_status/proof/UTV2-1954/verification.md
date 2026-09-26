@@ -11,7 +11,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1954-replay-fidelity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1654
-Head SHA: 262add2af229797ec8b8975549c98741142d81c6
+Head SHA: 3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a
 result: pass
 
 ## ASSERTIONS:
@@ -46,7 +46,7 @@ counterfactual contract. Fidelity to the recorded decision is the job of
 
 ## EVIDENCE:
 
-Measured on head `13b1ca56dfe500cc419ad00a7bf0001fa72b0903` in the lane worktree, and re-anchored to `262add2af229797ec8b8975549c98741142d81c6`.
+Measured on head `13b1ca56dfe500cc419ad00a7bf0001fa72b0903` in the lane worktree, and re-anchored to `3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a`.
 That commit changes only the live-DB proof file (see "Staging run 36212886508" below). No file
 in `pnpm test`, the affected suites or the mutation battery changed (`git diff 13b1ca56d 309fd866a`
 touches no implementation or unit-test file), so those figures carry forward. At `309fd866a`,
@@ -85,7 +85,7 @@ $ pnpm exec eslint apps/api/src/promotion-edge-integration.test.ts \
 exit 0
 
 $ npx tsx scripts/ci/r-level-check.ts --base af2f8e11ab4f813e4bc339b23bcd9ccf113f301a \
-    --head 262add2af229797ec8b8975549c98741142d81c6
+    --head 3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a
 Verdict: PASS
 Changed files: 11
 Rules matched: promotion-scoring
@@ -241,16 +241,22 @@ this workstation. The failure is the containment `SUPABASE_URL`, not a defect.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1654
 Approved PR head: pending merge
-Execution SHA: 262add2af229797ec8b8975549c98741142d81c6
+Execution SHA: 3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a
 
-### Re-anchor to `262add2af229797ec8b8975549c98741142d81c6`
+### Re-anchor to `3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a`
 
 Branch refreshed from origin/main `1526f7e2d` after main advanced. The merge brings in only main's own
 changes: `.ops/sync/WORK-2026092602.yml`, `.ops/sync/WORK-2026092603.yml`, `.ops/work/WORK-2026092603.md`, `apps/api/src/t1-proof-atomicity.test.ts`, `docs/06_status/lanes/WORK-2026092602.json`, `docs/06_status/lanes/WORK-2026092603.json`, `docs/06_status/proof/WORK-2026092602/diff-summary.md`, `docs/06_status/proof/WORK-2026092602/evidence.json`, `docs/06_status/proof/WORK-2026092602/verification.md`, `docs/06_status/readiness/readiness-score.json`, `scripts/ci/seed-staging-fixtures.ts`, `scripts/ci/staging-board-drain.ts`, `scripts/ci/staging-path-enforcement.test.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
 withdrawn: `309fd866a2bf1967d8e412629c0cc0ea649a1e13`. `verify` re-runs on the new head.
 
-### Re-anchor to `262add2af229797ec8b8975549c98741142d81c6`
+### Re-anchor to `3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a`
 
 Branch refreshed from origin/main `7771bd2d6` after main advanced. The merge brings in only main's own
 changes: `.ops/sync/WORK-2026092604.yml`, `.ops/work/WORK-2026092604.md`, `docs/06_status/lanes/WORK-2026092602.json`, `docs/06_status/lanes/WORK-2026092604.json`, `docs/06_status/proof/WORK-2026092602/diff-summary.md`, `docs/06_status/proof/WORK-2026092602/evidence.json`, `docs/06_status/proof/WORK-2026092602/verification.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
 withdrawn: `3e4967df29366ef408222bbf87a7b0c2be018616`. `verify` re-runs on the new head.
+
+### Re-anchor to `3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a`
+
+Branch refreshed from origin/main `744ff2f6a` after main advanced. The merge brings in only main's own
+changes: `docs/06_status/readiness/readiness-score.json`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `262add2af229797ec8b8975549c98741142d81c6`. `verify` re-runs on the new head.
