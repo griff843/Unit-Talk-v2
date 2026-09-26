@@ -208,6 +208,65 @@ ok 4 - UTV2-1954 live-DB: a persisted row stripped of its scoring context is not
 
 Every other T1 live suite in that job also passed (`# fail 0` for each).
 
+### PM bounce repair: agreement includes the persisted score column (`27f6392f7`)
+
+The PM verdict found that `replayRecordedPromotion` could return `agrees: true` when
+`payload.score` matched the replay but the row's own `pick_promotion_history.score` column did
+not, and that the live proof checked that column outside the helper, which protects no caller.
+
+- The helper now takes the column: `replayRecordedPromotion(payload, recorded: RecordedPromotionRow)`
+  where `RecordedPromotionRow = { status: string; decidedAt: string; score: number | string | null | undefined }`.
+- `agrees` = `statusMatches && scoreMatches && persistedScoreMatches`. `scoreMatches` is the
+  existing `payload.score` check (1e-9). `persistedScoreMatches` compares the replayed score, as
+  the column would store it, to the column value. `disagreements` names each field that did not
+  reproduce (`status`, `payload-score`, `persisted-score`).
+- `toPromotionScoreColumn(value)` applies numeric(5,2) semantics explicitly (column type confirmed
+  as `score numeric(5,2)` in the baseline migration; `number | null` in `database.types.ts`):
+  half away from zero on the decimal text Postgres receives, not the binary double (60.145 is
+  stored as 60.15; `Math.round(x * 100) / 100` gives 60.14), number or string input, and null
+  beyond +/-999.99.
+- A null, absent, non-finite or unreadable column returns
+  `{ outcome: 'not-reproducible', reason: 'persisted-score-missing' }`. It never agrees.
+- `replayPromotion`'s counterfactual caller-policy contract is unchanged.
+
+Unit coverage in `apps/api/src/promotion-edge-integration.test.ts`:
+
+- a row where `payload.score` matches the replay but the column is 60.14, 60.16, `'60.14'` or
+  70.76. The helper returns `agrees: false` with `disagreements: ['persisted-score']`.
+- the column compared at numeric(5,2) precision: 60.15, `'60.15'`, `'60.150'`, `' 60.15 '` and
+  the unrounded score all agree.
+- rounding cases for `toPromotionScoreColumn`: 60.145, -60.145, 0.005, overflow, and unreadable
+  input.
+- a column of null, undefined, NaN, Infinity, `'abc'` or 1000 makes the row not reproducible.
+- every disagreeing field is named.
+
+In the live proof, `apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts` hands the helper
+the row's real `score` column and asserts `agrees` from the helper. A fifth test builds a
+deliberately inconsistent row-shaped input from each real persisted row, with the payload
+untouched and the column moved by one cent. It asserts that the helper disagrees on
+`persisted-score` only, and that a null column is not reproducible. That test runs in the
+`Writable DB proof (staging only)` job. It was not run locally, because `local.env` targets
+production.
+
+Results after the repair:
+
+| Command | Result |
+|---|---|
+| `pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts` | 116 tests, 116 pass, 0 fail |
+| `pnpm type-check` | exit 0 |
+| `pnpm exec eslint` on the three changed source files | exit 0 |
+| `pnpm test` | exit 0; 6927 tests, 6927 pass, 0 fail |
+
+Mutations, each applied to `packages/domain/src/promotion.ts` and then restored (byte-identical,
+confirmed with `cmp`, 116/116 green after):
+
+| Mutation | Result | Failing test(s) |
+|---|---|---|
+| (a) `agrees` drops `persistedScoreMatches` | 115 pass, 1 fail | payload.score matches the replay but the score column differs -> the helper disagrees |
+| (b) `toPromotionScoreColumn` returns the raw value with no numeric(5,2) rounding | 113 pass, 3 fail | the score column is compared at numeric(5,2) precision...; toPromotionScoreColumn applies Postgres numeric(5,2) rounding; an empty or unreadable score column refuses the replay |
+| (b2) rounding on the binary double (`Math.round(x * 100) / 100`) | 115 pass, 1 fail | toPromotionScoreColumn applies Postgres numeric(5,2) rounding |
+| (c) a null column skips the refusal and counts as a match | 115 pass, 1 fail | an empty or unreadable score column refuses the replay, never agrees |
+
 ## Verification
 - [x] `pnpm type-check`: exit 0
 - [x] `pnpm test`: exit 0, with 6915 tests, 6915 pass and 0 fail
