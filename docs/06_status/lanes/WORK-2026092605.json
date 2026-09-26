@@ -8,7 +8,7 @@
   "branch": "codex/work-2026092605-cc-outbox-pagination",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1658",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/e2e/recovery/delivery-truth.spec.ts",
@@ -21,9 +21,9 @@
     "docs/06_status/proof/WORK-2026092605/verification.md",
     "docs/06_status/proof/WORK-2026092605/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-26T12:40:34.951Z",
-  "heartbeat_at": "2026-09-26T12:40:34.951Z",
+  "heartbeat_at": "2026-09-26T12:53:50.474Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026092605-cc-outbox-pagination.json",
