@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092605
 
-MERGE_SHA: pending merge
+MERGE_SHA: eb5559426b790e694b38a1de85ec99891790d238
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -49,7 +49,7 @@ Verdict: PASS
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: eb5559426b790e694b38a1de85ec99891790d238
 PR: pending
 Approved PR head: pending merge
 Execution SHA: 87ad3a4a6e8b2469d7de8d452a5386a90cbcf1c5
