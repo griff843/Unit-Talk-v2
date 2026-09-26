@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092602
 
-MERGE_SHA: fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837
+MERGE_SHA: pending merge
 
 > Pre-merge, the merge row carries the last non-proof commit. `post-merge-lane-close.yml` rebinds
 > merge authority after GitHub supplies the merged-PR attestation.
@@ -23,6 +23,12 @@ result: pass
 - [x] Voiding is a status -> voided update through `transition_pick_lifecycle`, never a delete. `voided` is terminal, so it is not reversible through the app.
 - [x] The drain runs only inside the staging-asserted CI seed step and logs the voided count.
 - [x] The atomicity suite voids its own STEP 3 pick in `after()`; what the suite proves is unchanged.
+
+## EVIDENCE:
+
+Runtime effect on staging (`xskgrzbteyqdufktjrjx`), CI run 36220299030, job "Writable DB proof (staging only)",
+seed step log line: voided 537 — `{"t1-proof-atomicity-enqueue":220,"utv2-1022-risk-proof":110,"utv2-1251-reject-proof":101,"utv2-1842-server-authorized":106}`;
+skipped Track Only 524; unmatched 0. Rows are voided through `transition_pick_lifecycle`, never deleted.
 
 ## Verification
 
@@ -54,3 +60,9 @@ UTV2-1022 110, UTV2-1251-reject 101, UTV2-1842 106, unmatched 0; Track Only excl
 `pnpm verify` and `pnpm test:db` were not run locally: local.env targets production and
 `ci:assert-staging` refuses it. The drain's runtime effect is proven by the CI job
 "Writable DB proof (staging only)".
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1655
+Execution SHA: fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837
