@@ -5,6 +5,8 @@ import path from 'node:path';
 import {
   type ObjectStoreConfig,
   resolveObjectStoreConfig,
+  resolveResearchObjectStoreConfig,
+  researchForbiddenPresent,
   WAREHOUSE_ENV_KEYS,
 } from './config.js';
 
@@ -279,6 +281,29 @@ export function createObjectStoreFromEnv(env: NodeJS.ProcessEnv = process.env): 
     return { ok: true, store: new LocalObjectStore(localRoot.trim(), 'local-warehouse') };
   }
   const resolved = resolveObjectStoreConfig(env);
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      code: resolved.code,
+      missing: resolved.missing,
+      message: resolved.message,
+    };
+  }
+  return { ok: true, store: new S3ObjectStore(resolved.config) };
+}
+
+/**
+ * The store a research or read command reads through: the reader key only.
+ * The refusal comes first, ahead of the local-root branch too, so a research
+ * command started beside the writer does not run even against a directory.
+ */
+export function createResearchObjectStoreFromEnv(env: NodeJS.ProcessEnv = process.env): StoreResolution {
+  const forbidden = researchForbiddenPresent(env);
+  const localRoot = env[WAREHOUSE_ENV_KEYS.localRoot];
+  if (forbidden.length === 0 && typeof localRoot === 'string' && localRoot.trim().length > 0) {
+    return { ok: true, store: new LocalObjectStore(localRoot.trim(), 'local-warehouse') };
+  }
+  const resolved = resolveResearchObjectStoreConfig(env);
   if (!resolved.ok) {
     return {
       ok: false,
