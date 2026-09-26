@@ -3,7 +3,13 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { describeConfig, redactSecrets, resolveSourceDsn } from './config.js';
+import {
+  describeConfig,
+  formatRedactedJson,
+  redactMessage,
+  renderDoctorSummary,
+  resolveSourceDsn,
+} from './config.js';
 import { openDuckDb } from './duckdb.js';
 import {
   CONVEYOR_HEARTBEAT_KEY,
@@ -14,7 +20,8 @@ import {
   type RetentionPolicyEntry,
 } from './conveyor.js';
 import { assertSourceNotRowFiltered, attachPostgres, qualifyAttached } from './export-partition.js';
-import { createObjectStoreFromEnv } from './object-store.js';
+import { createObjectStoreFromEnv, createResearchObjectStoreFromEnv } from './object-store.js';
+import { BACKFILL_SOURCES, isPruneHeldRelation, planBackfill, runBackfill } from './backfill.js';
 import { REPRESENTATIVE_QUERY, runWarehouseQuery } from './query.js';
 import { assessArchiveCandidate, runDbAudit, type SqlRunner } from './db-audit.js';
 import { decidePrune } from './verify-archive.js';
@@ -25,8 +32,9 @@ import { parseManifest } from './manifest.js';
  *
  * Every subcommand prints one JSON document and exits non-zero on failure, so a
  * scheduled run, a CI step and an operator at a terminal all read the same
- * thing. No subcommand prints a secret: error text goes through `redactSecrets`
- * before it reaches stdout or stderr.
+ * thing. No subcommand prints a secret: every JSON document and log event goes
+ * through `formatRedactedJson`, and error text through `redactMessage`, before
+ * it reaches stdout or stderr. Both fail closed to fixed text.
  *
  * There is no `prune` subcommand, and adding one is a separate, PM-gated
  * decision. This lane archives and verifies; it does not delete.
@@ -34,11 +42,13 @@ import { parseManifest } from './manifest.js';
 
 const USAGE = `unit-talk warehouse
 
-  doctor                          Report configuration presence (never values)
+  doctor    [--research]          Report configuration presence (never values)
   plan      [--policy <file>] [--today YYYY-MM-DD] [--window-date YYYY-MM-DD]
   conveyor  [--policy <file>] [--today YYYY-MM-DD] [--window-date YYYY-MM-DD] [--dry-run]
+  backfill  --source ${Object.keys(BACKFILL_SOURCES).join('|')}
+            --from YYYY-MM-DD --to YYYY-MM-DD [--max-windows N] [--today YYYY-MM-DD] [--dry-run]
   staleness [--max-age-hours N]   Read the conveyor heartbeat from the bucket
-  query     --prefix <p> [--sql <file>]
+  query     --prefix <p> [--sql <file>]   Reader key only; refuses beside the writer
   verify    --manifest <key>      Re-decide prune eligibility from a stored manifest
   audit     [--rules <file>] [--top N]
   candidate --relation <schema.relation> [--time-column <col>]
@@ -73,7 +83,12 @@ function parseArgs(argv: string[]): Args {
 }
 
 function emit(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+  process.stdout.write(`${formatRedactedJson(value, 2)}\n`);
+}
+
+/** The log sink handed to the conveyor and the backfill: one redacted line per event. */
+function logEvent(event: Record<string, unknown>): void {
+  process.stdout.write(`${formatRedactedJson(event)}\n`);
 }
 
 function repoSha(): string {
@@ -104,6 +119,29 @@ function requireFlag(args: Args, name: string): string {
 function loadPolicy(args: Args): RetentionPolicyEntry[] {
   const file = args.flags.get('policy');
   return file ? loadJsonFile<RetentionPolicyEntry[]>(file) : DEFAULT_RETENTION_POLICY;
+}
+
+/**
+ * Every required flag checked at once, so a missing-argument failure names the
+ * whole corrected invocation rather than one flag per attempt.
+ */
+function requireFlags(args: Args, names: string[], invocation: string): Map<string, string> {
+  const missing = names.filter((name) => !args.flags.get(name));
+  if (missing.length > 0) {
+    throw new Error(
+      `${missing.map((name) => `--${name}`).join(', ')} ${missing.length === 1 ? 'is' : 'are'} required. ` +
+        `Full invocation: ${invocation}`,
+    );
+  }
+  return new Map(names.map((name) => [name, args.flags.get(name)!]));
+}
+
+function parseMaxWindows(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`--max-windows must be a positive integer; received ${JSON.stringify(value)}`);
+  }
+  return Number(value);
 }
 
 function requireStore(): ReturnType<typeof createObjectStoreFromEnv> & { ok: true } {
@@ -146,7 +184,26 @@ async function main(): Promise<number> {
     case 'doctor': {
       const description = describeConfig();
       emit({ command: 'doctor', ...description });
-      return description.object_store_ready ? 0 : 1;
+      const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+      if (summaryPath) {
+        fs.appendFileSync(summaryPath, renderDoctorSummary(description));
+      }
+      if (args.bools.has('research')) {
+        // The reader's question, not the conveyor's: can a research command
+        // start here? Names of any refusing credential, never their values.
+        if (!description.research_ready) {
+          const reason =
+            description.research_forbidden_present.length > 0
+              ? `refused beside ${description.research_forbidden_present.join(', ')}`
+              : 'the reader key does not resolve';
+          process.stderr.write(`warehouse research: not ready -- ${reason}\n`);
+        }
+        return description.research_ready ? 0 : 1;
+      }
+      if (description.archive_state !== 'ready') {
+        process.stderr.write(`warehouse archive: ${description.archive_state} -- nothing was archived\n`);
+      }
+      return description.archive_state === 'ready' ? 0 : 1;
     }
 
     case 'plan': {
@@ -189,8 +246,68 @@ async function main(): Promise<number> {
           store,
           relationExpr: (item) => qualifyAttached('src', item.relation),
           exporterRepoSha: repoSha(),
+          log: logEvent,
         });
         emit({ command: 'conveyor', ...result });
+        return result.ok ? 0 : 1;
+      } finally {
+        await attached.detach();
+        await connection.close();
+      }
+    }
+
+    case 'backfill': {
+      const flags = requireFlags(
+        args,
+        ['source', 'from', 'to'],
+        `warehouse backfill --source ${Object.keys(BACKFILL_SOURCES).join('|')} --from YYYY-MM-DD --to YYYY-MM-DD [--max-windows N] [--dry-run]`,
+      );
+      const plan = planBackfill({
+        source: flags.get('source')!,
+        from: flags.get('from')!,
+        to: flags.get('to')!,
+        today: args.flags.get('today') ?? new Date().toISOString().slice(0, 10),
+        maxWindows: parseMaxWindows(args.flags.get('max-windows')),
+      });
+      const planned = {
+        source: plan.source,
+        relation: plan.relation,
+        from: plan.from,
+        to: plan.to,
+        run_date: plan.run_date,
+        prune_hold: plan.prune_hold,
+        ledger_key: plan.ledger_key,
+        windows: plan.windows.map((window) => ({
+          date: window.date,
+          data_key: window.data_key,
+          manifest_key: window.manifest_key,
+        })),
+      };
+      if (args.bools.has('dry-run')) {
+        // Plan only. No store is resolved and no source is attached, so a dry
+        // run cannot write a ledger, a manifest or an object.
+        emit({ command: 'backfill', dry_run: true, ...planned });
+        return 0;
+      }
+
+      const store = requireStore().store;
+      const dsn = resolveSourceDsn();
+      if (!dsn.ok) {
+        throw new Error(dsn.message);
+      }
+      const connection = await openDuckDb();
+      const attached = await attachPostgres(connection, dsn.config.dsn);
+      try {
+        await assertSourceNotRowFiltered(connection, 'src', plan.relation);
+        const result = await runBackfill({
+          plan,
+          connection,
+          store,
+          relationExpr: (item) => qualifyAttached('src', item.relation),
+          exporterRepoSha: repoSha(),
+          log: logEvent,
+        });
+        emit({ command: 'backfill', ...result });
         return result.ok ? 0 : 1;
       } finally {
         await attached.detach();
@@ -208,7 +325,13 @@ async function main(): Promise<number> {
     }
 
     case 'query': {
-      const store = requireStore().store;
+      // The reader key only. With the writer or a production credential in
+      // this environment, this refuses before anything is opened.
+      const resolved = createResearchObjectStoreFromEnv();
+      if (!resolved.ok) {
+        throw new Error(resolved.message);
+      }
+      const store = resolved.store;
       const sqlFile = args.flags.get('sql');
       const result = await runWarehouseQuery({
         store,
@@ -228,7 +351,19 @@ async function main(): Promise<number> {
       }
       const manifest = parseManifest(body.toString('utf8'));
       const decision = decidePrune(manifest);
-      emit({ command: 'verify', manifest_key: key, ...decision });
+      // A verified manifest for a held source still reports not eligible: the
+      // hold is policy, and no manifest can lift it. The exit code reports the
+      // verification, which the hold does not change.
+      const held = isPruneHeldRelation(manifest.source.relation);
+      emit({
+        command: 'verify',
+        manifest_key: key,
+        ...decision,
+        verified: decision.eligible,
+        prune_hold: held,
+        eligible: decision.eligible && !held,
+        reasons: held ? [...decision.reasons, 'prune_hold'] : decision.reasons,
+      });
       return decision.eligible ? 0 : 1;
     }
 
@@ -273,6 +408,6 @@ main()
   })
   .catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${redactSecrets(message)}\n`);
+    process.stderr.write(`${redactMessage(message)}\n`);
     process.exitCode = 1;
   });

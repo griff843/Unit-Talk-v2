@@ -118,14 +118,23 @@ jobs:
         run: |
           # SCRIPTS_PATH expands on the runner (from DEPLOY_PATH env var) before SSH
           SCRIPTS_PATH="${DEPLOY_PATH}/scripts"
+          # WORK-2026092403: these lines used to redirect into /var/log, which
+          # is root:syslog 0775. cron runs them as the deploy user, the shell
+          # cannot open the log file, and the command never starts -- so the
+          # disk alert and the health watcher had never run (no log file ever
+          # existed on the host, 2026-09-24). Logs now go under DEPLOY_PATH,
+          # which the deploy user owns, and the directory is created here.
+          LOG_PATH="${DEPLOY_PATH}/logs"
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            mkdir -p '${LOG_PATH}'
+
             # Health watcher: every 2 minutes
             (crontab -l 2>/dev/null | grep -v container-health-watch; \
-             printf '*/2 * * * * ${SCRIPTS_PATH}/container-health-watch.sh >> /var/log/unit-talk-health-watch.log 2>&1\n') | crontab -
+             printf '*/2 * * * * ${SCRIPTS_PATH}/container-health-watch.sh >> ${LOG_PATH}/unit-talk-health-watch.log 2>&1\n') | crontab -
 
             # Disk alert: every hour at minute 5 (avoids congestion at :00)
             (crontab -l 2>/dev/null | grep -v disk-alert; \
-             printf '5 * * * * ${SCRIPTS_PATH}/disk-alert.sh >> /var/log/unit-talk-disk-alert.log 2>&1\n') | crontab -
+             printf '5 * * * * ${SCRIPTS_PATH}/disk-alert.sh >> ${LOG_PATH}/unit-talk-disk-alert.log 2>&1\n') | crontab -
 
             echo 'Installed cron jobs:'
             crontab -l | grep -E 'container-health-watch|disk-alert' || echo '(none found — check DEPLOY_PATH expansion)'

@@ -11,12 +11,25 @@ name: Warehouse Archive Conveyor
 #     subcommand. A destructive production prune is a separate, PM-authorized
 #     action (docs/05_operations/FIRST_ARCHIVE_CANDIDATE_PACKET.md).
 #   * The job reads the source database through a READ_ONLY DuckDB attachment.
-#   * With no archive credentials configured the run exits cleanly after
-#     reporting that it is not configured — it never falls back to a local
-#     directory or a public bucket.
+#   * With no archive credentials configured the run FAILS at `warehouse
+#     doctor`, whose job summary names the state (`not_provisioned` or
+#     `incomplete`) and says that nothing was archived. It never falls back to
+#     a local directory or a public bucket, and it never reports success for an
+#     archive that did not happen: an archive that is not running is stale,
+#     never unknown (WAREHOUSE_ARCHIVE_CONTRACT.md §8).
 #   * Secrets reach the process only as environment variables from the GitHub
 #     secret store, are never echoed, and every error message is redacted
 #     through `redactSecrets` before it is printed.
+#   * Both jobs run in the `warehouse-archive` environment, whose secrets are
+#     scoped to `main`, and both refuse as their first step unless the run is
+#     on refs/heads/main. Dispatch inputs reach the shell only as environment
+#     variables, never interpolated into a command line.
+#
+# Backfill mode (`mode: backfill`) archives an explicit inclusive range of
+# closed UTC days for one named source, oldest first, one window per conveyor
+# run, stopping at the first failed window
+# (docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md). Starting one
+# against production is a PM-reserved action; the schedule never runs it.
 
 on:
   schedule:
@@ -25,8 +38,36 @@ on:
     - cron: '17 4 * * *'
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'conveyor = the daily window (or one window_date); backfill = an explicit from..to range for one source.'
+        required: false
+        type: choice
+        options:
+          - conveyor
+          - backfill
+        default: conveyor
       window_date:
-        description: 'Backfill one specific UTC day (YYYY-MM-DD). Blank = the day that just left hot retention.'
+        description: 'Conveyor mode: archive one specific UTC day (YYYY-MM-DD). Blank = the day that just left hot retention.'
+        required: false
+        type: string
+      source:
+        description: 'Backfill mode: the source to archive.'
+        required: false
+        type: choice
+        options:
+          - provider_offer_history
+          - provider_offers_legacy_quarantine
+        default: provider_offer_history
+      from:
+        description: 'Backfill mode: first UTC day, inclusive (YYYY-MM-DD).'
+        required: false
+        type: string
+      to:
+        description: 'Backfill mode: last UTC day, inclusive (YYYY-MM-DD). At most 62 days after from.'
+        required: false
+        type: string
+      max_windows:
+        description: 'Backfill mode: refuse the run if the range holds more windows than this. Blank = 62.'
         required: false
         type: string
       dry_run:
@@ -35,9 +76,9 @@ on:
         type: boolean
         default: false
 
-# One conveyor at a time. Two runs over the same window would be idempotent by
-# construction, but serializing them keeps the object store from serving a
-# half-written read to the verifier of the other run.
+# One archive run at a time, conveyor or backfill. Two runs over the same
+# window would be idempotent by construction, but serializing them keeps the
+# object store from serving a half-written read to the verifier of the other.
 concurrency:
   group: warehouse-archive-conveyor
   cancel-in-progress: false
@@ -48,10 +89,21 @@ permissions:
 jobs:
   conveyor:
     name: Archive one closed window per source
+    if: ${{ github.event_name == 'schedule' || inputs.mode != 'backfill' }}
     runs-on: ubuntu-latest
+    environment: warehouse-archive
     timeout-minutes: 45
 
     steps:
+      - name: Refuse unless running from main
+        env:
+          RUN_REF: ${{ github.ref }}
+        run: |
+          if [ "$RUN_REF" != "refs/heads/main" ]; then
+            echo "::error::the warehouse archive runs only from refs/heads/main; this run is on $RUN_REF"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -84,7 +136,8 @@ jobs:
           UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
           UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
           UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
-        run: pnpm -s warehouse plan ${{ inputs.window_date && format('--window-date {0}', inputs.window_date) || '' }}
+          WINDOW_DATE: ${{ inputs.window_date }}
+        run: pnpm -s warehouse plan ${WINDOW_DATE:+--window-date "$WINDOW_DATE"}
 
       - name: Run the conveyor
         if: ${{ inputs.dry_run != true }}
@@ -96,7 +149,8 @@ jobs:
           UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY }}
           UNIT_TALK_WAREHOUSE_SOURCE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_SOURCE_DSN }}
           WAREHOUSE_EXPORTER_REPO_SHA: ${{ github.sha }}
-        run: pnpm -s warehouse conveyor ${{ inputs.window_date && format('--window-date {0}', inputs.window_date) || '' }}
+          WINDOW_DATE: ${{ inputs.window_date }}
+        run: pnpm -s warehouse conveyor ${WINDOW_DATE:+--window-date "$WINDOW_DATE"}
 
       - name: Report conveyor staleness
         # Runs even when the conveyor failed: "failing" and "not running" are
@@ -109,3 +163,80 @@ jobs:
           UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID }}
           UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY }}
         run: pnpm -s warehouse staleness
+
+  backfill:
+    name: Backfill an explicit range of closed windows
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'backfill' }}
+    runs-on: ubuntu-latest
+    environment: warehouse-archive
+    # The largest planned range is 51 windows, the biggest about 2.7M rows.
+    # The runner's own ceiling, so the bound is explicit rather than implied.
+    timeout-minutes: 360
+
+    steps:
+      - name: Refuse unless running from main
+        env:
+          RUN_REF: ${{ github.ref }}
+        run: |
+          if [ "$RUN_REF" != "refs/heads/main" ]; then
+            echo "::error::the warehouse archive runs only from refs/heads/main; this run is on $RUN_REF"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Report archive configuration (presence only, never values)
+        env:
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY }}
+          UNIT_TALK_WAREHOUSE_SOURCE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_SOURCE_DSN }}
+        run: pnpm -s warehouse doctor
+
+      - name: Plan the backfill windows
+        # A dry run resolves no store and attaches no source: it only plans.
+        env:
+          BACKFILL_SOURCE: ${{ inputs.source }}
+          BACKFILL_FROM: ${{ inputs.from }}
+          BACKFILL_TO: ${{ inputs.to }}
+          BACKFILL_MAX_WINDOWS: ${{ inputs.max_windows }}
+        run: >-
+          pnpm -s warehouse backfill --dry-run
+          --source "$BACKFILL_SOURCE" --from "$BACKFILL_FROM" --to "$BACKFILL_TO"
+          ${BACKFILL_MAX_WINDOWS:+--max-windows "$BACKFILL_MAX_WINDOWS"}
+
+      - name: Run the backfill
+        if: ${{ inputs.dry_run != true }}
+        env:
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY }}
+          UNIT_TALK_WAREHOUSE_SOURCE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_SOURCE_DSN }}
+          WAREHOUSE_EXPORTER_REPO_SHA: ${{ github.sha }}
+          BACKFILL_SOURCE: ${{ inputs.source }}
+          BACKFILL_FROM: ${{ inputs.from }}
+          BACKFILL_TO: ${{ inputs.to }}
+          BACKFILL_MAX_WINDOWS: ${{ inputs.max_windows }}
+        run: >-
+          pnpm -s warehouse backfill
+          --source "$BACKFILL_SOURCE" --from "$BACKFILL_FROM" --to "$BACKFILL_TO"
+          ${BACKFILL_MAX_WINDOWS:+--max-windows "$BACKFILL_MAX_WINDOWS"}

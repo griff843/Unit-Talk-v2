@@ -26,6 +26,7 @@ import {
   isApprovedStagingTarget,
 } from './isolated-proof-attestation.js';
 import { collectEffectiveEnv } from './required-db-smoke.js';
+import { drainLeakedBoardFixtures } from './staging-board-drain.js';
 
 interface SeedRow {
   table: string;
@@ -166,7 +167,27 @@ async function main(): Promise<void> {
     }
     console.log(`[seed-staging] ${table}: ${rows.length} synthetic row(s) upserted`);
   }
-  console.log('[seed-staging] done (mutable tables reset, reference data re-seeded)');
+
+  // WORK-2026092602: leaked CI fixture picks held the best-bets board over its
+  // caps, so every proof expecting a real best-bets decision got `not_eligible`.
+  // Void (never delete) only positively identified fixtures older than the
+  // safety margin — see scripts/ci/staging-board-drain.ts for what that write is
+  // and is not. A failed drain fails the job: the suites would otherwise run on
+  // a board that is not a measurement of this commit.
+  try {
+    const drain = await drainLeakedBoardFixtures(client);
+    console.log(
+      `[seed-staging] best-bets board drain: ${drain.voided} leaked fixture pick(s) voided ` +
+        `(scanned=${drain.scanned}, raced=${drain.raced}) ${JSON.stringify({
+          bySignature: drain.bySignature,
+          skipped: drain.skipped,
+        })}`,
+    );
+  } catch (error) {
+    console.error(`[seed-staging] best-bets board drain: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+  console.log('[seed-staging] done (mutable tables reset, reference data re-seeded, board drained)');
 }
 
 /**

@@ -22,6 +22,8 @@ import {
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 import { checkZombiePickHealth } from './routes/health.js';
+import { checkSchemaDrift } from './model-health-scanner.js';
+import { POSTGREST_MAX_ROWS, readAllOrderedPages } from '@unit-talk/db';
 
 // Requeue/routing-preview tests assert delivery-target routing directly. This
 // depends on three ambient env vars read by distribution-service.ts (via
@@ -2534,7 +2536,7 @@ async function withHealthGuardRemoved<T>(
   const source = await readFile(sourcePath, 'utf8');
   const mutantSource = source.replace(
     new RegExp(
-      `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+      `[ ]*// [A-Z0-9-]+ ${guardName}_START[\\s\\S]*?// [A-Z0-9-]+ ${guardName}_END\\n`,
       'gu',
     ),
     '',
@@ -2778,4 +2780,170 @@ test('UTV2-1823: authenticated GET /api/picks/:id/trace for an unknown pick is 4
     server.close();
     restoreEnv('UNIT_TALK_API_KEY_OPERATOR', previousOperatorKey);
   }
+});
+
+async function createQualifiedFixturePick(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) {
+  return processSubmission(
+    {
+      source: 'smart-form',
+      market: 'NBA points',
+      selection: 'UTV2 Proof Player af71fed8 Over 27.5',
+      confidence: 0.9,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'UTV2 Proof Event af71fed8',
+        promotionScores: {
+          edge: 78,
+          trust: 79,
+          readiness: 88,
+          uniqueness: 82,
+          boardFit: 90,
+        },
+      },
+    },
+    repositories,
+  );
+}
+
+test('a stranded proof fixture is reported in fixtureCount, not counted as a zombie', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedFixturePick(repositories);
+  // Premise: the fixture really is stranded -- qualified, validated, no outbox.
+  assert.equal(created.pick.promotionStatus, 'qualified');
+  assert.equal(created.pick.lifecycleState, 'validated');
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  const health = await checkZombiePickHealth(runtime);
+  assert.equal(health.count, 0);
+  assert.equal(health.fixtureCount, 1);
+  assert.equal(health.status, 'healthy');
+  assert.equal(health.remediation, null);
+});
+
+test('a real zombie still fails /health when a stranded fixture sits beside it', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createQualifiedFixturePick(repositories);
+  await createQualifiedPick(repositories);
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  const health = await checkZombiePickHealth(runtime);
+  assert.equal(health.count, 1);
+  assert.equal(health.fixtureCount, 1);
+  assert.equal(health.status, 'down');
+  assert.match(health.remediation ?? '', /requeue/iu);
+});
+
+test('mutation control: removing ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD makes a proof fixture fail /health', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createQualifiedFixturePick(repositories);
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  assert.equal((await checkZombiePickHealth(runtime)).status, 'healthy');
+
+  await withHealthGuardRemoved('ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD', async (mutant) => {
+    const check = mutant['checkZombiePickHealth'] as typeof checkZombiePickHealth;
+    const mutated = await check(runtime);
+    assert.equal(mutated.count, 1);
+    assert.equal(mutated.fixtureCount, 0);
+    assert.equal(mutated.status, 'down');
+  });
+});
+
+test('zombie detection reads past the first 1,000 candidates when the repository only pages', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  // 2,345 validated picks: every one before the last page is not a candidate,
+  // and the single stranded zombie sits at row 2,344. A read that stops at one
+  // capped page -- the defect -- reports healthy.
+  const rows = Array.from({ length: 2345 }, (_, index) => ({
+    id: `00000000-0000-0000-0000-${String(index).padStart(12, '0')}`,
+    status: 'validated',
+    promotion_status: index === 2344 ? 'qualified' : 'not_eligible',
+    promotion_target: index === 2344 ? 'best-bets' : null,
+    metadata: {},
+    selection: 'Player Over 8.5',
+    created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+  }));
+  const calls: Array<{ limit: number | undefined; offset: number | undefined }> = [];
+  const pagingOnlyPicks = {
+    ...repositories.picks,
+    listPromotedByLifecycleStates: undefined,
+    async listByLifecycleStates(_states: unknown, limit?: number, offset?: number) {
+      calls.push({ limit, offset });
+      // Serve at most POSTGREST_MAX_ROWS rows, whatever is asked, as PostgREST does.
+      const start = offset ?? 0;
+      const size = Math.min(limit ?? POSTGREST_MAX_ROWS, POSTGREST_MAX_ROWS);
+      return rows.slice(start, start + size);
+    },
+  };
+  (runtime.repositories as { picks: unknown }).picks = pagingOnlyPicks;
+
+  const health = await checkZombiePickHealth(runtime);
+  assert.equal(health.count, 1);
+  assert.equal(health.status, 'down');
+  assert.deepEqual(
+    calls.map((call) => call.offset),
+    [0, 1000, 2000],
+  );
+});
+
+test('readAllOrderedPages returns every row across capped pages and stops on a short page', async () => {
+  const rows = Array.from({ length: 2500 }, (_, index) => ({ index }));
+  const ranges: Array<[number, number]> = [];
+  const read = await readAllOrderedPages<{ index: number }>(async (from, to) => {
+    ranges.push([from, to]);
+    return { data: rows.slice(from, Math.min(to + 1, from + POSTGREST_MAX_ROWS)), error: null };
+  });
+  assert.equal(read.length, 2500);
+  assert.deepEqual(read.map((row) => row.index), rows.map((row) => row.index));
+  assert.deepEqual(ranges, [[0, 999], [1000, 1999], [2000, 2999]]);
+
+  // An exact multiple of the page size needs one empty page to prove the end.
+  const exact = await readAllOrderedPages<{ index: number }>(async (from, to) => ({
+    data: rows.slice(0, 2000).slice(from, to + 1),
+    error: null,
+  }));
+  assert.equal(exact.length, 2000);
+});
+
+test('readAllOrderedPages refuses a page size above the server cap, and surfaces a page error', async () => {
+  await assert.rejects(
+    readAllOrderedPages(async () => ({ data: [], error: null }), POSTGREST_MAX_ROWS + 1),
+    /pageSize must be an integer from 1 to 1000/u,
+  );
+  await assert.rejects(
+    readAllOrderedPages(async (from) =>
+      from === 0
+        ? { data: Array.from({ length: POSTGREST_MAX_ROWS }, () => ({})), error: null }
+        : { data: null, error: { message: 'boom on page 2' } },
+    ),
+    /boom on page 2/u,
+  );
+});
+
+test('checkSchemaDrift probes canonical tables concurrently and keeps their order', async () => {
+  const tables = Array.from({ length: 20 }, (_, index) => `table_${index}`);
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const result = await checkSchemaDrift({
+    canonicalTableNames: tables,
+    logger: { warn: () => undefined, error: () => undefined },
+    probeTableCount: async (table) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return table === 'table_7'
+        ? { count: null, error: { code: 'PGRST205', message: 'missing' } }
+        : { count: 1, error: null };
+    },
+  });
+  assert.ok(maxInFlight > 1, `expected concurrent probes, saw ${maxInFlight} in flight`);
+  assert.ok(maxInFlight <= 8, `expected at most 8 probes in flight, saw ${maxInFlight}`);
+  assert.deepEqual(result.tables.map((entry) => entry.table), tables);
+  assert.equal(result.status, 'drift');
+  assert.deepEqual(result.unreachableTableNames, ['table_7']);
 });

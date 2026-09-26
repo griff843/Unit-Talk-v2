@@ -1,0 +1,111 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092604
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092604
+  objective: "Append to `docs/06_status/proof/WORK-2026092602/diff-summary.md` a
+    `## SHA Binding` section carrying `Merge SHA: pending merge`, the same
+    pre-merge anchor WORK-2026092407's diff summary carried."
+  acceptance_criteria:
+    - "The diff summary gains only the anchor section: `Merge SHA: pending
+      merge`, the PR URL, and the execution SHA
+      `fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837` that verification.md already
+      records."
+    - No merge SHA is hand-written. The governed closeout writes it.
+    - No other proof file, manifest field or product file changes. The lane is
+      not closed by this PR.
+  guardrails:
+    - No weakening of closeout, truth-check or merge controls.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026092604`, then `-f issue_id=WORK-2026092602`.
+  unmapped_sections:
+    - >-
+      WORK-2026092604 — Give WORK-2026092602's diff summary a merge-SHA anchor
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Follows WORK-2026092603
+      (#1656).
+
+
+      ## Why
+
+
+      - After #1656 declared the diff summary, closeout run `36224942800` passes
+      P11 but refuses:
+        - `P3 proof files missing merge SHA reference: docs/06_status/proof/WORK-2026092602/diff-summary.md`
+        - `C4 proof artifacts missing required SHA binding (e019642a8…): docs/06_status/proof/WORK-2026092602/diff-summary.md`
+      - The closeout rebinder writes the merge SHA only by rewriting a `Merge
+      SHA: pending merge` anchor. WORK-2026092407's diff summary had one and
+      closed; WORK-2026092602's has none.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092604.md
+    title: WORK-2026092604 — Give WORK-2026092602's diff summary a merge-SHA anchor
+    description: >-
+      # WORK-2026092604 — Give WORK-2026092602's diff summary a merge-SHA anchor
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Follows WORK-2026092603
+      (#1656).
+
+
+      ## Objective
+
+
+      - Append to `docs/06_status/proof/WORK-2026092602/diff-summary.md` a `##
+      SHA Binding` section carrying `Merge SHA: pending merge`, the same
+      pre-merge anchor WORK-2026092407's diff summary carried.
+
+
+      ## Why
+
+
+      - After #1656 declared the diff summary, closeout run `36224942800` passes
+      P11 but refuses:
+        - `P3 proof files missing merge SHA reference: docs/06_status/proof/WORK-2026092602/diff-summary.md`
+        - `C4 proof artifacts missing required SHA binding (e019642a8…): docs/06_status/proof/WORK-2026092602/diff-summary.md`
+      - The closeout rebinder writes the merge SHA only by rewriting a `Merge
+      SHA: pending merge` anchor. WORK-2026092407's diff summary had one and
+      closed; WORK-2026092602's has none.
+
+
+      ## Acceptance Criteria
+
+
+      - The diff summary gains only the anchor section: `Merge SHA: pending
+      merge`, the PR URL, and the execution SHA
+      `fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837` that verification.md already
+      records.
+
+      - No merge SHA is hand-written. The governed closeout writes it.
+
+      - No other proof file, manifest field or product file changes. The lane is
+      not closed by this PR.
+
+
+      ## Guardrails
+
+
+      - No weakening of closeout, truth-check or merge controls.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026092604`, then `-f issue_id=WORK-2026092602`.
+    captured_at: 2026-09-26T07:11:31.156Z
+    description_sha256: bfe9aa14bc4e6feeef023007a46b8e48086e102b15152aa41b98f4c3c386b364
+  contract_hash: e009c7568b42e6654f8fdff577cf7fc7e4dfcc2c5f21effb57b5183c05581b1f

@@ -1,0 +1,214 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1954
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1954
+  objective: Promotion replay must reproduce market-adjusted scores (market/sport
+    missing from snapshot)
+  acceptance_criteria:
+    - >-
+      **Source:** PM ruling on PR #1630 / UTV2-1902 (2026-09-23). The T1
+      approval of #1630 is scoped to confidence-floor and override replay
+      parity. This gap was **not waived** by that approval: it is an explicit
+      system-level correctness gap and must be fixed and verified separately.
+
+
+      ## Defect
+
+
+      `replayPromotion` (`packages/domain/src/promotion.ts`) rebuilds the pick
+      from `confidence` alone. `PromotionDecisionSnapshot` stores no market or
+      sport. `calculateScore` therefore skips the market-family modifiers the
+      live evaluation applied, because it takes the `!market` "pre-modifier"
+      branch. Replay can reach a different score and a different verdict than
+      the persisted decision.
+
+
+      Reproduced by the independent exact-head review of #1630:
+
+
+      * an eager-path pick on an NBA player prop persisted best-bets
+      `suppressed` at **60.15** and replays `qualified` at **70.76**;
+
+      * an MLB moneyline pick drifts from 31.91 to 31.22.
+
+
+      It affects every source and dates from the introduction of market-family
+      modifiers (UTV2-623). It predates #1630. It is recorded in
+      `docs/06_status/proof/UTV2-1902/verification.md` under "What replay still
+      does not reproduce".
+
+
+      ## Acceptance (PM ruling, verbatim intent)
+
+
+      1. Persist the required market and sport context in the promotion
+      snapshot, or establish an equivalent durable source for replay.
+
+      2. Reproduce the original market-adjusted score and promotion outcome.
+
+      3. Add a regression test for the reported NBA prop case: suppressed at
+      60.15 must not replay as qualified at 70.76.
+
+      4. Cover the affected pick sources and relevant promotion outcomes.
+
+      5. Bind the evidence to the exact candidate SHA and show that replay
+      agrees with the original decision.
+
+
+      ## Constraints
+
+
+      * Historical `pick_promotion_history` rows are not rewritten. Pre-existing
+      snapshots without market context must keep their documented replay
+      semantics, or be explicitly classified as not reproducible. They must
+      never silently "replay" to a different verdict.
+
+      * Expected scope: `packages/contracts/src/promotion.ts` (snapshot shape),
+      `packages/domain/src/promotion.ts` (replay), and
+      `apps/api/src/promotion-service.ts` (snapshot writers).
+
+      * This is likely T1 because it touches promotion scoring.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      **Source:** PM ruling on PR #1630 / UTV2-1902 (2026-09-23). The T1
+      approval of #1630 is scoped to confidence-floor and override replay
+      parity. This gap was **not waived** by that approval: it is an explicit
+      system-level correctness gap and must be fixed and verified separately.
+    - >-
+      Defect
+
+      `replayPromotion` (`packages/domain/src/promotion.ts`) rebuilds the pick
+      from `confidence` alone. `PromotionDecisionSnapshot` stores no market or
+      sport. `calculateScore` therefore skips the market-family modifiers the
+      live evaluation applied, because it takes the `!market` "pre-modifier"
+      branch. Replay can reach a different score and a different verdict than
+      the persisted decision.
+
+
+      Reproduced by the independent exact-head review of #1630:
+
+
+      * an eager-path pick on an NBA player prop persisted best-bets
+      `suppressed` at **60.15** and replays `qualified` at **70.76**;
+
+      * an MLB moneyline pick drifts from 31.91 to 31.22.
+
+
+      It affects every source and dates from the introduction of market-family
+      modifiers (UTV2-623). It predates #1630. It is recorded in
+      `docs/06_status/proof/UTV2-1902/verification.md` under "What replay still
+      does not reproduce".
+    - >-
+      Acceptance (PM ruling, verbatim intent)
+
+      1. Persist the required market and sport context in the promotion
+      snapshot, or establish an equivalent durable source for replay.
+
+      2. Reproduce the original market-adjusted score and promotion outcome.
+
+      3. Add a regression test for the reported NBA prop case: suppressed at
+      60.15 must not replay as qualified at 70.76.
+
+      4. Cover the affected pick sources and relevant promotion outcomes.
+
+      5. Bind the evidence to the exact candidate SHA and show that replay
+      agrees with the original decision.
+    - >-
+      Constraints
+
+      * Historical `pick_promotion_history` rows are not rewritten. Pre-existing
+      snapshots without market context must keep their documented replay
+      semantics, or be explicitly classified as not reproducible. They must
+      never silently "replay" to a different verdict.
+
+      * Expected scope: `packages/contracts/src/promotion.ts` (snapshot shape),
+      `packages/domain/src/promotion.ts` (replay), and
+      `apps/api/src/promotion-service.ts` (snapshot writers).
+
+      * This is likely T1 because it touches promotion scoring.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1954/promotion-replay-must-reproduce-market-adjusted-scores-marketsport
+    title: Promotion replay must reproduce market-adjusted scores (market/sport
+      missing from snapshot)
+    description: >-
+      **Source:** PM ruling on PR #1630 / UTV2-1902 (2026-09-23). The T1
+      approval of #1630 is scoped to confidence-floor and override replay
+      parity. This gap was **not waived** by that approval: it is an explicit
+      system-level correctness gap and must be fixed and verified separately.
+
+
+      ## Defect
+
+
+      `replayPromotion` (`packages/domain/src/promotion.ts`) rebuilds the pick
+      from `confidence` alone. `PromotionDecisionSnapshot` stores no market or
+      sport. `calculateScore` therefore skips the market-family modifiers the
+      live evaluation applied, because it takes the `!market` "pre-modifier"
+      branch. Replay can reach a different score and a different verdict than
+      the persisted decision.
+
+
+      Reproduced by the independent exact-head review of #1630:
+
+
+      * an eager-path pick on an NBA player prop persisted best-bets
+      `suppressed` at **60.15** and replays `qualified` at **70.76**;
+
+      * an MLB moneyline pick drifts from 31.91 to 31.22.
+
+
+      It affects every source and dates from the introduction of market-family
+      modifiers (UTV2-623). It predates #1630. It is recorded in
+      `docs/06_status/proof/UTV2-1902/verification.md` under "What replay still
+      does not reproduce".
+
+
+      ## Acceptance (PM ruling, verbatim intent)
+
+
+      1. Persist the required market and sport context in the promotion
+      snapshot, or establish an equivalent durable source for replay.
+
+      2. Reproduce the original market-adjusted score and promotion outcome.
+
+      3. Add a regression test for the reported NBA prop case: suppressed at
+      60.15 must not replay as qualified at 70.76.
+
+      4. Cover the affected pick sources and relevant promotion outcomes.
+
+      5. Bind the evidence to the exact candidate SHA and show that replay
+      agrees with the original decision.
+
+
+      ## Constraints
+
+
+      * Historical `pick_promotion_history` rows are not rewritten. Pre-existing
+      snapshots without market context must keep their documented replay
+      semantics, or be explicitly classified as not reproducible. They must
+      never silently "replay" to a different verdict.
+
+      * Expected scope: `packages/contracts/src/promotion.ts` (snapshot shape),
+      `packages/domain/src/promotion.ts` (replay), and
+      `apps/api/src/promotion-service.ts` (snapshot writers).
+
+      * This is likely T1 because it touches promotion scoring.
+    captured_at: 2026-09-26T02:34:46.533Z
+    description_sha256: 6cd99f5196477575bc2cbe84a0d0b3b3e95cb9f3293f2e8a8c72d5ba09ce8366
+  contract_hash: 6424d5ac2627ad017014d40e8c5029697359e2278e89917a7dcd1586e7d217e2

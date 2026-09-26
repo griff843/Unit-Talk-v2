@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092306",
+  "lane_type": "delivery-ui",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092306-effective-settlement-intel",
+  "branch": "claude/work-2026092306-effective-settlement-intel",
+  "base_branch": "main",
+  "commit_sha": "a10a6cc1ab9b6ad57fe94614e9e41e76f102d6ee",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1634",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/src/lib/data/analytics.test.ts",
+    "apps/command-center/src/lib/data/analytics.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092306/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092306/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-23T14:30:57.027Z",
+  "heartbeat_at": "2026-09-23T15:10:45.911Z",
+  "closed_at": "2026-09-23T15:10:45.911Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-23T15:10:43.609Z",
+      "verdict": "pass",
+      "merge_sha": "a10a6cc1ab9b6ad57fe94614e9e41e76f102d6ee",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092306-effective-settlement-intel",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

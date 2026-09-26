@@ -1,0 +1,185 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1902",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "40557d9183e700bc2fce78ecf84d848016ce0fce",
+    "verified_source_sha": "1410cd437717eb128417818d07fe0a62a14a7d80",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-23T19:26:34.063Z",
+    "ci_sentinels": {
+      "note": "Receipts pinning this evidence to verified_source_sha, the last non-proof commit on the branch. The authoritative result is the set of required contexts on PR #1630. post-merge-lane-close.yml rebinds merge_sha.",
+      "local_type_check": {
+        "command": "pnpm type-check",
+        "exit_code": 0
+      },
+      "local_lint": {
+        "command": "pnpm lint",
+        "exit_code": 0
+      },
+      "required_contexts_authority": "PR #1630: verify, Executor Result Validation, Merge Gate, P0 Protocol",
+      "local_full_suite": {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "ok_lines": 6965,
+        "not_ok_lines": 0,
+        "suite_blocks": 105,
+        "suite_blocks_with_failures": 0
+      }
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-23T05:45:00Z",
+    "measured_against_sha": "1410cd437717eb128417818d07fe0a62a14a7d80",
+    "commands": [
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "ok_lines": 6965,
+        "not_ok_lines": 0,
+        "suite_blocks": 105,
+        "suite_blocks_with_failures": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts apps/api/src/submission-service.test.ts apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "240 pass / 0 fail"
+      },
+      {
+        "command": "pnpm exec tsx --test apps/command-center/src/lib/promotion-presentation.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "7 pass / 0 fail"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; rules promotion-scoring, operator-ui; matched artifacts belong to other issues (utv2-845, 2026-05-13 QA) and are not evidence for this diff; R3 producer needs an absent credential; R2 producer script does not exist on main"
+      }
+    ]
+  },
+  "mutation_controls": [
+    {
+      "control": "UTV2-1902: a human capper delivery pick that meets a board threshold still gets no board target",
+      "mutation": "override: undefined in promotion-service.ts makeInput",
+      "observed": "236 pass / 1 fail",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902: board force_promote is refused for a human capper delivery pick",
+      "mutation": "409 predicate replaced with false in override-promotion-controller.ts",
+      "observed": "236 pass / 1 fail",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902 score-gate controls",
+      "mutation": "restore source-only forcePromote for source === smart-form",
+      "observed": "230 pass / 7 fail",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902: a legacy force-promoted pick reads as an override when a tied non-winner row sorts first",
+      "mutation": "read the override basis from promotionHistory[0] in promotion-presentation.ts",
+      "observed": "7 pass / 1 fail (not ok 3); restored 8/8",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902: a force_promote history row reads as an override, never as score qualification",
+      "mutation": "const overridden = false in promotion-presentation.ts",
+      "observed": "6 pass / 1 fail",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902: explicit hasRealEdge:false wins over a numeric realEdge",
+      "mutation": "delete the explicit === false branch",
+      "observed": "6 pass / 1 fail",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "unmutated baseline",
+      "mutation": "none",
+      "observed": "237/237 and 7/7 (pre-replay-fix); 240/240 after 94af838d6",
+      "result": "pass"
+    },
+    {
+      "control": "UTV2-1902 replay: low-confidence Smart Form pick replays as qualified; human capper pick replays with no board qualification",
+      "mutation": "promotion-service.ts reverted to unfixed 8786facdf",
+      "observed": "96 pass / 2 fail; behaviour-only: Smart Form expected qualified replayed not_eligible, human capper expected not_eligible replayed qualified",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902 replay: low-confidence Smart Form pick that qualified replays as qualified",
+      "mutation": "snapshot confidenceFloor reverted to policy.confidenceFloor",
+      "observed": "97 pass / 1 fail (not ok 96)",
+      "result": "fails_on_the_named_condition"
+    },
+    {
+      "control": "UTV2-1902 replay: an authorized human capper delivery pick replays with no board qualification",
+      "mutation": "override dropped from the multi-policy snapshot",
+      "observed": "97 pass / 1 fail (not ok 97)",
+      "result": "fails_on_the_named_condition"
+    }
+  ],
+  "runtime_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-23T05:51:41Z",
+    "note": "Read-only production measurement of the defect instance and containment. No deploy, no production write, no containment change. Writable DB proof is the CI staging-db-proof receipt verified inside the required verify context on PR #1630.",
+    "queries": [
+      {
+        "name": "the source-only promotion instance",
+        "method": "read-only SELECT on picks joined to pick_promotion_history, production zfzdnfwdarxucxtaojxm",
+        "result": "pick 2cc92f4b-bdc9-4fc4-8cf3-493407d2716b: source smart-form, promotion_status qualified, promotion_target best-bets, promotion_score 32.75, history override_action force_promote, reason smart-form submissions route directly to best-bets",
+        "significance": "A 32.75 score qualified for a member-facing board solely by intake source; the diff removes that path. Rows not rewritten, per the issue."
+      },
+      {
+        "name": "containment readback",
+        "method": "read-only SELECT on delivery_kill_switch, distribution_outbox, picks",
+        "result": "best-bets, exclusive-insights, official-picks, trader-insights all killed=true; outbox total 5750, newest 2026-09-23 02:21:03; 9 governed picks",
+        "significance": "Containment unchanged."
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "delivery_kill_switch_member_targets_not_killed",
+        "value": 0
+      },
+      {
+        "name": "distribution_outbox_rows_total",
+        "value": 5750
+      },
+      {
+        "name": "governed_picks_total",
+        "value": 9
+      }
+    ],
+    "observations": [
+      {
+        "what": "not deployed",
+        "evidence": "dispatching a production deployment is reserved decision 8"
+      },
+      {
+        "what": "T1 merge authority not claimed",
+        "evidence": "t1-approved label and pm-verdict/v1 are Griff-owned"
+      }
+    ]
+  }
+}

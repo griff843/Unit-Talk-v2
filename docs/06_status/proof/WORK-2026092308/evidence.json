@@ -1,0 +1,208 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092308",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "c76de54409ae1d188ff2d6bbdb041f2e014b7937",
+    "verified_source_sha": "588f0c77e74d84d3bee448fb003ae9c78caee7d9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "588f0c77e74d84d3bee448fb003ae9c78caee7d9 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092308/ and the lane manifest. It is the merge of origin/main decd67afa into this branch (ledger refresh only, docs/06_status/readiness/readiness-score.json; no code), on top of the earlier merge of 7159bcdeb. What main brought in since the previous anchor is docs, lane bookkeeping and the readiness ledger only (docs/mission/plan.md, docs/06_status/readiness/readiness-score.json, docs/06_status/lanes/WORK-2026092310.json, docs/06_status/proof/WORK-2026092310/*); no code, test or config file, so the lane's implementation tree and every static measurement taken at 056f9b575b4251bbb67bac3fbf1752e1dc66e563 carry forward unchanged. Superseded anchor, not withdrawn: 056f9b575b4251bbb67bac3fbf1752e1dc66e563. Previous note: 056f9b575b4251bbb67bac3fbf1752e1dc66e563 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092308/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree. It is the merge of main into this branch; the lane's own implementation files are byte-identical to 88afdea24 (git diff 88afdea24 056f9b575b4251bbb67bac3fbf1752e1dc66e563 -- apps/api is empty), and the only non-proof paths the merge changed are main's own (apps/command-center/src/lib/data/snapshot.ts, scripts/ops/readiness-refresh.ts and their tests).",
+    "bound_at": "2026-09-24T16:17:36.115Z"
+  },
+  "what_this_lane_repairs": {
+    "defect": "getModelPerformanceReport built its pick -> settlement map by skipping every settlement_records row whose corrects_id is set, keeping only each chain's root. A corrected pick was therefore reported with its superseded result and CLV. The in-memory test that covered the path asserted the inverted behaviour ('correction rows excluded').",
+    "repair": "Each pick's rows are resolved to the chain tip with resolveEffectiveSettlement. A chain incomplete inside the 30-day listRecent window is completed from listByPick. A chain that still does not resolve -- orphan correction, two roots, a branch, a cycle -- is not counted as settled and is counted in unresolvedSettlementPickCount. A pick whose effective record is manual_review is not counted as settled.",
+    "why_the_reconcile_check": "resolveEffectiveSettlement accepts any lone record without reading corrects_id and otherwise ignores rows its root-to-tip walk does not reach. A chain is accepted only when every corrects_id target is present and correction_depth + 1 equals its row count.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/model-performance-service.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 13,
+          "pass": 13,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "The inverted 'correction rows excluded' test is replaced by four: (10) a corrected pick reports the correction's loss and CLV -1.0, not the original win; (11) a chain whose root predates the read window is completed from listByPick, not dropped; (12) a correction whose target cannot be read is excluded and counted in unresolvedSettlementPickCount; (13) a chain whose tip is manual_review is not a settlement and not unresolved."
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6833,
+          "pass": 6833,
+          "fail": 0,
+          "not_ok_lines": 0
+        },
+        "label": "Full workspace unit suite on this tree."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint apps/api/src/model-performance-service.ts apps/api/src/model-performance-service.test.ts apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: ci:assert-staging refuses the containment placeholder SUPABASE_URL. This lane carries t1_live_db_precondition: deferred_to_ci, so verify and Writable DB proof (staging only) are obtained from CI on the merge SHA, which G6 enforces at closeout."
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied to apps/api/src/model-performance-service.ts alone, the suite run, then the file restored from a pre-mutation copy (cmp-checked).",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "Return the chain root (corrects_id null) instead of the resolved tip -- main's behaviour.",
+          "observed": "3 failures: tests 10, 11 and 13."
+        },
+        {
+          "id": "M2",
+          "mutation": "Never complete an incomplete window chain from listByPick.",
+          "observed": "1 failure: test 11."
+        },
+        {
+          "id": "M3",
+          "mutation": "Drop the completeness guard (every corrects_id target present).",
+          "observed": "1 failure: test 12."
+        },
+        {
+          "id": "M4",
+          "mutation": "Count a manual_review tip as settled.",
+          "observed": "1 failure: test 13."
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test apps/api/src/model-performance-service.test.ts",
+        "pass": 13,
+        "fail": 0
+      }
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 8308.24ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 4316.01ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 4777.08ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 4254.62ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 147.31ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 4464.18ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 5084.66ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 10,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 14,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-24T16:03:39.780Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 36024556245, job 107717664167), which ran immediately before the smoke-test step in the same job, on head c76de54409ae1d188ff2d6bbdb041f2e014b7937. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 36024556245,
+      "run_attempt": 1,
+      "job_id": 107717664167,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36024556245/job/107717664167",
+      "target_head_sha": "c76de54409ae1d188ff2d6bbdb041f2e014b7937",
+      "target_merge_sha": "c76de54409ae1d188ff2d6bbdb041f2e014b7937",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off -- unchanged",
+    "member_delivery": "disabled -- unchanged",
+    "files_changed": 3,
+    "note": "Three files inside the pinned file_scope_lock. No migration, no schema change, no new test file, no package.json edit."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1636"
+}

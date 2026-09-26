@@ -1224,7 +1224,9 @@ import {
   scanDocument as scanWorkflowDocument,
 } from '../ci/workflow-bare-binary-guard.js';
 import {
+  HOT_TABLES,
   RECEIPT_SCHEMA,
+  TABLE_SIZE_SQL,
   countChecks,
   deriveOutcome,
   evaluateAutovacuumRow,
@@ -1413,6 +1415,49 @@ test('UTV2-1632: table_size evaluates the measured value against the threshold',
   // The boundary is strictly greater-than, so a table exactly at the threshold
   // does not alert.
   assert.strictEqual(evaluateSizeRow(sizeRow('system_runs', 500), thresholds).status, 'pass');
+});
+
+// --- table_size measures a partitioned table by its partitions --------------
+
+test('WORK-2026092313: the size query sums each table with its partition tree', () => {
+  const sql = TABLE_SIZE_SQL.replace(/\s+/g, ' ');
+  // A partitioned parent is 0 bytes itself; the data is in pg_partition_tree.
+  assert.match(sql, /pg_partition_tree\(c\.oid\)/, 'the query must walk the partition tree');
+  // A plain table has an empty tree, so the relation itself must be in the set
+  // or every plain table would disappear from the check.
+  assert.match(sql, /SELECT c\.oid::regclass AS relid UNION SELECT pt\.relid/, 'the relation itself must be summed');
+  assert.match(sql, /sum\(pg_total_relation_size\(t\.relid\)\)::text AS total_bytes/);
+  assert.match(sql, /c\.relkind IN \('r', 'p'\)/, 'partitioned parents (relkind p) must be eligible');
+  assert.match(sql, /GROUP BY c\.relname/);
+});
+
+test('WORK-2026092313: the size query names exactly the hot tables', () => {
+  const listed = [...TABLE_SIZE_SQL.matchAll(/ARRAY\[([^\]]*)\]/g)].map((m) => m[1]);
+  assert.strictEqual(listed.length, 1);
+  const names = listed[0]!.split(',').map((part) => part.trim().replace(/^'|'$/g, ''));
+  assert.deepStrictEqual(names, [...HOT_TABLES]);
+});
+
+test('WORK-2026092313: the tripwire executes the tested size query, not its own', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts/ops/db-health-tripwire.ts'), 'utf8');
+  assert.match(source, /const sizeRows = await tx\.unsafe<SizeRow\[\]>\(TABLE_SIZE_SQL\);/);
+  // The pre-fix query sized each relation from pg_stat_user_tables alone,
+  // which reads a partitioned parent as 0 MB.
+  assert.doesNotMatch(source, /pg_total_relation_size\(relid\)/);
+});
+
+test('WORK-2026092313: a partitioned table measured by its partitions trips the size check', () => {
+  // Production 2026-09-23: provider_offer_history summed over 61 relations
+  // was 8,499,781,632 bytes, where the parent alone read 0 MB and passed.
+  const thresholds = resolveThresholds({ PROVIDER_OFFER_HISTORY_SIZE_THRESHOLD_MB: '300' });
+  const partitioned = evaluateSizeRow(
+    { relname: 'provider_offer_history', table_size: '4165 MB', total_size: '8106 MB', total_bytes: '8499781632' },
+    thresholds,
+  );
+  assert.strictEqual(partitioned.status, 'tripped');
+  assert.strictEqual(partitioned.severity, 'critical');
+  const parentOnly = evaluateSizeRow(sizeRow('provider_offer_history', 0), thresholds);
+  assert.strictEqual(parentOnly.status, 'pass', 'the pre-fix parent-only reading passed');
 });
 
 test('UTV2-1632: lowering the threshold trips a table that otherwise passes', () => {
@@ -1920,4 +1965,83 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
     /\$\{\{\s*github\.sha\s*\}\}/u,
     'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
   );
+});
+
+// WORK-2026092501: Claude Code hands PreToolUse hooks absolute paths. The Tier C guard
+// must classify those, and its manifest bypass must read the worktree the target lives in.
+const TIER_C_GUARD = path.join(ROOT, '.claude', 'hooks', 'tier-c-path-guard.sh');
+
+function runTierCGuard(filePath: string, cwd: string): number | null {
+  const result = spawnSync('bash', [TIER_C_GUARD], {
+    cwd,
+    input: JSON.stringify({ tool_input: { file_path: filePath } }),
+    encoding: 'utf8',
+  });
+  return result.status;
+}
+
+function makeLaneRepo(manifest: Record<string, unknown> | null): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier-c-guard-'));
+  const git = (...args: string[]) => {
+    const r = spawnSync('git', args, { cwd: dir, encoding: 'utf8' });
+    assert.strictEqual(r.status, 0, `git ${args.join(' ')} failed: ${r.stderr}`);
+  };
+  git('init', '-q', '-b', 'claude/work-2099010101-guard');
+  fs.mkdirSync(path.join(dir, 'supabase', 'migrations'), { recursive: true });
+  if (manifest) {
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'docs', '06_status', 'lanes', `${String(manifest.issue_id)}.json`),
+      JSON.stringify(manifest),
+    );
+  }
+  // A lane worktree always has a commit; without one HEAD has no branch name to read.
+  git('-c', 'user.email=t@example.invalid', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'init');
+  return dir;
+}
+
+test('tier-c-path-guard classifies an absolute Tier C path, not only a relative one', () => {
+  const dir = makeLaneRepo(null);
+  try {
+    assert.strictEqual(runTierCGuard(path.join(dir, 'supabase', 'migrations', 'x.sql'), os.tmpdir()), 2);
+    assert.strictEqual(runTierCGuard('supabase/migrations/x.sql', dir), 2);
+    assert.strictEqual(runTierCGuard(path.join(dir, 'apps', 'api', 'src', 'server.ts'), os.tmpdir()), 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('tier-c-path-guard allows a path outside any git repository', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tier-c-guard-norepo-'));
+  try {
+    assert.strictEqual(runTierCGuard(path.join(dir, 'supabase', 'migrations', 'x.sql'), os.tmpdir()), 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('tier-c-path-guard honours a WORK lane manifest from the target worktree, and only an open one on its branch', () => {
+  const lane = {
+    issue_id: 'WORK-2099010101',
+    status: 'in_progress',
+    branch: 'claude/work-2099010101-guard',
+    file_scope_lock: ['supabase/migrations/x.sql'],
+  };
+  const cases: Array<[Record<string, unknown>, number]> = [
+    [lane, 0],
+    [{ ...lane, status: 'done' }, 2],
+    [{ ...lane, branch: 'claude/work-2099010101-other' }, 2],
+  ];
+  for (const [manifest, expected] of cases) {
+    const dir = makeLaneRepo(manifest);
+    try {
+      assert.strictEqual(
+        runTierCGuard(path.join(dir, 'supabase', 'migrations', 'x.sql'), os.tmpdir()),
+        expected,
+        `manifest ${JSON.stringify(manifest)} must yield exit ${expected}`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
 });

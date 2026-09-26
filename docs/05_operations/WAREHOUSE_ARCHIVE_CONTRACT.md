@@ -150,6 +150,12 @@ seen the source and an environment holding no Supabase variable.
 Per the guardrail in `HISTORICAL_MARKET_DATA_WAREHOUSE.md` §11, the representative query makes
 no CLV, ROI or edge claim, and a test asserts it never acquires one.
 
+**The read path holds the reader key only.** `warehouse query` and `warehouse doctor --research`
+resolve S3 credentials only from `UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID` /
+`UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY` and never fall back to the writer names. They refuse
+to start when the writer key, the source DSN, or a production database credential is present, and
+the refusal names each variable, never its value.
+
 ## 8. Conveyor
 
 `scripts/warehouse/conveyor.ts`, run by `.github/workflows/warehouse-archive-conveyor.yml` at
@@ -167,6 +173,38 @@ no CLV, ROI or edge claim, and a test asserts it never acquires one.
   unnoticed. Staleness is read from the bucket, so it is answerable without a database credential
   and without access to the runner. A missing heartbeat is stale, never unknown.
 - **Alerting** — a run with any failed window exits non-zero and carries an `alert` payload.
+- **Unprovisioned is red, and says so** — `warehouse doctor` classifies the configuration as
+  `not_provisioned` (no archive key set), `incomplete` (something set, but a key is missing or a
+  placeholder) or `ready`, and exits 0 only for `ready`. A scheduled run before provisioning therefore
+  fails at `doctor`, and its job summary states that no window was exported, uploaded, verified or
+  manifested and that nothing became prune-eligible. It never exits cleanly: an archive that is not
+  running is stale, never unknown.
+- **The default policy names a key** — `season: 'window-year'` resolves to the window's own year, and
+  key construction runs inside the per-item `try`, so a target whose key cannot be built is a failed
+  window with a heartbeat, never a throw that escapes the run.
+- **Prune hold** — a policy entry may carry `pruneHold`. A held source is archived and verified, and
+  its result never reports prune-eligible. `decideRetentionEligibility` is the boundary any future
+  prune must obey; it decides and deletes nothing.
+
+### 8a. Historical backfill
+
+`scripts/warehouse/backfill.ts`, run as `warehouse backfill --source … --from … --to …
+[--max-windows N] [--dry-run]`, and by the same workflow as a `workflow_dispatch` with
+`mode: backfill`. The schedule can never start one. Both jobs run in the `warehouse-archive`
+environment and refuse unless the ref is `refs/heads/main`; dispatch inputs reach the shell only as
+environment variables.
+
+- **Bounded** — an inclusive range of UTC days, oldest first, at most 62 windows, and every window
+  must already have left hot retention.
+- **The conveyor's own guarantees** — each day runs as a one-item plan through `runConveyor`, so
+  export, verification against the store, manifest-last and idempotency are unchanged.
+- **Stop on first failure** — no later window is attempted after a failed one.
+- **Its own heartbeat** — a running backfill cannot make a dead daily conveyor read as alive.
+- **Progress ledger** — `manifests/_backfill/<source>/<from>_<to>.json`, an operator record the
+  prune gate never reads.
+
+Starting a production backfill is a PM-reserved action; see
+`WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md` §5.
 
 ## 9. What this contract does not do
 

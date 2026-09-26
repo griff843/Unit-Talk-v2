@@ -9,6 +9,9 @@ import {
   type PromotionScoreBreakdown,
   type PromotionScoreInputs,
   type PromotionScoreWeights,
+  type PromotionScoringContext,
+  parsePromotionSnapshot,
+  readPromotionScoringContext,
 } from '@unit-talk/contracts';
 import { createHash } from 'node:crypto';
 import { applyPromotionModifiers, type ScoreProvenance } from './scoring/promotion-weight-profiles.js';
@@ -480,12 +483,7 @@ function calculateScore(
     boardFit: b * weights.boardFit,
   };
 
-  const market = input.pick.market ?? '';
-  const sport =
-    input.pick.metadata &&
-    typeof input.pick.metadata['sport'] === 'string'
-      ? input.pick.metadata['sport']
-      : null;
+  const { market, sport } = promotionScoringContextForPick(input.pick);
 
   // Risk modifier: 1.0 when absent (pre-v3 compat), otherwise 0.85–1.0
   const riskModifier =
@@ -527,6 +525,20 @@ function calculateScore(
     total: modified.total * riskModifier,
     provenance: modified.provenance,
   };
+}
+
+/**
+ * UTV2-1954: the market and sport calculateScore reads from a pick. Snapshot
+ * writers persist exactly this, so a replay scores from the same context the
+ * live evaluation did.
+ */
+export function promotionScoringContextForPick(
+  pick: Pick<CanonicalPick, 'market' | 'metadata'>,
+): PromotionScoringContext {
+  const sport = pick.metadata && typeof pick.metadata['sport'] === 'string'
+    ? pick.metadata['sport']
+    : null;
+  return { market: pick.market ?? '', sport };
 }
 
 function normalizeScore(value: number) {
@@ -690,10 +702,22 @@ export function replayPromotion(
   policy: PromotionPolicy,
   decidedAt?: string,
 ): BoardPromotionDecisionWithProvenance {
+  // UTV2-1954: score from the market and sport the decision was scored with.
+  // Without them the market-family modifiers and caps are skipped, which is
+  // the documented pre-UTV2-623 semantics and is only meaningful for
+  // counterfactuals; replayRecordedPromotion() refuses to call that a
+  // reproduction.
+  const scoringContext = readPromotionScoringContext(snapshot);
   const input: BoardPromotionEvaluationInput = {
     target: policy.target,
     pick: {
       confidence: snapshot.gateInputs.pickConfidence ?? undefined,
+      ...(scoringContext
+        ? {
+            market: scoringContext.market,
+            metadata: scoringContext.sport !== null ? { sport: scoringContext.sport } : {},
+          }
+        : {}),
     } as CanonicalPick,
     approvalStatus: snapshot.gateInputs.approvalStatus as ApprovalStatus,
     hasRequiredFields: snapshot.gateInputs.hasRequiredFields,
@@ -718,4 +742,210 @@ export function replayPromotion(
   };
 
   return evaluatePromotionEligibility(input, policy);
+}
+
+/** UTV2-1954: why a recorded promotion decision cannot be reproduced. */
+export type PromotionReplayUnavailableReason =
+  /** The payload carries no score inputs (e.g. a stale-data or exposure-gate row). */
+  | 'snapshot-missing'
+  /** Written before UTV2-1954: the market and sport the score used were not persisted. */
+  | 'scoring-context-missing'
+  /** The payload does not carry the policy the decision was evaluated against. */
+  | 'policy-missing'
+  /** The payload does not carry the score that was recorded. */
+  | 'recorded-score-missing'
+  /**
+   * The row's `score` column is null, absent, non-numeric, non-finite or
+   * outside numeric(5,2). There is nothing to compare the replay against, so
+   * the replay is refused rather than allowed to agree.
+   */
+  | 'persisted-score-missing';
+
+/** A field of a persisted pick_promotion_history row that a replay did not reproduce. */
+export type PromotionReplayDisagreement =
+  /** The row's `status` column. */
+  | 'status'
+  /** `payload.score`, the unrounded score recorded in the snapshot. */
+  | 'payload-score'
+  /** The row's `score` column, compared at its numeric(5,2) precision. */
+  | 'persisted-score';
+
+/** The persisted pick_promotion_history columns a replay is checked against. */
+export interface RecordedPromotionRow {
+  /** pick_promotion_history.status */
+  status: string;
+  /** pick_promotion_history.decided_at */
+  decidedAt: string;
+  /**
+   * pick_promotion_history.score, a numeric(5,2) column, exactly as read.
+   * PostgREST may deliver it as a JSON number or a string; both are accepted.
+   * null or undefined means the column is empty and the replay is refused.
+   */
+  score: number | string | null | undefined;
+}
+
+export type RecordedPromotionReplay =
+  | { outcome: 'not-reproducible'; reason: PromotionReplayUnavailableReason }
+  | {
+      outcome: 'replayed';
+      decision: BoardPromotionDecisionWithProvenance;
+      /** payload.score */
+      recordedScore: number;
+      recordedStatus: string;
+      /** The row's score column, normalized to numeric(5,2). */
+      persistedScore: number;
+      /** The replayed score as the numeric(5,2) column would store it. */
+      replayedColumnScore: number | null;
+      /** Replayed score equals payload.score (to float noise). */
+      scoreMatches: boolean;
+      /** Replayed score, rounded to numeric(5,2), equals the row's score column. */
+      persistedScoreMatches: boolean;
+      statusMatches: boolean;
+      /** Every field that did not reproduce; empty exactly when `agrees`. */
+      disagreements: PromotionReplayDisagreement[];
+      /** True only when the status, payload.score and the score column all reproduce. */
+      agrees: boolean;
+    };
+
+/** Scores are recomputed from the same doubles; anything beyond float noise is a real difference. */
+const REPLAY_SCORE_TOLERANCE = 1e-9;
+
+/** numeric(5,2): at most 999.99 in magnitude, i.e. fewer than 100000 hundredths. */
+const NUMERIC_5_2_MAX_HUNDREDTHS = 99_999;
+
+function decimalStringToNumeric52(text: string): number | null {
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?$/.exec(text) ?? /^([+-]?)()\.(\d+)$/.exec(text);
+  if (!match) return null;
+  const negative = match[1] === '-';
+  const integerDigits = match[2] === '' ? '0' : match[2]!;
+  const fraction = (match[3] ?? '').padEnd(3, '0');
+  if (integerDigits.replace(/^0+/, '').length > 3) return null;
+  let hundredths = Number(integerDigits) * 100 + Number(fraction.slice(0, 2));
+  // Postgres numeric rounds half away from zero; the decimal digits are exact,
+  // so the third fractional digit alone decides it.
+  if (fraction.charCodeAt(2) >= 53 /* '5' */) hundredths += 1;
+  if (hundredths > NUMERIC_5_2_MAX_HUNDREDTHS) return null;
+  if (hundredths === 0) return 0;
+  return (negative ? -hundredths : hundredths) / 100;
+}
+
+/**
+ * UTV2-1954: the value a `numeric(5,2)` column holds for `value`, or null when
+ * the column could not hold it (null, absent, non-numeric, non-finite, or
+ * beyond +/-999.99).
+ *
+ * Postgres rounds numeric half away from zero on the exact decimal it receives.
+ * A JS number reaches it as its shortest round-trip decimal text (what
+ * JSON.stringify writes), so a number is rounded on that text, never on its
+ * binary double: 60.145 is stored as 60.15, although the double nearest 60.145
+ * is 60.14499999999999602... and `Math.round(x * 100) / 100` would give 60.14.
+ * A string is taken as the decimal text PostgREST returned.
+ */
+export function toPromotionScoreColumn(value: unknown): number | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null;
+    const text = String(value);
+    if (/e/i.test(text)) {
+      // Exponent form only appears below 1e-6 (rounds to 0) or at/above 1e21 (overflows).
+      return Math.abs(value) < 1 ? 0 : null;
+    }
+    return decimalStringToNumeric52(text);
+  }
+  if (typeof value === 'string') {
+    return decimalStringToNumeric52(value.trim());
+  }
+  return null;
+}
+
+function readRecordedPolicy(value: unknown): PromotionPolicy | null {
+  if (!isRecord(value)) return null;
+  const weights = value['weights'];
+  const boardCaps = value['boardCaps'];
+  if (
+    typeof value['target'] !== 'string' ||
+    typeof value['version'] !== 'string' ||
+    typeof value['minimumScore'] !== 'number' ||
+    typeof value['minimumEdge'] !== 'number' ||
+    typeof value['minimumTrust'] !== 'number' ||
+    !isRecord(weights) ||
+    !isRecord(boardCaps)
+  ) {
+    return null;
+  }
+  for (const key of ['edge', 'trust', 'readiness', 'uniqueness', 'boardFit']) {
+    if (typeof weights[key] !== 'number') return null;
+  }
+  for (const key of ['perSlate', 'perSport', 'perGame']) {
+    if (typeof boardCaps[key] !== 'number') return null;
+  }
+  return value as unknown as PromotionPolicy;
+}
+
+/**
+ * UTV2-1954: replay one persisted pick_promotion_history row and say whether it
+ * reproduces. Uses only what the row recorded: the snapshot, its scoring
+ * context and the saved policy -- never the caller's current policy. A row
+ * written before the scoring context was persisted is reported as
+ * not-reproducible instead of being silently re-decided without its market
+ * modifiers.
+ *
+ * `agrees` requires all three of the row's recorded outcomes to reproduce: the
+ * `status` column, `payload.score`, and the `score` column at its numeric(5,2)
+ * precision. The column is checked separately from the payload because the two
+ * are written independently: a row whose payload agrees with the replay but
+ * whose column does not is inconsistent, and is reported as a disagreement.
+ * An empty or unreadable score column refuses the replay (fail closed).
+ *
+ * @param payload  - pick_promotion_history.payload
+ * @param recorded - the row's persisted status, decided_at and score columns
+ */
+export function replayRecordedPromotion(
+  payload: unknown,
+  recorded: RecordedPromotionRow,
+): RecordedPromotionReplay {
+  const snapshot = parsePromotionSnapshot(payload);
+  if (!snapshot) {
+    return { outcome: 'not-reproducible', reason: 'snapshot-missing' };
+  }
+  if (!readPromotionScoringContext(snapshot)) {
+    return { outcome: 'not-reproducible', reason: 'scoring-context-missing' };
+  }
+  const record = payload as Record<string, unknown>;
+  const policy = readRecordedPolicy(record['policy']);
+  if (!policy) {
+    return { outcome: 'not-reproducible', reason: 'policy-missing' };
+  }
+  const recordedScore = record['score'];
+  if (typeof recordedScore !== 'number' || !Number.isFinite(recordedScore)) {
+    return { outcome: 'not-reproducible', reason: 'recorded-score-missing' };
+  }
+  // Normalized to the column's own precision: idempotent for a value read back
+  // from Postgres, and the value Postgres would store for one that was not.
+  const persistedScore = toPromotionScoreColumn(recorded.score);
+  if (persistedScore === null) {
+    return { outcome: 'not-reproducible', reason: 'persisted-score-missing' };
+  }
+
+  const decision = replayPromotion(snapshot, policy, recorded.decidedAt);
+  const replayedColumnScore = toPromotionScoreColumn(decision.score);
+  const scoreMatches = Math.abs(decision.score - recordedScore) <= REPLAY_SCORE_TOLERANCE;
+  const persistedScoreMatches = replayedColumnScore !== null && replayedColumnScore === persistedScore;
+  const statusMatches = decision.status === recorded.status;
+  const disagreements: PromotionReplayDisagreement[] = [];
+  if (!statusMatches) disagreements.push('status');
+  if (!scoreMatches) disagreements.push('payload-score');
+  if (!persistedScoreMatches) disagreements.push('persisted-score');
+  return {
+    outcome: 'replayed',
+    decision,
+    recordedScore,
+    recordedStatus: recorded.status,
+    persistedScore,
+    replayedColumnScore,
+    scoreMatches,
+    persistedScoreMatches,
+    statusMatches,
+    disagreements,
+    agrees: statusMatches && scoreMatches && persistedScoreMatches,
+  };
 }

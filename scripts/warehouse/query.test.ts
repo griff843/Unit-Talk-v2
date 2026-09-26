@@ -23,13 +23,6 @@ import {
   runWarehouseQuery,
 } from './query.js';
 
-const PRODUCTION_ENV_KEYS = [
-  'SUPABASE_URL',
-  'SUPABASE_ANON_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'UNIT_TALK_WAREHOUSE_SOURCE_DSN',
-];
-
 async function seedFixture(connection: DuckConnection): Promise<void> {
   await connection.run(`
     CREATE TABLE offers AS
@@ -105,10 +98,9 @@ test('the representative query answers a market question from the archive alone'
     // The reader is a separate connection that has never seen the fixture
     // table, and the environment carries no production credential at all.
     const reader = await openDuckDb();
+    // The query runs with an environment that carries none of the production
+    // keys, so succeeding at all shows it needs none of them.
     const env: NodeJS.ProcessEnv = {};
-    for (const key of PRODUCTION_ENV_KEYS) {
-      assert.equal(env[key], undefined, `${key} must not be needed to read the archive`);
-    }
 
     try {
       const result = await runWarehouseQuery({
@@ -119,7 +111,17 @@ test('the representative query answers a market question from the archive alone'
         env,
       });
 
-      assert.equal(result.used_production_database, false);
+      // `used_production_database` is typed as the literal `false`, so asserting
+      // it proves nothing. What does: after the query, the reader has attached
+      // no database besides DuckDB's own in-memory one.
+      const attached = await reader.all(
+        'SELECT database_name FROM duckdb_databases() WHERE NOT internal ORDER BY database_name',
+      );
+      assert.deepEqual(
+        attached.map((row) => row.database_name),
+        ['memory'],
+        'the archive query must not attach any database',
+      );
       assert.equal(result.row_count, 4, 'two days times two sports');
 
       const nflDayOne = result.rows.find(
@@ -153,4 +155,39 @@ test('the representative query makes no CLV, ROI or edge claim', () => {
     assert.equal(sql.includes(forbidden), false, `representative query must not mention ${forbidden}`);
   }
   assert.ok(REPRESENTATIVE_QUERY.includes(SOURCE_PLACEHOLDER));
+});
+
+test('the read path refuses to start with the writer key present, and runs with the reader alone', async () => {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-warehouse-query-'));
+  try {
+    const store = new LocalObjectStore(path.join(workDir, 'bucket'), 'archive');
+    const reader = {
+      UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID: 'READERKEYID00000001',
+      UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY: 'reader-s3cr3t-value-0001',
+    };
+    const writerSecret = 'wr1ter-s3cr3t-value-must-not-print';
+    await assert.rejects(
+      () =>
+        runWarehouseQuery({
+          store,
+          prefix: 'canonical/markets',
+          sql: `SELECT 1 AS one -- ${SOURCE_PLACEHOLDER}`,
+          env: { ...reader, UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY: writerSecret },
+        }),
+      (error: Error) =>
+        error.message.includes('UNIT_TALK_WAREHOUSE_S3_SECRET_ACCESS_KEY') && !error.message.includes(writerSecret),
+    );
+
+    // Reader only: the same call proceeds. The source stands in a comment, so
+    // the query runs without an archived object to glob over.
+    const result = await runWarehouseQuery({
+      store,
+      prefix: 'canonical/markets',
+      sql: `SELECT 1 AS one -- ${SOURCE_PLACEHOLDER}`,
+      env: reader,
+    });
+    assert.equal(result.row_count, 1);
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
 });

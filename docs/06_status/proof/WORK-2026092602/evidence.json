@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092602",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "ci-hygiene",
+  "status": "READY_FOR_REVIEW",
+  "pr_url": null,
+  "sha_binding": {
+    "merge_sha": "e019642a8176a51397ea85768c6e8e0b7c293469",
+    "verified_source_sha": "fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837 is the last commit on this lane that changes anything outside docs/06_status/proof/WORK-2026092602/ and the lane manifest. Every static measurement below was taken on that exact tree in the lane worktree.",
+    "bound_at": "2026-09-26T10:51:39.863Z"
+  },
+  "what_this_lane_repairs": {
+    "defects": [
+      "CI proof suites left qualified best-bets fixture picks on the shared staging project xskgrzbteyqdufktjrjx. CI run 36218675767 observed currentBoardCount 476 and sameSportCount 106 against caps of 15 per slate and 10 per sport, so every proof expecting a real best-bets decision received not_eligible."
+    ],
+    "repair": "scripts/ci/staging-board-drain.ts selects leaked fixture picks by positive per-suite signature (t1-proof-atomicity-enqueue, utv2-1022-risk-proof, utv2-1251-reject-proof, utv2-1842-server-authorized) and voids them via transition_pick_lifecycle (operator_override). seed-staging-fixtures.ts runs it inside the staging-asserted CI job before the suites and logs the voided count. t1-proof-atomicity.test.ts voids its own STEP 3 pick in after().",
+    "write_semantics": "status -> voided UPDATE through the lifecycle RPC; never a DELETE. Rows, submissions, lifecycle history and outbox rows remain. voided is terminal in picks_fsm_transition_guard, so the write is NOT reversible through the application.",
+    "hard_exclusions": [
+      "not on the best-bets board (target, promotion_status, null source)",
+      "Track Only",
+      "status not validated/queued",
+      "unparseable created_at",
+      "younger than the 2h margin (margin cannot be configured lower)",
+      "older than the 7-day board window",
+      "no positive fixture signature"
+    ],
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 38,
+          "pass": 38,
+          "fail": 0
+        },
+        "label": "7 new drain-selection tests (32-38): each signature selected; a real operator pick with distributionMode never selected; Track Only never selected even with a full signature; younger-than-margin never selected; short margin refused; off-board/non-voidable never selected; near-miss fixtures left alone."
+      },
+      {
+        "command": "pnpm test:ops",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 3386,
+          "pass": 3386,
+          "fail": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ci/required-db-smoke.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 12,
+          "pass": 12,
+          "fail": 0
+        }
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint <4 changed files>",
+      "exit_code": 0
+    },
+    "verify_quick": {
+      "command": "pnpm verify:quick",
+      "exit_code": 0
+    },
+    "boundary_checks": [
+      {
+        "command": "pnpm ci:db-client-boundary",
+        "result": "OK"
+      },
+      {
+        "command": "npx tsx scripts/ci/db-writer-inventory.ts",
+        "result": "errors []"
+      }
+    ],
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the local target. verify and Writable DB proof (staging only) come from CI."
+    },
+    "live_suites_local": "NOT_RUN by design: local.env holds production credentials. The atomicity after() and the drain execute only in the staging CI job.",
+    "mutation_battery": {
+      "method": "Each mutation applied alone to staging-board-drain.ts, staging-path-enforcement.test.ts run, file restored from a pre-mutation copy.",
+      "mutations": [
+        {
+          "id": "M1",
+          "mutation": "Remove the younger-than-margin exclusion.",
+          "observed": "test 35 red"
+        },
+        {
+          "id": "M2",
+          "mutation": "Remove the Track Only exclusion.",
+          "observed": "test 34 red"
+        },
+        {
+          "id": "M3",
+          "mutation": "Drop the 1842 deliveryAuthorization.capperId clause.",
+          "observed": "test 33 red"
+        },
+        {
+          "id": "M4",
+          "mutation": "Replace the 1842 signature with a broad distributionMode=delivery-eligible predicate.",
+          "observed": "tests 33 and 38 red"
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts",
+        "pass": 38,
+        "fail": 0
+      }
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    },
+    "staging_dry_run": {
+      "method": "Read-only SQL via Supabase MCP on xskgrzbteyqdufktjrjx mirroring the drain predicate. No write was issued.",
+      "eligible_older_than_2h_within_7d": {
+        "t1-proof-atomicity-enqueue": 220,
+        "utv2-1022-risk-proof": 110,
+        "utv2-1251-reject-proof": 101,
+        "utv2-1842-server-authorized": 106,
+        "unmatched": 0
+      },
+      "excluded_track_only": 524,
+      "non_track_only_board_rows_all_ages": 539,
+      "protected_by_margin": 2
+    }
+  },
+  "runtime_proof": {
+    "status": "PENDING_CI",
+    "job": "Writable DB proof (staging only)",
+    "expected_log_line": "[seed-staging] best-bets board drain: N leaked fixture pick(s) voided"
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "staging_writes_by_executor": 0,
+    "containment_changed": false,
+    "sgo": "off -- unchanged",
+    "member_delivery": "disabled -- unchanged",
+    "files_changed": 4,
+    "note": "Four files inside the pinned file_scope_lock. No migration, no schema change, no package.json edit. The drain runs only after isApprovedStagingTarget in seed-staging-fixtures.ts, inside the CI job that also runs ci:assert-staging."
+  },
+  "known_follow_up": "t1-proof-risk-score.test.ts (UTV2-1022) and t1-proof-utv2-1251-evidence-settlement.test.ts still write a board-eligible fixture every run and are not fixed at source. The drain clears them once older than 2h; rows younger than 2h can still accumulate against the NBA cap of 10. Recommended: void in after() in those two suites."
+}

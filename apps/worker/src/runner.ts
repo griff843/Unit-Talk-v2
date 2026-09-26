@@ -279,6 +279,10 @@ export async function runWorkerCycles(
           : null;
       // UTV2-1923 WORKER_GOVERNED_TARGET_DERIVATION_GUARD_END
       if (governedTarget !== null && !isTargetEnabled(governedTarget, registry)) {
+        // UTV2-1952: a deliberate refusal must be visible. Without this line a
+        // stopped lane and a dead worker look identical from outside: the row
+        // is never claimed, so `attempt_count` stays 0 either way.
+        logDeliberateDeliverySkip('worker.delivery-skipped-target-disabled', options.workerId, target, cycle);
         const disabledResult: WorkerProcessTargetDisabledResult = {
           status: 'target-disabled',
           target,
@@ -298,6 +302,7 @@ export async function runWorkerCycles(
       if (killSwitchTarget !== null && options.repositories.killSwitch) {
         const killed = await options.repositories.killSwitch.isKilled(killSwitchTarget);
         if (killed) {
+          logDeliberateDeliverySkip('worker.delivery-skipped-kill-switch', options.workerId, target, cycle);
           const killSwitchResult: WorkerProcessKillSwitchEngagedResult = {
             status: 'kill-switch-engaged',
             target,
@@ -639,4 +644,30 @@ async function completeCircuitRun(
   } catch {
     // Non-fatal: delivery can continue and the next health snapshot will retry from durable state.
   }
+}
+
+/**
+ * UTV2-1952: one structured line per deliberate skip, in the shape of
+ * `worker.delivery-skipped-transient`. It distinguishes three states an
+ * operator otherwise cannot tell apart, because an unclaimed row carries
+ * `attempt_count = 0` in all of them:
+ *   - deliberate skip: this line, emitted every cycle the control holds;
+ *   - unprocessed row: a heartbeat with no line for the row's target;
+ *   - attempted delivery: a claim, which increments `attempt_count`.
+ * `outboxClaimed: false` records that the skip happens before any claim.
+ */
+function logDeliberateDeliverySkip(
+  event: 'worker.delivery-skipped-kill-switch' | 'worker.delivery-skipped-target-disabled',
+  workerId: string,
+  target: string,
+  cycle: number,
+): void {
+  console.log(JSON.stringify({
+    event,
+    workerId,
+    target,
+    cycle,
+    reason: event === 'worker.delivery-skipped-kill-switch' ? 'kill-switch-engaged' : 'target-disabled',
+    outboxClaimed: false,
+  }));
 }

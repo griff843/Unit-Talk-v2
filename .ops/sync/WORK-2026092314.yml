@@ -1,0 +1,155 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092314
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092314
+  objective: WORK-2026092314 — two warehouse tests assert something that can fail
+  acceptance_criteria:
+    - >-
+      # WORK-2026092314 — two warehouse tests assert something that can fail
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      Two warehouse tests contain assertions that cannot fail:
+
+
+      - `scripts/warehouse/conveyor.test.ts`, "an interruption after upload
+      leaves no manifest": the loop
+        over uploaded data keys asserts `decidePrune(null).eligible === false` for every key. `null` is
+        a constant, so the loop checks nothing about any key.
+      - `scripts/warehouse/query.test.ts`: the test builds `env = {}` and then
+      asserts each production key
+        is undefined in it, which is true by construction. It also asserts `used_production_database ===
+        false`, a field whose type is the literal `false`.
+
+      ## Outcome
+
+
+      - The conveyor test resolves each data key's manifest the way the conveyor
+      does
+        (`manifestObjectKey(target, computeManifestId(key))`), reads it from the store, and asserts that
+        lookup is ineligible.
+      - The query test asserts the reader connection has no attached database
+      besides DuckDB's own
+        in-memory one after the query ran, which is what "no production database was used" means.
+
+      ## Acceptance
+
+
+      - A mutation that lets the interrupted run write its manifests turns the
+      conveyor assertion red.
+
+      - A mutation that attaches a second database to the reader turns the query
+      assertion red.
+
+      - Test files only; no warehouse source changes.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092314 — two warehouse tests assert something that can fail
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      Two warehouse tests contain assertions that cannot fail:
+
+
+      - `scripts/warehouse/conveyor.test.ts`, "an interruption after upload
+      leaves no manifest": the loop
+        over uploaded data keys asserts `decidePrune(null).eligible === false` for every key. `null` is
+        a constant, so the loop checks nothing about any key.
+      - `scripts/warehouse/query.test.ts`: the test builds `env = {}` and then
+      asserts each production key
+        is undefined in it, which is true by construction. It also asserts `used_production_database ===
+        false`, a field whose type is the literal `false`.
+
+      ## Outcome
+
+
+      - The conveyor test resolves each data key's manifest the way the conveyor
+      does
+        (`manifestObjectKey(target, computeManifestId(key))`), reads it from the store, and asserts that
+        lookup is ineligible.
+      - The query test asserts the reader connection has no attached database
+      besides DuckDB's own
+        in-memory one after the query ran, which is what "no production database was used" means.
+
+      ## Acceptance
+
+
+      - A mutation that lets the interrupted run write its manifests turns the
+      conveyor assertion red.
+
+      - A mutation that attaches a second database to the reader turns the query
+      assertion red.
+
+      - Test files only; no warehouse source changes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092314.md
+    title: WORK-2026092314 — two warehouse tests assert something that can fail
+    description: >-
+      # WORK-2026092314 — two warehouse tests assert something that can fail
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      ## Problem
+
+
+      Two warehouse tests contain assertions that cannot fail:
+
+
+      - `scripts/warehouse/conveyor.test.ts`, "an interruption after upload
+      leaves no manifest": the loop
+        over uploaded data keys asserts `decidePrune(null).eligible === false` for every key. `null` is
+        a constant, so the loop checks nothing about any key.
+      - `scripts/warehouse/query.test.ts`: the test builds `env = {}` and then
+      asserts each production key
+        is undefined in it, which is true by construction. It also asserts `used_production_database ===
+        false`, a field whose type is the literal `false`.
+
+      ## Outcome
+
+
+      - The conveyor test resolves each data key's manifest the way the conveyor
+      does
+        (`manifestObjectKey(target, computeManifestId(key))`), reads it from the store, and asserts that
+        lookup is ineligible.
+      - The query test asserts the reader connection has no attached database
+      besides DuckDB's own
+        in-memory one after the query ran, which is what "no production database was used" means.
+
+      ## Acceptance
+
+
+      - A mutation that lets the interrupted run write its manifests turns the
+      conveyor assertion red.
+
+      - A mutation that attaches a second database to the reader turns the query
+      assertion red.
+
+      - Test files only; no warehouse source changes.
+    captured_at: 2026-09-23T22:38:11.014Z
+    description_sha256: 540459452cfd83c198c3a6f8e50cc1ca4d39139a02aaf586b4c75c5b6413ef47
+  contract_hash: 30277adbc9d556cf0849af30d4169e391f6427daf2a33df662ee95f713ea9172
