@@ -10,7 +10,7 @@ Issue: WORK-2026092620
 Tier: T2
 Lane type: governance
 Branch: claude/work-2026092620-effective-settlement-scripts
-PR URL: PR_URL_TBD
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1662
 Head SHA: dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7
 result: pass
 
@@ -70,5 +70,5 @@ restored from a pre-mutation copy (`cmp` identical; restore rerun 18/18 green).
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: PR_URL_TBD
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1662
 Execution SHA: dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7
