@@ -31,6 +31,11 @@ export interface OutboxOverview {
   oldestUnsentCreatedAt: string | null;
   targets: string[];
   rows: OutboxOverviewRow[];
+  page: number;
+  receiptPage: number;
+  pageSize: number;
+  totalRows: number;
+  totalReceipts: number;
   recentReceipts: Array<{
     id: string;
     outboxId: string;
@@ -44,6 +49,8 @@ export interface OutboxOverview {
 export interface OutboxFilter {
   status?: string | undefined;
   target?: string | undefined;
+  page?: number | undefined;
+  receiptPage?: number | undefined;
 }
 
 function isRetryEligible(status: string, attemptCount: number): boolean {
@@ -72,27 +79,56 @@ export async function getOutboxSummary(): Promise<Pick<OutboxOverview, 'counts' 
   return { counts, oldestUnsentCreatedAt: oldestUnsentResult.data?.[0]?.created_at ?? null };
 }
 
+export function normalizeOutboxPage(value: unknown): number {
+  const page = Number(value);
+  return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
 export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<OutboxOverview> {
   const client = (await getDataClient()) as SupabaseClient<Database>;
 
+  const signal = AbortSignal.timeout(8_000);
+  const page = normalizeOutboxPage(filter.page);
+  const receiptPage = normalizeOutboxPage(filter.receiptPage);
+  const pageSize = 25;
   let rowQuery = applyOperatorPickPopulation(client
     .from('distribution_outbox')
-    .select('id, pick_id, status, target, attempt_count, last_error, next_attempt_at, claimed_at, created_at, updated_at,pick:picks!inner(id)'), 'pick')
+    .select('id, pick_id, status, target, attempt_count, last_error, next_attempt_at, claimed_at, created_at, updated_at,pick:picks!inner(id)', { count: 'exact' }), 'pick')
     .in('target', governedOutboxTargets)
-    .order('updated_at', { ascending: false })
-    .limit(100);
+    .order('updated_at', { ascending: false }).order('id', { ascending: false })
+    .range((page - 1) * pageSize, page * pageSize - 1).abortSignal(signal);
   if (filter.status) rowQuery = rowQuery.eq('status', filter.status);
   if (filter.target) rowQuery = rowQuery.eq('target', filter.target);
 
-  const [summary, rowsResult, receiptsResult] = await Promise.all([
+  const [summary, initialRowsResult, initialReceiptsResult] = await Promise.all([
     getOutboxSummary(),
     rowQuery,
     applyOperatorPickPopulation(client
       .from('distribution_receipts')
-      .select('id, outbox_id, channel, status, receipt_type, recorded_at,outbox:distribution_outbox!inner(target,pick:picks!inner(id))'), 'outbox.pick').in('outbox.target', governedOutboxTargets)
-      .order('recorded_at', { ascending: false })
-      .limit(50),
+      .select('id, outbox_id, channel, status, receipt_type, recorded_at,outbox:distribution_outbox!inner(target,pick:picks!inner(id))', { count: 'exact' }), 'outbox.pick').in('outbox.target', governedOutboxTargets)
+      .order('recorded_at', { ascending: false }).order('id', { ascending: false })
+      .range((receiptPage - 1) * pageSize, receiptPage * pageSize - 1).abortSignal(signal),
   ]);
+
+  // PostgREST reports a valid empty page beyond the end as 416/PGRST103.
+  // Re-read its exact scoped count; unrelated errors must still fail visibly.
+  let rowsResult = initialRowsResult;
+  if (rowsResult.error?.code === 'PGRST103') {
+    let countQuery = applyOperatorPickPopulation(client.from('distribution_outbox').select('id,pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
+      .in('target', governedOutboxTargets).abortSignal(signal);
+    if (filter.status) countQuery = countQuery.eq('status', filter.status);
+    if (filter.target) countQuery = countQuery.eq('target', filter.target);
+    const count = readAuthoritativeCount(await countQuery, 'matching outbox rows');
+    rowsResult = { ...rowsResult, error: null, data: [], count, status: 200, statusText: 'OK' };
+  }
+  let receiptsResult = initialReceiptsResult;
+  if (receiptsResult.error?.code === 'PGRST103') {
+    const result = await applyOperatorPickPopulation(client.from('distribution_receipts')
+      .select('id,outbox:distribution_outbox!inner(target,pick:picks!inner(id))', { count: 'exact', head: true }), 'outbox.pick')
+      .in('outbox.target', governedOutboxTargets).abortSignal(signal);
+    const count = readAuthoritativeCount(result, 'governed delivery receipts');
+    receiptsResult = { ...receiptsResult, error: null, data: [], count, status: 200, statusText: 'OK' };
+  }
 
   assertQuerySucceeded(rowsResult, 'outbox rows');
   assertQuerySucceeded(receiptsResult, 'delivery receipts');
@@ -121,6 +157,9 @@ export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<Outb
     ...summary,
     targets,
     rows,
+    page, receiptPage, pageSize,
+    totalRows: readAuthoritativeCount(rowsResult, 'matching outbox rows'),
+    totalReceipts: readAuthoritativeCount(receiptsResult, 'governed delivery receipts'),
     recentReceipts: ((receiptsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
       id: String(row['id'] ?? ''),
       outboxId: String(row['outbox_id'] ?? ''),
