@@ -188,10 +188,25 @@ The first staging run (CI run 36212886508, job `Writable DB proof (staging only)
    `payload.score`.
 3. Every status assertion reports the recorded suppression reasons and `boardStateAtDecision`.
 
-No assertion on the recorded decision is relaxed. **This does not clear the `perSlate`
-saturation of the staging best-bets board.** While that board holds 15 or more such picks,
-tests 1 and 2 will keep failing, now with a message naming the gate. Clearing it means
-removing or settling fixture rows this lane did not create, and is not done here.
+No assertion on the recorded decision is relaxed. This lane does not clear the `perSlate`
+saturation of the staging best-bets board; it removes no fixture rows it did not create.
+
+### Staging run 36226933161: the live proof passes
+
+The saturation was cleared by a separate lane, WORK-2026092602 (#1655, merged `e019642a8`),
+which drains positively identified leaked CI fixtures off the staging board through
+`transition_pick_lifecycle` in the staging-asserted seed step. On this lane's resynced head, CI
+run 36226933161, job `Writable DB proof (staging only)`:
+
+```
+[seed-staging] best-bets board drain: 0 leaked fixture pick(s) voided (scanned=524, raced=0)
+ok 1 - UTV2-1954 live-DB: the reported NBA prop replays suppressed at 60.15, not qualified at 70.76
+ok 2 - UTV2-1954 live-DB: a qualifying canonical player prop replays qualified at its recorded score
+ok 3 - UTV2-1954 live-DB: a game line and an unsupported sport replay at their recorded scores
+ok 4 - UTV2-1954 live-DB: a persisted row stripped of its scoring context is not reproducible
+```
+
+Every other T1 live suite in that job also passed (`# fail 0` for each).
 
 ## Verification
 - [x] `pnpm type-check`: exit 0
