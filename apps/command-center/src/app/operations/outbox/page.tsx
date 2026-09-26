@@ -21,12 +21,23 @@ function readParam(searchParams: Record<string, string | string[] | undefined> |
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function pillHref(status?: string, target?: string) {
+function pillHref(status?: string, target?: string, page = 1, receiptPage = 1) {
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   if (target) params.set('target', target);
+  if (page > 1) params.set('page', String(page));
+  if (receiptPage > 1) params.set('receiptPage', String(receiptPage));
   const query = params.toString();
   return query ? `/operations/outbox?${query}` : '/operations/outbox';
+}
+
+function HistoryPages({ label, page, total, pageSize, href }: { label: string; page: number; total: number; pageSize: number; href: (page: number) => string }) {
+  const lastPage = Math.max(1, Math.ceil(total / pageSize));
+  return <nav aria-label={label} className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+    <span>Page {page} of {lastPage} · {total.toLocaleString('en-US')} records</span>
+    {page > 1 ? <Link className="text-blue-400 hover:underline" href={href(Math.min(page - 1, lastPage))}>Previous page</Link> : null}
+    {page < lastPage ? <Link className="text-blue-400 hover:underline" href={href(page + 1)}>Next page</Link> : null}
+  </nav>;
 }
 
 function FilterPill({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
@@ -58,7 +69,7 @@ export default async function OutboxOpsPage({
   let overview: OutboxOverview | null = null;
   let loadError: string | null = null;
   try {
-    overview = await getOutboxOverview({ status, target });
+    overview = await getOutboxOverview({ status, target, page: Number(readParam(searchParams, 'page')), receiptPage: Number(readParam(searchParams, 'receiptPage')) });
   } catch (error) {
     console.error('Delivery data unavailable', error);
     loadError = 'Delivery records could not be loaded. Refresh to retry; counts are unavailable until the read succeeds.';
@@ -101,6 +112,7 @@ export default async function OutboxOpsPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">Filters</h2>
+            <p className="mb-3 text-xs cc-text-muted">Filters apply to attempts. Summary counts and receipts cover all governed delivery records.</p>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs cc-text-muted">Status:</span>
               <FilterPill href={pillHref(undefined, target)} active={!status}>All</FilterPill>
@@ -121,12 +133,12 @@ export default async function OutboxOpsPage({
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Outbox Rows ({overview.rows.length}{status || target ? ' filtered' : ''})
+              Outbox Rows ({overview.rows.length} shown of {overview.totalRows.toLocaleString('en-US')})
             </h2>
             {overview.rows.length === 0 ? (
               <EmptyState
                 message="No outbox rows match this filter."
-                detail="Adjust the status/target pills above."
+                detail="Adjust the status/target filters or return to an earlier page."
               />
             ) : (
               <div className="overflow-x-auto">
@@ -176,12 +188,14 @@ export default async function OutboxOpsPage({
             )}
           </div>
 
+          <HistoryPages label="Outbox pages" page={overview.page} total={overview.totalRows} pageSize={overview.pageSize} href={(page) => pillHref(status, target, page, overview.receiptPage)} />
+
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Recent Receipts ({overview.recentReceipts.length})
+              Delivery Receipts ({overview.recentReceipts.length} shown of {overview.totalReceipts.toLocaleString('en-US')})
             </h2>
             {overview.recentReceipts.length === 0 ? (
-              <EmptyState message="No delivery receipts recorded yet." />
+              <EmptyState message="No delivery receipts on this page." />
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -209,6 +223,7 @@ export default async function OutboxOpsPage({
               </div>
             )}
           </div>
+          <HistoryPages label="Receipt pages" page={overview.receiptPage} total={overview.totalReceipts} pageSize={overview.pageSize} href={(page) => pillHref(status, target, overview.page, page)} />
         </>
       ) : null}
     </div>
