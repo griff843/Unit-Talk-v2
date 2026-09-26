@@ -5,7 +5,7 @@
  * Run: UNIT_TALK_APP_ENV=local npx tsx --test apps/api/src/t1-proof-atomicity.test.ts
  */
 
-import { describe, test, before } from 'node:test';
+import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
@@ -268,6 +268,30 @@ describe('STEP 3 — Enqueue atomicity (UTV2-219)', () => {
     assert.ok(!error, `Re-enqueue error: ${error?.message}`);
     assert.equal(data, null, 'Expected null — pick not in validated state');
     console.log(`  ✓ Re-enqueue correctly returned null`);
+  });
+
+  // WORK-2026092602: this fixture is a qualified best-bets pick, so left queued it
+  // holds best-bets board capacity for 7 days (`getPromotionBoardState`). It leaked
+  // once per run and kept the shared staging board permanently over its caps.
+  // Voiding it after the assertions changes nothing the steps above prove.
+  //
+  // Through the lifecycle FSM (`transition_pick_lifecycle`), never a raw status
+  // PATCH, so the void is validated and recorded like any other transition. A
+  // failed cleanup is surfaced: a fixture left on the board is an operational fact.
+  after(async () => {
+    if (!enqueuePickId) return;
+    const picks = await query<PickStatusRow>('picks', `id=eq.${enqueuePickId}&select=status`);
+    const fromState = picks[0]?.status;
+    if (fromState !== 'queued' && fromState !== 'validated') return;
+    const { error } = await rpc<unknown>('transition_pick_lifecycle', {
+      p_pick_id: enqueuePickId,
+      p_from_state: fromState,
+      p_to_state: 'voided',
+      p_writer_role: 'operator_override',
+      p_reason: 'WORK-2026092602 atomicity proof fixture cleanup: release best-bets board capacity',
+      p_payload: { proof: true },
+    });
+    assert.ok(!error, `STEP 3 fixture cleanup failed for pick ${enqueuePickId}: ${error?.message}`);
   });
 });
 
