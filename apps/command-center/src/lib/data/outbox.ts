@@ -81,7 +81,7 @@ export async function getOutboxSummary(): Promise<Pick<OutboxOverview, 'counts' 
 
 export function normalizeOutboxPage(value: unknown): number {
   const page = Number(value);
-  return Number.isInteger(page) && page > 0 ? Math.min(page, 10_000) : 1;
+  return Number.isSafeInteger(page) && page > 0 ? page : 1;
 }
 
 export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<OutboxOverview> {

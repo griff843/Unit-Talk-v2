@@ -73,9 +73,11 @@ test('delivery readers scope every count, attempt and receipt to operator picks'
     });
     await t.test('out-of-range pages keep verified totals and an empty page instead of reporting a backend outage', async () => {
       failure = 'range';
-      const result = await withRequestContext({ authorization: 'Bearer delivery-reader-test' }, () => getOutboxOverview({ page: 10000, receiptPage: 10000 }));
+      const result = await withRequestContext({ authorization: 'Bearer delivery-reader-test' }, () => getOutboxOverview({ page: 10001, receiptPage: 10001 }));
       assert.equal(result.totalRows, 1250);
       assert.equal(result.totalReceipts, 1250);
+      assert.equal(result.page, 10001);
+      assert.equal(result.receiptPage, 10001);
       assert.equal(result.rows.length, 0);
       assert.equal(result.recentReceipts.length, 0);
       failure = 'none';
