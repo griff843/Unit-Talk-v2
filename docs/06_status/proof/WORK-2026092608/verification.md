@@ -14,8 +14,8 @@ result: pass
 
 ## ASSERTIONS:
 
-- [x] `defaultProofPaths` declares diff-summary.md, evidence.json and verification.md for every tier; an existing declared list is not rewritten (shared.test; M1 red).
-- [x] The declared set passes closeout P11 at every tier by filename alone (truth-check-lib.test; M1 red).
+- [x] `defaultProofPaths` declares diff-summary.md, evidence.json and verification.md for T1 and T2, and nothing for T3; an existing declared list is not rewritten (shared.test; M1 red).
+- [x] The declared set passes closeout P11 at T1 and T2 by filename alone (truth-check-lib.test; M1 red).
 - [x] lane-start scaffolds diff-summary.md and verification.md with a `Merge SHA: pending merge` anchor that `rebindMergeShaAnchorsInMarkdown` binds, and never writes a SHA or a `.gitkeep` (lane-start.test; M2, M3 red).
 - [x] An unfilled scaffold still fails P12-P14 and carries no checked assertion or fenced evidence (lane-start.test).
 - [x] A tracker-linked lane's unstarted issue is moved to In Claude / In Codex after preflight and the manifest write, on all three lane-start paths (M4, M5 red).
@@ -26,11 +26,11 @@ result: pass
 
 ```
 $ pnpm exec tsx --test scripts/ops/shared.test.ts           # tests 133  # pass 133  # fail 0
-$ pnpm exec tsx --test scripts/ops/lane-start.test.ts       # tests 73   # pass 73   # fail 0
+$ pnpm exec tsx --test scripts/ops/lane-start.test.ts       # tests 74   # pass 74   # fail 0
 $ pnpm exec tsx --test scripts/ops/lease-registry.test.ts   # tests 42   # pass 42   # fail 0
 $ pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts  # tests 158  # pass 158  # fail 0
 $ pnpm exec tsx --test scripts/ops/lane-manifest.test.ts    # tests 35   # pass 35   # fail 0
-$ pnpm test:ops                                             # tests 3452 # pass 3452 # fail 0
+$ pnpm test:ops                                             # tests 3453 # pass 3453 # fail 0
 ```
 
 ## Verification
@@ -72,3 +72,20 @@ from a pre-mutation copy (file checksums identical before and after; restore rer
 Merge SHA: pending merge
 PR: pending
 Execution SHA: 12dc5458001478aa1dbcec9bb18d4e3e07b645bb
+
+### Orchestrator review fixes
+
+Two defects found in review and repaired in `28907a15e`:
+
+1. **T3 kept bundle-free.** The first version gave every tier the three-file bundle. T3's proof is
+   green CI on the merge SHA (truth-check M7, the tier table), so a bundle would be a tier-policy
+   change, not a repair. `defaultProofPaths` returns `[]` for T3 again. Mutation MB (drop the T3
+   branch): shared.test red.
+2. **A reopened lane keeps its lease.** The sweep read `origin/main` first, so a lane reopened
+   locally (main `done`, local `started`) would have lost its live lease. A live local manifest now
+   wins. A local `merged` beside a terminal main is a stale copy and does not block the release.
+   New test "a lane reopened locally keeps its lease although main reads done". Mutation MA (main
+   always wins): that test red.
+
+Re-measured after the fixes: lane-start 74/74, shared 133/133, truth-check-lib 158/158,
+`pnpm test:ops` 3453/3453, eslint on the touched files rc=0.
