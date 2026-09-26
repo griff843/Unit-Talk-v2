@@ -473,6 +473,18 @@ function redactValue(
 }
 
 /**
+ * The redaction boundary for anything the warehouse persists at rest (the
+ * backfill ledger). Every string, at any depth, goes through `redactSecrets`,
+ * so failure text keeps its diagnostic shape with credential values removed.
+ * Unlike {@link redactLogEvent} it does not substitute a placeholder object: a
+ * durable record must never be silently replaced, so if redaction fails this
+ * throws and the caller must not write.
+ */
+export function redactForPersistence<T>(value: T, env: NodeJS.ProcessEnv = process.env): T {
+  return redactValue(value, env, 0, new Set<object>()) as T;
+}
+
+/**
  * The single redaction boundary for anything the warehouse writes to a log or
  * to stdout. Every string, at any depth, goes through `redactSecrets`. It fails
  * closed: if redaction throws for any reason, the caller receives

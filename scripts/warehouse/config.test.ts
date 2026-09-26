@@ -16,6 +16,7 @@ import {
   SECRET_ENV_KEYS,
   WAREHOUSE_ENV_KEYS,
   formatRedactedJson,
+  redactForPersistence,
   redactLogEvent,
   redactMessage,
   classifyArchiveState,
@@ -436,4 +437,21 @@ test('redactMessage fails closed on text it cannot process', () => {
   const out = redactMessage(secretBearingText(), env);
   assertNoSecret(out, 'redactMessage');
   assert.match(out, /withheld/);
+});
+
+test('redactForPersistence removes secrets at any depth and throws rather than persisting on failure', () => {
+  const env = { HETZNER_DATABASE_URL: 'postgres://u:env-only-9f3@h/db' } as NodeJS.ProcessEnv;
+  const record = {
+    windows: [{ failures: ['connect postgres://svc:pw-9f3@db.example.test:5432/x failed', 'echo postgres://u:env-only-9f3@h/db'] }],
+  };
+  const out = redactForPersistence(record, env);
+  const text = JSON.stringify(out);
+  assert.equal(text.includes('pw-9f3'), false);
+  assert.equal(text.includes('env-only-9f3'), false);
+  assert.match(text, /db\.example\.test/);
+  assert.equal(out.windows[0].failures.length, 2);
+
+  const circular: Record<string, unknown> = { a: 1 };
+  circular.self = circular;
+  assert.throws(() => redactForPersistence(circular, env));
 });

@@ -1,4 +1,4 @@
-import { redactLogEvent } from './config.js';
+import { redactForPersistence, redactLogEvent } from './config.js';
 import { type DuckConnection } from './duckdb.js';
 import {
   type ConveyorItemResult,
@@ -285,8 +285,14 @@ function isComplete(ledger: BackfillLedger): boolean {
   );
 }
 
+/**
+ * The ledger's only serialization point, and its at-rest redaction boundary:
+ * window failures carry driver, database and object-store text, which can hold
+ * a connection string or a key. If redaction throws, this throws, and the run
+ * stops as `ledger_failed` rather than persisting raw text.
+ */
 function ledgerBody(ledger: BackfillLedger): Buffer {
-  return Buffer.from(`${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
+  return Buffer.from(`${JSON.stringify(redactForPersistence(ledger), null, 2)}\n`, 'utf8');
 }
 
 /**

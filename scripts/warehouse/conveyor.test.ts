@@ -1133,3 +1133,81 @@ test('redaction: the conveyor with no log sink writes only redacted events to st
     await ws.close();
   }
 });
+
+/** Every object at rest in the local bucket, read raw from disk. */
+function bucketBodies(ws: Workspace): string[] {
+  const root = path.join(ws.workDir, 'bucket');
+  if (!fs.existsSync(root)) return [];
+  const files = fs.readdirSync(root, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile());
+  return files.map((entry) => fs.readFileSync(path.join(entry.parentPath ?? entry.path, entry.name), 'utf8'));
+}
+
+function assertNothingAtRestLeaks(ws: Workspace, label: string): void {
+  const bodies = bucketBodies(ws);
+  for (const [name, value] of Object.entries(LEAKY)) {
+    assert.equal(bodies.some((body) => body.includes(value)), false, `${label}: ${name} is persisted at rest`);
+  }
+}
+
+test('at rest: a failed window persists its failures in the ledger with no secret', async () => {
+  const ws = await workspace(seedOffers);
+  try {
+    await withEnvCredential(async () => {
+      const plan = historyPlan('2026-05-11', '2026-05-12');
+      const failing: DuckConnection = {
+        run: async () => {
+          throw leakyError();
+        },
+        all: async () => {
+          throw leakyError();
+        },
+        close: async () => {},
+      };
+      const result = await backfill(ws, plan, { connection: failing, log: () => {} });
+      // Not vacuous: the run's own failure text carried the secret.
+      assert.ok(result.windows[0].failures.join(' ').includes(LEAKY.uriPassword), 'the fixture never failed with a secret');
+
+      const body = (await ws.store.get(plan.ledger_key))!.toString('utf8');
+      for (const [name, value] of Object.entries(LEAKY)) {
+        assert.equal(body.includes(value), false, `persisted ledger: ${name} is at rest`);
+      }
+      const persisted = JSON.parse(body) as BackfillLedger;
+      assert.equal(persisted.windows[0].status, 'failed');
+      assert.equal(persisted.failed_window, '2026-05-11');
+      // Diagnostics survive: the failure is still recorded, with values redacted.
+      assert.ok(persisted.windows[0].failures.length > 0, 'the failure itself was dropped');
+      assert.match(persisted.windows[0].failures.join(' '), /\[redacted/);
+      assert.match(persisted.windows[0].failures.join(' '), /db\.example\.test/);
+      assertNothingAtRestLeaks(ws, 'failed-window run');
+    });
+  } finally {
+    await ws.close();
+  }
+});
+
+test('at rest: a ledger write failure leaves no secret in any persisted object', async () => {
+  const ws = await workspace(seedOffers);
+  try {
+    await withEnvCredential(async () => {
+      const plan = historyPlan('2026-05-11', '2026-05-12');
+      let ledgerPuts = 0;
+      // The first ledger write succeeds; the second fails with credential-bearing text.
+      const flakyLedger = wrapStore(ws.store, (key, body, contentType) => {
+        if (key === plan.ledger_key && ++ledgerPuts === 2) return Promise.reject(leakyError());
+        return ws.store.put(key, body, contentType);
+      });
+      const result = await backfill(ws, plan, { store: flakyLedger, log: () => {} });
+      assert.equal(result.ok, false);
+      assert.ok(result.ledger_error?.includes(LEAKY.uriPassword), 'the fixture never failed with a secret');
+      assert.equal(ledgerPuts, 2, 'the ledger was written once, then refused');
+
+      const persisted = await readLedger(ws.store, plan);
+      assert.equal(persisted.windows[0].status, 'archived', 'the first write recorded real progress');
+      // ledger_error exists only because the write failed, so it is never part of a persisted ledger.
+      assert.equal(Object.hasOwn(persisted, 'ledger_error'), false, 'ledger_error was persisted');
+      assertNothingAtRestLeaks(ws, 'ledger_failed run');
+    });
+  } finally {
+    await ws.close();
+  }
+});
