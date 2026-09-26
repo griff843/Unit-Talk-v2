@@ -1,6 +1,6 @@
 # Diff summary: WORK-2026092608
 
-Base `5710c8fe4`, code commit `12dc5458001478aa1dbcec9bb18d4e3e07b645bb`. 7 files, +918 / -32.
+Base `5710c8fe4`, code commit `28907a15e92785636e7565e5e69cab1dadb95781`. 7 files, +918 / -32.
 
 | File | Change |
 |---|---|
@@ -22,4 +22,4 @@ which needs the execution SHA. T3 lanes are unchanged: they declare no bundle.
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: 12dc5458001478aa1dbcec9bb18d4e3e07b645bb
+Execution SHA: 28907a15e92785636e7565e5e69cab1dadb95781

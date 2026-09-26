@@ -9,7 +9,7 @@ Issue: WORK-2026092608
 Tier: T2
 Lane type: governance
 Branch: claude/work-2026092608-closeable-lane-start
-Head SHA: 12dc5458001478aa1dbcec9bb18d4e3e07b645bb
+Head SHA: 28907a15e92785636e7565e5e69cab1dadb95781
 result: pass
 
 ## ASSERTIONS:
@@ -35,7 +35,7 @@ $ pnpm test:ops                                             # tests 3453 # pass 
 
 ## Verification
 
-Measured on `12dc5458001478aa1dbcec9bb18d4e3e07b645bb` in the lane worktree.
+Measured on `28907a15e92785636e7565e5e69cab1dadb95781` in the lane worktree.
 
 ```
 $ pnpm test:ops                  -> tests 3452, pass 3452, fail 0
@@ -71,7 +71,7 @@ from a pre-mutation copy (file checksums identical before and after; restore rer
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: 12dc5458001478aa1dbcec9bb18d4e3e07b645bb
+Execution SHA: 28907a15e92785636e7565e5e69cab1dadb95781
 
 ### Orchestrator review fixes
 

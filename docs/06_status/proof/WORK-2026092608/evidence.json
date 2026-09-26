@@ -7,13 +7,14 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "12dc5458001478aa1dbcec9bb18d4e3e07b645bb",
+    "verified_source_sha": "28907a15e92785636e7565e5e69cab1dadb95781",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "note": "28907a15e92785636e7565e5e69cab1dadb95781 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the orchestrator review fixes (T3 bundle-free, reopened-lane lease). Superseded anchor 12dc5458001478aa1dbcec9bb18d4e3e07b645bb. Previous note: "
   },
   "static_proof": {
     "status": "pass",
-    "measured_on": "12dc5458001478aa1dbcec9bb18d4e3e07b645bb",
+    "measured_on": "28907a15e92785636e7565e5e69cab1dadb95781",
     "unit_tests": [
       {
         "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
