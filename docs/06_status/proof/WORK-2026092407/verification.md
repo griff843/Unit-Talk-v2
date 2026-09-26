@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092407
 
-MERGE_SHA: pending merge
+MERGE_SHA: 4180e5fefdf17cbef3a345b5d13bca38632803e2
 
 > Pre-merge, the merge row is intentionally a placeholder. The Execution SHA row carries the last commit on this lane that changes
 > anything outside `docs/06_status/proof/WORK-2026092407/` and the lane manifest.
@@ -131,7 +131,7 @@ precondition in the runbook for retiring `cc-proxy`, and `cc-proxy` is not touch
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 4180e5fefdf17cbef3a345b5d13bca38632803e2
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1652
 Execution SHA: 98bda0923b6dab73cdaefdcf2c217f48c922c5be
 

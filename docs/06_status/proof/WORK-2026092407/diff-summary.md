@@ -7,7 +7,7 @@ Lane type: hygiene
 Branch: claude/work-2026092407-cc-operator-bridge
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1652
 Head SHA: 98bda0923b6dab73cdaefdcf2c217f48c922c5be
-Merge SHA: pending merge
+Merge SHA: 4180e5fefdf17cbef3a345b5d13bca38632803e2
 Diff base: 5b193aedb3536e5705d6b708d8fe5bc9c6bd43fb (origin/main)
 Diff target: 98bda0923b6dab73cdaefdcf2c217f48c922c5be
 
@@ -40,4 +40,4 @@ The proof commit that follows removes `.gitkeep` and adds this bundle.
 
 ## SHA Binding
 Head SHA: 98bda0923b6dab73cdaefdcf2c217f48c922c5be
-Merge SHA: pending merge
+Merge SHA: 4180e5fefdf17cbef3a345b5d13bca38632803e2
