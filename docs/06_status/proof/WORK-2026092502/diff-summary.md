@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092502-warehouse-historical-backfill
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1650
 Head SHA: f7c7b21be13f466ac47df36ac61b930158d89c99
-Merge SHA: pending merge
+Merge SHA: 53f99a8951d1decc4c488c7b99e33f7c52ad0914
 Diff base: d4253e8c59a43c42d9ce31714cbd47030504f660 (origin/main)
 Diff target: f7c7b21be13f466ac47df36ac61b930158d89c99
 

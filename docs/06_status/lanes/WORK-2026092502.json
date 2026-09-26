@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092502-warehouse-historical-backfill",
   "branch": "claude/work-2026092502-warehouse-historical-backfill",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "53f99a8951d1decc4c488c7b99e33f7c52ad0914",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1650",
   "files_changed": [],
   "file_scope_lock": [
@@ -27,14 +27,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026092502/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-25T20:24:27.912Z",
-  "heartbeat_at": "2026-09-25T20:24:27.912Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-26T14:05:36.428Z",
+  "closed_at": "2026-09-26T14:05:36.428Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092502-warehouse-historical-backfill.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-26T14:05:34.106Z",
+      "verdict": "pass",
+      "merge_sha": "53f99a8951d1decc4c488c7b99e33f7c52ad0914",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092502
 
-MERGE_SHA: pending merge
+MERGE_SHA: 53f99a8951d1decc4c488c7b99e33f7c52ad0914
 
 > Pre-merge, the merge row is intentionally a placeholder. The Execution SHA row carries the last commit on this lane that changes
 > anything outside `docs/06_status/proof/WORK-2026092502/` and the lane manifest.
@@ -184,7 +184,7 @@ the file was restored; all suites were green after restore.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 53f99a8951d1decc4c488c7b99e33f7c52ad0914
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1650
 Execution SHA: f7c7b21be13f466ac47df36ac61b930158d89c99
 
