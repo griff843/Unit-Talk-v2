@@ -6,10 +6,10 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1919-evidence-settlement-correction
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1589
-Head SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
+Head SHA: 924954c699e4fa00cad61a2c83fa6f8944963ccc
 Merge SHA: N/A
 Diff base: 4ab51ce8638062651fd3c8c572b260f5875dc6c0
-Diff target: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
+Diff target: 924954c699e4fa00cad61a2c83fa6f8944963ccc
 
 ## Git Diff Stat
 ```
@@ -36,5 +36,5 @@ A	docs/06_status/proof/UTV2-1919/.gitkeep
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
+Head SHA: 924954c699e4fa00cad61a2c83fa6f8944963ccc
 Merge SHA: N/A

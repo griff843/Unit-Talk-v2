@@ -7,11 +7,11 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f9ec8add91c30978a4cc797f4aecac2f09ceafdb",
+    "verified_source_sha": "924954c699e4fa00cad61a2c83fa6f8944963ccc",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "f9ec8add91c30978a4cc797f4aecac2f09ceafdb is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1919/. Every static measurement below was taken on that exact tree in the lane worktree. The proof bundle commit that follows it touches only the proof directory, which the proof-binding validator treats as prefix-exempt, so the execution anchor does not move when this file lands. Re-anchored 2026-09-23 after resyncing onto main 4ab51ce86 (merge 4204aa2c2) and tightening the race test (f9ec8add9); every measurement below was re-taken on this tree."
+    "note": "924954c699e4fa00cad61a2c83fa6f8944963ccc is the post-resync merge anchor that includes current main and the substantive lane changes. Every static measurement below was taken on that exact tree in the lane worktree. Subsequent accepted changes are proof or lane-governance metadata, so the execution anchor remains stable. Re-anchored 2026-09-23 after resyncing onto main 4ab51ce86 (merge 4204aa2c2) and incorporating the rewritten race-test commit 25794312c; every measurement below was re-taken on this tree."
   },
   "what_this_lane_repairs": {
     "defect": "An evidence-plane settlement could not be corrected. An evidence-plane pick keeps its status (validated / awaiting_approval) after it settles — deliberately, because validated -> settled is not a legal FSM edge — so recordPickSettlement dispatched every LATER operator grade back into recordOperatorEvidenceSettlement rather than to recordSettlementCorrection. The second grade was written as another *original*, corrects_id null, which production's partial unique index settlement_records_pick_source_idx (pick_id, source) WHERE corrects_id IS NULL rejects with 23505.",
@@ -77,7 +77,7 @@
           "mutation": "Restore main's exact pre-lane 23505 catch body: re-read findLatestForPick and return it as this request's settlementRecord with auditRecords: [].",
           "expected": "The refusal is reported as a success.",
           "observed": "1 failure — 'a duplicate-key race is refused, never reported as a successful settlement' — because the mutant RESOLVES with the other writer's WIN row. The other 37 pass.",
-          "correction_to_the_earlier_record": "Re-running M2 on 2026-09-23 found the earlier race test weaker than recorded: its stub returned null from EVERY findLatestForPick call, so the fake-success branch could never find a row and the mutant failed the test only because the raw 23505 message did not match the expected pattern. Commit f9ec8add9 makes only the pre-insert read miss, so the test now fails the old behaviour for the reason it names. A first 2026-09-23 run of a hand-written M2 that kept the 409 throw after the re-read inverted nothing, which is what exposed this."
+          "correction_to_the_earlier_record": "Re-running M2 on 2026-09-23 found the earlier race test weaker than recorded: its stub returned null from EVERY findLatestForPick call, so the fake-success branch could never find a row and the mutant failed the test only because the raw 23505 message did not match the expected pattern. Commit 25794312c makes only the pre-insert read miss, so the test now fails the old behaviour for the reason it names. A first 2026-09-23 run of a hand-written M2 that kept the 409 throw after the re-read inverted nothing, which is what exposed this."
         }
       ],
       "restore_check": {

@@ -11,7 +11,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1919-evidence-settlement-correction
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1589
-Head SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
+Head SHA: 924954c699e4fa00cad61a2c83fa6f8944963ccc
 result: pass
 
 ## ASSERTIONS:
@@ -28,7 +28,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on head `f9ec8add91c30978a4cc797f4aecac2f09ceafdb` in the lane worktree.
+Measured on head `924954c699e4fa00cad61a2c83fa6f8944963ccc` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test apps/api/src/settlement-service.test.ts
@@ -105,7 +105,7 @@ behaviour.
 **Correction to the earlier record (2026-09-23).** Re-running M2 at the resynced head showed the
 race test was weaker than first recorded: its stub returned `null` from *every*
 `findLatestForPick` call, so the fake-success branch could never find a row, and the mutant failed
-only because the raw 23505 message did not match the expected pattern. Commit `f9ec8add9` makes
+only because the raw 23505 message did not match the expected pattern. Commit `924954c69` makes
 only the pre-insert read miss — every later read sees the other writer's row, as in the real race —
 so the mutant now **resolves** with that row and the test fails for the reason it names.
 
@@ -153,4 +153,4 @@ unreachable from this workstation.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1589
 Approved PR head: pending merge
-Execution SHA: f9ec8add91c30978a4cc797f4aecac2f09ceafdb
+Execution SHA: 924954c699e4fa00cad61a2c83fa6f8944963ccc
