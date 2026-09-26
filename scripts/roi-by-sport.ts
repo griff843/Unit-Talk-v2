@@ -14,6 +14,12 @@ import {
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  formatUnresolvedSummary,
+  loadEffectiveSettlements,
+  type ReadClient,
+  type UnresolvedPick,
+} from './effective-settlements.js';
 
 export interface RoiBySportRow {
   result: string | null;
@@ -347,46 +353,40 @@ export function buildMonitorResult(
   };
 }
 
-async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
-  const env = loadEnvironment();
-  const connection = createServiceRoleDatabaseConnectionConfig(env);
-  const client = createDatabaseClientFromConnection(connection);
+export interface RoiFetchResult {
+  rows: RoiBySportRow[];
+  unresolved: UnresolvedPick[];
+}
 
-  const { data, error } = await client
-    .from('settlement_records')
-    .select(
-      `
-      result,
-      pick_id,
-      payload,
-      settled_at,
-      picks!inner(id, stake_units, odds, metadata)
-    `,
-    )
-    .gte('settled_at', afterDate)
-    .is('corrects_id', null);
-
-  if (error) {
-    throw new Error(`Failed to fetch settled ROI rows: ${error.message}`);
-  }
+/**
+ * Settled rows for every pick whose ROOT settlement is on/after `afterDate`,
+ * each carrying its EFFECTIVE settlement (the tip of its correction chain).
+ * Picks whose chain does not resolve are returned as unresolved, not counted.
+ */
+export async function fetchRoiRows(
+  client: ReadClient,
+  afterDate: string,
+): Promise<RoiFetchResult> {
+  const load = await loadEffectiveSettlements(
+    client,
+    { dateColumn: 'settled_at', after: afterDate },
+    'payload, picks!inner(id, stake_units, odds, metadata)',
+  );
 
   const promotionPayloadByPickId = await fetchLatestPromotionPayloads(
     client,
-    (data ?? [])
-      .map((row) => readString(row.pick_id))
-      .filter((pickId): pickId is string => pickId !== null),
+    load.effective.map((row) => row.pick_id),
   );
 
-  return (data ?? []).map((row) => {
-    const pick = Array.isArray(row.picks) ? row.picks[0] : row.picks;
-    const metadata = asRecord(pick?.metadata);
-    const payload = asRecord(row.payload);
-    const pickId = readString(row.pick_id) ?? readString(pick?.id);
-    const promotionPayload = pickId
-      ? (promotionPayloadByPickId.get(pickId) ?? null)
-      : null;
+  const rows = load.effective.map((effective) => {
+    const row = effective.raw;
+    const pick = asRecord(Array.isArray(row['picks']) ? row['picks'][0] : row['picks']);
+    const metadata = asRecord(pick?.['metadata']);
+    const payload = asRecord(row['payload']);
+    const pickId = effective.pick_id;
+    const promotionPayload = promotionPayloadByPickId.get(pickId) ?? null;
     return {
-      result: typeof row.result === 'string' ? row.result : null,
+      result: effective.result,
       sport: typeof metadata?.['sport'] === 'string' ? metadata['sport'] : null,
       marketType:
         typeof metadata?.['marketTypeId'] === 'string'
@@ -394,20 +394,28 @@ async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
           : typeof metadata?.['marketType'] === 'string'
             ? metadata['marketType']
             : null,
-      odds: readNumber(pick?.odds),
-      stakeUnits: readNumber(pick?.stake_units),
+      odds: readNumber(pick?.['odds']),
+      stakeUnits: readNumber(pick?.['stake_units']),
       clvStatus:
         typeof payload?.['clvStatus'] === 'string'
           ? payload['clvStatus']
           : null,
       edgeSourceSplit: resolveEdgeSourceSplit(metadata, promotionPayload),
-      settledAt: row.settled_at,
+      settledAt: effective.settled_at,
     };
   });
+  return { rows, unresolved: load.unresolved };
+}
+
+async function fetchRows(afterDate: string): Promise<RoiFetchResult> {
+  const env = loadEnvironment();
+  const connection = createServiceRoleDatabaseConnectionConfig(env);
+  const client = createDatabaseClientFromConnection(connection);
+  return fetchRoiRows(client as unknown as ReadClient, afterDate);
 }
 
 async function fetchLatestPromotionPayloads(
-  client: ReturnType<typeof createDatabaseClientFromConnection>,
+  client: ReadClient,
   pickIds: string[],
 ): Promise<Map<string, Record<string, unknown>>> {
   const uniquePickIds = [...new Set(pickIds)];
@@ -427,10 +435,11 @@ async function fetchLatestPromotionPayloads(
       );
     }
 
-    for (const row of data ?? []) {
-      const pickId = readString(row.pick_id);
+    for (const raw of data ?? []) {
+      const row = asRecord(raw);
+      const pickId = readString(row?.['pick_id']);
       if (!pickId || payloads.has(pickId)) continue;
-      payloads.set(pickId, asRecord(row.payload) ?? {});
+      payloads.set(pickId, asRecord(row?.['payload']) ?? {});
     }
   }
   return payloads;
@@ -454,7 +463,7 @@ export function printReport(
   rows: RoiBySportRow[],
   afterDate: string,
   generatedAt = new Date().toISOString(),
-  options: { realEdgeOnly?: boolean } = {},
+  options: { realEdgeOnly?: boolean; unresolved?: readonly UnresolvedPick[] } = {},
 ): string {
   const lines: string[] = [];
   const total = rows.length;
@@ -484,6 +493,11 @@ export function printReport(
   lines.push('| Metric | Value |');
   lines.push('|--------|-------|');
   lines.push(`| Total settled | ${total} |`);
+  if (options.unresolved !== undefined) {
+    lines.push(
+      `| Unresolved correction chains (excluded) | ${formatUnresolvedSummary(options.unresolved)} |`,
+    );
+  }
   lines.push(
     `| Real-edge-backed rows | ${rows.filter((row) => row.edgeSourceSplit === 'real-edge-backed').length} |`,
   );
@@ -760,11 +774,22 @@ async function main() {
   const monitorJson = hasFlag('monitor-json');
   const monitor = hasFlag('monitor') || monitorJson || stateFile !== null;
   const realEdgeOnly = hasFlag('real-edge-only');
-  const fetchedRows = await fetchRows(afterDate);
+  const fetched = await fetchRows(afterDate);
+  const fetchedRows = fetched.rows;
   const rows = realEdgeOnly ? filterRealEdgeBackedRows(fetchedRows) : fetchedRows;
   if (!monitor) {
-    console.log(printReport(rows, afterDate, new Date().toISOString(), { realEdgeOnly }));
+    console.log(
+      printReport(rows, afterDate, new Date().toISOString(), {
+        realEdgeOnly,
+        unresolved: fetched.unresolved,
+      }),
+    );
     return;
+  }
+  if (fetched.unresolved.length > 0) {
+    console.error(
+      `WARNING: unresolved correction chains excluded: ${formatUnresolvedSummary(fetched.unresolved)}`,
+    );
   }
 
   const result = buildMonitorResult(

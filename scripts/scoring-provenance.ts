@@ -8,16 +8,14 @@ import {
   getActiveClvPayloadPaths,
   summarizeClvCoverage,
 } from './clvCoverage.js'
-
-const env = loadEnvironment()
-const url = env.SUPABASE_URL ?? ''
-const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-if (!url || !key) { console.error('FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
-
-const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
-
-const args = process.argv.slice(2)
-const jsonMode = args.includes('--json')
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import {
+  formatUnresolvedSummary,
+  loadEffectiveSettlements,
+  type EffectiveSettlementLoad,
+  type ReadClient,
+} from './effective-settlements.js'
 
 // ─── Thresholds ───────────────────────────────────────────────────────────────
 const THRESHOLDS = {
@@ -38,7 +36,66 @@ interface Signal {
   breakdown?: Record<string, unknown>
 }
 
+/** Settlement sample: the newest N picks by ROOT settlement created_at. */
+const SETTLEMENT_SAMPLE_PICKS = 500
+
+export interface CoverageSettlementRecord {
+  id: string
+  pick_id: string
+  result: string | null
+  source: string | null
+  payload: unknown
+  created_at: string | null
+}
+
+/**
+ * Effective settlements (tip of each correction chain) for the newest
+ * SETTLEMENT_SAMPLE_PICKS picks, ordered by their ROOT record's created_at.
+ */
+export async function fetchRecentSettlements(client: ReadClient): Promise<EffectiveSettlementLoad> {
+  return loadEffectiveSettlements(
+    client,
+    { dateColumn: 'created_at', maxPicks: SETTLEMENT_SAMPLE_PICKS },
+    'source, payload',
+  )
+}
+
+export function toCoverageRecords(load: EffectiveSettlementLoad): CoverageSettlementRecord[] {
+  return load.effective.map(r => ({
+    id: r.id,
+    pick_id: r.pick_id,
+    result: r.result,
+    source: typeof r.raw['source'] === 'string' ? r.raw['source'] : null,
+    payload: r.raw['payload'] ?? null,
+    created_at: r.created_at,
+  }))
+}
+
+/** Settlement count by source, and how many of them are automated. */
+export function summarizeAutoGrade(recs: CoverageSettlementRecord[]): { bySrc: Record<string, number>; autoCount: number } {
+  const bySrc: Record<string, number> = {}
+  for (const s of recs) {
+    const src = s.source ?? 'unknown'
+    bySrc[src] = (bySrc[src] || 0) + 1
+  }
+  const autoSources = ['auto', 'system', 'sgo', 'auto-sgo', 'automated']
+  const autoCount = Object.entries(bySrc)
+    .filter(([k]) => autoSources.some(a => k.toLowerCase().includes(a)))
+    .reduce((sum, [, v]) => sum + v, 0)
+  return { bySrc, autoCount }
+}
+
 async function main() {
+  const env = loadEnvironment()
+  const url = env.SUPABASE_URL ?? ''
+  const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  if (!url || !key) { console.error('FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
+
+  const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
+
+  const args = process.argv.slice(2)
+  const jsonMode = args.includes('--json')
+
   const now = new Date()
   const signals: Signal[] = []
   const criticals: string[] = []
@@ -132,12 +189,16 @@ async function main() {
   }
 
   // ── 3. CLV Coverage ───────────────────────────────────────────────────────
-  const { data: settlements, error: settlErr } = await db
-    .from('settlement_records')
-    .select('id, pick_id, result, source, payload, created_at')
-    .is('corrects_id', null)
-    .order('created_at', { ascending: false })
-    .limit(500)
+  let settlements: CoverageSettlementRecord[] | null = null
+  let unresolvedSummary = '0'
+  let settlErr: { message: string } | null = null
+  try {
+    const load = await fetchRecentSettlements(db as unknown as ReadClient)
+    settlements = toCoverageRecords(load)
+    unresolvedSummary = formatUnresolvedSummary(load.unresolved)
+  } catch (error) {
+    settlErr = { message: error instanceof Error ? error.message : String(error) }
+  }
 
   if (settlErr) {
     signals.push({ name: 'CLV Coverage', status: 'UNKNOWN', value: 'query failed', detail: settlErr.message })
@@ -167,7 +228,7 @@ async function main() {
       name: 'CLV Coverage',
       status,
       value: clvPct >= 0 ? `${clvPct}% settlements have CLV; ${beatsPct}% beat closing line` : `sample too small (${recs.length})`,
-      detail: `total_records=${clvCoverage.totalRecords}; with_clv=${clvCoverage.withClv}; beats_closing=${beats.length}; payload_paths: ${formatClvPayloadPathCounts(clvCoverage.pathCounts)}`,
+      detail: `total_records=${clvCoverage.totalRecords}; with_clv=${clvCoverage.withClv}; beats_closing=${beats.length}; unresolved_chains=${unresolvedSummary}; payload_paths: ${formatClvPayloadPathCounts(clvCoverage.pathCounts)}`,
     })
     if (status === 'RED') criticals.push(`CLV: only ${clvPct}% settled picks have CLV data`)
     if (status === 'YELLOW') warns.push(`CLV: ${clvPct}% coverage (threshold=${THRESHOLDS.clvCoverageWarnPct}%)`)
@@ -176,15 +237,7 @@ async function main() {
   // ── 4. Auto-grade Coverage ────────────────────────────────────────────────
   const settlementsData = settlements ?? []
   if (settlementsData.length > 0) {
-    const bySrc: Record<string, number> = {}
-    for (const s of settlementsData) {
-      const src = s.source ?? 'unknown'
-      bySrc[src] = (bySrc[src] || 0) + 1
-    }
-    const autoSources = ['auto', 'system', 'sgo', 'auto-sgo', 'automated']
-    const autoCount = Object.entries(bySrc)
-      .filter(([k]) => autoSources.some(a => k.toLowerCase().includes(a)))
-      .reduce((sum, [, v]) => sum + v, 0)
+    const { bySrc, autoCount } = summarizeAutoGrade(settlementsData)
     const autoPct = Math.round((autoCount / settlementsData.length) * 100)
     const status: SignalStatus = autoPct < THRESHOLDS.autoGradeShareWarnPct ? 'YELLOW' : 'GREEN'
     signals.push({
@@ -275,4 +328,6 @@ async function main() {
   console.log()
 }
 
-main().catch(e => { console.error(e); process.exit(1) })
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch(e => { console.error(e); process.exit(1) })
+}
