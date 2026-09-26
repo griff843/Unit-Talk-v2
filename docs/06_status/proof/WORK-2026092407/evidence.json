@@ -1,0 +1,77 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092407",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "98bda0923b6dab73cdaefdcf2c217f48c922c5be",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "98bda0923b6dab73cdaefdcf2c217f48c922c5be is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 35c68ae3e into this branch. It brings in only main's own changes (`.ops/sync/WORK-2026092503.yml`, `apps/worker/src/runner.ts`, `apps/worker/src/worker-runtime.test.ts`, `docs/06_status/lanes/WORK-2026092503.json`, `docs/06_status/proof/WORK-2026092503/diff-summary.md`, `docs/06_status/proof/WORK-2026092503/evidence.json`, `docs/06_status/proof/WORK-2026092503/verification.md`, `docs/06_status/proof/WORK-2026092503/work-order.md`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor a75dd60a74b176a215d972f5f4bee7609fde75b3. CI re-runs verify on the new head. Previous note: 98bda0923b6dab73cdaefdcf2c217f48c922c5be is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Implementation commits ff588cfc0, 7563bbdd8, a75dd60a7 sit on the lane-start commit 1251a0213, whose parent is origin/main 5b193aedb3536e5705d6b708d8fe5bc9c6bd43fb. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "what_this_lane_delivers": {
+    "problem": "Command Center is internal-only (127.0.0.1:4300 on the host). ssh -L fails because the host runs AllowTcpForwarding no. The hand-started cc-proxy injects the operator bearer token into every request, so any process on the host loopback gets authenticated access with no credential.",
+    "repair": "scripts/ops/command-center-bridge.ts: a loopback-only local listener that carries each connection over an SSH shell exec (nc 127.0.0.1 4300), injects no credential, refuses non-loopback binds and malformed host or port, and gives a --check verdict from one unauthenticated GET /api/health.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6899,
+      "fail": 0,
+      "note": "pnpm test at 98bda0923b6dab73cdaefdcf2c217f48c922c5be"
+    },
+    "bridge_suite": {
+      "pass": 20,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level": "PASS; 7 changed files; no R-level artifacts required",
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "child 'close' destroys the client instead of draining it",
+        "observed": "red: test 13 (every byte delivered)"
+      },
+      {
+        "id": "M2",
+        "mutation": "'--' removed before the ssh host",
+        "observed": "red: test 7 (ssh argument shape)"
+      },
+      {
+        "id": "M3",
+        "mutation": "buildSshArgs stops re-validating the host",
+        "observed": "red: test 8 (re-validation)"
+      }
+    ],
+    "verify": {
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. CI runs verify on the PR."
+    }
+  },
+  "runtime_proof": {
+    "profile": "read-only-production-probe",
+    "status": "pass",
+    "method": "One unauthenticated GET /api/health through the bridge (--check) against host alias unit-talk-prod, using this lane's code.",
+    "measured_at": "2026-09-25T23:07:57Z",
+    "output": "{\"check\":\"command-center-bridge\",\"host\":\"unit-talk-prod\",\"ok\":true,\"reason\":\"command-center reports ok\"}",
+    "exit_code": 0,
+    "not_remeasured": [
+      "runbook step 2 (401 without sign-in): from an earlier draft on 2026-09-24",
+      "runbook step 3 (signed-in page): not performed"
+    ]
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "secrets_or_environments_changed": false,
+    "host_configuration_changed": false,
+    "files_changed": 4
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1652"
+}
