@@ -21,5 +21,5 @@ which needs the execution SHA. T3 lanes are unchanged: they declare no bundle.
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1660
 Execution SHA: 28907a15e92785636e7565e5e69cab1dadb95781

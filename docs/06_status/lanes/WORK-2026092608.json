@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092608-closeable-lane-start",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1660",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lane-manifest.test.ts",

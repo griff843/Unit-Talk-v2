@@ -70,7 +70,7 @@ from a pre-mutation copy (file checksums identical before and after; restore rer
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1660
 Execution SHA: 28907a15e92785636e7565e5e69cab1dadb95781
 
 ### Orchestrator review fixes
