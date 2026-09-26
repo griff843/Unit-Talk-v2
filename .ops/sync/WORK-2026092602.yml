@@ -1,0 +1,181 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092602
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092602
+  objective: >-
+    The shared staging project `xskgrzbteyqdufktjrjx` has a permanently
+    over-capacity best-bets board (CI run 36218675767: `currentBoardCount 476`,
+    `sameSportCount 106` against caps of 15 per slate and 10 per sport), so
+    every staging proof that expects a real best-bets decision gets
+    `not_eligible` for board cap.
+
+    Stop the atomicity suite leaking a board-holding pick every run, and drain
+    the fixture picks that already leaked, from inside the staging proof job
+    only.
+  acceptance_criteria:
+    - "`apps/api/src/t1-proof-atomicity.test.ts` leaves no pick holding
+      best-bets board capacity: STEP 3's pick is voided through the lifecycle
+      FSM in `after()`. What the suite proves is unchanged."
+    - "`scripts/ci/seed-staging-fixtures.ts` (already the pre-suite step of the
+      staging job, after its staging-target assertion) voids leaked fixture
+      picks that hold best-bets board capacity, identified positively by
+      per-suite fixture signature, only when older than a 2-hour margin, and
+      logs the count voided."
+    - "The selection logic is unit-tested with including and excluding cases: a
+      real operator pick with `distributionMode` is never selected, a Track Only
+      pick is never selected, a row younger than the margin is never selected."
+  guardrails:
+    - No write against staging or production outside the CI staging job. No
+      change to `.github/workflows/**`.
+    - Voiding goes through `transition_pick_lifecycle` (compare-and-set on
+      `from_state`, writes a `pick_lifecycle` row), never a raw status PATCH. No
+      row is deleted.
+    - "No broad predicate: every selected row must match one named fixture
+      signature in full."
+  non_goals:
+    - No change to board caps, promotion policy, or `getPromotionBoardState`.
+    - No change to the smart-form proof suites that write the other leaked
+      fixtures (reported as follow-up).
+  required_evidence:
+    - Unit tests for the selection predicate pass; mutation drill (break the
+      predicate, a named test turns red).
+    - "`pnpm type-check`, `pnpm lint`, affected test files."
+  exit_criteria:
+    - PR merged on green CI; the staging proof job log shows the drain count;
+      the lane closes through `ops:lane-close`.
+  unmapped_sections:
+    - >-
+      WORK-2026092602 — Drain leaked CI fixture picks from the staging best-bets
+      board
+
+      Tier: T2 (mechanical floor T3; raised because the change adds a write step
+      to the staging job that produces the required `verify` receipt) · Lane
+      type: hygiene · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## File scope
+
+
+      - `apps/api/src/t1-proof-atomicity.test.ts`
+
+      - `scripts/ci/seed-staging-fixtures.ts`
+
+      - `scripts/ci/staging-board-drain.ts`
+
+      - `scripts/ci/staging-path-enforcement.test.ts`
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092602.md
+    title: WORK-2026092602 — Drain leaked CI fixture picks from the staging
+      best-bets board
+    description: >-
+      # WORK-2026092602 — Drain leaked CI fixture picks from the staging
+      best-bets board
+
+
+      Tier: T2 (mechanical floor T3; raised because the change adds a write step
+      to the staging job that produces the required `verify` receipt) · Lane
+      type: hygiene · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      - The shared staging project `xskgrzbteyqdufktjrjx` has a permanently
+      over-capacity best-bets board (CI run 36218675767: `currentBoardCount
+      476`, `sameSportCount 106` against caps of 15 per slate and 10 per sport),
+      so every staging proof that expects a real best-bets decision gets
+      `not_eligible` for board cap.
+
+      - Stop the atomicity suite leaking a board-holding pick every run, and
+      drain the fixture picks that already leaked, from inside the staging proof
+      job only.
+
+
+      ## Acceptance Criteria
+
+
+      - `apps/api/src/t1-proof-atomicity.test.ts` leaves no pick holding
+      best-bets board capacity: STEP 3's pick is voided through the lifecycle
+      FSM in `after()`. What the suite proves is unchanged.
+
+      - `scripts/ci/seed-staging-fixtures.ts` (already the pre-suite step of the
+      staging job, after its staging-target assertion) voids leaked fixture
+      picks that hold best-bets board capacity, identified positively by
+      per-suite fixture signature, only when older than a 2-hour margin, and
+      logs the count voided.
+
+      - The selection logic is unit-tested with including and excluding cases: a
+      real operator pick with `distributionMode` is never selected, a Track Only
+      pick is never selected, a row younger than the margin is never selected.
+
+
+      ## Guardrails
+
+
+      - No write against staging or production outside the CI staging job. No
+      change to `.github/workflows/**`.
+
+      - Voiding goes through `transition_pick_lifecycle` (compare-and-set on
+      `from_state`, writes a `pick_lifecycle` row), never a raw status PATCH. No
+      row is deleted.
+
+      - No broad predicate: every selected row must match one named fixture
+      signature in full.
+
+
+      ## Non-goals
+
+
+      - No change to board caps, promotion policy, or `getPromotionBoardState`.
+
+      - No change to the smart-form proof suites that write the other leaked
+      fixtures (reported as follow-up).
+
+
+      ## Required Evidence
+
+
+      - Unit tests for the selection predicate pass; mutation drill (break the
+      predicate, a named test turns red).
+
+      - `pnpm type-check`, `pnpm lint`, affected test files.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI; the staging proof job log shows the drain count;
+      the lane closes through `ops:lane-close`.
+
+
+      ## File scope
+
+
+      - `apps/api/src/t1-proof-atomicity.test.ts`
+
+      - `scripts/ci/seed-staging-fixtures.ts`
+
+      - `scripts/ci/staging-board-drain.ts`
+
+      - `scripts/ci/staging-path-enforcement.test.ts`
+    captured_at: 2026-09-26T05:06:02.234Z
+    description_sha256: 5fd563a62fb2ac67ea1b9cf639679072974416a241234cb1c227a354b2a6b69b
+  contract_hash: 39a6c0bc230d2bd92eff666efe396a25637b01d330f20319c7e1aae9ab256b73
