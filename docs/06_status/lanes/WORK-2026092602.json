@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092602-staging-board-drain",
   "branch": "claude/work-2026092602-staging-board-drain",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "e019642a8176a51397ea85768c6e8e0b7c293469",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1655",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,24 @@
     "docs/06_status/proof/WORK-2026092602/evidence.json",
     "docs/06_status/proof/WORK-2026092602/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-09-26T05:06:10.424Z",
   "heartbeat_at": "2026-09-26T05:06:10.424Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026092602-staging-board-drain.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-26T10:36:34.014Z",
+      "verdict": "fail",
+      "merge_sha": "e019642a8176a51397ea85768c6e8e0b7c293469",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1655 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
