@@ -22,6 +22,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026092608/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092608/evidence.json",
     "docs/06_status/proof/WORK-2026092608/verification.md"
   ],
   "status": "started",
