@@ -10,7 +10,7 @@ Issue: UTV2-1954
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1954-replay-fidelity
-PR URL: pending -- set when the PR is opened
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1654
 Head SHA: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903
 result: pass
 
@@ -184,6 +184,6 @@ this workstation. The failure is the containment `SUPABASE_URL`, not a defect.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending -- set when the PR is opened
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1654
 Approved PR head: pending merge
 Execution SHA: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903
