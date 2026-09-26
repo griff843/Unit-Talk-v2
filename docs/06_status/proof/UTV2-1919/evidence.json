@@ -107,6 +107,24 @@
     "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
     "suite": "apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts, reached from pnpm verify via test:live-db -> test:t1-proof:live",
     "note": "Filled at closeout by autoHarvestCiDbProofIntoEvidence from the merge-SHA run. It is deliberately NOT hand-filled here: this lane carries t1_live_db_precondition: deferred_to_ci, the workstation cannot reach a writable database under containment, and writing a measured-looking result for a job that has not run would be fabrication. The third test below is what that job will execute.",
+    "queries": [
+      "Read the three settlement_records for the synthetic staging pick ordered by created_at and id.",
+      "Resolve the effective settlement and aggregate settlement summary for the same synthetic pick.",
+      "Count settled lifecycle rows and distribution_outbox rows for the same synthetic pick."
+    ],
+    "row_counts": [
+      {
+        "status": "PENDING_CI",
+        "assertions": {
+          "settlement_records": 3,
+          "root_settlement_records": 1,
+          "effective_total_picks": 1,
+          "settled_lifecycle_rows": 0,
+          "distribution_outbox_rows": 0
+        },
+        "note": "Expected assertions encoded by the staging test; the CI receipt remains the measured source and is harvested after merge."
+      }
+    ],
     "what_the_added_test_proves": [
       "Three operator grades on one real Track Only pick, submitted through submitPickController against real PostgREST, persist as THREE settlement_records rows — read back from the database ordered by created_at rather than from the return values.",
       "Exactly ONE of the three has corrects_id IS NULL. That is the assertion the in-memory suite structurally cannot make: it is the live partial unique index settlement_records_pick_source_idx that permits the second and third rows only because they carry corrects_id, and a second canonical row would have been rejected by Postgres before the test could count it.",
