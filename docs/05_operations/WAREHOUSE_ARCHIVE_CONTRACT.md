@@ -161,6 +161,21 @@ the refusal names each variable, never its value.
 `scripts/warehouse/conveyor.ts`, run by `.github/workflows/warehouse-archive-conveyor.yml` at
 04:17 UTC daily.
 
+- **What it archives** — `DEFAULT_RETENTION_POLICY`, one entry per table, each at the architecture's
+  hot retention:
+
+  | Relation | Window column | Hot days | Files under |
+  |---|---|---:|---|
+  | `public.provider_offer_history` | `snapshot_at` | 45 | `canonical/markets/` |
+  | `public.raw_payloads` | `snapshot_at` | 21 | `raw/raw_payloads/` |
+  | `public.odds_snapshots` | `snapshot_at` | 45 | `raw/odds_snapshots/` |
+  | `public.system_runs` | `started_at` | 90 | `raw/system_runs/` |
+
+  A table whose shape is not a canonical domain's files under `raw/{table}/`, so no two tables ever
+  share a key. A canonical entry that names no domain is refused, never filed under a guessed one.
+  Run telemetry windows on `started_at` because `finished_at` is null for a run that never finished,
+  and those rows would otherwise belong to no window. Every archived table is also a backfill source,
+  using the conveyor's own entry, so a backfilled day and a conveyor day are one key.
 - **One closed day per source per run** — `today - hotRetentionDays - 1`. A backlog stays visible
   as a backlog instead of being absorbed into one enormous export.
 - **Idempotent** — a run that finds an already-verified manifest for the target's key does nothing.

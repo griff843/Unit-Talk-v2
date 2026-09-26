@@ -24,9 +24,14 @@ its preconditions are `WAREHOUSE_ARCHIVE_CONTRACT.md` §6.
 | `manifest.ts` | the archive manifest, its validation, and the prune gate |
 | `verify-archive.ts` | fail-closed verification against the uploaded object |
 | `conveyor.ts` | the scheduled daily run: plan, export, upload, verify, manifest, heartbeat |
+| `backfill.ts` | a bounded, dispatched range of past days through the conveyor's own path |
 | `query.ts` | DuckDB over the bucket; the representative analytics query |
 | `db-audit.ts` | read-only sizing/retention audit and candidate assessment |
 | `cli.ts` | `pnpm warehouse <subcommand>` |
+
+The daily policy archives `provider_offer_history` (45 days hot, `canonical/markets/`),
+`raw_payloads` (21), `odds_snapshots` (45) and `system_runs` (90), the last three under
+`raw/{table}/`. Each is also a `backfill --source`.
 
 ## Usage
 

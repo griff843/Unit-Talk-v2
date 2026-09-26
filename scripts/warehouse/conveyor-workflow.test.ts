@@ -17,6 +17,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { BACKFILL_SOURCES } from './backfill.js';
 import { DEFAULT_RETENTION_POLICY, planConveyorRun } from './conveyor.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -36,7 +37,7 @@ test('the conveyor runs on a schedule and can be dispatched by hand', () => {
   );
 });
 
-test('the schedule is daily, and each day archives the window 45 days back', () => {
+test('the schedule is daily, and each day archives one window per table at its own hot age', () => {
   // A daily schedule and a one-day window are one design: together they move at
   // the rate the hot database fills. Either one changing alone opens a gap.
   const cron = /cron: '([^']+)'/.exec(workflow)?.[1] ?? '';
@@ -45,10 +46,23 @@ test('the schedule is daily, and each day archives the window 45 days back', () 
   assert.match(hour ?? '', /^\d+$/);
   assert.deepEqual([dayOfMonth, month, dayOfWeek], ['*', '*', '*'], 'the conveyor must run every day');
 
-  assert.equal(DEFAULT_RETENTION_POLICY.length, 1);
-  assert.equal(DEFAULT_RETENTION_POLICY[0]?.hotRetentionDays, 45);
+  // Hot ages are the architecture's retention windows: offer history 45 days,
+  // raw payloads 21, run telemetry 90. Offer snapshots follow offer history.
+  assert.deepEqual(
+    DEFAULT_RETENTION_POLICY.map((entry) => [entry.relation, entry.hotRetentionDays]),
+    [
+      ['public.provider_offer_history', 45],
+      ['public.raw_payloads', 21],
+      ['public.odds_snapshots', 45],
+      ['public.system_runs', 90],
+    ],
+  );
   const plan = planConveyorRun({ policy: DEFAULT_RETENTION_POLICY, today: '2026-09-24' });
-  assert.deepEqual(plan.items.map((item) => item.date), ['2026-08-09'], 'today - 45 - 1');
+  assert.deepEqual(
+    plan.items.map((item) => item.date),
+    ['2026-08-09', '2026-09-02', '2026-08-09', '2026-06-25'],
+    'today - hotRetentionDays - 1',
+  );
 });
 
 test('two conveyor runs cannot overlap', () => {
@@ -274,7 +288,13 @@ test('a backfill is a manual dispatch mode with explicit inputs, never the sched
   for (const input of ['mode', 'source', 'from', 'to', 'max_windows', 'dry_run']) {
     assert.match(workflow, new RegExp(`\\n {6}${input}:\\n`), `workflow_dispatch must declare ${input}`);
   }
-  assert.match(workflow, /- provider_offer_history\n\s+- provider_offers_legacy_quarantine\n/);
+  // The dispatch form offers exactly the sources the CLI accepts: a source
+  // missing here cannot be backfilled, and one listed here that the CLI does
+  // not know fails only after someone has dispatched it.
+  const sourceInput = workflow.slice(workflow.indexOf('\n      source:\n'));
+  const optionsBlock = sourceInput.slice(sourceInput.indexOf('options:\n'), sourceInput.indexOf('default:'));
+  const offered = [...optionsBlock.matchAll(/- ([a-z_]+)\n/g)].map((m) => m[1]);
+  assert.deepEqual([...offered].sort(), Object.keys(BACKFILL_SOURCES).sort());
 
   const backfill = jobBody('backfill');
   assert.match(backfill, /if: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.mode == 'backfill' \}\}/);

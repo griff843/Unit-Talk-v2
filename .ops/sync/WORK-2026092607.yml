@@ -1,0 +1,115 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092607
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092607
+  objective: "Extend the warehouse archive (conveyor and backfill) to the three
+    hot tables that drive the `db_tripwires` size findings and that
+    `WAREHOUSE_ARCHIVE_CONTRACT.md` §1 already classifies as archivable:
+    `public.raw_payloads` (694 MB), `public.odds_snapshots` (427 MB) and
+    `public.system_runs` (1.3 GB, 3.6M rows)."
+  acceptance_criteria:
+    - "`DEFAULT_RETENTION_POLICY` gains one entry per table, with hot retention
+      from `HISTORICAL_MARKET_DATA_WAREHOUSE.md` §4 (`raw_payloads` 21 days,
+      `system_runs` 90 days; `odds_snapshots` 45 days, the offer-history figure,
+      since §4 names none)."
+    - Each is exportable by the existing backfill (`--source`), and the
+      workflow's `source` choice lists it.
+    - Keys never collide across sources; every entry produces a valid object
+      key; nothing is prune-eligible without a verified manifest.
+    - The windowed export uses an existing index on the live database (measured
+      with EXPLAIN, read-only); no DDL is added.
+    - "Docs: contract §1/§2 and §8a, backfill plan (measured ranges),
+      provisioning doc (the reader grant for the three tables — reserved DDL,
+      stated, not applied)."
+  guardrails:
+    - Nothing is deleted, dropped or pruned. No production DDL. No credentials.
+      No change to containment.
+    - "`apps/command-center/**` is out of scope (another executor owns it)."
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI; closeout through `post-merge-lane-close.yml`.
+  unmapped_sections:
+    - >-
+      WORK-2026092607 — Warehouse coverage for raw payloads, odds snapshots and
+      run telemetry
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092607.md
+    title: WORK-2026092607 — Warehouse coverage for raw payloads, odds snapshots and
+      run telemetry
+    description: >-
+      # WORK-2026092607 — Warehouse coverage for raw payloads, odds snapshots
+      and run telemetry
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      Extend the warehouse archive (conveyor and backfill) to the three hot
+      tables that drive the `db_tripwires` size findings and that
+      `WAREHOUSE_ARCHIVE_CONTRACT.md` §1 already classifies as archivable:
+      `public.raw_payloads` (694 MB), `public.odds_snapshots` (427 MB) and
+      `public.system_runs` (1.3 GB, 3.6M rows).
+
+
+      ## Acceptance Criteria
+
+
+      - `DEFAULT_RETENTION_POLICY` gains one entry per table, with hot retention
+      from `HISTORICAL_MARKET_DATA_WAREHOUSE.md` §4 (`raw_payloads` 21 days,
+      `system_runs` 90 days; `odds_snapshots` 45 days, the offer-history figure,
+      since §4 names none).
+
+      - Each is exportable by the existing backfill (`--source`), and the
+      workflow's `source` choice lists it.
+
+      - Keys never collide across sources; every entry produces a valid object
+      key; nothing is prune-eligible without a verified manifest.
+
+      - The windowed export uses an existing index on the live database
+      (measured with EXPLAIN, read-only); no DDL is added.
+
+      - Docs: contract §1/§2 and §8a, backfill plan (measured ranges),
+      provisioning doc (the reader grant for the three tables — reserved DDL,
+      stated, not applied).
+
+
+      ## Guardrails
+
+
+      - Nothing is deleted, dropped or pruned. No production DDL. No
+      credentials. No change to containment.
+
+      - `apps/command-center/**` is out of scope (another executor owns it).
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI; closeout through `post-merge-lane-close.yml`.
+    captured_at: 2026-09-26T16:38:03.373Z
+    description_sha256: 4245f2b544811f0faf66faff12284d77f3520967a8caa4d8949b5c6dc42cda6c
+  contract_hash: 3f66f5c24740aeeaa49268ecc979cab339c593c07c71f66e021180bac29ea2e0
