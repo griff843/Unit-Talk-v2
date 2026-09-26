@@ -1,10 +1,9 @@
 # PROOF: WORK-2026092607
 
-MERGE_SHA: 386c008dbcd0e8171526bd31fa5f6bbad74478b5
+MERGE_SHA: pending merge
 
-> Pre-merge, the merge row carries the last commit on this lane that changes anything outside
-> `docs/06_status/proof/WORK-2026092607/` and the lane manifest. `post-merge-lane-close.yml`
-> rebinds it after GitHub supplies the merged-PR attestation.
+> Pre-merge, merge authority does not exist yet. `post-merge-lane-close.yml` binds the merge
+> SHA after GitHub supplies the merged-PR attestation.
 
 Generated at: 2026-09-26T17:04:14.000Z
 Issue: WORK-2026092607
@@ -76,6 +75,12 @@ and non-heartbeat run detail plus a 29,470-row heartbeat sample: zero hits.
 - [x] `pnpm verify`: not claimed locally. `scripts/ci/assert-staging-target.ts` refuses the
       containment placeholder by design; `verify` runs in CI on this PR and on the merge SHA.
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --issue WORK-2026092607 --base origin/main --head HEAD`: PASS, 12 changed files, no R-level artifacts required
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1659
+Execution SHA: 386c008dbcd0e8171526bd31fa5f6bbad74478b5
 
 ## Runtime Verification
 
