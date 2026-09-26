@@ -87,7 +87,7 @@ jobs:
               core.info(`Label plan head_sha ${plan.head_sha} is stale against current PR head ${associatedPr.head.sha}; skipping (a newer run will supersede this).`);
               return;
             }
-            if (!/^(?:UTV2|UNI)-\d+$/.test(String(plan.issue_id))) {
+            if (!/^(?:UTV2|UNI|WORK)-\d+$/.test(String(plan.issue_id))) {
               core.setFailed('Label plan issue_id failed strict format validation.');
               return;
             }

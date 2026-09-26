@@ -1,0 +1,193 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092503
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092503
+  objective: WORK-2026092503 — a deliberate delivery skip is visible in the worker log
+  acceptance_criteria:
+    - >-
+      # WORK-2026092503 — a deliberate delivery skip is visible in the worker
+      log
+
+
+      Tier: T1 (mechanical floor: `apps/worker/src/` is Tier C; declared T2
+      would be escalated) · Lane type: runtime · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Origin:
+      Linear **UTV2-1952**.
+
+      Linear was not reachable from this session (no credential), so the lane
+      runs under this
+
+      repository-owned identity. No Linear state was moved.
+
+
+      ## Problem
+
+
+      When the worker skips an outbox row deliberately — the target's kill
+      switch is engaged, or the
+
+      target is disabled in the registry — it writes nothing. The row is never
+      claimed, so
+
+      `attempt_count` stays 0, which is exactly what a dead worker leaves
+      behind. An operator looking at
+
+      `2cc92f4b` (pending on `official-picks` behind `killed = true`) cannot
+      tell a stopped lane from a
+
+      dead worker.
+
+
+      ## Outcome
+
+
+      1. `runWorkerCycles` emits one structured line per deliberate skip, per
+      cycle:
+         `worker.delivery-skipped-kill-switch` or `worker.delivery-skipped-target-disabled`, with
+         `workerId`, `target`, `cycle`, `reason` and `outboxClaimed: false`.
+      2. Logging only. No claim, no status change, no attempt increment;
+      kill-switch and registry
+         semantics are unchanged.
+      3. Tests prove each skip logs its line and never claims, and that an
+      attempted delivery emits no
+         skip line.
+
+      ## File scope
+
+
+      - `apps/worker/src/runner.ts`
+
+      - `apps/worker/src/worker-runtime.test.ts`
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092503 — a deliberate delivery skip is visible in the worker log
+
+      Tier: T1 (mechanical floor: `apps/worker/src/` is Tier C; declared T2
+      would be escalated) · Lane type: runtime · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Origin:
+      Linear **UTV2-1952**.
+
+      Linear was not reachable from this session (no credential), so the lane
+      runs under this
+
+      repository-owned identity. No Linear state was moved.
+
+
+      ## Problem
+
+
+      When the worker skips an outbox row deliberately — the target's kill
+      switch is engaged, or the
+
+      target is disabled in the registry — it writes nothing. The row is never
+      claimed, so
+
+      `attempt_count` stays 0, which is exactly what a dead worker leaves
+      behind. An operator looking at
+
+      `2cc92f4b` (pending on `official-picks` behind `killed = true`) cannot
+      tell a stopped lane from a
+
+      dead worker.
+
+
+      ## Outcome
+
+
+      1. `runWorkerCycles` emits one structured line per deliberate skip, per
+      cycle:
+         `worker.delivery-skipped-kill-switch` or `worker.delivery-skipped-target-disabled`, with
+         `workerId`, `target`, `cycle`, `reason` and `outboxClaimed: false`.
+      2. Logging only. No claim, no status change, no attempt increment;
+      kill-switch and registry
+         semantics are unchanged.
+      3. Tests prove each skip logs its line and never claims, and that an
+      attempted delivery emits no
+         skip line.
+
+      ## File scope
+
+
+      - `apps/worker/src/runner.ts`
+
+      - `apps/worker/src/worker-runtime.test.ts`
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092503.md
+    title: WORK-2026092503 — a deliberate delivery skip is visible in the worker log
+    description: >-
+      # WORK-2026092503 — a deliberate delivery skip is visible in the worker
+      log
+
+
+      Tier: T1 (mechanical floor: `apps/worker/src/` is Tier C; declared T2
+      would be escalated) · Lane type: runtime · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). Origin:
+      Linear **UTV2-1952**.
+
+      Linear was not reachable from this session (no credential), so the lane
+      runs under this
+
+      repository-owned identity. No Linear state was moved.
+
+
+      ## Problem
+
+
+      When the worker skips an outbox row deliberately — the target's kill
+      switch is engaged, or the
+
+      target is disabled in the registry — it writes nothing. The row is never
+      claimed, so
+
+      `attempt_count` stays 0, which is exactly what a dead worker leaves
+      behind. An operator looking at
+
+      `2cc92f4b` (pending on `official-picks` behind `killed = true`) cannot
+      tell a stopped lane from a
+
+      dead worker.
+
+
+      ## Outcome
+
+
+      1. `runWorkerCycles` emits one structured line per deliberate skip, per
+      cycle:
+         `worker.delivery-skipped-kill-switch` or `worker.delivery-skipped-target-disabled`, with
+         `workerId`, `target`, `cycle`, `reason` and `outboxClaimed: false`.
+      2. Logging only. No claim, no status change, no attempt increment;
+      kill-switch and registry
+         semantics are unchanged.
+      3. Tests prove each skip logs its line and never claims, and that an
+      attempted delivery emits no
+         skip line.
+
+      ## File scope
+
+
+      - `apps/worker/src/runner.ts`
+
+      - `apps/worker/src/worker-runtime.test.ts`
+    captured_at: 2026-09-25T20:37:24.916Z
+    description_sha256: e4ca782d8b5c489308fb13e7b69b3d2c3a0ef7610198e708678f9994265f4d86
+  contract_hash: 06a0b28c742d4b2c7819a9f15870d04080fadb120570c7b0621a1168a7226ff6
