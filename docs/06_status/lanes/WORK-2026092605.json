@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092605",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026092605-cc-outbox-pagination",
+  "branch": "codex/work-2026092605-cc-outbox-pagination",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/e2e/recovery/delivery-truth.spec.ts",
+    "apps/command-center/src/app/operations/outbox/page.tsx",
+    "apps/command-center/src/lib/data/delivery-population.test.ts",
+    "apps/command-center/src/lib/data/outbox.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092605/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092605/verification.md",
+    "docs/06_status/proof/WORK-2026092605/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-09-26T12:40:34.951Z",
+  "heartbeat_at": "2026-09-26T12:40:34.951Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026092605-cc-outbox-pagination.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026092605-cc-outbox-pagination",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
