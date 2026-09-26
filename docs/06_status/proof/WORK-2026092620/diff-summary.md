@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/work-2026092620-effective-settlement-scripts
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1662
 Head SHA: 76f3bad230845df6cd61e94b4b6dce73932c401d
-Merge SHA: pending merge
+Merge SHA: f71ea87ce54dc26c974bff13ab8e8dba9a732183
 Diff base: eb5559426b790e694b38a1de85ec99891790d238 (origin/main)
 Diff target: 76f3bad230845df6cd61e94b4b6dce73932c401d
 
