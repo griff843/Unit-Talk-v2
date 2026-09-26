@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092621-record-2605-repo-verification",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1661",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026092621.md",
