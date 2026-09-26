@@ -13,6 +13,6 @@ No migration, no schema change, no package.json edit, and no production path.
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e019642a8176a51397ea85768c6e8e0b7c293469
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1655
 Execution SHA: fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837
