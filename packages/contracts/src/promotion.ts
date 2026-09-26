@@ -506,6 +506,48 @@ export interface PromotionDecisionSnapshot {
     suppress?: boolean;
     reason?: string;
   };
+
+  /**
+   * UTV2-1954: the exact market and sport the score was computed from. The
+   * market-family multipliers, the family score cap and the unsupported-sport
+   * cap all depend on them, so a replay without them computes a different
+   * score. Absent on snapshots written before UTV2-1954; replayRecordedPromotion()
+   * reports those as not reproducible rather than re-deciding them.
+   */
+  scoringContext?: PromotionScoringContext | undefined;
+}
+
+/**
+ * UTV2-1954: the scoring inputs that come from the pick itself rather than
+ * from scoreInputs. `market` is the raw market string the scorer classified
+ * ('' when the pick had none); `sport` is metadata.sport, or null.
+ */
+export interface PromotionScoringContext {
+  market: string;
+  sport: string | null;
+}
+
+/**
+ * UTV2-1954: read a snapshot's scoring context, or null when it is absent or
+ * malformed. Null means the market-adjusted score cannot be reproduced.
+ */
+export function readPromotionScoringContext(
+  snapshot: Pick<PromotionDecisionSnapshot, 'scoringContext'>,
+): PromotionScoringContext | null {
+  const context: unknown = snapshot.scoringContext;
+  if (!context || typeof context !== 'object' || Array.isArray(context)) {
+    return null;
+  }
+  const record = context as Record<string, unknown>;
+  const market = record['market'];
+  const sport = record['sport'];
+  if (typeof market !== 'string') {
+    return null;
+  }
+  if (sport !== null && typeof sport !== 'string') {
+    return null;
+  }
+  return { market, sport };
 }
 
 export interface TargetRegistryEntry {
