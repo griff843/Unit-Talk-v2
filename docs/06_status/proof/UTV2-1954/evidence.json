@@ -1,0 +1,149 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1954",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "13b1ca56dfe500cc419ad00a7bf0001fa72b0903",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "13b1ca56dfe500cc419ad00a7bf0001fa72b0903 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1954/ and the lane manifest/sync file. It is a conflict-free cherry-pick of preserved commit 9bec7cc13 onto the lane-start commit 92be0f371, which sits on origin/main af2f8e11ab4f813e4bc339b23bcd9ccf113f301a. Every static measurement below was taken on that exact tree in the lane worktree."
+  },
+  "what_this_lane_repairs": {
+    "defect": "replayPromotion() built its pick from {confidence} alone, so calculateScore saw an empty market and no sport and skipped applyPromotionModifiers (market-family multipliers, the family score cap, the unsupported-sport cap). Replay also scored with the caller's policy rather than the weights and minimumScore the decision was recorded with. An eager-path NBA player prop persisted best-bets suppressed at 60.15 replayed qualified at 70.76.",
+    "repair": "Both promotion snapshot writers persist scoringContext {market, sport} via promotionScoringContextForPick(), the helper calculateScore now reads. replayPromotion() scores from it. New replayRecordedPromotion() replays a pick_promotion_history payload using only the row's snapshot, scoring context and saved policy, and reports score/status agreement; rows lacking a snapshot, scoring context, saved policy or recorded score are reported not-reproducible with a named reason.",
+    "residual": "replayPromotion(snapshot, policy) still accepts a caller policy (its counterfactual contract); fidelity to the recorded decision is replayRecordedPromotion()'s job. Rows written before this change are not reproducible (scoring-context-missing), by design.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 111,
+          "pass": 111,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Includes the UTV2-1954 tests: the reported 60.15/70.76 NBA prop, scoring-context-missing, saved-policy, disagreement, snapshot-missing, a 6-row eager-path matrix (qualified/suppressed; game lines, canonical and raw-string props, team total; supported and unsupported sport) and an operator override row."
+      },
+      {
+        "command": "pnpm exec tsx --test packages/contracts/src/promotion.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 32,
+          "pass": 32,
+          "fail": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test packages/domain/src/promotion-conviction.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6915,
+          "pass": 6915,
+          "fail": 0,
+          "not_ok_lines": 0
+        },
+        "label": "Full workspace unit suite on this tree."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint apps/api/src/promotion-edge-integration.test.ts apps/api/src/promotion-service.ts apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts packages/contracts/src/promotion.ts packages/domain/src/promotion.ts",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: ci:assert-staging refuses the containment placeholder SUPABASE_URL. This lane carries t1_live_db_precondition: deferred_to_ci, so verify and Writable DB proof (staging only) are obtained from CI."
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied to one file alone, apps/api/src/promotion-edge-integration.test.ts run, then the file restored from a pre-mutation copy (cmp-checked).",
+      "mutations": [
+        {
+          "id": "M1",
+          "file": "packages/domain/src/promotion.ts",
+          "mutation": "replayPromotion ignores the persisted scoring context (pre-fix behaviour: empty market, no sport).",
+          "observed": "9 failures: tests 99, 101, 104-109, 111."
+        },
+        {
+          "id": "M2",
+          "file": "packages/domain/src/promotion.ts",
+          "mutation": "replayRecordedPromotion scores with the current bestBetsPromotionPolicy instead of the saved policy.",
+          "observed": "1 failure: test 101 (replay uses the saved policy, not a caller-supplied one)."
+        },
+        {
+          "id": "M3",
+          "file": "apps/api/src/promotion-service.ts",
+          "mutation": "Both writers stop persisting scoringContext.",
+          "observed": "10 failures: tests 99, 101, 102, 104-109, 111."
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts",
+        "pass": 111,
+        "fail": 0
+      }
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base af2f8e11ab4f813e4bc339b23bcd9ccf113f301a --head 13b1ca56dfe500cc419ad00a7bf0001fa72b0903",
+      "verdict": "PASS",
+      "rules_matched": [
+        "promotion-scoring"
+      ],
+      "note": "The matched r2-determinism and r3-shadow-report files are UTV2-845's artifacts, not evidence for this diff. shadow-scoring-runner needs an absent credential (SHADOW_PARITY_READ_ONLY_KEY); live-data-lab-runner.ts does not exist on main. No R2/R3 artifact is claimed."
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "status": "PENDING_CI",
+    "job": "Writable DB proof (staging only)",
+    "target": "staging xskgrzbteyqdufktjrjx (assert-staging-target pinned; production credentials are absent from this workflow)",
+    "suite": "apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts, reached from pnpm verify via test:live-db -> test:t1-proof:live",
+    "note": "Filled at closeout by autoHarvestCiDbProofIntoEvidence from the merge-SHA run. Deliberately not hand-filled. Locally the four tests fail with 'Failed to find pick by idempotency key: TypeError: fetch failed', as does the existing UTV2-1951 live proof on this workstation: the containment placeholder, not a defect.",
+    "what_the_added_test_proves": [
+      "Real Track Only picks are submitted through the real controller against staging; every pick_promotion_history row is read back from Postgres, so each payload has made the JSONB round trip.",
+      "The reported NBA prop replays suppressed at 60.15, not qualified at 70.76.",
+      "A qualifying canonical player prop replays qualified at its recorded score.",
+      "A game line and an unsupported sport replay at their recorded scores.",
+      "A persisted row stripped of its scoring context is reported not-reproducible."
+    ]
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off -- unchanged",
+    "member_delivery": "disabled -- unchanged",
+    "files_changed": 7,
+    "note": "Seven files inside the pinned file_scope_lock. No migration, no schema change. The live proof writes Track Only fixture picks to staging only; they are kept as evidence."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ],
+  "pr_url": null
+}
