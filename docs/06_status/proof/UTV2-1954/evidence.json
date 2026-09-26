@@ -1,0 +1,229 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1954",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "c8546977676b1e07dbc0398fe7dd446a5a473d2a",
+    "verified_source_sha": "27f6392f751474d2ab29d9afc0e90a541d94e4c7",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "27f6392f751474d2ab29d9afc0e90a541d94e4c7 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the PM bounce repair (replay agreement requires the persisted numeric(5,2) score column), commit 27f6392f7 on top of the reviewed head b6ac17cb7.. Superseded anchor 3885c4b4ce28f6bad2676ca6a1ecd63b28ea513a. CI re-runs verify on the new head. Previous note: 27f6392f751474d2ab29d9afc0e90a541d94e4c7 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 744ff2f6a into this branch. It brings in only main's own changes (`docs/06_status/readiness/readiness-score.json`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor 262add2af229797ec8b8975549c98741142d81c6. CI re-runs verify on the new head. Previous note: 27f6392f751474d2ab29d9afc0e90a541d94e4c7 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 7771bd2d6 into this branch. It brings in only main's own changes (`.ops/sync/WORK-2026092604.yml`, `.ops/work/WORK-2026092604.md`, `docs/06_status/lanes/WORK-2026092602.json`, `docs/06_status/lanes/WORK-2026092604.json`, `docs/06_status/proof/WORK-2026092602/diff-summary.md`, `docs/06_status/proof/WORK-2026092602/evidence.json`, `docs/06_status/proof/WORK-2026092602/verification.md`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor 3e4967df29366ef408222bbf87a7b0c2be018616. CI re-runs verify on the new head. Previous note: 27f6392f751474d2ab29d9afc0e90a541d94e4c7 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 1526f7e2d into this branch. It brings in only main's own changes (`.ops/sync/WORK-2026092602.yml`, `.ops/sync/WORK-2026092603.yml`, `.ops/work/WORK-2026092603.md`, `apps/api/src/t1-proof-atomicity.test.ts`, `docs/06_status/lanes/WORK-2026092602.json`, `docs/06_status/lanes/WORK-2026092603.json`, `docs/06_status/proof/WORK-2026092602/diff-summary.md`, `docs/06_status/proof/WORK-2026092602/evidence.json`, `docs/06_status/proof/WORK-2026092602/verification.md`, `docs/06_status/readiness/readiness-score.json`, `scripts/ci/seed-staging-fixtures.ts`, `scripts/ci/staging-board-drain.ts`, `scripts/ci/staging-path-enforcement.test.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor 309fd866a2bf1967d8e412629c0cc0ea649a1e13. CI re-runs verify on the new head. Previous note: 27f6392f751474d2ab29d9afc0e90a541d94e4c7 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1954/ and the lane manifest/sync file. It changes only apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts (fixture eventName, numeric(5,2) column precision, decision diagnostics) after staging run 36212886508. The implementation and every unit/mutation measurement are unchanged from the superseded anchor 13b1ca56dfe500cc419ad00a7bf0001fa72b0903 (git diff 13b1ca56d 309fd866a touches no implementation or unit-test file); type-check, eslint on the changed file and r-level were re-run at 309fd866a. Superseded anchor, not withdrawn: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903. Previous note: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1954/ and the lane manifest/sync file. It is a conflict-free cherry-pick of preserved commit 9bec7cc13 onto the lane-start commit 92be0f371, which sits on origin/main af2f8e11ab4f813e4bc339b23bcd9ccf113f301a. Every static measurement below was taken on that exact tree in the lane worktree.",
+    "bound_at": "2026-09-26T13:00:49.246Z"
+  },
+  "what_this_lane_repairs": {
+    "defect": "replayPromotion() built its pick from {confidence} alone, so calculateScore saw an empty market and no sport and skipped applyPromotionModifiers (market-family multipliers, the family score cap, the unsupported-sport cap). Replay also scored with the caller's policy rather than the weights and minimumScore the decision was recorded with. An eager-path NBA player prop persisted best-bets suppressed at 60.15 replayed qualified at 70.76.",
+    "repair": "Both promotion snapshot writers persist scoringContext {market, sport} via promotionScoringContextForPick(), the helper calculateScore now reads. replayPromotion() scores from it. New replayRecordedPromotion() replays a pick_promotion_history payload using only the row's snapshot, scoring context and saved policy, and reports score/status agreement; rows lacking a snapshot, scoring context, saved policy or recorded score are reported not-reproducible with a named reason.",
+    "residual": "replayPromotion(snapshot, policy) still accepts a caller policy (its counterfactual contract); fidelity to the recorded decision is replayRecordedPromotion()'s job. Rows written before this change are not reproducible (scoring-context-missing), by design.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 111,
+          "pass": 111,
+          "fail": 0,
+          "skipped": 0
+        },
+        "label": "Includes the UTV2-1954 tests: the reported 60.15/70.76 NBA prop, scoring-context-missing, saved-policy, disagreement, snapshot-missing, a 6-row eager-path matrix (qualified/suppressed; game lines, canonical and raw-string props, team total; supported and unsupported sport) and an operator override row."
+      },
+      {
+        "command": "pnpm exec tsx --test packages/contracts/src/promotion.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 32,
+          "pass": 32,
+          "fail": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "command": "pnpm exec tsx --test packages/domain/src/promotion-conviction.test.ts",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "skipped": 0
+        }
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "row_counts": {
+          "tests": 6915,
+          "pass": 6915,
+          "fail": 0,
+          "not_ok_lines": 0
+        },
+        "label": "Full workspace unit suite on this tree."
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm exec eslint apps/api/src/promotion-edge-integration.test.ts apps/api/src/promotion-service.ts apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts packages/contracts/src/promotion.ts packages/domain/src/promotion.ts",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation by design: ci:assert-staging refuses the containment placeholder SUPABASE_URL. This lane carries t1_live_db_precondition: deferred_to_ci, so verify and Writable DB proof (staging only) are obtained from CI."
+    },
+    "mutation_battery": {
+      "method": "Each mutation applied to one file alone, apps/api/src/promotion-edge-integration.test.ts run, then the file restored from a pre-mutation copy (cmp-checked).",
+      "mutations": [
+        {
+          "id": "M1",
+          "file": "packages/domain/src/promotion.ts",
+          "mutation": "replayPromotion ignores the persisted scoring context (pre-fix behaviour: empty market, no sport).",
+          "observed": "9 failures: tests 99, 101, 104-109, 111."
+        },
+        {
+          "id": "M2",
+          "file": "packages/domain/src/promotion.ts",
+          "mutation": "replayRecordedPromotion scores with the current bestBetsPromotionPolicy instead of the saved policy.",
+          "observed": "1 failure: test 101 (replay uses the saved policy, not a caller-supplied one)."
+        },
+        {
+          "id": "M3",
+          "file": "apps/api/src/promotion-service.ts",
+          "mutation": "Both writers stop persisting scoringContext.",
+          "observed": "10 failures: tests 99, 101, 102, 104-109, 111."
+        }
+      ],
+      "restore_check": {
+        "command": "pnpm exec tsx --test apps/api/src/promotion-edge-integration.test.ts",
+        "pass": 111,
+        "fail": 0
+      }
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base af2f8e11ab4f813e4bc339b23bcd9ccf113f301a --head 27f6392f751474d2ab29d9afc0e90a541d94e4c7",
+      "verdict": "PASS",
+      "rules_matched": [
+        "promotion-scoring"
+      ],
+      "note": "The matched r2-determinism and r3-shadow-report files are UTV2-845's artifacts, not evidence for this diff. shadow-scoring-runner needs an absent credential (SHADOW_PARITY_READ_ONLY_KEY); live-data-lab-runner.ts does not exist on main. No R2/R3 artifact is claimed."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 5368.26ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 3966.43ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 4305.33ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 4880.59ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 161.04ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 7174.25ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 6652.52ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 10,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 7,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-26T12:44:35.425Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 36242827570, job 108406446205), which ran immediately before the smoke-test step in the same job, on head c8546977676b1e07dbc0398fe7dd446a5a473d2a. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 36242827570,
+      "run_attempt": 1,
+      "job_id": 108406446205,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36242827570/job/108406446205",
+      "target_head_sha": "c8546977676b1e07dbc0398fe7dd446a5a473d2a",
+      "target_merge_sha": "c8546977676b1e07dbc0398fe7dd446a5a473d2a",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "containment_changed": false,
+    "sgo": "off -- unchanged",
+    "member_delivery": "disabled -- unchanged",
+    "files_changed": 7,
+    "note": "Seven files inside the pinned file_scope_lock. No migration, no schema change. The live proof writes Track Only fixture picks to staging only; they are kept as evidence."
+  },
+  "known_red_checks_at_this_head": [
+    {
+      "check": "Merge Gate",
+      "cause": "awaiting the reserved T1 approval pair: t1-approved label and a pm-verdict/v1 APPROVED comment from CODEOWNERS. Not authored by the executor."
+    }
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1654"
+}
