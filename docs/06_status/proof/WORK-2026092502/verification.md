@@ -112,6 +112,63 @@ that no secret value is printed.
 No production database, bucket or credential was touched to produce this proof. Starting a
 production backfill remains PM-reserved (`WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md` §5).
 
+## PM Bounce Repairs
+
+Two safety repairs required by the PM review of #1650. Scope: `scripts/warehouse/config.ts`,
+`backfill.ts`, `cli.ts` and three existing test files. `package.json` is unchanged.
+
+**1. One fail-closed redaction boundary for log output.** `redactLogEvent` in `config.ts`
+redacts every string in a log event at any depth (keys, arrays, `Error` values) through
+`redactSecrets`. If redaction throws (circular event, hostile getter, excessive depth) it returns
+the fixed `REDACTION_FAILED_EVENT` and the original event is withheld, never emitted raw.
+`runBackfill` wraps its sink with it, so the `stopped`, `ledger_failed` and final-result events,
+and the conveyor's per-window lines that receive the same wrapper, carry no raw failure text. The
+CLI writes every JSON document through `formatRedactedJson`, passes a redacting `log` to both
+`runConveyor` and `runBackfill`, and writes error text through `redactMessage`. `redactSecrets`
+now removes URI userinfo, `password=` / `key=` / `secret=` / `token=` style pairs, Bearer
+tokens, JWTs, AWS-style access key ids and Supabase keys, and substitutes the value of every
+inventory alias, and of any credential-named variable, present in the environment.
+
+**2. Complete production credential inventory.** `PRODUCTION_CREDENTIAL_ENV_KEYS` in `config.ts`
+is the single list; `RESEARCH_FORBIDDEN_ENV_KEYS` and the redactor both derive from it. Added:
+`SUPABASE_DATABASE_URL`, `HETZNER_DATABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_DB_PASSWORD`,
+`V1_SUPABASE_SERVICE_ROLE_KEY`, `EXPECTED_DATABASE_URL`, `ACTUAL_DATABASE_URL`,
+`LIVE_DATABASE_URL`. Retained: `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ACCESS_TOKEN`,
+`SUPABASE_DB_URL`, `SUPABASE_DB_POOLER_URL`, `DATABASE_URL`, `POSTGRES_URL`. The reader key is
+never in the list.
+
+```
+$ pnpm exec tsx --test scripts/warehouse/<each>.test.ts
+config 28, conveyor-workflow 22, conveyor 31, db-audit 12, export-partition 18,
+manifest 13, object-layout 12, object-store 9, query 5, verify-archive 12
+# tests 162
+# pass 162
+# fail 0
+
+$ pnpm type-check
+rc=0
+
+$ pnpm exec eslint scripts/warehouse
+rc=0
+```
+
+Mutation battery for the repairs. Each mutation was applied alone, the named suite was run, and
+the file was restored; all suites were green after restore.
+
+| # | Mutation | Failing test |
+|---|---|---|
+| R1 | drop `SUPABASE_DATABASE_URL` from the inventory | research refuses beside every repository-supported production credential alias; the PM-named aliases are each refused on their own |
+| R2 | drop `HETZNER_DATABASE_URL` | same two tests |
+| R3 | drop `SUPABASE_ANON_KEY` | same two tests |
+| R4 | `stopped` event bypasses the redactor | redaction: a stopped window logs its failures, and the final result, with no secret |
+| R5 | `ledger_failed` event bypasses the redactor | redaction: a ledger write failure logs ledger_error, and the final result, with no secret |
+| R6 | final result bypasses the redactor | both redaction tests above |
+| R7 | CLI `emit` bypasses the redactor | the CLI writes JSON only through the redaction boundary, and hands it to both runners |
+| R8 | CLI backfill not given the redacting log | the CLI writes JSON only through the redaction boundary, and hands it to both runners |
+| R9 | `redactLogEvent` fails open | redactLogEvent fails closed to fixed text when redaction throws |
+| R10 | URI userinfo pass removed | 3 `redactSecrets` / `redactLogEvent` tests |
+| R11 | CLI stderr bypasses `redactMessage` | the static CLI boundary test; a CLI error carrying a connection string reaches stderr redacted |
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
