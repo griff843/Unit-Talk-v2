@@ -11,7 +11,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1954-replay-fidelity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1654
-Head SHA: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903
+Head SHA: 309fd866a2bf1967d8e412629c0cc0ea649a1e13
 result: pass
 
 ## ASSERTIONS:
@@ -46,7 +46,12 @@ counterfactual contract. Fidelity to the recorded decision is the job of
 
 ## EVIDENCE:
 
-Measured on head `13b1ca56dfe500cc419ad00a7bf0001fa72b0903` in the lane worktree. The branch
+Measured on head `13b1ca56dfe500cc419ad00a7bf0001fa72b0903` in the lane worktree, and re-anchored to `309fd866a2bf1967d8e412629c0cc0ea649a1e13`.
+That commit changes only the live-DB proof file (see "Staging run 36212886508" below). No file
+in `pnpm test`, the affected suites or the mutation battery changed (`git diff 13b1ca56d 309fd866a`
+touches no implementation or unit-test file), so those figures carry forward. At `309fd866a`,
+`pnpm type-check` and eslint on the live proof file were re-run (exit 0), as was the r-level
+check below. The branch
 is based on `origin/main` `af2f8e11ab4f813e4bc339b23bcd9ccf113f301a`; the implementation
 commit is a cherry-pick of `9bec7cc13` onto the lane-start commit, with no conflicts.
 
@@ -80,9 +85,9 @@ $ pnpm exec eslint apps/api/src/promotion-edge-integration.test.ts \
 exit 0
 
 $ npx tsx scripts/ci/r-level-check.ts --base af2f8e11ab4f813e4bc339b23bcd9ccf113f301a \
-    --head 13b1ca56dfe500cc419ad00a7bf0001fa72b0903
+    --head 309fd866a2bf1967d8e412629c0cc0ea649a1e13
 Verdict: PASS
-Changed files: 10
+Changed files: 11
 Rules matched: promotion-scoring
 ```
 
@@ -153,11 +158,46 @@ M2 is caught by exactly one test (101). The matrix rows cannot catch it, because
 in-memory suite the saved policy equals the current one. Test 101 saves a policy whose
 `minimumScore` differs and asserts the replay follows the saved value.
 
+### Staging run 36212886508: why the live proof failed, and what changed
+
+The first staging run (CI run 36212886508, job `Writable DB proof (staging only)`, head
+`557fd22f7`) failed all three score-driven tests. Tests 1 and 2 expected best-bets
+`suppressed` / `qualified` and got `not_eligible`. Test 3 failed on the score column.
+
+- **`not_eligible` is a board-capacity gate, not the fix failing.** `evaluatePromotionEligibility`
+  (`packages/domain/src/promotion.ts:326-335`) returns `not_eligible` when the target's board
+  is at its caps (`perSlate` 15, `perSport` 10, `perGame` 2). `getPromotionBoardState`
+  (`packages/db/src/runtime-repositories.ts:3612-3661`) counts qualified/promoted,
+  non-settled, non-voided, non-Track-Only picks on that target from the last 7 days. Staging is
+  shared, and `t1-proof-atomicity.test.ts:224-229` inserts a best-bets `qualified` pick with
+  `metadata: {}` on every staging run and never removes it (261 CI runs since 2026-09-19).
+  So the staging best-bets board sits above `perSlate`. It also matched the old fixture on
+  `perGame`, because a pick with no `eventName` compares `undefined === undefined` against
+  every other eventName-less pick (`runtime-repositories.ts:3654-3656`). An offline
+  simulation reproduces this: the same fixtures through the real controller reach
+  `suppressed` 60.15 / `qualified` on an empty board, and with 15 atomicity-shaped picks
+  seeded the best-bets row is `not_eligible` with
+  `["board cap for the slate has been reached"]`.
+- **Test 3:** `pick_promotion_history.score` is `numeric(5,2)`
+  (`supabase/migrations/00000000000000_baseline_live_schema.sql:2913`). The proof compared
+  it to the full-precision replayed score within 1e-6, so 31.48 could never match.
+
+`309fd866a` changes the live proof only:
+1. Each fixture names a unique game (`eventName`), as a real pick and the in-memory fixture do.
+2. The column is compared at the precision it stores. The exact comparison stays against
+   `payload.score`.
+3. Every status assertion reports the recorded suppression reasons and `boardStateAtDecision`.
+
+No assertion on the recorded decision is relaxed. **This does not clear the `perSlate`
+saturation of the staging best-bets board.** While that board holds 15 or more such picks,
+tests 1 and 2 will keep failing, now with a message naming the gate. Clearing it means
+removing or settling fixture rows this lane did not create, and is not done here.
+
 ## Verification
 - [x] `pnpm type-check`: exit 0
 - [x] `pnpm test`: exit 0, with 6915 tests, 6915 pass and 0 fail
 - [ ] `pnpm verify`: not runnable locally (staging-target assertion). It is executed by the required `verify` check on this PR.
-- [x] `npx tsx scripts/ci/r-level-check.ts --base af2f8e11a --head 13b1ca56d`: Verdict PASS
+- [x] `npx tsx scripts/ci/r-level-check.ts --base af2f8e11a --head 309fd866a`: Verdict PASS
 
 ## Runtime Verification
 
@@ -186,4 +226,4 @@ this workstation. The failure is the containment `SUPABASE_URL`, not a defect.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1654
 Approved PR head: pending merge
-Execution SHA: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903
+Execution SHA: 309fd866a2bf1967d8e412629c0cc0ea649a1e13

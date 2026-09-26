@@ -7,11 +7,11 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "13b1ca56dfe500cc419ad00a7bf0001fa72b0903",
+    "verified_source_sha": "309fd866a2bf1967d8e412629c0cc0ea649a1e13",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "13b1ca56dfe500cc419ad00a7bf0001fa72b0903 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1954/ and the lane manifest/sync file. It is a conflict-free cherry-pick of preserved commit 9bec7cc13 onto the lane-start commit 92be0f371, which sits on origin/main af2f8e11ab4f813e4bc339b23bcd9ccf113f301a. Every static measurement below was taken on that exact tree in the lane worktree."
+    "note": "309fd866a2bf1967d8e412629c0cc0ea649a1e13 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1954/ and the lane manifest/sync file. It changes only apps/api/src/t1-proof-utv2-1954-promotion-replay.test.ts (fixture eventName, numeric(5,2) column precision, decision diagnostics) after staging run 36212886508. The implementation and every unit/mutation measurement are unchanged from the superseded anchor 13b1ca56dfe500cc419ad00a7bf0001fa72b0903 (git diff 13b1ca56d 309fd866a touches no implementation or unit-test file); type-check, eslint on the changed file and r-level were re-run at 309fd866a. Superseded anchor, not withdrawn: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903. Previous note: 13b1ca56dfe500cc419ad00a7bf0001fa72b0903 is the last commit on this lane that changes anything outside docs/06_status/proof/UTV2-1954/ and the lane manifest/sync file. It is a conflict-free cherry-pick of preserved commit 9bec7cc13 onto the lane-start commit 92be0f371, which sits on origin/main af2f8e11ab4f813e4bc339b23bcd9ccf113f301a. Every static measurement below was taken on that exact tree in the lane worktree."
   },
   "what_this_lane_repairs": {
     "defect": "replayPromotion() built its pick from {confidence} alone, so calculateScore saw an empty market and no sport and skipped applyPromotionModifiers (market-family multipliers, the family score cap, the unsupported-sport cap). Replay also scored with the caller's policy rather than the weights and minimumScore the decision was recorded with. An eager-path NBA player prop persisted best-bets suppressed at 60.15 replayed qualified at 70.76.",
@@ -108,7 +108,7 @@
       }
     },
     "r_level": {
-      "command": "npx tsx scripts/ci/r-level-check.ts --base af2f8e11ab4f813e4bc339b23bcd9ccf113f301a --head 13b1ca56dfe500cc419ad00a7bf0001fa72b0903",
+      "command": "npx tsx scripts/ci/r-level-check.ts --base af2f8e11ab4f813e4bc339b23bcd9ccf113f301a --head 309fd866a2bf1967d8e412629c0cc0ea649a1e13",
       "verdict": "PASS",
       "rules_matched": [
         "promotion-scoring"
@@ -129,7 +129,14 @@
       "A qualifying canonical player prop replays qualified at its recorded score.",
       "A game line and an unsupported sport replay at their recorded scores.",
       "A persisted row stripped of its scoring context is reported not-reproducible."
-    ]
+    ],
+    "staging_run_36212886508": {
+      "head": "557fd22f7",
+      "result": "FAIL",
+      "cause": "Tests 1-2: best-bets not_eligible from board-capacity gates (packages/domain/src/promotion.ts:326-335) on the shared staging board, which t1-proof-atomicity.test.ts:224-229 fills with best-bets qualified metadata:{} picks on every run without cleanup (perSlate 15; perGame matched via undefined eventName, runtime-repositories.ts:3654-3656). Test 3: score column is numeric(5,2), compared at 1e-6.",
+      "change": "309fd866a: fixture eventName, column compared at numeric(5,2) precision, status assertions report suppressionReasons and boardStateAtDecision. No assertion on the recorded decision relaxed.",
+      "open": "perSlate saturation of the staging best-bets board is not cleared by this lane; tests 1-2 fail while it persists."
+    }
   },
   "scope_and_containment": {
     "production_writes": 0,
