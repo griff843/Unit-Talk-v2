@@ -130,9 +130,14 @@ now removes URI userinfo, `password=` / `key=` / `secret=` / `token=` style pair
 tokens, JWTs, AWS-style access key ids and Supabase keys, and substitutes the value of every
 inventory alias, and of any credential-named variable, present in the environment.
 
-Not changed, and outside the PM item: the backfill ledger object written to the warehouse bucket
-still records each window's raw `failures`. That object is not workflow stdout; it lives in the
-writer-only bucket.
+**3. The ledger is redacted at rest** (second PM review, reviewed head `6a7447e65`). `ledgerBody`,
+the ledger's only serialization point, passes the ledger through `redactForPersistence`, which
+redacts every string at any depth and **throws** if it cannot; the throw lands inside the ledger
+write's `try`, so the run stops as `ledger_failed` rather than persisting raw text. Failure entries
+keep their diagnostic shape (host, operation) with credential values replaced. `ledger_error` exists
+only when the ledger write itself failed, so it is never part of a persisted ledger; the test
+asserts that structurally. The conveyor heartbeat stores counts only, and the `.failed.json`
+manifest stores verification findings, not driver text; neither was changed.
 
 **2. Complete production credential inventory.** `PRODUCTION_CREDENTIAL_ENV_KEYS` in `config.ts`
 is the single list; `RESEARCH_FORBIDDEN_ENV_KEYS` and the redactor both derive from it. Added:
@@ -144,10 +149,10 @@ never in the list.
 
 ```
 $ pnpm exec tsx --test scripts/warehouse/<each>.test.ts
-config 28, conveyor-workflow 22, conveyor 32, db-audit 12, export-partition 18,
+config 29, conveyor-workflow 22, conveyor 34, db-audit 12, export-partition 18,
 manifest 13, object-layout 12, object-store 9, query 5, verify-archive 12
-# tests 163
-# pass 163
+# tests 166
+# pass 166
 # fail 0
 
 $ pnpm type-check
@@ -174,6 +179,8 @@ the file was restored; all suites were green after restore.
 | R10 | URI userinfo pass removed | 3 `redactSecrets` / `redactLogEvent` tests |
 | R11 | CLI stderr bypasses `redactMessage` | the static CLI boundary test; a CLI error carrying a connection string reaches stderr redacted |
 | R12 | conveyor default sink writes raw JSON | redaction: the conveyor with no log sink writes only redacted events to stdout |
+| R13 | `ledgerBody` serializes the raw ledger | at rest: a failed window persists its failures in the ledger with no secret |
+| R14 | `redactForPersistence` fails open | redactForPersistence removes secrets at any depth and throws rather than persisting on failure |
 
 ## Merge SHA Binding
 
