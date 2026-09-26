@@ -1085,3 +1085,51 @@ test('redaction: a ledger write failure logs ledger_error, and the final result,
     await ws.close();
   }
 });
+
+test('redaction: the conveyor with no log sink writes only redacted events to stdout', async () => {
+  const ws = await workspace(seedOffers);
+  const written: string[] = [];
+  const realWrite = process.stdout.write.bind(process.stdout);
+  try {
+    await withEnvCredential(async () => {
+      const failing: DuckConnection = {
+        run: async () => {
+          throw leakyError();
+        },
+        all: async () => {
+          throw leakyError();
+        },
+        close: async () => {},
+      };
+      process.stdout.write = ((chunk: string | Uint8Array) => {
+        written.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+        return true;
+      }) as typeof process.stdout.write;
+      let result;
+      try {
+        // No `log`: this exercises the conveyor's own default sink.
+        result = await runConveyor({
+          plan: planConveyorRun({ policy: DEFAULT_RETENTION_POLICY, today: '2026-09-24' }),
+          connection: failing,
+          store: ws.store,
+          relationExpr: () => 'offers',
+          exporterRepoSha: '0'.repeat(40),
+          now: () => BACKFILL_NOW,
+        });
+      } finally {
+        process.stdout.write = realWrite;
+      }
+      // Not vacuous: the run really carried a secret, and the default sink really wrote.
+      assert.ok(
+        result.items.some((item) => item.failures.join(' ').includes(LEAKY.uriPassword)),
+        'the fixture never failed with a secret',
+      );
+      assert.ok(written.length > 0, 'the default sink wrote nothing');
+      const events = written.join('').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+      assertNoLeak(events, 'conveyor default sink');
+    });
+  } finally {
+    process.stdout.write = realWrite;
+    await ws.close();
+  }
+});

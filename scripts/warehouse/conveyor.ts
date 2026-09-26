@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { redactLogEvent } from './config.js';
 import { type DuckConnection } from './duckdb.js';
 import {
   type ArchiveTarget,
@@ -398,7 +399,8 @@ async function readExistingManifest(
 
 export async function runConveyor(options: ConveyorRunOptions): Promise<ConveyorRunResult> {
   const now = options.now ?? (() => new Date());
-  const log = options.log ?? ((event) => process.stdout.write(`${JSON.stringify(event)}\n`));
+  // Fail closed without a caller-supplied sink too: the default writes only redacted events.
+  const log = options.log ?? ((event) => process.stdout.write(`${JSON.stringify(redactLogEvent(event))}\n`));
   const startedAt = now().toISOString();
   const results: ConveyorItemResult[] = [];
 
