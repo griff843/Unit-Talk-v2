@@ -1,0 +1,123 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092605
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092605
+  objective: Replace the fixed 100-attempt and 50-receipt samples on the Command
+    Center delivery page with independent, exact-count pagination. Rebase the
+    preserved UTV2-1950 patch onto current `origin/main`; do not recreate
+    delivery behavior already merged.
+  acceptance_criteria:
+    - Attempts and receipts page independently with stable ordering and exact
+      totals.
+    - Attempt filters persist while paging attempts and do not incorrectly
+      filter receipt history.
+    - An out-of-range PostgREST page renders an empty page with usable
+      navigation instead of a load failure.
+    - The 390px operator view has no page-level horizontal overflow.
+    - Existing governed population, target controls, and retry semantics remain
+      unchanged.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092605 — Command Center outbox pagination
+
+      Tier: T2 · Lane type: delivery-ui · Executor: codex-cli
+
+
+      Repo-owned work order created from the Command Center convergence audit.
+      No Linear issue exists for this identity.
+
+
+      ## File scope
+
+
+      - `apps/command-center/src/lib/data/outbox.ts`
+
+      - `apps/command-center/src/lib/data/delivery-population.test.ts`
+
+      - `apps/command-center/src/app/operations/outbox/page.tsx`
+
+      - `apps/command-center/e2e/recovery/delivery-truth.spec.ts`
+
+
+      ## Verification
+
+
+      - Focused `node:test` data tests and recovery Playwright spec.
+
+      - `pnpm verify` and the R-level check before PR.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092605.md
+    title: WORK-2026092605 — Command Center outbox pagination
+    description: >-
+      # WORK-2026092605 — Command Center outbox pagination
+
+
+      Tier: T2 · Lane type: delivery-ui · Executor: codex-cli
+
+
+      Repo-owned work order created from the Command Center convergence audit.
+      No Linear issue exists for this identity.
+
+
+      ## Objective
+
+
+      Replace the fixed 100-attempt and 50-receipt samples on the Command Center
+      delivery page with independent, exact-count pagination. Rebase the
+      preserved UTV2-1950 patch onto current `origin/main`; do not recreate
+      delivery behavior already merged.
+
+
+      ## Acceptance Criteria
+
+
+      - Attempts and receipts page independently with stable ordering and exact
+      totals.
+
+      - Attempt filters persist while paging attempts and do not incorrectly
+      filter receipt history.
+
+      - An out-of-range PostgREST page renders an empty page with usable
+      navigation instead of a load failure.
+
+      - The 390px operator view has no page-level horizontal overflow.
+
+      - Existing governed population, target controls, and retry semantics
+      remain unchanged.
+
+
+      ## File scope
+
+
+      - `apps/command-center/src/lib/data/outbox.ts`
+
+      - `apps/command-center/src/lib/data/delivery-population.test.ts`
+
+      - `apps/command-center/src/app/operations/outbox/page.tsx`
+
+      - `apps/command-center/e2e/recovery/delivery-truth.spec.ts`
+
+
+      ## Verification
+
+
+      - Focused `node:test` data tests and recovery Playwright spec.
+
+      - `pnpm verify` and the R-level check before PR.
+    captured_at: 2026-09-26T12:40:24.172Z
+    description_sha256: 7ad3043832939554552013dfe0d2e113cbf4b26a7d52a007259d9687a4f37043
+  contract_hash: cc9647a595c4d708ae97b03fb3bf10de603befcacb9aab108a9566ef27a5d6ca
