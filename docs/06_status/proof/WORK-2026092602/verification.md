@@ -9,6 +9,7 @@ Issue: WORK-2026092602
 Tier: T2
 Lane type: hygiene
 Branch: claude/work-2026092602-staging-board-drain
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1655
 Execution SHA: fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837
 Head SHA: fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837
 result: pass
