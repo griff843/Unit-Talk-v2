@@ -72,6 +72,30 @@ Unpartitioned table, about 6.5 GB. Counts are **exact** (`count(*)` grouped by U
 Window column: `snapshot_at` (btree-indexed, `provider_offers_snapshot_at_idx`). Ordering:
 `snapshot_at, id`.
 
+### 3c. Raw payloads, offer snapshots and run telemetry (measured 2026-09-26, read-only)
+
+Added once the conveyor archived only market data while the 1.3 GB `system_runs`, 694 MB
+`raw_payloads` and 427 MB `odds_snapshots` stayed hot indefinitely. Counts are exact, grouped by
+UTC day of the window column.
+
+| Source | First day | Last day | Days with rows | Rows | Largest day | Eligible through (2026-09-26) |
+|---|---|---|---:|---:|---:|---|
+| `raw_payloads` | 2026-05-23 | 2026-07-30 | 63 | 16,856 | 2,812 rows, 134 MB in-row | all of it (21-day hot) |
+| `odds_snapshots` | 2026-05-23 | 2026-06-30 | 23 | 9,434 | 1,476 rows, 126 MB in-row | all of it (45-day hot) |
+| `system_runs` | 2026-04-20 | still writing | 159 | 3,604,327 | 640,325 rows | 2026-06-27 (90-day hot) |
+
+The largest window is 3% of `MAX_WINDOW_ROWS` (20M). The largest byte window is a single object PUT
+well under the store's limit, so multipart stays ungranted. Window columns are btree-indexed
+(`raw_payloads_provider_league_snapshot_idx`, `idx_odds_snapshots_snapshot_at`,
+`system_runs_run_type_started_at_idx`), so no DDL is needed for the export.
+
+**Content check, before any byte leaves the database.** The archive is a copy of the row, so a
+credential in a payload would be copied into the bucket. Every `raw_payloads.payload`, every
+`odds_snapshots.price_blob`, every non-heartbeat `system_runs.details` and a two-day sample of
+29,470 `worker.heartbeat` details were matched against key, authorization, bearer, password, token
+and connection-string patterns: **zero hits**. 1,972 `raw_payloads` rows carry the provider key
+`utv2-1084-t1-proof`. They are proof fixtures, archived as they stand and not relabelled.
+
 The two sources do not overlap in time: the quarantine ends 2026-04-29 13:04Z, and history
 begins 2026-05-11 18:29Z.
 
@@ -112,6 +136,9 @@ For one source and an explicit inclusive `[from, to]` range:
 |---|---|---|
 | `provider_offer_history` | `canonical/markets/all/<YYYY>/<date>/part-0000.parquet` | `manifests/markets/<date>/<id>.json` |
 | `provider_offers_legacy_quarantine` | `raw/provider_offers_legacy/all/<YYYY>/<date>/part-0000.parquet` | `manifests/raw_provider_offers_legacy/<date>/<id>.json` |
+| `raw_payloads` | `raw/raw_payloads/all/<YYYY>/<date>/part-0000.parquet` | `manifests/raw_raw_payloads/<date>/<id>.json` |
+| `odds_snapshots` | `raw/odds_snapshots/all/<YYYY>/<date>/part-0000.parquet` | `manifests/raw_odds_snapshots/<date>/<id>.json` |
+| `system_runs` | `raw/system_runs/all/<YYYY>/<date>/part-0000.parquet` | `manifests/raw_system_runs/<date>/<id>.json` |
 
 `<YYYY>` is the window's year (§7, defect 1). The manifest id is `computeManifestId(dataKey)`, a
 pure function of the key. History uses the **same** key the daily conveyor uses, so a backfilled
@@ -144,6 +171,15 @@ Proposed sequence, each step a separate PM-visible dispatch:
 2. **History:** `2026-05-11 → 2026-06-30`. Oldest first, so the small May windows run before the
    2–3M-row late-June windows.
 3. **Quarantine:** `2026-04-23 → 2026-04-29`.
+4. **Offer snapshots:** `odds_snapshots`, `2026-05-23 → 2026-06-30` (39 windows, 16 of them empty,
+   each an honest zero-row manifest).
+5. **Raw payloads:** `raw_payloads`, `2026-05-23 → 2026-07-23`, then `2026-07-24 → 2026-07-30`.
+   Two dispatches, because the range is 69 days and one dispatch is at most 62 windows.
+6. **Run telemetry:** `system_runs`, `2026-04-20 → 2026-06-20`, then `2026-06-21 →` the day before
+   the daily conveyor's first archived `system_runs` window. From then on the conveyor carries it.
+
+Steps 4–6 need the reader grants in the provisioning doc §3 first; without them the conveyor refuses
+the source (`row_security_filtered`) rather than exporting zero rows.
 
 Acceptance for each step: every window `archived` or `skipped_already_verified`; zero `failed`;
 for every data window the manifest's `source.row_count` equals `export.exported_row_count`; and a
@@ -194,8 +230,8 @@ re-exported; an empty window yields a verified zero-row manifest; history and qu
 never collide; a `pruneHold` entry is never reported prune-eligible; `DEFAULT_RETENTION_POLICY`
 produces a valid key.
 
-**Waiting on:** #1643 (locks `cli.ts`, `config.ts`, the conveyor workflow), #1642 (locks
-`conveyor.test.ts`) and #1644 (locks `package.json`). All three wait on #1636.
+**Landed** in #1650 (WORK-2026092502). Raw payloads, offer snapshots and run telemetry were added
+to the default policy and as backfill sources in WORK-2026092607.
 
 **Source role:** `warehouse_reader` also needs `SELECT` on
 `public.provider_offers_legacy_quarantine`, which has RLS in the same state as history and needs

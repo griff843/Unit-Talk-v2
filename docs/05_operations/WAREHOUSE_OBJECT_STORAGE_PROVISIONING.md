@@ -237,12 +237,19 @@ ALTER ROLE warehouse_reader SET default_transaction_read_only = on;
 GRANT USAGE ON SCHEMA public TO warehouse_reader;
 GRANT SELECT ON public.provider_offer_history TO warehouse_reader;
 GRANT SELECT ON public.provider_offers_legacy_quarantine TO warehouse_reader;
+GRANT SELECT ON public.raw_payloads TO warehouse_reader;
+GRANT SELECT ON public.odds_snapshots TO warehouse_reader;
+GRANT SELECT ON public.system_runs TO warehouse_reader;
 ```
 
 `postgres` on this project holds `CREATEROLE` and `BYPASSRLS` without superuser, so it can issue
 this. The quarantine grant is for the one-time archive PM decided on 2026-09-24. That table has
-RLS on and no policy, the same as history (measured 2026-09-24). Add `GRANT SELECT` on further
-relations only when a policy entry for them lands.
+RLS on and no policy, the same as history (measured 2026-09-24). The last three grants are for the
+policy entries WORK-2026092607 added. All three have RLS enabled (measured 2026-09-26):
+`system_runs` has no policy at all, and `raw_payloads` (2 policies) and `odds_snapshots` (1) have
+policies written for the application roles. `BYPASSRLS` is what makes all of them readable in full,
+and the conveyor refuses a row-filtered read either way. Add `GRANT SELECT` on further relations
+only when a policy entry for them lands.
 
 **Use the Supabase session pooler for `UNIT_TALK_WAREHOUSE_SOURCE_DSN`**
 (`postgresql://warehouse_reader.zfzdnfwdarxucxtaojxm:<password>@<region>.pooler.supabase.com:5432/postgres`).

@@ -56,8 +56,12 @@ export const CONVEYOR_EVENT = 'warehouse.conveyor';
 export interface RetentionPolicyEntry {
   /** `schema.relation` in the operational database. */
   relation: string;
-  /** Canonical warehouse domain the export is filed under. */
-  domain: CanonicalDomain;
+  /**
+   * Canonical warehouse domain the export is filed under. Required unless the
+   * entry files under `raw/` (see {@link target}), where the namespace is the
+   * raw provider token instead and a domain would name nothing.
+   */
+  domain?: CanonicalDomain | null;
   /** Timestamp column the daily window is taken on. */
   windowColumn: string;
   /** Days of history that stay hot in Postgres. */
@@ -130,6 +134,45 @@ export const DEFAULT_RETENTION_POLICY: RetentionPolicyEntry[] = [
     orderBy: ['snapshot_at', 'id'],
     season: WINDOW_YEAR_SEASON,
   },
+  // The three below are archived table-as-is under `raw/<table>/`: none of them
+  // is a canonical domain's shape, and a separate namespace per table makes a
+  // key collision between them impossible by construction. Hot retention is
+  // HISTORICAL_MARKET_DATA_WAREHOUSE.md §4. Each window uses an index that
+  // already exists on its column (EXPLAIN, 2026-09-26), so none needs DDL.
+  {
+    relation: 'public.raw_payloads',
+    windowColumn: 'snapshot_at',
+    hotRetentionDays: 21,
+    sportColumn: null,
+    sports: ['all'],
+    orderBy: ['snapshot_at', 'id'],
+    season: WINDOW_YEAR_SEASON,
+    target: { kind: 'raw', provider: 'raw_payloads' },
+  },
+  {
+    // §4 names no figure for odds snapshots; they take offer history's 45 days,
+    // the conservative choice for line history an operator might still read.
+    relation: 'public.odds_snapshots',
+    windowColumn: 'snapshot_at',
+    hotRetentionDays: 45,
+    sportColumn: null,
+    sports: ['all'],
+    orderBy: ['snapshot_at', 'id'],
+    season: WINDOW_YEAR_SEASON,
+    target: { kind: 'raw', provider: 'odds_snapshots' },
+  },
+  {
+    // Run telemetry. Windowed on `started_at`, the column every run has from
+    // its first write; `finished_at` is null while a run is open.
+    relation: 'public.system_runs',
+    windowColumn: 'started_at',
+    hotRetentionDays: 90,
+    sportColumn: null,
+    sports: ['all'],
+    orderBy: ['started_at', 'id'],
+    season: WINDOW_YEAR_SEASON,
+    target: { kind: 'raw', provider: 'system_runs' },
+  },
 ];
 
 export interface ConveyorPlanItem {
@@ -167,6 +210,13 @@ function addDays(dateIso: string, days: number): string {
  * Pure. The tests drive it with a fixed `today`, because a scheduler whose
  * behaviour you can only observe by waiting a day is a scheduler nobody checks.
  */
+function requireDomain(entry: RetentionPolicyEntry): CanonicalDomain {
+  if (!entry.domain) {
+    throw new Error(`${entry.relation} files under canonical/ but names no domain`);
+  }
+  return entry.domain;
+}
+
 export function planConveyorRun(input: {
   policy: RetentionPolicyEntry[];
   today: string;
@@ -191,7 +241,7 @@ export function planConveyorRun(input: {
       const target: ArchiveTarget =
         entry.target?.kind === 'raw'
           ? { kind: 'raw', provider: entry.target.provider, sport, season, date }
-          : { kind: 'canonical', domain: entry.domain, sport, season, date };
+          : { kind: 'canonical', domain: requireDomain(entry), sport, season, date };
       items.push({
         relation: entry.relation,
         date,
