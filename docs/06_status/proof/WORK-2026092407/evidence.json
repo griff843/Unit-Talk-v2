@@ -7,11 +7,11 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "a75dd60a74b176a215d972f5f4bee7609fde75b3",
+    "verified_source_sha": "98bda0923b6dab73cdaefdcf2c217f48c922c5be",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "a75dd60a74b176a215d972f5f4bee7609fde75b3 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Implementation commits ff588cfc0, 7563bbdd8, a75dd60a7 sit on the lane-start commit 1251a0213, whose parent is origin/main 5b193aedb3536e5705d6b708d8fe5bc9c6bd43fb. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+    "note": "98bda0923b6dab73cdaefdcf2c217f48c922c5be is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main 35c68ae3e into this branch. It brings in only main's own changes (`.ops/sync/WORK-2026092503.yml`, `apps/worker/src/runner.ts`, `apps/worker/src/worker-runtime.test.ts`, `docs/06_status/lanes/WORK-2026092503.json`, `docs/06_status/proof/WORK-2026092503/diff-summary.md`, `docs/06_status/proof/WORK-2026092503/evidence.json`, `docs/06_status/proof/WORK-2026092503/verification.md`, `docs/06_status/proof/WORK-2026092503/work-order.md`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor a75dd60a74b176a215d972f5f4bee7609fde75b3. CI re-runs verify on the new head. Previous note: 98bda0923b6dab73cdaefdcf2c217f48c922c5be is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Implementation commits ff588cfc0, 7563bbdd8, a75dd60a7 sit on the lane-start commit 1251a0213, whose parent is origin/main 5b193aedb3536e5705d6b708d8fe5bc9c6bd43fb. Merge SHA is null until post-merge-lane-close.yml rebinds it."
   },
   "what_this_lane_delivers": {
     "problem": "Command Center is internal-only (127.0.0.1:4300 on the host). ssh -L fails because the host runs AllowTcpForwarding no. The hand-started cc-proxy injects the operator bearer token into every request, so any process on the host loopback gets authenticated access with no credential.",
@@ -22,7 +22,7 @@
     "unit_tests": {
       "pass": 6899,
       "fail": 0,
-      "note": "pnpm test at a75dd60a74b176a215d972f5f4bee7609fde75b3"
+      "note": "pnpm test at 98bda0923b6dab73cdaefdcf2c217f48c922c5be"
     },
     "bridge_suite": {
       "pass": 20,

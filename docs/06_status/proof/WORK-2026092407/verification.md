@@ -13,7 +13,7 @@ Tier: T2
 Lane type: hygiene
 Branch: claude/work-2026092407-cc-operator-bridge
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1652
-Head SHA: a75dd60a74b176a215d972f5f4bee7609fde75b3
+Head SHA: 98bda0923b6dab73cdaefdcf2c217f48c922c5be
 result: pass
 
 ## ASSERTIONS:
@@ -48,7 +48,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured at `a75dd60a74b176a215d972f5f4bee7609fde75b3` in the lane worktree, based on
+Measured at `98bda0923b6dab73cdaefdcf2c217f48c922c5be` in the lane worktree, based on
 `origin/main` `5b193aedb3536e5705d6b708d8fe5bc9c6bd43fb`.
 
 ```
@@ -133,12 +133,18 @@ precondition in the runbook for retiring `cc-proxy`, and `cc-proxy` is not touch
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1652
-Execution SHA: a75dd60a74b176a215d972f5f4bee7609fde75b3
+Execution SHA: 98bda0923b6dab73cdaefdcf2c217f48c922c5be
 
-Execution anchor: `a75dd60a74b176a215d972f5f4bee7609fde75b3` is the last commit on this lane
+Execution anchor: `98bda0923b6dab73cdaefdcf2c217f48c922c5be` is the last commit on this lane
 that changes anything outside `docs/06_status/proof/WORK-2026092407/` and the lane manifest. The
 lane's implementation commits are `ff588cfc0`, `7563bbdd8` and `a75dd60a7`, on top of the
 lane-start commit `1251a0213`, whose parent is `origin/main` `5b193aedb3536e5705d6b708d8fe5bc9c6bd43fb`.
 
 `work-order.md` in this directory is a byte-identical copy of the repository-owned work order
 `.ops/work/WORK-2026092407.md`, which exists only as an uncommitted file.
+
+### Re-anchor to `98bda0923b6dab73cdaefdcf2c217f48c922c5be`
+
+Branch refreshed from origin/main `35c68ae3e` after main advanced. The merge brings in only main's own
+changes: `.ops/sync/WORK-2026092503.yml`, `apps/worker/src/runner.ts`, `apps/worker/src/worker-runtime.test.ts`, `docs/06_status/lanes/WORK-2026092503.json`, `docs/06_status/proof/WORK-2026092503/diff-summary.md`, `docs/06_status/proof/WORK-2026092503/evidence.json`, `docs/06_status/proof/WORK-2026092503/verification.md`, `docs/06_status/proof/WORK-2026092503/work-order.md`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `a75dd60a74b176a215d972f5f4bee7609fde75b3`. `verify` re-runs on the new head.
