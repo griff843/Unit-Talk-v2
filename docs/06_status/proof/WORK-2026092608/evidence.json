@@ -7,14 +7,14 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "28907a15e92785636e7565e5e69cab1dadb95781",
+    "verified_source_sha": "479b7b134f396b6d85177de8539d57d3af3ebb86",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "note": "28907a15e92785636e7565e5e69cab1dadb95781 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the orchestrator review fixes (T3 bundle-free, reopened-lane lease). Superseded anchor 12dc5458001478aa1dbcec9bb18d4e3e07b645bb. Previous note: "
+    "note": "479b7b134f396b6d85177de8539d57d3af3ebb86 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main cb2f347f0 into this branch. It brings in only main's own changes (`.github/workflows/warehouse-archive-conveyor.yml`, `.ops/sync/WORK-2026092605.yml`, `.ops/sync/WORK-2026092607.yml`, `apps/command-center/e2e/recovery/delivery-truth.spec.ts`, `apps/command-center/src/app/operations/outbox/page.tsx`, `apps/command-center/src/lib/data/delivery-population.test.ts`, `apps/command-center/src/lib/data/outbox.ts`, `docs/05_operations/WAREHOUSE_ARCHIVE_CONTRACT.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092605.json`, `docs/06_status/lanes/WORK-2026092607.json`, `docs/06_status/proof/WORK-2026092605/.gitkeep`, `docs/06_status/proof/WORK-2026092605/diff-summary.md`, `docs/06_status/proof/WORK-2026092605/evidence.json`, `docs/06_status/proof/WORK-2026092605/model-routing.json`, `docs/06_status/proof/WORK-2026092605/verification.md`, `docs/06_status/proof/WORK-2026092607/diff-summary.md`, `docs/06_status/proof/WORK-2026092607/evidence.json`, `docs/06_status/proof/WORK-2026092607/verification.md`, `docs/06_status/proof/WORK-2026092607/work-order.md`, `scripts/warehouse/README.md`, `scripts/warehouse/backfill.ts`, `scripts/warehouse/conveyor-workflow.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/conveyor.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor 28907a15e92785636e7565e5e69cab1dadb95781. CI re-runs verify on the new head. Previous note: 479b7b134f396b6d85177de8539d57d3af3ebb86 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the orchestrator review fixes (T3 bundle-free, reopened-lane lease). Superseded anchor 12dc5458001478aa1dbcec9bb18d4e3e07b645bb. Previous note: "
   },
   "static_proof": {
     "status": "pass",
-    "measured_on": "28907a15e92785636e7565e5e69cab1dadb95781",
+    "measured_on": "479b7b134f396b6d85177de8539d57d3af3ebb86",
     "unit_tests": [
       {
         "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
