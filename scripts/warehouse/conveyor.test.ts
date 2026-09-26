@@ -967,3 +967,121 @@ test('the quarantine archives under raw/, and its verified windows stay held', a
     await ws.close();
   }
 });
+
+// --- PM bounce on #1650: nothing a failure carries reaches the log unredacted ---
+
+/**
+ * Driver, database and object-store errors quote connection strings and keys.
+ * One of each shape the redactor must remove, plus a value that only the
+ * environment pass can recognise.
+ */
+const LEAKY = {
+  uriPassword: 'uri-pass-7Q2x',
+  libpqPassword: 'libpq-pass-Zr4',
+  jwt: 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.c2lnbmF0dXJlLXZhbHVl',
+  accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+  secretPair: 'wJalrXUtnFEMI-K7MDENG-bPxRfiCY',
+  envOnly: 'opaque-env-only-value-51b7',
+};
+
+function leakyError(): Error {
+  return new Error(
+    [
+      `connect to postgresql://postgres.zfzdnfwdarxucxtaojxm:${LEAKY.uriPassword}@aws-0-us-east-2.pooler.supabase.com:6543/postgres failed`,
+      `host=db.example.test password=${LEAKY.libpqPassword}`,
+      `apikey: ${LEAKY.jwt}`,
+      `AccessKeyId ${LEAKY.accessKeyId} SecretAccessKey=${LEAKY.secretPair}`,
+      `driver echoed ${LEAKY.envOnly}`,
+    ].join('; '),
+  );
+}
+
+function assertNoLeak(events: Record<string, unknown>[], label: string): void {
+  const serialized = JSON.stringify(events);
+  for (const [name, value] of Object.entries(LEAKY)) {
+    assert.equal(serialized.includes(value), false, `${label}: ${name} reached the log`);
+  }
+}
+
+async function withEnvCredential<T>(run: () => Promise<T>): Promise<T> {
+  const key = 'HETZNER_DATABASE_URL';
+  const prior = process.env[key];
+  process.env[key] = LEAKY.envOnly;
+  try {
+    return await run();
+  } finally {
+    if (prior === undefined) delete process.env[key];
+    else process.env[key] = prior;
+  }
+}
+
+const isFinalResult = (event: Record<string, unknown>) =>
+  event.event === 'warehouse.backfill' && Array.isArray(event.windows);
+
+test('redaction: a stopped window logs its failures, and the final result, with no secret', async () => {
+  const ws = await workspace(seedOffers);
+  try {
+    await withEnvCredential(async () => {
+      const plan = historyPlan('2026-05-11', '2026-05-12');
+      const failing: DuckConnection = {
+        run: async () => {
+          throw leakyError();
+        },
+        all: async () => {
+          throw leakyError();
+        },
+        close: async () => {},
+      };
+      const events: Record<string, unknown>[] = [];
+      const result = await backfill(ws, plan, { connection: failing, log: (event) => events.push(event) });
+
+      assert.equal(result.failed_window, '2026-05-11');
+      // Not vacuous: the secret really is in what the run carried.
+      assert.ok(result.windows[0].failures.join(' ').includes(LEAKY.uriPassword), 'the fixture never failed with a secret');
+
+      const stopped = events.filter((event) => event.phase === 'stopped');
+      assert.equal(stopped.length, 1, 'the stopped event was logged');
+      assertNoLeak(stopped, 'stopped');
+      assert.match(JSON.stringify(stopped[0].failures), /\[redacted/);
+
+      const final = events.filter(isFinalResult);
+      assert.equal(final.length, 1, 'the final result was logged');
+      assertNoLeak(final, 'final result (stopped run)');
+
+      assertNoLeak(events, 'every event of the stopped run');
+    });
+  } finally {
+    await ws.close();
+  }
+});
+
+test('redaction: a ledger write failure logs ledger_error, and the final result, with no secret', async () => {
+  const ws = await workspace(seedOffers);
+  try {
+    await withEnvCredential(async () => {
+      const plan = historyPlan('2026-05-11', '2026-05-11');
+      const refusingLedger = wrapStore(ws.store, (key, body, contentType) =>
+        key === plan.ledger_key ? Promise.reject(leakyError()) : ws.store.put(key, body, contentType),
+      );
+      const events: Record<string, unknown>[] = [];
+      const result = await backfill(ws, plan, { store: refusingLedger, log: (event) => events.push(event) });
+
+      assert.equal(result.ok, false);
+      assert.ok(result.ledger_error?.includes(LEAKY.uriPassword), 'the fixture never failed with a secret');
+
+      const ledgerFailed = events.filter((event) => event.phase === 'ledger_failed');
+      assert.equal(ledgerFailed.length, 1, 'the ledger_failed event was logged');
+      assertNoLeak(ledgerFailed, 'ledger_failed');
+      assert.match(String(ledgerFailed[0].error), /\[redacted/);
+
+      const final = events.filter(isFinalResult);
+      assert.equal(final.length, 1, 'the final result was logged');
+      assertNoLeak(final, 'final result (ledger_failed run)');
+      assert.match(String(final[0].ledger_error), /\[redacted/);
+
+      assertNoLeak(events, 'every event of the ledger_failed run');
+    });
+  } finally {
+    await ws.close();
+  }
+});

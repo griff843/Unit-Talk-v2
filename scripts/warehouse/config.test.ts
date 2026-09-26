@@ -11,8 +11,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  PRODUCTION_CREDENTIAL_ENV_KEYS,
+  REDACTION_FAILED_EVENT,
   SECRET_ENV_KEYS,
   WAREHOUSE_ENV_KEYS,
+  formatRedactedJson,
+  redactLogEvent,
+  redactMessage,
   classifyArchiveState,
   classifyPresence,
   describeConfig,
@@ -287,4 +292,148 @@ test('redactSecrets also removes the reader key and production credentials', () 
   const redacted = redactSecrets('reader-s3cr3t-value-0001 and service-role-value-123', env);
   assert.equal(redacted.includes('reader-s3cr3t-value-0001'), false);
   assert.equal(redacted.includes('service-role-value-123'), false);
+});
+
+// --- PM bounce on #1650: the full production alias inventory, and one redaction boundary ---
+
+/**
+ * Every production credential name the repository reads, with where it is read.
+ * The PM named the first three as missing from the refusal inventory.
+ */
+const PRODUCTION_ALIASES: Record<string, string> = {
+  SUPABASE_DATABASE_URL: 'scripts/db-inspect/lib.ts, scripts/ops/disk-growth-report.ts',
+  HETZNER_DATABASE_URL: 'scripts/ops/disk-growth-report.ts, scripts/ops/compare-databases.ts',
+  SUPABASE_ANON_KEY: 'packages/config/src/env.ts',
+  SUPABASE_SERVICE_ROLE_KEY: 'packages/config/src/env.ts',
+  SUPABASE_ACCESS_TOKEN: '.env.example, scripts/disk-growth-alert.ts',
+  V1_SUPABASE_SERVICE_ROLE_KEY: 'scripts/shadow-clv-parity.ts',
+  SUPABASE_DB_URL: 'workflow secret; scripts/db-inspect/lib.ts',
+  SUPABASE_DB_POOLER_URL: 'workflow secret',
+  SUPABASE_DB_PASSWORD: 'scripts/generate-types.mjs',
+  DATABASE_URL: 'scripts/db-inspect/lib.ts, scripts/ops/disk-growth-report.ts',
+  POSTGRES_URL: 'scripts/ci/schema-roundtrip-hash.ts',
+  EXPECTED_DATABASE_URL: 'scripts/ops/compare-databases.ts',
+  ACTUAL_DATABASE_URL: 'scripts/ops/compare-databases.ts',
+  LIVE_DATABASE_URL: 'scripts/ops/compare-databases.ts',
+};
+
+test('research refuses beside every repository-supported production credential alias', () => {
+  for (const [key, where] of Object.entries(PRODUCTION_ALIASES)) {
+    assert.ok(PRODUCTION_CREDENTIAL_ENV_KEYS.includes(key), `${key} (${where}) is missing from the inventory`);
+    assert.ok(RESEARCH_FORBIDDEN_ENV_KEYS.includes(key), `${key} (${where}) is not refused`);
+    const resolved = resolveResearchObjectStoreConfig(readerEnv({ [key]: 'production-credential-value' }));
+    assert.equal(resolved.ok, false, `${key} present must refuse a research command`);
+    assert.ok(!resolved.ok && resolved.message.includes(key));
+    assert.equal(resolved.ok, false);
+    assert.equal(JSON.stringify(resolved).includes('production-credential-value'), false);
+    assert.throws(() => assertResearchEnvironment(readerEnv({ [key]: 'production-credential-value' })));
+  }
+});
+
+test('the PM-named aliases are each refused on their own', () => {
+  for (const key of ['SUPABASE_DATABASE_URL', 'HETZNER_DATABASE_URL', 'SUPABASE_ANON_KEY']) {
+    const description = describeConfig(readerEnv({ [key]: 'value-that-must-refuse' }));
+    assert.equal(description.research_ready, false, `${key} alone must make research not ready`);
+    assert.deepEqual(description.research_forbidden_present, [key]);
+  }
+});
+
+test('the reader key itself is never in the refusal inventory', () => {
+  assert.equal(RESEARCH_FORBIDDEN_ENV_KEYS.includes(WAREHOUSE_ENV_KEYS.readAccessKeyId), false);
+  assert.equal(RESEARCH_FORBIDDEN_ENV_KEYS.includes(WAREHOUSE_ENV_KEYS.readSecretAccessKey), false);
+});
+
+/** Representative secrets, one per shape the redactor must remove. */
+const REPRESENTATIVE_SECRETS = {
+  uriPassword: 'uri-pass-7Q2x',
+  poolerPassword: 'pooler-pass-K9m',
+  libpqPassword: 'libpq-pass-Zr4',
+  jwt: 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.c2lnbmF0dXJlLXZhbHVl',
+  accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+  secretPair: 'wJalrXUtnFEMI-K7MDENG-bPxRfiCY',
+  tokenPair: 'tok-3f9a1c2b7d',
+  bearer: 'bearer-opaque-8c1d2e',
+  supabasePat: 'sbp_0123456789abcdef0123456789',
+  envOnly: 'opaque-env-only-value-51b7',
+};
+
+function secretBearingText(s = REPRESENTATIVE_SECRETS): string {
+  return [
+    `connect to postgresql://postgres.zfzdnfwdarxucxtaojxm:${s.uriPassword}@aws-0-us-east-2.pooler.supabase.com:6543/postgres failed`,
+    `retry via postgres://reader:${s.poolerPassword}@db.example.test/postgres`,
+    `host=db.example.test user=reader password=${s.libpqPassword} sslmode=require`,
+    `apikey: ${s.jwt}`,
+    `S3 error for AccessKeyId ${s.accessKeyId}`,
+    `SecretAccessKey=${s.secretPair}`,
+    `https://bucket.example/obj?token=${s.tokenPair}&x=1`,
+    `Authorization: Bearer ${s.bearer}`,
+    `management API refused ${s.supabasePat}`,
+    `driver echoed ${s.envOnly} verbatim`,
+  ].join('; ');
+}
+
+function assertNoSecret(serialized: string, label: string, s = REPRESENTATIVE_SECRETS): void {
+  for (const [name, value] of Object.entries(s)) {
+    assert.equal(serialized.includes(value), false, `${label}: ${name} leaked`);
+  }
+}
+
+test('redactSecrets removes every representative credential shape', () => {
+  const env = { HETZNER_DATABASE_URL: REPRESENTATIVE_SECRETS.envOnly } as NodeJS.ProcessEnv;
+  const redacted = redactSecrets(secretBearingText(), env);
+  assertNoSecret(redacted, 'redactSecrets');
+  assert.ok(redacted.includes('[redacted:HETZNER_DATABASE_URL]'), 'an inventory value is named by its key');
+  // What the operator needs to read the failure survives.
+  assert.ok(redacted.includes('aws-0-us-east-2.pooler.supabase.com'));
+  assert.ok(redacted.includes('sslmode=require'));
+});
+
+test('redactSecrets substitutes the value of every inventory alias present in the environment', () => {
+  for (const key of PRODUCTION_CREDENTIAL_ENV_KEYS) {
+    const value = `inventory-value-for-${key.toLowerCase()}`;
+    const redacted = redactSecrets(`error: ${value}`, { [key]: value } as NodeJS.ProcessEnv);
+    assert.equal(redacted.includes(value), false, `${key}'s value survived redaction`);
+  }
+});
+
+test('redactLogEvent redacts strings at any depth, including keys and Error values', () => {
+  const event = {
+    event: 'warehouse.backfill',
+    failures: [secretBearingText()],
+    nested: { deeper: [{ error: new Error(secretBearingText()) }] },
+    [`key=${REPRESENTATIVE_SECRETS.tokenPair}`]: 1,
+  };
+  const out = redactLogEvent(event, { SUPABASE_DATABASE_URL: REPRESENTATIVE_SECRETS.envOnly });
+  assertNoSecret(JSON.stringify(out), 'redactLogEvent');
+  assert.equal(out.event, 'warehouse.backfill');
+});
+
+test('redactLogEvent fails closed to fixed text when redaction throws', () => {
+  const circular: Record<string, unknown> = { failures: [secretBearingText()] };
+  circular.self = circular;
+  assert.deepEqual(redactLogEvent(circular, {}), { ...REDACTION_FAILED_EVENT });
+
+  const hostile = {
+    get failures(): string {
+      throw new Error(secretBearingText());
+    },
+  };
+  const out = formatRedactedJson(hostile, undefined, {});
+  assertNoSecret(out, 'hostile getter');
+  assert.deepEqual(JSON.parse(out), { ...REDACTION_FAILED_EVENT });
+
+  let deep: Record<string, unknown> = { failures: [secretBearingText()] };
+  for (let i = 0; i < 64; i += 1) deep = { deep };
+  assert.deepEqual(redactLogEvent(deep, {}), { ...REDACTION_FAILED_EVENT });
+});
+
+test('redactMessage fails closed on text it cannot process', () => {
+  const env = new Proxy({} as NodeJS.ProcessEnv, {
+    ownKeys: () => {
+      throw new Error('env unavailable');
+    },
+  });
+  const out = redactMessage(secretBearingText(), env);
+  assertNoSecret(out, 'redactMessage');
+  assert.match(out, /withheld/);
 });

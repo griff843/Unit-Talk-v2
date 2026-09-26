@@ -3,7 +3,13 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { describeConfig, redactSecrets, renderDoctorSummary, resolveSourceDsn } from './config.js';
+import {
+  describeConfig,
+  formatRedactedJson,
+  redactMessage,
+  renderDoctorSummary,
+  resolveSourceDsn,
+} from './config.js';
 import { openDuckDb } from './duckdb.js';
 import {
   CONVEYOR_HEARTBEAT_KEY,
@@ -26,8 +32,9 @@ import { parseManifest } from './manifest.js';
  *
  * Every subcommand prints one JSON document and exits non-zero on failure, so a
  * scheduled run, a CI step and an operator at a terminal all read the same
- * thing. No subcommand prints a secret: error text goes through `redactSecrets`
- * before it reaches stdout or stderr.
+ * thing. No subcommand prints a secret: every JSON document and log event goes
+ * through `formatRedactedJson`, and error text through `redactMessage`, before
+ * it reaches stdout or stderr. Both fail closed to fixed text.
  *
  * There is no `prune` subcommand, and adding one is a separate, PM-gated
  * decision. This lane archives and verifies; it does not delete.
@@ -76,7 +83,12 @@ function parseArgs(argv: string[]): Args {
 }
 
 function emit(value: unknown): void {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+  process.stdout.write(`${formatRedactedJson(value, 2)}\n`);
+}
+
+/** The log sink handed to the conveyor and the backfill: one redacted line per event. */
+function logEvent(event: Record<string, unknown>): void {
+  process.stdout.write(`${formatRedactedJson(event)}\n`);
 }
 
 function repoSha(): string {
@@ -234,6 +246,7 @@ async function main(): Promise<number> {
           store,
           relationExpr: (item) => qualifyAttached('src', item.relation),
           exporterRepoSha: repoSha(),
+          log: logEvent,
         });
         emit({ command: 'conveyor', ...result });
         return result.ok ? 0 : 1;
@@ -292,6 +305,7 @@ async function main(): Promise<number> {
           store,
           relationExpr: (item) => qualifyAttached('src', item.relation),
           exporterRepoSha: repoSha(),
+          log: logEvent,
         });
         emit({ command: 'backfill', ...result });
         return result.ok ? 0 : 1;
@@ -394,6 +408,6 @@ main()
   })
   .catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${redactSecrets(message)}\n`);
+    process.stderr.write(`${redactMessage(message)}\n`);
     process.exitCode = 1;
   });

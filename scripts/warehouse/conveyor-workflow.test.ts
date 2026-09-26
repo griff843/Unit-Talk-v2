@@ -344,3 +344,38 @@ test('no prune or delete command exists in either job', () => {
     'the workflow runs only the archiving and reporting subcommands',
   );
 });
+
+// --- PM bounce on #1650: the CLI has one redaction boundary and no raw path ---
+
+test('the CLI writes JSON only through the redaction boundary, and hands it to both runners', () => {
+  // Every stdout write of data goes through formatRedactedJson; the only other
+  // writes are fixed usage text and fixed status lines.
+  const writes = cli.match(/process\.(?:stdout|stderr)\.write\([^\n]*/g) ?? [];
+  for (const write of writes) {
+    assert.ok(
+      /formatRedactedJson\(|redactMessage\(|USAGE\)|warehouse research: not ready|warehouse archive: /.test(write),
+      `unredacted CLI write: ${write}`,
+    );
+  }
+  assert.ok(writes.length >= 5, 'the write scan found the CLI writes');
+  // Both runners receive the redacting sink, never their raw stdout default.
+  for (const runner of ['runConveyor', 'runBackfill']) {
+    const call = cli.slice(cli.indexOf(`await ${runner}({`));
+    assert.match(call.slice(0, call.indexOf('});')), /log: logEvent,/, `${runner} is not given the redacting log`);
+  }
+});
+
+test('a CLI error carrying a connection string reaches stderr redacted', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-warehouse-cli-redact-'));
+  try {
+    const secret = 'cli-uri-pass-3Hk9';
+    const result = runCli(['verify', '--manifest', `postgres://reader:${secret}@db.example.test/postgres`], {
+      UNIT_TALK_WAREHOUSE_LOCAL_ROOT: root,
+    });
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(`${result.stdout}${result.stderr}`.includes(secret), false, 'the CLI printed the password');
+    assert.ok(result.stderr.includes('[redacted]'), result.stderr);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

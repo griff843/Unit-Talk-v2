@@ -1,3 +1,4 @@
+import { redactLogEvent } from './config.js';
 import { type DuckConnection } from './duckdb.js';
 import {
   type ConveyorItemResult,
@@ -270,6 +271,11 @@ export interface BackfillRunOptions {
   workDir?: string;
   sampleSize?: number;
   now?: () => Date;
+  /**
+   * Where log events go. Every event reaches it already redacted: failures and
+   * ledger errors carry driver, database and object-store text, which can
+   * include a connection string or a key.
+   */
   log?: (event: Record<string, unknown>) => void;
 }
 
@@ -290,7 +296,11 @@ function ledgerBody(ledger: BackfillLedger): Buffer {
  */
 export async function runBackfill(options: BackfillRunOptions): Promise<BackfillRunResult> {
   const now = options.now ?? (() => new Date());
-  const log = options.log ?? ((event) => process.stdout.write(`${JSON.stringify(event)}\n`));
+  const sink = options.log ?? ((event) => process.stdout.write(`${JSON.stringify(event)}\n`));
+  // The redaction boundary. Nothing below calls `sink` directly, and the
+  // conveyor is handed this wrapper too, so its per-window error lines pass
+  // through the same boundary.
+  const log = (event: Record<string, unknown>): void => sink(redactLogEvent(event));
   const { plan } = options;
 
   const ledger: BackfillLedger = {

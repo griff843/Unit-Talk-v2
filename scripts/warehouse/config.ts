@@ -39,29 +39,69 @@ export const SECRET_ENV_KEYS: readonly string[] = [
 ];
 
 /**
+ * Every production credential name the repository supports, in one place. Each
+ * entry is read somewhere on `main` as a way to reach the production project:
+ *
+ *   - Supabase API keys: `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
+ *     (packages/config/src/env.ts), `SUPABASE_ACCESS_TOKEN` (the management
+ *     API; .env.example, scripts/disk-growth-alert.ts), and the legacy V1
+ *     project's `V1_SUPABASE_SERVICE_ROLE_KEY` (scripts/shadow-*.ts).
+ *   - Postgres connection strings: `SUPABASE_DB_URL` and
+ *     `SUPABASE_DB_POOLER_URL` (workflow secrets), `DATABASE_URL`,
+ *     `SUPABASE_DATABASE_URL` (scripts/db-inspect/lib.ts,
+ *     scripts/ops/disk-growth-report.ts), `HETZNER_DATABASE_URL`,
+ *     `EXPECTED_DATABASE_URL`, `ACTUAL_DATABASE_URL`, `LIVE_DATABASE_URL`
+ *     (scripts/ops/compare-databases.ts), `POSTGRES_URL`
+ *     (scripts/ci/schema-roundtrip-hash.ts falls back to it for SUPABASE_DB_URL).
+ *   - A connection-string part: `SUPABASE_DB_PASSWORD`, from which
+ *     scripts/generate-types.mjs builds a production URL.
+ *
+ * A new alias is added here, not beside a single check: both the research
+ * refusal and the log redactor derive from this list.
+ */
+export const PRODUCTION_CREDENTIAL_ENV_KEYS: readonly string[] = [
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_ACCESS_TOKEN',
+  'V1_SUPABASE_SERVICE_ROLE_KEY',
+  'SUPABASE_DB_URL',
+  'SUPABASE_DB_POOLER_URL',
+  'SUPABASE_DATABASE_URL',
+  'SUPABASE_DB_PASSWORD',
+  'DATABASE_URL',
+  'POSTGRES_URL',
+  'HETZNER_DATABASE_URL',
+  'EXPECTED_DATABASE_URL',
+  'ACTUAL_DATABASE_URL',
+  'LIVE_DATABASE_URL',
+];
+
+/**
  * Credentials a research or read command refuses to start alongside: the
- * archive writer, the operational source, and the production database
- * credentials the rest of the repository uses. A research job run with any of
- * them present can write to the archive or reach production, so it does not
- * run at all -- refusing, rather than ignoring, is the control
+ * archive writer, the operational source, and every production credential the
+ * rest of the repository uses. A research job run with any of them present can
+ * write to the archive or reach production, so it does not run at all --
+ * refusing, rather than ignoring, is the control
  * (WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md §3).
  */
 export const RESEARCH_FORBIDDEN_ENV_KEYS: readonly string[] = [
   WAREHOUSE_ENV_KEYS.accessKeyId,
   WAREHOUSE_ENV_KEYS.secretAccessKey,
   WAREHOUSE_ENV_KEYS.sourceDsn,
-  'SUPABASE_SERVICE_ROLE_KEY',
-  'SUPABASE_DB_URL',
-  'SUPABASE_DB_POOLER_URL',
-  'SUPABASE_ACCESS_TOKEN',
-  'DATABASE_URL',
-  'POSTGRES_URL',
+  ...PRODUCTION_CREDENTIAL_ENV_KEYS,
 ];
 
 /** Everything `redactSecrets` substitutes: the warehouse secrets and the production credentials. */
 const REDACTED_ENV_KEYS: readonly string[] = [
   ...new Set([...SECRET_ENV_KEYS, ...RESEARCH_FORBIDDEN_ENV_KEYS]),
 ];
+
+/**
+ * Any other variable whose name says it holds a credential is substituted too.
+ * The explicit list above is the contract; this is the margin for a credential
+ * the list has not been told about yet.
+ */
+const CREDENTIAL_NAME_RE = /(?:KEY|SECRET|TOKEN|PASSWORD|PASSWD|DSN|DATABASE_URL|DB_URL|POOLER_URL|POSTGRES_URL)(?:_|$)/;
 
 export interface ObjectStoreConfig {
   endpoint: string;
@@ -351,18 +391,120 @@ export function renderDoctorSummary(description: ConfigDescription): string {
  * Redact anything that looks like a credential before it reaches a log line.
  * Applied to every error message the CLI prints, because the AWS SDK and the
  * Postgres driver both put connection strings into their own error text.
+ *
+ * Two passes. The first substitutes the value of every credential variable
+ * present in `env`. The second removes credential *shapes*, which catches a
+ * secret that was assembled, re-encoded or never in this environment at all.
  */
 export function redactSecrets(text: string, env: NodeJS.ProcessEnv = process.env): string {
   let out = text;
-  for (const key of REDACTED_ENV_KEYS) {
-    const value = env[key];
-    if (typeof value === 'string' && value.trim().length >= 8) {
-      out = out.split(value.trim()).join(`[redacted:${key}]`);
-    }
+  const names = new Set<string>(REDACTED_ENV_KEYS);
+  for (const key of Object.keys(env)) {
+    if (CREDENTIAL_NAME_RE.test(key)) names.add(key);
   }
-  // Credentials embedded in a URI (postgres://user:pass@host) survive the
-  // value-substitution pass above whenever the DSN was assembled rather than
-  // passed through verbatim.
-  out = out.replace(/\/\/([^\s/:@]+):([^\s/@]+)@/g, '//$1:[redacted]@');
+  // Longest first, so a value that contains another is replaced whole.
+  const values = [...names]
+    .map((key) => ({ key, value: typeof env[key] === 'string' ? env[key]!.trim() : '' }))
+    .filter((entry) => entry.value.length >= 8)
+    .sort((a, b) => b.value.length - a.value.length);
+  for (const { key, value } of values) {
+    out = out.split(value).join(`[redacted:${key}]`);
+  }
+  // Credentials embedded in a URI (postgres://user:pass@host, https://token@host):
+  // the whole userinfo goes, since a token-only URI has no colon to split on.
+  out = out.replace(/\/\/[^\s/@]+@/g, '//[redacted]@');
+  // libpq / DSN / query-string pairs: password=..., sslpassword=..., key=..., token: ...
+  out = out.replace(
+    /\b((?:ssl)?password|passwd|pwd|secret|client_secret|token|access_token|refresh_token|api[_-]?key|apikey|key|access[_-]?key(?:[_-]?id)?|secret[_-]?access[_-]?key|x-amz-security-token|x-amz-signature|x-amz-credential|signature)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s&;,'"]+)/gi,
+    '$1$2[redacted]',
+  );
+  out = out.replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/g, 'Bearer [redacted]');
+  // JWTs: Supabase anon and service-role keys are JWTs.
+  out = out.replace(/\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*/g, '[redacted:jwt]');
+  // AWS-style access key ids, which S3-compatible stores (Hetzner, R2, MinIO) reuse.
+  out = out.replace(/\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA|AIPA)[A-Z0-9]{16}\b/g, '[redacted:access-key-id]');
+  // Supabase personal access and secret API keys.
+  out = out.replace(/\bsb(?:p|_secret|_publishable)_[A-Za-z0-9_-]{10,}/g, '[redacted:supabase-key]');
   return out;
+}
+
+/**
+ * What a log line becomes when redaction itself fails. Fixed text, so a failure
+ * of the redactor can never be the path by which raw text escapes.
+ */
+export const REDACTION_FAILED_EVENT: Readonly<Record<string, unknown>> = Object.freeze({
+  event: 'warehouse.log',
+  redaction: 'failed',
+  note: 'a log event could not be redacted, so it was withheld',
+});
+
+const MAX_REDACTION_DEPTH = 32;
+
+function redactValue(
+  value: unknown,
+  env: NodeJS.ProcessEnv,
+  depth: number,
+  seen: Set<object>,
+): unknown {
+  if (typeof value === 'string') return redactSecrets(value, env);
+  if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'function' || typeof value === 'symbol') return undefined;
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Error) return redactSecrets(value.message, env);
+  if (Buffer.isBuffer(value)) return `[buffer:${value.length} bytes]`;
+  if (depth > MAX_REDACTION_DEPTH) throw new Error('log event nests too deeply to redact');
+  if (seen.has(value as object)) throw new Error('log event is circular');
+  seen.add(value as object);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((entry) => redactValue(entry, env, depth + 1, seen));
+    }
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      out[redactSecrets(key, env)] = redactValue(entry, env, depth + 1, seen);
+    }
+    return out;
+  } finally {
+    seen.delete(value as object);
+  }
+}
+
+/**
+ * The single redaction boundary for anything the warehouse writes to a log or
+ * to stdout. Every string, at any depth, goes through `redactSecrets`. It fails
+ * closed: if redaction throws for any reason, the caller receives
+ * {@link REDACTION_FAILED_EVENT} and the original event is dropped, never
+ * emitted raw.
+ */
+export function redactLogEvent(event: unknown, env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
+  try {
+    const redacted = redactValue(event, env, 0, new Set());
+    if (redacted !== null && typeof redacted === 'object' && !Array.isArray(redacted)) {
+      return redacted as Record<string, unknown>;
+    }
+    return { value: redacted };
+  } catch {
+    return { ...REDACTION_FAILED_EVENT };
+  }
+}
+
+/** `redactLogEvent`, serialized. The one function the CLI writes JSON through. */
+export function formatRedactedJson(event: unknown, indent?: number, env: NodeJS.ProcessEnv = process.env): string {
+  try {
+    return JSON.stringify(redactLogEvent(event, env), null, indent);
+  } catch {
+    return JSON.stringify(REDACTION_FAILED_EVENT, null, indent);
+  }
+}
+
+/** `redactSecrets` for free text, failing closed to fixed text. */
+export function redactMessage(text: string, env: NodeJS.ProcessEnv = process.env): string {
+  try {
+    return redactSecrets(text, env);
+  } catch {
+    return 'warehouse: an error occurred, and its message was withheld because it could not be redacted';
+  }
 }
