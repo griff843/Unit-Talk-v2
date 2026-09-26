@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092603-declare-2602-proof-paths",
   "branch": "claude/work-2026092603-declare-2602-proof-paths",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "788a41de73b315b9cae017b824939097af9ec963",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1656",
   "files_changed": [],
   "file_scope_lock": [
@@ -15,14 +15,22 @@
     "docs/06_status/lanes/WORK-2026092602.json"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-26T06:20:02.788Z",
-  "heartbeat_at": "2026-09-26T06:20:02.788Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-26T06:49:59.529Z",
+  "closed_at": "2026-09-26T06:49:59.529Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092603-declare-2602-proof-paths.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-26T06:49:57.702Z",
+      "verdict": "pass",
+      "merge_sha": "788a41de73b315b9cae017b824939097af9ec963",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
