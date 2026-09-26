@@ -17,6 +17,12 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { assertStagingTarget } from './assert-staging-target.js';
 import {
+  DEFAULT_DRAIN_MARGIN_MS,
+  matchFixtureSignature,
+  selectLeakedBoardFixtures,
+  type BoardDrainCandidate,
+} from './staging-board-drain.js';
+import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   EXPECTED_STAGING_SUPABASE_PROJECT_REF,
 } from './isolated-proof-attestation.js';
@@ -425,4 +431,197 @@ test('the rollback remote heredoc performs no command substitution while it is a
       'the script. Escape it as \\` or \\$( — see line 129 for the correct form.\n' +
       offenders.join('\n'),
   );
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026092602 — the staging best-bets board drain selects positively
+// ---------------------------------------------------------------------------
+//
+// The drain voids leaked CI fixture picks from inside the staging job. These
+// tests pin what it may select. Every fixture below is copied from the suite
+// that writes it; every excluding case is a row that must survive.
+
+const DRAIN_NOW = new Date('2026-09-26T12:00:00.000Z');
+const HOURS = 60 * 60 * 1000;
+const agedIso = (hoursAgo: number) => new Date(DRAIN_NOW.getTime() - hoursAgo * HOURS).toISOString();
+const RUN = '0192c49e';
+const UUID_A = '01208542-1c88-4b3c-a6ad-1ab409f39c65';
+
+function boardRow(overrides: Partial<BoardDrainCandidate>): BoardDrainCandidate {
+  return {
+    id: randomId(),
+    source: 'smart-form',
+    market: 'nba-spread',
+    selection: 'placeholder',
+    status: 'queued',
+    promotion_target: 'best-bets',
+    promotion_status: 'qualified',
+    created_at: agedIso(24),
+    metadata: {},
+    ...overrides,
+  };
+}
+let drainIdSeq = 0;
+function randomId(): string {
+  drainIdSeq += 1;
+  return `00000000-0000-4000-8000-${String(drainIdSeq).padStart(12, '0')}`;
+}
+
+const atomicityFixture = () =>
+  boardRow({ source: 't1-proof', market: 'nba-total', selection: 'Over 220.5', metadata: {} });
+const riskFixture = () =>
+  boardRow({
+    selection: `UTV2-1022 RISK PROOF utv2-1022-risk-${UUID_A}`,
+    metadata: { proof_fixture_id: `utv2-1022-risk-${UUID_A}`, proof_issue: 'UTV2-1022', band: 'B' },
+  });
+const rejectFixture = () =>
+  boardRow({
+    selection: `UTV2-1251 REJECT PROOF ${UUID_A}`,
+    metadata: { proof_run: RUN, proof_issue: 'UTV2-1251-reject' },
+  });
+const serverAuthorizedFixture = () =>
+  boardRow({
+    status: 'validated',
+    selection: `utv2-1842-${RUN}-server-authorized Challenger Alpha`,
+    metadata: {
+      sport: 'NBA',
+      distributionMode: 'delivery-eligible',
+      proof_run: RUN,
+      proof_issue: 'UTV2-1842',
+      deliveryAuthorization: { capperId: `utv2-1938-proof-${RUN}`, decision: 'authorized' },
+    },
+  });
+
+test('drain selects each leaked fixture shape by its own signature', () => {
+  const rows = [atomicityFixture(), riskFixture(), rejectFixture(), serverAuthorizedFixture()];
+  const { selected } = selectLeakedBoardFixtures(rows, DRAIN_NOW);
+  assert.deepEqual(
+    selected.map((entry) => entry.signature),
+    ['t1-proof-atomicity-enqueue', 'utv2-1022-risk-proof', 'utv2-1251-reject-proof', 'utv2-1842-server-authorized'],
+  );
+});
+
+test('drain never selects a real operator pick carrying distributionMode', () => {
+  // The shape of a genuine delivery-eligible Smart Form submission: no proof
+  // markers, a real capper id, a real selection.
+  const operatorPick = boardRow({
+    status: 'validated',
+    selection: 'Boston Celtics -3.5',
+    metadata: {
+      sport: 'NBA',
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: { capperId: 'griff843', decision: 'authorized' },
+    },
+  });
+  // A forged partial marker is still not the fixture: the selection and capper id
+  // must both embed the same proof run.
+  const partialMarker = boardRow({
+    status: 'validated',
+    selection: 'Boston Celtics -3.5',
+    metadata: {
+      distributionMode: 'delivery-eligible',
+      proof_run: RUN,
+      proof_issue: 'UTV2-1842',
+      deliveryAuthorization: { capperId: `utv2-1938-proof-${RUN}` },
+    },
+  });
+  const mismatchedRun = serverAuthorizedFixture();
+  (mismatchedRun.metadata as Record<string, unknown>)['deliveryAuthorization'] = { capperId: 'utv2-1938-proof-deadbeef' };
+
+  for (const row of [operatorPick, partialMarker, mismatchedRun]) {
+    assert.equal(matchFixtureSignature(row), null, `matched: ${JSON.stringify(row)}`);
+  }
+  const { selected, skipped } = selectLeakedBoardFixtures([operatorPick, partialMarker, mismatchedRun], DRAIN_NOW);
+  assert.equal(selected.length, 0);
+  assert.equal(skipped.no_fixture_signature, 3);
+});
+
+test('drain never selects a Track Only pick, even one carrying a full fixture signature', () => {
+  const trackOnlyFixture = serverAuthorizedFixture();
+  (trackOnlyFixture.metadata as Record<string, unknown>)['distributionMode'] = 'track-only';
+  const trackOnlyAtomicityShape = atomicityFixture();
+  trackOnlyAtomicityShape.metadata = { distributionMode: 'track-only' };
+
+  const { selected, skipped } = selectLeakedBoardFixtures([trackOnlyFixture, trackOnlyAtomicityShape], DRAIN_NOW);
+  assert.equal(selected.length, 0);
+  assert.equal(skipped.track_only, 2);
+});
+
+test('drain never selects a row younger than the safety margin', () => {
+  const justInside = atomicityFixture();
+  justInside.created_at = new Date(DRAIN_NOW.getTime() - DEFAULT_DRAIN_MARGIN_MS + 1000).toISOString();
+  const atBoundary = riskFixture();
+  atBoundary.created_at = new Date(DRAIN_NOW.getTime() - DEFAULT_DRAIN_MARGIN_MS).toISOString();
+  const fresh = rejectFixture();
+  fresh.created_at = agedIso(0);
+  const future = serverAuthorizedFixture();
+  future.created_at = agedIso(-1);
+
+  const { selected, skipped } = selectLeakedBoardFixtures([justInside, atBoundary, fresh, future], DRAIN_NOW);
+  assert.equal(selected.length, 0);
+  assert.equal(skipped.younger_than_margin, 4);
+
+  const justOutside = atomicityFixture();
+  justOutside.created_at = new Date(DRAIN_NOW.getTime() - DEFAULT_DRAIN_MARGIN_MS - 1000).toISOString();
+  assert.equal(selectLeakedBoardFixtures([justOutside], DRAIN_NOW).selected.length, 1);
+});
+
+test('drain refuses a margin shorter than the default', () => {
+  assert.throws(() => selectLeakedBoardFixtures([], DRAIN_NOW, DEFAULT_DRAIN_MARGIN_MS - 1), /margin/);
+  assert.throws(() => selectLeakedBoardFixtures([], DRAIN_NOW, Number.NaN), /margin/);
+});
+
+test('drain never selects a row that holds no board capacity or cannot be voided', () => {
+  const settled = atomicityFixture();
+  settled.status = 'settled';
+  const posted = atomicityFixture();
+  posted.status = 'posted';
+  const otherTarget = atomicityFixture();
+  otherTarget.promotion_target = 'trader-insights';
+  const notEligible = atomicityFixture();
+  notEligible.promotion_status = 'not_eligible';
+  const nullSource = atomicityFixture();
+  nullSource.source = null;
+  const stale = atomicityFixture();
+  stale.created_at = agedIso(24 * 8);
+  const unparseable = atomicityFixture();
+  unparseable.created_at = 'not-a-date';
+
+  const { selected, skipped } = selectLeakedBoardFixtures(
+    [settled, posted, otherTarget, notEligible, nullSource, stale, unparseable],
+    DRAIN_NOW,
+  );
+  assert.equal(selected.length, 0);
+  assert.equal(skipped.not_drainable_status, 2);
+  assert.equal(skipped.not_on_board, 3);
+  assert.equal(skipped.outside_board_window, 1);
+  assert.equal(skipped.unparseable_created_at, 1);
+});
+
+test('drain does not generalize a signature: near-miss fixtures are left alone', () => {
+  const atomicityWithMetadata = atomicityFixture();
+  atomicityWithMetadata.metadata = { proof: true };
+  const atomicityOtherSelection = atomicityFixture();
+  atomicityOtherSelection.selection = 'Over 221.5';
+  const riskSelectionMismatch = riskFixture();
+  riskSelectionMismatch.selection = 'UTV2-1022 RISK PROOF somebody-else';
+  const rejectBadRun = rejectFixture();
+  (rejectBadRun.metadata as Record<string, unknown>)['proof_run'] = 'not-a-run';
+  const riskWithDistribution = riskFixture();
+  (riskWithDistribution.metadata as Record<string, unknown>)['distributionMode'] = 'delivery-eligible';
+  const smartFormNoMarkers = boardRow({ selection: 'LAL -3.5', metadata: { sport: 'NBA' } });
+  const arrayMetadata = atomicityFixture();
+  arrayMetadata.metadata = [];
+
+  for (const row of [
+    atomicityWithMetadata,
+    atomicityOtherSelection,
+    riskSelectionMismatch,
+    rejectBadRun,
+    riskWithDistribution,
+    smartFormNoMarkers,
+    arrayMetadata,
+  ]) {
+    assert.equal(matchFixtureSignature(row), null, `matched: ${JSON.stringify(row)}`);
+  }
 });
