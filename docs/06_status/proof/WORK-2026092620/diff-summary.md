@@ -5,7 +5,7 @@ Issue: WORK-2026092620
 Tier: T2
 Lane type: governance
 Branch: claude/work-2026092620-effective-settlement-scripts
-PR URL: PR_URL_TBD
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1662
 Head SHA: 76f3bad230845df6cd61e94b4b6dce73932c401d
 Merge SHA: pending merge
 Diff base: eb5559426b790e694b38a1de85ec99891790d238 (origin/main)
