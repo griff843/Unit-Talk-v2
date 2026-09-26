@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092620",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-26T17:33:13.000Z"
+  },
+  "what_this_lane_delivers": {
+    "defect": "Five operator research scripts filtered settlement_records with .is('corrects_id', null) and reported every corrected pick (12,066 correction rows in production) with its original result.",
+    "repair": "One shared reader selects picks by root window, loads whole chains in chunked ordered pages, and accepts a resolveEffectiveSettlement answer only for a complete chain; all five scripts consume the effective record and surface an unresolved count.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 6996,
+      "fail": 0
+    },
+    "test_ops": {
+      "pass": 3450,
+      "fail": 0
+    },
+    "lane_test_file": {
+      "path": "scripts/roi-by-sport.test.ts",
+      "pass": 18,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level": "PASS; 10 changed files; no R-level artifacts required",
+    "mutation_battery": [
+      { "id": "M1", "mutation": "resolveChain accepts without the completeness checks (missing-target and depth checks removed)", "observed": "red (10 tests)" },
+      { "id": "M1b", "mutation": "depth check alone removed", "observed": "red (branched chain, orphan loop)" },
+      { "id": "M2a", "mutation": "ORDER BY dropped from root-candidate paging", "observed": "red (1165 of 1500 candidates)" },
+      { "id": "M2b", "mutation": "ORDER BY dropped from chain paging", "observed": "red (347 of 1500 picks resolved)" },
+      { "id": "M3", "mutation": "roi-by-sport reverted to a root-only .is('corrects_id', null) read", "observed": "red (roi-by-sport effective test)" }
+    ],
+    "verify": {
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. CI runs verify."
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "database_reads_by_this_lane": 0,
+    "containment_changed": false,
+    "secrets_or_environments_changed": false
+  },
+  "pr_url": "PR_URL_TBD"
+}
