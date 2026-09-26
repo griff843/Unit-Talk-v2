@@ -8,14 +8,14 @@
   "branch": "claude/work-2026092604-anchor-2602-diff-summary",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1657",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026092604.md",
     "docs/06_status/proof/WORK-2026092602/diff-summary.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-26T07:11:39.881Z",
   "heartbeat_at": "2026-09-26T07:11:39.881Z",
   "closed_at": null,
