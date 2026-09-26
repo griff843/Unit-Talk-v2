@@ -753,23 +753,109 @@ export type PromotionReplayUnavailableReason =
   /** The payload does not carry the policy the decision was evaluated against. */
   | 'policy-missing'
   /** The payload does not carry the score that was recorded. */
-  | 'recorded-score-missing';
+  | 'recorded-score-missing'
+  /**
+   * The row's `score` column is null, absent, non-numeric, non-finite or
+   * outside numeric(5,2). There is nothing to compare the replay against, so
+   * the replay is refused rather than allowed to agree.
+   */
+  | 'persisted-score-missing';
+
+/** A field of a persisted pick_promotion_history row that a replay did not reproduce. */
+export type PromotionReplayDisagreement =
+  /** The row's `status` column. */
+  | 'status'
+  /** `payload.score`, the unrounded score recorded in the snapshot. */
+  | 'payload-score'
+  /** The row's `score` column, compared at its numeric(5,2) precision. */
+  | 'persisted-score';
+
+/** The persisted pick_promotion_history columns a replay is checked against. */
+export interface RecordedPromotionRow {
+  /** pick_promotion_history.status */
+  status: string;
+  /** pick_promotion_history.decided_at */
+  decidedAt: string;
+  /**
+   * pick_promotion_history.score, a numeric(5,2) column, exactly as read.
+   * PostgREST may deliver it as a JSON number or a string; both are accepted.
+   * null or undefined means the column is empty and the replay is refused.
+   */
+  score: number | string | null | undefined;
+}
 
 export type RecordedPromotionReplay =
   | { outcome: 'not-reproducible'; reason: PromotionReplayUnavailableReason }
   | {
       outcome: 'replayed';
       decision: BoardPromotionDecisionWithProvenance;
+      /** payload.score */
       recordedScore: number;
       recordedStatus: string;
+      /** The row's score column, normalized to numeric(5,2). */
+      persistedScore: number;
+      /** The replayed score as the numeric(5,2) column would store it. */
+      replayedColumnScore: number | null;
+      /** Replayed score equals payload.score (to float noise). */
       scoreMatches: boolean;
+      /** Replayed score, rounded to numeric(5,2), equals the row's score column. */
+      persistedScoreMatches: boolean;
       statusMatches: boolean;
-      /** True only when both the score and the status reproduce. */
+      /** Every field that did not reproduce; empty exactly when `agrees`. */
+      disagreements: PromotionReplayDisagreement[];
+      /** True only when the status, payload.score and the score column all reproduce. */
       agrees: boolean;
     };
 
 /** Scores are recomputed from the same doubles; anything beyond float noise is a real difference. */
 const REPLAY_SCORE_TOLERANCE = 1e-9;
+
+/** numeric(5,2): at most 999.99 in magnitude, i.e. fewer than 100000 hundredths. */
+const NUMERIC_5_2_MAX_HUNDREDTHS = 99_999;
+
+function decimalStringToNumeric52(text: string): number | null {
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?$/.exec(text) ?? /^([+-]?)()\.(\d+)$/.exec(text);
+  if (!match) return null;
+  const negative = match[1] === '-';
+  const integerDigits = match[2] === '' ? '0' : match[2]!;
+  const fraction = (match[3] ?? '').padEnd(3, '0');
+  if (integerDigits.replace(/^0+/, '').length > 3) return null;
+  let hundredths = Number(integerDigits) * 100 + Number(fraction.slice(0, 2));
+  // Postgres numeric rounds half away from zero; the decimal digits are exact,
+  // so the third fractional digit alone decides it.
+  if (fraction.charCodeAt(2) >= 53 /* '5' */) hundredths += 1;
+  if (hundredths > NUMERIC_5_2_MAX_HUNDREDTHS) return null;
+  if (hundredths === 0) return 0;
+  return (negative ? -hundredths : hundredths) / 100;
+}
+
+/**
+ * UTV2-1954: the value a `numeric(5,2)` column holds for `value`, or null when
+ * the column could not hold it (null, absent, non-numeric, non-finite, or
+ * beyond +/-999.99).
+ *
+ * Postgres rounds numeric half away from zero on the exact decimal it receives.
+ * A JS number reaches it as its shortest round-trip decimal text (what
+ * JSON.stringify writes), so a number is rounded on that text, never on its
+ * binary double: 60.145 is stored as 60.15, although the double nearest 60.145
+ * is 60.14499999999999602... and `Math.round(x * 100) / 100` would give 60.14.
+ * A string is taken as the decimal text PostgREST returned.
+ */
+export function toPromotionScoreColumn(value: unknown): number | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null;
+    const text = String(value);
+    if (/e/i.test(text)) {
+      // Exponent form only appears below 1e-6 (rounds to 0) or at/above 1e21 (overflows).
+      return Math.abs(value) < 1 ? 0 : null;
+    }
+    return decimalStringToNumeric52(text);
+  }
+  if (typeof value === 'string') {
+    return decimalStringToNumeric52(value.trim());
+  }
+  return null;
+}
 
 function readRecordedPolicy(value: unknown): PromotionPolicy | null {
   if (!isRecord(value)) return null;
@@ -803,12 +889,19 @@ function readRecordedPolicy(value: unknown): PromotionPolicy | null {
  * not-reproducible instead of being silently re-decided without its market
  * modifiers.
  *
+ * `agrees` requires all three of the row's recorded outcomes to reproduce: the
+ * `status` column, `payload.score`, and the `score` column at its numeric(5,2)
+ * precision. The column is checked separately from the payload because the two
+ * are written independently: a row whose payload agrees with the replay but
+ * whose column does not is inconsistent, and is reported as a disagreement.
+ * An empty or unreadable score column refuses the replay (fail closed).
+ *
  * @param payload  - pick_promotion_history.payload
- * @param recorded - the row's persisted status and decided_at
+ * @param recorded - the row's persisted status, decided_at and score columns
  */
 export function replayRecordedPromotion(
   payload: unknown,
-  recorded: { status: string; decidedAt: string },
+  recorded: RecordedPromotionRow,
 ): RecordedPromotionReplay {
   const snapshot = parsePromotionSnapshot(payload);
   if (!snapshot) {
@@ -826,17 +919,33 @@ export function replayRecordedPromotion(
   if (typeof recordedScore !== 'number' || !Number.isFinite(recordedScore)) {
     return { outcome: 'not-reproducible', reason: 'recorded-score-missing' };
   }
+  // Normalized to the column's own precision: idempotent for a value read back
+  // from Postgres, and the value Postgres would store for one that was not.
+  const persistedScore = toPromotionScoreColumn(recorded.score);
+  if (persistedScore === null) {
+    return { outcome: 'not-reproducible', reason: 'persisted-score-missing' };
+  }
 
   const decision = replayPromotion(snapshot, policy, recorded.decidedAt);
+  const replayedColumnScore = toPromotionScoreColumn(decision.score);
   const scoreMatches = Math.abs(decision.score - recordedScore) <= REPLAY_SCORE_TOLERANCE;
+  const persistedScoreMatches = replayedColumnScore !== null && replayedColumnScore === persistedScore;
   const statusMatches = decision.status === recorded.status;
+  const disagreements: PromotionReplayDisagreement[] = [];
+  if (!statusMatches) disagreements.push('status');
+  if (!scoreMatches) disagreements.push('payload-score');
+  if (!persistedScoreMatches) disagreements.push('persisted-score');
   return {
     outcome: 'replayed',
     decision,
     recordedScore,
     recordedStatus: recorded.status,
+    persistedScore,
+    replayedColumnScore,
     scoreMatches,
+    persistedScoreMatches,
     statusMatches,
-    agrees: scoreMatches && statusMatches,
+    disagreements,
+    agrees: statusMatches && scoreMatches && persistedScoreMatches,
   };
 }

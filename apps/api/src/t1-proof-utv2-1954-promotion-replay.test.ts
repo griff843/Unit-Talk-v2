@@ -82,7 +82,8 @@ interface HistoryRow {
   id: string;
   target: string;
   status: string;
-  score: number | null;
+  // numeric(5,2): PostgREST may return it as a JSON number or as decimal text.
+  score: number | string | null;
   decided_at: string;
   override_action: string | null;
   payload: Record<string, unknown>;
@@ -146,18 +147,19 @@ function decisionContext(row: HistoryRow): string {
 }
 
 function assertRowReproduces(label: string, row: HistoryRow) {
-  const replay = replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at });
+  // The helper is handed the row's own score column, exactly as PostgREST
+  // returned it, so `agrees` covers the column and not only payload.score.
+  const replay = replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at, score: row.score });
   assert.equal(replay.outcome, 'replayed', `${label}/${row.target}: reproducible (${JSON.stringify(replay)})`);
   if (replay.outcome !== 'replayed') return replay;
   assert.equal(replay.decision.score, row.payload['score'], `${label}/${row.target}: exact recorded score`);
-  // pick_promotion_history.score is numeric(5,2): the column holds the score
-  // rounded to cents. The exact comparison is against payload.score above; the
-  // column is compared at the precision it stores.
-  assert.ok(
-    row.score !== null && Math.abs(Number(row.score) - replay.decision.score) <= 0.005 + 1e-9,
-    `${label}/${row.target}: agrees with the numeric(5,2) score column ${row.score} (replayed ${replay.decision.score})`,
+  assert.equal(
+    replay.persistedScoreMatches,
+    true,
+    `${label}/${row.target}: agrees with the numeric(5,2) score column ${row.score} (replayed ${replay.decision.score} -> ${replay.replayedColumnScore})`,
   );
   assert.equal(replay.decision.status, row.status, `${label}/${row.target}: recorded status ${decisionContext(row)}`);
+  assert.deepEqual(replay.disagreements, [], `${label}/${row.target}: no field disagrees`);
   assert.equal(replay.agrees, true, `${label}/${row.target}: replay agrees`);
   return replay;
 }
@@ -240,9 +242,47 @@ test('UTV2-1954 live-DB: a persisted row stripped of its scoring context is not 
   for (const row of rows) {
     const { scoringContext: _dropped, ...legacyPayload } = row.payload;
     assert.deepEqual(
-      replayRecordedPromotion(legacyPayload, { status: row.status, decidedAt: row.decided_at }),
+      replayRecordedPromotion(legacyPayload, { status: row.status, decidedAt: row.decided_at, score: row.score }),
       { outcome: 'not-reproducible', reason: 'scoring-context-missing' },
       `${row.target}: a pre-UTV2-1954 row is never silently re-decided`,
+    );
+  }
+});
+
+test('UTV2-1954 live-DB: a persisted row whose score column disagrees with its payload is a disagreement', { skip: skipReason }, async () => {
+  const { rows } = await submitTrackOnly('column-drift', 'NBA - Player Points', 'NBA', {
+    edge: 72.5,
+    trust: 72.5,
+    readiness: 72.5,
+    uniqueness: 72.5,
+    boardFit: 72.5,
+  });
+  for (const row of rows) {
+    // Control: the row as Postgres returned it reproduces.
+    assert.equal(assertRowReproduces('column-drift', row).outcome, 'replayed');
+    assert.notEqual(row.score, null, `${row.target}: the column was written`);
+
+    // A deliberately inconsistent row-shaped input built from the real row:
+    // payload untouched (so payload.score still matches the replay), only the
+    // score column moved by one cent. The helper itself must refuse to agree.
+    const drifted: HistoryRow = { ...row, score: Number(row.score) + 0.01 };
+    const replay = replayRecordedPromotion(drifted.payload, {
+      status: drifted.status,
+      decidedAt: drifted.decided_at,
+      score: drifted.score,
+    });
+    assert.equal(replay.outcome, 'replayed', `column-drift/${row.target}: ${JSON.stringify(replay)}`);
+    if (replay.outcome !== 'replayed') continue;
+    assert.equal(replay.scoreMatches, true, `column-drift/${row.target}: payload.score still matches`);
+    assert.equal(replay.statusMatches, true, `column-drift/${row.target}: status still matches`);
+    assert.deepEqual(replay.disagreements, ['persisted-score'], `column-drift/${row.target}`);
+    assert.equal(replay.agrees, false, `column-drift/${row.target}: the helper disagrees`);
+
+    // And an empty column refuses the replay rather than agreeing.
+    assert.deepEqual(
+      replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at, score: null }),
+      { outcome: 'not-reproducible', reason: 'persisted-score-missing' },
+      `column-drift/${row.target}: a null column is not reproducible`,
     );
   }
 });

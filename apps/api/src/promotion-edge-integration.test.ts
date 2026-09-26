@@ -22,7 +22,7 @@ import {
   traderInsightsPromotionPolicy,
   type PromotionPolicy,
 } from '@unit-talk/contracts';
-import { replayPromotion, replayRecordedPromotion } from '@unit-talk/domain';
+import { replayPromotion, replayRecordedPromotion, toPromotionScoreColumn } from '@unit-talk/domain';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
 import {
@@ -2383,7 +2383,7 @@ function historyRowsFor(repositories: InMemoryBundle, pickId: string) {
 function assertEveryRowReproduces(repositories: InMemoryBundle, pickId: string) {
   const rows = historyRowsFor(repositories, pickId);
   for (const row of rows) {
-    const replay = replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at });
+    const replay = replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at, score: row.score });
     assert.equal(replay.outcome, 'replayed', `${row.target}: the row is reproducible`);
     if (replay.outcome !== 'replayed') continue;
     assert.equal(replay.decision.score, row.score, `${row.target}: replay reproduces the recorded score exactly`);
@@ -2444,7 +2444,7 @@ test('UTV2-1954: the reported NBA prop, suppressed at 60.15, does not replay as 
   const snapshot = parsePromotionSnapshot(bestBets.payload)!;
   assert.deepEqual(snapshot.scoringContext, { market: 'NBA - Player Points', sport: 'NBA' });
 
-  const replay = replayRecordedPromotion(bestBets.payload, { status: bestBets.status, decidedAt: bestBets.decided_at });
+  const replay = replayRecordedPromotion(bestBets.payload, { status: bestBets.status, decidedAt: bestBets.decided_at, score: bestBets.score });
   assert.equal(replay.outcome, 'replayed');
   if (replay.outcome !== 'replayed') return;
   assert.equal(replay.decision.status, 'suppressed', 'replay reproduces the suppression');
@@ -2466,7 +2466,7 @@ test('UTV2-1954: a snapshot written before the scoring context is reported not r
   const { repositories, result } = await submitNbaProp1954('smart-form', 'legacy');
   for (const row of historyRowsFor(repositories, result.pick.id)) {
     const { scoringContext: _dropped, ...legacyPayload } = row.payload as Record<string, unknown>;
-    const replay = replayRecordedPromotion(legacyPayload, { status: row.status, decidedAt: row.decided_at });
+    const replay = replayRecordedPromotion(legacyPayload, { status: row.status, decidedAt: row.decided_at, score: row.score });
     assert.deepEqual(replay, { outcome: 'not-reproducible', reason: 'scoring-context-missing' }, row.target);
   }
 });
@@ -2477,7 +2477,7 @@ test('UTV2-1954: replay uses the saved policy, not a caller-supplied one', async
   // A row whose saved policy is gone cannot be replayed against a guessed one.
   const { policy: _dropped, ...withoutPolicy } = bestBets.payload as Record<string, unknown>;
   assert.deepEqual(
-    replayRecordedPromotion(withoutPolicy, { status: bestBets.status, decidedAt: bestBets.decided_at }),
+    replayRecordedPromotion(withoutPolicy, { status: bestBets.status, decidedAt: bestBets.decided_at, score: bestBets.score }),
     { outcome: 'not-reproducible', reason: 'policy-missing' },
   );
   // A saved policy with a lower minimum is honoured: the replay follows the
@@ -2486,7 +2486,7 @@ test('UTV2-1954: replay uses the saved policy, not a caller-supplied one', async
     ...(bestBets.payload as Record<string, unknown>),
     policy: { ...bestBetsPromotionPolicy, minimumScore: 50 },
   };
-  const replay = replayRecordedPromotion(lowered, { status: bestBets.status, decidedAt: bestBets.decided_at });
+  const replay = replayRecordedPromotion(lowered, { status: bestBets.status, decidedAt: bestBets.decided_at, score: bestBets.score });
   assert.equal(replay.outcome, 'replayed');
   if (replay.outcome !== 'replayed') return;
   assert.equal(replay.decision.status, 'qualified');
@@ -2499,16 +2499,116 @@ test('UTV2-1954: a replay that reaches a different score is reported as a disagr
   const { repositories, result } = await submitNbaProp1954('smart-form', 'tampered');
   const row = historyRowsFor(repositories, result.pick.id)[0]!;
   const tampered = { ...(row.payload as Record<string, unknown>), score: (row.score ?? 0) + 1 };
-  const replay = replayRecordedPromotion(tampered, { status: row.status, decidedAt: row.decided_at });
+  const replay = replayRecordedPromotion(tampered, { status: row.status, decidedAt: row.decided_at, score: row.score });
   assert.equal(replay.outcome, 'replayed');
   if (replay.outcome !== 'replayed') return;
   assert.equal(replay.scoreMatches, false);
   assert.equal(replay.agrees, false);
 });
 
+// ── UTV2-1954 (PM bounce): the persisted score column is part of agreement ──
+//
+// pick_promotion_history.score is written independently of payload.score. A
+// row whose payload agrees with the replay but whose column does not is
+// inconsistent, and the helper itself must say so -- a caller that checks only
+// `agrees` must not be told the row reproduces.
+
+test('UTV2-1954: payload.score matches the replay but the score column differs -> the helper disagrees', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'column-drift');
+  const bestBets = historyRowsFor(repositories, result.pick.id).find((row) => row.target === 'best-bets')!;
+  const payload = bestBets.payload as Record<string, unknown>;
+
+  // Control: the consistent row agrees.
+  const consistent = replayRecordedPromotion(payload, { status: bestBets.status, decidedAt: bestBets.decided_at, score: bestBets.score });
+  assert.equal(consistent.outcome, 'replayed');
+  if (consistent.outcome !== 'replayed') return;
+  assert.equal(consistent.agrees, true);
+  assert.deepEqual(consistent.disagreements, []);
+
+  // The inconsistent row: payload untouched, only the column moved by a cent.
+  for (const drifted of [60.14, 60.16, '60.14', 70.76]) {
+    const replay = replayRecordedPromotion(payload, { status: bestBets.status, decidedAt: bestBets.decided_at, score: drifted });
+    assert.equal(replay.outcome, 'replayed', `column ${drifted}`);
+    if (replay.outcome !== 'replayed') continue;
+    assert.equal(replay.scoreMatches, true, `column ${drifted}: payload.score still matches`);
+    assert.equal(replay.statusMatches, true, `column ${drifted}: status still matches`);
+    assert.equal(replay.persistedScoreMatches, false, `column ${drifted}: column does not`);
+    assert.deepEqual(replay.disagreements, ['persisted-score'], `column ${drifted}`);
+    assert.equal(replay.agrees, false, `column ${drifted}: the helper refuses to agree`);
+  }
+});
+
+test('UTV2-1954: the score column is compared at numeric(5,2) precision, as a number or a string', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'column-precision');
+  const bestBets = historyRowsFor(repositories, result.pick.id).find((row) => row.target === 'best-bets')!;
+  const payload = bestBets.payload as Record<string, unknown>;
+  const recordedScore = payload['score'] as number;
+  // The fixture's score carries more than two decimals, so an unrounded
+  // comparison against the stored column could not agree.
+  assert.notEqual(recordedScore, 60.15);
+  assert.equal(toPromotionScoreColumn(recordedScore), 60.15);
+
+  // What PostgREST hands back for the column: a JSON number or decimal text.
+  for (const column of [60.15, '60.15', '60.150', ' 60.15 ', recordedScore]) {
+    const replay = replayRecordedPromotion(payload, { status: bestBets.status, decidedAt: bestBets.decided_at, score: column });
+    assert.equal(replay.outcome, 'replayed', `column ${JSON.stringify(column)}`);
+    if (replay.outcome !== 'replayed') continue;
+    assert.equal(replay.persistedScore, 60.15, `column ${JSON.stringify(column)} normalizes to 60.15`);
+    assert.equal(replay.replayedColumnScore, 60.15);
+    assert.equal(replay.agrees, true, `column ${JSON.stringify(column)} agrees`);
+  }
+});
+
+test('UTV2-1954: toPromotionScoreColumn applies Postgres numeric(5,2) rounding', () => {
+  // Half away from zero on the decimal text, not on the binary double:
+  // Math.round(60.145 * 100) / 100 is 60.14.
+  assert.equal(toPromotionScoreColumn(60.145), 60.15);
+  assert.equal(toPromotionScoreColumn('60.145'), 60.15);
+  assert.equal(toPromotionScoreColumn(-60.145), -60.15);
+  assert.equal(toPromotionScoreColumn(60.1449999), 60.14);
+  assert.equal(toPromotionScoreColumn(0.005), 0.01);
+  assert.equal(toPromotionScoreColumn(0.004), 0);
+  assert.equal(toPromotionScoreColumn(-0.004), 0);
+  assert.equal(toPromotionScoreColumn(1e-7), 0);
+  assert.equal(toPromotionScoreColumn(999.99), 999.99);
+  assert.equal(toPromotionScoreColumn('.5'), 0.5);
+  // numeric(5,2) overflows beyond +/-999.99 (Postgres raises; nothing is stored).
+  assert.equal(toPromotionScoreColumn(999.995), null);
+  assert.equal(toPromotionScoreColumn('1000'), null);
+  assert.equal(toPromotionScoreColumn(1e21), null);
+  for (const unreadable of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY, '', 'abc', '60.15.1', '1e2', {}, true]) {
+    assert.equal(toPromotionScoreColumn(unreadable), null, `${String(unreadable)} is not a column value`);
+  }
+});
+
+test('UTV2-1954: an empty or unreadable score column refuses the replay, never agrees', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'column-null');
+  for (const row of historyRowsFor(repositories, result.pick.id)) {
+    for (const column of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY, 'abc', 1000]) {
+      assert.deepEqual(
+        replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at, score: column as number | null }),
+        { outcome: 'not-reproducible', reason: 'persisted-score-missing' },
+        `${row.target}: column ${String(column)}`,
+      );
+    }
+  }
+});
+
+test('UTV2-1954: every disagreeing field is named', async () => {
+  const { repositories, result } = await submitNbaProp1954('smart-form', 'all-disagree');
+  const row = historyRowsFor(repositories, result.pick.id)[0]!;
+  const tampered = { ...(row.payload as Record<string, unknown>), score: (row.score ?? 0) + 1 };
+  const otherStatus = row.status === 'qualified' ? 'suppressed' : 'qualified';
+  const replay = replayRecordedPromotion(tampered, { status: otherStatus, decidedAt: row.decided_at, score: (row.score ?? 0) + 1 });
+  assert.equal(replay.outcome, 'replayed');
+  if (replay.outcome !== 'replayed') return;
+  assert.deepEqual(replay.disagreements, ['status', 'payload-score', 'persisted-score']);
+  assert.equal(replay.agrees, false);
+});
+
 test('UTV2-1954: rows without score inputs are not reproducible', () => {
   assert.deepEqual(
-    replayRecordedPromotion({ staleDataBlock: true, qualified: false, score: 0 }, { status: 'suppressed', decidedAt: '2026-09-24T00:00:00.000Z' }),
+    replayRecordedPromotion({ staleDataBlock: true, qualified: false, score: 0 }, { status: 'suppressed', decidedAt: '2026-09-24T00:00:00.000Z', score: 0 }),
     { outcome: 'not-reproducible', reason: 'snapshot-missing' },
   );
 });
