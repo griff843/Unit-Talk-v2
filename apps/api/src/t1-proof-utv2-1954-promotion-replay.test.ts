@@ -102,6 +102,11 @@ async function submitTrackOnly(
     confidence: 0.7,
     metadata: {
       sport,
+      // A real pick names its game. Without one, getPromotionBoardState counts
+      // every other eventName-less pick on the target's board as the same game
+      // (undefined === undefined), so the per-game cap reflects unrelated CI
+      // fixtures rather than this pick. The in-memory fixture carries one too.
+      eventName: `UTV2-1954 ${label} ${RUN_ID} Away at Home`,
       distributionMode: 'track-only',
       promotionScores,
       proof_run: RUN_ID,
@@ -126,16 +131,33 @@ async function submitTrackOnly(
   return { pickId: data.pickId, rows };
 }
 
+/**
+ * Why a recorded decision has the status it has: its suppression reasons and
+ * the board state it was evaluated against. Attached to every status assertion
+ * so a staging failure names the gate that fired.
+ */
+function decisionContext(row: HistoryRow): string {
+  const explanation = row.payload['explanation'] as { suppressionReasons?: unknown } | undefined;
+  return JSON.stringify({
+    status: row.status,
+    suppressionReasons: explanation?.suppressionReasons ?? null,
+    boardStateAtDecision: row.payload['boardStateAtDecision'] ?? null,
+  });
+}
+
 function assertRowReproduces(label: string, row: HistoryRow) {
   const replay = replayRecordedPromotion(row.payload, { status: row.status, decidedAt: row.decided_at });
   assert.equal(replay.outcome, 'replayed', `${label}/${row.target}: reproducible (${JSON.stringify(replay)})`);
   if (replay.outcome !== 'replayed') return replay;
   assert.equal(replay.decision.score, row.payload['score'], `${label}/${row.target}: exact recorded score`);
+  // pick_promotion_history.score is numeric(5,2): the column holds the score
+  // rounded to cents. The exact comparison is against payload.score above; the
+  // column is compared at the precision it stores.
   assert.ok(
-    row.score !== null && Math.abs(Number(row.score) - replay.decision.score) < 1e-6,
-    `${label}/${row.target}: agrees with the score column ${row.score}`,
+    row.score !== null && Math.abs(Number(row.score) - replay.decision.score) <= 0.005 + 1e-9,
+    `${label}/${row.target}: agrees with the numeric(5,2) score column ${row.score} (replayed ${replay.decision.score})`,
   );
-  assert.equal(replay.decision.status, row.status, `${label}/${row.target}: recorded status`);
+  assert.equal(replay.decision.status, row.status, `${label}/${row.target}: recorded status ${decisionContext(row)}`);
   assert.equal(replay.agrees, true, `${label}/${row.target}: replay agrees`);
   return replay;
 }
@@ -150,7 +172,7 @@ test('UTV2-1954 live-DB: the reported NBA prop replays suppressed at 60.15, not 
   });
   const bestBets = rows.find((row) => row.target === 'best-bets');
   assert.ok(bestBets, 'a best-bets row was persisted');
-  assert.equal(bestBets.status, 'suppressed');
+  assert.equal(bestBets.status, 'suppressed', `nba-prop/best-bets: ${decisionContext(bestBets)}`);
   assert.equal(Number(Number(bestBets.payload['score']).toFixed(2)), 60.15);
   const explanation = bestBets.payload['explanation'] as { suppressionReasons: string[] };
   assert.deepEqual(explanation.suppressionReasons, ['promotion score 60.15 is below threshold 70.00']);
@@ -179,7 +201,7 @@ test('UTV2-1954 live-DB: a qualifying canonical player prop replays qualified at
   });
   const bestBets = rows.find((row) => row.target === 'best-bets');
   assert.ok(bestBets);
-  assert.equal(bestBets.status, 'qualified');
+  assert.equal(bestBets.status, 'qualified', `nba-prop-qualified/best-bets: ${decisionContext(bestBets)}`);
   for (const row of rows) assertRowReproduces('nba-prop-qualified', row);
 });
 
