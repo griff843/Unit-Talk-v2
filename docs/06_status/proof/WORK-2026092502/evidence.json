@@ -6,11 +6,11 @@
   "proof_profile": "static",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b9240a12cf4dd1badf1785e963135947e2c75fde",
+    "verified_source_sha": "aec22b93f00e3ff0d573a16a83f19f8c195edfb3",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "b9240a12cf4dd1badf1785e963135947e2c75fde is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+    "note": "aec22b93f00e3ff0d573a16a83f19f8c195edfb3 is the last commit on this lane that changes anything outside the proof directory and the lane manifest: the merge of origin/main af2f8e11a into this branch. It brings in only main's own changes (`.claude/hooks/tier-c-path-guard.sh`, `.github/workflows/tier-label-apply.yml`, `.github/workflows/tier-label-check.yml`, `.ops/sync/WORK-2026092402.yml`, `.ops/sync/WORK-2026092407.yml`, `.ops/sync/WORK-2026092501.yml`, `.ops/sync/WORK-2026092503.yml`, `.ops/sync/WORK-2026092601.yml`, `.ops/work/WORK-2026092601.md`, `apps/worker/src/runner.ts`, `apps/worker/src/worker-runtime.test.ts`, `docs/05_operations/COMMAND_CENTER_OPERATOR_ACCESS.md`, `docs/06_status/lanes/WORK-2026092402.json`, `docs/06_status/lanes/WORK-2026092407.json`, `docs/06_status/lanes/WORK-2026092501.json`, `docs/06_status/lanes/WORK-2026092503.json`, `docs/06_status/lanes/WORK-2026092601.json`, `docs/06_status/proof/WORK-2026092402/diff-summary.md`, `docs/06_status/proof/WORK-2026092402/evidence.json`, `docs/06_status/proof/WORK-2026092402/verification.md`, `docs/06_status/proof/WORK-2026092402/work-order.md`, `docs/06_status/proof/WORK-2026092407/diff-summary.md`, `docs/06_status/proof/WORK-2026092407/evidence.json`, `docs/06_status/proof/WORK-2026092407/verification.md`, `docs/06_status/proof/WORK-2026092407/work-order.md`, `docs/06_status/proof/WORK-2026092501/diff-summary.md`, `docs/06_status/proof/WORK-2026092501/verification.md`, `docs/06_status/proof/WORK-2026092501/work-order.md`, `docs/06_status/proof/WORK-2026092503/diff-summary.md`, `docs/06_status/proof/WORK-2026092503/evidence.json`, `docs/06_status/proof/WORK-2026092503/verification.md`, `docs/06_status/proof/WORK-2026092503/work-order.md`, `docs/06_status/readiness/readiness-score.json`, `package.json`, `scripts/ci/tier-label-workflow.test.ts`, `scripts/ops/command-center-bridge.test.ts`, `scripts/ops/command-center-bridge.ts`, `scripts/ops/workflow-hardening.test.ts`); none of them is in this lane's file scope, so the lane's implementation is unchanged from the superseded anchor b9240a12cf4dd1badf1785e963135947e2c75fde. CI re-runs verify on the new head. Previous note: aec22b93f00e3ff0d573a16a83f19f8c195edfb3 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it."
   },
   "what_this_lane_delivers": {
     "defect": "DEFAULT_RETENTION_POLICY season 'all' made dataObjectKey throw for the only production entry, outside the per-item try; existing history could never reach the warehouse; the research path could resolve the writer key.",
@@ -18,29 +18,79 @@
     "production_writes_by_this_change": 0
   },
   "static_proof": {
-    "unit_tests": { "pass": 6904, "fail": 0, "note": "pnpm test at 7d3ee96f0bfd8bbad7e45598caa92980eb762587; b9240a12cf4dd1badf1785e963135947e2c75fde adds assertions only, warehouse battery re-run" },
+    "unit_tests": {
+      "pass": 6904,
+      "fail": 0,
+      "note": "pnpm test at 7d3ee96f0bfd8bbad7e45598caa92980eb762587; aec22b93f00e3ff0d573a16a83f19f8c195edfb3 adds assertions only, warehouse battery re-run"
+    },
     "type_check": "pass",
     "lint": "pass",
     "r_level": "PASS; 15 changed files; no R-level artifacts required",
-    "warehouse_battery": { "pass": 150, "fail": 0 },
+    "warehouse_battery": {
+      "pass": 150,
+      "fail": 0
+    },
     "mutation_battery": [
-      { "id": "M1", "mutation": "runBackfill does not stop after a failed window", "observed": "red" },
-      { "id": "M2", "mutation": "fresh-archive result ignores pruneHold", "observed": "red after b9240a12cf4dd1badf1785e963135947e2c75fde; survived before" },
-      { "id": "M3", "mutation": "decideRetentionEligibility ignores pruneHold", "observed": "red" },
-      { "id": "M4", "mutation": "window-year season passed verbatim", "observed": "red" },
-      { "id": "M5", "mutation": "research environment never refuses", "observed": "red" },
-      { "id": "M6", "mutation": "research store resolves writer key names", "observed": "red" },
-      { "id": "M7", "mutation": "window cap not enforced", "observed": "red" },
-      { "id": "M8", "mutation": "backfill job reachable from schedule", "observed": "red" },
-      { "id": "M9", "mutation": "backfill job outside warehouse-archive environment", "observed": "red" }
+      {
+        "id": "M1",
+        "mutation": "runBackfill does not stop after a failed window",
+        "observed": "red"
+      },
+      {
+        "id": "M2",
+        "mutation": "fresh-archive result ignores pruneHold",
+        "observed": "red after aec22b93f00e3ff0d573a16a83f19f8c195edfb3; survived before"
+      },
+      {
+        "id": "M3",
+        "mutation": "decideRetentionEligibility ignores pruneHold",
+        "observed": "red"
+      },
+      {
+        "id": "M4",
+        "mutation": "window-year season passed verbatim",
+        "observed": "red"
+      },
+      {
+        "id": "M5",
+        "mutation": "research environment never refuses",
+        "observed": "red"
+      },
+      {
+        "id": "M6",
+        "mutation": "research store resolves writer key names",
+        "observed": "red"
+      },
+      {
+        "id": "M7",
+        "mutation": "window cap not enforced",
+        "observed": "red"
+      },
+      {
+        "id": "M8",
+        "mutation": "backfill job reachable from schedule",
+        "observed": "red"
+      },
+      {
+        "id": "M9",
+        "mutation": "backfill job outside warehouse-archive environment",
+        "observed": "red"
+      }
     ],
-    "verify": { "status": "NOT_RUN", "is_pass": false, "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. t1_live_db_precondition: deferred_to_ci." }
+    "verify": {
+      "status": "NOT_RUN",
+      "is_pass": false,
+      "note": "Not runnable on the workstation: ci:assert-staging refuses the containment placeholder. t1_live_db_precondition: deferred_to_ci."
+    }
   },
   "runtime_proof": {
     "profile": "cli-process",
     "status": "pass",
     "method": "runBackfill/runConveyor against in-process DuckDB and an in-memory store with read-back verification; cli.ts spawned as a child process for backfill --dry-run, query and doctor --research.",
-    "hosted_live_db": { "status": "PENDING_CI", "job": "Writable DB proof (staging only)" }
+    "hosted_live_db": {
+      "status": "PENDING_CI",
+      "job": "Writable DB proof (staging only)"
+    }
   },
   "scope_and_containment": {
     "production_writes": 0,
