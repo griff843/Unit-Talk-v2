@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092620",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092620-effective-settlement-scripts",
+  "branch": "claude/work-2026092620-effective-settlement-scripts",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/band-accuracy.ts",
+    "scripts/clv-dashboard.ts",
+    "scripts/effective-settlements.ts",
+    "scripts/portfolio-review.ts",
+    "scripts/roi-by-sport.test.ts",
+    "scripts/roi-by-sport.ts",
+    "scripts/scoring-provenance.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092620/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092620/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-09-26T17:21:45.221Z",
+  "heartbeat_at": "2026-09-26T17:21:45.221Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026092620-effective-settlement-scripts.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092620-effective-settlement-scripts",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
