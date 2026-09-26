@@ -2792,3 +2792,134 @@ test("processNextDistributionWork with persistenceMode=in_memory calls claimNext
   assert.equal(sequentialClaimCalled, true, "in_memory mode must use sequential claimNext");
   assert.equal(atomicClaimCalled, false, "in_memory mode must NOT call claimNextAtomic");
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1952 — a deliberate skip is observable, and is not an attempt
+// ---------------------------------------------------------------------------
+
+/** Counts every claim attempt, so a test can prove a skip never claimed. */
+function spyOnClaims(repositories: RepositoryBundle): { count: () => number } {
+  let calls = 0;
+  const outbox = repositories.outbox as unknown as Record<string, unknown>;
+  for (const method of ['claimNext', 'claimNextAtomic'] as const) {
+    const original = outbox[method] as ((...args: unknown[]) => unknown) | undefined;
+    if (typeof original !== 'function') continue;
+    outbox[method] = (...args: unknown[]) => {
+      calls += 1;
+      return original.apply(repositories.outbox, args);
+    };
+  }
+  return { count: () => calls };
+}
+
+async function captureWorkerLogs(run: () => Promise<unknown>) {
+  const originalLog = console.log;
+  const logged: Array<Record<string, unknown>> = [];
+  console.log = (message: unknown) => {
+    try {
+      const parsed = JSON.parse(String(message)) as unknown;
+      if (parsed && typeof parsed === 'object') logged.push(parsed as Record<string, unknown>);
+    } catch {
+      // not a structured line
+    }
+  };
+  try {
+    await run();
+  } finally {
+    console.log = originalLog;
+  }
+  return logged;
+}
+
+test('UTV2-1952: a kill-switch skip logs a structured line and leaves the row pending, unattempted', async () => {
+  const outbox = createOutboxRecord('discord:official-picks');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  await killSwitch.setKilled({ target: 'official-picks', killed: true, actor: 'test-operator' });
+  const claims = spyOnClaims(repositories);
+
+  const logged = await captureWorkerLogs(() =>
+    runWorkerCycles({
+      repositories: { ...repositories, killSwitch },
+      workerId: 'worker-1952-kill',
+      targets: ['discord:official-picks'],
+      deliver: createStubDeliveryAdapter(),
+      maxCycles: 2,
+      persistenceMode: 'in_memory',
+      targetRegistry: [{ target: 'official-picks', enabled: true, rolloutPct: 100 }],
+    }),
+  );
+
+  const skips = logged.filter((line) => line['event'] === 'worker.delivery-skipped-kill-switch');
+  assert.equal(skips.length, 2, 'one skip line per cycle the control holds');
+  assert.deepEqual(skips[0], {
+    event: 'worker.delivery-skipped-kill-switch',
+    workerId: 'worker-1952-kill',
+    target: 'discord:official-picks',
+    cycle: 1,
+    reason: 'kill-switch-engaged',
+    outboxClaimed: false,
+  });
+  // A skip is never an attempt: no claim was made, nothing was incremented,
+  // and the row is exactly as pending as it was.
+  assert.equal(claims.count(), 0, 'a kill-switch skip must not claim the row');
+  assert.equal(outbox.status, 'pending');
+  assert.equal(outbox.attempt_count, 0);
+  assert.equal(outbox.claimed_at ?? null, null);
+  assert.equal(outbox.claimed_by ?? null, null);
+  assert.equal(logged.some((line) => line['event'] === 'worker.delivery-skipped-target-disabled'), false);
+});
+
+test('UTV2-1952: a registry-disabled skip logs its own structured line and leaves the row unattempted', async () => {
+  const outbox = createOutboxRecord('discord:best-bets');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const claims = spyOnClaims(repositories);
+
+  const logged = await captureWorkerLogs(() =>
+    runWorkerCycles({
+      repositories,
+      workerId: 'worker-1952-disabled',
+      targets: ['discord:best-bets'],
+      deliver: createStubDeliveryAdapter(),
+      maxCycles: 1,
+      persistenceMode: 'in_memory',
+      targetRegistry: [{ target: 'best-bets', enabled: false, disabledReason: 'test', rolloutPct: 100 }],
+    }),
+  );
+
+  const skip = logged.find((line) => line['event'] === 'worker.delivery-skipped-target-disabled');
+  assert.equal(skip?.['reason'], 'target-disabled');
+  assert.equal(skip?.['target'], 'discord:best-bets');
+  assert.equal(claims.count(), 0, 'a disabled-target skip must not claim the row');
+  assert.equal(outbox.status, 'pending');
+  assert.equal(outbox.attempt_count, 0);
+  assert.equal(outbox.claimed_at ?? null, null);
+});
+
+test('UTV2-1952: an attempted delivery emits no skip line', async () => {
+  const outbox = createOutboxRecord('discord:best-bets');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  await killSwitch.setKilled({ target: 'best-bets', killed: false, actor: 'test-operator' });
+  const claims = spyOnClaims(repositories);
+
+  const logged = await captureWorkerLogs(() =>
+    runWorkerCycles({
+      repositories: { ...repositories, killSwitch },
+      workerId: 'worker-1952-attempt',
+      targets: ['discord:best-bets'],
+      deliver: createStubDeliveryAdapter(),
+      maxCycles: 1,
+      persistenceMode: 'in_memory',
+      targetRegistry: [{ target: 'best-bets', enabled: true, rolloutPct: 100 }],
+    }),
+  );
+
+  assert.equal(
+    logged.some((line) => String(line['event']).startsWith('worker.delivery-skipped-')),
+    false,
+    'a delivery that was attempted must not be reported as a skip',
+  );
+  assert.ok(claims.count() > 0, 'control: an attempted delivery does claim');
+  assert.notEqual(outbox.status, 'pending', 'the row was claimed and processed');
+});
