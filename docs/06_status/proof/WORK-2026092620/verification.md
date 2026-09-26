@@ -11,7 +11,7 @@ Tier: T2
 Lane type: governance
 Branch: claude/work-2026092620-effective-settlement-scripts
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1662
-Head SHA: dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7
+Head SHA: 76f3bad230845df6cd61e94b4b6dce73932c401d
 result: pass
 
 ## ASSERTIONS:
@@ -35,7 +35,7 @@ $ pnpm test                                           # pass 6996 # fail 0 (summ
 
 ## Verification
 
-Measured on `dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7` in the lane worktree.
+Measured on `76f3bad230845df6cd61e94b4b6dce73932c401d` in the lane worktree.
 
 ```
 $ pnpm exec tsx --test scripts/roi-by-sport.test.ts -> tests 18, pass 18, fail 0
@@ -71,4 +71,10 @@ restored from a pre-mutation copy (`cmp` identical; restore rerun 18/18 green).
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1662
-Execution SHA: dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7
+Execution SHA: 76f3bad230845df6cd61e94b4b6dce73932c401d
+
+### Re-anchor to `76f3bad230845df6cd61e94b4b6dce73932c401d`
+
+Branch refreshed from origin/main `1cdb726c9` after main advanced. The merge brings in only main's own
+changes: `.github/workflows/warehouse-archive-conveyor.yml`, `.ops/sync/WORK-2026092607.yml`, `.ops/sync/WORK-2026092608.yml`, `.ops/sync/WORK-2026092621.yml`, `.ops/work/WORK-2026092621.md`, `docs/05_operations/WAREHOUSE_ARCHIVE_CONTRACT.md`, `docs/05_operations/WAREHOUSE_HISTORICAL_BACKFILL_PLAN.md`, `docs/05_operations/WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md`, `docs/06_status/lanes/WORK-2026092605.json`, `docs/06_status/lanes/WORK-2026092607.json`, `docs/06_status/lanes/WORK-2026092608.json`, `docs/06_status/lanes/WORK-2026092621.json`, `docs/06_status/proof/WORK-2026092605/diff-summary.md`, `docs/06_status/proof/WORK-2026092605/evidence.json`, `docs/06_status/proof/WORK-2026092605/model-routing.json`, `docs/06_status/proof/WORK-2026092605/verification.md`, `docs/06_status/proof/WORK-2026092607/diff-summary.md`, `docs/06_status/proof/WORK-2026092607/evidence.json`, `docs/06_status/proof/WORK-2026092607/verification.md`, `docs/06_status/proof/WORK-2026092607/work-order.md`, `docs/06_status/proof/WORK-2026092608/diff-summary.md`, `docs/06_status/proof/WORK-2026092608/evidence.json`, `docs/06_status/proof/WORK-2026092608/verification.md`, `docs/06_status/proof/WORK-2026092621/.gitkeep`, `scripts/ops/lane-start.test.ts`, `scripts/ops/lane-start.ts`, `scripts/ops/lease-registry.test.ts`, `scripts/ops/lease-registry.ts`, `scripts/ops/shared.test.ts`, `scripts/ops/shared.ts`, `scripts/ops/truth-check-lib.test.ts`, `scripts/warehouse/README.md`, `scripts/warehouse/backfill.ts`, `scripts/warehouse/conveyor-workflow.test.ts`, `scripts/warehouse/conveyor.test.ts`, `scripts/warehouse/conveyor.ts`. Lane-scope files changed by the merge: 0. Superseded anchor, not
+withdrawn: `dd6ce2a08c9a1df7ef25e98a51b7307cb4547db7`. `verify` re-runs on the new head.
