@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092608",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092608-closeable-lane-start",
+  "branch": "claude/work-2026092608-closeable-lane-start",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1660",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/lane-manifest.test.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/lease-registry.test.ts",
+    "scripts/ops/lease-registry.ts",
+    "scripts/ops/shared.test.ts",
+    "scripts/ops/shared.ts",
+    "scripts/ops/truth-check-lib.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092608/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092608/evidence.json",
+    "docs/06_status/proof/WORK-2026092608/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-09-26T16:45:05.629Z",
+  "heartbeat_at": "2026-09-26T16:45:05.629Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026092608-closeable-lane-start.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092608-closeable-lane-start",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
