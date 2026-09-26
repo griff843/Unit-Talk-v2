@@ -29,6 +29,7 @@ import {
   linearTaskToken,
   mirrorPreflightTokenToWorktree,
   persistLaneTaskContract,
+  readLaneStatusForLeaseSweep,
   resolveLaneTaskContract,
   resolveReadmissionContract,
   validateReadmissionTokenRequest,
@@ -2537,4 +2538,26 @@ test('WORK-2026092608: lane-start sweeps terminal leases before its first lease 
     }),
   );
   assert.ok(sweep < firstLeaseCheck, 'sweep precedes every lease check');
+});
+
+test('WORK-2026092608: a lane reopened locally keeps its lease although main reads done', () => {
+  const read = (main: string | null, local: string | null | Error) =>
+    readLaneStatusForLeaseSweep('WORK-9000010', {
+      atMain: () => main as never,
+      local: () => {
+        if (local instanceof Error) throw local;
+        return local as never;
+      },
+    });
+  // Reopened: main still carries the previous closeout, this checkout is live.
+  assert.deepEqual(read('done', 'started'), { status: 'started', source: 'local manifest' });
+  // Closed out in CI, local copy stale: main is the authority.
+  assert.deepEqual(read('done', 'merged'), { status: 'done', source: 'origin/main' });
+  assert.deepEqual(read('merged', 'merged'), { status: 'merged', source: 'origin/main' });
+  assert.deepEqual(read('done', 'done'), { status: 'done', source: 'origin/main' });
+  assert.deepEqual(read('done', null), { status: 'done', source: 'origin/main' });
+  assert.deepEqual(read(null, 'cancelled'), { status: 'cancelled', source: 'local manifest' });
+  assert.equal(read(null, null), null);
+  // An unreadable local manifest never justifies a release.
+  assert.equal(read('done', new Error('corrupt')), null);
 });

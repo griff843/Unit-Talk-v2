@@ -12,6 +12,7 @@ import {
   releaseLease,
   reserveLease,
   sweepTerminalLaneLeases,
+  SWEEPABLE_LANE_STATUSES,
   type LaneStatusReading,
   type TerminalLeaseSweepResult,
 } from './lease-registry.js';
@@ -51,6 +52,7 @@ import {
   ROOT,
   type CanonicalLaneType,
   type LaneExecutor,
+  type LaneManifestStatus,
   type LaneTier,
   type PreflightToken,
 } from './shared.js';
@@ -496,26 +498,42 @@ export function advanceTrackerIssueOnStart(input: {
 /**
  * Reads a lane's status for the lease sweep: `origin/main` first, because a
  * closeout that ran in CI is recorded there and not in this checkout, then the
- * local manifest. Anything unreadable resolves to null, which the sweep treats
- * as "keep the lease".
+ * local manifest. A local manifest that is still live (not `merged`, not
+ * terminal) wins over a terminal one on main: a lane reopened here must keep its lease even though its previous
+ * closeout reads `done` on main. Anything unreadable resolves to null, which
+ * the sweep treats as "keep the lease".
  */
-export function readLaneStatusForLeaseSweep(issueId: string): LaneStatusReading | null {
+export function readLaneStatusForLeaseSweep(
+  issueId: string,
+  readers: {
+    atMain?: (issueId: string) => LaneManifestStatus | null;
+    local?: (issueId: string) => LaneManifestStatus | null;
+  } = {},
+): LaneStatusReading | null {
+  const atMain =
+    readers.atMain ?? ((id: string) => readManifestAtRef(id, 'origin/main')?.manifest.status ?? null);
+  const local = readers.local ?? ((id: string) => (manifestExists(id) ? readManifest(id).status : null));
+
+  let localStatus: LaneManifestStatus | null;
   try {
-    const onMain = readManifestAtRef(issueId, 'origin/main');
-    if (onMain) {
-      return { status: onMain.manifest.status, source: 'origin/main' };
+    localStatus = local(issueId);
+  } catch {
+    return null;
+  }
+  // `merged` is the state a CI closeout advances from, so a local `merged`
+  // beside a terminal main is a stale copy, not a live lane.
+  if (localStatus && localStatus !== 'merged' && !SWEEPABLE_LANE_STATUSES.has(localStatus)) {
+    return { status: localStatus, source: 'local manifest' };
+  }
+  try {
+    const mainStatus = atMain(issueId);
+    if (mainStatus) {
+      return { status: mainStatus, source: 'origin/main' };
     }
   } catch {
     // fall through to the local manifest
   }
-  try {
-    if (manifestExists(issueId)) {
-      return { status: readManifest(issueId).status, source: 'local manifest' };
-    }
-  } catch {
-    return null;
-  }
-  return null;
+  return localStatus ? { status: localStatus, source: 'local manifest' } : null;
 }
 
 function runLeaseSweep(): TerminalLeaseSweepResult {

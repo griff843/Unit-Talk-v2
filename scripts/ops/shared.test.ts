@@ -233,18 +233,20 @@ test('validateBranchName enforces ratified branch format', () => {
   assert.throws(() => validateBranchName('codex/utv2-539'), /<owner>\/<issue-id-lowercase>-<slug>/);
 });
 
-test('defaultProofPaths declares the full closeable bundle for every tier (WORK-2026092608)', () => {
+test('defaultProofPaths declares the full closeable bundle for T1 and T2, and none for T3 (WORK-2026092608)', () => {
   // Closeout needs diff-summary.md (P11), and proof-generate binds evidence.json
   // and verification.md. A tier-shaped subset is what produced proof-path-only
-  // repair lanes, so every tier now declares the same three files.
+  // repair lanes, so T1 and T2 declare the same three files. T3's proof is
+  // green CI on the merge SHA; it carries no bundle.
   const expected = [
     'docs/06_status/proof/UTV2-539/diff-summary.md',
     'docs/06_status/proof/UTV2-539/evidence.json',
     'docs/06_status/proof/UTV2-539/verification.md',
   ];
-  for (const tier of ['T1', 'T2', 'T3'] as const) {
+  for (const tier of ['T1', 'T2'] as const) {
     assert.deepStrictEqual(defaultProofPaths('UTV2-539', tier), expected, `tier ${tier}`);
   }
+  assert.deepStrictEqual(defaultProofPaths('UTV2-539', 'T3'), []);
   assert.deepStrictEqual(defaultProofPaths('WORK-2026092608', 'T2'), [
     'docs/06_status/proof/WORK-2026092608/diff-summary.md',
     'docs/06_status/proof/WORK-2026092608/evidence.json',

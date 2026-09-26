@@ -3348,11 +3348,11 @@ test('UTV2-1529 binding: a 7-char prefix of the head SHA is NOT accepted', () =>
 });
 
 // ── WORK-2026092608 ─────────────────────────────────────────────────────────
-test('WORK-2026092608: the proof paths lane-start declares satisfy P11 at every tier, by file alone', () => {
+test('WORK-2026092608: the proof paths lane-start declares satisfy P11 at T1 and T2, by file alone', () => {
   // P11 was the closeout refusal a tier-shaped default produced: a T1 lane
   // declared only evidence.json and so carried no diff summary. The declared
   // set must satisfy P11 without relying on any prose in the proof contents.
-  for (const tier of ['T1', 'T2', 'T3'] as const) {
+  for (const tier of ['T1', 'T2'] as const) {
     const proofPaths = defaultProofPaths('WORK-9000003', tier);
     const p11 = evaluateT2ProofEvidence({ proofPaths, proofContents: '' }).find((check) => check.id === 'P11');
     assert.equal(p11?.status, 'pass', `tier ${tier}: ${p11?.detail}`);
