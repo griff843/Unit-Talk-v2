@@ -19,6 +19,11 @@ import {
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  loadEffectiveSettlements,
+  type ReadClient,
+  type UnresolvedPick,
+} from './effective-settlements.js';
 
 type ClvSourceClass = 'pinnacle' | 'consensus' | 'proxy' | 'unknown';
 type OutputFormat = 'markdown' | 'json';
@@ -68,6 +73,8 @@ export interface ClvDashboardReport {
     until: string | null;
   };
   rowCount: number;
+  /** Picks in the window whose correction chain did not resolve; excluded from every summary. */
+  unresolvedPickCount: number;
   summaries: ClvSegmentSummary[];
   notes: string[];
 }
@@ -96,63 +103,52 @@ interface RawPickRow {
   source?: unknown;
 }
 
-const PAGE_SIZE = 1000;
 const DEFAULT_WINDOW_DAYS = 30;
 const MIN_CORRELATION_ROWS = 3;
 
-export async function fetchClvDashboardRows(options: QueryOptions): Promise<ClvDashboardRow[]> {
+export interface ClvDashboardFetchResult {
+  rows: ClvDashboardRow[];
+  unresolved: UnresolvedPick[];
+}
+
+/**
+ * Dashboard rows for every pick whose ROOT settlement falls in the window, each
+ * read from its EFFECTIVE settlement (the tip of its correction chain). Picks
+ * whose chain does not resolve are returned as unresolved, not counted.
+ */
+export async function loadClvDashboardRows(
+  client: ReadClient,
+  options: QueryOptions,
+): Promise<ClvDashboardFetchResult> {
+  const load = await loadEffectiveSettlements(
+    client,
+    { dateColumn: 'settled_at', after: options.after, until: options.until },
+    'payload, stake_units, picks!inner(odds, stake_units, metadata, market_type_id, market, source)',
+  );
+  return {
+    rows: load.effective.map((row) => toDashboardRow(asRawSettlementRow(row.raw))),
+    unresolved: load.unresolved,
+  };
+}
+
+export async function fetchClvDashboardRows(options: QueryOptions): Promise<ClvDashboardFetchResult> {
   const env = loadEnvironment();
   const connection = createServiceRoleDatabaseConnectionConfig(env);
   const client = createDatabaseClientFromConnection(connection);
-
-  const rows: ClvDashboardRow[] = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    let query = client
-      .from('settlement_records')
-      .select(
-        `
-        id,
-        pick_id,
-        result,
-        payload,
-        settled_at,
-        stake_units,
-        picks!inner(odds, stake_units, metadata, market_type_id, market, source)
-      `,
-      )
-      .gte('settled_at', options.after)
-      .is('corrects_id', null)
-      .order('settled_at', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
-
-    if (options.until) {
-      query = query.lt('settled_at', options.until);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      throw new Error(`Failed to fetch CLV dashboard rows: ${error.message}`);
-    }
-
-    const page = (data ?? []) as unknown[];
-    rows.push(...page.map((row) => toDashboardRow(asRawSettlementRow(row))));
-    if (page.length < PAGE_SIZE) {
-      break;
-    }
-  }
-
-  return rows;
+  return loadClvDashboardRows(client as unknown as ReadClient, options);
 }
 
 export function buildClvDashboardReport(
   rows: ClvDashboardRow[],
   options: QueryOptions,
   generatedAt = new Date().toISOString(),
+  unresolved: readonly UnresolvedPick[] = [],
 ): ClvDashboardReport {
   return {
     generatedAt,
     window: options,
     rowCount: rows.length,
+    unresolvedPickCount: unresolved.length,
     summaries: [
       summarizeSegment('overall', 'all', rows),
       ...summarizeBy('sport', rows, (row) => row.sport),
@@ -162,6 +158,7 @@ export function buildClvDashboardReport(
     ],
     notes: [
       'CLV is read from settlement_records.payload and is not recomputed by this report.',
+      'Each pick is read from its effective settlement (the tip of its correction chain); the window selects picks by their root settlement.',
       'Pinnacle rows are payload.clv.providerKey values matching pinnacle or odds-api:pinnacle.',
       'Proxy rows are opening-line fallback CLV; consensus rows are non-Pinnacle computed CLV with a provider key.',
       `CLV/ROI correlation is Pearson correlation over rows with both clvPercent and stake-based row ROI; requires at least ${MIN_CORRELATION_ROWS} rows.`,
@@ -176,6 +173,7 @@ export function formatClvDashboardMarkdown(report: ClvDashboardReport): string {
   lines.push(`Generated: ${report.generatedAt}`);
   lines.push(`Window: settled_at >= ${report.window.after}${report.window.until ? ` and < ${report.window.until}` : ''}`);
   lines.push(`Rows: ${report.rowCount}`);
+  lines.push(`Unresolved correction chains (excluded): ${report.unresolvedPickCount}`);
   lines.push('');
   lines.push('## Summary');
   lines.push('| Segment | Key | Settled | CLV rows | CLV coverage | Positive CLV | Mean CLV | Median CLV | ROI | CLV/ROI corr | Pinnacle | Consensus | Proxy | Unknown |');
@@ -552,8 +550,11 @@ function buildSampleRows(): ClvDashboardRow[] {
 
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
-  const rows = options.sampleData ? buildSampleRows() : await fetchClvDashboardRows(options.query);
-  const report = buildClvDashboardReport(rows, options.query);
+  const fetched = options.sampleData
+    ? { rows: buildSampleRows(), unresolved: [] }
+    : await fetchClvDashboardRows(options.query);
+  const rows = fetched.rows;
+  const report = buildClvDashboardReport(rows, options.query, new Date().toISOString(), fetched.unresolved);
   const output =
     options.format === 'json'
       ? JSON.stringify({ ...report, rows }, null, 2)
