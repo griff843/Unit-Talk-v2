@@ -19,6 +19,8 @@ import {
   validateActiveLeaseForLane,
   writeLeaseAtomic,
   findLeasesHeldByTerminalLanes,
+  sweepTerminalLaneLeases,
+  type LaneStatusReading,
 } from './lease-registry.js';
 import { buildStaleLaneAlertMessage } from './stale-lane-alerter.js';
 
@@ -924,5 +926,106 @@ test('reclaim matches the lane issue id case-insensitively', () => {
       result.ok ? result.lease.reclaim_history?.at(-1)?.admitted_by : undefined,
       'terminal_lane',
     );
+  });
+});
+
+// ── WORK-2026092608: sweep leases whose lane already closed ──────────────────
+
+function statusReader(
+  statuses: Record<string, LaneStatusReading | null>,
+): (issueId: string) => LaneStatusReading | null {
+  return (issueId) => statuses[issueId] ?? null;
+}
+
+test('WORK-2026092608: a leaked lease on a done lane no longer refuses the next lane-start', () => {
+  withTempRegistry((registryDir) => {
+    // A finished lane whose CI closeout could not see the local registry.
+    assert.equal(reserve(registryDir, 'UTV2-1954', ['scripts/ops/lane-start.ts']).ok, true);
+
+    // Without the sweep, the next lane on the same file is refused.
+    const blocked = reserve(registryDir, 'UTV2-2000', ['scripts/ops/lane-start.ts']);
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.ok ? '' : blocked.code, 'lease_conflict');
+
+    const sweep = sweepTerminalLaneLeases({
+      readLaneStatus: statusReader({ 'UTV2-1954': { status: 'done', source: 'origin/main' } }),
+      actor: 'ops:lane-start',
+      registryDir,
+      now: new Date('2026-05-18T12:30:00.000Z'),
+    });
+    assert.deepEqual(sweep.released, [{ issue_id: 'UTV2-1954', lane_status: 'done', source: 'origin/main' }]);
+    assert.deepEqual(sweep.warnings, []);
+
+    const released = readAllLeases(registryDir).find((lease) => lease.issue_id === 'UTV2-1954');
+    assert.equal(released?.status, 'released');
+    const record = released?.reclaim_history?.at(-1);
+    assert.equal(record?.reclaimed_by, 'ops:lane-start');
+    assert.match(record?.reason ?? '', /terminal \(done\) on origin\/main/);
+
+    assert.equal(reserve(registryDir, 'UTV2-2000', ['scripts/ops/lane-start.ts']).ok, true);
+  });
+});
+
+test('WORK-2026092608: the sweep never releases a lease for a lane that has not closed', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1001', ['scripts/ops/a.ts']);
+    reserve(registryDir, 'UTV2-1002', ['scripts/ops/b.ts']);
+    reserve(registryDir, 'UTV2-1003', ['scripts/ops/c.ts']);
+    reserve(registryDir, 'UTV2-1004', ['scripts/ops/d.ts']);
+    reserve(registryDir, 'UTV2-1005', ['scripts/ops/e.ts']);
+
+    const sweep = sweepTerminalLaneLeases({
+      readLaneStatus: (issueId) => {
+        if (issueId === 'UTV2-1001') return { status: 'in_progress', source: 'origin/main' };
+        if (issueId === 'UTV2-1002') return { status: 'started', source: 'local' };
+        // merged is not closed: its closeout is what releases the lease.
+        if (issueId === 'UTV2-1003') return { status: 'merged', source: 'origin/main' };
+        if (issueId === 'UTV2-1004') throw new Error('git show failed');
+        return null; // UTV2-1005: no manifest anywhere
+      },
+      actor: 'ops:lane-start',
+      registryDir,
+    });
+
+    assert.deepEqual(sweep.released, []);
+    assert.deepEqual(
+      sweep.retained.map((entry) => entry.issue_id).sort(),
+      ['UTV2-1001', 'UTV2-1002', 'UTV2-1003', 'UTV2-1004', 'UTV2-1005'],
+    );
+    for (const lease of readAllLeases(registryDir)) {
+      assert.equal(lease.status, 'active', `${lease.issue_id} must stay active`);
+    }
+  });
+});
+
+test('WORK-2026092608: the sweep releases every closed-without-completing terminal state', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1011', ['scripts/ops/a.ts']);
+    reserve(registryDir, 'UTV2-1012', ['scripts/ops/b.ts']);
+    reserve(registryDir, 'UTV2-1013', ['scripts/ops/c.ts']);
+    const sweep = sweepTerminalLaneLeases({
+      readLaneStatus: statusReader({
+        'UTV2-1011': { status: 'superseded', source: 'origin/main' },
+        'UTV2-1012': { status: 'cancelled', source: 'origin/main' },
+        'UTV2-1013': { status: 'failed', source: 'local' },
+      }),
+      actor: 'ops:lane-start',
+      registryDir,
+    });
+    assert.deepEqual(sweep.released.map((entry) => entry.issue_id).sort(), ['UTV2-1011', 'UTV2-1012', 'UTV2-1013']);
+  });
+});
+
+test('WORK-2026092608: an unreadable registry is a warning, never a throw', () => {
+  withTempRegistry((registryDir) => {
+    fs.writeFileSync(path.join(registryDir, 'UTV2-1020.json'), '{"not":"a lease"}\n', 'utf8');
+    const sweep = sweepTerminalLaneLeases({
+      readLaneStatus: () => ({ status: 'done', source: 'origin/main' }),
+      actor: 'ops:lane-start',
+      registryDir,
+    });
+    assert.deepEqual(sweep.released, []);
+    assert.equal(sweep.warnings.length, 1);
+    assert.match(sweep.warnings[0] ?? '', /registry unreadable/);
   });
 });

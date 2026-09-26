@@ -853,6 +853,110 @@ export function findLeasesHeldByTerminalLanes(
   return findings;
 }
 
+/**
+ * Lane states whose local lease a sweep may release (WORK-2026092608).
+ *
+ * Deliberately narrower than TERMINAL_STATUSES: `merged` is excluded. A merged
+ * lane has not been closed out yet, and its closeout (`ops:lane-close`) is what
+ * releases the lease as part of the done transition. Only lanes whose closeout
+ * has actually happened, or that ended without completing, are swept.
+ */
+export const SWEEPABLE_LANE_STATUSES: ReadonlySet<LaneManifestStatus> = new Set<LaneManifestStatus>([
+  'done',
+  'superseded',
+  'cancelled',
+  'failed',
+]);
+
+export interface LaneStatusReading {
+  status: LaneManifestStatus;
+  /** Where the status was read from, recorded on the release (e.g. `origin/main`). */
+  source: string;
+}
+
+export interface TerminalLeaseSweepResult {
+  released: Array<{ issue_id: string; lane_status: LaneManifestStatus; source: string }>;
+  /** Active leases left alone, with why. Never an error by itself. */
+  retained: Array<{ issue_id: string; reason: string }>;
+  /** Anything that stopped part of the sweep. The sweep never throws. */
+  warnings: string[];
+}
+
+/**
+ * Release local leases whose lane has already ended (WORK-2026092608).
+ *
+ * WHY. `ops:lane-close` releases the lease, but post-merge closeout runs in
+ * CI, on a runner where the gitignored `.ops/leases` registry does not exist.
+ * The local lease therefore survives every CI closeout and later refuses an
+ * unrelated `ops:lane-start` with `lease_conflict` on files the finished lane
+ * no longer owns.
+ *
+ * The sweep releases a lease only when its lane's manifest positively reads as
+ * one of SWEEPABLE_LANE_STATUSES. An unreadable, missing, or non-terminal
+ * manifest leaves the lease untouched: an unknown lane state must never
+ * justify releasing a lease. Each release goes through `releaseLease`, so the
+ * actor and reason are recorded in the lease's own history.
+ */
+export function sweepTerminalLaneLeases(input: {
+  readLaneStatus: (issueId: string) => LaneStatusReading | null;
+  actor: string;
+  registryDir?: string;
+  now?: Date;
+}): TerminalLeaseSweepResult {
+  const registryDir = input.registryDir ?? LEASE_REGISTRY_DIR;
+  const result: TerminalLeaseSweepResult = { released: [], retained: [], warnings: [] };
+  let leases: DispatchLease[];
+  try {
+    leases = readAllLeases(registryDir);
+  } catch (error) {
+    result.warnings.push(
+      `lease sweep skipped: registry unreadable: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return result;
+  }
+
+  for (const lease of leases) {
+    if (!ACTIVE_NON_RECLAIMED.has(lease.status)) continue;
+    let reading: LaneStatusReading | null;
+    try {
+      reading = input.readLaneStatus(lease.issue_id.toUpperCase());
+    } catch (error) {
+      result.retained.push({
+        issue_id: lease.issue_id,
+        reason: `lane status unreadable: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      continue;
+    }
+    if (!reading) {
+      result.retained.push({ issue_id: lease.issue_id, reason: 'no lane manifest found' });
+      continue;
+    }
+    if (!SWEEPABLE_LANE_STATUSES.has(reading.status)) {
+      result.retained.push({
+        issue_id: lease.issue_id,
+        reason: `lane status ${reading.status} (${reading.source}) is not terminal`,
+      });
+      continue;
+    }
+    const release = releaseLease(
+      {
+        issue_id: lease.issue_id,
+        actor: input.actor,
+        reason:
+          `lane manifest is terminal (${reading.status}) on ${reading.source}; ` +
+          'its closeout did not release the local lease',
+      },
+      { registryDir, now: input.now },
+    );
+    if (release.ok) {
+      result.released.push({ issue_id: lease.issue_id, lane_status: reading.status, source: reading.source });
+    } else {
+      result.warnings.push(`lease sweep could not release ${lease.issue_id}: ${release.code} ${release.message}`);
+    }
+  }
+  return result;
+}
+
 export function buildLeaseStaleReport(
   registryDir = LEASE_REGISTRY_DIR,
   now = new Date(),

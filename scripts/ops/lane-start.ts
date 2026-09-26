@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncOptionsWithStringEncoding, type SpawnSyncReturns } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,9 @@ import {
   readAllLeases,
   releaseLease,
   reserveLease,
+  sweepTerminalLaneLeases,
+  type LaneStatusReading,
+  type TerminalLeaseSweepResult,
 } from './lease-registry.js';
 import { readMergeLock } from './merge-mutex.js';
 import { evaluateSubstrate, gatherSubstrateFacts } from './substrate-guard.js';
@@ -33,7 +36,9 @@ import {
   resolveActiveLaneManifests,
   type ActiveLaneDiscovery,
   readManifest,
+  readManifestAtRef,
   readConfiguredEnvValue,
+  resolveTrackerRef,
   relativeToRoot,
   requireIssueId,
   requireVerificationTarget,
@@ -46,6 +51,7 @@ import {
   ROOT,
   type CanonicalLaneType,
   type LaneExecutor,
+  type LaneTier,
   type PreflightToken,
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
@@ -222,6 +228,320 @@ export function linearTaskToken(): string {
     readConfiguredEnvValue('LINEAR_API_KEY') ||
     ''
   );
+}
+
+// ── WORK-2026092608: a lane that can close the first time ────────────────────
+
+/**
+ * The proof files lane-start scaffolds. `evidence.json` is deliberately absent:
+ * its generator is `ops:proof-generate` (buildEvidenceSkeleton), which needs the
+ * lane's execution SHA -- a fact that does not exist until the work is done.
+ */
+export const SCAFFOLDED_PROOF_FILES = ['diff-summary.md', 'verification.md'] as const;
+export type ScaffoldedProofFile = (typeof SCAFFOLDED_PROOF_FILES)[number];
+
+/**
+ * An honest, unfilled proof template.
+ *
+ * It carries the merge-SHA anchors the post-merge rebinder rewrites
+ * (`MERGE_SHA:` / `Merge SHA:` / `## Merge SHA Binding`) and nothing else a gate
+ * could mistake for evidence: no SHA, no command names, no checked assertion and
+ * no fenced block. An unfilled scaffold therefore still fails the content gates
+ * (P12-P14, the Executor Result Validation EVIDENCE fence check) until the
+ * executor writes real results into it. It also avoids every token the proof
+ * gates reject as unfinished text.
+ */
+export function buildProofScaffold(issueId: string, tier: LaneTier, file: ScaffoldedProofFile): string {
+  if (file === 'diff-summary.md') {
+    return [
+      `# Diff summary: ${issueId}`,
+      '',
+      '> Scaffolded by `ops:lane-start`. Replace this note with the files this lane changed',
+      '> and why. Until then this file records nothing.',
+      '',
+      '| File | Change |',
+      '|---|---|',
+      '',
+      '## SHA Binding',
+      '',
+      'Merge SHA: pending merge',
+      'PR: pending',
+      '',
+    ].join('\n');
+  }
+  return [
+    `# PROOF: ${issueId}`,
+    '',
+    'MERGE_SHA: pending merge',
+    '',
+    '> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command',
+    '> actually executed and its real result before review. `post-merge-lane-close.yml`',
+    '> binds the merge SHA; never write one here by hand.',
+    '',
+    `Issue: ${issueId}`,
+    `Tier: ${tier}`,
+    'result: not_run',
+    '',
+    '## ASSERTIONS:',
+    '',
+    '- [ ] (state each behavior this lane proves, and the test that proves it)',
+    '',
+    '## EVIDENCE:',
+    '',
+    '(paste measured output here, in fenced blocks)',
+    '',
+    '## Verification',
+    '',
+    '(record every verification command run on the final code commit, with its real result)',
+    '',
+    '## Merge SHA Binding',
+    '',
+    'Merge SHA: pending merge',
+    'PR: pending',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Writes the proof scaffolds a lane declares into `proofDir`. A file that
+ * already exists is authored work and is never touched. Returns the
+ * repo-relative paths it created, so the caller commits exactly those.
+ */
+export function scaffoldLaneProofFiles(input: {
+  proofDir: string;
+  issueId: string;
+  tier: LaneTier;
+  expectedProofPaths: string[];
+}): string[] {
+  const declared = new Set(input.expectedProofPaths.map((proofPath) => path.posix.basename(proofPath)));
+  fs.mkdirSync(input.proofDir, { recursive: true });
+  const created: string[] = [];
+  for (const file of SCAFFOLDED_PROOF_FILES) {
+    if (!declared.has(file)) continue;
+    const absolutePath = path.join(input.proofDir, file);
+    if (fs.existsSync(absolutePath)) continue;
+    fs.writeFileSync(absolutePath, buildProofScaffold(input.issueId, input.tier, file), 'utf8');
+    created.push(`docs/06_status/proof/${input.issueId}/${file}`);
+  }
+  return created;
+}
+
+export type TrackerTransitionResult =
+  | { status: 'skipped'; reason: string }
+  | { status: 'already_started'; tracker_ref: string; state: string }
+  | { status: 'advanced'; tracker_ref: string; from: string; to: string }
+  | { status: 'warning'; tracker_ref: string | null; reason: string };
+
+/** The started-type workflow state lane-start moves a tracker issue into. */
+export function trackerStartStateName(executor: LaneExecutor): string {
+  return executor === 'claude' ? 'In Claude' : 'In Codex';
+}
+
+export type TrackerRunner = (
+  command: string,
+  args: string[],
+  options: SpawnSyncOptionsWithStringEncoding,
+) => Pick<SpawnSyncReturns<string>, 'status' | 'stdout' | 'stderr' | 'error'>;
+
+function trackerGraphql(
+  runner: TrackerRunner,
+  token: string,
+  query: string,
+  variables: Record<string, unknown>,
+): Record<string, unknown> {
+  if (/\r|\n/u.test(token)) {
+    throw new Error('Linear API token contains an invalid newline');
+  }
+  const result = runner(
+    'curl',
+    [
+      '--config',
+      '-',
+      '--fail-with-body',
+      '--silent',
+      '--show-error',
+      '--request',
+      'POST',
+      'https://api.linear.app/graphql',
+      '--header',
+      'Content-Type: application/json',
+      '--data-binary',
+      JSON.stringify({ query, variables }),
+    ],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+      timeout: 15_000,
+      input: `header = "Authorization: ${token.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"\n`,
+    },
+  );
+  if (result.error || result.status !== 0) {
+    throw new Error(result.error?.message ?? (String(result.stderr ?? '').trim() || `curl exit ${result.status}`));
+  }
+  const payload = JSON.parse(String(result.stdout ?? '{}')) as {
+    data?: Record<string, unknown>;
+    errors?: Array<{ message?: string }>;
+  };
+  if (payload.errors?.length) {
+    throw new Error(payload.errors.map((entry) => entry.message ?? 'unknown Linear error').join('; '));
+  }
+  return payload.data ?? {};
+}
+
+/**
+ * Best-effort: move a lane's tracker issue into its executor's started state.
+ *
+ * WHY. Closeout's L3 refuses a lane whose issue is still `unstarted`, and
+ * nothing moved it -- only lane-close ever wrote the tracker, and only to Done.
+ * A lane that forgot the manual transition failed closeout after merge
+ * (UTV2-1954 needed two attempts).
+ *
+ * BOUNDS. Tracker sync is optional and non-blocking (intent.md, tracker
+ * independence). This never throws: a lane with no tracker issue is skipped, and
+ * a missing credential, network failure, or unexpected workflow is returned as a
+ * warning. It only ever moves an issue OUT of an unstarted type (backlog,
+ * unstarted, triage) and never touches one that is started, completed or
+ * canceled. L3 itself is unchanged.
+ */
+export function advanceTrackerIssueOnStart(input: {
+  manifest: { issue_id: string; tracker_ref?: string | null };
+  executor: LaneExecutor;
+  token: string;
+  runner?: TrackerRunner;
+}): TrackerTransitionResult {
+  const trackerRef = resolveTrackerRef(input.manifest);
+  if (!trackerRef) {
+    return { status: 'skipped', reason: `${input.manifest.issue_id} has no tracker issue` };
+  }
+  if (!input.token.trim()) {
+    return {
+      status: 'warning',
+      tracker_ref: trackerRef,
+      reason: 'no Linear credential (LINEAR_API_TOKEN/LINEAR_API_KEY); tracker state left unchanged',
+    };
+  }
+  const runner: TrackerRunner = input.runner ?? ((command, args, options) => spawnSync(command, args, options));
+  const target = trackerStartStateName(input.executor);
+  try {
+    const issueData = trackerGraphql(
+      runner,
+      input.token,
+      `query LaneStartIssue($id: String!) {
+        issue(id: $id) {
+          id
+          identifier
+          state { id name type }
+          team { states { nodes { id name type } } }
+        }
+      }`,
+      { id: trackerRef },
+    );
+    const issue = issueData['issue'] as
+      | {
+          id?: string;
+          identifier?: string;
+          state?: { name?: string; type?: string } | null;
+          team?: { states?: { nodes?: Array<{ id?: string; name?: string; type?: string }> } } | null;
+        }
+      | null
+      | undefined;
+    if (!issue?.id || (issue.identifier ?? '').toUpperCase() !== trackerRef) {
+      return { status: 'warning', tracker_ref: trackerRef, reason: 'tracker issue not found or identity mismatch' };
+    }
+    const currentName = issue.state?.name ?? 'Unknown';
+    const currentType = (issue.state?.type ?? '').toLowerCase();
+    if (currentType === 'started') {
+      return { status: 'already_started', tracker_ref: trackerRef, state: currentName };
+    }
+    if (!['backlog', 'unstarted', 'triage'].includes(currentType)) {
+      return {
+        status: 'warning',
+        tracker_ref: trackerRef,
+        reason: `issue is in ${currentName} (type ${currentType || 'unknown'}); lane-start only advances an unstarted issue`,
+      };
+    }
+    const targetState = (issue.team?.states?.nodes ?? []).find(
+      (state) => state.name === target && (state.type ?? '').toLowerCase() === 'started',
+    );
+    if (!targetState?.id) {
+      return {
+        status: 'warning',
+        tracker_ref: trackerRef,
+        reason: `the issue's team has no started-type "${target}" state`,
+      };
+    }
+    const updateData = trackerGraphql(
+      runner,
+      input.token,
+      `mutation LaneStartIssueUpdate($id: String!, $input: IssueUpdateInput!) {
+        issueUpdate(id: $id, input: $input) { success }
+      }`,
+      { id: issue.id, input: { stateId: targetState.id } },
+    );
+    const update = updateData['issueUpdate'] as { success?: boolean } | undefined;
+    if (!update?.success) {
+      return { status: 'warning', tracker_ref: trackerRef, reason: 'Linear reported issueUpdate success=false' };
+    }
+    return { status: 'advanced', tracker_ref: trackerRef, from: currentName, to: target };
+  } catch (error) {
+    return {
+      status: 'warning',
+      tracker_ref: trackerRef,
+      reason: `tracker transition failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+/**
+ * Reads a lane's status for the lease sweep: `origin/main` first, because a
+ * closeout that ran in CI is recorded there and not in this checkout, then the
+ * local manifest. Anything unreadable resolves to null, which the sweep treats
+ * as "keep the lease".
+ */
+export function readLaneStatusForLeaseSweep(issueId: string): LaneStatusReading | null {
+  try {
+    const onMain = readManifestAtRef(issueId, 'origin/main');
+    if (onMain) {
+      return { status: onMain.manifest.status, source: 'origin/main' };
+    }
+  } catch {
+    // fall through to the local manifest
+  }
+  try {
+    if (manifestExists(issueId)) {
+      return { status: readManifest(issueId).status, source: 'local manifest' };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function runLeaseSweep(): TerminalLeaseSweepResult {
+  try {
+    return sweepTerminalLaneLeases({
+      readLaneStatus: readLaneStatusForLeaseSweep,
+      actor: 'ops:lane-start',
+    });
+  } catch (error) {
+    return {
+      released: [],
+      retained: [],
+      warnings: [`lease sweep failed: ${error instanceof Error ? error.message : String(error)}`],
+    };
+  }
+}
+
+function runTrackerStartTransition(
+  manifest: { issue_id: string; tracker_ref?: string | null },
+  executor: LaneExecutor,
+): TrackerTransitionResult {
+  const result = advanceTrackerIssueOnStart({ manifest, executor, token: linearTaskToken() });
+  if (result.status === 'warning') {
+    process.stderr.write(`[lane-start] warning: tracker not advanced: ${result.reason}\n`);
+  }
+  return result;
 }
 
 /**
@@ -984,6 +1304,15 @@ function main(): void {
 
     const currentHead = currentHeadSha();
     const preflight = validatePreflightToken(issueId, branch, currentHead);
+    // WORK-2026092608: release leases whose lane already closed BEFORE any lease
+    // check below. CI closeout cannot see this checkout's gitignored registry,
+    // so without this a finished lane's lease refuses the next start. Only a
+    // lane whose manifest positively reads terminal is swept; failures are
+    // warnings and never block the start.
+    const leaseSweep = runLeaseSweep();
+    for (const warning of leaseSweep.warnings) {
+      process.stderr.write(`[lane-start] warning: ${warning}\n`);
+    }
     const worktreePath = worktreePathForBranch(branch);
     const branchAlreadyExists = branchExists(branch);
     const worktreeAlreadyExists = worktreeExists(worktreePath);
@@ -1047,6 +1376,7 @@ function main(): void {
       // Each destination merges against its OWN record, so the branch's
       // accumulated entities, findings, controls and proofs survive.
       persistLaneTaskContract(issueId, contractResolution.contract, [ROOT, worktreePath]);
+      const trackerTransition = runTrackerStartTransition(manifest, executor);
       emitJson({
         ok: true,
         code: 'lane_resumed',
@@ -1068,6 +1398,8 @@ function main(): void {
         contract_hash: contractResolution.contract.contract_hash,
         contract_fetched: contractResolution.fetched,
         status: manifest.status,
+        lease_sweep: leaseSweep,
+        tracker_transition: trackerTransition,
       });
       return;
     }
@@ -1312,13 +1644,17 @@ function main(): void {
           `.ops/sync/${issueId}.yml`,
         ];
         const worktreeProofDir = path.join(worktreePath, 'docs', '06_status', 'proof', issueId);
-        if (!fs.existsSync(worktreeProofDir)) {
-          fs.mkdirSync(worktreeProofDir, { recursive: true });
-        }
-        if (fs.readdirSync(worktreeProofDir).length === 0) {
-          fs.writeFileSync(path.join(worktreeProofDir, '.gitkeep'), '', 'utf8');
-          metadataPaths.push(`docs/06_status/proof/${issueId}/.gitkeep`);
-        }
+        // WORK-2026092608: scaffold the anchored proof templates the closeout
+        // rebinder can bind, never an empty .gitkeep. Proof the preserved branch
+        // already carries is authored work and is left untouched.
+        metadataPaths.push(
+          ...scaffoldLaneProofFiles({
+            proofDir: worktreeProofDir,
+            issueId,
+            tier,
+            expectedProofPaths: manifest.expected_proof_paths,
+          }),
+        );
 
         const add = git(['add', '--', ...metadataPaths], worktreePath);
         if (!add.ok) {
@@ -1342,6 +1678,7 @@ function main(): void {
         if (!commit.ok) {
           throw new Error(`failed to commit regenerated readmission metadata: ${commit.stderr}`);
         }
+        const trackerTransition = runTrackerStartTransition(manifest, executor);
 
         emitJson({
           ok: true,
@@ -1370,6 +1707,8 @@ function main(): void {
           contract_hash: readmittedContract.contract_hash,
           contract_fetched: readmittedResolution.fetched,
           status: 'started',
+          lease_sweep: leaseSweep,
+          tracker_transition: trackerTransition,
         });
         return;
       } catch (error) {
@@ -1464,8 +1803,12 @@ function main(): void {
       );
     }
     persistLaneTaskContract(issueId, contractResolution.contract, [ROOT]);
+    // WORK-2026092608: preflight has passed and the manifest is written, so the
+    // tracker issue (if the lane has one) can be moved to a started state. A
+    // tracker failure is a warning; it never fails the start.
+    const trackerTransition = runTrackerStartTransition(manifest, executor);
 
-    // The empty proof directory (UTV2-1492) is scaffolded directly inside
+    // The proof directory (UTV2-1492) is scaffolded directly inside
     // the lane worktree below, alongside the manifest/sync mirror — not in
     // the main checkout, which must stay clean/control-plane-only (PG2).
     // Operators/executors no longer need to hand-create
@@ -1475,7 +1818,8 @@ function main(): void {
     // implementation existed. Real proof content is populated during
     // implementation and validated later by proof-gate.yml (CI on PR) and
     // truth-check-lib.ts (ops:lane-close) — this scaffold is empty on
-    // purpose.
+    // purpose. WORK-2026092608 replaced the empty .gitkeep with anchored,
+    // unfilled templates (scaffoldLaneProofFiles) that claim nothing.
 
     // Mirror manifest and sync file into the worktree and commit so the lane
     // branch carries its own metadata without requiring a manual copy from main.
@@ -1489,11 +1833,12 @@ function main(): void {
       path.join(worktreeSyncDir, `${issueId}.yml`)
     );
     const worktreeProofDir = path.join(worktreePath, 'docs', '06_status', 'proof', issueId);
-    fs.mkdirSync(worktreeProofDir, { recursive: true });
-    const worktreeProofGitkeep = path.join(worktreeProofDir, '.gitkeep');
-    if (!fs.existsSync(worktreeProofGitkeep)) {
-      fs.writeFileSync(worktreeProofGitkeep, '', 'utf8');
-    }
+    const scaffoldedProofPaths = scaffoldLaneProofFiles({
+      proofDir: worktreeProofDir,
+      issueId,
+      tier,
+      expectedProofPaths: manifest.expected_proof_paths,
+    });
     // UTV2-1619 capability 19: a bootstrap admission leaves a durable, committed
     // receipt on the lane branch. The JSON emitted to stdout is ephemeral -- if
     // the only record of an out-of-caps admission is a terminal scrollback, the
@@ -1536,7 +1881,7 @@ function main(): void {
         'add',
         `docs/06_status/lanes/${issueId}.json`,
         `.ops/sync/${issueId}.yml`,
-        `docs/06_status/proof/${issueId}/.gitkeep`,
+        ...scaffoldedProofPaths,
         ...(bootstrapAuthorization === null ? [] : [bootstrapReceiptRelPath]),
       ],
       { cwd: worktreePath, stdio: 'inherit' }
@@ -1566,6 +1911,9 @@ function main(): void {
       contract_hash: contractResolution.contract.contract_hash,
       contract_fetched: contractResolution.fetched,
       status: 'started',
+      scaffolded_proof_paths: scaffoldedProofPaths,
+      lease_sweep: leaseSweep,
+      tracker_transition: trackerTransition,
       // UTV2-1619 capability 18: an authorized admission must never look like an
       // ordinary one. Absent when the lane was admitted under the caps.
       ...(bootstrapAuthorization === null

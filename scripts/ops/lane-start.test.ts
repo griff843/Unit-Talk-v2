@@ -15,6 +15,11 @@ import {
 } from './execution-packet.js';
 import { ROOT, type LaneManifest } from './shared.js';
 import {
+  advanceTrackerIssueOnStart,
+  buildProofScaffold,
+  scaffoldLaneProofFiles,
+  trackerStartStateName,
+  type TrackerRunner,
   captureOrReadTaskContract,
   type ExistingBranchReadmissionToken,
   fetchLinearTaskSource,
@@ -29,6 +34,8 @@ import {
   validateReadmissionTokenRequest,
 } from './lane-start.js';
 import { createTempWorkspace } from './temp-workspace.js';
+import { normalizePreMergeVerificationMarkdown, rebindMergeShaAnchorsInMarkdown } from './proof-generate.js';
+import { evaluateT2ProofEvidence } from './truth-check-lib.js';
 
 test('lane-start captures Linear truth without exposing its token in process arguments', () => {
   const token = 'token-fixture';
@@ -168,10 +175,17 @@ test('lane-start scaffolds the empty proof directory inside the worktree', () =>
     /worktreeProofDir = path\.join\(worktreePath, 'docs', '06_status', 'proof', issueId\)/,
     'lane-start must scaffold docs/06_status/proof/<issue>/ inside the worktree',
   );
+  // WORK-2026092608: the directory is scaffolded with anchored proof templates,
+  // committed alongside the manifest and sync file -- never an empty .gitkeep.
   assert.match(
     source,
-    /docs\/06_status\/proof\/\$\{issueId\}\/\.gitkeep/,
-    'the scaffolded proof directory placeholder must be committed alongside the manifest and sync file',
+    /\.\.\.scaffoldedProofPaths,/,
+    'the scaffolded proof templates must be committed alongside the manifest and sync file',
+  );
+  assert.doesNotMatch(
+    source,
+    /writeFileSync\([^)]*\.gitkeep/,
+    'lane-start must not write an empty .gitkeep into the proof directory',
   );
 });
 
@@ -2261,4 +2275,266 @@ test('G50: readmission refuses when the metadata commit fails', () => {
     /failed to commit regenerated readmission metadata/u,
     'the commit-failure guard must be the thing that refuses',
   );
+});
+
+// ── WORK-2026092608: a lane that can close the first time ────────────────────
+
+const WORK_MERGE_SHA = 'e019642a8176a51397ea85768c6e8e0b7c293469';
+
+test('WORK-2026092608: lane-start scaffolds diff-summary.md and verification.md with bindable anchors', () => {
+  const root = createTempWorkspace('work-2026092608-scaffold-');
+  try {
+    const proofDir = path.join(root, 'docs', '06_status', 'proof', 'WORK-9000001');
+    const created = scaffoldLaneProofFiles({
+      proofDir,
+      issueId: 'WORK-9000001',
+      tier: 'T2',
+      expectedProofPaths: [
+        'docs/06_status/proof/WORK-9000001/diff-summary.md',
+        'docs/06_status/proof/WORK-9000001/evidence.json',
+        'docs/06_status/proof/WORK-9000001/verification.md',
+      ],
+    });
+    assert.deepEqual(created, [
+      'docs/06_status/proof/WORK-9000001/diff-summary.md',
+      'docs/06_status/proof/WORK-9000001/verification.md',
+    ]);
+    // evidence.json belongs to ops:proof-generate, which needs the execution SHA.
+    assert.equal(fs.existsSync(path.join(proofDir, 'evidence.json')), false);
+    assert.equal(fs.existsSync(path.join(proofDir, '.gitkeep')), false);
+
+    for (const file of ['diff-summary.md', 'verification.md']) {
+      const content = fs.readFileSync(path.join(proofDir, file), 'utf8');
+      assert.match(content, /^Merge SHA: pending merge$/m, `${file} carries the rebinder anchor`);
+      // Never a SHA: lane-start has no merge authority to record.
+      assert.doesNotMatch(content, /\b[0-9a-f]{40}\b/, `${file} writes no SHA`);
+      // The Executor Result Validation placeholder check (case-sensitive).
+      assert.doesNotMatch(content, /\b(TODO|TBD|FIXME|PLACEHOLDER|<fill-in>)\b/, `${file} avoids rejected tokens`);
+
+      // The closeout rebinder binds both files to the merge SHA, so P3/C4 pass.
+      const rebound = rebindMergeShaAnchorsInMarkdown(content, WORK_MERGE_SHA, 'https://github.com/o/r/pull/1');
+      assert.ok(rebound.includes(WORK_MERGE_SHA), `${file} binds to the merge SHA`);
+    }
+
+    const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.match(verification, /^MERGE_SHA: pending merge$/m);
+    assert.match(verification, /^## Verification$/m);
+    assert.match(verification, /^## Merge SHA Binding$/m);
+    // The pre-merge normalizer accepts the scaffold (exactly one MERGE_SHA row).
+    const normalized = normalizePreMergeVerificationMarkdown(
+      verification,
+      'docs/06_status/proof/WORK-9000001/verification.md',
+      'a'.repeat(40),
+      null,
+    );
+    assert.match(normalized, /^Execution SHA: a{40}$/m);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('WORK-2026092608: an unfilled scaffold claims nothing the content gates accept', () => {
+  // Honesty: the scaffold must not satisfy P12-P14 on its own. Those pass only
+  // when the executor records the commands it actually ran.
+  const contents = ['diff-summary.md', 'verification.md']
+    .map((file) => buildProofScaffold('WORK-9000002', 'T2', file as 'diff-summary.md' | 'verification.md'))
+    .join('\n');
+  const checks = evaluateT2ProofEvidence({
+    proofPaths: ['docs/06_status/proof/WORK-9000002/diff-summary.md'],
+    proofContents: contents,
+  });
+  const byId = new Map(checks.map((check) => [check.id, check.status]));
+  assert.equal(byId.get('P11'), 'pass');
+  assert.equal(byId.get('P12'), 'fail');
+  assert.equal(byId.get('P13'), 'fail');
+  assert.equal(byId.get('P14'), 'fail');
+  assert.doesNotMatch(contents, /- \[x\]/, 'no checked assertion');
+  assert.doesNotMatch(contents, /^```/m, 'no fenced evidence block');
+});
+
+test('WORK-2026092608: scaffolding never overwrites authored proof', () => {
+  const root = createTempWorkspace('work-2026092608-scaffold-existing-');
+  try {
+    const proofDir = path.join(root, 'proof');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(path.join(proofDir, 'verification.md'), 'authored\n', 'utf8');
+    const created = scaffoldLaneProofFiles({
+      proofDir,
+      issueId: 'UTV2-9001',
+      tier: 'T1',
+      expectedProofPaths: ['docs/06_status/proof/UTV2-9001/verification.md', 'docs/06_status/proof/UTV2-9001/diff-summary.md'],
+    });
+    assert.deepEqual(created, ['docs/06_status/proof/UTV2-9001/diff-summary.md']);
+    assert.equal(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), 'authored\n');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('WORK-2026092608: both admission paths scaffold proof templates', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const main = source.slice(source.indexOf('function main(): void {'));
+  assert.equal((main.match(/scaffoldLaneProofFiles\(\{/g) ?? []).length, 2, 'new-lane and readmission paths');
+});
+
+type RecordedCall = { query: string; variables: Record<string, unknown> };
+
+function linearRunner(responses: Array<Record<string, unknown> | Error>, calls: RecordedCall[]): TrackerRunner {
+  return (_command, args, options) => {
+    const body = JSON.parse(args[args.indexOf('--data-binary') + 1] ?? '{}') as RecordedCall;
+    calls.push(body);
+    assert.match(String(options.input), /Authorization: token-fixture/);
+    assert.equal(args.join(' ').includes('token-fixture'), false, 'token never in argv');
+    const next = responses.shift();
+    if (next instanceof Error) {
+      return { status: 7, stdout: '', stderr: next.message, error: undefined };
+    }
+    return { status: 0, stdout: JSON.stringify({ data: next }), stderr: '', error: undefined };
+  };
+}
+
+const TEAM_STATES = {
+  nodes: [
+    { id: 'state-todo', name: 'Todo', type: 'unstarted' },
+    { id: 'state-claude', name: 'In Claude', type: 'started' },
+    { id: 'state-codex', name: 'In Codex', type: 'started' },
+    { id: 'state-done', name: 'Done', type: 'completed' },
+  ],
+};
+
+function issueResponse(stateName: string, stateType: string): Record<string, unknown> {
+  return {
+    issue: {
+      id: 'issue-uuid',
+      identifier: 'UTV2-1954',
+      state: { id: 'x', name: stateName, type: stateType },
+      team: { states: TEAM_STATES },
+    },
+  };
+}
+
+test('WORK-2026092608: lane-start moves an unstarted tracker issue to the executor started state', () => {
+  const calls: RecordedCall[] = [];
+  const result = advanceTrackerIssueOnStart({
+    manifest: { issue_id: 'UTV2-1954' },
+    executor: 'claude',
+    token: 'token-fixture',
+    runner: linearRunner([issueResponse('Todo', 'unstarted'), { issueUpdate: { success: true } }], calls),
+  });
+  assert.deepEqual(result, { status: 'advanced', tracker_ref: 'UTV2-1954', from: 'Todo', to: 'In Claude' });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1]?.variables, { id: 'issue-uuid', input: { stateId: 'state-claude' } });
+
+  const codexCalls: RecordedCall[] = [];
+  const codex = advanceTrackerIssueOnStart({
+    manifest: { issue_id: 'UTV2-1954' },
+    executor: 'codex-cli',
+    token: 'token-fixture',
+    runner: linearRunner([issueResponse('Backlog', 'backlog'), { issueUpdate: { success: true } }], codexCalls),
+  });
+  assert.equal(codex.status, 'advanced');
+  assert.deepEqual(codexCalls[1]?.variables, { id: 'issue-uuid', input: { stateId: 'state-codex' } });
+  assert.equal(trackerStartStateName('codex-cloud'), 'In Codex');
+});
+
+test('WORK-2026092608: a lane with no tracker issue never touches the tracker', () => {
+  const calls: RecordedCall[] = [];
+  const runner = linearRunner([], calls);
+  assert.equal(
+    advanceTrackerIssueOnStart({ manifest: { issue_id: 'WORK-2026092608' }, executor: 'claude', token: 'token-fixture', runner }).status,
+    'skipped',
+  );
+  assert.equal(
+    advanceTrackerIssueOnStart({ manifest: { issue_id: 'UTV2-1954', tracker_ref: null }, executor: 'claude', token: 'token-fixture', runner }).status,
+    'skipped',
+  );
+  assert.equal(calls.length, 0);
+});
+
+test('WORK-2026092608: tracker failures are warnings and never throw', () => {
+  const noToken = advanceTrackerIssueOnStart({
+    manifest: { issue_id: 'UTV2-1954' },
+    executor: 'claude',
+    token: '',
+    runner: () => {
+      throw new Error('must not be called without a credential');
+    },
+  });
+  assert.equal(noToken.status, 'warning');
+
+  const network = advanceTrackerIssueOnStart({
+    manifest: { issue_id: 'UTV2-1954' },
+    executor: 'claude',
+    token: 'token-fixture',
+    runner: linearRunner([new Error('Could not resolve host')], []),
+  });
+  assert.equal(network.status, 'warning');
+  assert.match(network.status === 'warning' ? network.reason : '', /Could not resolve host/);
+
+  const thrown = advanceTrackerIssueOnStart({
+    manifest: { issue_id: 'UTV2-1954' },
+    executor: 'claude',
+    token: 'token-fixture',
+    runner: () => {
+      throw new Error('spawn curl ENOENT');
+    },
+  });
+  assert.equal(thrown.status, 'warning');
+
+  const rejected = advanceTrackerIssueOnStart({
+    manifest: { issue_id: 'UTV2-1954' },
+    executor: 'claude',
+    token: 'token-fixture',
+    runner: linearRunner([issueResponse('Todo', 'unstarted'), { issueUpdate: { success: false } }], []),
+  });
+  assert.equal(rejected.status, 'warning');
+});
+
+test('WORK-2026092608: lane-start never moves an issue that is already started, done or canceled', () => {
+  for (const [name, type, expected] of [
+    ['In Claude', 'started', 'already_started'],
+    ['Done', 'completed', 'warning'],
+    ['Canceled', 'canceled', 'warning'],
+  ] as const) {
+    const calls: RecordedCall[] = [];
+    const result = advanceTrackerIssueOnStart({
+      manifest: { issue_id: 'UTV2-1954' },
+      executor: 'claude',
+      token: 'token-fixture',
+      runner: linearRunner([issueResponse(name, type)], calls),
+    });
+    assert.equal(result.status, expected, name);
+    assert.equal(calls.length, 1, `${name}: no issueUpdate`);
+  }
+});
+
+test('WORK-2026092608: every lane-start path attempts the tracker transition after the manifest is written', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const main = source.slice(source.indexOf('function main(): void {'));
+  const calls = [...main.matchAll(/runTrackerStartTransition\(manifest, executor\)/g)].map((m) => m.index ?? -1);
+  assert.equal(calls.length, 3, 'resume, readmission and new-lane paths');
+  const writes = [...main.matchAll(/writeManifest\(manifest\);/g)].map((m) => m.index ?? -1);
+  assert.equal(writes.length, 3);
+  for (let i = 0; i < 3; i += 1) {
+    assert.ok(calls[i]! > writes[i]!, `transition ${i} runs after its manifest write`);
+  }
+  assert.ok(
+    main.indexOf('validatePreflightToken(issueId, branch, currentHead);\n    // WORK-2026092608') !== -1 &&
+      main.indexOf('validatePreflightToken(issueId, branch, currentHead);\n    // WORK-2026092608') < calls[0]!,
+    'preflight has passed before any transition',
+  );
+});
+
+test('WORK-2026092608: lane-start sweeps terminal leases before its first lease check', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const main = source.slice(source.indexOf('function main(): void {'));
+  const sweep = main.indexOf('const leaseSweep = runLeaseSweep();');
+  assert.notEqual(sweep, -1, 'main runs the sweep');
+  const firstLeaseCheck = Math.min(
+    ...['reserveLease({', 'assertNoReadmissionOwnershipState('].map((needle) => {
+      const at = main.indexOf(needle);
+      return at === -1 ? Number.POSITIVE_INFINITY : at;
+    }),
+  );
+  assert.ok(sweep < firstLeaseCheck, 'sweep precedes every lease check');
 });

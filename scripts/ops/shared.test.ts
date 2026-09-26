@@ -233,13 +233,43 @@ test('validateBranchName enforces ratified branch format', () => {
   assert.throws(() => validateBranchName('codex/utv2-539'), /<owner>\/<issue-id-lowercase>-<slug>/);
 });
 
-test('defaultProofPaths are tier-aware', () => {
-  assert.deepStrictEqual(defaultProofPaths('UTV2-539', 'T1'), ['docs/06_status/proof/UTV2-539/evidence.json']);
-  assert.deepStrictEqual(defaultProofPaths('UTV2-539', 'T2'), [
+test('defaultProofPaths declares the full closeable bundle for every tier (WORK-2026092608)', () => {
+  // Closeout needs diff-summary.md (P11), and proof-generate binds evidence.json
+  // and verification.md. A tier-shaped subset is what produced proof-path-only
+  // repair lanes, so every tier now declares the same three files.
+  const expected = [
     'docs/06_status/proof/UTV2-539/diff-summary.md',
+    'docs/06_status/proof/UTV2-539/evidence.json',
     'docs/06_status/proof/UTV2-539/verification.md',
+  ];
+  for (const tier of ['T1', 'T2', 'T3'] as const) {
+    assert.deepStrictEqual(defaultProofPaths('UTV2-539', tier), expected, `tier ${tier}`);
+  }
+  assert.deepStrictEqual(defaultProofPaths('WORK-2026092608', 'T2'), [
+    'docs/06_status/proof/WORK-2026092608/diff-summary.md',
+    'docs/06_status/proof/WORK-2026092608/evidence.json',
+    'docs/06_status/proof/WORK-2026092608/verification.md',
   ]);
-  assert.deepStrictEqual(defaultProofPaths('UTV2-539', 'T3'), []);
+});
+
+test('defaultProofPaths never rewrites a manifest that already declares its proof paths', () => {
+  // The default applies only where lane-start creates a manifest. A manifest
+  // written earlier keeps the exact list it was written with.
+  const legacy = createManifest({
+    issue_id: 'UTV2-540',
+    tier: 'T1',
+    branch: 'claude/utv2-540-legacy-proof',
+    worktree_path: worktreePathForBranch('claude/utv2-540-legacy-proof'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: ['docs/06_status/proof/UTV2-540/evidence.json'],
+    preflight_token: '.out/ops/preflight/claude/utv2-540-legacy-proof.json',
+    lane_type: 'runtime',
+    executor: 'claude',
+    created_by: 'claude',
+    status: 'started',
+    now: '2026-09-26T00:00:00.000Z',
+  });
+  assert.deepStrictEqual(legacy.expected_proof_paths, ['docs/06_status/proof/UTV2-540/evidence.json']);
 });
 
 test('validateManifest accepts a canonical done status manifest', () => {
