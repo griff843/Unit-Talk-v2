@@ -1,0 +1,312 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1919
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1919
+  objective: "Evidence-plane settlement correction: a re-settle silently returns
+    the stale record instead of writing a correction row"
+  acceptance_criteria:
+    - >-
+      Canonical owner for the evidence-plane settlement-correction defect.
+      Verified against `apps/api/src/settlement-service.ts` on `main`, not
+      recalled.
+
+
+      ## The defect
+
+
+      `recordSettlement` dispatches **every** evidence-plane pick
+      (`isEvidencePlanePick`: `awaiting_approval`, or `validated` AND Track
+      Only) to `recordOperatorEvidenceSettlement` at `:108` — **before** the
+      `pick.status === 'settled' -> recordSettlementCorrection` branch at
+      `:117`.
+
+
+      `recordOperatorEvidenceSettlement` (`:503`):
+
+
+      * hardcodes `correction: false` in its payload (`:573`) and never passes
+      `correctsId`;
+
+      * returns `finalLifecycleState: pick.status` (`:627`), so the pick never
+      leaves `validated`/`awaiting_approval` and keeps matching
+      `isEvidencePlanePick` forever — the correction branch is unreachable for
+      this cohort;
+
+      * catches 23505 at `:584-599` and returns the **pre-existing** record with
+      `auditRecords: []` and no indication a write was dropped. Command Center
+      turns that into `{ ok: true, settlementRecordId }`.
+
+
+      So an operator who corrects a mis-graded Track Only settlement gets a
+      success response and no correction.
+
+
+      ## Required behaviour
+
+
+      * The original settlement is immutable.
+
+      * A correction creates a **new** settlement row.
+
+      * `corrects_id` references the superseded settlement.
+
+      * The latest effective settlement wins — effective is `corrects_id IS
+      NULL`, matching the production partial unique index `UNIQUE (pick_id,
+      source) WHERE corrects_id IS NULL`.
+
+      * A 23505 can no longer be swallowed and returned as fake success.
+
+      * WIN -> LOSS -> WIN produces exactly one statistical contribution at each
+      point.
+
+      * Zero member delivery, `distribution_outbox` or `execution_intents`
+      artifacts are created.
+
+
+      ## Shape of the fix
+
+
+      `recordSettlementCorrection` (`:905`) is the template: `findLatestForPick`
+      first, 409 `SETTLEMENT_CORRECTION_NOT_ALLOWED` when absent, then `record({
+      correctsId: latest.id, payload: { correction: true,
+      priorSettlementRecordId: latest.id, ... } })`, a `saveLifecycleEvent`, and
+      a `settlement.corrected` audit.
+
+
+      In `recordOperatorEvidenceSettlement`, before writing: look up
+      `findLatestForPick(pick.id)`; when one exists, write a correction carrying
+      `correctsId`, `payload.correction: true`,
+      `payload.priorSettlementRecordId`, a fresh attestation and a derived
+      `evidenceRef`, audited as `settlement.operator_evidence_corrected`.
+
+
+      Preserve the evidence plane's two deliberate differences from
+      `recordSettlementCorrection`: **no CLV** (`clv: null` plus
+      `clvUnavailableReason` stays) and **no lifecycle transition**
+      (`finalLifecycleState: pick.status`) — `validated -> settled` is not a
+      legal FSM edge and `awaiting_approval` is a governance brake an outcome
+      does not release.
+
+
+      ## Coverage
+
+
+      Zero tests exercise a second settle or a correction on an evidence-plane
+      pick today; `t1-proof-utv2-1904-operator-evidence-settlement.test.ts` and
+      `settlement-service.test.ts` only assert the attestation refusal.
+
+
+      ## Constraint
+
+
+      Correction mutation testing uses **staging/test data only**. Griff's real
+      Chiefs production pick `04174f12-9a01-4e4c-94ec-9a7bf70d0538` is not a
+      correction test subject.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Canonical owner for the evidence-plane settlement-correction defect.
+      Verified against `apps/api/src/settlement-service.ts` on `main`, not
+      recalled.
+    - >-
+      The defect
+
+      `recordSettlement` dispatches **every** evidence-plane pick
+      (`isEvidencePlanePick`: `awaiting_approval`, or `validated` AND Track
+      Only) to `recordOperatorEvidenceSettlement` at `:108` — **before** the
+      `pick.status === 'settled' -> recordSettlementCorrection` branch at
+      `:117`.
+
+
+      `recordOperatorEvidenceSettlement` (`:503`):
+
+
+      * hardcodes `correction: false` in its payload (`:573`) and never passes
+      `correctsId`;
+
+      * returns `finalLifecycleState: pick.status` (`:627`), so the pick never
+      leaves `validated`/`awaiting_approval` and keeps matching
+      `isEvidencePlanePick` forever — the correction branch is unreachable for
+      this cohort;
+
+      * catches 23505 at `:584-599` and returns the **pre-existing** record with
+      `auditRecords: []` and no indication a write was dropped. Command Center
+      turns that into `{ ok: true, settlementRecordId }`.
+
+
+      So an operator who corrects a mis-graded Track Only settlement gets a
+      success response and no correction.
+    - >-
+      Required behaviour
+
+      * The original settlement is immutable.
+
+      * A correction creates a **new** settlement row.
+
+      * `corrects_id` references the superseded settlement.
+
+      * The latest effective settlement wins — effective is `corrects_id IS
+      NULL`, matching the production partial unique index `UNIQUE (pick_id,
+      source) WHERE corrects_id IS NULL`.
+
+      * A 23505 can no longer be swallowed and returned as fake success.
+
+      * WIN -> LOSS -> WIN produces exactly one statistical contribution at each
+      point.
+
+      * Zero member delivery, `distribution_outbox` or `execution_intents`
+      artifacts are created.
+    - >-
+      Shape of the fix
+
+      `recordSettlementCorrection` (`:905`) is the template: `findLatestForPick`
+      first, 409 `SETTLEMENT_CORRECTION_NOT_ALLOWED` when absent, then `record({
+      correctsId: latest.id, payload: { correction: true,
+      priorSettlementRecordId: latest.id, ... } })`, a `saveLifecycleEvent`, and
+      a `settlement.corrected` audit.
+
+
+      In `recordOperatorEvidenceSettlement`, before writing: look up
+      `findLatestForPick(pick.id)`; when one exists, write a correction carrying
+      `correctsId`, `payload.correction: true`,
+      `payload.priorSettlementRecordId`, a fresh attestation and a derived
+      `evidenceRef`, audited as `settlement.operator_evidence_corrected`.
+
+
+      Preserve the evidence plane's two deliberate differences from
+      `recordSettlementCorrection`: **no CLV** (`clv: null` plus
+      `clvUnavailableReason` stays) and **no lifecycle transition**
+      (`finalLifecycleState: pick.status`) — `validated -> settled` is not a
+      legal FSM edge and `awaiting_approval` is a governance brake an outcome
+      does not release.
+    - >-
+      Coverage
+
+      Zero tests exercise a second settle or a correction on an evidence-plane
+      pick today; `t1-proof-utv2-1904-operator-evidence-settlement.test.ts` and
+      `settlement-service.test.ts` only assert the attestation refusal.
+    - >-
+      Constraint
+
+      Correction mutation testing uses **staging/test data only**. Griff's real
+      Chiefs production pick `04174f12-9a01-4e4c-94ec-9a7bf70d0538` is not a
+      correction test subject.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1919/evidence-plane-settlement-correction-a-re-settle-silently-returns-the
+    title: "Evidence-plane settlement correction: a re-settle silently returns the
+      stale record instead of writing a correction row"
+    description: >-
+      Canonical owner for the evidence-plane settlement-correction defect.
+      Verified against `apps/api/src/settlement-service.ts` on `main`, not
+      recalled.
+
+
+      ## The defect
+
+
+      `recordSettlement` dispatches **every** evidence-plane pick
+      (`isEvidencePlanePick`: `awaiting_approval`, or `validated` AND Track
+      Only) to `recordOperatorEvidenceSettlement` at `:108` — **before** the
+      `pick.status === 'settled' -> recordSettlementCorrection` branch at
+      `:117`.
+
+
+      `recordOperatorEvidenceSettlement` (`:503`):
+
+
+      * hardcodes `correction: false` in its payload (`:573`) and never passes
+      `correctsId`;
+
+      * returns `finalLifecycleState: pick.status` (`:627`), so the pick never
+      leaves `validated`/`awaiting_approval` and keeps matching
+      `isEvidencePlanePick` forever — the correction branch is unreachable for
+      this cohort;
+
+      * catches 23505 at `:584-599` and returns the **pre-existing** record with
+      `auditRecords: []` and no indication a write was dropped. Command Center
+      turns that into `{ ok: true, settlementRecordId }`.
+
+
+      So an operator who corrects a mis-graded Track Only settlement gets a
+      success response and no correction.
+
+
+      ## Required behaviour
+
+
+      * The original settlement is immutable.
+
+      * A correction creates a **new** settlement row.
+
+      * `corrects_id` references the superseded settlement.
+
+      * The latest effective settlement wins — effective is `corrects_id IS
+      NULL`, matching the production partial unique index `UNIQUE (pick_id,
+      source) WHERE corrects_id IS NULL`.
+
+      * A 23505 can no longer be swallowed and returned as fake success.
+
+      * WIN -> LOSS -> WIN produces exactly one statistical contribution at each
+      point.
+
+      * Zero member delivery, `distribution_outbox` or `execution_intents`
+      artifacts are created.
+
+
+      ## Shape of the fix
+
+
+      `recordSettlementCorrection` (`:905`) is the template: `findLatestForPick`
+      first, 409 `SETTLEMENT_CORRECTION_NOT_ALLOWED` when absent, then `record({
+      correctsId: latest.id, payload: { correction: true,
+      priorSettlementRecordId: latest.id, ... } })`, a `saveLifecycleEvent`, and
+      a `settlement.corrected` audit.
+
+
+      In `recordOperatorEvidenceSettlement`, before writing: look up
+      `findLatestForPick(pick.id)`; when one exists, write a correction carrying
+      `correctsId`, `payload.correction: true`,
+      `payload.priorSettlementRecordId`, a fresh attestation and a derived
+      `evidenceRef`, audited as `settlement.operator_evidence_corrected`.
+
+
+      Preserve the evidence plane's two deliberate differences from
+      `recordSettlementCorrection`: **no CLV** (`clv: null` plus
+      `clvUnavailableReason` stays) and **no lifecycle transition**
+      (`finalLifecycleState: pick.status`) — `validated -> settled` is not a
+      legal FSM edge and `awaiting_approval` is a governance brake an outcome
+      does not release.
+
+
+      ## Coverage
+
+
+      Zero tests exercise a second settle or a correction on an evidence-plane
+      pick today; `t1-proof-utv2-1904-operator-evidence-settlement.test.ts` and
+      `settlement-service.test.ts` only assert the attestation refusal.
+
+
+      ## Constraint
+
+
+      Correction mutation testing uses **staging/test data only**. Griff's real
+      Chiefs production pick `04174f12-9a01-4e4c-94ec-9a7bf70d0538` is not a
+      correction test subject.
+    captured_at: 2026-09-16T09:22:37.830Z
+    description_sha256: 0415da5e6caba7b6b2e02cea8d5e2cce836a6116a499b8f1567f3aa62c38f38f
+  contract_hash: a7f820ff8560a3b59a2e4f1e88e31677402e170088c551af14f4c73c0353a1d3

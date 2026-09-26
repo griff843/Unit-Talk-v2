@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1919",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1919-evidence-settlement-correction",
+  "branch": "claude/utv2-1919-evidence-settlement-correction",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1589",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/settlement-service.test.ts",
+    "apps/api/src/settlement-service.ts",
+    "apps/api/src/t1-proof-utv2-1904-operator-evidence-settlement.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1919/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-16T09:22:52.694Z",
+  "heartbeat_at": "2026-09-26T14:18:23.912Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1919-evidence-settlement-correction.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1919-evidence-settlement-correction",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

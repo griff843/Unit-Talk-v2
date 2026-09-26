@@ -96,6 +96,8 @@ interface SettlementRow {
   result: string;
   source: string;
   settled_by: string;
+  corrects_id: string | null;
+  created_at: string;
   payload: Record<string, unknown> | null;
 }
 
@@ -193,7 +195,7 @@ test(
     );
 
     const settlementRows = await restQuery<SettlementRow>(
-      `settlement_records?pick_id=eq.${pickId}&select=id,pick_id,result,source,settled_by,payload`,
+      `settlement_records?pick_id=eq.${pickId}&select=id,pick_id,result,source,settled_by,corrects_id,created_at,payload`,
     );
     assert.equal(settlementRows.length, 1, 'exactly one settlement record must be visible');
     assert.equal(settlementRows[0]!.result, 'win');
@@ -242,7 +244,7 @@ test(
     );
 
     const settlementRows = await restQuery<SettlementRow>(
-      `settlement_records?pick_id=eq.${pickId}&select=id,pick_id,result,source,settled_by,payload`,
+      `settlement_records?pick_id=eq.${pickId}&select=id,pick_id,result,source,settled_by,corrects_id,created_at,payload`,
     );
     assert.equal(
       settlementRows.length,
@@ -257,5 +259,110 @@ test(
       `distribution_outbox?pick_id=eq.${pickId}&select=id,pick_id`,
     );
     assert.equal(outboxRows.length, 0);
+  },
+);
+
+test(
+  'UTV2-1919: a second operator grade corrects the first against real Postgres, and the unique index permits exactly that',
+  { skip: skipReason },
+  async () => {
+    // The in-memory repository does not implement
+    // `settlement_records_pick_source_idx (pick_id, source) WHERE corrects_id
+    // IS NULL`, so the unit tests can prove the chain but cannot prove the
+    // index tolerates it. This one runs against the real constraint: the first
+    // grade lands as the canonical row, and the second is accepted only
+    // because it carries `corrects_id` and is therefore exempt.
+    const pickId = await createValidatedTrackOnlyPick('EVIDENCE CORRECTION');
+
+    const first = await recordPickSettlement(
+      pickId,
+      operatorRequest({ result: 'win', evidenceRef: `manual:utv2-1919:${RUN_ID}:v1` }),
+      repositories,
+    );
+    const second = await recordPickSettlement(
+      pickId,
+      operatorRequest({ result: 'loss', evidenceRef: `manual:utv2-1919:${RUN_ID}:v2` }),
+      repositories,
+    );
+    const third = await recordPickSettlement(
+      pickId,
+      operatorRequest({ result: 'win', evidenceRef: `manual:utv2-1919:${RUN_ID}:v3` }),
+      repositories,
+    );
+
+    // Read the chain back from Postgres rather than from the return values.
+    const rows = await restQuery<SettlementRow>(
+      `settlement_records?pick_id=eq.${pickId}&select=id,pick_id,result,source,settled_by,corrects_id,created_at,payload&order=created_at.asc`,
+    );
+    assert.equal(rows.length, 3, 'three operator grades must persist as three rows');
+
+    const roots = rows.filter((row) => row.corrects_id === null);
+    assert.equal(
+      roots.length,
+      1,
+      'exactly one canonical row may exist for a (pick, source) — more would violate the partial unique index',
+    );
+    assert.equal(roots[0]!.id, first.settlementRecord.id);
+    assert.equal(roots[0]!.result, 'win', 'the original settlement is immutable');
+
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    assert.equal(
+      byId.get(second.settlementRecord.id)?.corrects_id,
+      first.settlementRecord.id,
+      'the second grade must reference the settlement it supersedes',
+    );
+    assert.equal(byId.get(second.settlementRecord.id)?.result, 'loss');
+    assert.equal(
+      byId.get(third.settlementRecord.id)?.corrects_id,
+      second.settlementRecord.id,
+      'the third grade must reference the second, not the original',
+    );
+    assert.equal(byId.get(third.settlementRecord.id)?.result, 'win');
+
+    // One statistical contribution, and it is the tip of the chain.
+    assert.equal(third.downstream.unresolvedReason, null);
+    assert.equal(
+      third.downstream.effectiveSettlement?.effective_record_id,
+      third.settlementRecord.id,
+    );
+    assert.equal(third.downstream.effectiveSettlement?.result, 'win');
+    assert.equal(third.downstream.effectiveSettlement?.correction_depth, 2);
+    assert.equal(third.downstream.settlementSummary.total_picks, 1);
+
+    const correctionPayload = byId.get(third.settlementRecord.id)?.payload ?? {};
+    assert.equal(correctionPayload['correction'], true);
+    assert.equal(correctionPayload['priorSettlementRecordId'], second.settlementRecord.id);
+    assert.equal(correctionPayload['priorResult'], 'loss');
+    assert.equal(correctionPayload['evidencePlane'], true);
+    assert.deepEqual(
+      correctionPayload['operatorGradingContext'],
+      OPERATOR_GRADING_CONTEXT,
+      'a correction carries its own attested basis, exactly as the original does',
+    );
+
+    // Nothing else moved. Correcting a grade is not a route to a member.
+    const pickRows = await restQuery<PickRow>(`picks?id=eq.${pickId}&select=id,status`);
+    assert.equal(
+      pickRows[0]!.status,
+      'validated',
+      'a correction writes no lifecycle transition either',
+    );
+
+    const lifecycleRows = await restQuery<LifecycleRow>(
+      `pick_lifecycle?pick_id=eq.${pickId}&select=id,to_state`,
+    );
+    assert.equal(
+      lifecycleRows.filter((row) => row.to_state === 'settled').length,
+      0,
+    );
+
+    const outboxRows = await restQuery<OutboxRow>(
+      `distribution_outbox?pick_id=eq.${pickId}&select=id,pick_id`,
+    );
+    assert.equal(
+      outboxRows.length,
+      0,
+      'distribution_outbox must stay at zero across all three grades',
+    );
   },
 );

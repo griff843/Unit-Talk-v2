@@ -543,11 +543,30 @@ async function recordOperatorEvidenceSettlement(
     );
   }
 
+  // UTV2-1919. An evidence-plane pick keeps its status (`validated` /
+  // `awaiting_approval`) after it settles, so `recordPickSettlement` dispatches
+  // every later operator grade back to this function rather than to
+  // `recordSettlementCorrection`. Without this read the second grade is written
+  // as another *original* — `corrects_id` null — which the partial unique index
+  // `settlement_records_pick_source_idx (pick_id, source) WHERE corrects_id IS
+  // NULL` rejects with 23505, and the catch below then reported that refusal as
+  // success. The original settlement stays immutable; a later grade becomes a
+  // new row pointing at the one it supersedes, exactly as
+  // `recordSettlementCorrection` does for the delivery plane.
+  const priorSettlement = await repositories.settlements.findLatestForPick(pick.id);
+  const isCorrection = priorSettlement !== null;
+
   const payload: Record<string, unknown> = {
     operatorGradingContext,
-    correction: false,
+    correction: isCorrection,
     evidencePlane: true,
     operatorSettled: true,
+    ...(isCorrection
+      ? {
+          priorSettlementRecordId: priorSettlement.id,
+          priorResult: priorSettlement.result,
+        }
+      : {}),
     ...buildPickProvenancePayload(pick),
     ...buildStakeIntegrityPayload(pick.stake_units),
     // Not "CLV was zero" — CLV was not computable. An evidence-plane pick has no
@@ -578,22 +597,21 @@ async function recordOperatorEvidenceSettlement(
       reviewReason: null,
       settledBy: request.settledBy,
       settledAt,
+      ...(isCorrection ? { correctsId: priorSettlement.id } : {}),
       payload,
     });
   } catch (err: unknown) {
     if (isDuplicateSettlementError(err)) {
-      const existing = await repositories.settlements.findLatestForPick(pick.id);
-      if (existing) {
-        const downstream = await computeSettlementDownstreamBundle(pick, repositories.settlements);
-        return {
-          pickRecord: pick,
-          settlementRecord: existing,
-          lifecycleEvent: null,
-          auditRecords: [],
-          finalLifecycleState: pick.status,
-          downstream,
-        };
-      }
+      // The 23505 stays a genuine race guard: another writer inserted the
+      // canonical row for this (pick, source) between the read above and this
+      // insert. It must NOT be reported as success. The row that exists is not
+      // the one this request asked for, so returning it told the operator their
+      // grade had persisted when a different grade had.
+      throw new ApiError(
+        409,
+        'SETTLEMENT_ALREADY_RECORDED',
+        `Pick ${pick.id} already carries a settlement for source ${request.source} that this request did not write. Re-read the current settlement and resubmit.`,
+      );
     }
     throw err;
   }
@@ -604,7 +622,9 @@ async function recordOperatorEvidenceSettlement(
     entityType: 'settlement_records',
     entityId: settlementRecord.id,
     entityRef: pick.id,
-    action: 'settlement.operator_evidence_graded',
+    action: isCorrection
+      ? 'settlement.operator_evidence_corrected'
+      : 'settlement.operator_evidence_graded',
     actor: request.settledBy,
     payload: {
       pickId: pick.id,
@@ -613,6 +633,12 @@ async function recordOperatorEvidenceSettlement(
       source: request.source,
       operatorGradingContext,
       evidencePlane: true,
+      ...(isCorrection
+        ? {
+            correctsId: priorSettlement.id,
+            priorResult: priorSettlement.result,
+          }
+        : {}),
       downstream,
     },
   });
