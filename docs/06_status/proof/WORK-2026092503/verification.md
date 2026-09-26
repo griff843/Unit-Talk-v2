@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092503
 
-MERGE_SHA: pending merge
+MERGE_SHA: bac574b3d5e808555eeb5acf95662fac575574ee
 
 > Pre-merge, the merge row is intentionally a placeholder. The Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -107,7 +107,7 @@ the real `runWorkerCycles` loop with the in-memory repository bundle and the rea
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: bac574b3d5e808555eeb5acf95662fac575574ee
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1651
 
 ### Re-anchor to `bc9375f152e909bf3c48fffbc377703970bb85c9`
