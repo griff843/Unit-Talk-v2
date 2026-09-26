@@ -53,3 +53,19 @@ Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
 Execution SHA: 87ad3a4a6e8b2469d7de8d452a5386a90cbcf1c5
+
+## Repo-level verification at the merge SHA (recorded by WORK-2026092621)
+
+Closeout truth-check P12 requires the repo-level commands, which this proof had not recorded: it
+ran a package-scoped type-check and a focused suite. Both were then run on 2026-09-26 in a clean
+worktree detached at the merge SHA `eb5559426b790e694b38a1de85ec99891790d238`:
+
+```
+$ pnpm type-check
+exit 0
+
+$ pnpm test
+105 suites; 6982 passed, 0 failed; exit 0
+```
+
+Nothing above this section was changed.
