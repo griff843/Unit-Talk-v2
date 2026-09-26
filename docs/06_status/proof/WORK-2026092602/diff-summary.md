@@ -10,3 +10,9 @@ Base `0a6690bc6`, code commit `fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837`. 4 file
 | `scripts/ci/staging-path-enforcement.test.ts` | 7 selection tests, covering both inclusion and exclusion. |
 
 No migration, no schema change, no package.json edit, and no production path.
+
+## SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1655
+Execution SHA: fc0634c5b2e3dd53c54cbdaaba35b79eb26fe837
