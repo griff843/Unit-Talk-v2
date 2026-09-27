@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092606",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026092606-cc-settlement-truth",
+  "branch": "codex/work-2026092606-cc-settlement-truth",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/e2e/recovery/settlement-truth.spec.ts",
+    "apps/command-center/src/app/settlement/page.tsx",
+    "apps/command-center/src/lib/data/dashboard.ts",
+    "apps/command-center/src/lib/data/operations-home.test.ts",
+    "apps/command-center/src/lib/data/operations-home.ts",
+    "apps/command-center/src/lib/data/picks.ts",
+    "apps/command-center/src/lib/data/results-ops.ts",
+    "apps/command-center/src/lib/data/settlement-population.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092606/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092606/evidence.json",
+    "docs/06_status/proof/WORK-2026092606/verification.md",
+    "docs/06_status/proof/WORK-2026092606/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-09-27T13:59:51.876Z",
+  "heartbeat_at": "2026-09-27T13:59:51.876Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026092606-cc-settlement-truth.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026092606-cc-settlement-truth",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

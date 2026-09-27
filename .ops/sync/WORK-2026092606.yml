@@ -1,0 +1,302 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092606
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092606
+  objective: Make Command Center settlement work complete and truthful by paging
+    governed settlement history and deriving open manual review from the
+    effective current settlement state rather than immutable historical rows.
+    Settlement, Exceptions and Dashboard must show one truth about the same
+    governed population.
+  acceptance_criteria:
+    - Amended 2026-09-26 by PM direction, before execution began. The lane
+      itself is unchanged; the criteria below make its contract match the
+      product outcome.
+    - "### A. Pagination (original)"
+    - Recent settlements, corrections, and current manual-review items page
+      independently, with exact totals and stable ordering by timestamp then ID.
+    - Out-of-range pages recover to usable navigation, never showing a backend
+      outage or a false empty queue.
+    - "Pagination does not change population semantics: the union of all pages
+      equals the unpaged population, with no row duplicated or dropped."
+    - "### B. Corrected chains resolve to the effective settlement"
+    - "A pick's current operator truth is its **effective** settlement: the tip
+      of its correction chain (`corrects_id`), resolved with
+      `resolveEffectiveSettlement` from `@unit-talk/domain`."
+    - A chain resolution is accepted only when every `corrects_id` target is
+      present **and** `correction_depth + 1` equals the chain's row count. A
+      partial or windowed chain is never resolved from whatever rows happen to
+      be loaded.
+    - Superseded rows remain available for audit and history, and are never
+      counted as the current effective settlement.
+    - A corrected chain surfaces its effective result, never the stale original.
+    - "### C. One governed population, one resolution semantics, on all three
+      surfaces"
+    - Settlement, Exceptions and Dashboard use the same governed population and
+      the same current manual-review definition, derived from the effective
+      settlement.
+    - "A historical manual-review record resolved by a later additive settlement
+      or correction:"
+    - does not appear unresolved in Settlement;
+    - is absent from Exceptions;
+    - is absent from Dashboard counts and surfaces.
+    - The same underlying record is never counted differently on different
+      surfaces.
+    - "**Dashboard (strengthened):**"
+    - "Dashboard metrics and counts use the same effective-settlement and
+      unresolved-review semantics as Settlement and Exceptions. This covers both
+      Dashboard readers:"
+    - >2-
+          - the `/` "Settlement review" count (`operations-home.ts`);
+          - `/pipeline` and the sidebar badge (`dashboard.ts` — its per-row `status === 'manual_review'` checks are the defect).
+    - A generic "population looks correct" assertion is not acceptable. Tests
+      must assert exact counts that agree across the three surfaces for one
+      fixture.
+    - "### D. Browser/runtime proof of cross-surface consistency (required)"
+    - "Using one production-backed or sanctioned runtime dataset, prove in a
+      browser:"
+    - Settlement displays the correct effective settlement state and count.
+    - Exceptions excludes records already resolved historically.
+    - Dashboard counts agree with Settlement and Exceptions for that same
+      governed population.
+    - Corrected settlement chains surface the effective result, not a stale
+      original.
+    - Pagination does not change the population semantics.
+    - The proof names the dataset and records the counts each surface showed.
+    - "### E. Preserved"
+    - Immutable correction semantics and audit/history truth are unchanged. No
+      settlement row is edited or deleted.
+    - The governed-pick population predicate is unchanged.
+    - No member-delivery, delivery-target, kill-switch or containment change.
+    - Focused node:test coverage, recovery Playwright coverage, Command Center
+      type-check, and `pnpm verify` pass.
+  guardrails: []
+  non_goals:
+    - Any DDL, including `picks_current_state` or `v_governed_pick_performance`.
+      If the effective-state count cannot be computed without DDL, stop and
+      surface it; it is reserved.
+    - Writes to production data.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092606 — Command Center settlement truth and pagination
+
+      Tier: T2 · Lane type: delivery-ui · Executor: codex-cli
+
+
+      ## File scope
+
+
+      - `apps/command-center/src/lib/data/results-ops.ts`
+
+      - `apps/command-center/src/app/settlement/page.tsx`
+
+      - `apps/command-center/src/lib/data/settlement-population.test.ts`
+
+      - `apps/command-center/e2e/recovery/settlement-truth.spec.ts`
+
+      - `apps/command-center/src/lib/data/picks.ts` (Exceptions:
+      `getExceptionQueues`)
+
+      - `apps/command-center/src/lib/data/dashboard.ts` (`/pipeline` and sidebar
+      badge)
+
+      - `apps/command-center/src/lib/data/operations-home.ts` (the `/`
+      "Settlement review" count) — added 2026-09-26
+
+      - `apps/command-center/src/lib/data/operations-home.test.ts` — added
+      2026-09-26
+
+      - relevant existing Command Center tests for those readers
+
+
+      ## Notes for the executor (measured 2026-09-26)
+
+
+      - `picks_current_state.settlement_status` comes from the **newest**
+      `settlement_records` row per pick (`ORDER BY created_at DESC, id DESC`),
+      not from a resolved chain. It is close to effective, but it does not check
+      chain completeness. Reconcile it against the effective-settlement
+      resolution in app code; no DDL is needed or permitted.
+
+      - `dashboard.ts` is not rendered at `/`. It feeds `/pipeline` and the
+      sidebar badge's first paint. The `/` count is `operations-home.ts`.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092606.md
+    title: WORK-2026092606 — Command Center settlement truth and pagination
+    description: >-
+      # WORK-2026092606 — Command Center settlement truth and pagination
+
+
+      Tier: T2 · Lane type: delivery-ui · Executor: codex-cli
+
+
+      ## Objective
+
+
+      Make Command Center settlement work complete and truthful by paging
+      governed settlement history and deriving open manual review from the
+      effective current settlement state rather than immutable historical rows.
+      Settlement, Exceptions and Dashboard must show one truth about the same
+      governed population.
+
+
+      ## Acceptance Criteria
+
+
+      Amended 2026-09-26 by PM direction, before execution began. The lane
+      itself is unchanged; the criteria below make its contract match the
+      product outcome.
+
+
+      ### A. Pagination (original)
+
+
+      - Recent settlements, corrections, and current manual-review items page
+      independently, with exact totals and stable ordering by timestamp then ID.
+
+      - Out-of-range pages recover to usable navigation, never showing a backend
+      outage or a false empty queue.
+
+      - Pagination does not change population semantics: the union of all pages
+      equals the unpaged population, with no row duplicated or dropped.
+
+
+      ### B. Corrected chains resolve to the effective settlement
+
+
+      - A pick's current operator truth is its **effective** settlement: the tip
+      of its correction chain (`corrects_id`), resolved with
+      `resolveEffectiveSettlement` from `@unit-talk/domain`.
+
+      - A chain resolution is accepted only when every `corrects_id` target is
+      present **and** `correction_depth + 1` equals the chain's row count. A
+      partial or windowed chain is never resolved from whatever rows happen to
+      be loaded.
+
+      - Superseded rows remain available for audit and history, and are never
+      counted as the current effective settlement.
+
+      - A corrected chain surfaces its effective result, never the stale
+      original.
+
+
+      ### C. One governed population, one resolution semantics, on all three
+      surfaces
+
+
+      - Settlement, Exceptions and Dashboard use the same governed population
+      and the same current manual-review definition, derived from the effective
+      settlement.
+
+      - A historical manual-review record resolved by a later additive
+      settlement or correction:
+        - does not appear unresolved in Settlement;
+        - is absent from Exceptions;
+        - is absent from Dashboard counts and surfaces.
+      - The same underlying record is never counted differently on different
+      surfaces.
+
+      - **Dashboard (strengthened):**
+        - Dashboard metrics and counts use the same effective-settlement and unresolved-review semantics as Settlement and Exceptions. This covers both Dashboard readers:
+          - the `/` "Settlement review" count (`operations-home.ts`);
+          - `/pipeline` and the sidebar badge (`dashboard.ts` — its per-row `status === 'manual_review'` checks are the defect).
+        - A generic "population looks correct" assertion is not acceptable. Tests must assert exact counts that agree across the three surfaces for one fixture.
+
+      ### D. Browser/runtime proof of cross-surface consistency (required)
+
+
+      Using one production-backed or sanctioned runtime dataset, prove in a
+      browser:
+
+
+      - Settlement displays the correct effective settlement state and count.
+
+      - Exceptions excludes records already resolved historically.
+
+      - Dashboard counts agree with Settlement and Exceptions for that same
+      governed population.
+
+      - Corrected settlement chains surface the effective result, not a stale
+      original.
+
+      - Pagination does not change the population semantics.
+
+
+      The proof names the dataset and records the counts each surface showed.
+
+
+      ### E. Preserved
+
+
+      - Immutable correction semantics and audit/history truth are unchanged. No
+      settlement row is edited or deleted.
+
+      - The governed-pick population predicate is unchanged.
+
+      - No member-delivery, delivery-target, kill-switch or containment change.
+
+      - Focused node:test coverage, recovery Playwright coverage, Command Center
+      type-check, and `pnpm verify` pass.
+
+
+      ## File scope
+
+
+      - `apps/command-center/src/lib/data/results-ops.ts`
+
+      - `apps/command-center/src/app/settlement/page.tsx`
+
+      - `apps/command-center/src/lib/data/settlement-population.test.ts`
+
+      - `apps/command-center/e2e/recovery/settlement-truth.spec.ts`
+
+      - `apps/command-center/src/lib/data/picks.ts` (Exceptions:
+      `getExceptionQueues`)
+
+      - `apps/command-center/src/lib/data/dashboard.ts` (`/pipeline` and sidebar
+      badge)
+
+      - `apps/command-center/src/lib/data/operations-home.ts` (the `/`
+      "Settlement review" count) — added 2026-09-26
+
+      - `apps/command-center/src/lib/data/operations-home.test.ts` — added
+      2026-09-26
+
+      - relevant existing Command Center tests for those readers
+
+
+      ## Notes for the executor (measured 2026-09-26)
+
+
+      - `picks_current_state.settlement_status` comes from the **newest**
+      `settlement_records` row per pick (`ORDER BY created_at DESC, id DESC`),
+      not from a resolved chain. It is close to effective, but it does not check
+      chain completeness. Reconcile it against the effective-settlement
+      resolution in app code; no DDL is needed or permitted.
+
+      - `dashboard.ts` is not rendered at `/`. It feeds `/pipeline` and the
+      sidebar badge's first paint. The `/` count is `operations-home.ts`.
+
+
+      ## Out of scope
+
+
+      - Any DDL, including `picks_current_state` or
+      `v_governed_pick_performance`. If the effective-state count cannot be
+      computed without DDL, stop and surface it; it is reserved.
+
+      - Writes to production data.
+    captured_at: 2026-09-27T13:59:39.286Z
+    description_sha256: 71fcc16a1144f5c971a70224c79364934bc309b1a3be514472f8feeedcc7466f
+  contract_hash: 80b74c06947ecaa9d1fa276a8a9fbcf535056ce2e2aab51df5a5613b16c46dc3
