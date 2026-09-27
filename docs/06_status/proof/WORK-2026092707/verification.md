@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092707
 
-MERGE_SHA: pending merge
+MERGE_SHA: 13982f5101b06b39321124ee7f2e162b87e98062
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
