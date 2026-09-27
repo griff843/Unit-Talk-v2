@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092707/.out/worktrees/claude__work-2026092707-plan-reconcile",
   "branch": "claude/work-2026092707-plan-reconcile",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "29bf66d031f2fc8b54b8123e9b095f58aab6a40b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1673",
   "files_changed": [],
   "file_scope_lock": [
@@ -15,14 +15,22 @@
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-27T18:41:58.841Z",
-  "heartbeat_at": "2026-09-27T18:41:58.841Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-27T20:22:15.210Z",
+  "closed_at": "2026-09-27T20:22:15.210Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092707-plan-reconcile.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-27T20:22:13.310Z",
+      "verdict": "pass",
+      "merge_sha": "29bf66d031f2fc8b54b8123e9b095f58aab6a40b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

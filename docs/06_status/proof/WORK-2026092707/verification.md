@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092707
 
-MERGE_SHA: 13982f5101b06b39321124ee7f2e162b87e98062
+MERGE_SHA: 29bf66d031f2fc8b54b8123e9b095f58aab6a40b
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries the
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
@@ -56,7 +56,7 @@ R-level rule in `scripts/ci/r-level-check.ts` is triggered by a docs-only diff.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 29bf66d031f2fc8b54b8123e9b095f58aab6a40b
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1673
 Approved PR head: pending merge
 Execution SHA: 13982f5101b06b39321124ee7f2e162b87e98062
