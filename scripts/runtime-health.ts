@@ -4,6 +4,8 @@
 // Subsystem states: HEALTHY | DEGRADED | FAILED | UNKNOWN
 import { loadEnvironment } from '@unit-talk/config'
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
+import { readAllPages, type RangeQuery } from './ops/pipeline-health-classification.js'
+import { evaluateQueueMovement, type QueueRow } from './ops/runtime-health-queue.js'
 
 const env = loadEnvironment()
 const url = env.SUPABASE_URL ?? ''
@@ -130,57 +132,40 @@ async function main() {
   }
 
   // ── 2. Queue Movement ─────────────────────────────────────────────────────
+  // WORK-2026092705: every non-sent row, read in id-ordered pages and checked
+  // against an exact count; `sent` is counted, never fetched. PostgREST caps a
+  // single response at 1000 rows, so one unpaged read judged a sample.
   {
-    const { data: outbox, error } = await db
-      .from('distribution_outbox')
-      .select('id, status, created_at, claimed_at, attempt_count, last_error')
-
-    if (error) {
-      subsystems.push({ name: 'Queue Movement', state: 'UNKNOWN', value: 'query failed', detail: error.message })
-    } else {
-      const rows = outbox ?? []
-      const pending = rows.filter(r => r.status === 'pending')
-      const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
-        row.status === 'dead_letter' &&
-        row.attempt_count === 0 &&
-        typeof row.last_error === 'string' &&
-        (row.last_error.startsWith('proof-pick-blocked:') ||
-          row.last_error.startsWith('operator-disposition') ||
-          row.last_error.startsWith('stale_pending_operator_review'))
-      const deadLetter = rows.filter(r => r.status === 'dead_letter' && !isGovernanceBrakeDeadLetter(r))
-      const governanceBrake = rows.filter(isGovernanceBrakeDeadLetter)
-      const stuckProc = rows.filter(r =>
-        r.status === 'processing' && r.claimed_at && ageMin(r.claimed_at) > T.outboxStuckProcMin
+    const [nonSentHead, sentHead] = await Promise.all([
+      db.from('distribution_outbox').select('id', { count: 'exact', head: true }).neq('status', 'sent'),
+      db.from('distribution_outbox').select('id', { count: 'exact', head: true }).eq('status', 'sent'),
+    ])
+    let rows: QueueRow[] | null = null
+    let readError: string | null = null
+    try {
+      rows = await readAllPages(() =>
+        db
+          .from('distribution_outbox')
+          .select('id, status, created_at, claimed_at, attempt_count, last_error')
+          .neq('status', 'sent') as unknown as RangeQuery<QueueRow>,
       )
-      const completed = rows.filter(r => r.status === 'sent' || r.status === 'completed' || r.status === 'delivered')
+    } catch (e) {
+      readError = e instanceof Error ? e.message : String(e)
+    }
 
-      let state: SubsystemState = 'HEALTHY'
-      const issues: string[] = []
-
-      if (deadLetter.length >= T.outboxDeadLetterCrit) {
-        state = 'FAILED'
-        issues.push(`${deadLetter.length} true dead_letter rows`)
-      } else if (pending.length > T.outboxMaxPendingCrit) {
-        state = 'FAILED'
-        issues.push(`${pending.length} pending rows (>${T.outboxMaxPendingCrit})`)
-      } else if (pending.length > T.outboxMaxPendingWarn || stuckProc.length > 0) {
-        state = 'DEGRADED'
-        if (pending.length > T.outboxMaxPendingWarn) issues.push(`${pending.length} pending (>${T.outboxMaxPendingWarn} warn)`)
-        if (stuckProc.length > 0) issues.push(`${stuckProc.length} stuck processing >5m`)
-      }
-      if (governanceBrake.length > 0 && state === 'HEALTHY') {
-        state = 'DEGRADED'
-        issues.push(`${governanceBrake.length} governance brake dead_letter row(s) (expected P7A proof-blocked)`)
-      }
-
-      subsystems.push({
-        name: 'Queue Movement',
-        state,
-        value: `${pending.length} pending, ${deadLetter.length} true dead_letter`,
-        detail: `total=${rows.length}; completed=${completed.length}; stuck=${stuckProc.length}; true_dead_letter=${deadLetter.length}; governance_brake=${governanceBrake.length}; ${issues.join('; ')}`,
+    if (rows === null) {
+      subsystems.push({ name: 'Queue Movement', state: 'UNKNOWN', value: 'query failed', detail: readError ?? 'unknown error' })
+    } else {
+      const result = evaluateQueueMovement({
+        rows,
+        nonSentCount: nonSentHead.error ? null : nonSentHead.count ?? null,
+        sentCount: sentHead.error ? null : sentHead.count ?? null,
+        now,
+        thresholds: T,
       })
-      if (state === 'FAILED') failed.push(`Queue: ${issues.join(', ')}`)
-      if (state === 'DEGRADED') degraded.push(`Queue: ${issues.join(', ')}`)
+      subsystems.push({ name: 'Queue Movement', state: result.state, value: result.value, detail: result.detail })
+      if (result.state === 'FAILED') failed.push(`Queue: ${result.issues.join(', ')}`)
+      if (result.state === 'DEGRADED') degraded.push(`Queue: ${result.issues.join(', ')}`)
     }
   }
 
