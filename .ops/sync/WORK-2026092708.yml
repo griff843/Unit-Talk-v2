@@ -1,0 +1,157 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092708
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092708
+  objective: >-
+    `scripts/pipeline-health.ts` § "Authorized delivery targets" is the
+    monitor's containment check: did anything deliver somewhere it should not?
+    It reads `distribution_receipts` with `.limit(100)` and no order, which on
+    2026-09-27 means 100 of about 3,739 receipts, chosen arbitrarily. It
+    compares each receipt's `channel` against a hardcoded `['discord:canary',
+    'discord:best-bets']` plus two channel ids.
+
+    It flags 2,145 historical `discord:#canary` receipts as non-live.
+
+    It never names `official-picks`, the only target `human-capper` delivers to.
+
+    Since UTV2-1929 a receipt's `channel` is the resolved Discord id, and the
+    logical target lives in `payload.target`.
+
+    So the warning is permanent, it is sampled, and it can miss a real delivery
+    to an unauthorized destination.
+  acceptance_criteria:
+    - "Receipts inside a bounded authority window are read completely: paged in
+      `id` order with `readAllPages`, and checked against an exact count. A
+      partial read is CRITICAL, never clean."
+    - "Each receipt's logical target is `payload.target` when present, otherwise
+      `channel`. It is classified by a pure, unit-tested function:"
+    - "`governed` when it is in `governedDeliveryTargets` from
+      `@unit-talk/contracts`."
+    - "`control` when it is the canary lane."
+    - "`unrecognized` otherwise."
+    - An `unrecognized` receipt inside the window is CRITICAL and named.
+      Receipts older than the window are not judged.
+    - The hardcoded `LIVE_TARGETS` / `LIVE_CHANNEL_IDS` lists are removed from
+      the script. The JSON report carries the window census.
+    - No database write, no delivery-path change, and no change to `apps/worker`
+      (its replay allowlist is a separate, deliberate restriction).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI, and the lane closed through
+      `post-merge-lane-close.yml`.
+  unmapped_sections:
+    - >-
+      WORK-2026092708 — pipeline health judges every recent receipt's
+      destination
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## File scope
+
+
+      - `scripts/pipeline-health.ts`
+
+      - `scripts/ops/pipeline-health-classification.ts`
+
+      - `scripts/ops/pipeline-health-classification.test.ts`
+
+      - `.ops/work/WORK-2026092708.md`
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092708.md
+    title: WORK-2026092708 — pipeline health judges every recent receipt's destination
+    description: >-
+      # WORK-2026092708 — pipeline health judges every recent receipt's
+      destination
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      `scripts/pipeline-health.ts` § "Authorized delivery targets" is the
+      monitor's containment check: did anything deliver somewhere it should not?
+      It reads `distribution_receipts` with `.limit(100)` and no order, which on
+      2026-09-27 means 100 of about 3,739 receipts, chosen arbitrarily. It
+      compares each receipt's `channel` against a hardcoded `['discord:canary',
+      'discord:best-bets']` plus two channel ids.
+
+
+      - It flags 2,145 historical `discord:#canary` receipts as non-live.
+
+      - It never names `official-picks`, the only target `human-capper` delivers
+      to.
+
+      - Since UTV2-1929 a receipt's `channel` is the resolved Discord id, and
+      the logical target lives in `payload.target`.
+
+
+      So the warning is permanent, it is sampled, and it can miss a real
+      delivery to an unauthorized destination.
+
+
+      ## Acceptance Criteria
+
+
+      - Receipts inside a bounded authority window are read completely: paged in
+      `id` order with `readAllPages`, and checked against an exact count. A
+      partial read is CRITICAL, never clean.
+
+      - Each receipt's logical target is `payload.target` when present,
+      otherwise `channel`. It is classified by a pure, unit-tested function:
+        - `governed` when it is in `governedDeliveryTargets` from `@unit-talk/contracts`.
+        - `control` when it is the canary lane.
+        - `unrecognized` otherwise.
+      - An `unrecognized` receipt inside the window is CRITICAL and named.
+      Receipts older than the window are not judged.
+
+      - The hardcoded `LIVE_TARGETS` / `LIVE_CHANNEL_IDS` lists are removed from
+      the script. The JSON report carries the window census.
+
+      - No database write, no delivery-path change, and no change to
+      `apps/worker` (its replay allowlist is a separate, deliberate
+      restriction).
+
+
+      ## File scope
+
+
+      - `scripts/pipeline-health.ts`
+
+      - `scripts/ops/pipeline-health-classification.ts`
+
+      - `scripts/ops/pipeline-health-classification.test.ts`
+
+      - `.ops/work/WORK-2026092708.md`
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI, and the lane closed through
+      `post-merge-lane-close.yml`.
+    captured_at: 2026-09-27T18:56:00.154Z
+    description_sha256: ced7a92cd6184b7d6a8c1d0809bd2a8773001f305e3e4b6a9ee926c5233aec69
+  contract_hash: f9460b0b6215e519c92ad7573dc3fd3c418cb3193755fb1e2341a5ece15f0e7f

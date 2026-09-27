@@ -10,8 +10,11 @@ import {
   formatTargetCounts,
   partitionDeadLetters,
   partitionHeldPendingRows,
+  partitionReceiptAuthority,
   partitionUnclaimableProcessing,
   readAllPages,
+  receiptLogicalTarget,
+  RECEIPT_AUTHORITY_WINDOW_DAYS,
   resolveDeployedWorkerTargets,
   type KillSwitchRow,
   type RangeQuery,
@@ -307,21 +310,42 @@ if (sent.length === 0) {
 }
 
 // ── 8. Authorized delivery targets ─────────────────────────────────────
-// Receipts may store target names or raw Discord channel IDs. Validate against known live targets.
-const LIVE_TARGETS = ['discord:canary', 'discord:best-bets']
-const LIVE_CHANNEL_IDS = ['1296531122234327100', '1288613037539852329'] // canary, best-bets
-const { data: allRecCh } = await db.from('distribution_receipts').select('id, channel').limit(100)
+// WORK-2026092708: every receipt recorded inside the authority window is read,
+// in id-ordered pages checked against an exact count, and judged by its logical
+// target against the governed registry. Receipts older than the window are
+// history and are not judged.
+type ReceiptRow = { id: string; channel: string | null; payload: unknown; recorded_at: string }
+const receiptWindowStart = new Date(now.getTime() - RECEIPT_AUTHORITY_WINDOW_DAYS * 86_400_000).toISOString()
+let windowReceipts: ReceiptRow[] = []
+let receiptReadError: string | null = null
+try {
+  windowReceipts = await readAllPages<ReceiptRow>(() =>
+    db
+      .from('distribution_receipts')
+      .select('id, channel, payload, recorded_at')
+      .gte('recorded_at', receiptWindowStart) as unknown as RangeQuery<ReceiptRow>,
+  )
+} catch (e) { receiptReadError = (e as Error).message }
+const { count: windowReceiptCount, error: receiptCountErr } = await db
+  .from('distribution_receipts')
+  .select('id', { count: 'exact', head: true })
+  .gte('recorded_at', receiptWindowStart)
+const receiptReadComplete =
+  receiptReadError === null && !receiptCountErr && typeof windowReceiptCount === 'number' && windowReceiptCount === windowReceipts.length
+const receiptAuthority = partitionReceiptAuthority(windowReceipts)
 
 console.log('\n╔══ AUTHORITY BOUNDARY ═══════════════════════════════════════')
-const badChannels = (allRecCh ?? []).filter(r => {
-  if (!r.channel) return true
-  return !LIVE_TARGETS.includes(r.channel) && !LIVE_CHANNEL_IDS.some(id => r.channel.includes(id))
-})
-if (badChannels.length) {
-  console.log(`  ⚠  ${badChannels.length} receipts with non-live delivery targets/channels (may be historical pre-activation records):`)
-  for (const r of badChannels.slice(0, 5)) console.log(`    receipt ${r.id.slice(0,8)} channel=${r.channel}`)
+console.log(`  window: receipts since ${receiptWindowStart} (${RECEIPT_AUTHORITY_WINDOW_DAYS}d) — read ${windowReceipts.length} of ${windowReceiptCount ?? 'unknown'}`)
+console.log(`  governed=${receiptAuthority.governed.length} control=${receiptAuthority.control.length} simulated=${receiptAuthority.simulated.length} unrecognized=${receiptAuthority.unrecognized.length}`)
+if (!receiptReadComplete) {
+  console.log(`  ⛔ receipt read incomplete — ${receiptReadError ?? receiptCountErr?.message ?? 'row count does not match the exact count'}`)
+} else if (receiptAuthority.unrecognized.length > 0) {
+  console.log(`  ⛔ ${receiptAuthority.unrecognized.length} receipt(s) inside the window on a destination the registry does not govern:`)
+  for (const r of receiptAuthority.unrecognized.slice(0, 10)) {
+    console.log(`    receipt ${r.id.slice(0,8)} at ${r.recorded_at} target=${receiptLogicalTarget(r) ?? 'NONE'} channel=${r.channel ?? 'NULL'}`)
+  }
 } else {
-  console.log('  All receipts on live delivery targets/channels: CLEAN')
+  console.log('  Every receipt in the window is on a governed or control destination: CLEAN')
 }
 
 // ── SLO status ────────────────────────────────────────────────────────────
@@ -354,7 +378,8 @@ if (failed.length > 0) warns.push(`${failed.length} failed rows`)
 if (stuckProc.length > 0) criticals.push(`${stuckProc.length} stuck processing rows`)
 if (stuckPend.length > 0) warns.push(`${stuckPend.length} pending rows stuck >30min`)
 if (deferredPend.length > 0) warns.push(`${deferredPend.length} pending row(s) outside worker targets`)
-if (badChannels.length) warns.push(`${badChannels.length} receipt(s) with non-live delivery targets/channels (historical pre-activation records)`)
+if (!receiptReadComplete) criticals.push(`receipt read incomplete — read ${windowReceipts.length} receipt(s) in the ${RECEIPT_AUTHORITY_WINDOW_DAYS}d authority window, exact count is ${windowReceiptCount ?? 'unknown'}; the authority boundary was not checked`)
+if (receiptReadComplete && receiptAuthority.unrecognized.length > 0) criticals.push(`${receiptAuthority.unrecognized.length} receipt(s) in the last ${RECEIPT_AUTHORITY_WINDOW_DAYS}d on a destination the registry does not govern`)
 if (!workerVerdict.startsWith('HEALTHY')) (workerVerdict.startsWith('DOWN') ? criticals : warns).push(workerVerdict)
 for (const alert of queueHealth.alerts) {
   const detail = alertDetail(alert)
@@ -399,6 +424,14 @@ if (outputJsonPath) {
     silent_stranding_risk: queueHealth.silentStrandingRisk,
     queue_health_alerts: queueHealth.alerts,
     worker_verdict: workerVerdict,
+    receipt_authority_window_days: RECEIPT_AUTHORITY_WINDOW_DAYS,
+    receipt_authority_read_complete: receiptReadComplete,
+    receipt_authority_counts: {
+      governed: receiptAuthority.governed.length,
+      control: receiptAuthority.control.length,
+      simulated: receiptAuthority.simulated.length,
+      unrecognized: receiptAuthority.unrecognized.length,
+    },
     slo_overall_status: sloReport.overallStatus,
     slo_deploy_risk: sloReport.deployRisk,
     slo_violated_objectives: sloReport.violatedObjectives,
