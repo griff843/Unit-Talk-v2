@@ -5,13 +5,13 @@
   "lane_type": "governance",
   "proof_profile": "static",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "0f5d48322fd494c967da694a7ce44991104a0232",
     "verified_source_sha": "063620c2dcd005396d4aa8ae6ecf2a213ae32f03",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
     "note": "063620c2dcd005396d4aa8ae6ecf2a213ae32f03 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
-    "bound_at": "2026-09-27T04:02:32Z"
+    "bound_at": "2026-09-27T10:28:00.355Z"
   },
   "what_this_lane_delivers": {
     "defect": "Codex governed preflight for WORK-2026092606 failed PL1 (Linear issue not found) because an executor holding a Linear credential sent a repo-minted identity to the tracker, and PG2 because ten work orders were untracked in the root checkout.",

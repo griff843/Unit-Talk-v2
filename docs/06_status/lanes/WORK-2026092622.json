@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026092622-work-id-preflight-contract",
   "branch": "claude/work-2026092622-work-id-preflight-contract",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "0f5d48322fd494c967da694a7ce44991104a0232",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1663",
   "files_changed": [],
   "file_scope_lock": [
@@ -32,14 +32,22 @@
     "docs/06_status/proof/WORK-2026092622/evidence.json",
     "docs/06_status/proof/WORK-2026092622/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-09-27T03:55:10.563Z",
-  "heartbeat_at": "2026-09-27T03:55:10.563Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-27T10:28:02.558Z",
+  "closed_at": "2026-09-27T10:28:02.558Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092622-work-id-preflight-contract.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-27T10:28:00.361Z",
+      "verdict": "pass",
+      "merge_sha": "0f5d48322fd494c967da694a7ce44991104a0232",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
