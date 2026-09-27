@@ -5,13 +5,13 @@
   "lane_type": "governance",
   "proof_profile": "static",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "09e6947762ddcf06d6c429d684799cb8d770bcef",
     "verified_source_sha": "ff3198e161c8e8d027dc552c23d78a6a3735f44a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
     "note": "ff3198e161c8e8d027dc552c23d78a6a3735f44a is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
-    "bound_at": "2026-09-27T10:50:40Z"
+    "bound_at": "2026-09-27T11:02:59.896Z"
   },
   "what_this_lane_delivers": {
     "defect": "Every WORK-### preflight crashed with ReferenceError: Cannot access WORK_ORDER_TIER_PATTERN before initialization, because main() runs at module level and reaches runLinearChecks synchronously, before two constants declared below its invocation are initialized.",
