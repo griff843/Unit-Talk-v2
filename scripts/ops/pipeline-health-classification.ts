@@ -6,8 +6,13 @@
 // switch a stranding "target mismatch" and advised rerouting it, and called rows
 // on retired targets that no deployed worker can claim "stuck processing".
 //
-// Everything here is pure: no I/O, no env, no clock. The script feeds it rows it
-// has already read.
+// Everything here is pure (no env, no clock, no I/O of its own) except
+// `readAllPages`, which performs only the reads its caller injects.
+//
+// WORK-2026092703: the monitor also read only the first 1000 non-sent rows, and
+// classified dead letters with its own copy of a rule the readiness gate owns.
+
+import { classifyDeadLetter } from './outbox-triage.js';
 
 export type WorkerTargetSource = 'heartbeat' | 'env' | 'unknown';
 
@@ -177,4 +182,105 @@ export function formatTargetCounts(counts: Record<string, number>): string {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([target, count]) => `${target}=${count}`)
     .join(', ');
+}
+
+// ── dead letters (WORK-2026092703) ────────────────────────────────────────
+
+export type DeadLetterBucket = 'governance_hold' | 'unattempted_unclassified' | 'true_failure';
+
+export interface DeadLetterRowLike {
+  status: string;
+  last_error?: unknown;
+  attempt_count?: unknown;
+}
+
+/**
+ * The readiness gate's rule (`bucketDeadLetterRows` in readiness-refresh.ts),
+ * applied per row: a recognised disposition reason is a governance hold whatever
+ * its attempt count; otherwise an attempted row is a true failure and an
+ * unattempted one is unclassified. A non-numeric attempt count is not evidence
+ * of "never attempted", so it counts as attempted (fail closed). The reason
+ * classification itself is `classifyDeadLetter`, never a local copy.
+ */
+export function deadLetterBucket(row: DeadLetterRowLike): DeadLetterBucket {
+  const reason = typeof row.last_error === 'string' ? row.last_error : null;
+  const attempted = typeof row.attempt_count === 'number' ? row.attempt_count > 0 : true;
+  const classification = classifyDeadLetter(reason);
+  if (classification !== 'unrecognised' && classification !== 'unclassified_null_reason') {
+    return 'governance_hold';
+  }
+  return attempted ? 'true_failure' : 'unattempted_unclassified';
+}
+
+export interface DeadLetterPartition<Row> {
+  governanceHold: Row[];
+  unattemptedUnclassified: Row[];
+  trueFailure: Row[];
+  /** Every row that is not a dead letter, in input order. */
+  rest: Row[];
+}
+
+export function partitionDeadLetters<Row extends DeadLetterRowLike>(rows: readonly Row[]): DeadLetterPartition<Row> {
+  const partition: DeadLetterPartition<Row> = {
+    governanceHold: [],
+    unattemptedUnclassified: [],
+    trueFailure: [],
+    rest: [],
+  };
+  for (const row of rows) {
+    if (row.status !== 'dead_letter') {
+      partition.rest.push(row);
+      continue;
+    }
+    const bucket = deadLetterBucket(row);
+    if (bucket === 'governance_hold') partition.governanceHold.push(row);
+    else if (bucket === 'unattempted_unclassified') partition.unattemptedUnclassified.push(row);
+    else partition.trueFailure.push(row);
+  }
+  return partition;
+}
+
+export function countByReasonClass(rows: readonly DeadLetterRowLike[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const key = classifyDeadLetter(typeof row.last_error === 'string' ? row.last_error : null);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
+// ── paged reads (WORK-2026092703) ─────────────────────────────────────────
+
+/** PostgREST's `max-rows` on this project; no response is ever larger. */
+export const OUTBOX_PAGE_SIZE = 1000;
+
+export interface RangeQuery<Row> {
+  order(column: string, options: { ascending: boolean }): RangeQuery<Row>;
+  range(from: number, to: number): PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
+}
+
+/**
+ * PostgREST caps every response at 1000 rows whatever `.limit()` asks for, so a
+ * single read of a larger population silently returns its first page. Read in
+ * `id`-ordered pages until a page comes back empty — the same loop as the
+ * readiness reader. Without a stable order, range pages overlap and skip rows.
+ * Rows are de-duplicated by id; the caller compares the result against an exact
+ * count and refuses a partial read.
+ */
+export async function readAllPages<Row extends { id: string }>(
+  makeQuery: () => RangeQuery<Row>,
+  pageSize = OUTBOX_PAGE_SIZE,
+  maxRows = 200_000,
+): Promise<Row[]> {
+  const byId = new Map<string, Row>();
+  for (let from = 0; from < maxRows; from += pageSize) {
+    const { data, error } = await makeQuery()
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`paged read failed at offset ${from}: ${error.message}`);
+    const page = data ?? [];
+    if (page.length === 0) break;
+    for (const row of page) byId.set(row.id, row);
+  }
+  return [...byId.values()];
 }
