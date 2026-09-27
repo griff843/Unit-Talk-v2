@@ -5,12 +5,16 @@ import { evaluateQueueHealth, evaluateSlo } from '@unit-talk/observability'
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import fs from 'node:fs'
 import {
+  countByReasonClass,
   countByTarget,
   formatTargetCounts,
+  partitionDeadLetters,
   partitionHeldPendingRows,
   partitionUnclaimableProcessing,
+  readAllPages,
   resolveDeployedWorkerTargets,
   type KillSwitchRow,
+  type RangeQuery,
 } from './ops/pipeline-health-classification.js'
 
 const args = process.argv.slice(2)
@@ -77,16 +81,31 @@ function alertDetail(alert: { target?: string; status?: string; ageMs?: number; 
 // UTV2-1249: the previous unbounded select silently hit Supabase's 1000-row
 // default cap; with >1000 outbox rows the newest sent rows fell outside the
 // result set and delivery freshness was computed from a stale subset. Queue
-// evaluation only needs non-sent rows (bounded); sent-row truth (freshness,
+// evaluation only needs non-sent rows; sent-row truth (freshness,
 // count, last-5) is fetched exactly below.
-const { data: outbox, error: outboxErr } = await db
-  .from('distribution_outbox')
-  .select('id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count, last_error')
-  .neq('status', 'sent')
-  .order('updated_at', { ascending: false })
-  .limit(5000)
+// WORK-2026092703: `.limit(5000)` never applied — PostgREST caps a response at
+// 1000 rows, and production holds more non-sent rows than that. Read every page
+// in id order, and refuse to report a partial population as whole.
+type OutboxRow = {
+  id: string; status: string; target: string; created_at: string; updated_at: string
+  claimed_at: string | null; pick_id: string | null; attempt_count: number; last_error: string | null
+}
+let outbox: OutboxRow[]
+try {
+  outbox = await readAllPages<OutboxRow>(() =>
+    db
+      .from('distribution_outbox')
+      .select('id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count, last_error')
+      .neq('status', 'sent') as unknown as RangeQuery<OutboxRow>,
+  )
+} catch (e) { console.error('outbox query failed:', (e as Error).message); process.exit(1) }
 
-if (outboxErr) { console.error('outbox query failed:', outboxErr.message); process.exit(1) }
+const { count: nonSentCount, error: nonSentCountErr } = await db
+  .from('distribution_outbox')
+  .select('id', { count: 'exact', head: true })
+  .neq('status', 'sent')
+if (nonSentCountErr) { console.error('non-sent count query failed:', nonSentCountErr.message); process.exit(1) }
+const outboxReadComplete = typeof nonSentCount === 'number' && nonSentCount === outbox.length
 
 const { data: lastSentRows, error: lastSentErr } = await db
   .from('distribution_outbox')
@@ -103,22 +122,19 @@ const { count: sentCount, error: sentCountErr } = await db
   .eq('status', 'sent')
 if (sentCountErr) { console.error('sent-count query failed:', sentCountErr.message); process.exit(1) }
 
-const rows = outbox ?? []
-const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
-  row.status === 'dead_letter' &&
-  row.attempt_count === 0 &&
-  typeof row.last_error === 'string' &&
-  (row.last_error.startsWith('proof-pick-blocked:') ||
-    row.last_error.startsWith('operator-disposition') ||
-    row.last_error.startsWith('stale_pending_operator_review'))
-const allDeadLetter = rows.filter(r => r.status === 'dead_letter')
-const governanceBrake = allDeadLetter.filter(isGovernanceBrakeDeadLetter)
-const trueDeadLetter = allDeadLetter.filter(r => !isGovernanceBrakeDeadLetter(r))
+const rows = outbox
+// WORK-2026092703: the readiness gate's dead-letter rule (classifyDeadLetter x
+// attempt_count), not a local prefix list, so both report the same row the same way.
+const deadLetters = partitionDeadLetters(rows)
+const governanceBrake = deadLetters.governanceHold
+const unattemptedDeadLetter = deadLetters.unattemptedUnclassified
+const trueDeadLetter = deadLetters.trueFailure
+const nonFailureDeadLetterIds = new Set([...governanceBrake, ...unattemptedDeadLetter].map(r => r.id))
 // Rows held by the kill switch and processing rows no deployed worker can claim
 // are reported below as warnings; they are not evidence of a stranded queue or a
 // stuck worker, and are kept out of the rows evaluateQueueHealth judges.
 const { held: heldPending, rest: notHeld } = partitionHeldPendingRows(
-  rows.filter(r => !isGovernanceBrakeDeadLetter(r)),
+  rows.filter(r => !nonFailureDeadLetterIds.has(r.id)),
   killSwitchRows,
   workerTargets,
 )
@@ -181,11 +197,10 @@ if (trueDeadLetter.length === 0) {
   for (const r of trueDeadLetter)
     console.log(`  DEAD_LETTER id=${r.id.slice(0,8)} target=${r.target} pick=${r.pick_id?.slice(0,8)} attempts=${r.attempt_count} age=${ageFmt(r.created_at)}`)
 }
-if (governanceBrake.length > 0) {
-  console.log(`  Governance brake (P7A, expected): ${governanceBrake.length} rows`)
-  for (const r of governanceBrake)
-    console.log(`    INFO id=${r.id.slice(0,8)} target=${r.target} pick=${r.pick_id?.slice(0,8)} error=${r.last_error}`)
-}
+if (governanceBrake.length > 0)
+  console.log(`  Governance hold (recognised disposition, expected): ${governanceBrake.length} rows — ${formatTargetCounts(countByReasonClass(governanceBrake))}`)
+if (unattemptedDeadLetter.length > 0)
+  console.log(`  Unattempted, no recognised reason: ${unattemptedDeadLetter.length} rows — ${formatTargetCounts(countByTarget(unattemptedDeadLetter))}`)
 
 if (failed.length === 0) {
   console.log('  Failed: NONE')
@@ -332,7 +347,9 @@ if (killSwitchRows === null) criticals.push(`delivery_kill_switch could not be r
 if (heldPending.length > 0) warns.push(`${heldPending.length} pending row(s) held by kill switch (${formatTargetCounts(countByTarget(heldPending))}) — release is an operator/owner decision; do not reroute or remove the row`)
 if (unclaimableProcessing.length > 0) warns.push(`${unclaimableProcessing.length} processing row(s) on targets the deployed worker does not poll (${formatTargetCounts(countByTarget(unclaimableProcessing))}) — unclaimable data hygiene, not a stuck worker`)
 if (trueDeadLetter.length > 0) criticals.push(`${trueDeadLetter.length} dead_letter rows (true failures)`)
-if (governanceBrake.length > 0) warns.push(`${governanceBrake.length} governance-class row(s) (P7A proof-pick-blocked / operator-disposition — expected, not system failures)`)
+if (!outboxReadComplete) criticals.push(`outbox read incomplete — read ${rows.length} non-sent row(s), exact count is ${nonSentCount ?? 'unknown'}; every outbox count in this report is partial`)
+if (governanceBrake.length > 0) warns.push(`${governanceBrake.length} dead_letter row(s) with a recognised disposition (${formatTargetCounts(countByReasonClass(governanceBrake))}) — expected, not delivery failures`)
+if (unattemptedDeadLetter.length > 0) warns.push(`${unattemptedDeadLetter.length} dead_letter row(s) never attempted and with no recognised reason — not delivery failures, but unexplained`)
 if (failed.length > 0) warns.push(`${failed.length} failed rows`)
 if (stuckProc.length > 0) criticals.push(`${stuckProc.length} stuck processing rows`)
 if (stuckPend.length > 0) warns.push(`${stuckPend.length} pending rows stuck >30min`)
@@ -369,6 +386,9 @@ if (outputJsonPath) {
     outbox_unclaimable_processing: countByTarget(unclaimableProcessing),
     outbox_dead_letter_count: trueDeadLetter.length,
     outbox_governance_brake_count: governanceBrake.length,
+    outbox_dead_letter_unattempted_unclassified_count: unattemptedDeadLetter.length,
+    outbox_non_sent_count: nonSentCount ?? null,
+    outbox_read_complete: outboxReadComplete,
     outbox_failed_count: failed.length,
     outbox_stuck_processing: stuckProc.length,
     outbox_pending_by_target: queueHealth.pendingByTarget,
@@ -399,7 +419,8 @@ if (
   queueHealth.status === 'down' ||
   queueHealth.silentStrandingRisk ||
   resolvedWorker.source === 'unknown' ||
-  killSwitchRows === null
+  killSwitchRows === null ||
+  !outboxReadComplete
 ) process.exitCode = 1
 } // end main
 
