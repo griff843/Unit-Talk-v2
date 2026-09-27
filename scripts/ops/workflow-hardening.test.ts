@@ -2046,13 +2046,20 @@ test('tier-c-path-guard honours a WORK lane manifest from the target worktree, a
   }
 });
 
-// WORK-2026092706: every job that binds staging-ci writes one shared staging
-// database, and the seed step resets system_runs wholesale. Overlapping writers
-// delete each other's in-flight rows, so each such job must join one
-// cross-workflow concurrency group and never cancel a running proof.
-test('every job that binds staging-ci is serialized in the shared staging-ci-db group', () => {
+// WORK-2026092706: scripts/ci/seed-staging-fixtures.ts deletes every row of
+// system_runs, distribution_outbox and distribution_receipts in the shared staging
+// database. A job that runs it while another such job is mid-proof deletes that
+// run's in-flight rows, so every job that runs the reset joins one cross-workflow
+// concurrency group and never cancels a running proof.
+//
+// Only the resetting jobs may join. GitHub keeps one pending job per group and
+// cancels the older pending one when another arrives, so a sibling job fired by the
+// same pull_request event (proof-gate.yml's T1 Proof Gate) would cancel `verify`'s
+// staging job on every T1 push. Measured on the first revision of this change.
+test('every job that runs the staging seed reset, and only those, is serialized in staging-ci-db', () => {
   const workflowDir = path.join(ROOT, '.github', 'workflows');
-  const bound: string[] = [];
+  const resetters: string[] = [];
+  const grouped: string[] = [];
   for (const file of fs.readdirSync(workflowDir).filter((f) => /\.ya?ml$/.test(f)).sort()) {
     const doc = readWorkflowYaml(file);
     const jobs = doc['jobs'];
@@ -2060,19 +2067,22 @@ test('every job that binds staging-ci is serialized in the shared staging-ci-db 
     for (const [jobId, rawJob] of Object.entries(jobs as Record<string, unknown>)) {
       if (!rawJob || typeof rawJob !== 'object') continue;
       const job = rawJob as WorkflowDocument;
-      const env = job['environment'];
-      const envName = typeof env === 'string' ? env : env && typeof env === 'object' ? (env as WorkflowDocument)['name'] : undefined;
-      if (envName !== 'staging-ci') continue;
-      bound.push(`${file}:${jobId}`);
+      const steps = Array.isArray(job['steps']) ? (job['steps'] as WorkflowDocument[]) : [];
+      const resets = steps.some((step) => typeof step?.['run'] === 'string' && (step['run'] as string).includes('seed-staging-fixtures.ts'));
       const concurrency = job['concurrency'];
+      const group = concurrency && typeof concurrency === 'object' ? (concurrency as WorkflowDocument)['group'] : concurrency;
+      if (group === 'staging-ci-db') grouped.push(`${file}:${jobId}`);
+      if (!resets) continue;
+      resetters.push(`${file}:${jobId}`);
       assert.ok(
         concurrency && typeof concurrency === 'object',
-        `${file}:${jobId} binds staging-ci but declares no job-level concurrency`,
+        `${file}:${jobId} runs the staging seed reset but declares no job-level concurrency`,
       );
       const c = concurrency as WorkflowDocument;
       assert.equal(c['group'], 'staging-ci-db', `${file}:${jobId} must join concurrency group staging-ci-db`);
       assert.equal(c['cancel-in-progress'], false, `${file}:${jobId} must never cancel a running staging proof`);
     }
   }
-  assert.ok(bound.length >= 5, `expected at least 5 staging-ci jobs, found ${bound.length}: ${bound.join(', ')}`);
+  assert.ok(resetters.length >= 2, `expected at least 2 jobs running the staging seed reset, found ${resetters.length}: ${resetters.join(', ')}`);
+  assert.deepEqual(grouped, resetters, 'only jobs that run the staging seed reset may join staging-ci-db');
 });

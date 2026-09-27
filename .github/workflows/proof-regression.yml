@@ -34,15 +34,6 @@ jobs:
     # previously received PRODUCTION credentials. Binding staging-ci is what
     # releases CI_SUPABASE_* and denies this job any production credential.
     environment: staging-ci
-    # Every job that binds staging-ci writes the same staging database, and the
-    # seed step resets system_runs / distribution_outbox / distribution_receipts
-    # wholesale. Overlapping writers delete each other's in-flight rows, so all of
-    # them share one group and run one at a time (WORK-2026092706). GitHub keeps
-    # at most one pending job per group: a third writer cancels the older pending
-    # one, which fails closed and is rerun rather than corrupting a live proof.
-    concurrency:
-      group: staging-ci-db
-      cancel-in-progress: false
 
     steps:
       - name: Checkout
