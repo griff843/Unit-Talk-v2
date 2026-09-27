@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092708-receipt-authority",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1674",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026092708.md",
@@ -21,7 +21,7 @@
     "docs/06_status/proof/WORK-2026092708/evidence.json",
     "docs/06_status/proof/WORK-2026092708/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-27T18:56:10.937Z",
   "heartbeat_at": "2026-09-27T18:56:10.937Z",
   "closed_at": null,
