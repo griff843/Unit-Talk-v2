@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092701",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": "a6677a96ff9f70a435b142fb347878f0e07a59b8",
+    "verified_source_sha": "47b6af7e2e19a57b4df2367962fb9f71cdf7eecf",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "47b6af7e2e19a57b4df2367962fb9f71cdf7eecf is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it. This file was added after merge by a separate repair lane; every value is copied from verification.md.",
+    "bound_at": "2026-09-27T16:39:40.374Z"
+  },
+  "what_this_lane_delivers": {
+    "defect": "scripts/pipeline-health.ts judged the outbox against the discord:canary env fallback rather than the deployed worker, calling kill-switch-held rows a target mismatch and unclaimable rows on retired targets stuck processing.",
+    "repair": "Worker targets resolved from a fresh worker.heartbeat (then explicit env, then unknown with no default); kill-switch-held pending rows and unclaimable processing rows reported as named warnings; unknown targets or an unreadable kill switch are critical.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "focused_suites": {
+      "pass": 16,
+      "fail": 0
+    },
+    "test_ops": {
+      "pass": 3499,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "verify_ci": {
+      "run": 36325879684,
+      "job": 108640322133,
+      "head": "cbc478602416a6df90f2140ba00415e83825dc67",
+      "conclusion": "success"
+    },
+    "r_level_check": "pass",
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "missing kill-switch row no longer treated as held",
+        "observed": "red (1)"
+      }
+    ]
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1666"
+}

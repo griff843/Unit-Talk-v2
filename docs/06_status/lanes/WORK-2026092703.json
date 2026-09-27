@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092703",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092703/.out/worktrees/claude__work-2026092703-pipeline-health-dead-letters",
+  "branch": "claude/work-2026092703-pipeline-health-dead-letters",
+  "base_branch": "main",
+  "commit_sha": "62906b0350cce46d51f0afd8e2b1a081df981da3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1669",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026092703.md",
+    "scripts/ops/pipeline-health-classification.test.ts",
+    "scripts/ops/pipeline-health-classification.ts",
+    "scripts/pipeline-health.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092703/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092703/evidence.json",
+    "docs/06_status/proof/WORK-2026092703/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-27T15:56:12.105Z",
+  "heartbeat_at": "2026-09-27T17:21:56.468Z",
+  "closed_at": "2026-09-27T17:21:56.468Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-27T17:21:53.164Z",
+      "verdict": "pass",
+      "merge_sha": "62906b0350cce46d51f0afd8e2b1a081df981da3",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092703/.out/worktrees/claude__work-2026092703-pipeline-health-dead-letters",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

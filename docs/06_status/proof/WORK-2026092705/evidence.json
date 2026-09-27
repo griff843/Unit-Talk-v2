@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092705",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": "f8b016cd703533bdd04bf09198a69229ec419183",
+    "verified_source_sha": "c679ab1ff7a17bb121fccad9abedddc492978d3b",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "c679ab1ff7a17bb121fccad9abedddc492978d3b is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-27T18:48:05.886Z"
+  },
+  "what_this_lane_delivers": {
+    "defect": "scripts/runtime-health.ts judged Queue Movement from one unfiltered, unordered distribution_outbox select capped at 1000 of 5750 rows by PostgREST max-rows, with a local dead-letter rule that diverged from the readiness gate.",
+    "repair": "Exact head counts, id-ordered paged non-sent read (partial read is UNKNOWN), canonical partitionDeadLetters buckets; pure evaluateQueueMovement with parity against bucketDeadLetterRows.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "focused_suites": {
+      "pass": 10,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level_check": "pass",
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "partial-read check removed",
+        "observed": "red (2)"
+      },
+      {
+        "id": "M2",
+        "mutation": "holds/unattempted -> DEGRADED removed",
+        "observed": "red (2)"
+      }
+    ],
+    "live_population_probe": {
+      "measured_at": "2026-09-27T17:40:34Z",
+      "by_status": {
+        "sent": 3760,
+        "dead_letter": 1954,
+        "processing": 32,
+        "pending": 4
+      },
+      "canonical_buckets": {
+        "governance_hold": 1950,
+        "unattempted_unclassified": 4,
+        "true_failure": 0
+      },
+      "old_local_rule_true_dead_letter": 41,
+      "stuck_processing_over_5m": 32
+    }
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1672"
+}

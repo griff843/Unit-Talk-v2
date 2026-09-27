@@ -1,12 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { evaluateQueueHealth } from '@unit-talk/observability';
+import { governedDeliveryTargets } from '@unit-talk/contracts';
 import {
+  classifyReceiptDestination,
+  deadLetterBucket,
   killSwitchKeyForTarget,
+  partitionDeadLetters,
   partitionHeldPendingRows,
+  partitionReceiptAuthority,
   partitionUnclaimableProcessing,
+  readAllPages,
+  receiptLogicalTarget,
   resolveDeployedWorkerTargets,
+  type RangeQuery,
 } from './pipeline-health-classification.js';
+import { bucketDeadLetterRows } from './readiness-refresh.js';
 
 const NOW = new Date('2026-09-27T14:00:00Z');
 const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
@@ -215,4 +224,179 @@ test('mutation guard: fed the unfiltered rows, the evaluator raises exactly the 
     outboxRows: partitionUnclaimableProcessing(rest, worker).rest,
   });
   assert.equal(filtered.status, 'healthy');
+});
+
+// ── dead letters: the readiness gate's rule, not a local copy ─────────────
+
+const deadLetterRows = [
+  { id: 'd1', status: 'dead_letter', attempt_count: 0, last_error: 'proof-pick-blocked: source x is not a live source' },
+  { id: 'd2', status: 'dead_letter', attempt_count: 3, last_error: 'operator-disposition: voided 2026-07-01' },
+  { id: 'd3', status: 'dead_letter', attempt_count: 1, last_error: 'stale_pending_operator_review' },
+  { id: 'd4', status: 'dead_letter', attempt_count: 2, last_error: 'governance_public_delivery_suppressed' },
+  { id: 'd5', status: 'dead_letter', attempt_count: 0, last_error: null },
+  { id: 'd6', status: 'dead_letter', attempt_count: 0, last_error: 'discord 500' },
+  { id: 'd7', status: 'dead_letter', attempt_count: 4, last_error: 'discord 500' },
+  { id: 'd8', status: 'dead_letter', attempt_count: 2, last_error: null },
+  { id: 'd9', status: 'dead_letter', attempt_count: '2', last_error: 'discord 500' },
+  { id: 'd10', status: 'dead_letter', last_error: '' },
+];
+
+test('dead-letter buckets match the readiness gate row for row, so the two can never disagree', () => {
+  const partition = partitionDeadLetters(deadLetterRows);
+  const gate = bucketDeadLetterRows(deadLetterRows);
+  assert.equal(partition.governanceHold.length, gate.governanceHold);
+  assert.equal(partition.unattemptedUnclassified.length, gate.unattemptedUnclassified);
+  assert.equal(partition.trueFailure.length, gate.trueFailure);
+  assert.deepEqual(partition.governanceHold.map((r) => r.id), ['d1', 'd2', 'd3', 'd4']);
+  assert.deepEqual(partition.unattemptedUnclassified.map((r) => r.id), ['d5', 'd6']);
+  assert.deepEqual(partition.trueFailure.map((r) => r.id), ['d7', 'd8', 'd9', 'd10']);
+});
+
+test('a recognised disposition is a governance hold even after delivery was attempted', () => {
+  // The monitor's old local rule required attempt_count === 0 and called this a true failure.
+  assert.equal(deadLetterBucket(deadLetterRows[1]), 'governance_hold');
+});
+
+test('a non-numeric or missing attempt count is treated as attempted (fail closed)', () => {
+  assert.equal(deadLetterBucket({ status: 'dead_letter', attempt_count: '2', last_error: 'discord 500' }), 'true_failure');
+  assert.equal(deadLetterBucket({ status: 'dead_letter', last_error: null }), 'true_failure');
+});
+
+test('rows that are not dead letters pass through untouched, in order', () => {
+  const rows = [
+    { id: 'p1', status: 'pending', attempt_count: 0, last_error: null },
+    deadLetterRows[6],
+    { id: 'x1', status: 'processing', attempt_count: 1, last_error: null },
+  ];
+  assert.deepEqual(partitionDeadLetters(rows).rest.map((r) => r.id), ['p1', 'x1']);
+});
+
+// ── paged reads past the PostgREST cap ────────────────────────────────────
+
+type Row = { id: string };
+
+/**
+ * A PostgREST stand-in capped at `cap` rows per response. An id-ordered read is
+ * stable; an unordered one is served in a different order on every request, as
+ * a real heap scan may be, so unordered range pages overlap and skip rows.
+ */
+function fakeTable(size: number, cap = 1000) {
+  const sorted: Row[] = Array.from({ length: size }, (_, i) => ({ id: `id-${String(i).padStart(6, '0')}` }));
+  const log = { queries: 0, ordered: 0 };
+  let seed = 7;
+  const shuffled = () => {
+    const copy = [...sorted];
+    for (let i = copy.length - 1; i > 0; i--) {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      const j = seed % (i + 1);
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+  const makeQuery = (): RangeQuery<Row> => {
+    log.queries += 1;
+    let orderedById = false;
+    const query: RangeQuery<Row> = {
+      order(column, options) {
+        if (column === 'id' && options.ascending) orderedById = true;
+        return query;
+      },
+      range(from, to) {
+        if (orderedById) log.ordered += 1;
+        const source = orderedById ? sorted : shuffled();
+        const end = Math.min(to + 1, from + cap);
+        return Promise.resolve({ data: source.slice(from, end), error: null });
+      },
+    };
+    return query;
+  };
+  return { sorted, makeQuery, log };
+}
+
+test('a population larger than one response is read completely, once per row', async () => {
+  const table = fakeTable(2500);
+  const rows = await readAllPages(table.makeQuery);
+  assert.equal(rows.length, 2500);
+  assert.deepEqual(new Set(rows.map((r) => r.id)), new Set(table.sorted.map((r) => r.id)));
+  assert.equal(table.log.queries, 4, 'three full pages and one empty page');
+  assert.equal(table.log.ordered, table.log.queries, 'every page is id-ordered');
+});
+
+test('the fake is discriminating: unordered range pages lose rows, which is why the order is load-bearing', async () => {
+  const table = fakeTable(2500);
+  const seen = new Set<string>();
+  for (let from = 0; from < 2500; from += 1000) {
+    const { data } = await table.makeQuery().range(from, from + 999);
+    for (const row of data ?? []) seen.add(row.id);
+  }
+  assert.ok(seen.size < 2500, `unordered paging should lose rows, got ${seen.size}`);
+});
+
+test('a page error is raised, never returned as a shorter population', async () => {
+  const failing = (): RangeQuery<Row> => {
+    const query: RangeQuery<Row> = {
+      order: () => query,
+      range: () => Promise.resolve({ data: null, error: { message: 'boom' } }),
+    };
+    return query;
+  };
+  await assert.rejects(readAllPages(failing), /offset 0: boom/);
+});
+
+// ── receipt authority (WORK-2026092708) ───────────────────────────────────
+// Shapes are the ones production holds (measured 2026-09-27).
+
+const receipt = (id: string, channel: string | null, target?: string) => ({
+  id,
+  channel,
+  payload: target === undefined ? { adapter: 'discord' } : { adapter: 'discord', target },
+});
+
+test('a human-capper receipt is judged by payload.target, not the resolved channel id', () => {
+  // UTV2-1929: channel is the pinned per-capper Discord id.
+  const row = receipt('r1', '1384052464189440120', 'discord:official-picks');
+  assert.equal(receiptLogicalTarget(row), 'discord:official-picks');
+  assert.equal(classifyReceiptDestination(row), 'governed');
+});
+
+test('an older receipt with no payload.target is judged by its channel, including the #canary spelling', () => {
+  assert.equal(classifyReceiptDestination(receipt('r2', 'discord:official-picks')), 'governed');
+  assert.equal(classifyReceiptDestination(receipt('r3', 'discord:#canary')), 'control');
+  assert.equal(classifyReceiptDestination(receipt('r4', 'discord:canary')), 'control');
+  assert.equal(classifyReceiptDestination(receipt('r5', 'discord:best-bets')), 'governed');
+});
+
+test('every governed delivery target is recognised, so the check follows the registry rather than a copy of it', () => {
+  for (const target of governedDeliveryTargets) {
+    assert.equal(classifyReceiptDestination(receipt(`g-${target}`, '1', `discord:${target}`)), 'governed', target);
+  }
+});
+
+test('a dry-run receipt is simulated, not a delivery', () => {
+  assert.equal(classifyReceiptDestination(receipt('r6', 'simulated:discord:canary')), 'simulated');
+});
+
+test('a destination the registry does not govern is unrecognized — including a bare channel id and a missing channel', () => {
+  assert.equal(classifyReceiptDestination(receipt('r7', 'discord:recaps')), 'unrecognized');
+  assert.equal(classifyReceiptDestination(receipt('r8', 'discord:1519728782355857529')), 'unrecognized');
+  assert.equal(classifyReceiptDestination(receipt('r9', null)), 'unrecognized');
+  assert.equal(classifyReceiptDestination({ id: 'r10', channel: '  ', payload: { target: '' } }), 'unrecognized');
+});
+
+test('a governed-looking channel cannot launder an ungoverned payload.target', () => {
+  assert.equal(classifyReceiptDestination(receipt('r11', 'discord:official-picks', 'discord:strategy-room')), 'unrecognized');
+});
+
+test('the partition places every row exactly once', () => {
+  const rows = [
+    receipt('a', '1384052464189440120', 'discord:official-picks'),
+    receipt('b', 'discord:#canary'),
+    receipt('c', 'simulated:discord:canary'),
+    receipt('d', 'discord:game-threads'),
+  ];
+  const p = partitionReceiptAuthority(rows);
+  assert.deepEqual(
+    { g: p.governed.map((r) => r.id), c: p.control.map((r) => r.id), s: p.simulated.map((r) => r.id), u: p.unrecognized.map((r) => r.id) },
+    { g: ['a'], c: ['b'], s: ['c'], u: ['d'] },
+  );
 });

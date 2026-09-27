@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092703",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": "62906b0350cce46d51f0afd8e2b1a081df981da3",
+    "verified_source_sha": "993427f5b11bd54ff60ba9c8aafec2def90fcff5",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "993427f5b11bd54ff60ba9c8aafec2def90fcff5 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-27T17:21:53.160Z"
+  },
+  "what_this_lane_delivers": {
+    "defect": "scripts/pipeline-health.ts read only the first 1000 non-sent outbox rows (PostgREST max-rows) and classified dead letters with a local rule, reporting 41 true failures where the readiness gate's canonical rule reports 0.",
+    "repair": "id-ordered paged read checked against an exact count (partial read is critical); dead letters bucketed by classifyDeadLetter x attempt_count with row-for-row parity against bucketDeadLetterRows.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "focused_suites": {
+      "pass": 23,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "r_level_check": "pass",
+    "mutation_battery": [
+      {
+        "id": "M1",
+        "mutation": "readAllPages .order('id') removed",
+        "observed": "red (1)"
+      },
+      {
+        "id": "M2",
+        "mutation": "non-numeric attempt_count defaults to not attempted",
+        "observed": "red (2)"
+      }
+    ],
+    "live_population_probe": {
+      "non_sent_rows": 1990,
+      "dead_letter_rows": 1954,
+      "rows_dropped_by_old_read": 990,
+      "canonical_buckets": {
+        "governance_hold": 1950,
+        "unattempted_unclassified": 4,
+        "true_failure": 0
+      },
+      "old_local_rule_true_failures": 45
+    }
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1669"
+}

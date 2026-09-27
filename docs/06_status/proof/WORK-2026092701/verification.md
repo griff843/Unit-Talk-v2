@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092701
 
-MERGE_SHA: 47b6af7e2e19a57b4df2367962fb9f71cdf7eecf
+MERGE_SHA: a6677a96ff9f70a435b142fb347878f0e07a59b8
 
 Issue: WORK-2026092701
 Tier: T2
@@ -78,6 +78,18 @@ pnpm type-check                                                           # exit
 pnpm exec eslint scripts/pipeline-health.ts scripts/ops/pipeline-health-classification*.ts   # exit 0
 ```
 
+pnpm verify ran as the required `verify` job on the final PR head `cbc478602`: CI run 36325879684,
+job 108640322133, conclusion success.
+
+scripts/ci/r-level-check.ts, run after merge against the exact merged diff (explicit SHAs, never `HEAD`):
+
+```
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base 83538008f --head a6677a96f
+Verdict: PASS
+Changed files: 9
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
 `pnpm test` in preflight hit one failure in `scripts/ops/verify-semaphore.test.ts` ("a killed
 process releases its slot through the signal path"), which this lane does not touch. It passed 3
 of 3 isolated reruns, so it is load-dependent.
@@ -88,5 +100,5 @@ substitutes a governed read-only SQL read of the same inputs.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `a6677a96ff9f70a435b142fb347878f0e07a59b8`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1666

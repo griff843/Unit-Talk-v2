@@ -1,0 +1,135 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092702
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092702
+  objective: "Land the manifest mutation computed by `pnpm ops:lane-manifest
+    record-merge WORK-2026092701 --pr
+    https://github.com/griff843/Unit-Talk-v2/pull/1666`. It sets `pr_url`, sets
+    `commit_sha` to the merge commit `a6677a96ff9f70a435b142fb347878f0e07a59b8`
+    read from GitHub, and sets `status: merged`."
+  acceptance_criteria:
+    - "`docs/06_status/lanes/WORK-2026092701.json` on `main` carries `pr_url`
+      #1666, the GitHub merge commit as `commit_sha`, and `status: merged`."
+    - The lane is NOT closed by this PR. Closing still goes through
+      `post-merge-lane-close.yml` and a passing `ops:truth-check`.
+  guardrails:
+    - No product code, and no proof content for WORK-2026092701 is changed.
+    - No weakening of closeout, truth-check or merge controls.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026092701` is dispatched.
+  unmapped_sections:
+    - >-
+      WORK-2026092702 — Record WORK-2026092701's PR binding from GitHub merge
+      state
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Same shape as
+      WORK-2026092305 (#1633).
+
+
+      ## Why
+
+
+      - PR #1666 merged, but its manifest on `main` carries `pr_url: null`,
+      because `lane-pr-binding` does not bind WORK-### ids.
+
+      - `post-merge-lane-close.yml` resolves the merge SHA only from
+      `manifest.pr_url`, so closeout run `36328285180` refused, and no dispatch
+      can close the lane until the binding exists on `main`.
+
+
+      ## File scope
+
+
+      - `docs/06_status/lanes/WORK-2026092701.json`
+
+      - `.ops/work/WORK-2026092702.md`
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092702.md
+    title: WORK-2026092702 — Record WORK-2026092701's PR binding from GitHub merge
+      state
+    description: >-
+      # WORK-2026092702 — Record WORK-2026092701's PR binding from GitHub merge
+      state
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Same shape as
+      WORK-2026092305 (#1633).
+
+
+      ## Objective
+
+
+      - Land the manifest mutation computed by `pnpm ops:lane-manifest
+      record-merge WORK-2026092701 --pr
+      https://github.com/griff843/Unit-Talk-v2/pull/1666`. It sets `pr_url`,
+      sets `commit_sha` to the merge commit
+      `a6677a96ff9f70a435b142fb347878f0e07a59b8` read from GitHub, and sets
+      `status: merged`.
+
+
+      ## Why
+
+
+      - PR #1666 merged, but its manifest on `main` carries `pr_url: null`,
+      because `lane-pr-binding` does not bind WORK-### ids.
+
+      - `post-merge-lane-close.yml` resolves the merge SHA only from
+      `manifest.pr_url`, so closeout run `36328285180` refused, and no dispatch
+      can close the lane until the binding exists on `main`.
+
+
+      ## Acceptance Criteria
+
+
+      - `docs/06_status/lanes/WORK-2026092701.json` on `main` carries `pr_url`
+      #1666, the GitHub merge commit as `commit_sha`, and `status: merged`.
+
+      - The lane is NOT closed by this PR. Closing still goes through
+      `post-merge-lane-close.yml` and a passing `ops:truth-check`.
+
+
+      ## File scope
+
+
+      - `docs/06_status/lanes/WORK-2026092701.json`
+
+      - `.ops/work/WORK-2026092702.md`
+
+
+      ## Guardrails
+
+
+      - No product code, and no proof content for WORK-2026092701 is changed.
+
+      - No weakening of closeout, truth-check or merge controls.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026092701` is dispatched.
+    captured_at: 2026-09-27T15:18:07.565Z
+    description_sha256: 937d5763944732b5a146febc2b691a45eca37783a845ffee3b73bf8db6cad2a3
+  contract_hash: 04861dc63f8e1ae46f2750416b507ce598e022a71cf46468cfbcbc262fc03c16
