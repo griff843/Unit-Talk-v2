@@ -66,6 +66,17 @@ The acceptance test is the real Codex preflight for WORK-2026092606 run from the
 
 Measured on `063620c2dcd005396d4aa8ae6ecf2a213ae32f03` in the lane worktree: the focused suites, `pnpm test:ops`, `pnpm type-check`, eslint and the mutation battery above. `verify` re-runs `pnpm type-check` and `pnpm test` on the PR head.
 
+pnpm verify ran as the required `verify` job on PR head `81bb9ef0c`: run 36293177561, job 108548347674, conclusion success.
+
+scripts/ci/r-level-check.ts, run after merge against the exact merged diff (explicit SHAs, never `HEAD`):
+
+```
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base f2caf062f --head 0f5d48322
+Verdict: PASS
+Changed files: 20
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
