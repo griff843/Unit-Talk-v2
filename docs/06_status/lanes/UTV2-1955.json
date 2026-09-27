@@ -7,21 +7,29 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1955-closeout-proof-repair",
   "branch": "claude/utv2-1955-closeout-proof-repair",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "a172b71b60b4eb2351b6d78fc03df6397362ac21",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1664",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/WORK-2026092622/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-27T08:25:54.935Z",
-  "heartbeat_at": "2026-09-27T08:27:23.493Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-27T08:44:01.181Z",
+  "closed_at": "2026-09-27T08:44:01.181Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1955-closeout-proof-repair.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-27T08:43:59.391Z",
+      "verdict": "pass",
+      "merge_sha": "a172b71b60b4eb2351b6d78fc03df6397362ac21",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
