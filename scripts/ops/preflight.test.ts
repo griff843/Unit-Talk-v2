@@ -540,6 +540,27 @@ const runWorkChecks = async (
   return { sink, trackerCalls };
 };
 
+test('preflight declares every module-level binding above its main() invocation', () => {
+  // `main()` runs at module load and reaches runLinearChecks with no `await`
+  // first, so a top-level const/let/class declared below the invocation is
+  // still in its temporal dead zone when main() reads it. That shipped once:
+  // every WORK-### preflight crashed with
+  // `Cannot access 'WORK_ORDER_TIER_PATTERN' before initialization`, while
+  // every import-based unit test passed, because importing never runs main().
+  const lines = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8').split('\n');
+  const guard = lines.findIndex((line) => line.startsWith('if (import.meta.url === '));
+  assert.ok(guard > 0, 'the module-level main() invocation guard must exist');
+  const late = lines
+    .map((line, index) => ({ line, number: index + 1 }))
+    .slice(guard)
+    .filter(({ line }) => /^(?:export\s+)?(?:const|let|class)\s/u.test(line));
+  assert.deepEqual(
+    late.map(({ line, number }) => `${number}: ${line.slice(0, 80)}`),
+    [],
+    'declare module-level bindings above the main() invocation',
+  );
+});
+
 test('WORK-2026092622: isRepoOwnedWorkId names only the repo-minted namespace', () => {
   assert.equal(isRepoOwnedWorkId('WORK-2026092606'), true);
   for (const id of ['UTV2-1837', 'UNI-12', 'work-2026092606', 'WORK-', 'XWORK-1', 'WORK-1a']) {
