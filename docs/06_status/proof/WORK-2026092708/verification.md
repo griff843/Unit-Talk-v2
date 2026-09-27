@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092708
 
-MERGE_SHA: pending merge
+MERGE_SHA: 826f23f5be13073f07784efb27e7bf76fa15006c
 
 Issue: WORK-2026092708
 Tier: T2
@@ -75,5 +75,5 @@ containment placeholders. Evidence 1 is a governed read-only SQL read of the sam
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `826f23f5be13073f07784efb27e7bf76fa15006c`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1674
