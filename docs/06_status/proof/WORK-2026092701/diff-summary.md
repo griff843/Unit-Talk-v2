@@ -12,5 +12,5 @@ Not changed: `packages/observability`, the worker, any delivery path, the monito
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: a6677a96ff9f70a435b142fb347878f0e07a59b8
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1666

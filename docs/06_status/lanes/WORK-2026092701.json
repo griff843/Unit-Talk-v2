@@ -22,14 +22,22 @@
     "docs/06_status/proof/WORK-2026092701/evidence.json",
     "docs/06_status/proof/WORK-2026092701/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-09-27T14:15:27.486Z",
-  "heartbeat_at": "2026-09-27T15:18:38.068Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-27T16:39:42.224Z",
+  "closed_at": "2026-09-27T16:39:42.224Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092701-pipeline-health-deployed-worker.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-27T16:39:40.379Z",
+      "verdict": "pass",
+      "merge_sha": "a6677a96ff9f70a435b142fb347878f0e07a59b8",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092701
 
-MERGE_SHA: 47b6af7e2e19a57b4df2367962fb9f71cdf7eecf
+MERGE_SHA: a6677a96ff9f70a435b142fb347878f0e07a59b8
 
 Issue: WORK-2026092701
 Tier: T2
@@ -100,5 +100,5 @@ substitutes a governed read-only SQL read of the same inputs.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `a6677a96ff9f70a435b142fb347878f0e07a59b8`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1666
