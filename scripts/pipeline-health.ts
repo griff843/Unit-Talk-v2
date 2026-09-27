@@ -4,6 +4,14 @@ import { resolveTargetRegistry } from '@unit-talk/contracts'
 import { evaluateQueueHealth, evaluateSlo } from '@unit-talk/observability'
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import fs from 'node:fs'
+import {
+  countByTarget,
+  formatTargetCounts,
+  partitionHeldPendingRows,
+  partitionUnclaimableProcessing,
+  resolveDeployedWorkerTargets,
+  type KillSwitchRow,
+} from './ops/pipeline-health-classification.js'
 
 const args = process.argv.slice(2)
 const jsonFlagIdx = args.indexOf('--output-json')
@@ -15,10 +23,29 @@ const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 if (!url || !key) { console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
 
 const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
-const workerTargets = (env.UNIT_TALK_DISTRIBUTION_TARGETS?.trim() || 'discord:canary')
-  .split(',')
-  .map((target) => target.trim())
-  .filter(Boolean)
+// WORK-2026092701: liveness and target resolution share one heartbeat window.
+const HEARTBEAT_WINDOW_MINUTES = 10
+
+async function main() {
+const now = new Date()
+
+// ── 0. Which worker is deployed ───────────────────────────────────────────
+// The running worker records the targets it polls on each heartbeat. Judge the
+// queue against that worker, not against a default that is not deployed.
+const { data: heartbeats, error: heartbeatErr } = await db
+  .from('system_runs')
+  .select('id, status, started_at, finished_at, run_type, details')
+  .eq('run_type', 'worker.heartbeat')
+  .order('started_at', { ascending: false })
+  .limit(10)
+if (heartbeatErr) console.error('heartbeat query failed:', heartbeatErr.message)
+const resolvedWorker = resolveDeployedWorkerTargets({
+  heartbeats: heartbeats ?? [],
+  envTargets: env.UNIT_TALK_DISTRIBUTION_TARGETS,
+  now,
+  maxHeartbeatAgeMinutes: HEARTBEAT_WINDOW_MINUTES,
+})
+const workerTargets = resolvedWorker.targets
 const targetMismatches = resolveTargetRegistry(env)
   .filter((entry) => entry.enabled)
   .map((entry) => ({
@@ -28,8 +55,12 @@ const targetMismatches = resolveTargetRegistry(env)
   }))
   .filter((entry) => !workerTargets.includes(entry.requiredWorkerTarget))
 
-async function main() {
-const now = new Date()
+// The live kill switch the worker consults before delivering. null = unreadable,
+// in which case no row is treated as held (fail closed).
+const { data: killSwitchData, error: killSwitchErr } = await db
+  .from('delivery_kill_switch')
+  .select('target, killed')
+const killSwitchRows: KillSwitchRow[] | null = killSwitchErr ? null : (killSwitchData ?? [])
 
 function ageMin(ts: string) { return Math.round((now.getTime() - new Date(ts).getTime()) / 60000) }
 function ageFmt(ts: string) { const m = ageMin(ts); return m < 60 ? `${m}m` : `${Math.round(m/60*10)/10}h` }
@@ -83,7 +114,17 @@ const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
 const allDeadLetter = rows.filter(r => r.status === 'dead_letter')
 const governanceBrake = allDeadLetter.filter(isGovernanceBrakeDeadLetter)
 const trueDeadLetter = allDeadLetter.filter(r => !isGovernanceBrakeDeadLetter(r))
-const queueEvaluationRows = rows.filter(r => !isGovernanceBrakeDeadLetter(r))
+// Rows held by the kill switch and processing rows no deployed worker can claim
+// are reported below as warnings; they are not evidence of a stranded queue or a
+// stuck worker, and are kept out of the rows evaluateQueueHealth judges.
+const { held: heldPending, rest: notHeld } = partitionHeldPendingRows(
+  rows.filter(r => !isGovernanceBrakeDeadLetter(r)),
+  killSwitchRows,
+  workerTargets,
+)
+const { unclaimable: unclaimableProcessing, rest: queueEvaluationRows } =
+  partitionUnclaimableProcessing(notHeld, workerTargets)
+const heldIds = new Set(heldPending.map(r => r.id))
 const queueHealth = evaluateQueueHealth({
   observedAt: now.toISOString(),
   workerTargets,
@@ -116,11 +157,13 @@ const stuckProc = rows.filter(r =>
   r.status === 'processing' && r.claimed_at &&
   ageMin(r.claimed_at) > 5
 )
-const stuckPend = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending' && ageMin(r.created_at) > 30)
+const stuckPend = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending' && !heldIds.has(r.id) && ageMin(r.created_at) > 30)
 const deferredPend = rows.filter(r => !workerTargets.includes(r.target) && r.status === 'pending' && ageMin(r.created_at) > 30)
 
 console.log('\n╔══ STUCK ROWS ═══════════════════════════════════════════════')
-console.log(`  Worker targets:     ${workerTargets.join(', ')}`)
+console.log(`  Worker targets:     ${workerTargets.join(', ') || 'UNKNOWN'} (${resolvedWorker.note})`)
+console.log(`  Held by kill switch: ${heldPending.length === 0 ? 'NONE' : formatTargetCounts(countByTarget(heldPending))}`)
+console.log(`  Unclaimable processing: ${unclaimableProcessing.length === 0 ? 'NONE' : formatTargetCounts(countByTarget(unclaimableProcessing))}`)
 console.log(`  Processing >5min:  ${stuckProc.length === 0 ? 'NONE' : stuckProc.map(r => r.id.slice(0,8)).join(', ')}`)
 console.log(`  Pending >30min:    ${stuckPend.length === 0 ? 'NONE' : stuckPend.length + ' rows, oldest=' + ageFmt(stuckPend.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0].created_at)}`)
 console.log(`  Deferred pending:   ${deferredPend.length === 0 ? 'NONE' : deferredPend.length + ' rows outside worker targets, oldest=' + ageFmt(deferredPend.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0].created_at)}`)
@@ -161,12 +204,6 @@ const { data: runs } = await db
   .eq('run_type', 'distribution.process')
   .order('started_at', { ascending: false })
   .limit(10)
-const { data: heartbeats } = await db
-  .from('system_runs')
-  .select('id, status, started_at, finished_at, run_type')
-  .eq('run_type', 'worker.heartbeat')
-  .order('started_at', { ascending: false })
-  .limit(10)
 
 console.log('\n╔══ WORKER / SYSTEM RUNS (last 10 distribution) ═════════════')
 let lastSuccessAge: number | null = null
@@ -182,7 +219,7 @@ for (const r of runs ?? []) {
 if (!runs?.length) console.log('  (no distribution runs found)')
 
 const runsInWindow = (runs ?? []).filter(r => ageMin(r.started_at) <= 120)
-const heartbeatsInWindow = (heartbeats ?? []).filter(r => ageMin(r.started_at) <= 10)
+const heartbeatsInWindow = (heartbeats ?? []).filter(r => ageMin(r.started_at) <= HEARTBEAT_WINDOW_MINUTES)
 const stuckRunning = (runs ?? []).filter(r => r.status === 'running' && !r.finished_at && ageMin(r.started_at) > 5)
 const lastRun = runs?.[0]
 const lastHeartbeat = heartbeats?.[0]
@@ -197,7 +234,7 @@ console.log(`  Last successful delivery: ${queueHealth.lastSuccessfulDeliveryAt 
 
 // ── 6. Backlog age ────────────────────────────────────────────────────────
 // Computed before verdict so idle-vs-DOWN distinction can use pending count.
-const pending = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending')
+const pending = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending' && !heldIds.has(r.id))
 
 // Worker verdict
 let workerVerdict = 'HEALTHY'
@@ -290,6 +327,10 @@ if (sloReport.atRiskObjectives.length > 0) {
 console.log('\n╔══ VERDICT ══════════════════════════════════════════════════')
 const warns: string[] = []
 const criticals: string[] = []
+if (resolvedWorker.source === 'unknown') criticals.push(`deployed worker target set unknown — ${resolvedWorker.note}`)
+if (killSwitchRows === null) criticals.push(`delivery_kill_switch could not be read (${killSwitchErr?.message ?? 'unknown error'}) — no pending row was treated as held`)
+if (heldPending.length > 0) warns.push(`${heldPending.length} pending row(s) held by kill switch (${formatTargetCounts(countByTarget(heldPending))}) — release is an operator/owner decision; do not reroute or remove the row`)
+if (unclaimableProcessing.length > 0) warns.push(`${unclaimableProcessing.length} processing row(s) on targets the deployed worker does not poll (${formatTargetCounts(countByTarget(unclaimableProcessing))}) — unclaimable data hygiene, not a stuck worker`)
 if (trueDeadLetter.length > 0) criticals.push(`${trueDeadLetter.length} dead_letter rows (true failures)`)
 if (governanceBrake.length > 0) warns.push(`${governanceBrake.length} governance-class row(s) (P7A proof-pick-blocked / operator-disposition — expected, not system failures)`)
 if (failed.length > 0) warns.push(`${failed.length} failed rows`)
@@ -320,6 +361,12 @@ console.log()
 if (outputJsonPath) {
   const report = {
     checked_at: now.toISOString(),
+    worker_targets: workerTargets,
+    worker_targets_source: resolvedWorker.source,
+    worker_targets_note: resolvedWorker.note,
+    kill_switch_readable: killSwitchRows !== null,
+    outbox_held_by_kill_switch: countByTarget(heldPending),
+    outbox_unclaimable_processing: countByTarget(unclaimableProcessing),
     outbox_dead_letter_count: trueDeadLetter.length,
     outbox_governance_brake_count: governanceBrake.length,
     outbox_failed_count: failed.length,
@@ -348,7 +395,12 @@ if (outputJsonPath) {
   fs.writeFileSync(outputJsonPath, JSON.stringify(report, null, 2) + '\n')
   console.log(`JSON report written to ${outputJsonPath}`)
 }
-if (queueHealth.status === 'down' || queueHealth.silentStrandingRisk) process.exitCode = 1
+if (
+  queueHealth.status === 'down' ||
+  queueHealth.silentStrandingRisk ||
+  resolvedWorker.source === 'unknown' ||
+  killSwitchRows === null
+) process.exitCode = 1
 } // end main
 
 main().catch(e => { console.error(e); process.exit(1) })
