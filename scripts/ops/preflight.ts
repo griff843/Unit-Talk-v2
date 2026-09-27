@@ -1120,6 +1120,169 @@ function runGateEquivalentChecks(
   void headSha;
 }
 
+/** Repo-minted work identity: no tracker issue exists by this name. */
+export function isRepoOwnedWorkId(issueId: string): boolean {
+  return /^WORK-\d+$/.test(issueId);
+}
+
+/** Returns the work order's committed text, or `null` when it is not committed. */
+export type WorkOrderReader = (issueId: string) => string | null;
+
+/**
+ * The work order as committed at HEAD -- never the working copy. An untracked
+ * or uncommitted file is a local draft, not a repo-owned contract.
+ */
+export function readCommittedWorkOrder(issueId: string): string | null {
+  const result = git(['show', `HEAD:.ops/work/${issueId}.md`]);
+  return result.ok ? result.stdout : null;
+}
+
+const WORK_ORDER_TIER_PATTERN = /^Tier:\s*(T[123])\b/mu;
+
+function acceptanceCriteriaBody(workOrder: string): string {
+  const match = workOrder.match(/^## Acceptance Criteria[ \t]*\n([\s\S]*?)(?=^## |(?![\s\S]))/mu);
+  return match ? match[1] : '';
+}
+
+/**
+ * PE2's mechanical floor, shared by every path that has no tracker tier label
+ * to read. The floor can refuse a declared tier; it never sets or lowers one.
+ */
+function checkMechanicalFloor(
+  tier: LaneTier,
+  candidateFiles: string[],
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
+  context: string,
+): LaneTier {
+  const { mechanicalMinimum, matches } = classifyMechanicalMinimum(candidateFiles);
+  if (maxTier(tier, mechanicalMinimum) !== tier) {
+    const offending = matches
+      .map((match) => match.path)
+      .slice(0, 5)
+      .join(', ');
+    addCheck(
+      'PE2',
+      'fail',
+      `${context}, and declared --tier ${tier} is below the mechanical floor ` +
+        `${mechanicalMinimum} implied by the declared file scope (${offending}). ` +
+        'A tier is never lowered to avoid tracker bookkeeping.',
+    );
+  } else {
+    addCheck(
+      'PE2',
+      'skip',
+      `${context}; tracker checks are optional and non-blocking. ` +
+        `Declared --tier ${tier} satisfies the mechanical floor ${mechanicalMinimum}.`,
+    );
+  }
+  return mechanicalMinimum;
+}
+
+const TERMINAL_MANIFEST_STATUSES = new Set(['done', 'superseded', 'cancelled', 'failed']);
+
+/**
+ * WORK-2026092622: the tracker checks' repo-owned equivalents. Each tracker
+ * question has a repository answer, so none is skipped:
+ * PL1 the contract exists and is committed; PL2 its tier equals --tier;
+ * PL3 it is startable (or, on readmission, not terminal); PL4 it states
+ * acceptance criteria; PL5/PL6 are the same manifest checks a tracker lane gets.
+ */
+export function runRepoOwnedWorkChecks(
+  issueId: string,
+  tier: LaneTier,
+  candidateFiles: string[],
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
+  readmitExistingBranch = false,
+  branch = '',
+  readWorkOrder: WorkOrderReader = readCommittedWorkOrder,
+): void {
+  const workPath = `.ops/work/${issueId}.md`;
+  const floor = checkMechanicalFloor(tier, candidateFiles, addCheck, `repo-owned identity ${issueId} has no tracker issue`);
+
+  const workOrder = readWorkOrder(issueId);
+  const heading = workOrder?.match(/^#\s+(\S+)/mu)?.[1] ?? null;
+  if (workOrder === null) {
+    addCheck('PL1', 'fail', `repo-owned work order ${workPath} is not committed at HEAD; a WORK-### identity is valid only with a committed work order`);
+  } else if (heading !== issueId) {
+    addCheck('PL1', 'fail', `${workPath} title heading names ${heading ?? '(none)'}, not ${issueId}`);
+  } else {
+    addCheck('PL1', 'pass', `repo-owned work order ${workPath} is committed at HEAD`);
+  }
+
+  const declaredTier = workOrder?.match(WORK_ORDER_TIER_PATTERN)?.[1] ?? null;
+  if (workOrder === null) {
+    addCheck('PL2', 'skip', 'PL2 skipped because the work order could not be read');
+  } else if (declaredTier === null) {
+    addCheck('PL2', 'fail', `${workPath} declares no Tier: line`);
+  } else if (declaredTier !== tier) {
+    addCheck('PL2', 'fail', `${workPath} declares Tier: ${declaredTier}, which does not match --tier ${tier}`);
+  } else {
+    addCheck('PL2', 'pass', `work order tier matches ${tier} (mechanical floor ${floor})`);
+  }
+
+  const manifest = readAllManifests().find((entry) => entry.issue_id === issueId);
+  if (readmitExistingBranch && manifest && TERMINAL_MANIFEST_STATUSES.has(manifest.status)) {
+    addCheck('PL3', 'fail', `lane ${issueId} is ${manifest.status} and cannot be readmitted`);
+  } else if (readmitExistingBranch) {
+    addCheck('PL3', 'pass', `lane ${issueId} is not terminal (${manifest?.status ?? 'no manifest'})`);
+  } else {
+    addCheck('PL3', 'pass', 'repo-owned identity has no tracker state; lane ownership is checked by PL5');
+  }
+
+  if (workOrder === null) {
+    addCheck('PL4', 'skip', 'PL4 skipped because the work order could not be read');
+  } else if (/^\s*[-*]\s+\S/mu.test(acceptanceCriteriaBody(workOrder))) {
+    addCheck('PL4', 'pass', `${workPath} states acceptance criteria`);
+  } else {
+    addCheck('PL4', 'fail', `${workPath} has no non-empty ## Acceptance Criteria section`);
+  }
+
+  runManifestOwnershipChecks(issueId, candidateFiles, addCheck, readmitExistingBranch, branch);
+}
+
+/** PL5 (active manifest owns the issue) and PL6 (file-scope overlap). */
+function runManifestOwnershipChecks(
+  issueId: string,
+  candidateFiles: string[],
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
+  readmitExistingBranch: boolean,
+  branch: string,
+): void {
+  const conflictingManifest = readAllManifests().find(
+    (manifest) => manifest.issue_id === issueId && manifest.status !== 'done',
+  );
+  if (
+    readmitExistingBranch &&
+    conflictingManifest &&
+    conflictingManifest.branch === branch
+  ) {
+    addCheck(
+      'PL5',
+      'pass',
+      `existing metadata matches readmission issue and branch (status ${conflictingManifest.status})`,
+    );
+  } else if (conflictingManifest) {
+    addCheck('PL5', 'fail', `active manifest already exists with status ${conflictingManifest.status}`);
+  } else {
+    addCheck('PL5', 'pass', 'no active manifest owns this issue');
+  }
+
+  if (candidateFiles.length === 0) {
+    addCheck('PL6', 'skip', 'PL6 skipped without candidate --files input');
+  } else {
+    const normalizedFiles = candidateFiles.map((filePath) => normalizeRepoRelativePath(filePath));
+    const overlap = readAllManifests()
+      .filter((manifest) => ['started', 'in_progress', 'in_review', 'blocked', 'reopened'].includes(manifest.status))
+      .filter((manifest) => !readmitExistingBranch || manifest.issue_id !== issueId)
+      .find((manifest) => normalizedFiles.some((filePath) => (manifest.file_scope_lock ?? []).includes(filePath)));
+    if (overlap) {
+      addCheck('PL6', 'fail', `candidate file scope overlaps with active manifest ${overlap.issue_id}`);
+    } else {
+      addCheck('PL6', 'pass', 'candidate file scope does not overlap any active manifest');
+    }
+  }
+}
+
 export async function runLinearChecks(
   issueId: string,
   tier: LaneTier,
@@ -1129,7 +1292,18 @@ export async function runLinearChecks(
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
   readmitExistingBranch = false,
   branch = '',
+  readWorkOrder: WorkOrderReader = readCommittedWorkOrder,
 ): Promise<{ labels: string[]; stateName: string }> {
+  // WORK-2026092622: a repo-minted `WORK-###` names no tracker issue, so asking
+  // the tracker about it can only answer "not found". That made PL1 fail for any
+  // executor holding a Linear credential -- the credential-free path below was
+  // the only way in. The identity is validated against its repo-owned contract
+  // instead, and the decision does not depend on which credentials are present.
+  if (isRepoOwnedWorkId(issueId)) {
+    runRepoOwnedWorkChecks(issueId, tier, candidateFiles, addCheck, readmitExistingBranch, branch, readWorkOrder);
+    return { labels: [], stateName: '' };
+  }
+
   const token = env?.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
   if (!token) {
     // Tracker independence (ratified 2026-09-05, `docs/mission/intent.md`
@@ -1151,28 +1325,7 @@ export async function runLinearChecks(
     //
     // The floor is binary (T1 or T3) and blind to semantic risk, so it is
     // used ONLY to refuse a declared tier beneath it, never to set a tier.
-    const { mechanicalMinimum, matches } = classifyMechanicalMinimum(candidateFiles);
-    const declaredMeetsFloor = maxTier(tier, mechanicalMinimum) === tier;
-    if (!declaredMeetsFloor) {
-      const offending = matches
-        .map((match) => match.path)
-        .slice(0, 5)
-        .join(', ');
-      addCheck(
-        'PE2',
-        'fail',
-        `no tracker credential, and declared --tier ${tier} is below the mechanical floor ` +
-          `${mechanicalMinimum} implied by the declared file scope (${offending}). ` +
-          'A tier is never lowered to avoid tracker bookkeeping.',
-      );
-    } else {
-      addCheck(
-        'PE2',
-        'skip',
-        'no tracker credential; tracker checks are optional and non-blocking. ' +
-          `Declared --tier ${tier} satisfies the mechanical floor ${mechanicalMinimum}.`,
-      );
-    }
+    const mechanicalMinimum = checkMechanicalFloor(tier, candidateFiles, addCheck, 'no tracker credential');
     addCheck('PL1', 'skip', 'PL1 skipped: no tracker credential');
     addCheck('PL2', 'skip', `PL2 skipped: no tracker credential; --tier ${tier} stands above floor ${mechanicalMinimum}`);
     addCheck('PL3', 'skip', 'PL3 skipped: no tracker credential');
@@ -1239,39 +1392,7 @@ export async function runLinearChecks(
     addCheck('PL4', 'fail', 'issue description is empty');
   }
 
-  const conflictingManifest = readAllManifests().find(
-    (manifest) => manifest.issue_id === issueId && manifest.status !== 'done',
-  );
-  if (
-    readmitExistingBranch &&
-    conflictingManifest &&
-    conflictingManifest.branch === branch
-  ) {
-    addCheck(
-      'PL5',
-      'pass',
-      `existing metadata matches readmission issue and branch (status ${conflictingManifest.status})`,
-    );
-  } else if (conflictingManifest) {
-    addCheck('PL5', 'fail', `active manifest already exists with status ${conflictingManifest.status}`);
-  } else {
-    addCheck('PL5', 'pass', 'no active manifest owns this issue');
-  }
-
-  if (candidateFiles.length === 0) {
-    addCheck('PL6', 'skip', 'PL6 skipped without candidate --files input');
-  } else {
-    const normalizedFiles = candidateFiles.map((filePath) => normalizeRepoRelativePath(filePath));
-    const overlap = readAllManifests()
-      .filter((manifest) => ['started', 'in_progress', 'in_review', 'blocked', 'reopened'].includes(manifest.status))
-      .filter((manifest) => !readmitExistingBranch || manifest.issue_id !== issueId)
-      .find((manifest) => normalizedFiles.some((filePath) => (manifest.file_scope_lock ?? []).includes(filePath)));
-    if (overlap) {
-      addCheck('PL6', 'fail', `candidate file scope overlaps with active manifest ${overlap.issue_id}`);
-    } else {
-      addCheck('PL6', 'pass', 'candidate file scope does not overlap any active manifest');
-    }
-  }
+  runManifestOwnershipChecks(issueId, candidateFiles, addCheck, readmitExistingBranch, branch);
 
   return { labels, stateName };
 }
@@ -1653,10 +1774,14 @@ function parsePorcelainPaths(stdout: string): string[] {
     });
 }
 
-function isLaneRegistryPath(repoRelativePath: string): boolean {
+// WORK-2026092622: a repo-minted `WORK-###` lane writes the same two registry
+// files as a `UTV2-###` lane, so both namespaces are control-plane dirt. A work
+// order under `.ops/work/` is deliberately NOT: it is the lane's contract and
+// belongs in the repository, so an untracked one still fails PG2.
+export function isLaneRegistryPath(repoRelativePath: string): boolean {
   return (
-    /^\.ops\/sync\/UTV2-\d+\.yml$/.test(repoRelativePath) ||
-    /^docs\/06_status\/lanes\/UTV2-\d+\.json$/.test(repoRelativePath)
+    /^\.ops\/sync\/(?:UTV2|WORK)-\d+\.yml$/.test(repoRelativePath) ||
+    /^docs\/06_status\/lanes\/(?:UTV2|WORK)-\d+\.json$/.test(repoRelativePath)
   );
 }
 

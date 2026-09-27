@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092622",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "063620c2dcd005396d4aa8ae6ecf2a213ae32f03",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "063620c2dcd005396d4aa8ae6ecf2a213ae32f03 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-27T04:02:32Z"
+  },
+  "what_this_lane_delivers": {
+    "defect": "Codex governed preflight for WORK-2026092606 failed PL1 (Linear issue not found) because an executor holding a Linear credential sent a repo-minted identity to the tracker, and PG2 because ten work orders were untracked in the root checkout.",
+    "repair": "A WORK-### identity is validated against its committed work order (PL1-PL4) and never reaches the tracker; PL5/PL6 still run; WORK registry files are control-plane dirt as UTV2 ones are; the ten work orders are committed.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "focused_suites": {
+      "pass": 161,
+      "fail": 0
+    },
+    "test_ops": {
+      "pass": 3482,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "lint": "pass",
+    "mutation_battery": [
+      {
+        "id": "MA",
+        "mutation": "runLinearChecks WORK branch disabled",
+        "observed": "red (8 tests)"
+      },
+      {
+        "id": "MB",
+        "mutation": "lane-registry pattern UTV2-only",
+        "observed": "red (1)"
+      },
+      {
+        "id": "MC",
+        "mutation": "work order read from working copy",
+        "observed": "red (1)"
+      },
+      {
+        "id": "MD",
+        "mutation": "PL4 always passes",
+        "observed": "red (1)"
+      },
+      {
+        "id": "ME",
+        "mutation": "fetchLinearTaskSource WORK guard removed",
+        "observed": "red (1)"
+      },
+      {
+        "id": "MF",
+        "mutation": "PL2 tier equality removed",
+        "observed": "red (1)"
+      }
+    ],
+    "real_input_probe": {
+      "identity": "WORK-2026092606",
+      "linear_credential_present": true,
+      "tracker_calls": 0,
+      "pl1_to_pl6": "pass"
+    }
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1663"
+}
