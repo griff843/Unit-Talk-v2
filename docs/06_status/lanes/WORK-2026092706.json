@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092706-staging-ci-serialize",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1671",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
@@ -24,7 +24,7 @@
     "docs/06_status/proof/WORK-2026092706/evidence.json",
     "docs/06_status/proof/WORK-2026092706/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-27T17:22:00.941Z",
   "heartbeat_at": "2026-09-27T17:22:00.941Z",
   "closed_at": null,
