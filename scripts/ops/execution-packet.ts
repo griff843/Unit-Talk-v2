@@ -1350,6 +1350,15 @@ export function fetchLinearTaskSource(
   token: string,
   runner: LinearFetchRunner = spawnSync,
 ): LinearTaskSource {
+  // WORK-2026092622: a repo-minted identity names no tracker issue, so the only
+  // answer Linear can give is "Entity not found". Name the missing work order
+  // instead of spending a network call to report a misleading error.
+  if (/^WORK-\d+$/u.test(issueId)) {
+    throw new Error(
+      `${issueId} is a repo-owned identity with no tracker issue; its task contract is ` +
+        `${relativeWorkPath(issueId)}, which was not found`,
+    );
+  }
   if (!token.trim()) {
     throw new Error(
       `LINEAR_API_TOKEN or LINEAR_API_KEY is required to capture the task contract for ${issueId}`,

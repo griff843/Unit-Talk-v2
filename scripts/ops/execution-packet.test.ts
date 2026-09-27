@@ -2989,3 +2989,30 @@ test('UTV2-1837 AC4 inversion: with no local work order the tracker is still con
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('WORK-2026092622: a repo-owned identity never reaches the tracker for its task contract', () => {
+  let calls = 0;
+  const runner = (() => {
+    calls += 1;
+    return { status: 0, stdout: '{}', stderr: '', error: undefined };
+  }) as typeof spawnSync;
+
+  assert.throws(
+    () => fetchLinearTaskSource('WORK-2026099901', 'lin_api_present', runner),
+    /WORK-2026099901 is a repo-owned identity with no tracker issue; its task contract is \.ops\/work\/WORK-2026099901\.md/u,
+  );
+  assert.equal(calls, 0, 'a WORK identity must be refused before curl is invoked, even with a credential');
+
+  // A tracker identity still reaches the tracker exactly as before.
+  const trackerRunner = (() => {
+    calls += 1;
+    return {
+      status: 0,
+      stdout: JSON.stringify({ data: { issue: { identifier: 'UTV2-999972', title: 't', url: 'u', description: 'd' } } }),
+      stderr: '',
+      error: undefined,
+    };
+  }) as typeof spawnSync;
+  assert.equal(fetchLinearTaskSource('UTV2-999972', 'lin_api_present', trackerRunner).identifier, 'UTV2-999972');
+  assert.equal(calls, 1);
+});
