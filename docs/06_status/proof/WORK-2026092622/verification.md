@@ -10,7 +10,7 @@ Issue: WORK-2026092622
 Tier: T2
 Lane type: governance
 Branch: claude/work-2026092622-work-id-preflight-contract
-PR URL: pending
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1663
 Head SHA: 063620c2dcd005396d4aa8ae6ecf2a213ae32f03
 result: pass
 
@@ -69,5 +69,5 @@ Measured on `063620c2dcd005396d4aa8ae6ecf2a213ae32f03` in the lane worktree: the
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1663
 Execution SHA: 063620c2dcd005396d4aa8ae6ecf2a213ae32f03
