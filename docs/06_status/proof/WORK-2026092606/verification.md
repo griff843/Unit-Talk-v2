@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092606
 
-MERGE_SHA: pending merge
+MERGE_SHA: 5ea7d7689d7efefbc8020145f2faf57738ee8adf
 
 Issue: WORK-2026092606
 Tier: T2
