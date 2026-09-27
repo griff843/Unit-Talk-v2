@@ -4,10 +4,14 @@
 // packages/db/src/database.types.ts.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  resolveEffectiveSettlement,
+  type SettlementInput,
+} from '@unit-talk/domain';
 import type { Database } from '../../../../../packages/db/src/database.types.js';
 import { getDataClient } from './client';
 import { applyOperatorPickPopulation } from '../governed-population';
-import { readAuthoritativeCount } from '../query-result';
+import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 
 
 export interface SettlementOpsRow {
@@ -81,6 +85,11 @@ export interface ResultsOpsSnapshot {
   recentSettlements: SettlementOpsRow[];
   manualReview: SettlementOpsRow[];
   corrections: SettlementOpsRow[];
+  pagination: {
+    settlements: SettlementPage;
+    manualReview: SettlementPage;
+    corrections: SettlementPage;
+  };
   stuckPosted: StuckPostedPick[];
   gameResults: {
     latestSourcedAt: string | null;
@@ -89,7 +98,29 @@ export interface ResultsOpsSnapshot {
   };
 }
 
-function mapSettlementRow(row: Record<string, unknown>): SettlementOpsRow {
+export interface SettlementPage {
+  page: number;
+  pageSize: number;
+  total: number;
+  lastPage: number;
+}
+
+export interface ResultsOpsFilter {
+  settlementsPage?: number;
+  manualReviewPage?: number;
+  correctionsPage?: number;
+}
+
+export interface EffectiveSettlementTruth {
+  settlements: SettlementOpsRow[];
+  manualReview: SettlementOpsRow[];
+  corrections: SettlementOpsRow[];
+}
+
+const HISTORY_PAGE_SIZE = 1_000;
+export const SETTLEMENT_DISPLAY_PAGE_SIZE = 25;
+
+export function mapSettlementRow(row: Record<string, unknown>): SettlementOpsRow {
   return {
     id: String(row['id'] ?? ''),
     pickId: String(row['pick_id'] ?? ''),
@@ -103,6 +134,152 @@ function mapSettlementRow(row: Record<string, unknown>): SettlementOpsRow {
     settledAt: String(row['settled_at'] ?? ''),
     createdAt: String(row['created_at'] ?? ''),
     ...readClvFields(row['payload']),
+  };
+}
+
+function compareRowsDesc(
+  left: SettlementOpsRow,
+  right: SettlementOpsRow,
+  timestamp: 'settledAt' | 'createdAt',
+) {
+  return right[timestamp].localeCompare(left[timestamp]) || right.id.localeCompare(left.id);
+}
+
+function settlementInput(row: SettlementOpsRow): SettlementInput {
+  if (row.status !== 'settled' && row.status !== 'manual_review') {
+    throw new Error(`Unsupported settlement status ${row.status} on ${row.id}`);
+  }
+  return {
+    id: row.id,
+    pick_id: row.pickId,
+    status: row.status,
+    result: row.result,
+    confidence: row.confidence,
+    corrects_id: row.correctsId,
+    settled_at: row.settledAt,
+  };
+}
+
+/**
+ * Read the complete governed settlement plane before resolving current truth.
+ * A PostgREST response is capped at 1,000 rows, so every page is ordered by the
+ * immutable `(created_at, id)` tuple and the authoritative count is reconciled
+ * against the union. This reader never hands a windowed correction chain to the
+ * domain resolver.
+ */
+export async function readEffectiveSettlementTruth(
+  client: SupabaseClient<Database>,
+  options: { includeFixtures?: boolean } = {},
+): Promise<EffectiveSettlementTruth> {
+  const settlementColumns =
+    'id, pick_id, status, result, source, confidence, review_reason, settled_by, corrects_id, settled_at, created_at, payload';
+  const rows: SettlementOpsRow[] = [];
+  const seen = new Set<string>();
+  let exactTotal: number | null = null;
+
+  for (let from = 0; exactTotal === null || from < exactTotal; from += HISTORY_PAGE_SIZE) {
+    const base = client
+      .from('settlement_records')
+      .select(`${settlementColumns}, pick:picks!inner(id)`, { count: 'exact' });
+    const scoped = options.includeFixtures ? base : applyOperatorPickPopulation(base, 'pick');
+    const result = await scoped
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + HISTORY_PAGE_SIZE - 1)
+      .abortSignal(AbortSignal.timeout(8_000));
+    assertQuerySucceeded(result, 'complete settlement history');
+    const reportedTotal = readAuthoritativeCount(result, 'complete settlement history');
+    if (exactTotal !== null && reportedTotal !== exactTotal) {
+      throw new Error(`Settlement history changed during pagination (${exactTotal} -> ${reportedTotal})`);
+    }
+    exactTotal = reportedTotal;
+    for (const raw of (result.data ?? []) as Array<Record<string, unknown>>) {
+      const row = mapSettlementRow(raw);
+      if (seen.has(row.id)) throw new Error(`Duplicate settlement row ${row.id} across history pages`);
+      seen.add(row.id);
+      rows.push(row);
+    }
+    if ((result.data ?? []).length === 0) break;
+  }
+
+  if (rows.length !== exactTotal) {
+    throw new Error(`Settlement history incomplete: read ${rows.length} of ${exactTotal ?? 'unknown'} rows`);
+  }
+
+  const byPick = new Map<string, SettlementOpsRow[]>();
+  for (const row of rows) {
+    const group = byPick.get(row.pickId);
+    if (group) group.push(row);
+    else byPick.set(row.pickId, [row]);
+  }
+
+  const settlements: SettlementOpsRow[] = [];
+  for (const [pickId, history] of byPick) {
+    const ids = new Set(history.map((row) => row.id));
+    if (history.some((row) => row.correctsId !== null && !ids.has(row.correctsId))) {
+      throw new Error(`Settlement chain for ${pickId} is missing a corrected record`);
+    }
+    const children = new Map<string, SettlementOpsRow[]>();
+    for (const row of history) {
+      if (row.correctsId === null) continue;
+      const existing = children.get(row.correctsId);
+      if (existing) existing.push(row);
+      else children.set(row.correctsId, [row]);
+    }
+    if ([...children.values()].some((rowsForParent) => rowsForParent.length !== 1)) {
+      throw new Error(`Settlement chain for ${pickId} branches and has no single effective result`);
+    }
+    const visited = new Set<string>();
+    const additiveTips: SettlementOpsRow[] = [];
+    for (const root of history.filter((row) => row.correctsId === null)) {
+      const chain: SettlementOpsRow[] = [];
+      let current: SettlementOpsRow | undefined = root;
+      while (current) {
+        if (visited.has(current.id)) throw new Error(`Settlement chain for ${pickId} is circular`);
+        visited.add(current.id);
+        chain.push(current);
+        current = children.get(current.id)?.[0];
+      }
+      const resolved = resolveEffectiveSettlement(chain.map(settlementInput));
+      if (!resolved.ok || resolved.settlement.correction_depth + 1 !== chain.length) {
+        throw new Error(`Settlement chain for ${pickId} is incomplete or ambiguous`);
+      }
+      const effective = chain.find((row) => row.id === resolved.settlement.effective_record_id);
+      if (!effective) throw new Error(`Effective settlement ${resolved.settlement.effective_record_id} is unavailable`);
+      additiveTips.push(effective);
+    }
+    if (visited.size !== history.length || additiveTips.length === 0) {
+      throw new Error(`Settlement chain for ${pickId} is incomplete or has no root`);
+    }
+    // A manual-review row may be followed by a separately recorded settlement
+    // (both roots, both immutable). Each correction chain is resolved first;
+    // the newest chain tip is then the pick's current additive truth.
+    additiveTips.sort((left, right) => compareRowsDesc(left, right, 'createdAt'));
+    settlements.push(additiveTips[0]!);
+  }
+
+  settlements.sort((left, right) => compareRowsDesc(left, right, 'settledAt'));
+  const manualReview = settlements
+    .filter((row) => row.status === 'manual_review')
+    .sort((left, right) => compareRowsDesc(left, right, 'createdAt'));
+  const corrections = rows
+    .filter((row) => row.correctsId !== null)
+    .sort((left, right) => compareRowsDesc(left, right, 'createdAt'));
+  return { settlements, manualReview, corrections };
+}
+
+function normalizePage(value: unknown) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageRows<T>(rows: T[], requestedPage: unknown) {
+  const lastPage = Math.max(1, Math.ceil(rows.length / SETTLEMENT_DISPLAY_PAGE_SIZE));
+  const page = Math.min(normalizePage(requestedPage), lastPage);
+  const from = (page - 1) * SETTLEMENT_DISPLAY_PAGE_SIZE;
+  return {
+    rows: rows.slice(from, from + SETTLEMENT_DISPLAY_PAGE_SIZE),
+    pagination: { page, pageSize: SETTLEMENT_DISPLAY_PAGE_SIZE, total: rows.length, lastPage },
   };
 }
 
@@ -128,21 +305,13 @@ function readClvFields(payload: unknown): Pick<
   };
 }
 
-export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
+export async function getResultsOpsSnapshot(filter: ResultsOpsFilter = {}): Promise<ResultsOpsSnapshot> {
   const client = await getDataClient() as SupabaseClient<Database>;
   const nowMs = Date.now();
   const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
 
-  const settlementColumns =
-    'id, pick_id, status, result, source, confidence, review_reason, settled_by, corrects_id, settled_at, created_at, payload';
-
   const [
-    recentResult,
-    manualResult,
-    manualCountResult,
-    correctionsResult,
-    correctionsCountResult,
-    settled24hResult,
+    settlementTruth,
     stuckResult,
     stuckCountResult,
     deliveredAwaitingResult,
@@ -151,31 +320,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     game24hResult,
   ] =
     await Promise.all([
-      applyOperatorPickPopulation(client.from('settlement_records').select(`${settlementColumns}, pick:picks!inner(id)`), 'pick').order('settled_at', { ascending: false }).limit(50),
-      applyOperatorPickPopulation(client
-        .from('settlement_records')
-        .select(`${settlementColumns}, pick:picks!inner(id)`), 'pick')
-        .eq('status', 'manual_review')
-        .order('created_at', { ascending: false })
-        .limit(50),
-      applyOperatorPickPopulation(client
-        .from('settlement_records')
-        .select('id, pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
-        .eq('status', 'manual_review'),
-      applyOperatorPickPopulation(client
-        .from('settlement_records')
-        .select(`${settlementColumns}, pick:picks!inner(id)`), 'pick')
-        .not('corrects_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(50),
-      applyOperatorPickPopulation(client
-        .from('settlement_records')
-        .select('id, pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
-        .not('corrects_id', 'is', null),
-      applyOperatorPickPopulation(client
-        .from('settlement_records')
-        .select('id, pick:picks!inner(id)', { count: 'exact', head: true }), 'pick')
-        .gte('settled_at', dayAgo),
+      readEffectiveSettlementTruth(client),
       // Picks still lifecycle "posted" more than 24h after posting — age-based
       // proxy for "event started but never settled".
       // TODO(data-contract): join events (via pick metadata eventId) so stuck
@@ -213,26 +358,24 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     ]);
 
   for (const result of [
-    recentResult,
-    manualResult,
-    correctionsResult,
     stuckResult,
     deliveredAwaitingResult,
   ]) {
     if (result.error) throw result.error;
   }
 
-  const settled24h = readAuthoritativeCount(settled24hResult, 'settled in 24h');
-  const manualReviewOpen = readAuthoritativeCount(manualCountResult, 'manual review settlements');
-  const correctionCount = readAuthoritativeCount(correctionsCountResult, 'settlement corrections');
+  const settled24h = settlementTruth.settlements.filter((row) => row.settledAt >= dayAgo).length;
+  const manualReviewOpen = settlementTruth.manualReview.length;
+  const correctionCount = settlementTruth.corrections.length;
   const stuckPostedCount = readAuthoritativeCount(stuckCountResult, 'stuck posted picks');
   // Results-feed availability is independent of operator settlement. A provider
   // read failure must not remove the operator's own history and controls.
   const gameUnavailable = Boolean(gameLatestResult.error || game24hResult.error || game24hResult.count == null);
   const gameResults24h = gameUnavailable ? null : readAuthoritativeCount(game24hResult, 'game results in 24h');
 
-  const manualReview = ((manualResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow);
-  const corrections = ((correctionsResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow);
+  const settlementsPage = pageRows(settlementTruth.settlements, filter.settlementsPage);
+  const manualReviewPage = pageRows(settlementTruth.manualReview, filter.manualReviewPage);
+  const correctionsPage = pageRows(settlementTruth.corrections, filter.correctionsPage);
 
   const stuckPosted: StuckPostedPick[] = ((stuckResult.data ?? []) as Array<Record<string, unknown>>).map((row) => {
     const createdAt = typeof row['created_at'] === 'string' ? row['created_at'] : null;
@@ -286,9 +429,14 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
       deliveredAwaitingSettlement: readAuthoritativeCount(deliveredAwaitingCountResult, 'delivered awaiting settlement'),
     },
     deliveredAwaitingSettlement,
-    recentSettlements: ((recentResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow),
-    manualReview,
-    corrections,
+    recentSettlements: settlementsPage.rows,
+    manualReview: manualReviewPage.rows,
+    corrections: correctionsPage.rows,
+    pagination: {
+      settlements: settlementsPage.pagination,
+      manualReview: manualReviewPage.pagination,
+      corrections: correctionsPage.pagination,
+    },
     stuckPosted,
     gameResults: {
       latestSourcedAt: !gameUnavailable && typeof latestGameRow?.['sourced_at'] === 'string' ? latestGameRow['sourced_at'] : null,

@@ -1,5 +1,6 @@
 import { getDataClient, isTestFixturePick } from './client';
 import { OUTBOX_STATUSES } from './outbox';
+import { readEffectiveSettlementTruth } from './results-ops';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import {
   applyPickPopulation,
@@ -206,10 +207,10 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
   const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const awaitingApprovalStaleMs = 4 * 60 * 60 * 1000;
 
-  const [failedResult, deadLetterResult, manualReviewResult, stalePicksResult, awaitingApprovalResult, rerunCandidatesResult, providerOffersResult, bookAliasesResult, marketAliasesResult] = await Promise.all([
+  const [settlementTruth, failedResult, deadLetterResult, stalePicksResult, awaitingApprovalResult, rerunCandidatesResult, providerOffersResult, bookAliasesResult, marketAliasesResult] = await Promise.all([
+    readEffectiveSettlementTruth(client, { includeFixtures }),
     client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'failed').in('target', governedOutboxTargets).order('updated_at', { ascending: false }),
     client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'dead_letter').in('target', governedOutboxTargets).order('updated_at', { ascending: false }),
-    client.from('settlement_records').select('id, pick_id, result, status, review_reason, settled_by, created_at').eq('status', 'manual_review').order('created_at', { ascending: false }).limit(50),
     applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold), pickPopulation).order('created_at', { ascending: true }).limit(50),
     applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval'), pickPopulation).order('created_at', { ascending: true }).limit(50),
     applyPickPopulation(client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, promotion_reason, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']), pickPopulation).order('created_at', { ascending: false }).limit(50),
@@ -221,7 +222,6 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
   for (const [label, result] of [
     ['failed outbox', failedResult],
     ['dead-letter outbox', deadLetterResult],
-    ['manual-review settlements', manualReviewResult],
     ['stale picks', stalePicksResult],
     ['awaiting-approval picks', awaitingApprovalResult],
     ['promotion rerun candidates', rerunCandidatesResult],
@@ -237,7 +237,15 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
   const nowMs = Date.now();
   const deadLetter = deadLetterRows.filter((row) => !isHistoricalDeadLetter(row, nowMs));
   const historicalDeadLetter = deadLetterRows.filter((row) => isHistoricalDeadLetter(row, nowMs));
-  const manualReview = (manualReviewResult.data ?? []) as Array<JsonObject>;
+  const manualReview = settlementTruth.manualReview.map((row): JsonObject => ({
+    id: row.id,
+    pick_id: row.pickId,
+    result: row.result,
+    status: row.status,
+    review_reason: row.reviewReason,
+    settled_by: row.settledBy,
+    created_at: row.createdAt,
+  }));
 
   const stale = (await enrichPickRowsWithIdentity(client, (stalePicksResult.data ?? []) as Array<JsonObject>))
     .filter((row) => includeFixtures || !isFixtureLikePick(row));
