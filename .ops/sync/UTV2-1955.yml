@@ -1,0 +1,94 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1955
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1955
+  objective: Repair WORK-2026092622's proof so its post-merge closeout passes
+    truth-check P13/P14. Closeout run 36294864597 failed because
+    `docs/06_status/proof/WORK-2026092622/verification.md` does not literally
+    name `pnpm verify` or `scripts/ci/r-level-check.ts`.
+  acceptance_criteria:
+    - "verification.md names `pnpm verify`, citing the required `verify` job on
+      #1663 head 81bb9ef0c (run 36293177561, job 108548347674, success)."
+    - "verification.md names `scripts/ci/r-level-check.ts` with its real output
+      on the exact merged diff (`--base f2caf062f --head 0f5d48322`: PASS, 20
+      files, no rules matched)."
+    - Nothing else in 2622's bundle changes (anchor, execution SHA,
+      merge-binding rows).
+    - "After merge, WORK-2026092622 closeout is replayed via
+      post-merge-lane-close.yml workflow_dispatch (issue_id only): manifest
+      status done, closed_at set, lease released, lock on
+      scripts/ops/preflight.ts gone."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Temporary bootstrap identity (PM-approved 2026-09-27). Linear is the
+      identity source for this repair lane only; it is not restored as execution
+      authority, and WORK-2026092606 stays tracker-independent.
+    - >-
+      Scope
+
+      Documentation/proof only:
+      `docs/06_status/proof/WORK-2026092622/verification.md`. No preflight
+      implementation changes.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1955/repair-work-2026092622-proof-name-pnpm-verify-and-scriptscir-level
+    title: "Repair WORK-2026092622 proof: name pnpm verify and
+      scripts/ci/r-level-check.ts (P13/P14)"
+    description: >-
+      Temporary bootstrap identity (PM-approved 2026-09-27). Linear is the
+      identity source for this repair lane only; it is not restored as execution
+      authority, and WORK-2026092606 stays tracker-independent.
+
+
+      ## Objective
+
+
+      Repair WORK-2026092622's proof so its post-merge closeout passes
+      truth-check P13/P14. Closeout run 36294864597 failed because
+      `docs/06_status/proof/WORK-2026092622/verification.md` does not literally
+      name `pnpm verify` or `scripts/ci/r-level-check.ts`.
+
+
+      ## Scope
+
+
+      Documentation/proof only:
+      `docs/06_status/proof/WORK-2026092622/verification.md`. No preflight
+      implementation changes.
+
+
+      ## Acceptance Criteria
+
+
+      * verification.md names `pnpm verify`, citing the required `verify` job on
+      #1663 head 81bb9ef0c (run 36293177561, job 108548347674, success).
+
+      * verification.md names `scripts/ci/r-level-check.ts` with its real output
+      on the exact merged diff (`--base f2caf062f --head 0f5d48322`: PASS, 20
+      files, no rules matched).
+
+      * Nothing else in 2622's bundle changes (anchor, execution SHA,
+      merge-binding rows).
+
+      * After merge, WORK-2026092622 closeout is replayed via
+      post-merge-lane-close.yml workflow_dispatch (issue_id only): manifest
+      status done, closed_at set, lease released, lock on
+      scripts/ops/preflight.ts gone.
+    captured_at: 2026-09-27T08:25:45.705Z
+    description_sha256: 0450f29f54de1770a55007a8874abe685cdba3dc2dbc6947f8e9df520d22837d
+  contract_hash: e859297136e19ec69f23d570dbe1516d6a0c82c373686df111f11bf6ca6f2207
