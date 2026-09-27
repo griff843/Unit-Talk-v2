@@ -170,6 +170,15 @@ const WAIVABLE_CHECKS: Record<LaneTier, Set<string>> = {
 // dead zone at that point.
 const RUN_COMMAND_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
+// Read by runRepoOwnedWorkChecks, which `main()` reaches synchronously -- there is
+// no `await` before runLinearChecks. Declared here, above the module-level
+// `main()` invocation, for the reason given for RUN_COMMAND_MAX_BUFFER_BYTES:
+// declared below it they were still in their temporal dead zone, and every
+// WORK-### preflight crashed with a ReferenceError that no import-based unit
+// test can observe. The structural test in preflight.test.ts pins the rule.
+const WORK_ORDER_TIER_PATTERN = /^Tier:\s*(T[123])\b/mu;
+const TERMINAL_MANIFEST_STATUSES = new Set(['done', 'superseded', 'cancelled', 'failed']);
+
 // Slot ownership, liveness, reclaim and the operator view all live in
 // scripts/ops/verify-semaphore.ts (UTV2-1594). Preflight is a consumer of that
 // module, not a second implementation of it: the original inline version could
@@ -1137,8 +1146,6 @@ export function readCommittedWorkOrder(issueId: string): string | null {
   return result.ok ? result.stdout : null;
 }
 
-const WORK_ORDER_TIER_PATTERN = /^Tier:\s*(T[123])\b/mu;
-
 function acceptanceCriteriaBody(workOrder: string): string {
   const match = workOrder.match(/^## Acceptance Criteria[ \t]*\n([\s\S]*?)(?=^## |(?![\s\S]))/mu);
   return match ? match[1] : '';
@@ -1177,8 +1184,6 @@ function checkMechanicalFloor(
   }
   return mechanicalMinimum;
 }
-
-const TERMINAL_MANIFEST_STATUSES = new Set(['done', 'superseded', 'cancelled', 'failed']);
 
 /**
  * WORK-2026092622: the tracker checks' repo-owned equivalents. Each tracker

@@ -1,0 +1,98 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1956
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1956
+  objective: "Repair the WORK-\\* preflight crash introduced by #1663:
+    `ReferenceError: Cannot access 'WORK_ORDER_TIER_PATTERN' before
+    initialization`. `scripts/ops/preflight.ts` invokes `main()` at module
+    level, and `main()` reaches `runRepoOwnedWorkChecks` synchronously, before
+    two module constants declared below the invocation are initialized. Every
+    WORK-\\* preflight on main crashes. UTV2-\\* preflight is unaffected."
+  acceptance_criteria:
+    - "`WORK_ORDER_TIER_PATTERN` and `TERMINAL_MANIFEST_STATUSES` are declared
+      above the module-level `main()` invocation; no logic changes."
+    - A structural test fails if any module-level const/let/class is declared
+      below the `main()` invocation, and it is red on the unfixed code.
+    - The REAL Codex preflight for WORK-2026092606 (`pnpm -s ops:preflight
+      WORK-2026092606 --tier T2 --branch
+      codex/work-2026092606-cc-settlement-truth --json`, Linear credential
+      present) makes zero tracker calls, passes PL1-PL6, and passes PG2 from the
+      root checkout.
+    - Baseline `pnpm type-check` and `pnpm test` pass.
+    - No change to PG2, PL5/PL6, scope locking, tier rules, P0, proof
+      requirements, branch discipline or merge controls. No forged or copied
+      token, no break-glass.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Temporary bootstrap identity (PM-approved 2026-09-27). Linear is the
+      identity source for this repair lane only; it is not restored as execution
+      authority, and WORK-2026092606 stays tracker-independent.
+    - |-
+      Scope
+      `scripts/ops/preflight.ts` and `scripts/ops/preflight.test.ts` only.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1956/repair-the-work-preflight-crash-declare-check-constants-above-the-main
+    title: "Repair the WORK-* preflight crash: declare check constants above the
+      main() invocation"
+    description: >-
+      Temporary bootstrap identity (PM-approved 2026-09-27). Linear is the
+      identity source for this repair lane only; it is not restored as execution
+      authority, and WORK-2026092606 stays tracker-independent.
+
+
+      ## Objective
+
+
+      Repair the WORK-\* preflight crash introduced by #1663: `ReferenceError:
+      Cannot access 'WORK_ORDER_TIER_PATTERN' before initialization`.
+      `scripts/ops/preflight.ts` invokes `main()` at module level, and `main()`
+      reaches `runRepoOwnedWorkChecks` synchronously, before two module
+      constants declared below the invocation are initialized. Every WORK-\*
+      preflight on main crashes. UTV2-\* preflight is unaffected.
+
+
+      ## Scope
+
+
+      `scripts/ops/preflight.ts` and `scripts/ops/preflight.test.ts` only.
+
+
+      ## Acceptance Criteria
+
+
+      * `WORK_ORDER_TIER_PATTERN` and `TERMINAL_MANIFEST_STATUSES` are declared
+      above the module-level `main()` invocation; no logic changes.
+
+      * A structural test fails if any module-level const/let/class is declared
+      below the `main()` invocation, and it is red on the unfixed code.
+
+      * The REAL Codex preflight for WORK-2026092606 (`pnpm -s ops:preflight
+      WORK-2026092606 --tier T2 --branch
+      codex/work-2026092606-cc-settlement-truth --json`, Linear credential
+      present) makes zero tracker calls, passes PL1-PL6, and passes PG2 from the
+      root checkout.
+
+      * Baseline `pnpm type-check` and `pnpm test` pass.
+
+      * No change to PG2, PL5/PL6, scope locking, tier rules, P0, proof
+      requirements, branch discipline or merge controls. No forged or copied
+      token, no break-glass.
+    captured_at: 2026-09-27T10:34:20.841Z
+    description_sha256: 5c284d030f89384c66bfd145bf2a2729db6abf7a3e8a90496757edceccb2ec0a
+  contract_hash: 8e1b17c550fd2a243490fe397b611db1c6542255821534310a495e67b4409f09
