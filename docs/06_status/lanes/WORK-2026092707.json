@@ -8,14 +8,14 @@
   "branch": "claude/work-2026092707-plan-reconcile",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1673",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026092707.md",
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-27T18:41:58.841Z",
   "heartbeat_at": "2026-09-27T18:41:58.841Z",
   "closed_at": null,
