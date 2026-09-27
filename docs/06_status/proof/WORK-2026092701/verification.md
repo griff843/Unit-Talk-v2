@@ -89,4 +89,4 @@ substitutes a governed read-only SQL read of the same inputs.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1666
