@@ -18,17 +18,27 @@ test('operations home counts real operator states and reads bounded lifecycle ac
     const params = url.searchParams;
     const lifecycle = url.pathname.endsWith('/pick_lifecycle');
     const settlements = url.pathname.endsWith('/settlement_records');
+    const currentReviewCandidates =
+      url.pathname.endsWith('/picks_current_state') &&
+      params.get('settlement_status') === 'eq.manual_review';
     const prefix = lifecycle ? 'pick.' : '';
+    if (currentReviewCandidates) {
+      assert.equal(params.get('metadata->distributionMode'), 'not.is.null');
+      assert.equal(params.get('order'), 'id.asc');
+      assert.equal(params.get('limit'), '250');
+      return Response.json([{ id: 'review-pick' }], {
+        headers: failCount ? {} : { 'content-range': '0-0/1' },
+      });
+    }
     if (settlements) {
       assert.equal(params.get('pick.metadata->distributionMode'), 'not.is.null');
       assert.equal(params.get('order'), 'created_at.asc,id.asc');
+      assert.equal(params.get('pick_id'), 'in.(review-pick)');
       const rows = [
-        { id: 'old-review', pick_id: 'resolved-pick', status: 'manual_review', result: null, source: 'operator', confidence: 'pending', review_reason: 'review', settled_by: 'operator', corrects_id: null, settled_at: '2026-09-20T00:00:00Z', created_at: '2026-09-20T00:00:00Z', payload: {} },
-        { id: 'resolved', pick_id: 'resolved-pick', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', review_reason: null, settled_by: 'operator', corrects_id: null, settled_at: '2026-09-21T00:00:00Z', created_at: '2026-09-21T00:00:00Z', payload: {} },
         { id: 'old-settlement', pick_id: 'review-pick', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', review_reason: null, settled_by: 'operator', corrects_id: null, settled_at: '2026-09-22T00:00:00Z', created_at: '2026-09-22T00:00:00Z', payload: {} },
         { id: 'current-review', pick_id: 'review-pick', status: 'manual_review', result: null, source: 'operator', confidence: 'pending', review_reason: 'review', settled_by: 'operator', corrects_id: 'old-settlement', settled_at: '2026-09-23T00:00:00Z', created_at: '2026-09-23T00:00:00Z', payload: {} },
       ];
-      return Response.json(rows, { headers: failCount ? {} : { 'content-range': '0-3/4' } });
+      return Response.json(rows, { headers: failCount ? {} : { 'content-range': '0-1/2' } });
     }
     assert.equal(params.get(`${prefix}metadata->distributionMode`), 'not.is.null');
     for (const key of ['testRun', 'proof_issue', 'proof_fixture_id', 'proof_script', 'test_key']) assert.equal(params.get(`${prefix}metadata->>${key}`), 'is.null');
@@ -110,10 +120,28 @@ test('Settlement, Exceptions, overview, and dashboard agree on effective manual-
     const table = url.pathname.split('/').at(-1);
     const select = url.searchParams.get('select') ?? '';
     if (table === 'settlement_records') {
+      const pickFilter = url.searchParams.get('pick_id');
+      if (pickFilter === 'in.(open-review-pick)') {
+        const currentRows = rows.filter((row) => row.pick_id === 'open-review-pick');
+        return Response.json(currentRows, { headers: { 'content-range': '0-1/2' } });
+      }
+      if (pickFilter !== null) {
+        assert.equal(pickFilter, 'in.(resolved-pick,open-review-pick)');
+        return Response.json(rows);
+      }
       if (select.includes('pick:picks!inner')) {
         return Response.json(rows, { headers: { 'content-range': '0-3/4' } });
       }
       return Response.json(rows);
+    }
+    if (
+      table === 'picks_current_state' &&
+      url.searchParams.get('settlement_status') === 'eq.manual_review'
+    ) {
+      assert.equal(url.searchParams.get('order'), 'id.asc');
+      return Response.json([{ id: 'open-review-pick' }], {
+        headers: { 'content-range': '0-0/1' },
+      });
     }
     if (request.method === 'HEAD') return new Response(null, { headers: { 'content-range': '*/0' } });
     return Response.json([]);

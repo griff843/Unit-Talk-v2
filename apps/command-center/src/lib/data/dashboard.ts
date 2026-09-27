@@ -56,6 +56,17 @@ function asStringOrNull(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
 }
 
+export function settlementRowHasClv(row: Record<string, unknown>): boolean {
+  if (typeof row['clvRaw'] === 'number' || typeof row['clvPercent'] === 'number') {
+    return true;
+  }
+  const payload = readJsonObject(row['payload']);
+  return (
+    typeof payload?.['clvRaw'] === 'number' ||
+    typeof payload?.['clvPercent'] === 'number'
+  );
+}
+
 function asNumberOrNull(v: unknown): number | null {
   return typeof v === 'number' ? v : null;
 }
@@ -343,13 +354,7 @@ function buildIntelligenceSummary(
       : typeof metadata?.['edgeSource'] === 'string'
         ? metadata['edgeSource']
         : null;
-  const clv = settlementRows.some((row) => {
-    const payload = readJsonObject(row['payload']);
-    return (
-      typeof payload?.['clvRaw'] === 'number' ||
-      typeof payload?.['clvPercent'] === 'number'
-    );
-  });
+  const clv = settlementRows.some(settlementRowHasClv);
 
   return {
     domainAnalysis: domainAnalysis !== null,

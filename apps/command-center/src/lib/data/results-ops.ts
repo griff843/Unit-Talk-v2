@@ -26,11 +26,13 @@ export interface SettlementOpsRow {
   correctsId: string | null;
   settledAt: string;
   createdAt: string;
+  payload: Record<string, unknown>;
   /**
    * CLV fields unpacked from settlement_records.payload. All are null today —
    * closing-line capture depends on a provider that is deliberately off — and the
    * surface renders that absence explicitly rather than as a dash.
    */
+  clvRaw: number | null;
   clvPercent: number | null;
   beatsClosingLine: boolean | null;
   isOpeningLineFallback: boolean | null;
@@ -118,9 +120,20 @@ export interface EffectiveSettlementTruth {
 }
 
 const HISTORY_PAGE_SIZE = 1_000;
+const CURRENT_REVIEW_PAGE_SIZE = 250;
+const CURRENT_REVIEW_HISTORY_BATCH_SIZE = 100;
+const SETTLEMENT_COLUMNS =
+  'id, pick_id, status, result, source, confidence, review_reason, settled_by, corrects_id, settled_at, created_at, payload';
 export const SETTLEMENT_DISPLAY_PAGE_SIZE = 25;
 
+function settlementPayload(payload: unknown): Record<string, unknown> {
+  return payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+    ? (payload as Record<string, unknown>)
+    : {};
+}
+
 export function mapSettlementRow(row: Record<string, unknown>): SettlementOpsRow {
+  const payload = settlementPayload(row['payload']);
   return {
     id: String(row['id'] ?? ''),
     pickId: String(row['pick_id'] ?? ''),
@@ -133,8 +146,53 @@ export function mapSettlementRow(row: Record<string, unknown>): SettlementOpsRow
     correctsId: typeof row['corrects_id'] === 'string' ? row['corrects_id'] : null,
     settledAt: String(row['settled_at'] ?? ''),
     createdAt: String(row['created_at'] ?? ''),
-    ...readClvFields(row['payload']),
+    payload,
+    ...readClvFields(payload),
   };
+}
+
+async function readCompleteSettlementRows(
+  client: SupabaseClient<Database>,
+  options: {
+    includeFixtures?: boolean;
+    pickIds?: string[];
+    label: string;
+  },
+): Promise<SettlementOpsRow[]> {
+  const rows: SettlementOpsRow[] = [];
+  const seen = new Set<string>();
+  let exactTotal: number | null = null;
+
+  for (let from = 0; exactTotal === null || from < exactTotal; from += HISTORY_PAGE_SIZE) {
+    const base = client
+      .from('settlement_records')
+      .select(`${SETTLEMENT_COLUMNS}, pick:picks!inner(id)`, { count: 'exact' });
+    const governed = options.includeFixtures ? base : applyOperatorPickPopulation(base, 'pick');
+    const filtered = options.pickIds ? governed.in('pick_id', options.pickIds) : governed;
+    const result = await filtered
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + HISTORY_PAGE_SIZE - 1)
+      .abortSignal(AbortSignal.timeout(8_000));
+    assertQuerySucceeded(result, options.label);
+    const reportedTotal = readAuthoritativeCount(result, options.label);
+    if (exactTotal !== null && reportedTotal !== exactTotal) {
+      throw new Error(`${options.label} changed during pagination (${exactTotal} -> ${reportedTotal})`);
+    }
+    exactTotal = reportedTotal;
+    for (const raw of (result.data ?? []) as Array<Record<string, unknown>>) {
+      const row = mapSettlementRow(raw);
+      if (seen.has(row.id)) throw new Error(`Duplicate settlement row ${row.id} across history pages`);
+      seen.add(row.id);
+      rows.push(row);
+    }
+    if ((result.data ?? []).length === 0) break;
+  }
+
+  if (rows.length !== exactTotal) {
+    throw new Error(`${options.label} incomplete: read ${rows.length} of ${exactTotal ?? 'unknown'} rows`);
+  }
+  return rows;
 }
 
 function compareRowsDesc(
@@ -161,51 +219,10 @@ function settlementInput(row: SettlementOpsRow): SettlementInput {
 }
 
 /**
- * Read the complete governed settlement plane before resolving current truth.
- * A PostgREST response is capped at 1,000 rows, so every page is ordered by the
- * immutable `(created_at, id)` tuple and the authoritative count is reconciled
- * against the union. This reader never hands a windowed correction chain to the
- * domain resolver.
+ * Resolve only complete per-pick histories. Callers are responsible for
+ * loading every row for each included pick before entering this function.
  */
-export async function readEffectiveSettlementTruth(
-  client: SupabaseClient<Database>,
-  options: { includeFixtures?: boolean } = {},
-): Promise<EffectiveSettlementTruth> {
-  const settlementColumns =
-    'id, pick_id, status, result, source, confidence, review_reason, settled_by, corrects_id, settled_at, created_at, payload';
-  const rows: SettlementOpsRow[] = [];
-  const seen = new Set<string>();
-  let exactTotal: number | null = null;
-
-  for (let from = 0; exactTotal === null || from < exactTotal; from += HISTORY_PAGE_SIZE) {
-    const base = client
-      .from('settlement_records')
-      .select(`${settlementColumns}, pick:picks!inner(id)`, { count: 'exact' });
-    const scoped = options.includeFixtures ? base : applyOperatorPickPopulation(base, 'pick');
-    const result = await scoped
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .range(from, from + HISTORY_PAGE_SIZE - 1)
-      .abortSignal(AbortSignal.timeout(8_000));
-    assertQuerySucceeded(result, 'complete settlement history');
-    const reportedTotal = readAuthoritativeCount(result, 'complete settlement history');
-    if (exactTotal !== null && reportedTotal !== exactTotal) {
-      throw new Error(`Settlement history changed during pagination (${exactTotal} -> ${reportedTotal})`);
-    }
-    exactTotal = reportedTotal;
-    for (const raw of (result.data ?? []) as Array<Record<string, unknown>>) {
-      const row = mapSettlementRow(raw);
-      if (seen.has(row.id)) throw new Error(`Duplicate settlement row ${row.id} across history pages`);
-      seen.add(row.id);
-      rows.push(row);
-    }
-    if ((result.data ?? []).length === 0) break;
-  }
-
-  if (rows.length !== exactTotal) {
-    throw new Error(`Settlement history incomplete: read ${rows.length} of ${exactTotal ?? 'unknown'} rows`);
-  }
-
+function resolveSettlementRows(rows: SettlementOpsRow[]): EffectiveSettlementTruth {
   const byPick = new Map<string, SettlementOpsRow[]>();
   for (const row of rows) {
     const group = byPick.get(row.pickId);
@@ -268,6 +285,91 @@ export async function readEffectiveSettlementTruth(
   return { settlements, manualReview, corrections };
 }
 
+/**
+ * Resolve the full settlement plane for history and pagination surfaces. A
+ * PostgREST response is capped at 1,000 rows, so every page is ordered by the
+ * immutable `(created_at, id)` tuple and reconciled against an exact count.
+ * This reader intentionally loads every governed row because those surfaces
+ * expose exact settlement and correction totals.
+ */
+export async function readEffectiveSettlementTruth(
+  client: SupabaseClient<Database>,
+  options: { includeFixtures?: boolean } = {},
+): Promise<EffectiveSettlementTruth> {
+  const rows = await readCompleteSettlementRows(client, {
+    includeFixtures: options.includeFixtures,
+    label: 'complete settlement history',
+  });
+  return resolveSettlementRows(rows);
+}
+
+/**
+ * Read only the presently open manual-review population for overview metrics.
+ * `picks_current_state` narrows the candidate set to the newest settlement row;
+ * complete immutable histories are then loaded only for those candidates and
+ * resolved with the same fail-closed chain rules as the settlement surface.
+ * Work is therefore bounded by the current review queue, not lifetime history.
+ */
+export async function readCurrentManualReviewTruth(
+  client: SupabaseClient<Database>,
+  options: { includeFixtures?: boolean } = {},
+): Promise<SettlementOpsRow[]> {
+  const candidateIds: string[] = [];
+  const seen = new Set<string>();
+  let exactTotal: number | null = null;
+
+  for (let from = 0; exactTotal === null || from < exactTotal; from += CURRENT_REVIEW_PAGE_SIZE) {
+    const base = client
+      .from('picks_current_state')
+      .select('id', { count: 'exact' });
+    const governed = options.includeFixtures ? base : applyOperatorPickPopulation(base);
+    const result = await governed
+      .eq('settlement_status', 'manual_review')
+      .order('id', { ascending: true })
+      .range(from, from + CURRENT_REVIEW_PAGE_SIZE - 1)
+      .abortSignal(AbortSignal.timeout(8_000));
+    assertQuerySucceeded(result, 'current manual-review candidates');
+    const reportedTotal = readAuthoritativeCount(result, 'current manual-review candidates');
+    if (exactTotal !== null && reportedTotal !== exactTotal) {
+      throw new Error(`Current manual-review population changed during pagination (${exactTotal} -> ${reportedTotal})`);
+    }
+    exactTotal = reportedTotal;
+    for (const raw of (result.data ?? []) as Array<Record<string, unknown>>) {
+      const id = String(raw['id'] ?? '');
+      if (!id || seen.has(id)) throw new Error(`Invalid or duplicate current manual-review pick ${id}`);
+      seen.add(id);
+      candidateIds.push(id);
+    }
+    if ((result.data ?? []).length === 0) break;
+  }
+
+  if (candidateIds.length !== exactTotal) {
+    throw new Error(`Current manual-review candidates incomplete: read ${candidateIds.length} of ${exactTotal ?? 'unknown'} picks`);
+  }
+  if (candidateIds.length === 0) return [];
+
+  const history: SettlementOpsRow[] = [];
+  for (let index = 0; index < candidateIds.length; index += CURRENT_REVIEW_HISTORY_BATCH_SIZE) {
+    history.push(...await readCompleteSettlementRows(client, {
+      includeFixtures: options.includeFixtures,
+      pickIds: candidateIds.slice(index, index + CURRENT_REVIEW_HISTORY_BATCH_SIZE),
+      label: 'current manual-review settlement history',
+    }));
+  }
+  const truth = resolveSettlementRows(history);
+  const effectiveByPick = new Map(truth.settlements.map((row) => [row.pickId, row]));
+  for (const pickId of candidateIds) {
+    const effective = effectiveByPick.get(pickId);
+    if (!effective || effective.status !== 'manual_review') {
+      throw new Error(`Current manual-review state disagrees with effective settlement for ${pickId}`);
+    }
+  }
+  if (truth.manualReview.length !== candidateIds.length) {
+    throw new Error(`Current manual-review resolution mismatch: ${candidateIds.length} candidates, ${truth.manualReview.length} effective rows`);
+  }
+  return truth.manualReview;
+}
+
 function normalizePage(value: unknown) {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
@@ -285,18 +387,16 @@ function pageRows<T>(rows: T[], requestedPage: unknown) {
 
 function readClvFields(payload: unknown): Pick<
   SettlementOpsRow,
-  'clvPercent' | 'beatsClosingLine' | 'isOpeningLineFallback' | 'clvStatus' | 'clvUnavailableReason'
+  'clvRaw' | 'clvPercent' | 'beatsClosingLine' | 'isOpeningLineFallback' | 'clvStatus' | 'clvUnavailableReason'
 > {
-  const p =
-    payload !== null && typeof payload === 'object' && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
-      : {};
+  const p = settlementPayload(payload);
 
   const numOrNull = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   const boolOrNull = (v: unknown) => (typeof v === 'boolean' ? v : null);
   const strOrNull = (v: unknown) => (typeof v === 'string' && v.length > 0 ? v : null);
 
   return {
+    clvRaw: numOrNull(p['clvRaw']),
     clvPercent: numOrNull(p['clvPercent']),
     beatsClosingLine: boolOrNull(p['beatsClosingLine']),
     isOpeningLineFallback: boolOrNull(p['isOpeningLineFallback']),

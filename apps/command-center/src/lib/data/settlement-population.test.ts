@@ -144,3 +144,28 @@ test('settlement truth pages complete chains once and preserves one population a
     restoreDefaults();
   }
 });
+
+test('effective settlement mapping preserves CLV evidence for dashboard intelligence', async () => {
+  const [{ mapSettlementRow }, { settlementRowHasClv }] = await Promise.all([
+    import('./results-ops'),
+    import('./dashboard'),
+  ]);
+  const row = mapSettlementRow({
+    id: 'clv-correction',
+    pick_id: 'clv-pick',
+    status: 'settled',
+    result: 'win',
+    source: 'operator',
+    confidence: 'confirmed',
+    review_reason: null,
+    settled_by: 'griff843',
+    corrects_id: 'clv-root',
+    settled_at: '2026-09-27T00:00:00.000Z',
+    created_at: '2026-09-27T00:00:00.000Z',
+    payload: { clvRaw: 0.021, clvStatus: 'available' },
+  });
+
+  assert.deepEqual(row.payload, { clvRaw: 0.021, clvStatus: 'available' });
+  assert.equal(row.clvRaw, 0.021);
+  assert.equal(settlementRowHasClv(row as unknown as Record<string, unknown>), true);
+});
