@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092705
 
-MERGE_SHA: pending merge
+MERGE_SHA: f8b016cd703533bdd04bf09198a69229ec419183
 
 Issue: WORK-2026092705
 Tier: T2
@@ -74,5 +74,5 @@ same population.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `f8b016cd703533bdd04bf09198a69229ec419183`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1672
