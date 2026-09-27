@@ -78,6 +78,18 @@ pnpm type-check                                                           # exit
 pnpm exec eslint scripts/pipeline-health.ts scripts/ops/pipeline-health-classification*.ts   # exit 0
 ```
 
+pnpm verify ran as the required `verify` job on the final PR head `cbc478602`: CI run 36325879684,
+job 108640322133, conclusion success.
+
+scripts/ci/r-level-check.ts, run after merge against the exact merged diff (explicit SHAs, never `HEAD`):
+
+```
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base 83538008f --head a6677a96f
+Verdict: PASS
+Changed files: 9
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
 `pnpm test` in preflight hit one failure in `scripts/ops/verify-semaphore.test.ts` ("a killed
 process releases its slot through the signal path"), which this lane does not touch. It passed 3
 of 3 isolated reruns, so it is load-dependent.
