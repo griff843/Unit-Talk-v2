@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092704",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092704/.out/worktrees/claude__work-2026092704-complete-2701-proof",
+  "branch": "claude/work-2026092704-complete-2701-proof",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1670",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026092704.md",
+    "docs/06_status/proof/WORK-2026092701/evidence.json",
+    "docs/06_status/proof/WORK-2026092701/verification.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "started_at": "2026-09-27T16:04:36.722Z",
+  "heartbeat_at": "2026-09-27T16:04:36.722Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026092704-complete-2701-proof.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092704/.out/worktrees/claude__work-2026092704-complete-2701-proof",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
