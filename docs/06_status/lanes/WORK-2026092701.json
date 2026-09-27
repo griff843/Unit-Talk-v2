@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092602/.out/worktrees/claude__work-2026092701-pipeline-health-deployed-worker",
   "branch": "claude/work-2026092701-pipeline-health-deployed-worker",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a6677a96ff9f70a435b142fb347878f0e07a59b8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1666",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026092701.md",
@@ -22,9 +22,9 @@
     "docs/06_status/proof/WORK-2026092701/evidence.json",
     "docs/06_status/proof/WORK-2026092701/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-09-27T14:15:27.486Z",
-  "heartbeat_at": "2026-09-27T14:15:27.486Z",
+  "heartbeat_at": "2026-09-27T15:18:38.068Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026092701-pipeline-health-deployed-worker.json",
