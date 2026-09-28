@@ -123,6 +123,7 @@ function recoveryManifest(issueId: string): LaneManifest {
     created_by: 'codex-cli',
     truth_check_history: [],
     reopen_history: [],
+    t1_live_db_precondition: 'deferred_to_ci',
   };
 }
 
@@ -160,6 +161,11 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
     assert.strictEqual(writtenToken?.['head_sha'], 'a'.repeat(40));
     assert.strictEqual(writtenToken?.['status'], 'pass');
     assert.strictEqual(writtenToken?.['preflight_run_id'], 'recovery-run-id');
+    assert.strictEqual(
+      writtenToken?.['t1_live_db_precondition'],
+      'deferred_to_ci',
+      'recovery must preserve the manifest-authorized staging-CI obligation',
+    );
   } finally {
     fs.rmSync(tokenPath, { force: true });
   }

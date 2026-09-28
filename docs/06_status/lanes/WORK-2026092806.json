@@ -17,6 +17,8 @@
     "docs/05_operations/DB_MIGRATION_WORKFLOW.md",
     "scripts/ops/proof-schema.test.ts",
     "scripts/ops/proof-schema.ts",
+    "scripts/ops/lane-link-pr.test.ts",
+    "scripts/ops/lane-link-pr.ts",
     "scripts/ops/truth-check-lib.test.ts"
   ],
   "expected_proof_paths": [
