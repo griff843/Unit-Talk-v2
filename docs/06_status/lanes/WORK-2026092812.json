@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092812",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092812/.out/worktrees/codex__work-2026092812-command-center-pick-truth",
+  "branch": "codex/work-2026092812-command-center-pick-truth",
+  "base_branch": "main",
+  "commit_sha": "79b1c9b95a77288ba36ae6da03f4b7b3e58f1d71",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1685",
+  "files_changed": [
+    "apps/command-center/src/app/command-center-pages.test.tsx",
+    "apps/command-center/src/app/picks/[id]/page.tsx",
+    "apps/command-center/src/components/GovernedPickTruth.tsx",
+    "apps/command-center/src/components/PicksExplorerClient.tsx",
+    "docs/06_status/proof/WORK-2026092812/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092812/evidence.json",
+    "docs/06_status/proof/WORK-2026092812/model-routing.json",
+    "docs/06_status/proof/WORK-2026092812/verification.md"
+  ],
+  "file_scope_lock": [
+    "apps/command-center/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092812/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092812/evidence.json",
+    "docs/06_status/proof/WORK-2026092812/verification.md",
+    "docs/06_status/proof/WORK-2026092812/model-routing.json"
+  ],
+  "status": "pr_open",
+  "started_at": "2026-09-28T20:30:09.282Z",
+  "heartbeat_at": "2026-09-28T20:43:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026092812-command-center-pick-truth.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092812/.out/worktrees/codex__work-2026092812-command-center-pick-truth",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
