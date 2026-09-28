@@ -6,7 +6,7 @@ Issue: WORK-2026092814
 Tier: T2
 Lane type: delivery-ui
 Branch: claude/work-2026092814-bot-truthful-copy
-Head SHA: b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162
+Head SHA: dd7994f2aea4b51b53027b2a035f0f66b097561a
 result: pass
 
 ## ASSERTIONS:
@@ -59,9 +59,10 @@ With every file restored to the lane version, all 103 pass.
 - [x] `tsc -p apps/discord-bot --noEmit`: exit 0
 - [x] eslint on `apps/discord-bot/src`: exit 0
 - [x] Mutation drill: reverting any one of the five source files turns at least one test red
-- [x] `pnpm verify` runs in the required CI `verify` context on this PR's head, which carries the implementation commit b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162 unchanged. The Merge Gate requires it to be green before merge.
+- [x] `pnpm verify:commands`: the regenerated Discord command manifest (`apps/discord-bot/command-manifest.json`) matches the command definitions; migration version and lint checks pass
+- [x] `pnpm verify` runs in the required CI `verify` context on this PR's head, which carries the implementation commits b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162 and dd7994f2aea4b51b53027b2a035f0f66b097561a unchanged. The Merge Gate requires it to be green before merge.
 - [x] `pnpm type-check` and `pnpm test` are included in that `pnpm verify` run.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base 32bb4af3e1a254ff9cbbcc30a57a77849b48536e --head b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162`: Verdict PASS, 12 changed files, rule matched `discord-delivery`.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base cc9e5a1826453c779c6593b3f2f2961b6f9d886f --head dd7994f2aea4b51b53027b2a035f0f66b097561a`: Verdict PASS, 14 changed files, rule matched `discord-delivery`.
 
 ## Runtime Verification
 
@@ -72,4 +73,4 @@ members only through a deploy, which is reserved to Griff.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1688
-Execution SHA: b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162
+Execution SHA: dd7994f2aea4b51b53027b2a035f0f66b097561a

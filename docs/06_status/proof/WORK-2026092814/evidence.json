@@ -7,21 +7,45 @@
   "status": "in_review",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162",
+    "verified_source_sha": "dd7994f2aea4b51b53027b2a035f0f66b097561a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
-    "note": "b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162 is the only implementation commit on this lane. Later commits change only the lane manifest and this proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+    "note": "b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162 (copy changes and tests) and dd7994f2aea4b51b53027b2a035f0f66b097561a (regenerated command manifest) are the implementation commits on this lane; dd7994f2aea4b51b53027b2a035f0f66b097561a is the last non-proof commit. Later commits change only the lane manifest and this proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it."
   },
   "static_proof": {
-    "unit_tests": { "pass": 103, "fail": 0, "note": "apps/discord-bot/src/discord-bot-foundation.test.ts" },
+    "unit_tests": {
+      "pass": 103,
+      "fail": 0,
+      "note": "apps/discord-bot/src/discord-bot-foundation.test.ts"
+    },
     "type_check": "pass",
     "mutation_battery": [
-      { "id": "M1", "mutation": "restore trial-status.ts", "observed": "red: 1 test" },
-      { "id": "M2", "mutation": "restore upgrade.ts", "observed": "red: 1 test" },
-      { "id": "M3", "mutation": "restore heat-signal.ts", "observed": "red: 2 tests" },
-      { "id": "M4", "mutation": "restore recap.ts", "observed": "red: 1 test" },
-      { "id": "M5", "mutation": "restore stats.ts", "observed": "red: 1 test" }
+      {
+        "id": "M1",
+        "mutation": "restore trial-status.ts",
+        "observed": "red: 1 test"
+      },
+      {
+        "id": "M2",
+        "mutation": "restore upgrade.ts",
+        "observed": "red: 1 test"
+      },
+      {
+        "id": "M3",
+        "mutation": "restore heat-signal.ts",
+        "observed": "red: 2 tests"
+      },
+      {
+        "id": "M4",
+        "mutation": "restore recap.ts",
+        "observed": "red: 1 test"
+      },
+      {
+        "id": "M5",
+        "mutation": "restore stats.ts",
+        "observed": "red: 1 test"
+      }
     ]
   },
   "production_writes_by_this_change": 0

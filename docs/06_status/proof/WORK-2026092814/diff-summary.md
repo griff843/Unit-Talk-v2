@@ -5,8 +5,8 @@ Tier: T2
 Lane type: delivery-ui
 Branch: claude/work-2026092814-bot-truthful-copy
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1688
-Diff base: 32bb4af3e1a254ff9cbbcc30a57a77849b48536e
-Diff target: b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162
+Diff base: cc9e5a1826453c779c6593b3f2f2961b6f9d886f
+Diff target: dd7994f2aea4b51b53027b2a035f0f66b097561a
 
 | File | Change |
 |---|---|
@@ -17,6 +17,7 @@ Diff target: b897fed48cc3fc0184f6c9f2e55e3c9f91bcb162
 | `apps/discord-bot/src/commands/recap.ts` | A missing CLV renders `unavailable` |
 | `apps/discord-bot/src/commands/stats.ts` | A `CLV: unavailable` field when no pick has closing-line data |
 | `apps/discord-bot/src/discord-bot-foundation.test.ts` | 4 new cases; the heat-signal empty-state assertion is updated |
+| `apps/discord-bot/command-manifest.json` | Regenerated: the `/heat-signal` description |
 | `.ops/work/WORK-2026092814.md` | Acceptance criteria for recap and stats state the implemented behaviour |
 
 ## SHA Binding
