@@ -25,23 +25,21 @@ drop table if exists public.warehouse_retention_executions;
 drop table if exists public.warehouse_retention_plans;
 drop function if exists public.warehouse_retention_control_immutable();
 
-create or replace function public.raw_payloads_immutable()
-returns trigger
+create or replace function public.raw_payloads_immutable() returns trigger
 language plpgsql
-as $function$
-begin
-  raise exception 'raw_payloads rows are immutable — no UPDATE or DELETE allowed (UTV2-1084)';
-end
-$function$;
+as $$
+BEGIN
+  RAISE EXCEPTION 'raw_payloads rows are immutable — no UPDATE or DELETE allowed (UTV2-1084)';
+END;
+$$;
 
-create or replace function public.odds_snapshots_immutable()
-returns trigger
+create or replace function public.odds_snapshots_immutable() returns trigger
 language plpgsql
-as $function$
-begin
-  raise exception 'odds_snapshots rows are immutable — no UPDATE or DELETE allowed (UTV2-1085)';
-end
-$function$;
+as $$
+BEGIN
+  RAISE EXCEPTION 'odds_snapshots rows are immutable — no UPDATE or DELETE allowed (UTV2-1085)';
+END;
+$$;
 
 -- Phase roles are cluster-wide and may be shared by another database in the
 -- same cluster. Make them inert in this database; do not make rollback depend
