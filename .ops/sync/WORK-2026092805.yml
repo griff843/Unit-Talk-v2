@@ -1,0 +1,134 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092805
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092805
+  objective: >-
+    Rebuild `docs/mission/plan.md` from live truth after the 2026-09-28 deploy
+    of `063a9f36a` and the production Track Only acceptance of pick `92789b58`.
+
+    Correct `apps/api/CLAUDE.md` and `docs/03_product/smart-form/intent.md`
+    §3.9. Both still say an authenticated capper's submission is "pinned" to
+    Track Only and that a contrary value is refused, which stopped being true
+    when `TRACK_ONLY_INTENT_GUARD` replaced that behaviour.
+  acceptance_criteria:
+    - The plan records `063a9f36a` as deployed (run 36426213004) and the
+      production Track Only acceptance (pick `92789b58`, mode `track-only`,
+      reason `track-only-requested`, 0 outbox rows, 0 receipts, 0 execution
+      intents, containment unchanged). It also records the remaining PM
+      decisions, including the disposition of `c12f1e2f` and `2cc92f4b`.
+    - "Both docs describe the guard as it now behaves: `track-only` or no mode
+      persists Track Only with a server-recorded refusal; `delivery-eligible`
+      requires server allow-list authorization or is refused; any other value is
+      refused. They cite the guard by marker name, not line number."
+    - The Track Only safety intent in §3.9 is unchanged. Only its implementation
+      references are reconciled.
+  guardrails:
+    - No code changes. No change to any gate, tier or merge control.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI, then closed through `post-merge-lane-close.yml`
+      without `pr`.
+  unmapped_sections:
+    - >-
+      WORK-2026092805 — Reconcile the plan and the Track Only docs with the
+      deployed fix
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Why
+
+
+      - The plan names `6685f171c` as the running release and #1671 as in
+      flight. Both are stale.
+
+      - The two docs cite line ranges in `handlers/submit-pick.ts` that no
+      longer hold, and describe behaviour the code no longer has. Agents read
+      them before changing the guard.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092805.md
+    title: WORK-2026092805 — Reconcile the plan and the Track Only docs with the
+      deployed fix
+    description: >-
+      # WORK-2026092805 — Reconcile the plan and the Track Only docs with the
+      deployed fix
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      - Rebuild `docs/mission/plan.md` from live truth after the 2026-09-28
+      deploy of `063a9f36a` and the production Track Only acceptance of pick
+      `92789b58`.
+
+      - Correct `apps/api/CLAUDE.md` and `docs/03_product/smart-form/intent.md`
+      §3.9. Both still say an authenticated capper's submission is "pinned" to
+      Track Only and that a contrary value is refused, which stopped being true
+      when `TRACK_ONLY_INTENT_GUARD` replaced that behaviour.
+
+
+      ## Why
+
+
+      - The plan names `6685f171c` as the running release and #1671 as in
+      flight. Both are stale.
+
+      - The two docs cite line ranges in `handlers/submit-pick.ts` that no
+      longer hold, and describe behaviour the code no longer has. Agents read
+      them before changing the guard.
+
+
+      ## Acceptance Criteria
+
+
+      - The plan records `063a9f36a` as deployed (run 36426213004) and the
+      production Track Only acceptance (pick `92789b58`, mode `track-only`,
+      reason `track-only-requested`, 0 outbox rows, 0 receipts, 0 execution
+      intents, containment unchanged). It also records the remaining PM
+      decisions, including the disposition of `c12f1e2f` and `2cc92f4b`.
+
+      - Both docs describe the guard as it now behaves: `track-only` or no mode
+      persists Track Only with a server-recorded refusal; `delivery-eligible`
+      requires server allow-list authorization or is refused; any other value is
+      refused. They cite the guard by marker name, not line number.
+
+      - The Track Only safety intent in §3.9 is unchanged. Only its
+      implementation references are reconciled.
+
+
+      ## Guardrails
+
+
+      - No code changes. No change to any gate, tier or merge control.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI, then closed through `post-merge-lane-close.yml`
+      without `pr`.
+    captured_at: 2026-09-28T15:40:28.236Z
+    description_sha256: 392c267eca1e72c907b5037956868b1472f2a196234eacfee5932546f49af184
+  contract_hash: 45c03b03e3e33390924fd2d3568507fee14c27331b58c8b64d419941f1ff8d25

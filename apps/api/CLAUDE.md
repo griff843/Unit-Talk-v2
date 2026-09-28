@@ -19,10 +19,15 @@ reference-data endpoints, or any Track Only / distribution guard, read
 
 Three rules from it bind this app directly:
 
-- **Track Only is enforced here, not in the form.** `handlers/submit-pick.ts:93-106` pins
-  `metadata.distributionMode = 'track-only'` for an authenticated capper and refuses a contrary
-  value; `:119-123` refuses a Smart Form submission declaring none. Every UTV2-1672 guard is
-  mutation-tested — any change keeps a check that fails when the guard is removed.
+- **Track Only is enforced here, not in the form.** `TRACK_ONLY_INTENT_GUARD` in
+  `handlers/submit-pick.ts` decides an authenticated capper's mode: `track-only` or no mode
+  persists Track Only with a server-recorded refusal (`track-only-requested`), whatever the
+  allow-list says; `delivery-eligible` is honoured only when the server allow-list authorizes the
+  capper, and is otherwise refused with `CAPPER_TRACK_ONLY_REQUIRED`, never silently narrowed; any
+  other value is refused. The server never widens a Track Only request. `SMART_FORM_HTTP_CONTRACT_GUARD`
+  refuses a Smart Form submission reaching HTTP without a declared mode. Every UTV2-1672 guard, and
+  the WORK-2026092802 guard, is mutation-tested — any change keeps a check that fails when the guard
+  is removed.
 - **Provenance must be truthful.** `smart-form-validation.ts` verifies a claimed
   `canonical-coverage-gap` against the catalog and refuses a false one; manual resolution is
   deliberately all-or-nothing so a coverage gap cannot carry real canonical IDs. A transient search

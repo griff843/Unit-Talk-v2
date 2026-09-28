@@ -1,0 +1,141 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092806
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092806
+  objective: >-
+    Repair the migration proof contradiction exposed by PR #1678 without
+    changing that PR's retention behavior or applying its migration early.
+
+    Let an unapplied candidate migration satisfy pre-merge proof only through
+    governed non-production receipts and an explicit post-deploy parity
+    obligation.
+
+    Keep production live-schema parity fail-closed after sanctioned deployment
+    and before lane close.
+  acceptance_criteria:
+    - Pre-merge migration evidence accepts a narrowly defined
+      `PENDING_POST_DEPLOY` production-parity receipt only when it is backed by
+      an exact failed live-parity run/job, states production DDL is unapplied,
+      and names the post-deploy-before-close gate.
+    - A generic `FAIL`, missing receipt, malformed pending marker, skipped
+      result, or invented PASS remains rejected.
+    - Post-merge truth/close validation rejects every pending marker and
+      requires a real `PASS` receipt with exact run/job ids.
+    - Existing migration evidence carrying a real parity PASS remains valid, and
+      non-migration proof profiles are unchanged.
+    - "Canonical migration and closeout contracts state the phase boundary:
+      candidate proof before merge; production apply after merge; live parity
+      before close."
+    - Node tests cover both gates and the fail-closed cases; `pnpm verify` and
+      R-level checks pass.
+    - "PR #1678 can rebind its proof to the repaired contract and return through
+      normal exact-head T1 approval without migration deployment or bypass."
+  guardrails:
+    - "Do not modify PR #1678's migration or retention implementation."
+    - Do not change the live-schema comparison, allowlists, or workflow verdict.
+    - Do not deploy any migration or mutate production.
+    - Do not weaken T1 approval, merge authority, or post-merge closeout.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - Governed T1 PR with exact-head green CI and proof, ready for PM approval.
+    - "The PR packet identifies the exact follow-on sequence for #1678."
+  unmapped_sections:
+    - >-
+      WORK-2026092806 — Phase-aware migration proof and close contract
+
+      Tier: T1 · Lane type: governance · Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092806.md
+    title: WORK-2026092806 — Phase-aware migration proof and close contract
+    description: >-
+      # WORK-2026092806 — Phase-aware migration proof and close contract
+
+
+      Tier: T1 · Lane type: governance · Executor: codex-cli
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      - Repair the migration proof contradiction exposed by PR #1678 without
+      changing that PR's retention behavior or applying its migration early.
+
+      - Let an unapplied candidate migration satisfy pre-merge proof only
+      through governed non-production receipts and an explicit post-deploy
+      parity obligation.
+
+      - Keep production live-schema parity fail-closed after sanctioned
+      deployment and before lane close.
+
+
+      ## Acceptance Criteria
+
+
+      - Pre-merge migration evidence accepts a narrowly defined
+      `PENDING_POST_DEPLOY` production-parity receipt only when it is backed by
+      an exact failed live-parity run/job, states production DDL is unapplied,
+      and names the post-deploy-before-close gate.
+
+      - A generic `FAIL`, missing receipt, malformed pending marker, skipped
+      result, or invented PASS remains rejected.
+
+      - Post-merge truth/close validation rejects every pending marker and
+      requires a real `PASS` receipt with exact run/job ids.
+
+      - Existing migration evidence carrying a real parity PASS remains valid,
+      and non-migration proof profiles are unchanged.
+
+      - Canonical migration and closeout contracts state the phase boundary:
+      candidate proof before merge; production apply after merge; live parity
+      before close.
+
+      - Node tests cover both gates and the fail-closed cases; `pnpm verify` and
+      R-level checks pass.
+
+      - PR #1678 can rebind its proof to the repaired contract and return
+      through normal exact-head T1 approval without migration deployment or
+      bypass.
+
+
+      ## Guardrails
+
+
+      - Do not modify PR #1678's migration or retention implementation.
+
+      - Do not change the live-schema comparison, allowlists, or workflow
+      verdict.
+
+      - Do not deploy any migration or mutate production.
+
+      - Do not weaken T1 approval, merge authority, or post-merge closeout.
+
+
+      ## Exit Criteria
+
+
+      - Governed T1 PR with exact-head green CI and proof, ready for PM
+      approval.
+
+      - The PR packet identifies the exact follow-on sequence for #1678.
+    captured_at: 2026-09-28T16:05:46.674Z
+    description_sha256: f92ff66730a5986c32dee37f3132bc71704008889c5fd1a2b9235fe1c3111773
+  contract_hash: 96bd8e8808f3c7270b3d46c8b9140584b5c55cfac29bddf92dab6b463e2db0c2
