@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1370",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "status": "BLOCKED_PRE_DEPLOY_PARITY",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ee373ec786a24c460412361dce2708f4e69ce597",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "result": "PASS",
+    "commands": [
+      "pnpm verify:static",
+      "node scripts/check-migration-versions.mjs",
+      "node scripts/lint-migrations.mjs",
+      "pnpm ci:db-client-boundary",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "pnpm exec tsx --test scripts/ci/migration-reversibility-gate.test.ts scripts/ci/required-db-smoke.test.ts scripts/warehouse/retention.test.ts scripts/warehouse/retention-workflow.test.ts apps/api/src/t1-proof-warehouse-retention.test.ts"
+    ],
+    "assertions": {
+      "lane_authority": "PASS",
+      "migration_versions": "137 unique",
+      "migration_lint": "136 forward migrations checked; no findings",
+      "r_level": "PASS; no additional R-level artifacts matched",
+      "production_writes": 0,
+      "production_deletes": 0
+    }
+  },
+  "runtime_proof": {
+    "head": "ee373ec786a24c460412361dce2708f4e69ce597",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 36436625145,
+      "job": 108976108712,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36436625145/job/108976108712",
+      "cases": [
+        "refuses when a governed object already exists before DDL",
+        "applies on an empty scratch schema",
+        "adversarial non-refusing guard is rejected"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 36436625145,
+      "job": 108976108520,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36436625145/job/108976108520"
+    },
+    "bounded_retention_lifecycle": {
+      "result": "PASS",
+      "run": 36436625145,
+      "job": 108976108520,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36436625145/job/108976108520",
+      "observed": [
+        "mismatched and stale evidence refused",
+        "provider_offer_history canary changed 1 hot row to 0",
+        "reader-only Parquet readback still returned 1 archived row",
+        "recovery changed 0 hot rows back to 1",
+        "referenced raw_payloads, odds_snapshots, and system_runs refused",
+        "quarantine, picks, audit_log, and disabled legacy cron remained unchanged",
+        "executor had no direct DELETE privilege"
+      ]
+    },
+    "live_schema_parity": {
+      "result": "FAIL",
+      "run": 36436625162,
+      "job": 108976153000,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36436625162/job/108976153000",
+      "reason": "Expected pre-deploy drift: production does not yet contain this unapplied migration. Deployment was expressly prohibited."
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 36436625310,
+      "job": 108976752649,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36436625310/job/108976752649"
+    }
+  },
+  "canary_contract": {
+    "source": "provider_offer_history",
+    "window_start": "2026-06-14T00:00:00Z",
+    "window_end": "2026-06-15T00:00:00Z",
+    "expected_hot_before": 1,
+    "expected_archive_rows": 1,
+    "expected_hot_after": 0,
+    "executed_in_production": false
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1678"
+}
