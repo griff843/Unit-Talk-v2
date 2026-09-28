@@ -272,7 +272,7 @@ export function BetSlipPanel({
 
           {/* UTV2-1925: this is pre-submission, so it describes the REQUEST. The
               outcome is the server's to determine and is stated on the receipt. */}
-          <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Requesting Track Only — the server decides delivery, and the receipt will report what it did.' : 'Requesting delivery eligible — subject to server authorization, approval and routing checks.'}</p>
+          <p className="track-only-pill rounded-lg px-3 py-2.5 text-xs leading-relaxed">{values.trackOnly ? 'Track Only — this pick is tracked and will never be delivered to members.' : 'Requesting delivery — the server delivers only if you are authorized, and otherwise refuses. The receipt reports its decision.'}</p>
 
           <Button
             data-testid="smart-form-submit-button"

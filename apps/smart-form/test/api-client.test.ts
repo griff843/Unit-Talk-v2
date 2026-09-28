@@ -683,6 +683,63 @@ test('enqueued wins over awaiting_approval, because a created record is the stro
   assert.equal(d.kind, 'queued');
 });
 
+test('a server-declared track-only posture is reported as Track Only', () => {
+  // The exact response production returned for pick 92789b58 after the Track
+  // Only intent guard was deployed. Only the server's posture earns the
+  // stronger sentence; the same response without it stays `not-enqueued`.
+  const response = {
+    outboxEnqueued: false,
+    lifecycleState: 'validated',
+    promotionStatus: 'suppressed',
+    promotionTarget: null,
+  };
+  const d = resolveDeliveryDisposition({ ...response, deliveryPosture: 'track-only' });
+  assert.equal(d.kind, 'track-only');
+  assert.match(d.headline, /Track Only/);
+  assert.match(d.detail, /no delivery record/i);
+  assert.match(d.detail, /never delivered/i);
+
+  const withoutPosture = resolveDeliveryDisposition(response);
+  assert.equal(withoutPosture.kind, 'not-enqueued');
+  assert.doesNotMatch(withoutPosture.detail, /track only/i);
+});
+
+test('a refused delivery request is reported with the server reason, never as Track Only', () => {
+  const d = resolveDeliveryDisposition({
+    outboxEnqueued: false,
+    lifecycleState: 'validated',
+    deliveryPosture: 'delivery-refused',
+    deliveryRefusedReason: 'target-killed',
+  });
+  assert.equal(d.kind, 'delivery-refused');
+  assert.ok(d.kind === 'delivery-refused' && d.reason === 'target-killed');
+  assert.match(d.detail, /refused/i);
+  assert.match(d.detail, /target-killed/);
+  assert.doesNotMatch(d.detail, /track only/i);
+
+  const noReason = resolveDeliveryDisposition({ deliveryPosture: 'delivery-refused' });
+  assert.equal(noReason.kind, 'delivery-refused');
+  assert.ok(noReason.kind === 'delivery-refused' && noReason.reason === null);
+});
+
+test('a created delivery record outranks any posture claim', () => {
+  // A response that claimed Track Only while reporting an enqueued row is
+  // contradictory; the receipt reports the positive fact, not the reassuring one.
+  const d = resolveDeliveryDisposition({
+    outboxEnqueued: true,
+    deliveryPosture: 'track-only',
+    promotionTarget: 'official-picks',
+  });
+  assert.equal(d.kind, 'queued');
+});
+
+test('an unrecognised posture falls back to the response fields', () => {
+  const d = resolveDeliveryDisposition({ outboxEnqueued: false, deliveryPosture: 'widened' });
+  assert.equal(d.kind, 'not-enqueued');
+  const u = resolveDeliveryDisposition({ deliveryPosture: 42 });
+  assert.equal(u.kind, 'undetermined');
+});
+
 test('the disposition is a function of the server response alone', async () => {
   // A structural control: the module must not import client form state, and the
   // receipt must not reach for `trackOnly` again. The unit assertions above

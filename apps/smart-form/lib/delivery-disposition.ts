@@ -18,18 +18,30 @@
  *   "no delivery was created"  is an OBSERVATION about this submission.
  *   "no member delivery"       is a CLAIM about a permanent containment property.
  *
- * Today's submission response carries `outboxEnqueued`, `lifecycleState`,
- * `promotionStatus` and `promotionTarget`. It does NOT carry the pick's
- * `distributionMode`, so the client genuinely cannot distinguish "Track Only,
- * structurally undeliverable" from "deliverable, but nothing was enqueued this
- * time". Only the first justifies the stronger sentence, so the receipt makes
- * the weaker, true statement and this module refuses to manufacture the other.
+ * The submission response carries `outboxEnqueued`, `lifecycleState`,
+ * `promotionStatus` and `promotionTarget`, and -- from a current API build --
+ * `deliveryPosture`, the server's own statement of what it decided:
+ *
+ *   `track-only`        the server persisted the pick as Track Only. The server
+ *                       never widens a Track Only request, and a Track Only
+ *                       pick is structurally undeliverable, so this -- and only
+ *                       this -- earns the stronger sentence.
+ *   `delivery-refused`  delivery was requested and a server control refused it;
+ *                       `deliveryRefusedReason` says which.
+ *   `delivered`         a delivery record was created (also `outboxEnqueued`).
+ *
+ * Without `deliveryPosture` (an older API build) the client cannot distinguish
+ * "Track Only, structurally undeliverable" from "deliverable, but nothing was
+ * enqueued this time", so the receipt makes the weaker, true statement and
+ * this module refuses to manufacture the other.
  */
 
 /** Exactly what the server determined, with no client inference folded in. */
 export type DeliveryDisposition =
   | { kind: 'queued'; target: string | null; headline: string; detail: string }
   | { kind: 'awaiting-approval'; headline: string; detail: string }
+  | { kind: 'track-only'; headline: string; detail: string }
+  | { kind: 'delivery-refused'; reason: string | null; headline: string; detail: string }
   | { kind: 'not-enqueued'; headline: string; detail: string }
   | { kind: 'undetermined'; headline: string; detail: string };
 
@@ -43,6 +55,8 @@ export interface DeliveryDispositionInput {
   lifecycleState?: unknown;
   promotionStatus?: unknown;
   promotionTarget?: unknown;
+  deliveryPosture?: unknown;
+  deliveryRefusedReason?: unknown;
 }
 
 function asBoolean(value: unknown): boolean | null {
@@ -87,6 +101,32 @@ export function resolveDeliveryDisposition(
       detail: target
         ? `The server created a delivery record for ${target}.`
         : 'The server created a delivery record for this pick.',
+    };
+  }
+
+  // The server's own posture outranks every inference below it. It is read
+  // only after `outboxEnqueued === true`, so a response that somehow claimed
+  // both is reported by its positive fact, never by the reassuring one.
+  const posture = asTrimmedString(result.deliveryPosture);
+
+  if (posture === 'track-only') {
+    return {
+      kind: 'track-only',
+      headline: 'Saved as Track Only',
+      detail:
+        'The server recorded this pick as Track Only. No delivery record was created, and a Track Only pick is never delivered to members.',
+    };
+  }
+
+  if (posture === 'delivery-refused') {
+    const reason = asTrimmedString(result.deliveryRefusedReason);
+    return {
+      kind: 'delivery-refused',
+      reason,
+      headline: 'Saved, delivery refused',
+      detail: reason
+        ? `You requested delivery and the server refused it (${reason}). No delivery record was created.`
+        : 'You requested delivery and the server refused it. No delivery record was created.',
     };
   }
 
