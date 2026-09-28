@@ -6,7 +6,7 @@ Issue: UTV2-1370
 Tier: T1 / Tier C migration  
 Result: blocked on a canonical pre-merge migration-control contradiction
 
-## Assertions
+## ASSERTIONS:
 
 - Archive evidence is re-read through the reader-only object-store path and independently checked for manifest validity, checksum, Parquet readability, exact source/window, and row count before planning.
 - Planning and execution refuse stale or changed evidence, count mismatches, protected references, expired or oversized plans, active legacy pruning, wrong phase credentials, and any unsupported source.
@@ -15,6 +15,8 @@ Result: blocked on a canonical pre-merge migration-control contradiction
 - `raw_payloads` and `odds_snapshots` immutability exceptions are transaction-local and exact-plan/window scoped inside SECURITY DEFINER routines; no caller receives direct table DELETE.
 - Recovery requires the original execution receipt, newly verified archive evidence, an empty hot window, a bounded payload, exact row restoration, and an immutable recovery receipt.
 - The disabled `nightly-retention-prune` job is asserted inactive and is never scheduled or enabled.
+
+## EVIDENCE:
 
 ## Verification
 

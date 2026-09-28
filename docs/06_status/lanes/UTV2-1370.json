@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     ".env.example",
+    ".github/workflows/migration-reversibility-gate.yml",
     ".github/workflows/warehouse-retention.yml",
     "apps/api/src/t1-proof-warehouse-retention.test.ts",
     "db/migrations-rollback/20260928131714_utv2_1370_warehouse_retention.down.sql",
