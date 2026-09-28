@@ -1,0 +1,15 @@
+{
+  "issue_id": "WORK-2026092812",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-terra-medium",
+  "model": "gpt-5.6-terra",
+  "reasoning_effort": "medium",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "generated_at": "2026-09-28T20:30:01.097Z",
+  "merge_sha": null
+}

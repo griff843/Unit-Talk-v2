@@ -15,6 +15,7 @@ import { buildPromotionPresentation, readRealEdgePresence } from '@/lib/promotio
 import { renderClvSummary } from '@/lib/clv-summary';
 import { getPickDetail } from '@/lib/data';
 import { getPickLineMovement } from '@/lib/data/odds-intel';
+import { GovernedPickTruth } from '@/components/GovernedPickTruth';
 import { LineMovementChart } from '@/components/LineMovementChart';
 import { notFound } from 'next/navigation';
 
@@ -221,6 +222,12 @@ function summarizeSettlementContext(detail: PickDetailViewResponse) {
   return latest.result ?? latest.status;
 }
 
+function distributionModeLabel(value: unknown): string | null {
+  if (value === 'track-only') return 'Track Only';
+  if (value === 'delivery-eligible') return 'Delivery eligible';
+  return null;
+}
+
 
 export async function generateMetadata({ params }: PickDetailPageProps) {
   const { id } = await params;
@@ -296,6 +303,11 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <GovernedPickTruth
+        metadata={pick.metadata}
+        hasEventLink={rawEventId !== null}
+        voided={pick.status === 'voided'}
+      />
       <Card>
         <div className="flex flex-col gap-4">
           <PickIdentityPanel
@@ -354,11 +366,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
 
       <Card title="Distribution mode">
         <p className="text-sm text-gray-100">
-          {pick.metadata['distributionMode'] === 'track-only'
-            ? 'Track Only'
-            : pick.metadata['distributionMode'] === 'delivery-eligible'
-              ? 'Delivery eligible'
-              : 'Distribution mode not recorded'}
+          {distributionModeLabel(pick.metadata['distributionMode']) ?? 'Distribution mode not recorded'}
         </p>
         {pick.metadata['distributionMode'] === 'track-only' && (
           <p className="mt-2 text-sm text-gray-400">
