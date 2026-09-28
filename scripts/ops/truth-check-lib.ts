@@ -91,6 +91,7 @@ import {
   verifyExternalVerifierProvenanceBinding,
   type MergedPrAttestation,
   type EvidenceContractResult,
+  type EvidenceGithubApiRunner,
   type EvidenceGitRunner,
 } from './proof-schema.js';
 
@@ -584,6 +585,10 @@ export interface CloseEligibilityPreflightInput {
   > & { model_routing?: unknown };
   /** Proof artifacts as they exist at the PR head. */
   proof_artifacts: CloseoutProofArtifact[];
+  /** Deterministic verifier seam; production callers resolve GitHub directly. */
+  githubApiRunner?: EvidenceGithubApiRunner;
+  /** Explicit repository for receipt resolution; production normally derives it from git. */
+  repository?: string;
 }
 
 export interface CloseEligibilityPreflightResult {
@@ -810,6 +815,8 @@ export function evaluateCloseEligibilityPreflight(
           gate: 'pre-merge',
           laneType: input.manifest.lane_type,
           tier: input.manifest.tier,
+          githubApiRunner: input.githubApiRunner,
+          repository: input.repository,
         });
       } catch {
         contract = null;

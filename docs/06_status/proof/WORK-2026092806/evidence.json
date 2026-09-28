@@ -15,8 +15,8 @@
     "status": "pass",
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
-      "tests": 261,
-      "pass": 261,
+      "tests": 263,
+      "pass": 263,
       "fail": 0
     },
     "type_check": "pass",
@@ -37,6 +37,10 @@
     },
     "migration_contract_regression": {
       "pre_merge_strict_pending": "pass",
+      "authoritative_github_run_job_binding": "pass",
+      "fabricated_run_or_job_refusal": "pass",
+      "wrong_workflow_head_or_completion_refusal": "pass",
+      "unrelated_failure_refusal": "pass",
       "generic_or_malformed_pending_refusal": "pass",
       "post_merge_pending_refusal": "pass",
       "existing_pass_receipt": "pass",

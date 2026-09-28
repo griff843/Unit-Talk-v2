@@ -123,6 +123,7 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'migration_roundtrip_missing'
     | 'migration_schema_parity_missing'
     | 'migration_schema_parity_pending_invalid'
+    | 'migration_schema_parity_receipt_unverified'
     | 'migration_staging_proof_missing'
     | 'author_verifier_forbidden';
 }
@@ -148,6 +149,10 @@ export interface EvidenceContractContext {
   mergedPrAttestation?: MergedPrAttestation | null;
   /** Deterministic test seam; production callers always use the local Git repository. */
   gitRunner?: EvidenceGitRunner;
+  /** Repository containing authoritative GitHub Actions run/job receipts. */
+  repository?: string | null;
+  /** Deterministic test seam; production callers resolve immutable GitHub API records. */
+  githubApiRunner?: EvidenceGithubApiRunner;
 }
 
 export interface EvidenceGitResult {
@@ -158,6 +163,15 @@ export interface EvidenceGitResult {
 }
 
 export type EvidenceGitRunner = (args: readonly string[], cwd: string) => EvidenceGitResult;
+
+export interface EvidenceGithubApiResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error?: Error;
+}
+
+export type EvidenceGithubApiRunner = (endpoint: string) => EvidenceGithubApiResult;
 
 export interface EvidenceContractResult {
   valid: boolean;
@@ -249,6 +263,164 @@ function migrationParityPendingPostDeploy(value: unknown): value is Record<strin
     value['reason'].trim().length > 0 &&
     isPositiveRunId(value['run']) &&
     isPositiveRunId(value['job']);
+}
+
+interface GithubWorkflowRunRecord {
+  id?: unknown;
+  name?: unknown;
+  path?: unknown;
+  head_sha?: unknown;
+  event?: unknown;
+  status?: unknown;
+  conclusion?: unknown;
+  pull_requests?: unknown;
+}
+
+interface GithubWorkflowJobRecord {
+  id?: unknown;
+  run_id?: unknown;
+  workflow_name?: unknown;
+  head_sha?: unknown;
+  name?: unknown;
+  status?: unknown;
+  conclusion?: unknown;
+  steps?: unknown;
+}
+
+type MigrationParityReceiptVerification =
+  | { valid: true }
+  | { valid: false; detail: string };
+
+function parseGithubRepository(remote: string): string | null {
+  const normalized = remote.trim().replace(/\.git$/u, '');
+  const match = normalized.match(/github\.com[/:]([^/]+\/[^/]+)$/u);
+  return match?.[1] ?? null;
+}
+
+function resolveGithubRepository(context: EvidenceContractContext): string | null {
+  const explicit = context.repository?.trim() || process.env['GITHUB_REPOSITORY']?.trim();
+  if (explicit && /^[^/\s]+\/[^/\s]+$/u.test(explicit)) return explicit;
+
+  const repoRoot = context.repoRoot?.trim() || process.cwd();
+  const remote = runEvidenceGit(['config', '--get', 'remote.origin.url'], repoRoot, context.gitRunner);
+  return remote.status === 0 ? parseGithubRepository(remote.stdout) : null;
+}
+
+function runGithubApi(endpoint: string, runner?: EvidenceGithubApiRunner): EvidenceGithubApiResult {
+  if (runner) return runner(endpoint);
+
+  const token = process.env['GH_TOKEN']?.trim() || process.env['GITHUB_TOKEN']?.trim();
+  const args = [
+    '--fail',
+    '--silent',
+    '--show-error',
+    '--header',
+    'Accept: application/vnd.github+json',
+    '--header',
+    'X-GitHub-Api-Version: 2022-11-28',
+  ];
+  if (token) args.push('--header', `Authorization: Bearer ${token}`);
+  args.push(`https://api.github.com/${endpoint}`);
+  const result = spawnSync('curl', args, { encoding: 'utf8' });
+  return {
+    status: result.status,
+    stdout: String(result.stdout ?? ''),
+    stderr: String(result.stderr ?? ''),
+    ...(result.error ? { error: result.error } : {}),
+  };
+}
+
+function parseGithubApiRecord<T>(
+  endpoint: string,
+  runner?: EvidenceGithubApiRunner,
+): { value: T | null; detail: string | null } {
+  const response = runGithubApi(endpoint, runner);
+  if (response.status !== 0 || response.error) {
+    const reason = response.error?.message || response.stderr.trim() || `exit ${String(response.status)}`;
+    return { value: null, detail: `GitHub API request ${endpoint} failed: ${reason}` };
+  }
+  try {
+    return { value: JSON.parse(response.stdout) as T, detail: null };
+  } catch {
+    return { value: null, detail: `GitHub API response ${endpoint} was not valid JSON` };
+  }
+}
+
+function idEquals(actual: unknown, expected: unknown): boolean {
+  return String(actual ?? '') === String(expected ?? '');
+}
+
+/**
+ * Independently binds a pending production-parity obligation to GitHub's
+ * immutable Actions run and job records. The expected failure is deliberately
+ * narrow: the trusted comparison must complete, the drift authorization gate
+ * must be the failing step, and its artifact must still upload. An unrelated
+ * setup, credential, scratch, cancellation, or infrastructure failure cannot
+ * masquerade as the sanctioned pre-deploy schema mismatch.
+ */
+function verifyPendingMigrationParityReceipt(
+  pending: Record<string, unknown>,
+  expectedHead: string,
+  context: EvidenceContractContext,
+): MigrationParityReceiptVerification {
+  const repository = resolveGithubRepository(context);
+  if (!repository) return { valid: false, detail: 'could not resolve the authoritative GitHub repository' };
+
+  const runId = pending['run'];
+  const jobId = pending['job'];
+  const runResponse = parseGithubApiRecord<GithubWorkflowRunRecord>(
+    `repos/${repository}/actions/runs/${String(runId)}`,
+    context.githubApiRunner,
+  );
+  if (!runResponse.value) return { valid: false, detail: runResponse.detail ?? 'run receipt unavailable' };
+
+  const run = runResponse.value;
+  const pullRequests = Array.isArray(run.pull_requests) ? run.pull_requests : [];
+  const exactPrHead = pullRequests.some((entry) =>
+    isPopulatedRecord(entry) && isPopulatedRecord(entry['head']) && entry['head']['sha'] === expectedHead,
+  );
+  const runMismatch = [
+    !idEquals(run.id, runId) && 'run id',
+    run.name !== 'Live Schema Parity' && 'workflow name',
+    run.path !== '.github/workflows/live-schema-parity.yml' && 'workflow path',
+    run.head_sha !== expectedHead && 'head SHA',
+    run.event !== 'pull_request' && 'pull_request event',
+    run.status !== 'completed' && 'completed status',
+    run.conclusion !== 'failure' && 'failure conclusion',
+    !exactPrHead && 'pull-request head binding',
+  ].filter(Boolean);
+  if (runMismatch.length > 0) {
+    return { valid: false, detail: `Live Schema Parity run receipt mismatched: ${runMismatch.join(', ')}` };
+  }
+
+  const jobResponse = parseGithubApiRecord<GithubWorkflowJobRecord>(
+    `repos/${repository}/actions/jobs/${String(jobId)}`,
+    context.githubApiRunner,
+  );
+  if (!jobResponse.value) return { valid: false, detail: jobResponse.detail ?? 'job receipt unavailable' };
+
+  const job = jobResponse.value;
+  const steps = Array.isArray(job.steps) ? job.steps.filter(isPopulatedRecord) : [];
+  const stepConclusion = (name: string): unknown => steps.find((step) => step['name'] === name)?.['conclusion'];
+  const jobMismatch = [
+    !idEquals(job.id, jobId) && 'job id',
+    !idEquals(job.run_id, runId) && 'job-to-run binding',
+    job.workflow_name !== 'Live Schema Parity' && 'job workflow name',
+    job.name !== 'Live Schema Parity' && 'job name',
+    job.head_sha !== expectedHead && 'job head SHA',
+    job.status !== 'completed' && 'job completed status',
+    job.conclusion !== 'failure' && 'job failure conclusion',
+    stepConclusion('Refuse to run PR-modified code against production') !== 'success' && 'trusted-code guard',
+    stepConclusion('Apply repo migrations to local stack') !== 'success' && 'candidate scratch apply',
+    stepConclusion('Compare scratch schema to live schema') !== 'success' && 'schema comparison',
+    stepConclusion('Authorize schema drift gate') !== 'failure' && 'expected drift-gate failure',
+    stepConclusion('Upload schema parity artifact') !== 'success' && 'parity artifact upload',
+  ].filter(Boolean);
+  if (jobMismatch.length > 0) {
+    return { valid: false, detail: `Live Schema Parity job receipt mismatched: ${jobMismatch.join(', ')}` };
+  }
+
+  return { valid: true };
 }
 
 function runEvidenceGit(
@@ -1230,7 +1402,8 @@ function validateProfileEvidence(
 
   const liveParity = runtimeProof['live_schema_parity'];
   if (context.gate === 'pre-merge') {
-    if (!migrationReceiptPass(liveParity) && !migrationParityPendingPostDeploy(liveParity)) {
+    const pendingParity = migrationParityPendingPostDeploy(liveParity);
+    if (!migrationReceiptPass(liveParity) && !pendingParity) {
       failures.push({
         code: 'migration_schema_parity_pending_invalid',
         field: 'runtime_proof.live_schema_parity',
@@ -1239,6 +1412,15 @@ function validateProfileEvidence(
           '(observed_result=FAIL, production_ddl_applied=false, required_phase=post-deploy-before-lane-close, ' +
           'non-empty reason, and exact run/job ids)',
       });
+    } else if (pendingParity && typeof receiptHead === 'string' && SHA_RE.test(receiptHead)) {
+      const receipt = verifyPendingMigrationParityReceipt(liveParity, receiptHead, context);
+      if (!receipt.valid) {
+        failures.push({
+          code: 'migration_schema_parity_receipt_unverified',
+          field: 'runtime_proof.live_schema_parity',
+          message: `pending production parity requires an authoritative exact-head Live Schema Parity receipt: ${receipt.detail}`,
+        });
+      }
     }
   } else if (!migrationReceiptPass(liveParity)) {
     failures.push({
