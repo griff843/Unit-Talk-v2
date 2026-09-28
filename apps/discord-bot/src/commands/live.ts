@@ -11,13 +11,15 @@ import {
   type QueriedPick,
 } from '../api-client.js';
 import { loadBotConfig } from '../config.js';
+import { requireActivePickRoles } from '../role-guard.js';
 import type { CommandHandler } from '../command-registry.js';
 
 const LIVE_STATUSES = ['validated', 'queued', 'posted'];
 const PAGE_SIZE = 10;
 
-export function createLiveCommand(apiClient: ApiClient): CommandHandler {
+export function createLiveCommand(apiClient: ApiClient, requiredRoles: string[]): CommandHandler {
   return {
+    requiredRoles,
     data: new SlashCommandBuilder()
       .setName('live')
       .setDescription('Show active picks that are still live on the board'),
@@ -136,5 +138,5 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createLiveCommand(createApiClient(config.apiUrl, config.apiKey));
+  return createLiveCommand(createApiClient(config.apiUrl, config.apiKey), requireActivePickRoles(config));
 }
