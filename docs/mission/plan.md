@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-28, against `main` `3ba97e758` and deployed release `063a9f36a`
+**Last reconciled against live truth:** 2026-09-28 (evening), against `main` `a5399adc1` and deployed release `063a9f36a`
 **Archives, read on demand — never at session start:**
 [`plan-lessons.md`](plan-lessons.md) (operating lessons) ·
 [`plan-history-2026-09.md`](plan-history-2026-09.md) (chronological narrative through 2026-09-14)
@@ -12,6 +12,24 @@ belongs in an archive above.
 
 ---
 
+## 0. The direction, as corrected by Griff on 2026-09-28
+
+**Move Unit Talk as close as possible to a sellable, operable product while SGO stays parked.**
+
+- **Track Only production acceptance is complete** (§2).
+- **Manual and eventless picks are valid** for contained operator testing. A pick with
+  `eventId: null` and honest provenance is a correct pick, not a defect to repair.
+- **Event-linked automated grading and CLV wait on SGO data supply.** That is a known data-supply
+  dependency, not an execution target. It is parked until Griff authorizes SGO activation.
+- **Manual event seeding is not the production strategy.** Nobody builds a substitute event feed
+  and nobody manufactures production event coverage. `scripts/ops/seed-operator-event.ts` exists,
+  but it is not a plan step.
+- **Work everything that needs neither SGO nor Codex's occupied capacity**, in parallel where safe:
+  the Smart Form language, the Command Center operator view, official-picks launch readiness and the
+  paid-member path. §4 is the gap, §6 the wave.
+
+---
+
 ## 1. Current truth
 
 Measured 2026-09-28 against `origin/main`, the GitHub API and production `zfzdnfwdarxucxtaojxm`
@@ -19,123 +37,202 @@ Measured 2026-09-28 against `origin/main`, the GitHub API and production `zfzdnf
 
 | Fact | Value |
 |---|---|
-| `main` | `3ba97e758` (a readiness-ledger refresh on top of `063a9f36a`) |
-| Deployed release | **`063a9f36a`** — `Deploy` run `36426213004`, succeeded 2026-09-28 ~14:40Z, canary and production approved by Griff, rollback target `fb77e5508` unused. The previous release, `fb77e5508`, deployed the same morning (run `36365836032`). |
-| Drift `deployed..main` | **No code.** One file, `readiness-score.json`. Re-measure with `git diff --name-only 063a9f36a..origin/main`; never quote. |
-| Cron job 5 `nightly-retention-prune` | **Inactive** (since 2026-09-24, Griff-authorized). **Do not re-enable it** without PM approval of a verified replacement retention design. Job 2 `awaiting-approval-drift-monitor` is the only active job. |
-| Governed pick cohort (`metadata ? 'distributionMode'`) | **11** — 7 `track-only` (all `validated`); 4 `delivery-eligible`: `816a84c7` settled, `ed0ed43c` posted, and **`2cc92f4b` and `c12f1e2f` queued**. |
-| Settlement records for that cohort | **6**, all operator-sourced |
-| Queued behind the killed switch | `2cc92f4b` (outbox `68f922a2`, `pending` since 2026-09-23 02:21) and `c12f1e2f` (outbox `5005f461`, `pending` since 2026-09-28 02:13). Both `attempt_count = 0`, no receipts. |
-| Whole outbox | 5751 rows: 3760 `sent`, 1954 `dead_letter`, 32 `processing` (the stranded canary rows, §9), 5 `pending` |
-| Kill switches | `official-picks`, `best-bets`, `trader-insights`, `exclusive-insights` all `killed = true`; `official-picks` last toggled 2026-09-19 02:24:44 |
-| CLV on settled picks | **null on all 6** |
-| Current-game reference data | **2** events in the last 14 days, both operator-seeded: Lions @ Bills (2026-09-17) and Eagles @ Bears (2026-09-28). |
-| Newest `game_results` | **2026-06-30** — SGO owner-deferred (§5 decision 2) |
-| Effective deploy mode | **`human-capper`**, confirmed by run `36426213004`'s `syndicate_machine_mode.confirmed` line: ingestor autorun and scheduling off, worker on, one enabled target (`official-picks`), `killSwitchEngaged: true`. See §7. |
-| `worker.heartbeat` | alive — newest 2026-09-28 15:34Z. `grading.run` fires on schedule (newest 15:31Z). |
-| Readiness ledger | **RED**, generated 2026-09-28T13:23Z — **before** the deploy, so its `deploy_sha_alignment: fail` predates `063a9f36a`. Re-read after the next refresh. |
-| Open PRs | **9**: #1678 (Codex, UTV2-1370 warehouse retention, **T1 with a migration**) and the frozen or inadmissible #1556, #1505, #1498, #1495, #1492, #1491, #1451, #1429 |
-| Lane manifests | 838 `done`, 28 `closed`, **27 `merged`** (26 old plus WORK-2026092606, accepted closeout debt), 1 `superseded`, 2 `started` (UTV2-1370, Codex; and this edition's lane). Count with `jq .status docs/06_status/lanes/*.json`; never assume terminal. |
+| `main` | `a5399adc1` |
+| Deployed release | **`063a9f36a`** — `Deploy` run `36426213004`, 2026-09-28 ~14:40Z, canary and production approved by Griff. The run's `syndicate_machine_mode.confirmed` line reads `human-capper`: ingestor autorun and scheduling off, worker on, one enabled target (`official-picks`), `killSwitchEngaged: true`. |
+| Drift `deployed..main` | **No runtime code.** Only docs and lane files. Re-measure with `git diff --name-only 063a9f36a..origin/main`; never quote. |
+| Governed pick cohort (`metadata ? 'distributionMode'`) | **11.** 7 `track-only` (all `validated`, including `92789b58`). 4 `delivery-eligible`: `816a84c7` settled, `ed0ed43c` posted, and **`2cc92f4b` and `c12f1e2f` voided** (below). |
+| Retired sample picks | `2cc92f4b` and `c12f1e2f` were **voided by Griff's decision on 2026-09-28** (`queued → voided`, `operator_override`, one `pick.voided` audit row each). Their outbox rows `68f922a2` / `5005f461` were deliberately left `pending`; the worker skips a voided pick's row, so neither can post. **Do not touch them.** |
+| Settlement records for the cohort | **6**, all operator-sourced; CLV null on all 6 |
+| `discord:official-picks` outbox | 2 `sent` (816a84c7, ed0ed43c; 2 receipts, 2026-09-18) and the 2 voided picks' `pending` rows |
+| Kill switches | `official-picks`, `best-bets`, `trader-insights`, `exclusive-insights` all `killed = true`. `official-picks` was last set 2026-09-19 02:24 by actor `claude:human-capper-e2e-window-close`. |
+| Current-game events | 2 in the last 14 days, both operator-seeded historical test events. Not a supply; see §0. |
+| Newest `game_results` | **2026-06-30** — SGO parked |
+| Members | **`member_tiers` has 0 rows, ever.** No Whop, subscription, entitlement or webhook table exists. |
+| `worker.heartbeat` / `grading.run` | alive and on schedule (grading honestly reports `degraded_stale_input`) |
+| Cron | job 2 `awaiting-approval-drift-monitor` active; job 5 `nightly-retention-prune` **inactive — do not re-enable** without a PM-approved replacement retention design |
+| Readiness ledger | **RED**, last generated 2026-09-28T13:23Z, **before** the deploy. Re-read after the next refresh before citing `deploy_sha_alignment`. |
+| Open PRs | #1681 (mine, T2), #1680 (**Codex, active**, T1 migration-proof governance repair), #1678 (Codex, T1, warehouse retention with a migration), and the frozen or inadmissible #1556, #1505, #1498, #1495, #1492, #1491, #1451, #1429 |
+| Lane manifests | 839 `done`, 28 `closed`, 27 `merged` (26 historical plus WORK-2026092606, accepted closeout debt), 1 `superseded`, and `started`: UTV2-1370 (Codex) and this session's lanes. Count with `jq .status docs/06_status/lanes/*.json`. |
 
-**Milestone 1 is complete.** Griff performed it end to end against the deployed system on
-2026-09-09, verified by governed read-only production observation with containment intact. The
-evidence narrative is in [`plan-history-2026-09.md`](plan-history-2026-09.md#milestone-1--the-completion-record).
-
-**Milestone 2 is the active milestone.** §3 gives where each of its six conditions stands.
+**Milestone 1 is complete** (2026-09-09, pick `dfcd9486`). **Milestone 2 is active**; §3 gives its
+conditions against §0's direction.
 
 ---
 
 ## 2. Production position
 
-**`main` and production agree.** For the first time since 2026-09-23 the running code is `main`'s
-code: the deploy of `063a9f36a` carried the 109-commit backlog (settlement-truth readers, promotion,
-`/health` zombies, host disk reclamation, Command Center settlement truth from #1667) and the Track
-Only containment repair below. Only a ledger refresh sits on top.
+**`main` and production agree on runtime code.** The deploy of `063a9f36a` carried the 109-commit
+backlog and the Track Only containment repair.
 
-**The Track Only containment defect is fixed and accepted in production.**
+**Track Only production acceptance — complete, 2026-09-28.** Griff submitted pick `92789b58`
+(Yankees ML −143, Track Only) through the deployed form as `griff843`.
 
-- **The defect.** An allow-listed capper's explicit Track Only request was widened server-side to
-  `delivery-eligible` and queued for delivery. Griff's real pilot pick `c12f1e2f` (2026-09-28 02:13Z)
-  was queued that way; only the killed `official-picks` switch stopped delivery.
-- **The fix.** #1675 (WORK-2026092802, T1, Griff's `t1-approved` + PM verdict), `TRACK_ONLY_INTENT_GUARD`
-  in `handlers/submit-pick.ts`. `track-only` or no mode persists Track Only with a server-recorded
-  refusal; `delivery-eligible` needs the server allow-list or is refused; anything else is refused.
-  Proven by a regression test that fails on the old handler, a mutation drill, and a live staging
-  suite (3/3). Lanes WORK-2026092802/03/04 are `done`.
-- **Production acceptance, 2026-09-28.** Griff submitted pick `92789b58` (Yankees ML −143, Track Only)
-  through the deployed form, authenticated as `griff843`. Production DB: submission and pick both
-  `track-only`; `deliveryAuthorization` `refused` / `track-only-requested`; status `validated`, one
-  lifecycle event (`→ validated`); **0 outbox, 0 receipts, 0 execution intents**; the only pick created
-  since the deploy; no outbox row or receipt created anywhere since. Command Center (signed in,
-  through the bridge, observed by Codex and checked against a screenshot) shows `Track Only —
-  Verified: no outbox row, no receipt, no delivery attempt`, and the pick is absent from outbox,
-  delivery, review, exceptions and settlement surfaces. Kill switches and both queued picks are
-  byte-identical to the pre-deploy baseline.
+- **Database:** submission and pick `track-only`; `deliveryAuthorization` `refused` /
+  `track-only-requested`; status `validated`, one lifecycle event; **0 outbox rows, 0 receipts,
+  0 execution intents**.
+- **Command Center:** signed in through the governed bridge, it showed `Track Only — Verified: no outbox
+  row, no receipt, no delivery attempt`. The pick was absent from every delivery, review, exception
+  and settlement surface.
+- **Containment:** unchanged throughout.
+- **The fix it proves:** #1675, `TRACK_ONLY_INTENT_GUARD` in `handlers/submit-pick.ts`. A `track-only`
+  request is never widened, and `delivery-eligible` needs the server allow-list or is refused.
 
-**Readiness dimensions**, from `docs/06_status/readiness/readiness-score.json` (generated before the
-deploy — re-read):
+**Readiness dimensions** (ledger 2026-09-28T13:23Z, pre-deploy — re-read):
 
-| Dimension | Blocking | Status | What it means |
+| Dimension | Blocking | Status | Meaning |
 |---|---|---|---|
-| `deploy_sha_alignment` | yes | fail *(stale)* | Measured before the deploy. Code drift is now zero; expect a pass at the next refresh, and re-measure rather than assume. |
-| `ingestor_health` | yes | fail | **Containment.** `human-capper` keeps the ingestor off; SGO is owner-deferred. |
-| `grading_health` | yes | fail | Grading runs on schedule and honestly reports `degraded_stale_input`: no result newer than 2026-06-30. Provider-dependent. |
-| `worker_outbox_health` | yes | **pass** | The 32 stranded canary `processing` rows are classified unclaimable and remain present (§9). |
-| `dead_letter_count` | yes | **pass** | The paged reader reads all 1954 rows (#1637). |
-| `db_tripwires` | yes | fail | Real size findings (`system_runs`, parked-ingestion tables). Relief is archive-then-prune — §5 decision 10. |
-
-Non-blocking: `pnpm_verify`, `scheduled_observer_health`, `proof_coverage` fail;
-`constitution_convergence` is `unknown`.
+| `deploy_sha_alignment` | yes | fail *(stale)* | Measured before the deploy; runtime drift is now zero. Expect a pass at the next refresh — re-measure, do not assume. |
+| `ingestor_health` | yes | fail | **SGO parked** by design. |
+| `grading_health` | yes | fail | **SGO parked**: no result after 2026-06-30. |
+| `worker_outbox_health` | yes | pass | Counts only pending rows with `attempt_count > 0` — blind to never-claimed rows (§4.3). |
+| `dead_letter_count` | yes | pass | Paged reader reads all rows. |
+| `db_tripwires` | yes | fail | Real size findings; relief is the warehouse (§5 decision 10). |
 
 ---
 
 ## 3. Active work
 
-**In flight:**
-
 | PR | Lane | What | State |
 |---|---|---|---|
-| #1678 | UTV2-1370, T1, **Codex** | Governed warehouse retention lifecycle, **including a migration** (`20260928131714_utv2_1370_warehouse_retention.sql`) | Codex-owned, `BLOCKED`. Its migration is production DDL — reserved. Do not touch its files. |
-| — | WORK-2026092805, T3 | This plan edition, and the two docs that still described Track Only as "pinned" | this lane |
+| #1681 | WORK-2026092807, T2, Claude | Smart Form receipt reads the server's `deliveryPosture`: a Track Only pick says Track Only, a refused delivery request carries its reason. The bet slip states Track Only stays Track Only and delivery is server-authorized or refused. | CI running |
+| this PR | WORK-2026092808, T3, Claude | This plan edition and the Smart Form intent corrections | this lane |
+| #1680 | WORK-2026092806, T1, **Codex (active)** | Migration-proof governance repair (`proof-schema.ts`, `truth-check-lib`, DB workflow docs) | **Do not touch its files or lane.** |
+| #1678 | UTV2-1370, T1, **Codex** | Warehouse retention lifecycle **with a migration** | Holds `package.json` in its file-scope lock; production DDL is reserved |
 
-**Landed 2026-09-27 → 09-28:** #1667 (Codex, Command Center settlement truth), #1671 (staging CI
-serialization), #1672 (`runtime:health`), #1675 (Track Only fix), #1676 / #1677 (its lane binding
-and proof-profile repair). All closed except WORK-2026092606 (#1667), which is accepted closeout
-debt — do not rewrite its manifest.
-
-**Milestone 2, measured against `intent.md`'s six conditions (2026-09-28):**
+**Milestone 2 against §0's direction:**
 
 | # | Condition | State |
 |---|---|---|
-| 1 | Repeatable submission without per-submission engineering | **The form repeats, and now honours the requested mode.** 11 governed picks; `92789b58` went in with no engineering intervention. Events still do not: `92789b58` has `eventId: null` because no Red Sox @ Yankees event exists; only operator-seeded events do. |
-| 2 | Canonical identity and truthful provenance on every pick | **Holds for all 11.** `92789b58` resolved both participants `canonical`. |
-| 3 | Grading and settlement on schedule against real results | **Settlement proven, automated grading deferred** (SGO). Picks with `eventId: null` skip grading at `event_link_not_found`. |
-| 4 | Statistics computed from persisted history | **Reconciles, minus CLV**, and the effective-settlement readers are **now deployed**. |
-| 5 | Operator observes through a governed internal surface | **Holds.** Command Center, signed in through the bridge, rendered `92789b58` correctly. It does **not** show the pick's delivery-authorization record, participant resolution, submission mode or edge-scope reason, and its list row omits capper, units and a Track Only badge — a product-contract gap, recorded not filed. |
-| 6 | None of it achieved by activating member-facing delivery | **Holds.** All governed targets killed; both delivery-eligible queued picks wait `pending`. |
+| 1 | Repeatable submission without per-submission engineering | **Holds for eventless picks.** 11 governed picks; `92789b58` needed no engineering. |
+| 2 | Canonical identity and truthful provenance | **Holds for all 11.** |
+| 3 | Grading and settlement on schedule against real results | **Settlement proven (operator). Event-linked automated grading is SGO-parked** — a data-supply dependency, not a target. |
+| 4 | Statistics from persisted history | **Reconciles minus CLV (SGO-parked).** Effective-settlement readers are deployed. |
+| 5 | Operator observes through a governed surface | **Holds, with display gaps** — §4.2; a Codex packet is ready. |
+| 6 | None of it via member delivery | **Holds.** |
 
 **The governed cohort predicate is `metadata ? 'distributionMode'`, and getting it wrong is
-silent.** About 93% of `picks` are CI fixtures predating staging isolation.
-`v_governed_pick_performance` filters `source = 'board-construction'`, so it cannot contain an
-operator submission. Identify genuine submissions *positively*.
+silent.** About 93% of `picks` are CI fixtures. `v_governed_pick_performance` filters
+`source = 'board-construction'` and cannot contain an operator submission.
 
 ---
 
-## 4. Blockers
+## 4. Pre-SGO launch gap
 
-| Blocker | Blocks | Owner |
-|---|---|---|
-| **Two delivery-eligible picks are queued behind a killed switch** — `2cc92f4b`, and `c12f1e2f`, which was only delivery-eligible because of the now-fixed defect | their delivery or retirement | Griff — §5 decisions 1a, 1c |
-| **No current game is selectable as an event** without an operator seeding one | Milestone 2 condition 1, grading of new picks | operator: `scripts/ops/seed-operator-event.ts` with production credentials |
-| **Results supply: no `game_results` after 2026-06-30** | condition 3 (automated grading), CLV, `grading_health` | **owner-deferred** (SGO), §5 decision 2 — not to be routed around |
-| **A second data source cannot be admitted by an agent** | any non-SGO route to schedules or results | `PROVIDER_AUTHORITY_LOCK.md` is an active T1 rule; amending it is PM-owned |
-| **The canonical reference bootstrap is unowned** — #1484 was closed, not merged | routine reference-data seeding beyond the operator CLI | nobody; a gap, not a resolution |
-| **`P0 Protocol` is still blind to `WORK-###`** | tracker-independence exit condition 1 | reserved (merge authority) |
-| **The warehouse is built but not provisioned**; #1678 adds retention with a migration | archiving off Supabase; any prune; `db_tripwires` | owner actions in `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` — §5 decision 10 |
+Sourced 2026-09-28 from three read-only audits of `main` `a5399adc1` plus production SELECTs. Each
+item names its evidence; re-verify before building on it.
 
-**No longer a blocker**, each verified 2026-09-28: the 109-commit deploy drift (deployed);
-staging CI cross-run corruption (#1671 merged); the Track Only widening defect (fixed, deployed,
-accepted in production).
+### 4.1 Production-proven
+
+- Smart Form: reach, sign-in, canonical identity `griff843`, submit, persist, Track Only
+  containment — performed by Griff (Milestone 1; `92789b58`).
+- Operator settlement: 6 attested settlements; effective-settlement readers deployed.
+- Command Center: deployed, reachable through the governed bridge (#1652), renders a governed pick
+  and its verified non-delivery.
+- `official-picks` delivery **once** (816a84c7, ed0ed43c, 2026-09-18, 2 receipts). Kill switch
+  holds; `isKilled()` fails closed.
+- Routing truth: a human-capper delivery is released in one transaction with its outbox row, or
+  refused and no row is written (`submit-pick-controller.ts:176-253`).
+
+### 4.2 Completable now, without SGO or Codex's occupied capacity
+
+**Smart Form language** — #1681 (receipt, bet slip) and this PR (intent §2, §8). Done when both merge
+and a deploy carries #1681.
+
+**Command Center operator view** — a Codex T2 packet is ready (display only, no new reads). It covers:
+- the delivery authorization decision and reason (`packages/contracts/src/smart-form.ts:93-126`, never
+  rendered);
+- the requested vs persisted mode;
+- participant resolution (never read anywhere in `apps/command-center/src`);
+- the edge fallback reason (`page.tsx:590-599`);
+- an eventless-pick note (grading skips at `event_link_not_found`; settle manually);
+- a voided banner;
+- capper, units and a Track Only badge on the list row, which today shows `unrouted / SUPPRESSED`
+  (`PicksExplorerClient.tsx:79-189`).
+
+Follow-ups: a distribution-mode filter, and a kill-switch refusal reason on pending delivery-eligible
+picks.
+
+**`official-picks` launch readiness** — four gaps that should close **before any un-kill**:
+1. **Delivery freshness is fooled by skipped rows.** `scripts/pipeline-health.ts:113-120,164` counts
+   any `sent` row. After an un-kill the two voided picks' rows become `sent` with no receipt and would
+   read as fresh deliveries. Derive it from `distribution_receipts` per target.
+2. **`/health` fails open.** It reports healthy when its zombie check throws
+   (`apps/api/src/routes/health.ts:272-278`), and never checks human-capper picks, because their
+   `promotion_target` is null (`:101,149`).
+3. **Replay excludes official-picks.**
+   - The worker replay CLI accepts only `discord:canary` / `discord:best-bets`
+     (`apps/worker/src/replay-failed-delivery.ts:11,186,307-310`), and `--target all` silently omits
+     official-picks.
+   - Neither replay nor `POST /api/picks/:id/retry-delivery` refuses when a sent receipt already
+     exists.
+4. **Double-post window.** The Discord POST sends no `nonce` / `enforce_nonce`
+   (`apps/worker/src/delivery-adapters.ts:135-143`). A post that succeeds before a failed confirm or
+   the 60 s watchdog is posted again.
+
+Before an un-kill as well:
+- `routes/kill-switch.ts:63` treats `reason` as optional.
+- `DELIVERY_KILL_SWITCH.md` has no official-picks release checklist, pending-backlog review,
+  double-post or dead-letter procedure.
+- `worker_outbox_health` cannot see never-claimed rows (`readiness-refresh.ts:711-715`).
+- The official-picks embed falls into the default branch with a "Unit Talk | Canary" footer
+  (`delivery-adapters.ts:606-649`).
+
+**Paid-member path, buildable now:**
+- **The bot's tier sync is refused on every call and the error is swallowed.** The bot authenticates as
+  `submitter`, the route needs `operator` (`apps/api/src/auth.ts:72,182-183`;
+  `apps/discord-bot/.../api-client.ts:199-203`). Hence `member_tiers` has 0 rows.
+- **Trials never expire.** No caller sets `effective_until` (`routes/member-tiers.ts:37-42`), and the
+  expiry query re-audits already-ended trials every hour without removing the role
+  (`runtime-repositories.ts:10619,10682-10688`).
+- **Free members can read active picks.** `/live` and `/today` have no tier gate (`live.ts:29`,
+  `today.ts:29`); the contract bars it (§3.3, §11).
+- **Copy promises what is not live.** "Market context on every pick", "priority alert delivery",
+  Best Bets / Trader Insights, line-movement signals, "CLV (vs SGO close)" and "Edge (sgo)":
+  - `apps/…/site-config.ts:52,103,119,158,161`, `pricing/page.tsx:35`, `faq/page.tsx:53,63`,
+    `trial-status.ts:81,83`, `upgrade.ts:157-168`, `heat-signal.ts:21,69`, `recap.ts:133`,
+    `stats.ts:122-123`, `delivery-adapters.ts:545-548`;
+  - the site also has no Trial tier and names the top tier "Syndicate", not the contract's Black Label.
+- **No member onboarding or support path.** No join welcome, no purchase linking, no lost-access
+  runbook.
+
+### 4.3 Blocked specifically by SGO (parked — do not route around)
+
+- Event-linked automated grading, and `grading_health`.
+- CLV on every pick, closing lines, and `ingestor_health`.
+- Market context and line movement: VIP+ intelligence, heat signals and live offers.
+- Provider-fed schedules, and so event-bound participant search.
+
+### 4.4 Blocked by open Codex T1 PRs
+
+- **#1680:** migration-proof governance repair. Until it lands, avoid proof-schema, truth-check and
+  DB-workflow docs.
+- **#1678:** warehouse retention, and with it `db_tripwires` relief. Its migration is reserved DDL.
+  Its `package.json` lock means no other lane can add a test file until it lands.
+- **Whop entitlement intake** (next section) needs a migration. It queues behind Griff's DDL decision,
+  not behind these PRs.
+
+### 4.5 What still blocks taking a first paying member
+
+In order. (a) buildable now, (b) needs Griff or an account/secret, (c) needs SGO.
+
+1. **(b) Whop and Discord setup.** Whop product/plan IDs, the webhook secret, the bot's role
+   position, VIP/Trial role IDs in the production env, and refund/cancellation policy. Prices and
+   tier naming are Griff's (pricing authority).
+2. **(a) Scoped bot credential for tier sync, and stop swallowing its error.** Proof: a Discord
+   role change writes a `member_tiers` row; a refused call alerts.
+3. **(a) Trial expiry that works.** Set `effective_until` on activation, use one definition of
+   "active", expire each trial once and remove the role.
+4. **(a)+(b) Whop webhook intake.** Signature-verified, idempotent, entitlement → tier, role
+   removal on cancel/expire. Needs a migration (reserved DDL) and the webhook secret.
+5. **(a) Tier-gate `/live` and `/today`.**
+6. **(a) The `official-picks` gaps in §4.2**, then **(b) Griff's decision to un-kill
+   `official-picks`** — member-delivery activation, reserved.
+7. **(a) Copy pass.** Remove or mark unavailable every claim in §4.2; add the Trial tier and Free
+   settled-results access.
+8. **(a) Onboarding and support**, after item 4.
+
+**(c) None of the above needs SGO.** A VIP/Trial product of human-capper picks with operator
+settlement is sellable without it. Only VIP+ intelligence, CLV and automated grading wait on SGO.
 
 ---
 
@@ -143,81 +240,66 @@ accepted in production).
 
 | # | Decision | Reserved under | Blocks |
 |---|---|---|---|
-| 1a | **Whether to release delivery-eligible pick `2cc92f4b`**, `pending` on `official-picks` since 2026-09-23 02:21 behind `killed = true`. Left alone, it will never deliver. | member-delivery activation (2) | that pick's delivery |
-| 1c | **Disposition of `c12f1e2f`** and its outbox row `5005f461`. It was submitted as Track Only and became delivery-eligible only through the fixed defect. Any change to it is a production data write. | production data (1) / member delivery (2) | that pick only |
-| 1b | **Settle `ed0ed43c`** (delivered 2026-09-18, still `posted`) through the Command Center once its game is final | operator action, not reserved | condition 4 completeness |
-| 2 | **SGO — OWNER-DEFERRED 2026-09-18.** Do not re-raise until provider-independent work is exhausted. `RESULTS_BACKFILL_AUTHORIZATION_PACKET.md` stays valid. | secrets (4) / paid provider (3) | automated grading, CLV, provider-fed supply — **deferred, not failed** |
-| 7 | **#1491 / #1492 architecture review** | merge authority | those two PRs only |
-| 8 | **#1451** — production DDL, `verify` red | production DDL (1) | #1451 only |
-| 9 | **Direct-`main` prevention control** (`enforce_admins: false`) | branch protection | nothing; the prohibition is already in force |
-| 10 | **Warehouse provisioning**, and now #1678's retention migration. Owner sequence: `WAREHOUSE_OBJECT_STORAGE_PROVISIONING.md` §6. | secrets (4), production DDL (1) | the conveyor's first real run; any relief for `db_tripwires` |
-| 11 | **Smart Form intent §2 wording.** `docs/03_product/smart-form/intent.md` §2 still says "Track Only is pinned server-side and delivery cannot be enabled from this surface". The ratified behaviour now lets a server-authorized capper request delivery from the form. That sentence is product intent, so it is Griff's to restate. | product intent | nothing; a doc correction |
+| 1b | **Settle `ed0ed43c`** (delivered 2026-09-18, still `posted`) through Command Center once final | operator action | condition 4 completeness |
+| 2 | **SGO — parked by owner.** Automated grading, CLV and market intelligence wait on it. `RESULTS_BACKFILL_AUTHORIZATION_PACKET.md` stays valid. | secrets / paid provider | §4.3 only |
+| 7 | **#1491 / #1492 architecture review** | merge authority | those PRs only |
+| 8 | **#1451** — production DDL, `verify` red | production DDL | #1451 only |
+| 9 | **Direct-`main` prevention** (`enforce_admins: false`) | branch protection | nothing; the prohibition holds |
+| 10 | **Warehouse provisioning and #1678's migration** | secrets, production DDL | `db_tripwires` relief |
+| 12 | **Whop and Discord setup** (§4.5 item 1): plan IDs, webhook secret, role IDs and position, refund/cancellation policy, prices and tier names | secrets, pricing and tier authority | the whole paid-member path |
+| 13 | **Who may un-kill `official-picks`.** Today any `operator` credential can (`routes/kill-switch.ts`), and an agent session last toggled it. Making the release owner-only touches merge authority / reserved-decision mechanics; this is a proposal, not a change. | member delivery; merge authority | nothing now; must precede launch |
+| 14 | **Un-kill `official-picks`** once §4.2's delivery gaps are closed | member-delivery activation | first paid delivery |
 
-Decision 1 (deploy) and decision 5 (#1671) of the previous edition are resolved: `063a9f36a` is
-deployed and #1671 merged. The other numbers are kept stable.
+Resolved since the previous edition: the deploy, #1671, the disposition of the two sample picks
+(voided), and the Smart Form intent wording (corrected in this PR under the direction above).
 
-**Affirmatively not asked for.** No containment change: the effective mode stays `human-capper`
-and every governed delivery target is `killed = true`. No provider activation. No clearing of the
-32 stranded canary `processing` rows (§9). No re-enabling of cron job 5.
+**Affirmatively not asked for.** No containment change, no SGO activation, no event seeding, no
+clearing of the 32 stranded canary `processing` rows (§9), no re-enabling of cron job 5.
 
 ---
 
-## 6. Recommended / executable next wave
+## 6. Recommended next production wave
 
-**Under existing authority, nothing reserved.** A reserved gate blocks only the work that depends
-on it.
+**Under existing authority, nothing reserved, nothing SGO-dependent.** A reserved gate blocks only
+the work that depends on it.
 
-**Standing sequencing directive (owner, 2026-09-18): SGO is intentionally off.** Finish everything
-that can truthfully be completed *without* provider-fed schedules, offers, results or closing
-lines. Mark the rest **explicitly deferred, not failed**.
+1. **Land #1681 and this PR.** The receipt change reaches cappers only through a deploy, and
+   dispatching one is Griff's.
+2. **Command Center operator view → Codex** (T2 packet ready, §4.2), when Codex's #1680 capacity
+   frees up. Claude does not code it.
+3. **`official-picks` launch hardening, Claude, in small lanes** (§4.2 items 1–4):
+   - receipt-based delivery freshness;
+   - `/health` failing closed;
+   - replay target list plus a sent-receipt guard;
+   - Discord `nonce`.
 
-1. **Command Center pick-detail truth.** Render what the database already records for a governed
-   pick: the `deliveryAuthorization` decision and reason, participant resolution, submission mode
-   and edge-scope reason; add capper, units and a Track Only badge to the list row. Read
-   `COMMAND_CENTER_PRODUCT_CONTRACT.md` first. Coordinate with Codex — Command Center has been its
-   lane.
-2. **Smart Form copy.** `BetSlipPanel.tsx` says "Requesting Track Only — the server decides
-   delivery". The server now guarantees Track Only; the copy should say so. UI change; needs a
-   deploy to take effect.
-3. **UTV2-1953 stays queued** by PM instruction; UTV2-1952 follows it. Do not start either
-   without a PM release.
-4. **Seed a current event, then submit again** in an unexercised market shape (player prop, total,
-   multi-leg), so condition 1 and grading are tested with a real event link. Needs an operator with
-   production credentials.
-5. **Repair `governance.awaiting-approval-drift`'s classification** (UTV2-1871). The repair belongs
-   in the classification, never in the data.
-6. **Re-home the inadmissible PRs** (#1429, #1491, #1492, #1495, #1498) through replacement PRs
-   carrying the same diff. Renaming an open PR's head branch closes it for good. #1491 / #1492
-   stay frozen pending PM review regardless.
-7. **Correct the stale `LIVE_TARGETS` lists.** `scripts/pipeline-health.ts:311` and
-   `apps/worker/src/replay-failed-delivery.ts:11` both hold `['discord:canary', 'discord:best-bets']`.
-   Neither names `discord:official-picks`, the only target `human-capper` delivers to. Read both
-   consumers before changing either; the worker file is runtime code.
+   Each is runtime code with its own proof; tier per the classifier floor. After them, an
+   official-picks embed branch and the kill-switch `reason` requirement plus release runbook.
+   New test files wait for #1678's `package.json` lock; extend existing tests meanwhile.
+4. **Paid-member path, Claude** (§4.5 items 2, 3, 5, 7):
+   - scoped bot credential and a visible sync failure;
+   - trial expiry;
+   - `/live` and `/today` tier gate;
+   - the copy pass.
 
-**Not executable, and why:** delivery or retirement of `2cc92f4b` and `c12f1e2f` (decisions 1a, 1c);
-automated grading and CLV (SGO, decision 2); #1678's migration (production DDL).
+   None needs Griff to start. Whop intake (item 4) is designed and staged up to the migration, then
+   surfaced as a reserved decision with the migration ready.
+5. **UTV2-1953 stays queued** by PM instruction; UTV2-1952 follows it.
+6. **`governance.awaiting-approval-drift` classification** (UTV2-1871) — repair the classification,
+   never the data.
 
-**On the governance slot.** A ceiling, not a quota. Record findings here and in
-`plan-lessons.md` rather than filing them. One defect class gets one canonical issue.
+**Findings recorded, not filed** (tooling; none blocks production):
 
-**Findings recorded 2026-09-28, not filed** (each affects tooling, none blocks production):
-
-- **A merged lane's proof cannot be repaired on its own lane.** WORK-2026092802's bundle authored
-  `proof_profile: "runtime"`, which the shared evidence contract rejects, and nothing caught it
-  before merge; closeout refused at P6/P9/R1/R2. The repair had to land under a second identity
-  (WORK-2026092804) and close by `workflow_dispatch`. `proof_profile` must be `app-runtime`,
-  `migration` or `static`; `app-runtime` also needs non-empty `runtime_proof.queries` and
-  `row_counts`. Validate with `validateEvidenceBundleContract` before opening the PR.
-- **WORK lanes still need `pr_url` bound in the lane PR itself**; otherwise closeout refuses and
-  a separate repair lane is needed (WORK-2026092803).
-- **The push-triggered closeout ignores WORK identities.** WORK lanes close only through
-  `workflow_dispatch` of `post-merge-lane-close.yml` without the `pr` input.
-- **`Return review packet` is red on every WORK-### PR.** It is not required.
-- **The orchestrator cannot approve its own PR.** T2/T3 WORK lanes merge on the executor-result
-  path of the Merge Gate.
+- **A merged lane's proof cannot be repaired on its own lane.** `proof_profile` must be
+  `app-runtime`, `migration` or `static`, and `app-runtime` needs non-empty
+  `runtime_proof.queries` and `row_counts`. Validate with `validateEvidenceBundleContract` before
+  opening the PR.
+- **WORK lanes need `pr_url` bound in the lane PR itself**, and close only through
+  `workflow_dispatch` of `post-merge-lane-close.yml` without `pr`.
+- **A delivery-ui lane may declare only its one app root** in `file_scope_lock`.
 
 **Lane hygiene owed.** 26 historical manifests sit at `merged`. Release a terminal lane's lease with
-`pnpm ops:lease release --issue <ID> --actor claude --reason "<why>"` as part of every closeout.
+`pnpm ops:lease release --issue <ID> --actor claude --reason "<why>"` at every closeout.
 
 ---
 
@@ -241,8 +323,8 @@ automated grading and CLV (SGO, decision 2); #1678's migration (production DDL).
   `human-capper`. Confirm against the newest successful `Deploy` run's
   `{"event":"syndicate_machine_mode.validated","mode":…}` line.
 - **`human-capper` cannot deliver on its own.** Its one enabled target is independently killed at
-  the live switch, and `isKilled()` fails closed for a target with no row. `2cc92f4b` waiting
-  `pending` is that mechanism working.
+  the live switch, and `isKilled()` fails closed for a target with no row. The two retired
+  sample picks' `pending` rows sat behind it for days without posting — that mechanism working.
 - **Grading is deliberately not contained.** `deploy.yml` sets `UNIT_TALK_GRADING_CRON_AUTORUN=true`
   outside the mode case statement.
 - **Non-delivery is enforced, not merely absent.** `isTrackOnlyPickMetadata` gates eight

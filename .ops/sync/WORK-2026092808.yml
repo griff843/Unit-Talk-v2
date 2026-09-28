@@ -1,0 +1,140 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092808
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092808
+  objective: >-
+    Rebuild `docs/mission/plan.md` around the owner's 2026-09-28 correction:
+    Track Only production acceptance is complete; manual and eventless picks are
+    valid for contained operator testing; event-linked grading and CLV wait on
+    SGO data supply; manual event seeding is not the production strategy.
+
+    Record a current pre-SGO launch gap in the plan: what is production-proven,
+    what can be completed now, what is SGO-blocked, what is blocked by open T1
+    PRs, and what blocks taking a paying member. It is sourced from read-only
+    audits of the official-picks delivery path, the membership path and Command
+    Center.
+
+    Correct the Smart Form intent: §2 still says delivery cannot be enabled from
+    the form, and the §8 status table predates every persisted pick.
+  acceptance_criteria:
+    - The plan states the corrected product truth above and drops manual event
+      seeding as a strategy.
+    - The plan carries the pre-SGO launch gap with file-level evidence for each
+      gap.
+    - Smart Form intent §2 states that Track Only stays Track Only when
+      selected, that an authorized capper may explicitly request delivery, and
+      that the server authorizes or refuses it and never widens Track Only.
+    - Smart Form intent §8 records, dated, which rows production evidence has
+      since moved to Exercised, without re-asserting rows that were not
+      re-measured.
+  guardrails:
+    - Docs only. No code, gate, tier or merge-control change.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI, then closed through `post-merge-lane-close.yml`
+      without `pr`.
+  unmapped_sections:
+    - >-
+      WORK-2026092808 — Reset the plan to pre-SGO product truth
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Why
+
+
+      - The plan listed operator event seeding as the next production step,
+      which the owner has ruled out.
+
+      - An agent reading the Smart Form intent would conclude the form can never
+      request delivery, and that no pick has ever persisted.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092808.md
+    title: WORK-2026092808 — Reset the plan to pre-SGO product truth
+    description: >-
+      # WORK-2026092808 — Reset the plan to pre-SGO product truth
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      - Rebuild `docs/mission/plan.md` around the owner's 2026-09-28 correction:
+      Track Only production acceptance is complete; manual and eventless picks
+      are valid for contained operator testing; event-linked grading and CLV
+      wait on SGO data supply; manual event seeding is not the production
+      strategy.
+
+      - Record a current pre-SGO launch gap in the plan: what is
+      production-proven, what can be completed now, what is SGO-blocked, what is
+      blocked by open T1 PRs, and what blocks taking a paying member. It is
+      sourced from read-only audits of the official-picks delivery path, the
+      membership path and Command Center.
+
+      - Correct the Smart Form intent: §2 still says delivery cannot be enabled
+      from the form, and the §8 status table predates every persisted pick.
+
+
+      ## Why
+
+
+      - The plan listed operator event seeding as the next production step,
+      which the owner has ruled out.
+
+      - An agent reading the Smart Form intent would conclude the form can never
+      request delivery, and that no pick has ever persisted.
+
+
+      ## Acceptance Criteria
+
+
+      - The plan states the corrected product truth above and drops manual event
+      seeding as a strategy.
+
+      - The plan carries the pre-SGO launch gap with file-level evidence for
+      each gap.
+
+      - Smart Form intent §2 states that Track Only stays Track Only when
+      selected, that an authorized capper may explicitly request delivery, and
+      that the server authorizes or refuses it and never widens Track Only.
+
+      - Smart Form intent §8 records, dated, which rows production evidence has
+      since moved to Exercised, without re-asserting rows that were not
+      re-measured.
+
+
+      ## Guardrails
+
+
+      - Docs only. No code, gate, tier or merge-control change.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI, then closed through `post-merge-lane-close.yml`
+      without `pr`.
+    captured_at: 2026-09-28T19:05:06.154Z
+    description_sha256: bb3dea427de8b74da07495b5ae943b6ac3659dd605fe9b3998a604deee429f6b
+  contract_hash: 058644e304bef4d76026af1794b85211ef671ddc0481536469541c3a995b36f3
