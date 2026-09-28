@@ -12,5 +12,5 @@ and deliberately left unchanged (see verification.md, Evidence 2).
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e8482f4e013487fd2f5673d1ec4b83d4982aed02
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1671

@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092706
 
-MERGE_SHA: pending merge
+MERGE_SHA: e8482f4e013487fd2f5673d1ec4b83d4982aed02
 
 Issue: WORK-2026092706
 Tier: T1
@@ -98,5 +98,5 @@ serialized. None of them resets tables.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `e8482f4e013487fd2f5673d1ec4b83d4982aed02`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1671
