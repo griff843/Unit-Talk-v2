@@ -564,6 +564,9 @@ export async function searchPicks(
   const limit = Number.isSafeInteger(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : DEFAULT_LIMIT;
   const offset = Number.isSafeInteger(rawOffset) ? Math.max(rawOffset, 0) : 0;
   const population = readPickPopulation(params['population']);
+  const distributionMode = ['track-only', 'delivery-eligible', 'ungoverned'].includes(params['distributionMode'] ?? '')
+    ? params['distributionMode'] ?? ''
+    : '';
 
   try {
     const client: Client = await getDataClient();
@@ -629,8 +632,20 @@ export async function searchPicks(
     const sortCol = ['created_at', 'id', 'selection', 'status'].includes(requestedSort) ? requestedSort : 'created_at';
     const sortAsc = params['sortDir'] === 'asc';
 
+    const applyDistributionMode = <T extends {
+      eq: (column: string, value: string) => T;
+      not: (column: string, operator: string, value: null) => T;
+      is: (column: string, value: null) => T;
+      or: (filters: string, options?: { referencedTable?: string }) => T;
+    }>(base: T): T => {
+      if (population === 'fixtures') return applyPickPopulation(base, population);
+      if (distributionMode === 'ungoverned') return applyPickPopulation(base, 'fixtures');
+      const governed = applyOperatorPickPopulation(base);
+      return distributionMode ? governed.eq('metadata->>distributionMode', distributionMode) : governed;
+    };
+
     const rowBase = applyFilters(client.from('picks_current_state').select(selectCols));
-    const rowQuery = (population === 'governed' ? applyOperatorPickPopulation(rowBase) : applyPickPopulation(rowBase, population))
+    const rowQuery = applyDistributionMode(rowBase)
       .order(sortCol, { ascending: sortAsc })
       .order('id', { ascending: sortAsc })
       .range(offset, offset + limit - 1)
@@ -653,7 +668,7 @@ export async function searchPicks(
     // production on three predicates -- unfiltered 107866/107866,
     // source='smart-form' 62629/62629, settled since 2026-01-01 18287/18287.
     const countBase = applyFilters(client.from('picks').select('id', { count: 'exact', head: true }));
-    const countQuery = (population === 'governed' ? applyOperatorPickPopulation(countBase) : applyPickPopulation(countBase, population)).abortSignal(AbortSignal.timeout(8_000));
+    const countQuery = applyDistributionMode(countBase).abortSignal(AbortSignal.timeout(8_000));
 
     const [
       { data, error },

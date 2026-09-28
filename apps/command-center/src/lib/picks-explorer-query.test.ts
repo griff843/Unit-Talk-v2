@@ -13,11 +13,17 @@ test('explorer bounds invalid paging and uses canonical lifecycle options', () =
   assert.equal(PICK_STATUS_OPTIONS.includes('failed'), false);
 });
 
-test('page links preserve search, lifecycle and population across navigation', () => {
-  const query = readPicksExplorerQuery({ q: '  Lions & Chiefs  ', status: 'posted', limit: '5', population: 'fixtures' });
+test('distribution mode is allow-listed and page links preserve it across navigation', () => {
+  assert.equal(readPicksExplorerQuery({ distributionMode: 'track-only' }).distributionMode, 'track-only');
+  assert.equal(readPicksExplorerQuery({ distributionMode: 'delivery-eligible' }).distributionMode, 'delivery-eligible');
+  assert.equal(readPicksExplorerQuery({ distributionMode: 'ungoverned' }).distributionMode, 'ungoverned');
+  assert.equal(readPicksExplorerQuery({ distributionMode: 'invented' }).distributionMode, '');
+
+  const query = readPicksExplorerQuery({ q: '  Lions & Chiefs  ', status: 'posted', distributionMode: 'delivery-eligible', limit: '5', population: 'fixtures' });
   const next = new URL(picksExplorerHref(query, 2), 'http://localhost');
   assert.equal(next.searchParams.get('q'), 'Lions & Chiefs');
   assert.equal(next.searchParams.get('status'), 'posted');
+  assert.equal(next.searchParams.get('distributionMode'), 'delivery-eligible');
   assert.equal(next.searchParams.get('limit'), '5');
   assert.equal(next.searchParams.get('page'), '2');
   assert.equal(next.searchParams.get('population'), 'fixtures');

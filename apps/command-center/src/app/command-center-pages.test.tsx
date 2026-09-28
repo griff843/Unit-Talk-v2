@@ -108,6 +108,43 @@ test('governed pick truth renders an authorized authorization record', () => {
   assert.match(html, /2026-09-28T20:30:00\.000Z/);
 });
 
+test('delivery-eligible picks show a killed target and its recorded switch truth', () => {
+  const html = renderToStaticMarkup(<GovernedPickTruth
+    metadata={{ distributionMode: 'delivery-eligible', deliveryAuthorization: authorization('authorized') }}
+    hasEventLink={true}
+    voided={false}
+    deliveryKillSwitch={{ state: 'killed', target: 'official-picks', reason: 'maintenance', actor: 'operator-1', updatedAt: '2026-09-28T21:00:00.000Z' }}
+  />);
+
+  assert.match(html, /Delivery held:.*official-picks.*kill switch engaged/);
+  assert.match(html, /maintenance/);
+  assert.match(html, /operator-1/);
+  assert.match(html, /2026-09-28T21:00:00\.000Z/);
+});
+
+test('delivery-eligible picks fail closed for missing and unavailable switch reads', () => {
+  const missingHtml = renderToStaticMarkup(<GovernedPickTruth
+    metadata={{ distributionMode: 'delivery-eligible' }} hasEventLink={true} voided={false}
+    deliveryKillSwitch={{ state: 'missing', target: 'official-picks' }}
+  />);
+  const unavailableHtml = renderToStaticMarkup(<GovernedPickTruth
+    metadata={{ distributionMode: 'delivery-eligible' }} hasEventLink={true} voided={false}
+    deliveryKillSwitch={{ state: 'unavailable', target: 'official-picks' }}
+  />);
+
+  assert.match(missingHtml, /Delivery held: the worker fails closed/);
+  assert.match(unavailableHtml, /Kill-switch state unavailable/);
+  assert.doesNotMatch(unavailableHtml, /kill switch disengaged/);
+});
+
+test('Track Only picks do not render a delivery-held block', () => {
+  const html = renderToStaticMarkup(<GovernedPickTruth
+    metadata={{ distributionMode: 'track-only' }} hasEventLink={true} voided={false}
+  />);
+
+  assert.doesNotMatch(html, /Delivery held|Kill-switch state unavailable/);
+});
+
 test('malformed delivery authorization never renders as authorized', () => {
   const html = renderToStaticMarkup(<GovernedPickTruth
     metadata={{ distributionMode: 'track-only', deliveryAuthorization: { decision: 'authorized' } }}

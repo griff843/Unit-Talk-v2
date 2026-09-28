@@ -12,6 +12,7 @@ test('operations home counts real operator states and reads bounded lifecycle ac
   const { searchPicks } = await import('./queues');
   const originalFetch = globalThis.fetch;
   let failCount = false;
+  let expectedDistributionMode: string | null = null;
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
@@ -41,6 +42,9 @@ test('operations home counts real operator states and reads bounded lifecycle ac
       return Response.json(rows, { headers: failCount ? {} : { 'content-range': '0-1/2' } });
     }
     assert.equal(params.get(`${prefix}metadata->distributionMode`), 'not.is.null');
+    if (expectedDistributionMode) {
+      assert.equal(params.get(`${prefix}metadata->>distributionMode`), `eq.${expectedDistributionMode}`);
+    }
     for (const key of ['testRun', 'proof_issue', 'proof_fixture_id', 'proof_script', 'test_key']) assert.equal(params.get(`${prefix}metadata->>${key}`), 'is.null');
     assert.ok(params.getAll(`${prefix}or`).includes('(selection.is.null,selection.not.ilike.*proof*)'));
     if (lifecycle) {
@@ -83,9 +87,14 @@ test('operations home counts real operator states and reads bounded lifecycle ac
       assert.equal(activity[0]?.to_state, 'posted');
     });
     await t.test('pick search rows and totals use the same fixture exclusion before pagination', async () => {
-      const result = await withRequestContext({ authorization: 'Bearer operations-home-test' }, () => searchPicks({ q: 'Lions', limit: '10', offset: '10' }));
-      assert.equal(result.total, 1250);
-      assert.equal(result.picks.length, 1);
+      expectedDistributionMode = 'track-only';
+      try {
+        const result = await withRequestContext({ authorization: 'Bearer operations-home-test' }, () => searchPicks({ q: 'Lions', distributionMode: 'track-only', limit: '10', offset: '10' }));
+        assert.equal(result.total, 1250);
+        assert.equal(result.picks.length, 1);
+      } finally {
+        expectedDistributionMode = null;
+      }
     });
     await t.test('a missing count cannot produce a reassuring zero', async () => {
       failCount = true;

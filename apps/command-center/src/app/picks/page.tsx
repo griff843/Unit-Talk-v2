@@ -19,6 +19,7 @@ export default async function PicksPage({
   try {
     const { picks, total } = await searchPicks({
       q: query.q, status: query.status, limit: String(query.limit), offset: String(offset),
+      ...(fixtureMode ? {} : { distributionMode: query.distributionMode }),
       ...(fixtureMode ? { population: 'fixtures' } : {}),
     });
 
@@ -33,7 +34,7 @@ export default async function PicksPage({
       </nav>
     );
     const filters = (
-      <form action="/picks" method="get" key={`${query.q}:${query.status}:${query.limit}`} className="flex flex-wrap items-end gap-3">
+      <form action="/picks" method="get" key={`${query.q}:${query.status}:${query.distributionMode}:${query.limit}`} className="flex flex-wrap items-end gap-3">
         {fixtureMode ? <input type="hidden" name="population" value="fixtures" /> : null}
         <label className="flex w-full flex-col gap-1 text-sm sm:w-auto sm:min-w-[220px] sm:flex-1">Search picks
           <input name="q" defaultValue={query.q} maxLength={200} placeholder="Selection, market or source" className="cc-input min-w-0" />
@@ -42,6 +43,14 @@ export default async function PicksPage({
           <select name="status" defaultValue={query.status} className="cc-select">
             <option value="">All statuses</option>
             {PICK_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">Distribution mode
+          <select name="distributionMode" defaultValue={query.distributionMode} className="cc-select">
+            <option value="">All</option>
+            <option value="track-only">Track Only</option>
+            <option value="delivery-eligible">Delivery-eligible</option>
+            <option value="ungoverned">Ungoverned</option>
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">Picks per page
