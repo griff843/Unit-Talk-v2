@@ -1,0 +1,144 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092804
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092804
+  objective: "Correct `docs/06_status/proof/WORK-2026092802/evidence.json` so it
+    satisfies the shared evidence contract for the profile its manifest
+    declares. The manifest's `lane_type: runtime` maps to `app-runtime`
+    (`declaredProfileForLaneType`)."
+  acceptance_criteria:
+    - "`proof_profile` is `app-runtime`."
+    - "`runtime_proof.queries` and `runtime_proof.row_counts` restate, without
+      adding any new claim, the reads and counts that the merged live test
+      `apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts`
+      asserts, all recorded on staging run `36409289475`."
+    - "`validateEvidenceBundleContract(bundle, { gate: 'pre-merge', laneType:
+      'runtime', tier: 'T1' })` returns valid, with no failures."
+    - "`sha_binding` is unchanged: `verified_source_sha` stays
+      `d04e63d759e576a0f398804a87f419da73f44c25` and `merge_sha` stays null for
+      the closeout rebinder to set."
+    - The lane is NOT closed by this PR. Closing still goes through
+      `post-merge-lane-close.yml` and a passing `ops:truth-check`.
+  guardrails:
+    - No product code changes.
+    - No change to verification.md, diff-summary.md or the manifest of
+      WORK-2026092802.
+    - No weakening of closeout, truth-check, proof or merge controls.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026092802` is dispatched without `pr`.
+  unmapped_sections:
+    - >-
+      WORK-2026092804 — Correct WORK-2026092802's proof profile so its lane can
+      close
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. It follows the precedent
+      that a merged lane's proof is repaired under a different identity, because
+      any PR on the merged lane itself is refused by Executor Result Validation.
+
+
+      ## Why
+
+
+      - Closeout run `36422112167` for WORK-2026092802 refused at P6, P9, R1 and
+      R2: "proof_profile must be one of app-runtime, migration, or static; got
+      runtime".
+
+      - Fixing only the label would fail next: the `app-runtime` profile also
+      requires non-empty `runtime_proof.queries` and `runtime_proof.row_counts`,
+      which the bundle omitted.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092804.md
+    title: WORK-2026092804 — Correct WORK-2026092802's proof profile so its lane can
+      close
+    description: >-
+      # WORK-2026092804 — Correct WORK-2026092802's proof profile so its lane
+      can close
+
+
+      Tier: T3 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. It follows the precedent
+      that a merged lane's proof is repaired under a different identity, because
+      any PR on the merged lane itself is refused by Executor Result Validation.
+
+
+      ## Objective
+
+
+      - Correct `docs/06_status/proof/WORK-2026092802/evidence.json` so it
+      satisfies the shared evidence contract for the profile its manifest
+      declares. The manifest's `lane_type: runtime` maps to `app-runtime`
+      (`declaredProfileForLaneType`).
+
+
+      ## Why
+
+
+      - Closeout run `36422112167` for WORK-2026092802 refused at P6, P9, R1 and
+      R2: "proof_profile must be one of app-runtime, migration, or static; got
+      runtime".
+
+      - Fixing only the label would fail next: the `app-runtime` profile also
+      requires non-empty `runtime_proof.queries` and `runtime_proof.row_counts`,
+      which the bundle omitted.
+
+
+      ## Acceptance Criteria
+
+
+      - `proof_profile` is `app-runtime`.
+
+      - `runtime_proof.queries` and `runtime_proof.row_counts` restate, without
+      adding any new claim, the reads and counts that the merged live test
+      `apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts`
+      asserts, all recorded on staging run `36409289475`.
+
+      - `validateEvidenceBundleContract(bundle, { gate: 'pre-merge', laneType:
+      'runtime', tier: 'T1' })` returns valid, with no failures.
+
+      - `sha_binding` is unchanged: `verified_source_sha` stays
+      `d04e63d759e576a0f398804a87f419da73f44c25` and `merge_sha` stays null for
+      the closeout rebinder to set.
+
+      - The lane is NOT closed by this PR. Closing still goes through
+      `post-merge-lane-close.yml` and a passing `ops:truth-check`.
+
+
+      ## Guardrails
+
+
+      - No product code changes.
+
+      - No change to verification.md, diff-summary.md or the manifest of
+      WORK-2026092802.
+
+      - No weakening of closeout, truth-check, proof or merge controls.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026092802` is dispatched without `pr`.
+    captured_at: 2026-09-28T12:36:38.494Z
+    description_sha256: c8ecd705b50ae666f13d51b3d6d8bb3f18bc9b49d0f317f0359b8a78feaac306
+  contract_hash: d07520b93a5aa146fced5d78b28ab31baaa6e9988fdea9efed891a30743e1add
