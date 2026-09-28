@@ -28,7 +28,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-09-28T13:21:45.334Z",
-  "heartbeat_at": "2026-09-28T13:55:29.940Z",
+  "heartbeat_at": "2026-09-28T13:55:54.021Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1370-warehouse-retention.json",
@@ -42,7 +42,6 @@
     "selected_by": "three-brain",
     "policy_version": "1.0.0"
   },
-  "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1370-warehouse-retention",
