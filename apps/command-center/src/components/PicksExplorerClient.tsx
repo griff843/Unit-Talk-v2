@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import Link from '@/components/OperatorLink';
 
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
@@ -108,6 +109,23 @@ function RoutingCell({
   );
 }
 
+function GovernedPickCell({ metadata, capper, stakeUnits }: {
+  metadata: Record<string, unknown> | null;
+  capper: string | null;
+  stakeUnits: number | null;
+}) {
+  const distributionMode = metadata ? str(metadata['distributionMode']) : null;
+  return (
+    <div className="leading-tight">
+      <div className="text-xs text-gray-200">{capper ?? 'Capper not recorded'}</div>
+      <div className="text-[10px] text-gray-500">{stakeUnits != null ? `${stakeUnits}u` : 'Units not recorded'}</div>
+      {distributionMode === 'track-only' ? (
+        <span className="mt-1 inline-flex rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-200">Track Only</span>
+      ) : null}
+    </div>
+  );
+}
+
 export function PicksExplorerClient({ picks, sourceTotal, offset = 0 }: PicksExplorerClientProps) {
   return (
     <div className="flex flex-col gap-6">
@@ -145,7 +163,9 @@ export function PicksExplorerClient({ picks, sourceTotal, offset = 0 }: PicksExp
               const matchup = str(pick['matchup']);
               const result = str(pick['settlement_result']);
               const promotionStatus = str(pick['promotion_status']);
-              const insight = buildScoreInsight(obj(pick['metadata']));
+              const metadata = obj(pick['metadata']);
+              const insight = buildScoreInsight(metadata);
+              const governed = metadata !== null && Object.hasOwn(metadata, 'distributionMode');
               return (
                 <tr key={id} className="border-b border-gray-800/60 text-gray-300 transition-colors hover:bg-white/[0.02]">
                   <td className="px-4 py-2">
@@ -161,11 +181,19 @@ export function PicksExplorerClient({ picks, sourceTotal, offset = 0 }: PicksExp
                     <ScoreCell score={num(pick['promotion_score'])} status={promotionStatus} />
                   </td>
                   <td className="px-4 py-2">
-                    <RoutingCell
-                      target={str(pick['promotion_target'])}
-                      status={promotionStatus}
-                      reason={str(pick['promotion_reason'])}
-                    />
+                    {governed ? (
+                      <GovernedPickCell
+                        metadata={metadata}
+                        capper={str(pick['capper_display_name'])}
+                        stakeUnits={num(pick['stake_units'])}
+                      />
+                    ) : (
+                      <RoutingCell
+                        target={str(pick['promotion_target'])}
+                        status={promotionStatus}
+                        reason={str(pick['promotion_reason'])}
+                      />
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     <span
