@@ -20,8 +20,8 @@ result: pass (static governance behavior); governed staging DB receipt pending C
 Focused contract suite:
 
 ```text
-tests 261
-pass 261
+tests 281
+pass 281
 fail 0
 ```
 
@@ -43,7 +43,7 @@ Local writable-DB containment:
 
 ## Verification
 
-- `pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts` — PASS (261/261).
+- `pnpm exec tsx --test scripts/ops/lane-link-pr.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts` — PASS (281/281).
 - `pnpm type-check` — PASS.
 - `pnpm lint` — PASS.
 - `git diff --check` — PASS before implementation commit.
@@ -54,4 +54,4 @@ Local writable-DB containment:
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: 19604aca3d8f1993cd500b2fb9d54bee17c49472
+Execution SHA: 170039b84878d7ca88578464d2db4ba696c46308
