@@ -1,6 +1,6 @@
 import Link from '@/components/OperatorLink';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
-import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow } from '@/lib/data/results-ops';
+import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow, type DeliveredAwaitingSettlementRow, type SettlementPage } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 import { renderClvSummary, isClvUnresolved } from '@/lib/clv-summary';
 import { SettlementWorkbench } from '@/components/SettlementWorkbench';
@@ -12,6 +12,43 @@ import { isPickAlreadySettled } from '@/lib/settlement-state';
 export const metadata = { title: 'Settlement — Unit Talk Command Center' };
 
 export const dynamic = 'force-dynamic';
+
+function readPage(searchParams: Record<string, string | string[] | undefined>, key: string) {
+  const value = searchParams[key];
+  const parsed = typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function settlementHref(
+  pages: { settlementsPage: number; manualReviewPage: number; correctionsPage: number },
+  pickId: string | null,
+) {
+  const params = new URLSearchParams();
+  if (pickId) params.set('pickId', pickId);
+  if (pages.settlementsPage > 1) params.set('settlementsPage', String(pages.settlementsPage));
+  if (pages.manualReviewPage > 1) params.set('manualReviewPage', String(pages.manualReviewPage));
+  if (pages.correctionsPage > 1) params.set('correctionsPage', String(pages.correctionsPage));
+  const query = params.toString();
+  return query ? `/settlement?${query}` : '/settlement';
+}
+
+function HistoryPages({
+  label,
+  pagination,
+  href,
+}: {
+  label: string;
+  pagination: SettlementPage;
+  href: (page: number) => string;
+}) {
+  return (
+    <nav aria-label={label} className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+      <span>Page {pagination.page} of {pagination.lastPage} · {pagination.total.toLocaleString('en-US')} records</span>
+      {pagination.page > 1 ? <Link className="text-blue-400 hover:underline" href={href(pagination.page - 1)}>Previous page</Link> : null}
+      {pagination.page < pagination.lastPage ? <Link className="text-blue-400 hover:underline" href={href(pagination.page + 1)}>Next page</Link> : null}
+    </nav>
+  );
+}
 
 function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: number }) {
   return (
@@ -139,13 +176,18 @@ export default async function SettlementPage({
   const requestedPickId = typeof searchParams['pickId'] === 'string'
     ? searchParams['pickId'].trim() || null
     : null;
+  const requestedPages = {
+    settlementsPage: readPage(searchParams, 'settlementsPage'),
+    manualReviewPage: readPage(searchParams, 'manualReviewPage'),
+    correctionsPage: readPage(searchParams, 'correctionsPage'),
+  };
   const nowMs = Date.now();
   const observedAt = new Date(nowMs).toISOString();
 
   let snapshot: ResultsOpsSnapshot | null = null;
   let loadError: string | null = null;
   try {
-    snapshot = await getResultsOpsSnapshot();
+    snapshot = await getResultsOpsSnapshot(requestedPages);
   } catch (error) {
     console.error('command_center.settlement_read_failed', error);
     loadError = 'Settlement history is temporarily unavailable. Refresh to try again or check System Health.';
@@ -273,6 +315,15 @@ export default async function SettlementPage({
             ) : (
               <SettlementTable rows={snapshot.manualReview} nowMs={nowMs} />
             )}
+            <HistoryPages
+              label="Manual review pages"
+              pagination={snapshot.pagination.manualReview}
+              href={(page) => settlementHref({
+                settlementsPage: snapshot.pagination.settlements.page,
+                manualReviewPage: page,
+                correctionsPage: snapshot.pagination.corrections.page,
+              }, requestedPickId)}
+            />
           </div>
 
           <div className="cc-surface p-5">
@@ -327,24 +378,42 @@ export default async function SettlementPage({
               Corrections ({snapshot.counts.corrections})
             </h2>
             <p className="mb-3 text-xs cc-text-muted">
-              Corrections preserve the original settlement and record who changed the outcome. Showing up to 50 most recent corrections.
+              Corrections preserve the original settlement and record who changed the outcome. Results are paged newest first.
             </p>
             {snapshot.corrections.length === 0 ? (
               <EmptyState message="No correction records." />
             ) : (
               <SettlementTable rows={snapshot.corrections} nowMs={nowMs} />
             )}
+            <HistoryPages
+              label="Correction pages"
+              pagination={snapshot.pagination.corrections}
+              href={(page) => settlementHref({
+                settlementsPage: snapshot.pagination.settlements.page,
+                manualReviewPage: snapshot.pagination.manualReview.page,
+                correctionsPage: page,
+              }, requestedPickId)}
+            />
           </div>
 
           <div className="cc-surface p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
-              Recent Settlement Records ({snapshot.recentSettlements.length} shown)
+              Current Effective Settlements ({snapshot.recentSettlements.length} shown of {snapshot.pagination.settlements.total.toLocaleString('en-US')})
             </h2>
             {snapshot.recentSettlements.length === 0 ? (
               <EmptyState message="No settlement records yet." />
             ) : (
               <SettlementTable rows={snapshot.recentSettlements} nowMs={nowMs} />
             )}
+            <HistoryPages
+              label="Settlement pages"
+              pagination={snapshot.pagination.settlements}
+              href={(page) => settlementHref({
+                settlementsPage: page,
+                manualReviewPage: snapshot.pagination.manualReview.page,
+                correctionsPage: snapshot.pagination.corrections.page,
+              }, requestedPickId)}
+            />
           </div>
         </>
       ) : null}

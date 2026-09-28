@@ -3,6 +3,7 @@ import type { Database } from '../../../../../packages/db/src/database.types.js'
 import { getDataClient } from './client';
 import { applyOperatorPickPopulation } from '../governed-population';
 import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
+import { readCurrentManualReviewTruth } from './results-ops';
 
 export async function getOperationsMetrics() {
   const client = await getDataClient() as SupabaseClient<Database>;
@@ -13,7 +14,7 @@ export async function getOperationsMetrics() {
   const [total, submittedToday, manualReview, awaitingSettlement, agedPosted] = await Promise.all([
     applyOperatorPickPopulation(client.from('picks').select('id', { count: 'exact', head: true })).abortSignal(signal),
     applyOperatorPickPopulation(client.from('picks').select('id', { count: 'exact', head: true })).gte('created_at', today).abortSignal(signal),
-    applyOperatorPickPopulation(client.from('picks_current_state').select('id', { count: 'exact', head: true })).eq('settlement_status', 'manual_review').abortSignal(signal),
+    readCurrentManualReviewTruth(client),
     applyOperatorPickPopulation(client.from('picks_current_state').select('id', { count: 'exact', head: true }))
       .eq('status', 'posted').is('settlement_recorded_at', null).eq('metadata->deliveryAuthorization->>decision', 'authorized').abortSignal(signal),
     applyOperatorPickPopulation(client.from('picks_current_state').select('id', { count: 'exact', head: true }))
@@ -23,7 +24,7 @@ export async function getOperationsMetrics() {
     observedAt,
     total: readAuthoritativeCount(total, 'operator picks'),
     submittedToday: readAuthoritativeCount(submittedToday, 'operator submissions today'),
-    manualReview: readAuthoritativeCount(manualReview, 'current manual review'),
+    manualReview: manualReview.length,
     awaitingSettlement: readAuthoritativeCount(awaitingSettlement, 'delivered awaiting settlement'),
     agedPosted: readAuthoritativeCount(agedPosted, 'posted over 24h without settlement'),
   };

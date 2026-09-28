@@ -11,5 +11,5 @@ Not changed: `packages/observability`, `outbox-triage.ts`, `readiness-refresh.ts
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 62906b0350cce46d51f0afd8e2b1a081df981da3
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1669

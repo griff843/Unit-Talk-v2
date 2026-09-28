@@ -11,7 +11,11 @@
 //
 // WORK-2026092703: the monitor also read only the first 1000 non-sent rows, and
 // classified dead letters with its own copy of a rule the readiness gate owns.
+//
+// WORK-2026092708: the authority-boundary check judged 100 arbitrary receipts
+// against a hardcoded two-target list that never named `official-picks`.
 
+import { governedDeliveryTargets } from '@unit-talk/contracts';
 import { classifyDeadLetter } from './outbox-triage.js';
 
 export type WorkerTargetSource = 'heartbeat' | 'env' | 'unknown';
@@ -283,4 +287,67 @@ export async function readAllPages<Row extends { id: string }>(
     for (const row of page) byId.set(row.id, row);
   }
   return [...byId.values()];
+}
+
+// ── receipt authority (WORK-2026092708) ───────────────────────────────────
+
+/** Receipts recorded inside this many days are judged; older ones are history. */
+export const RECEIPT_AUTHORITY_WINDOW_DAYS = 30;
+
+export type ReceiptDestinationClass = 'governed' | 'control' | 'simulated' | 'unrecognized';
+
+export interface ReceiptRowLike {
+  id: string;
+  channel: string | null;
+  payload?: unknown;
+  recorded_at?: string;
+}
+
+/**
+ * The logical target a receipt was delivered for. Since UTV2-1929 `channel` is
+ * the resolved Discord id (a pinned per-capper channel, say) and the logical
+ * target lives in `payload.target`; older receipts carry the target in
+ * `channel` itself.
+ */
+export function receiptLogicalTarget(row: ReceiptRowLike): string | null {
+  const payload = row.payload;
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const target = (payload as Record<string, unknown>).target;
+    if (typeof target === 'string' && target.trim() !== '') return target.trim();
+  }
+  return typeof row.channel === 'string' && row.channel.trim() !== '' ? row.channel.trim() : null;
+}
+
+/**
+ * `governed` — a destination the registry, worker coverage and kill switch
+ * govern (`governedDeliveryTargets`). `control` — the canary lane.
+ * `simulated` — a dry-run receipt, which delivered nothing. Anything else,
+ * including a bare channel id with no logical target, is `unrecognized`: the
+ * monitor cannot show it was authorized, so it does not call it clean.
+ */
+export function classifyReceiptDestination(row: ReceiptRowLike): ReceiptDestinationClass {
+  const logical = receiptLogicalTarget(row);
+  if (logical === null) return 'unrecognized';
+  let name = logical.toLowerCase();
+  if (name.startsWith('simulated:')) return 'simulated';
+  if (name.startsWith('discord:')) name = name.slice('discord:'.length);
+  if (name.startsWith('#')) name = name.slice(1);
+  if ((governedDeliveryTargets as readonly string[]).includes(name)) return 'governed';
+  if (name === 'canary') return 'control';
+  return 'unrecognized';
+}
+
+export interface ReceiptAuthorityPartition<Row> {
+  governed: Row[];
+  control: Row[];
+  simulated: Row[];
+  unrecognized: Row[];
+}
+
+export function partitionReceiptAuthority<Row extends ReceiptRowLike>(
+  rows: readonly Row[],
+): ReceiptAuthorityPartition<Row> {
+  const out: ReceiptAuthorityPartition<Row> = { governed: [], control: [], simulated: [], unrecognized: [] };
+  for (const row of rows) out[classifyReceiptDestination(row)].push(row);
+  return out;
 }

@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { evaluateQueueHealth } from '@unit-talk/observability';
+import { governedDeliveryTargets } from '@unit-talk/contracts';
 import {
+  classifyReceiptDestination,
   deadLetterBucket,
   killSwitchKeyForTarget,
   partitionDeadLetters,
   partitionHeldPendingRows,
+  partitionReceiptAuthority,
   partitionUnclaimableProcessing,
   readAllPages,
+  receiptLogicalTarget,
   resolveDeployedWorkerTargets,
   type RangeQuery,
 } from './pipeline-health-classification.js';
@@ -337,4 +341,62 @@ test('a page error is raised, never returned as a shorter population', async () 
     return query;
   };
   await assert.rejects(readAllPages(failing), /offset 0: boom/);
+});
+
+// ── receipt authority (WORK-2026092708) ───────────────────────────────────
+// Shapes are the ones production holds (measured 2026-09-27).
+
+const receipt = (id: string, channel: string | null, target?: string) => ({
+  id,
+  channel,
+  payload: target === undefined ? { adapter: 'discord' } : { adapter: 'discord', target },
+});
+
+test('a human-capper receipt is judged by payload.target, not the resolved channel id', () => {
+  // UTV2-1929: channel is the pinned per-capper Discord id.
+  const row = receipt('r1', '1384052464189440120', 'discord:official-picks');
+  assert.equal(receiptLogicalTarget(row), 'discord:official-picks');
+  assert.equal(classifyReceiptDestination(row), 'governed');
+});
+
+test('an older receipt with no payload.target is judged by its channel, including the #canary spelling', () => {
+  assert.equal(classifyReceiptDestination(receipt('r2', 'discord:official-picks')), 'governed');
+  assert.equal(classifyReceiptDestination(receipt('r3', 'discord:#canary')), 'control');
+  assert.equal(classifyReceiptDestination(receipt('r4', 'discord:canary')), 'control');
+  assert.equal(classifyReceiptDestination(receipt('r5', 'discord:best-bets')), 'governed');
+});
+
+test('every governed delivery target is recognised, so the check follows the registry rather than a copy of it', () => {
+  for (const target of governedDeliveryTargets) {
+    assert.equal(classifyReceiptDestination(receipt(`g-${target}`, '1', `discord:${target}`)), 'governed', target);
+  }
+});
+
+test('a dry-run receipt is simulated, not a delivery', () => {
+  assert.equal(classifyReceiptDestination(receipt('r6', 'simulated:discord:canary')), 'simulated');
+});
+
+test('a destination the registry does not govern is unrecognized — including a bare channel id and a missing channel', () => {
+  assert.equal(classifyReceiptDestination(receipt('r7', 'discord:recaps')), 'unrecognized');
+  assert.equal(classifyReceiptDestination(receipt('r8', 'discord:1519728782355857529')), 'unrecognized');
+  assert.equal(classifyReceiptDestination(receipt('r9', null)), 'unrecognized');
+  assert.equal(classifyReceiptDestination({ id: 'r10', channel: '  ', payload: { target: '' } }), 'unrecognized');
+});
+
+test('a governed-looking channel cannot launder an ungoverned payload.target', () => {
+  assert.equal(classifyReceiptDestination(receipt('r11', 'discord:official-picks', 'discord:strategy-room')), 'unrecognized');
+});
+
+test('the partition places every row exactly once', () => {
+  const rows = [
+    receipt('a', '1384052464189440120', 'discord:official-picks'),
+    receipt('b', 'discord:#canary'),
+    receipt('c', 'simulated:discord:canary'),
+    receipt('d', 'discord:game-threads'),
+  ];
+  const p = partitionReceiptAuthority(rows);
+  assert.deepEqual(
+    { g: p.governed.map((r) => r.id), c: p.control.map((r) => r.id), s: p.simulated.map((r) => r.id), u: p.unrecognized.map((r) => r.id) },
+    { g: ['a'], c: ['b'], s: ['c'], u: ['d'] },
+  );
 });

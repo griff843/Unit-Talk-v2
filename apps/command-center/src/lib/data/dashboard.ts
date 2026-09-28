@@ -6,6 +6,7 @@ import { getProviderCycleHealth } from './provider-cycle-health.js';
 import { getStorageHealth } from './storage-health.js';
 import { readAuthoritativeCount } from '../query-result.js';
 import { applyOperatorPickPopulation } from '../governed-population';
+import { readEffectiveSettlementTruth, type EffectiveSettlementTruth } from './results-ops.js';
 import type {
   DashboardData,
   DashboardRuntimeData,
@@ -55,6 +56,17 @@ function asStringOrNull(v: unknown): string | null {
   return typeof v === 'string' ? v : null;
 }
 
+export function settlementRowHasClv(row: Record<string, unknown>): boolean {
+  if (typeof row['clvRaw'] === 'number' || typeof row['clvPercent'] === 'number') {
+    return true;
+  }
+  const payload = readJsonObject(row['payload']);
+  return (
+    typeof payload?.['clvRaw'] === 'number' ||
+    typeof payload?.['clvPercent'] === 'number'
+  );
+}
+
 function asNumberOrNull(v: unknown): number | null {
   return typeof v === 'number' ? v : null;
 }
@@ -81,16 +93,16 @@ function deriveSignals(
   snapshot: unknown,
   recap: unknown,
   pipeline?: unknown,
+  settlementTruth?: EffectiveSettlementTruth,
 ): LifecycleSignal[] {
   const snap = unwrapResponse(snapshot);
   const counts = asRecord(snap['counts']);
   const recentPicks = asArray(snap['recentPicks']);
   const recentReceipts = asArray(snap['recentReceipts']);
-  const recentSettlements = asArray(snap['recentSettlements']);
 
   const deadLetterOutbox = asNumber(counts['deadLetterOutbox']);
   const failedOutbox = asNumber(counts['failedOutbox']);
-  const pendingManualReview = asNumber(counts['pendingManualReview']);
+  const pendingManualReview = settlementTruth?.manualReview.length ?? 0;
 
   // ── submission ──────────────────────────────────────────────────────────
   const submissionStatus: SignalStatus =
@@ -182,15 +194,12 @@ function deriveSignals(
 
   let settlementStatus: SignalStatus;
   let settlementDetail: string;
-  if (total === 0) {
+  if (pendingManualReview > 0) {
+    settlementStatus = 'DEGRADED';
+    settlementDetail = `${total} settled; ${pendingManualReview} pending manual review`;
+  } else if (total === 0) {
     settlementStatus = 'WORKING';
     settlementDetail = 'No settled picks yet';
-  } else if (
-    pendingManualReview > 0 ||
-    recentSettlements.some((s) => asRecord(s)['status'] === 'manual_review')
-  ) {
-    settlementStatus = 'DEGRADED';
-    settlementDetail = `${total} settled; pending manual review`;
   } else {
     settlementStatus = 'WORKING';
     settlementDetail = `${total} settled (${wins}W/${losses}L/${pushes}P)`;
@@ -280,22 +289,22 @@ function mapSettlementStatus(
   settlementResult: string | null,
   recentSettlements: unknown[],
 ): PickRow['settlementStatus'] {
-  if (settlementResult === null) return 'pending';
-
   const settlementForPick = recentSettlements
     .map(asRecord)
-    .filter((s) => asString(s['pick_id']) === pickId);
+    .filter((s) => asString(s['pick_id'] ?? s['pickId']) === pickId);
 
   if (settlementForPick.some((s) => asString(s['status']) === 'manual_review')) {
     return 'manual_review';
   }
   if (
     settlementForPick.some(
-      (s) => s['corrects_id'] !== null && s['corrects_id'] !== undefined,
+      (s) => (s['corrects_id'] ?? s['correctsId']) !== null && (s['corrects_id'] ?? s['correctsId']) !== undefined,
     )
   ) {
     return 'corrected';
   }
+  if (settlementForPick.some((s) => asString(s['status']) === 'settled')) return 'settled';
+  if (settlementResult === null) return 'pending';
   return 'settled';
 }
 
@@ -345,13 +354,7 @@ function buildIntelligenceSummary(
       : typeof metadata?.['edgeSource'] === 'string'
         ? metadata['edgeSource']
         : null;
-  const clv = settlementRows.some((row) => {
-    const payload = readJsonObject(row['payload']);
-    return (
-      typeof payload?.['clvRaw'] === 'number' ||
-      typeof payload?.['clvPercent'] === 'number'
-    );
-  });
+  const clv = settlementRows.some(settlementRowHasClv);
 
   return {
     domainAnalysis: domainAnalysis !== null,
@@ -397,9 +400,14 @@ function mapPickRows(
     const promotionTarget = asStringOrNull(p['promotion_target']);
 
     const pipelineRow = pipelineByPickId.get(pickId);
-    const settlementResult = pipelineRow
-      ? asStringOrNull(pipelineRow['settlementResult'])
-      : null;
+    const effectiveSettlement = recentSettlements
+      .map(asRecord)
+      .find((settlement) => asString(settlement['pick_id'] ?? settlement['pickId']) === pickId);
+    const settlementResult = effectiveSettlement
+      ? asStringOrNull(effectiveSettlement['result'])
+      : pipelineRow
+        ? asStringOrNull(pipelineRow['settlementResult'])
+        : null;
 
     const outboxRow =
       outbox
@@ -412,7 +420,7 @@ function mapPickRows(
         .find((receipt) => asString(receipt['outbox_id']) === outboxId) ?? null;
     const settlementRows = recentSettlements
       .map(asRecord)
-      .filter((settlement) => asString(settlement['pick_id']) === pickId);
+      .filter((settlement) => asString(settlement['pick_id'] ?? settlement['pickId']) === pickId);
 
     return {
       id: pickId,
@@ -466,10 +474,11 @@ function detectExceptions(
   snapshot: unknown,
   _recap: unknown,
   picks: PickRow[],
+  settlementTruth: EffectiveSettlementTruth,
 ): OperationalException[] {
   const exceptions: OperationalException[] = [];
   const snap = unwrapResponse(snapshot);
-  const recentSettlements = asArray(snap['recentSettlements']);
+  const recentSettlements = settlementTruth.settlements;
   const outboxRows = asArray(snap['recentOutbox']);
   const now = Date.now();
   let exId = 0;
@@ -578,7 +587,7 @@ function detectExceptions(
         category: 'correction',
         title: 'Pending manual review',
         detail: `Settlement record requires manual review`,
-        pickId: asString(s['pick_id']) || undefined,
+        pickId: asString(s['pick_id'] ?? s['pickId']) || undefined,
       });
     }
   }
@@ -608,22 +617,24 @@ function resolveLaneHealth(
 // ── getDashboardData ──────────────────────────────────────────────────────────
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const [snapshot, pipeline, recap] = await Promise.all([
+  const client = await getDataClient();
+  const [snapshot, pipeline, recap, settlementTruth] = await Promise.all([
     getSnapshotData(),
     getPicksPipelineData(),
     getRecapData(),
+    readEffectiveSettlementTruth(client),
   ]);
 
   const snap = unwrapResponse(snapshot);
   const outbox = asArray(snap['recentOutbox']);
   const recentReceipts = asArray(snap['recentReceipts']);
-  const recentSettlements = asArray(snap['recentSettlements']);
+  const recentSettlements = settlementTruth.settlements;
   const snapshotPicks = asArray(snap['recentPicks']);
 
   const pipelineData = unwrapResponse(pipeline);
   const pipelinePicks = asArray(pipelineData['recentPicks']);
 
-  const signals = deriveSignals(snapshot, recap, pipeline);
+  const signals = deriveSignals(snapshot, recap, pipeline, settlementTruth);
   const picks = mapPickRows(
     snapshotPicks,
     pipelinePicks,
@@ -632,7 +643,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     recentReceipts,
   );
   const stats = mapStats(recap);
-  const exceptions = detectExceptions(snapshot, recap, picks);
+  const exceptions = detectExceptions(snapshot, recap, picks, settlementTruth);
   const observedAt = asString(snap['observedAt'], new Date().toISOString());
 
   return { signals, picks, stats, exceptions, observedAt };
