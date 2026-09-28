@@ -2,17 +2,13 @@
 
 | File | Change |
 |---|---|
-| `.ops/work/WORK-2026092806.md` | Binds the approved governance packet and narrow acceptance contract. |
-| `scripts/ops/proof-schema.ts` | Requires `PENDING_POST_DEPLOY` to resolve to authoritative GitHub Live Schema Parity run/job records for the exact evidence head and expected drift-gate failure; retains real production parity PASS as the only post-merge close evidence. |
-| `scripts/ops/proof-schema.test.ts` | Tests the valid authoritative receipt and mutations for fabricated IDs, wrong workflow/head, incomplete runs, unrelated failures, malformed markers, and post-merge refusal. |
-| `scripts/ops/truth-check-lib.test.ts` | Proves post-merge lane close remains fail-closed for pending parity. |
-| `docs/05_operations/DB_MIGRATION_WORKFLOW.md` | Defines governed non-production candidate proof and mandatory post-deploy production parity. |
-| `docs/05_operations/DB_EXECUTION_PLAN.md` | Places the pending obligation before merge and actual parity PASS after sanctioned apply. |
-| `docs/05_operations/CLOSEOUT_TRUTH_POLICY.md` | Records that merge eligibility never implies close eligibility for pending parity. |
-| `docs/06_status/proof/WORK-2026092806/*` | Exact-source proof, verification record, diff summary, and model-routing provenance. |
+| `scripts/ops/proof-schema.ts` | Binds the pending receipt to immutable run/job heads plus authoritative repository/PR identity, while allowing only a commit-history-proven proof-only descendant to record it. |
+| `scripts/ops/proof-schema.test.ts` | Proves the honest receipt commit and rejects wrong PR/repository/head/job binding, fabricated receipts, runtime changes, reverted runtime changes, and post-merge pending close. |
+| `docs/06_status/lanes/WORK-2026092806.json` | Rebinds the still-open repository-owned work-order lane from merged PR #1680 to continuation PR #1687 through the canonical manifest updater. |
+| `docs/06_status/proof/WORK-2026092806/*` | Rebinds the candidate proof to the immutable implementation source and current continuation PR. |
 
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
-Execution SHA: e1db7f7ac347e3a2d8741e036a6f20d329d4c069
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1687
+Execution SHA: 745bf10b60f53e9b69f663ab95fec77e960f3d9e
