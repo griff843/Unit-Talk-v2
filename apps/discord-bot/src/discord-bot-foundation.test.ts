@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 
 import type { AppEnv } from '@unit-talk/config';
 import { parseBotConfig, parseQaBotConfig } from './config.js';
-import { checkRoles } from './role-guard.js';
+import { checkRoles, requireActivePickRoles } from './role-guard.js';
 import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
 import {
@@ -58,6 +58,7 @@ import {
 } from './commands/live.js';
 import {
   buildTodayEmbeds,
+  createTodayCommand,
   filterTodayPicks,
 } from './commands/today.js';
 import {
@@ -531,7 +532,7 @@ test('/live command renders active picks from the picks query API', async () => 
       ],
     }),
   };
-  const command = createLiveCommand(apiClient);
+  const command = createLiveCommand(apiClient, ['role-vip']);
   let payload: Payload | null = null;
 
   await command.execute({
@@ -974,6 +975,100 @@ test('checkRoles returns false when member lacks roles.cache', () => {
   } as unknown as ChatInputCommandInteraction;
 
   assert.equal(checkRoles(interaction, ['role-a']), false);
+});
+
+// ---------------------------------------------------------------------------
+// Active-pick tier gate (MEMBERSHIP_PRODUCT_CONTRACT.md §3.3)
+// ---------------------------------------------------------------------------
+
+const ACTIVE_PICK_ROLE_CONFIG = {
+  trialRoleId: 'role-trial',
+  vipRoleId: 'role-vip',
+  vipPlusRoleId: 'role-vip-plus',
+  capperRoleId: 'role-capper',
+  operatorRoleId: 'role-operator',
+};
+
+test('requireActivePickRoles returns Trial, VIP, VIP+, Capper and Operator', () => {
+  assert.deepEqual(requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG), [
+    'role-trial',
+    'role-vip',
+    'role-vip-plus',
+    'role-capper',
+    'role-operator',
+  ]);
+});
+
+test('requireActivePickRoles omits an unconfigured Trial or Operator role', () => {
+  assert.deepEqual(
+    requireActivePickRoles({ ...ACTIVE_PICK_ROLE_CONFIG, trialRoleId: null, operatorRoleId: undefined }),
+    ['role-vip', 'role-vip-plus', 'role-capper'],
+  );
+});
+
+test('requireActivePickRoles never returns an empty (unrestricted) role list', () => {
+  const roles = requireActivePickRoles({
+    trialRoleId: null,
+    vipRoleId: '',
+    vipPlusRoleId: '',
+    capperRoleId: '',
+    operatorRoleId: undefined,
+  });
+  assert.ok(roles.length > 0, 'an empty list would disable the router role guard');
+  assert.deepEqual(roles, ['__active_pick_roles_not_configured__']);
+});
+
+for (const [name, create] of [
+  ['live', createLiveCommand],
+  ['today', createTodayCommand],
+] as const) {
+  test(`/${name} refuses a member without a paid, trial, capper or operator role and never reads picks`, async () => {
+    let apiCalls = 0;
+    const apiClient: ApiClient = {
+      get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
+      post: async <T>() => ({} as T),
+      getPicksByStatus: async () => { apiCalls += 1; return { picks: [], count: 0 }; },
+    };
+    const command = create(apiClient, requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG));
+    const handler = createInteractionHandler(makeRegistry([command]));
+    const mock = makeMockInteraction({ commandName: name, roles: { heldRoles: ['role-free'] } });
+
+    await handler(mock.interaction);
+
+    assert.equal(mock.replies[0], "You don't have access to this command.");
+    assert.equal(mock.deferred, false);
+    assert.equal(apiCalls, 0, 'a refused member must not trigger a picks read');
+  });
+
+  test(`/${name} admits a VIP member`, async () => {
+    let apiCalls = 0;
+    const apiClient: ApiClient = {
+      get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
+      post: async <T>() => ({} as T),
+      getPicksByStatus: async () => { apiCalls += 1; return { picks: [], count: 0 }; },
+    };
+    const command = create(apiClient, requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG));
+    const handler = createInteractionHandler(makeRegistry([command]));
+    const mock = makeMockInteraction({ commandName: name, roles: { heldRoles: ['role-vip'] } });
+
+    await handler(mock.interaction);
+
+    assert.equal(mock.deferred, true);
+    assert.equal(apiCalls, 1);
+  });
+}
+
+test('loadCommandRegistry gates /live and /today to the active-pick roles from config', async () => {
+  await withEnvVars(
+    makeRegistryEnv(),
+    async () => {
+      const registry = await loadCommandRegistry();
+      const expected = ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator'];
+      assert.deepEqual(registry.get('live')?.requiredRoles, expected);
+      assert.deepEqual(registry.get('today')?.requiredRoles, expected);
+      assert.equal(registry.get('results')?.requiredRoles, undefined, '/results stays open to every member');
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

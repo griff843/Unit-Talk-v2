@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092812",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "79b1c9b95a77288ba36ae6da03f4b7b3e58f1d71",
+    "evidence_commit_sha": "pending proof commit",
+    "current_pr_head_sha": "79b1c9b95a77288ba36ae6da03f4b7b3e58f1d71",
+    "sha_type": "pending_merge",
+    "bound_at": "2026-09-28T20:30:01.097Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_test": {
+      "command": "cd apps/command-center && npx tsx --test src/app/command-center-pages.test.tsx",
+      "status": "PASS",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "Completed static gate: environment validation, lint, project-reference type-check/build, aggregate tests, Smart Form verification, and command verification."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Initial lane-head check found no R-level rules. Re-run after final commit is required before PR creation."
+    }
+  },
+  "runtime_proof": {
+    "status": "DEFERRED_TO_STAGING_CI",
+    "detail": "Display-only Command Center change with no DB reader or write change. Writable live-DB proof requires staging-ci credentials for project xskgrzbteyqdufktjrjx and is not performed locally."
+  },
+  "acceptance_criteria": {
+    "delivery_authorization": "PASS",
+    "submission_mode_and_provenance": "PASS",
+    "edge_scope_eventless_and_voided_truth": "PASS",
+    "governed_list_row": "PASS",
+    "ungoverned_list_unchanged": "PASS"
+  },
+  "verdict": "PASS"
+}
