@@ -1,0 +1,178 @@
+name: Warehouse Retention
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/warehouse-retention.yml'
+      - 'scripts/warehouse/retention.ts'
+      - 'scripts/warehouse/retention*.test.ts'
+      - 'supabase/migrations/20260928131714_utv2_1370_warehouse_retention.sql'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'plan is dry-run only; execute performs one pre-planned prune; recover restores one execution.'
+        required: true
+        type: choice
+        options: [plan, execute, recover]
+      source:
+        description: 'Governed archive source.'
+        required: true
+        type: choice
+        options:
+          [provider_offer_history, raw_payloads, odds_snapshots, system_runs]
+      date:
+        description: 'One UTC day, YYYY-MM-DD.'
+        required: true
+        type: string
+      idempotency_key:
+        description: 'Required for plan mode.'
+        required: false
+        type: string
+      plan_id:
+        description: 'Approved dry-run plan UUID; required for execute mode.'
+        required: false
+        type: string
+      execution_id:
+        description: 'Execution receipt UUID; required for recover mode.'
+        required: false
+        type: string
+
+concurrency:
+  group: warehouse-archive-conveyor
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  staging-proof:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: retention_proof
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d retention_proof"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - name: Prove fail-closed plan, bounded prune, protected truth, and recovery
+        env:
+          WAREHOUSE_RETENTION_TEST_DSN: postgres://postgres:postgres@localhost:5432/retention_proof
+        run: pnpm exec tsx --test scripts/warehouse/retention.test.ts scripts/warehouse/retention-workflow.test.ts
+
+  plan:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'plan' }}
+    runs-on: ubuntu-latest
+    environment: warehouse-retention-plan
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - name: Plan one governed window without deleting
+        env:
+          RETENTION_SOURCE: ${{ inputs.source }}
+          RETENTION_DATE: ${{ inputs.date }}
+          RETENTION_IDEMPOTENCY_KEY: ${{ inputs.idempotency_key }}
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY }}
+          UNIT_TALK_WAREHOUSE_RETENTION_PLAN_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_RETENTION_PLAN_DSN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          pnpm -s warehouse:retention plan --source "$RETENTION_SOURCE" --date "$RETENTION_DATE" \
+            --idempotency-key "$RETENTION_IDEMPOTENCY_KEY" --requested-by "$GITHUB_ACTOR"
+
+  execute:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'execute' }}
+    runs-on: ubuntu-latest
+    environment: warehouse-retention-execute
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - name: Execute one approved bounded plan
+        env:
+          RETENTION_SOURCE: ${{ inputs.source }}
+          RETENTION_DATE: ${{ inputs.date }}
+          RETENTION_PLAN_ID: ${{ inputs.plan_id }}
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY }}
+          UNIT_TALK_WAREHOUSE_RETENTION_EXECUTE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_RETENTION_EXECUTE_DSN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          pnpm -s warehouse:retention execute --source "$RETENTION_SOURCE" --date "$RETENTION_DATE" \
+            --plan-id "$RETENTION_PLAN_ID" --requested-by "$GITHUB_ACTOR"
+
+  recover:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'recover' }}
+    runs-on: ubuntu-latest
+    environment: warehouse-retention-recovery
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run: pnpm install --frozen-lockfile
+      - name: Restore one execution from its independently verified archive
+        env:
+          RETENTION_SOURCE: ${{ inputs.source }}
+          RETENTION_DATE: ${{ inputs.date }}
+          RETENTION_EXECUTION_ID: ${{ inputs.execution_id }}
+          UNIT_TALK_WAREHOUSE_S3_ENDPOINT: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_ENDPOINT }}
+          UNIT_TALK_WAREHOUSE_S3_REGION: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_REGION }}
+          UNIT_TALK_WAREHOUSE_S3_BUCKET: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_BUCKET }}
+          UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_READ_ACCESS_KEY_ID }}
+          UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY: ${{ secrets.UNIT_TALK_WAREHOUSE_S3_READ_SECRET_ACCESS_KEY }}
+          UNIT_TALK_WAREHOUSE_RETENTION_RECOVERY_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_RETENTION_RECOVERY_DSN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          pnpm -s warehouse:retention recover --source "$RETENTION_SOURCE" --date "$RETENTION_DATE" \
+            --execution-id "$RETENTION_EXECUTION_ID" --requested-by "$GITHUB_ACTOR"
