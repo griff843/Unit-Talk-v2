@@ -130,6 +130,14 @@ export function buildStatsEmbed(stats: CapperStatsResponse) {
     });
   }
 
+  if (stats.picks >= 5 && stats.picksWithClv === 0) {
+    embed.addFields({
+      name: 'CLV',
+      value: 'unavailable (no closing-line data)',
+      inline: false,
+    });
+  }
+
   if (stats.picks >= 5) {
     embed.addFields({
       name: 'Last 5',

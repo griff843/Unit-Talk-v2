@@ -2072,7 +2072,7 @@ test('/heat-signal command returns empty-state copy when no detections exist', a
 
   assert.ok(payload);
   const emptyPayload = payload as EmptyHeatSignalPayload;
-  assert.equal(emptyPayload.content, 'No notable line movements detected in the current window.');
+  assert.equal(emptyPayload.content, 'Line-movement alerts are not live yet. There are no detections to show.');
 });
 
 test('/alerts-setup command requires operator role and registers private visibility', () => {
@@ -2403,4 +2403,79 @@ test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier'
 
   // Must not throw — handler swallows all errors
   await assert.doesNotReject(async () => handler(oldMember as never, newMember as never));
+});
+
+// ---------------------------------------------------------------------------
+// WORK-2026092814: member-facing copy promises only what is live
+// ---------------------------------------------------------------------------
+
+const NOT_LIVE_CLAIMS = [/Best Bets/, /Trader Insights/, /permanently/];
+
+function tierContext(tier: 'free' | 'trial' | 'vip' | 'vip-plus') {
+  return {
+    discordUserId: 'user-123',
+    tier,
+    isCapper: false,
+    isVip: tier === 'vip',
+    isVipPlus: tier === 'vip-plus',
+    isTrial: tier === 'trial',
+    resolvedAt: '2026-09-28T12:00:00.000Z',
+  } as const;
+}
+
+test('WORK-2026092814: /trial-status and /upgrade name no surface that is not live', () => {
+  for (const tier of ['free', 'trial', 'vip', 'vip-plus'] as const) {
+    const texts = [
+      String(buildTrialStatusEmbed(tierContext(tier)).toJSON().description ?? ''),
+      String(buildUpgradeEmbed(tierContext(tier)).toJSON().description ?? ''),
+    ];
+    for (const text of texts) {
+      for (const claim of NOT_LIVE_CLAIMS) {
+        assert.doesNotMatch(text, claim, `${tier}: ${text}`);
+      }
+    }
+  }
+  assert.match(
+    String(buildTrialStatusEmbed(tierContext('vip-plus')).toJSON().description ?? ''),
+    /not live yet/,
+  );
+  assert.match(
+    String(buildUpgradeEmbed(tierContext('free')).toJSON().description ?? ''),
+    /\*\*VIP\+\*\* - Everything in VIP\. Its market-intelligence features are not live yet\./,
+  );
+});
+
+test('WORK-2026092814: /heat-signal describes line-movement alerts as not live', () => {
+  const apiClient: ApiClient = {
+    get: async <T>() => ({ detections: [] } as T),
+    post: async <T>() => ({} as T),
+  };
+  const command = createHeatSignalCommand(apiClient);
+  assert.match(command.data.toJSON().description, /not live yet/);
+  assert.doesNotMatch(command.data.toJSON().description, /Show recent notable/);
+});
+
+test('WORK-2026092814: a recap pick with no CLV renders "unavailable", not a dash', () => {
+  const embed = buildCapperRecapEmbed(makeRecapResponse()).toJSON() as {
+    fields?: Array<{ value?: unknown }>;
+  };
+  assert.match(String(embed.fields?.[0]?.value ?? ''), /CLV: \+3\.8%/);
+  assert.match(String(embed.fields?.[1]?.value ?? ''), /CLV: unavailable/);
+  assert.doesNotMatch(String(embed.fields?.[1]?.value ?? ''), /CLV: —/);
+});
+
+test('WORK-2026092814: /stats says CLV is unavailable instead of dropping it silently', () => {
+  const withoutClv = buildStatsEmbed({
+    ...makeStatsResponse(),
+    picksWithClv: 0,
+    avgClvPct: null,
+    beatsLine: null,
+  }).toJSON();
+  const clvField = withoutClv.fields?.find((field) => field.name === 'CLV');
+  assert.equal(clvField?.value, 'unavailable (no closing-line data)');
+  assert.equal(withoutClv.fields?.some((field) => field.name === 'Avg CLV% (vs SGO close)'), false);
+
+  const withClv = buildStatsEmbed(makeStatsResponse()).toJSON();
+  assert.equal(withClv.fields?.some((field) => field.name === 'CLV'), false);
+  assert.equal(withClv.fields?.some((field) => field.name === 'Avg CLV% (vs SGO close)'), true);
 });
