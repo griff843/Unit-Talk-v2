@@ -15,6 +15,8 @@ import {
   readAllPages,
   receiptLogicalTarget,
   RECEIPT_AUTHORITY_WINDOW_DAYS,
+  newestDeliveredReceiptAt,
+  newestGovernedReceiptByTarget,
   resolveDeployedWorkerTargets,
   type KillSwitchRow,
   type RangeQuery,
@@ -110,14 +112,36 @@ const { count: nonSentCount, error: nonSentCountErr } = await db
 if (nonSentCountErr) { console.error('non-sent count query failed:', nonSentCountErr.message); process.exit(1) }
 const outboxReadComplete = typeof nonSentCount === 'number' && nonSentCount === outbox.length
 
-const { data: lastSentRows, error: lastSentErr } = await db
-  .from('distribution_outbox')
-  .select('updated_at')
-  .eq('status', 'sent')
-  .order('updated_at', { ascending: false })
-  .limit(1)
-if (lastSentErr) { console.error('last-sent query failed:', lastSentErr.message); process.exit(1) }
-const lastSuccessfulDeliveryAt = lastSentRows?.[0]?.updated_at ?? null
+// ── Receipts in the authority window (read once; used for freshness and §8) ─
+// WORK-2026092708: every receipt recorded inside the authority window is read,
+// in id-ordered pages checked against an exact count, and judged by its logical
+// target against the governed registry. Receipts older than the window are
+// history and are not judged.
+type ReceiptRow = { id: string; channel: string | null; payload: unknown; recorded_at: string }
+const receiptWindowStart = new Date(now.getTime() - RECEIPT_AUTHORITY_WINDOW_DAYS * 86_400_000).toISOString()
+let windowReceipts: ReceiptRow[] = []
+let receiptReadError: string | null = null
+try {
+  windowReceipts = await readAllPages<ReceiptRow>(() =>
+    db
+      .from('distribution_receipts')
+      .select('id, channel, payload, recorded_at')
+      .gte('recorded_at', receiptWindowStart) as unknown as RangeQuery<ReceiptRow>,
+  )
+} catch (e) { receiptReadError = (e as Error).message }
+const { count: windowReceiptCount, error: receiptCountErr } = await db
+  .from('distribution_receipts')
+  .select('id', { count: 'exact', head: true })
+  .gte('recorded_at', receiptWindowStart)
+const receiptReadComplete =
+  receiptReadError === null && !receiptCountErr && typeof windowReceiptCount === 'number' && windowReceiptCount === windowReceipts.length
+const receiptAuthority = partitionReceiptAuthority(windowReceipts)
+
+// WORK-2026092811: delivery freshness comes from receipts, never from a `sent`
+// outbox row — the worker marks a settled or voided pick's row `sent` with no
+// receipt. An incomplete receipt read reports no delivery rather than a guess.
+const lastSuccessfulDeliveryAt = receiptReadComplete ? newestDeliveredReceiptAt(windowReceipts) : null
+const newestGovernedByTarget = receiptReadComplete ? newestGovernedReceiptByTarget(windowReceipts) : {}
 
 const { count: sentCount, error: sentCountErr } = await db
   .from('distribution_outbox')
@@ -249,6 +273,7 @@ console.log(`  Stuck running (>5min): ${stuckRunning.length === 0 ? 'NONE' : stu
 console.log(`  Last successful run: ${lastSuccessAge !== null ? lastSuccessAge + 'm ago' : 'NONE in last 10'}`)
 console.log(`  Queue health: ${queueHealth.status.toUpperCase()}`)
 console.log(`  Last successful delivery: ${queueHealth.lastSuccessfulDeliveryAt ? queueHealth.lastSuccessfulDeliveryAt + ' (' + Math.round((queueHealth.lastSuccessfulDeliveryAgeMs ?? 0) / 60000) + 'm ago)' : 'NONE'}`)
+console.log(`  Newest governed receipt by target: ${Object.keys(newestGovernedByTarget).length === 0 ? 'NONE in window' : Object.entries(newestGovernedByTarget).map(([t, at]) => `${t}=${at}`).join(', ')}`)
 
 // ── 6. Backlog age ────────────────────────────────────────────────────────
 // Computed before verdict so idle-vs-DOWN distinction can use pending count.
@@ -310,29 +335,7 @@ if (sent.length === 0) {
 }
 
 // ── 8. Authorized delivery targets ─────────────────────────────────────
-// WORK-2026092708: every receipt recorded inside the authority window is read,
-// in id-ordered pages checked against an exact count, and judged by its logical
-// target against the governed registry. Receipts older than the window are
-// history and are not judged.
-type ReceiptRow = { id: string; channel: string | null; payload: unknown; recorded_at: string }
-const receiptWindowStart = new Date(now.getTime() - RECEIPT_AUTHORITY_WINDOW_DAYS * 86_400_000).toISOString()
-let windowReceipts: ReceiptRow[] = []
-let receiptReadError: string | null = null
-try {
-  windowReceipts = await readAllPages<ReceiptRow>(() =>
-    db
-      .from('distribution_receipts')
-      .select('id, channel, payload, recorded_at')
-      .gte('recorded_at', receiptWindowStart) as unknown as RangeQuery<ReceiptRow>,
-  )
-} catch (e) { receiptReadError = (e as Error).message }
-const { count: windowReceiptCount, error: receiptCountErr } = await db
-  .from('distribution_receipts')
-  .select('id', { count: 'exact', head: true })
-  .gte('recorded_at', receiptWindowStart)
-const receiptReadComplete =
-  receiptReadError === null && !receiptCountErr && typeof windowReceiptCount === 'number' && windowReceiptCount === windowReceipts.length
-const receiptAuthority = partitionReceiptAuthority(windowReceipts)
+// The receipt read itself runs before the queue evaluation (WORK-2026092811).
 
 console.log('\n╔══ AUTHORITY BOUNDARY ═══════════════════════════════════════')
 console.log(`  window: receipts since ${receiptWindowStart} (${RECEIPT_AUTHORITY_WINDOW_DAYS}d) — read ${windowReceipts.length} of ${windowReceiptCount ?? 'unknown'}`)
