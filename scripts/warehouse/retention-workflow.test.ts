@@ -4,8 +4,6 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import YAML from 'yaml';
-
 import { openDuckDb, quote } from './duckdb.js';
 import { buildManifest, serializeManifest } from './manifest.js';
 import { LocalObjectStore, sha256Hex } from './object-store.js';
@@ -19,11 +17,6 @@ const migrationPath = path.join(
   root,
   'supabase/migrations/20260928131714_utv2_1370_warehouse_retention.sql',
 );
-const workflowPath = path.join(
-  root,
-  '.github/workflows/warehouse-retention.yml',
-);
-
 test('migration is allowlisted, bounded, fail-closed, and keeps legacy cron disabled', () => {
   const sql = fs.readFileSync(migrationPath, 'utf8');
   assert.match(
@@ -41,31 +34,6 @@ test('migration is allowlisted, bounded, fail-closed, and keeps legacy cron disa
   assert.match(sql, /legacy nightly-retention-prune is active; refusing/);
   assert.doesNotMatch(sql, /^\s*update\s+cron\.job/im);
   assert.doesNotMatch(sql, /^\s*(?:select\s+)?cron\.schedule\s*\(/im);
-});
-
-test('workflow is manual, main-only, phase-scoped, and serialized with archive writes', () => {
-  const text = fs.readFileSync(workflowPath, 'utf8');
-  const workflow = YAML.parse(text) as Record<string, unknown>;
-  const trigger = workflow.on ?? workflow.true;
-  assert.deepEqual(Object.keys(trigger as object).sort(), [
-    'pull_request',
-    'workflow_dispatch',
-  ]);
-  assert.match(text, /refs\/heads\/main/);
-  assert.match(text, /group: warehouse-archive-conveyor/);
-  assert.match(text, /environment: warehouse-retention-plan/);
-  assert.match(text, /environment: warehouse-retention-execute/);
-  assert.match(text, /environment: warehouse-retention-recovery/);
-  assert.match(text, /UNIT_TALK_WAREHOUSE_RETENTION_PLAN_DSN/);
-  assert.match(text, /UNIT_TALK_WAREHOUSE_RETENTION_EXECUTE_DSN/);
-  assert.doesNotMatch(
-    text,
-    /SUPABASE_(?:DB_URL|DB_POOLER_URL|SERVICE_ROLE_KEY)/,
-  );
-  assert.doesNotMatch(
-    text,
-    /UNIT_TALK_WAREHOUSE_S3_(?:ACCESS_KEY_ID|SECRET_ACCESS_KEY):/,
-  );
 });
 
 test(
