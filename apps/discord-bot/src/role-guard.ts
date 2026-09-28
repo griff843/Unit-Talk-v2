@@ -38,6 +38,27 @@ export function checkRoles(
   return requiredRoles.some((roleId) => cache.has(roleId));
 }
 
+/**
+ * Roles allowed to read active (unsettled) picks.
+ *
+ * MEMBERSHIP_PRODUCT_CONTRACT.md §3.3: free access to settled results never
+ * grants access to an active paid pick before settlement. Trial and Operator
+ * are included only when configured; VIP, VIP+ and Capper are required config,
+ * so the list is never empty and the router never treats it as unrestricted.
+ */
+export function requireActivePickRoles(
+  config: Pick<BotConfig, 'trialRoleId' | 'vipRoleId' | 'vipPlusRoleId' | 'capperRoleId' | 'operatorRoleId'>,
+): string[] {
+  const roles = [
+    config.trialRoleId,
+    config.vipRoleId,
+    config.vipPlusRoleId,
+    config.capperRoleId,
+    config.operatorRoleId,
+  ].filter((roleId): roleId is string => typeof roleId === 'string' && roleId.length > 0);
+  return roles.length > 0 ? roles : ['__active_pick_roles_not_configured__'];
+}
+
 export function requireOperatorRole(
   config: Pick<BotConfig, 'operatorRoleId'>,
 ): string[] {
