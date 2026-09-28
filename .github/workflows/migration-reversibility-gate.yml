@@ -320,6 +320,15 @@ jobs:
           echo ""
           echo "PASS: All new migrations passed the schema round-trip drill."
 
+      - name: Prove bounded warehouse retention lifecycle in ephemeral PostgreSQL
+        if: contains(steps.detect.outputs.migrations, '20260928131714_utv2_1370_warehouse_retention.sql')
+        env:
+          WAREHOUSE_RETENTION_TEST_DSN: postgresql://postgres:postgres@localhost:5432/retention_lifecycle_drill
+        run: |
+          psql "postgresql://postgres:postgres@localhost:5432/postgres" \
+            -v ON_ERROR_STOP=1 -c "CREATE DATABASE retention_lifecycle_drill;"
+          pnpm exec tsx --test apps/api/src/t1-proof-warehouse-retention.test.ts
+
   # UTV2-1718 — proves a migration's fail-closed precondition actually refuses.
   #
   # Deliberately a SEPARATE job from schema-roundtrip-drill, for two reasons:
