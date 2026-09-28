@@ -264,7 +264,7 @@ test('UTV2-1923: the distribution gate refuses the human target while the regist
 // 2. Unauthorized cappers: every prior Track Only behaviour, unchanged
 // ---------------------------------------------------------------------------
 
-test('UTV2-1923: with no allow-list, a capper submission is still pinned Track Only', async () => {
+test('UTV2-1923: with no allow-list, a capper submission that declares no mode is Track Only', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const response = await withEnv(CONTAINED_ENV, () =>
     handleSubmitPick({ body: capperSubmissionBody({}, 'contained'), auth: CAPPER_AUTH }, repositories),
@@ -286,30 +286,63 @@ test('UTV2-1923: with no allow-list, a capper submission is still pinned Track O
   assert.equal(authorization?.decision, 'refused');
   assert.equal(
     authorization?.reason,
-    'human-delivery-posture-off',
-    'the refusal must record WHY, not merely that it refused',
+    'track-only-requested',
+    'the refusal must record WHY, not merely that it refused: nobody asked for delivery',
   );
 
   const outbox = await repositories.outbox.listByPickId(response.body.data.pickId);
   assert.equal(outbox.length, 0, 'an unauthorized capper pick must produce no delivery work');
 });
 
+// WORK-2026092802: asking is necessary for delivery, never sufficient. The
+// server-side allow-list still decides, and a request it does not authorize is
+// refused outright rather than silently narrowed to something nobody asked for.
 test('UTV2-1923: a client cannot grant itself delivery by asking for it', async () => {
-  const repositories = createInMemoryRepositoryBundle();
-  const refused = await withEnv(AUTHORIZED_ENV, () =>
-    handleSubmitPick(
-      {
-        body: capperSubmissionBody({ distributionMode: 'delivery-eligible' }, 'client-asks'),
-        auth: CAPPER_AUTH,
-      },
-      repositories,
-    ),
-  );
+  const cases: Array<{ label: string; env: Record<string, string | undefined>; auth: typeof CAPPER_AUTH }> = [
+    { label: 'human delivery posture off', env: CONTAINED_ENV, auth: CAPPER_AUTH },
+    {
+      label: 'posture on, capper not on the allow-list',
+      env: { ...AUTHORIZED_ENV, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: 'someone-else' },
+      auth: CAPPER_AUTH,
+    },
+    {
+      label: 'allow-list set, posture flag off',
+      env: { ...AUTHORIZED_ENV, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED: undefined },
+      auth: CAPPER_AUTH,
+    },
+  ];
+  for (const { label, env, auth } of cases) {
+    const repositories = createInMemoryRepositoryBundle();
+    const refused = await withEnv(env, () =>
+      handleSubmitPick(
+        {
+          body: capperSubmissionBody({ distributionMode: 'delivery-eligible' }, `client-asks-${label}`),
+          auth,
+        },
+        repositories,
+      ),
+    );
 
-  assert.equal(refused.status, 403);
-  assert.ok(!refused.body.ok);
-  if (!refused.body.ok) {
-    assert.equal(refused.body.error.code, 'CAPPER_TRACK_ONLY_REQUIRED');
+    assert.equal(refused.status, 403, label);
+    assert.ok(!refused.body.ok, label);
+    if (!refused.body.ok) {
+      assert.equal(refused.body.error.code, 'CAPPER_TRACK_ONLY_REQUIRED', label);
+    }
+    const picks = await repositories.picks.listBySource('smart-form');
+    assert.equal(picks.length, 0, `${label}: a refused request persists no pick`);
+  }
+});
+
+test('WORK-2026092802: a capper cannot request any mode other than track-only or delivery-eligible', async () => {
+  for (const mode of ['member-delivery', 'best-bets', '', 'DELIVERY-ELIGIBLE', true, 1]) {
+    const repositories = createInMemoryRepositoryBundle();
+    const refused = await withEnv(AUTHORIZED_ENV, () =>
+      handleSubmitPick(
+        { body: capperSubmissionBody({ distributionMode: mode }, `odd-mode-${String(mode)}`), auth: CAPPER_AUTH },
+        repositories,
+      ),
+    );
+    assert.equal(refused.status, 403, `mode ${JSON.stringify(mode)}`);
   }
 });
 
@@ -425,7 +458,12 @@ async function submitAuthorizedPick(
   repositories = createInMemoryRepositoryBundle(),
 ) {
   const response = await withEnv({ ...AUTHORIZED_ENV, ...env }, () =>
-    handleSubmitPick({ body: capperSubmissionBody({}, seed), auth: CAPPER_AUTH }, repositories),
+    handleSubmitPick(
+      // WORK-2026092802: delivery is asked for explicitly. An authorized
+      // capper who does not ask for it gets Track Only (section 6 below).
+      { body: capperSubmissionBody({ distributionMode: 'delivery-eligible' }, seed), auth: CAPPER_AUTH },
+      repositories,
+    ),
   );
   assert.ok(response.body.ok, 'authorized submission must be accepted');
   if (!response.body.ok) throw new Error('unreachable');
@@ -1454,6 +1492,7 @@ test('UTV2-1923: the browser cannot supply or override the destination', async (
       {
         body: capperSubmissionBody(
           {
+            distributionMode: 'delivery-eligible',
             discord: { guildId: GUILD_ID, picksChannelId: forgedChannel },
             deliveryDestination: {
               version: 'capper-discord-routing/v1',
@@ -1503,7 +1542,7 @@ test('UTV2-1923: routing is resolved per capper, not once per deployment', async
     { ...AUTHORIZED_ENV, ...RELEASED_ENV, UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST: other },
     () =>
       handleSubmitPick(
-        { body: capperSubmissionBody({}, 'per-capper-theirs'), auth: { role: 'capper' as const, capperId: other, identity: other } },
+        { body: capperSubmissionBody({ distributionMode: 'delivery-eligible' }, 'per-capper-theirs'), auth: { role: 'capper' as const, capperId: other, identity: other } },
         bundle,
       ),
   );
@@ -1560,4 +1599,145 @@ test('mutation control: without the destination guard, delivery falls back to a 
       );
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// 7. WORK-2026092802 — an explicit Track Only request is never widened
+//
+// Production pick c12f1e2f: griff843, on the delivery allow-list, submitted
+// through the deployed Smart Form with `distributionMode: 'track-only'`. The
+// server rewrote it to `delivery-eligible`, authorized it and queued it for
+// `discord:official-picks`. Only the kill switch stopped the post. The request
+// below reproduces that request at the handler boundary under the posture that
+// makes delivery maximally reachable: allow-listed, posture on, target
+// released, and the capper's own picks destination configured.
+// ---------------------------------------------------------------------------
+
+const PRODUCTION_POSTURE = { ...AUTHORIZED_ENV, ...RELEASED_ENV };
+
+async function submitAsProductionDid(
+  metadataExtra: Record<string, unknown>,
+  seed: string,
+  handler: typeof handleSubmitPick = handleSubmitPick,
+) {
+  const repositories = seedCapperRouting(createInMemoryRepositoryBundle());
+  const response = await withEnv(PRODUCTION_POSTURE, () =>
+    handler({ body: capperSubmissionBody(metadataExtra, seed), auth: CAPPER_AUTH }, repositories),
+  );
+  return { repositories, response };
+}
+
+async function assertStayedTrackOnly(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  response: Awaited<ReturnType<typeof handleSubmitPick>>,
+  label: string,
+) {
+  assert.equal(response.status, 201, label);
+  assert.ok(response.body.ok, label);
+  if (!response.body.ok) return;
+  const { data } = response.body;
+
+  assert.equal(data.deliveryPosture, 'track-only', `${label}: receipt must say Track Only`);
+  assert.equal(data.outboxEnqueued, false, `${label}: nothing may be enqueued`);
+  assert.notEqual(data.lifecycleState, 'queued', `${label}: a Track Only pick is never queued`);
+
+  const pick = await repositories.picks.findPickById(data.pickId);
+  const metadata = pick?.metadata as Record<string, unknown>;
+  assert.equal(metadata['distributionMode'], 'track-only', `${label}: persisted mode`);
+  assert.equal(isHumanCapperDeliveryAuthorized(metadata), false, `${label}: not authorized`);
+  const authorization = readHumanCapperDeliveryAuthorization(metadata);
+  assert.equal(authorization?.decision, 'refused', label);
+  assert.equal(authorization?.reason, 'track-only-requested', label);
+  assert.equal(authorization?.capperId, CAPPER, label);
+
+  assert.equal(
+    (await repositories.outbox.listByPickId(data.pickId)).length,
+    0,
+    `${label}: zero delivery intent / outbox rows`,
+  );
+}
+
+test('WORK-2026092802: the production request shape — explicit Track Only from an allow-listed capper — persists Track Only', async () => {
+  const { repositories, response } = await submitAsProductionDid(
+    { distributionMode: 'track-only' },
+    'production-shape',
+  );
+  await assertStayedTrackOnly(repositories, response, 'explicit track-only');
+});
+
+test('WORK-2026092802: an allow-listed capper who declares no mode is Track Only', async () => {
+  // Over HTTP a Smart Form body without a mode is refused by the contract
+  // guard; in-process, the capper pin still resolves an absent mode to Track
+  // Only rather than to whatever the allow-list would permit.
+  const { repositories, response } = await submitAsProductionDid({}, 'no-mode');
+  await assertStayedTrackOnly(repositories, response, 'absent mode');
+});
+
+test('WORK-2026092802: the same capper, same posture, asking for delivery still gets it', async () => {
+  // The capability the fix must not disable: the explicit, authorized path.
+  const { repositories, response } = await submitAsProductionDid(
+    { distributionMode: 'delivery-eligible' },
+    'explicit-delivery',
+  );
+  assert.equal(response.status, 201);
+  assert.ok(response.body.ok);
+  if (!response.body.ok) return;
+  assert.equal(response.body.data.deliveryPosture, 'delivered');
+  const pick = await repositories.picks.findPickById(response.body.data.pickId);
+  const metadata = pick?.metadata as Record<string, unknown>;
+  assert.equal(metadata['distributionMode'], 'delivery-eligible');
+  assert.equal(isHumanCapperDeliveryAuthorized(metadata), true);
+  const rows = await repositories.outbox.listByPickId(response.body.data.pickId);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.target, HUMAN_DELIVERY_TARGET);
+});
+
+test('mutation control: restoring the pre-fix widening turns the production request into a queued delivery', async () => {
+  // Replace the intent guard with the exact block that ran in production from
+  // UTV2-1923 until this fix. The production-shape test must then fail, which
+  // is what shows it tests the defect and not something adjacent to it.
+  const PRE_FIX_BLOCK = `  if (isAuthenticatedCapper) {
+    if (metadata['distributionMode'] !== undefined && metadata['distributionMode'] !== 'track-only') {
+      throw new ApiError(403, 'CAPPER_TRACK_ONLY_REQUIRED', 'restricted');
+    }
+    const deliveryAuthorization = evaluateCapperDeliveryAuthorization({
+      capperId: auth?.capperId,
+      isAuthenticatedCapper,
+    });
+    metadata['distributionMode'] =
+      deliveryAuthorization.decision === 'authorized' ? 'delivery-eligible' : 'track-only';
+    metadata[humanCapperDeliveryAuthorizationKey] = deliveryAuthorization;
+  }
+`;
+  const sourcePath = fileURLToPath(new URL('./handlers/submit-pick.ts', import.meta.url));
+  const suffix = `__mutant_track_only_intent_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern =
+    /[ ]*\/\/ WORK-2026092802 TRACK_ONLY_INTENT_GUARD_START[\s\S]*?\/\/ WORK-2026092802 TRACK_ONLY_INTENT_GUARD_END\n/u;
+  const mutantSource = source.replace(guardPattern, PRE_FIX_BLOCK);
+  assert.notEqual(mutantSource, source, 'mutation control could not locate TRACK_ONLY_INTENT_GUARD');
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = (await import(`${pathToFileURL(mutantPath).href}?mutation=track-only-intent`)) as {
+      handleSubmitPick: typeof handleSubmitPick;
+    };
+    const { repositories, response } = await submitAsProductionDid(
+      { distributionMode: 'track-only' },
+      'mutant-production-shape',
+      mutant.handleSubmitPick,
+    );
+    assert.ok(response.body.ok);
+    if (!response.body.ok) return;
+    assert.equal(response.body.data.deliveryPosture, 'delivered', 'the defect: receipt says delivered');
+    const pick = await repositories.picks.findPickById(response.body.data.pickId);
+    assert.equal((pick?.metadata as Record<string, unknown>)['distributionMode'], 'delivery-eligible');
+    assert.equal((await repositories.outbox.listByPickId(response.body.data.pickId)).length, 1);
+    await assert.rejects(
+      () => assertStayedTrackOnly(repositories, response, 'mutant'),
+      'the production-shape assertion must fail against the pre-fix handler',
+    );
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
 });

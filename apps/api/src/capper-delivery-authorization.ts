@@ -305,3 +305,45 @@ export async function loadCapperDeliveryDestination(input: {
     ...(input.env === undefined ? {} : { env: input.env }),
   });
 }
+
+export interface RecordTrackOnlyRequestInput {
+  /** The authenticated capper identity the record is about. */
+  capperId?: string | null | undefined;
+  now?: Date;
+}
+
+/**
+ * WORK-2026092802 — the record written when a capper asks for Track Only.
+ *
+ * The allow-list answers "MAY this capper's picks reach members?". It never
+ * answered "SHOULD this pick?" -- only the capper can say that, and a Track
+ * Only request is the capper saying no. Before this function existed the
+ * server evaluated the allow-list for every capper submission and overwrote
+ * the request with the answer, so an allow-listed capper could not submit
+ * Track Only at all: production pick c12f1e2f was requested Track Only,
+ * persisted `delivery-eligible`, and enqueued for official-picks, held only by
+ * the kill switch.
+ *
+ * So the allow-list is not consulted here. The record is a refusal -- the only
+ * decision any delivery path reads as "not deliverable" -- and its reason says
+ * why in terms of the request, not of the allow-list. `authority` keeps the
+ * schema's only admissible value, because `readHumanCapperDeliveryAuthorization`
+ * discards a record carrying any other; `reason` is what distinguishes it.
+ */
+export function recordTrackOnlyRequest(
+  input: RecordTrackOnlyRequestInput,
+): HumanCapperDeliveryAuthorization {
+  const capperId =
+    typeof input.capperId === 'string' && input.capperId.trim().length > 0
+      ? input.capperId.trim()
+      : null;
+  return {
+    version: humanCapperDeliveryAuthorizationVersion,
+    decision: 'refused',
+    capperId,
+    reason: 'track-only-requested',
+    authority: 'server-allowlist',
+    allowlistSource: CAPPER_DELIVERY_ALLOWLIST_ENV,
+    decidedAt: (input.now ?? new Date()).toISOString(),
+  };
+}

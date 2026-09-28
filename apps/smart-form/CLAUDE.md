@@ -10,7 +10,8 @@ whatever you are touching: `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION
 `T1_SMART_FORM_V1_CONTRACT.md`, `T2_SMART_FORM_CONFIDENCE_CONTRACT.md`.
 
 **It is not public-facing.** Access is allow-list-gated Google OAuth (see Runtime Behavior). Every
-submission is pinned server-side to Track Only and cannot create member delivery.
+submission is Track Only, decided server-side, unless the capper explicitly asks for delivery AND
+the server-side delivery allow-list authorizes them. A Track Only request is never widened.
 
 ## Role in Unit Talk V2
 
@@ -62,10 +63,16 @@ submission is pinned server-side to Track Only and cannot create member delivery
   (`lib/auth-allowlist.ts:43-66`). `auth.ts:35-40` puts the resolved `capperId` in the session JWT,
   and `apps/api/src/handlers/submit-pick.ts:143-144` prefers that claim over the form's
   `submittedBy` — so it becomes the persisted identity of a real pick.
-- **Track Only is pinned server-side, not by this app.** `handlers/submit-pick.ts:93-106` forces
-  `metadata.distributionMode = 'track-only'` for an authenticated capper and refuses a contrary
-  value; `:119-123` refuses a Smart Form submission declaring none; the controller returns
-  `outboxEnqueued: false`. The UTV2-1672 guard set is mutation-tested.
+- **The distribution mode is decided server-side, not by this app.** In `handlers/submit-pick.ts`
+  (`TRACK_ONLY_INTENT_GUARD`), an authenticated capper's `track-only` request -- or one declaring no
+  mode -- persists as `track-only` and the delivery allow-list is not consulted. A
+  `delivery-eligible` request is honoured only when `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED` and
+  `UNIT_TALK_HUMAN_CAPPER_DELIVERY_ALLOWLIST` authorize that capper, and is otherwise refused with
+  403 `CAPPER_TRACK_ONLY_REQUIRED`; any other value is refused. The Smart Form HTTP contract guard
+  refuses a submission declaring no mode. Before WORK-2026092802 an allow-listed capper's explicit
+  Track Only request was rewritten to `delivery-eligible` (production pick `c12f1e2f`); the
+  mutation control in `t1-proof-utv2-1923-human-capper-delivery.test.ts` restores that block and
+  must fail. The UTV2-1672 guard set is mutation-tested.
 - **Participant resolution has three tiers**, and which one was used must be recorded truthfully:
   canonical+event / structured team fallback (real canonical IDs, `eventId: null`, team sports only)
   / explicit manual `canonical-coverage-gap` (participant IDs must be `null`). The server verifies a

@@ -2,7 +2,10 @@ import {
   humanCapperDeliveryAuthorizationKey,
   type SubmissionPayload,
 } from '@unit-talk/contracts';
-import { evaluateCapperDeliveryAuthorization } from '../capper-delivery-authorization.js';
+import {
+  evaluateCapperDeliveryAuthorization,
+  recordTrackOnlyRequest,
+} from '../capper-delivery-authorization.js';
 import type { RepositoryBundle } from '@unit-talk/db';
 import { ApiError, normalizeApiError } from '../errors.js';
 import type { ApiResponse } from '../http.js';
@@ -60,8 +63,10 @@ export async function handleSubmitPick(
  *
  * When the authenticated role is 'capper', the capperId from the JWT claim
  * takes precedence over whatever submittedBy the form sent. Capper requests
- * are also pinned to source=smart-form and distributionMode=track-only so a
- * modified client cannot opt into member delivery.
+ * are also pinned to source=smart-form. Their distributionMode is Track Only
+ * unless the capper explicitly asks for `delivery-eligible` AND the server-side
+ * allow-list authorizes them; a modified client cannot opt into member
+ * delivery, and an authorized capper's Track Only request is never widened.
  */
 function coerceSubmissionPayload(
   body: unknown,
@@ -109,30 +114,53 @@ function coerceSubmissionPayload(
   // UTV2-1923 CAPPER_DELIVERY_AUTHORIZATION_FORGERY_GUARD_END
 
   // UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD_START
-  // UTV2-1923: extended, not relaxed. The refusal below is unchanged -- a
-  // client still cannot ask for anything but Track Only -- and an unauthorized
-  // capper is still pinned to Track Only exactly as before. What is new is
-  // that an authorized capper is pinned to `delivery-eligible` INSTEAD, by the
-  // server, on the strength of a server-side allow-list the client cannot
-  // reach. Client intent never widens the outcome in either direction.
+  // UTV2-1923 extended this guard; WORK-2026092802 corrects it. The capper's
+  // request decides whether delivery is ASKED FOR, and the server-side
+  // allow-list decides whether it is PERMITTED. Neither widens the other:
+  //
+  //   - `track-only`, or no mode at all, stays Track Only whatever the
+  //     allow-list says. The allow-list is not consulted. Before this, an
+  //     allow-listed capper's explicit Track Only request was rewritten to
+  //     `delivery-eligible` and queued for delivery (production pick c12f1e2f).
+  //   - `delivery-eligible` is honoured only when the allow-list authorizes
+  //     this capper; otherwise it is refused, never silently narrowed.
+  //   - anything else is refused.
+  // WORK-2026092802 TRACK_ONLY_INTENT_GUARD_START
   if (isAuthenticatedCapper) {
-    if (metadata['distributionMode'] !== undefined && metadata['distributionMode'] !== 'track-only') {
+    const requestedMode = metadata['distributionMode'];
+    if (
+      requestedMode !== undefined &&
+      requestedMode !== 'track-only' &&
+      requestedMode !== 'delivery-eligible'
+    ) {
       throw new ApiError(
         403,
         'CAPPER_TRACK_ONLY_REQUIRED',
         'Authenticated capper submissions are restricted to Track Only internal tracking.',
       );
     }
-    const deliveryAuthorization = evaluateCapperDeliveryAuthorization({
-      capperId: auth?.capperId,
-      isAuthenticatedCapper,
-    });
-    // Server authority, not client intent, decides whether a capper pick can
-    // produce delivery work during the recovery phase.
-    metadata['distributionMode'] =
-      deliveryAuthorization.decision === 'authorized' ? 'delivery-eligible' : 'track-only';
-    metadata[humanCapperDeliveryAuthorizationKey] = deliveryAuthorization;
+    if (requestedMode === 'delivery-eligible') {
+      const deliveryAuthorization = evaluateCapperDeliveryAuthorization({
+        capperId: auth?.capperId,
+        isAuthenticatedCapper,
+      });
+      if (deliveryAuthorization.decision !== 'authorized') {
+        throw new ApiError(
+          403,
+          'CAPPER_TRACK_ONLY_REQUIRED',
+          'This capper is not authorized for member delivery; submit as Track Only.',
+        );
+      }
+      metadata['distributionMode'] = 'delivery-eligible';
+      metadata[humanCapperDeliveryAuthorizationKey] = deliveryAuthorization;
+    } else {
+      metadata['distributionMode'] = 'track-only';
+      metadata[humanCapperDeliveryAuthorizationKey] = recordTrackOnlyRequest({
+        capperId: auth?.capperId,
+      });
+    }
   }
+  // WORK-2026092802 TRACK_ONLY_INTENT_GUARD_END
   // UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD_END
 
   // UTV2-1672 SMART_FORM_HTTP_CONTRACT_GUARD_START
