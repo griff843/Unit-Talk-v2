@@ -28,7 +28,6 @@ drop function if exists public.warehouse_retention_control_immutable();
 create or replace function public.raw_payloads_immutable()
 returns trigger
 language plpgsql
-set search_path = ''
 as $function$
 begin
   raise exception 'raw_payloads rows are immutable — no UPDATE or DELETE allowed (UTV2-1084)';
@@ -38,7 +37,6 @@ $function$;
 create or replace function public.odds_snapshots_immutable()
 returns trigger
 language plpgsql
-set search_path = ''
 as $function$
 begin
   raise exception 'odds_snapshots rows are immutable — no UPDATE or DELETE allowed (UTV2-1085)';
