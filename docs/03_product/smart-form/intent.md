@@ -189,10 +189,16 @@ than the response supports.
 
 This is the safety boundary of the whole surface, and it is enforced server-side, not by the form.
 
-- `handlers/submit-pick.ts:93-106` — an authenticated capper's submission is **pinned** to
-  `distributionMode: 'track-only'`, and an explicit contrary value is refused with
-  `CAPPER_TRACK_ONLY_REQUIRED`.
-- `:119-123` — a Smart Form submission that declares no `distributionMode` at all is refused.
+- `TRACK_ONLY_INTENT_GUARD` in `handlers/submit-pick.ts` — an authenticated capper's requested
+  mode is honoured, never widened. `track-only`, or no mode, persists Track Only with a
+  server-recorded `deliveryAuthorization` of `refused` / `track-only-requested`, whatever the
+  delivery allow-list says. `delivery-eligible` is honoured only when the server allow-list
+  authorizes that capper, and is otherwise refused with `CAPPER_TRACK_ONLY_REQUIRED`. Any other
+  value is refused. (Before WORK-2026092802, an allow-listed capper's explicit Track Only request
+  was rewritten to `delivery-eligible`; production pick `c12f1e2f` was queued that way on
+  2026-09-28. The fix was deployed at `063a9f36a` and accepted in production with pick `92789b58`.)
+- `SMART_FORM_HTTP_CONTRACT_GUARD` in the same handler — a Smart Form submission that reaches HTTP
+  declaring no `distributionMode` at all is refused.
 - `submit-pick-controller.ts:86-101` — a Track Only pick returns `outboxEnqueued: false` and takes
   no distribution path.
 - UTV2-1672 additionally guards direct enqueue, retry, requeue, the outbox chokepoint, the atomic
@@ -201,7 +207,7 @@ This is the safety boundary of the whole surface, and it is enforced server-side
 
 **What "persisted truth" means concretely:** the pick row carries the canonical `capper_id`, a
 `metadata.distributionMode` of `track-only`, honest participant provenance, and **zero outbox
-rows**. Because `:119-123` refuses a submission lacking `distributionMode`, a `null`
+rows**. Because `SMART_FORM_HTTP_CONTRACT_GUARD` refuses a submission lacking `distributionMode`, a `null`
 `distribution_mode` on a *new* pick is a failure signal, not "not applicable".
 
 ### 3.10 Observe the result
