@@ -47,8 +47,19 @@ Ratified delivery order (`docs/mission/intent.md` § "Delivery order"):
    and settled performance history.
 3. **Member-facing delivery** — separately reserved, and explicitly not part of either.
 
-The form is built for internal cappers first. Member-facing behaviour is not a Smart Form concern
-at all: Track Only is pinned server-side and delivery cannot be enabled from this surface.
+The form is built for internal cappers first. The capper chooses the mode, and the server decides
+what happens:
+
+- **Track Only stays Track Only.** A pick submitted as Track Only persists as Track Only and is never
+  delivered, whoever submits it. The server never widens a Track Only request.
+- **Delivery is an explicit request, never a default.** An authorized capper may request delivery.
+  The server authorizes it only for a capper on its allow-list, and otherwise refuses it and says so.
+  It never silently narrows the request to Track Only.
+- **The receipt reports the server's decision** — tracked, delivered, or refused with the reason.
+  The form never decides delivery itself.
+
+Whether an authorized delivery then reaches members is not a Smart Form concern. That is governed by
+the delivery kill switch and member-delivery activation, both reserved.
 
 ---
 
@@ -199,8 +210,10 @@ This is the safety boundary of the whole surface, and it is enforced server-side
   2026-09-28. The fix was deployed at `063a9f36a` and accepted in production with pick `92789b58`.)
 - `SMART_FORM_HTTP_CONTRACT_GUARD` in the same handler — a Smart Form submission that reaches HTTP
   declaring no `distributionMode` at all is refused.
-- `submit-pick-controller.ts:86-101` — a Track Only pick returns `outboxEnqueued: false` and takes
-  no distribution path.
+- `submit-pick-controller.ts`, the Track Only branch — a Track Only pick returns
+  `outboxEnqueued: false` with `deliveryPosture: 'track-only'` and takes no distribution path. A
+  refused delivery request returns `deliveryPosture: 'delivery-refused'` with its reason, and the
+  receipt shows both (`apps/smart-form/lib/delivery-disposition.ts`).
 - UTV2-1672 additionally guards direct enqueue, retry, requeue, the outbox chokepoint, the atomic
   RPC chokepoint and recap exclusion. **Each has a test that fails when the guard is removed** —
   the guards are mutation-tested, not merely present.
@@ -452,6 +465,21 @@ a physical on-screen keyboard, and no evidence should be described as if it did.
 ## 8. Current state — required behaviour against implementation
 
 Measured 2026-09-06 against `main` `551edfe67` and production `d3f69b804`.
+
+> **Production evidence since that measurement (2026-09-28).** The table below is the 2026-09-06
+> reading and is kept as it was measured. Four of its rows have since been exercised in production:
+>
+> - **Submission**, **Receipt** and **Track Only persisted truth**. Milestone 1 pick `dfcd9486` was
+>   submitted on 2026-09-09. Pick `92789b58` was submitted on 2026-09-28, after the Track Only intent
+>   repair was deployed at `063a9f36a`. Both went through the deployed form as `griff843` and
+>   persisted `track-only`, with zero outbox rows, receipts or execution intents.
+> - **Read-only observation.** Both picks were observed read-only, and `92789b58` also through the
+>   deployed Command Center.
+>
+> Eventless picks with honest manual provenance are valid for contained operator use. Event-bound
+> participant search stays unreachable until provider data supply (SGO) is authorized. Nobody seeds
+> a substitute event feed to reach it. No other row was re-measured, so no other row is restated
+> here.
 
 **The state vocabulary is deliberate, and "Done" is the narrowest word in it.** A merge, a green
 check or a passing unit test establishes none of these states on its own (§7):
