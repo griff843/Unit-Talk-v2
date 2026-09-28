@@ -3,7 +3,7 @@
   "issue_id": "WORK-2026092802",
   "tier": "T1",
   "lane_type": "runtime",
-  "proof_profile": "runtime",
+  "proof_profile": "app-runtime",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "d04e63d759e576a0f398804a87f419da73f44c25",
@@ -63,7 +63,20 @@
         "non-allow-listed capper requesting delivery: 403, no pick persisted"
       ],
       "fixture_note": "run-namespaced cappers and the manual canonical-coverage-gap path; production used the canonical path; the defect lived only in the mode decision"
-    }
+    },
+    "queries": [
+      { "table": "picks,distribution_outbox,distribution_receipts,execution_intents", "description": "live test 1 (staging, run 36409289475): allow-listed capper under production posture submits track-only; picks read back by id; distribution_outbox and execution_intents filtered on pick_id; distribution_receipts filtered on the outbox ids" },
+      { "table": "picks,distribution_outbox,distribution_receipts", "description": "live test 2: same capper and posture requests delivery-eligible; distribution_outbox filtered on pick_id (target and status asserted); distribution_receipts filtered on the outbox ids" },
+      { "table": "picks", "description": "live test 3: capper not on the allow-list requests delivery-eligible; 403 CAPPER_TRACK_ONLY_REQUIRED; picks filtered on the run-namespaced selection" }
+    ],
+    "row_counts": [
+      { "table": "distribution_outbox", "count": 0, "status": "track-only pick (live test 1)" },
+      { "table": "distribution_receipts", "count": 0, "status": "track-only pick (live test 1)" },
+      { "table": "execution_intents", "count": 0, "status": "track-only pick (live test 1)" },
+      { "table": "distribution_outbox", "count": 1, "status": "delivery-eligible pick, pending on the human target (live test 2)" },
+      { "table": "distribution_receipts", "count": 0, "status": "delivery-eligible pick (live test 2)" },
+      { "table": "picks", "count": 0, "status": "refused non-allow-listed submission (live test 3)" }
+    ]
   },
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1675"
 }
