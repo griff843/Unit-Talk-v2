@@ -4,7 +4,7 @@ MERGE_SHA: pending merge
 
 Issue: UTV2-1370  
 Tier: T1 / Tier C migration  
-Result: blocked on a canonical pre-merge migration-control contradiction
+Result: ready for T1 review with production parity pending until sanctioned post-merge deployment
 
 ## ASSERTIONS:
 
@@ -20,31 +20,31 @@ Result: blocked on a canonical pre-merge migration-control contradiction
 
 ## Verification
 
-- Exact refreshed execution SHA: `19b9d81e711f55491c4e1c584874568d1969aa0a`.
-- Migration run `36439442288`, job `108985797094`: apply → rollback → byte-equivalent schema → reapply passed. The same job's ephemeral PostgreSQL lifecycle proved stale/mismatched evidence refusal, 1 → 0 bounded prune, independent archive readback of 1 row, reference protection, unchanged quarantine/business rows, disabled legacy cron, no direct executor DELETE, and 0 → 1 recovery.
-- Migration run `36439442288`, job `108985796493`: fail-closed precondition drill and empty-scratch application passed.
-- CI run `36439442259`, job `108986033953`: canonical writable staging DB proof receipt for the refreshed execution SHA.
+- Exact refreshed execution SHA: `12e0f4b936586ab86cf2db300c07ccefdcb32c51`.
+- Migration run `36471754685`, job `109095473654`: apply → rollback → byte-equivalent schema → reapply passed. The same job's ephemeral PostgreSQL lifecycle proved stale/mismatched evidence refusal, 1 → 0 bounded prune, independent archive readback of 1 row, reference protection, unchanged quarantine/business rows, disabled legacy cron, no direct executor DELETE, and 0 → 1 recovery.
+- Migration run `36471754685`, job `109095473395`: fail-closed precondition drill and empty-scratch application passed.
+- Proof Gate run `36471754947`, job `109095745470`: canonical T1 live-DB proof ran against governed staging and passed for the refreshed execution SHA.
 - Local `pnpm verify:static`: passed, including lint, type-check, build, 3,524 tests, Smart Form verification, migration version uniqueness, and migration lint.
 - Local focused retention/proof suites: 18 passed, 0 failed, 1 live-DB case skipped without an explicit test DSN.
 - `pnpm ci:db-client-boundary`: passed; all privileged driver construction sites remain classified and unreachable from `pnpm test`.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; no additional R-level rules matched.
 - Production writes/deletes performed by this lane: 0 / 0.
 
-## Governance contradiction
+## Phase-aware production parity obligation
 
-Live Schema Parity run `36439442340`, job `108985848653` fails because production does not contain the unapplied retention migration. This is not an accepted proof result: the schema-v2 migration contract requires this receipt to be `PASS`.
+Live Schema Parity run `36471754689`, job `109095503592` is the authoritative exact-head receipt for the candidate execution SHA. The trusted workflow applied the repository migrations to scratch, compared scratch with production, uploaded its parity artifact, and completed with the expected failure at `Authorize schema drift gate` because production does not yet contain this unapplied migration.
 
-The repository currently provides no sanctioned order that can make that pre-merge receipt pass:
+The phase-aware migration contract records this pre-merge state as `PENDING_POST_DEPLOY` only because all of the following are independently true:
 
-- `docs/05_operations/DB_EXECUTION_PLAN.md` says migration apply happens only after review, CI, merge, and the sanctioned deploy flow.
-- `docs/05_operations/DB_ARCHITECTURE_SPEC.md` says no migration may be applied to live Supabase before merge.
-- `scripts/ops/proof-schema.ts` requires a passing `runtime_proof.live_schema_parity` receipt for a pre-merge migration packet.
-- `.github/workflows/live-schema-parity.yml` replays all PR migrations into scratch, compares that result directly with production, and denies every schema difference other than two named extension differences.
+- the run belongs to the canonical Live Schema Parity workflow and targets the exact execution SHA;
+- the comparison path completed and only the drift gate failed;
+- `production_ddl_applied` is explicitly false; and
+- production parity is bound to the `post-deploy-before-lane-close` phase.
 
-Therefore this new schema-changing migration cannot be both unapplied before merge and equal to production before merge. No gate was weakened, bypassed, or reclassified, and no production DDL was executed.
+After merge and sanctioned deployment, lane close still refuses this pending state. A new authoritative production Live Schema Parity `PASS` receipt is mandatory before the migration lane can close. No gate was weakened or bypassed, and no production DDL or pruning was executed during this candidate-proof refresh.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge  
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1678  
-Execution SHA: 19b9d81e711f55491c4e1c584874568d1969aa0a
+Execution SHA: 12e0f4b936586ab86cf2db300c07ccefdcb32c51

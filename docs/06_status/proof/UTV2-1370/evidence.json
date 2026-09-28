@@ -4,10 +4,10 @@
   "tier": "T1",
   "lane_type": "migration",
   "proof_profile": "migration",
-  "status": "BLOCKED_PRE_MERGE_PARITY_CONTRADICTION",
+  "status": "READY_FOR_T1_REVIEW_PENDING_POST_DEPLOY_PARITY",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "19b9d81e711f55491c4e1c584874568d1969aa0a",
+    "verified_source_sha": "12e0f4b936586ab86cf2db300c07ccefdcb32c51",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -31,12 +31,12 @@
     }
   },
   "runtime_proof": {
-    "head": "19b9d81e711f55491c4e1c584874568d1969aa0a",
+    "head": "12e0f4b936586ab86cf2db300c07ccefdcb32c51",
     "precondition_drill": {
       "result": "PASS",
-      "run": 36439442288,
-      "job": 108985796493,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36439442288/job/108985796493",
+      "run": 36471754685,
+      "job": 109095473395,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36471754685/job/109095473395",
       "cases": [
         "refuses when a governed object already exists before DDL",
         "applies on an empty scratch schema",
@@ -45,15 +45,15 @@
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
-      "run": 36439442288,
-      "job": 108985797094,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36439442288/job/108985797094"
+      "run": 36471754685,
+      "job": 109095473654,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36471754685/job/109095473654"
     },
     "bounded_retention_lifecycle": {
       "result": "PASS",
-      "run": 36439442288,
-      "job": 108985797094,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36439442288/job/108985797094",
+      "run": 36471754685,
+      "job": 109095473654,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36471754685/job/109095473654",
       "observed": [
         "mismatched and stale evidence refused",
         "provider_offer_history canary changed 1 hot row to 0",
@@ -65,17 +65,20 @@
       ]
     },
     "live_schema_parity": {
-      "result": "FAIL",
-      "run": 36439442340,
-      "job": 108985848653,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36439442340/job/108985848653",
-      "reason": "Canonical contradiction: DB_EXECUTION_PLAN and DB_ARCHITECTURE_SPEC prohibit live DDL before merge, while the migration proof contract requires a pre-merge Live Schema Parity PASS and the parity workflow denies the expected missing-in-production migration objects."
+      "result": "PENDING_POST_DEPLOY",
+      "observed_result": "FAIL",
+      "production_ddl_applied": false,
+      "required_phase": "post-deploy-before-lane-close",
+      "run": 36471754689,
+      "job": 109095503592,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36471754689/job/109095503592",
+      "reason": "The authoritative exact-head Live Schema Parity job applied all candidate migrations to scratch, completed the production comparison, and failed only at the drift authorization step because this approved candidate migration has not been applied to production. Production parity remains mandatory after sanctioned deployment and before lane close."
     },
     "writable_db_proof_staging": {
       "result": "PASS",
-      "run": 36439442259,
-      "job": 108986033953,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36439442259/job/108986033953"
+      "run": 36471754947,
+      "job": 109095745470,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36471754947/job/109095745470"
     }
   },
   "canary_contract": {
