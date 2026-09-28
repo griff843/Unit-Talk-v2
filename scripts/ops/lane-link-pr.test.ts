@@ -123,7 +123,6 @@ function recoveryManifest(issueId: string): LaneManifest {
     created_by: 'codex-cli',
     truth_check_history: [],
     reopen_history: [],
-    t1_live_db_precondition: 'deferred_to_ci',
   };
 }
 
@@ -161,47 +160,6 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
     assert.strictEqual(writtenToken?.['head_sha'], 'a'.repeat(40));
     assert.strictEqual(writtenToken?.['status'], 'pass');
     assert.strictEqual(writtenToken?.['preflight_run_id'], 'recovery-run-id');
-    assert.strictEqual(
-      writtenToken?.['t1_live_db_precondition'],
-      'deferred_to_ci',
-      'recovery must preserve the manifest-authorized staging-CI obligation',
-    );
-  } finally {
-    fs.rmSync(tokenPath, { force: true });
-  }
-});
-
-test('missing-token recovery cannot invent a T1 staging deferral absent from manifest authority', () => {
-  const manifest = recoveryManifest('UTV2-99118');
-  delete manifest.t1_live_db_precondition;
-  const tokenPath = preflightTokenPathForBranch(manifest.branch);
-  fs.rmSync(tokenPath, { force: true });
-  let writtenToken: Record<string, unknown> | undefined;
-  try {
-    recoverMissingPreflightToken(
-      manifest,
-      manifest.branch,
-      'https://github.com/example/unit-talk/pull/137',
-      {
-        cwd: ROOT,
-        currentBranch: () => manifest.branch,
-        currentHead: () => 'c'.repeat(40),
-        isClean: () => true,
-        dependenciesReady: () => true,
-        readPullRequest: () => ({
-          url: 'https://github.com/example/unit-talk/pull/137',
-          headRefName: manifest.branch,
-          headRefOid: 'c'.repeat(40),
-          baseRefName: 'main',
-          state: 'OPEN',
-        }),
-        activeManifests: () => [manifest],
-        writeToken: (_path, token) => {
-          writtenToken = token as unknown as Record<string, unknown>;
-        },
-      },
-    );
-    assert.strictEqual(writtenToken?.['t1_live_db_precondition'], undefined);
   } finally {
     fs.rmSync(tokenPath, { force: true });
   }

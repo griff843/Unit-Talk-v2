@@ -7,7 +7,6 @@ import {
   type LaneManifest,
   type PreflightToken,
   ROOT,
-  T1_LIVE_DB_PRECONDITION_DEFERRED,
   TERMINAL_STATUSES,
   activeManifestOverlap,
   currentHeadSha,
@@ -246,9 +245,6 @@ export function recoverMissingPreflightToken(
       'docs/05_operations/LANE_MANIFEST_SPEC.md',
       'docs/05_operations/TRUTH_CHECK_SPEC.md',
     ],
-    ...(manifest.t1_live_db_precondition === T1_LIVE_DB_PRECONDITION_DEFERRED
-      ? { t1_live_db_precondition: T1_LIVE_DB_PRECONDITION_DEFERRED }
-      : {}),
   };
   (deps.writeToken ?? writeJsonFile)(expectedTokenPath, token);
 }
