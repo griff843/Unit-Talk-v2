@@ -171,6 +171,42 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
   }
 });
 
+test('missing-token recovery cannot invent a T1 staging deferral absent from manifest authority', () => {
+  const manifest = recoveryManifest('UTV2-99118');
+  delete manifest.t1_live_db_precondition;
+  const tokenPath = preflightTokenPathForBranch(manifest.branch);
+  fs.rmSync(tokenPath, { force: true });
+  let writtenToken: Record<string, unknown> | undefined;
+  try {
+    recoverMissingPreflightToken(
+      manifest,
+      manifest.branch,
+      'https://github.com/example/unit-talk/pull/137',
+      {
+        cwd: ROOT,
+        currentBranch: () => manifest.branch,
+        currentHead: () => 'c'.repeat(40),
+        isClean: () => true,
+        dependenciesReady: () => true,
+        readPullRequest: () => ({
+          url: 'https://github.com/example/unit-talk/pull/137',
+          headRefName: manifest.branch,
+          headRefOid: 'c'.repeat(40),
+          baseRefName: 'main',
+          state: 'OPEN',
+        }),
+        activeManifests: () => [manifest],
+        writeToken: (_path, token) => {
+          writtenToken = token as unknown as Record<string, unknown>;
+        },
+      },
+    );
+    assert.strictEqual(writtenToken?.['t1_live_db_precondition'], undefined);
+  } finally {
+    fs.rmSync(tokenPath, { force: true });
+  }
+});
+
 test('missing-token recovery fails closed when only the PR head ref differs', () => {
   const manifest = recoveryManifest('UTV2-99117');
   const tokenPath = preflightTokenPathForBranch(manifest.branch);
