@@ -7,16 +7,16 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "170039b84878d7ca88578464d2db4ba696c46308",
+    "verified_source_sha": "e1db7f7ace28b72d68fc3107a0e7395fcb2db2cf",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
     "focused_tests": {
-      "command": "pnpm exec tsx --test scripts/ops/lane-link-pr.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
-      "tests": 281,
-      "pass": 281,
+      "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
+      "tests": 261,
+      "pass": 261,
       "fail": 0
     },
     "type_check": "pass",
@@ -41,10 +41,6 @@
       "post_merge_pending_refusal": "pass",
       "existing_pass_receipt": "pass",
       "non_migration_profiles": "pass"
-    },
-    "t1_token_recovery": {
-      "existing_manifest_deferral_preserved": "pass",
-      "deferral_not_introduced_without_manifest_authority": "pass"
     },
     "pr_1678_fixture": {
       "source_head": "308b46eb93e725627817c1469e352d9ae8aeac4f",
