@@ -281,6 +281,13 @@
       ]
     },
     {
+      "path": "apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts",
+      "owner": "api",
+      "execution": [
+        "pnpm test:t1-proof:live"
+      ]
+    },
+    {
       "path": "apps/command-center/src/lib/data/client.test.ts",
       "owner": "command-center",
       "execution": [

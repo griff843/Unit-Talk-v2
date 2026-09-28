@@ -14,8 +14,12 @@ import {
   evaluateCapperDeliveryAuthorization,
   isHumanCapperDeliveryPostureEnabled,
   parseCapperDeliveryAllowlist,
+  recordTrackOnlyRequest,
 } from './capper-delivery-authorization.js';
-import { readHumanCapperDeliveryAuthorization } from '@unit-talk/contracts';
+import {
+  isHumanCapperDeliveryAuthorized,
+  readHumanCapperDeliveryAuthorization,
+} from '@unit-talk/contracts';
 
 const POSTURE_ON = { UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED: 'true' };
 
@@ -190,5 +194,48 @@ test('a malformed authorization record never reads as permission', () => {
       null,
       `${JSON.stringify(value)} must not read as an authorization record`,
     );
+  }
+});
+
+test('recordTrackOnlyRequest: a Track Only request is a readable refusal that never authorizes', () => {
+  const now = new Date('2026-09-28T02:13:06.495Z');
+  const record = recordTrackOnlyRequest({ capperId: '  griff843  ', now });
+  assert.deepEqual(record, {
+    version: 'human-capper-delivery/v1',
+    decision: 'refused',
+    capperId: 'griff843',
+    reason: 'track-only-requested',
+    authority: 'server-allowlist',
+    allowlistSource: CAPPER_DELIVERY_ALLOWLIST_ENV,
+    decidedAt: now.toISOString(),
+  });
+  // It must survive the reader, or the pick would carry no record at all.
+  const metadata = { deliveryAuthorization: record };
+  assert.deepEqual(readHumanCapperDeliveryAuthorization(metadata), record);
+  assert.equal(isHumanCapperDeliveryAuthorized(metadata), false);
+});
+
+test('recordTrackOnlyRequest: does not consult the allow-list, even when it would authorize', () => {
+  const previous = { ...process.env };
+  process.env['UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED'] = 'true';
+  process.env[CAPPER_DELIVERY_ALLOWLIST_ENV] = 'griff843';
+  try {
+    assert.equal(
+      evaluateCapperDeliveryAuthorization({ capperId: 'griff843', isAuthenticatedCapper: true }).decision,
+      'authorized',
+      'precondition: the allow-list would authorize this capper',
+    );
+    assert.equal(recordTrackOnlyRequest({ capperId: 'griff843' }).decision, 'refused');
+  } finally {
+    for (const key of ['UNIT_TALK_HUMAN_CAPPER_DELIVERY_ENABLED', CAPPER_DELIVERY_ALLOWLIST_ENV]) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+});
+
+test('recordTrackOnlyRequest: an absent or blank capper id is recorded as null', () => {
+  for (const capperId of [undefined, null, '', '   ']) {
+    assert.equal(recordTrackOnlyRequest({ capperId }).capperId, null);
   }
 });

@@ -83,6 +83,12 @@ export const humanCapperDeliveryRefusalReasons = [
   'no-capper-identity',
   /** The deployment posture does not admit human capper delivery at all. */
   'human-delivery-posture-off',
+  /**
+   * The capper asked for Track Only, or declared no mode at all. Delivery is
+   * never authorized for a pick nobody asked to deliver, whatever the
+   * allow-list says (WORK-2026092802).
+   */
+  'track-only-requested',
 ] as const;
 export type HumanCapperDeliveryRefusalReason =
   (typeof humanCapperDeliveryRefusalReasons)[number];
