@@ -39,11 +39,39 @@ test('migration is allowlisted, bounded, fail-closed, and keeps legacy cron disa
 test(
   'staging lifecycle proves refusal, bounded deletion, independent receipt truth, and recovery',
   { skip: !process.env.WAREHOUSE_RETENTION_TEST_DSN },
-  async () => {
+  async (t) => {
     const dsn = process.env.WAREHOUSE_RETENTION_TEST_DSN!;
-    const migration = fs.readFileSync(migrationPath, 'utf8');
+    const suffix = `${process.pid}_${Date.now().toString(36)}`;
+    const proofSchema = `utv2_1370_${suffix}`;
+    const proofCronSchema = `utv2_1370_cron_${suffix}`;
+    const plannerRole = `utv2_1370_planner_${suffix}`;
+    const executorRole = `utv2_1370_executor_${suffix}`;
+    const recoveryRole = `utv2_1370_recovery_${suffix}`;
+    const scopeSql = (sql: string): string =>
+      sql
+        .replaceAll('warehouse_retention_planner', plannerRole)
+        .replaceAll('warehouse_retention_executor', executorRole)
+        .replaceAll('warehouse_retention_recovery', recoveryRole)
+        .replaceAll('public.', `${proofSchema}.`)
+        .replaceAll('cron.', `${proofCronSchema}.`);
+    const run = (sql: string, variables?: Record<string, string>) =>
+      runPsqlScript(dsn, scopeSql(sql), variables);
+    await runPsqlScript(
+      dsn,
+      `create schema ${proofSchema}; create schema ${proofCronSchema};`,
+    );
+    t.after(async () => {
+      await runPsqlScript(
+        dsn,
+        `drop schema if exists ${proofSchema} cascade;
+         drop schema if exists ${proofCronSchema} cascade;
+         drop role if exists ${plannerRole};
+         drop role if exists ${executorRole};
+         drop role if exists ${recoveryRole};`,
+      );
+    });
+    const migration = scopeSql(fs.readFileSync(migrationPath, 'utf8'));
     const fixture = `
-      create schema if not exists cron;
       create table cron.job(jobname text primary key, active boolean not null);
       insert into cron.job values ('nightly-retention-prune', false);
 
@@ -97,7 +125,7 @@ test(
       create trigger odds_snapshots_immutable before update or delete on public.odds_snapshots
         for each row execute function public.odds_snapshots_immutable();
     `;
-    await runPsqlScript(dsn, fixture);
+    await run(fixture);
     await runPsqlScript(dsn, migration);
 
     const archiveRoot = fs.mkdtempSync(
@@ -184,21 +212,19 @@ test(
         /\$(\d+)/g,
         (_match, index: string) => `:'p${index}'`,
       );
-      const output = await runPsqlScript(
-        dsn,
+      const output = await run(
         `begin; set local role ${role}; ${parameterized.replace(/\s+result$/, '::text')}; commit;`,
         variables,
       );
       return JSON.parse(output) as Record<string, unknown>;
     };
     const scalar = async (query: string): Promise<string> =>
-      runPsqlScript(dsn, query);
+      run(query);
     const hashA = evidence.manifestSha256;
     const hashB = 'b'.repeat(64);
     const fresh = evidence.evidenceCheckedAt;
 
-    await runPsqlScript(
-      dsn,
+    await run(
       `insert into public.provider_offer_history values ('11111111-1111-4111-8111-111111111111', '2026-06-14T12:00:00Z', null)`,
     );
     await assert.rejects(
@@ -309,17 +335,14 @@ test(
       1,
     );
 
-    await runPsqlScript(
-      dsn,
+    await run(
       `insert into public.raw_payloads values ('33333333-3333-4333-8333-333333333333','2026-01-02T12:00:00Z')`,
     );
-    await runPsqlScript(
-      dsn,
+    await run(
       `insert into public.odds_snapshots values ('44444444-4444-4444-8444-444444444444','2026-09-28T12:00:00Z','33333333-3333-4333-8333-333333333333',null)`,
     );
     await assert.rejects(
-      runPsqlScript(
-        dsn,
+      run(
         `delete from public.raw_payloads where id='33333333-3333-4333-8333-333333333333'`,
       ),
       /raw_payloads rows are immutable/,
@@ -344,12 +367,10 @@ test(
       ),
       /reference-protected/,
     );
-    await runPsqlScript(
-      dsn,
+    await run(
       `insert into public.odds_snapshots values ('55555555-5555-4555-8555-555555555555','2026-01-03T12:00:00Z',null,null)`,
     );
-    await runPsqlScript(
-      dsn,
+    await run(
       `insert into public.odds_snapshot_corrections values ('55555555-5555-4555-8555-555555555555','44444444-4444-4444-8444-444444444444')`,
     );
     await assert.rejects(
@@ -373,12 +394,10 @@ test(
       /reference-protected/,
     );
 
-    await runPsqlScript(
-      dsn,
+    await run(
       `insert into public.system_runs values ('22222222-2222-4222-8222-222222222222','2026-01-01T12:00:00Z')`,
     );
-    await runPsqlScript(
-      dsn,
+    await run(
       `insert into public.pick_candidates values ('22222222-2222-4222-8222-222222222222')`,
     );
     await assert.rejects(
