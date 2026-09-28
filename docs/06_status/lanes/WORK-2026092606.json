@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026092606-cc-settlement-truth",
   "branch": "codex/work-2026092606-cc-settlement-truth",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "7b3227826bb9b1ff9353e21d64b3672bb0fde097",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1667",
   "files_changed": [],
   "file_scope_lock": [
@@ -26,14 +26,24 @@
     "docs/06_status/proof/WORK-2026092606/verification.md",
     "docs/06_status/proof/WORK-2026092606/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-09-27T13:59:51.876Z",
   "heartbeat_at": "2026-09-27T14:50:46.597Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026092606-cc-settlement-truth.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-28T12:34:31.704Z",
+      "verdict": "fail",
+      "merge_sha": "7b3227826bb9b1ff9353e21d64b3672bb0fde097",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1667 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
