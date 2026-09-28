@@ -17,7 +17,19 @@ result: pass
 
 ## EVIDENCE:
 
-A literal-string scan of both repaired files finds all four command names.
+A literal-string scan of both repaired files finds all four command names (count of matching lines, command, file):
+
+```
+$ for f in <both files>; do for c in <four commands>; do grep -cF "$c" $f; done; done
+1  pnpm type-check              docs/06_status/proof/WORK-2026092807/verification.md
+1  pnpm test                    docs/06_status/proof/WORK-2026092807/verification.md
+3  pnpm verify                  docs/06_status/proof/WORK-2026092807/verification.md
+1  scripts/ci/r-level-check.ts  docs/06_status/proof/WORK-2026092807/verification.md
+1  pnpm type-check              docs/06_status/proof/WORK-2026092811/verification.md
+1  pnpm test                    docs/06_status/proof/WORK-2026092811/verification.md
+3  pnpm verify                  docs/06_status/proof/WORK-2026092811/verification.md
+1  scripts/ci/r-level-check.ts  docs/06_status/proof/WORK-2026092811/verification.md
+```
 
 ## Verification
 
