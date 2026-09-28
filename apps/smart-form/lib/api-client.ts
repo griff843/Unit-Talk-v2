@@ -119,6 +119,12 @@ export interface SubmitPickResult {
   promotionTarget?: string | null;
   shadowMode?: boolean;
   governanceBrake?: boolean;
+  /** The server's delivery decision: `track-only`, `delivered` or `delivery-refused`. */
+  deliveryPosture?: 'track-only' | 'delivered' | 'delivery-refused';
+  /** Present only with `deliveryPosture: 'delivery-refused'`. */
+  deliveryRefusedReason?: string;
+  /** The governed member-facing target, present whenever a human delivery was attempted. */
+  deliveryTarget?: string;
 }
 
 function normalizeCatalogData(data: unknown): CatalogData {
