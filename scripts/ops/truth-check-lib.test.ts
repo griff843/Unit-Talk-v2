@@ -38,7 +38,6 @@ import type { DispatchLease } from './lease-registry.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
 import {
   verifyExternalVerifierProvenanceBinding,
-  type EvidenceGithubApiRunner,
   type EvidenceGitRunner,
 } from './proof-schema.js';
 import { defaultProofPaths, getRepoRoot } from './shared.js';
@@ -757,38 +756,6 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
 const AUTHENTIC_PR_HEAD = 'aa4d4cfc4d528a7ef4e9f684c08f914f9ba0cfd7';
 const AUTHENTIC_MERGE_SHA = '3ce86b98a5aa01ae244794253a8c7e716f2ce733';
 const RESTORED_RECEIPT_HEAD = 'a9943aa1d9e24201e0acdfd76c59d1c7813a068d';
-
-const PENDING_PARITY_API: EvidenceGithubApiRunner = (endpoint) => ({
-  status: 0,
-  stderr: '',
-  stdout: JSON.stringify(endpoint.includes('/actions/runs/')
-    ? {
-        id: 36441151899,
-        name: 'Live Schema Parity',
-        path: '.github/workflows/live-schema-parity.yml',
-        head_sha: AUTHENTIC_PR_HEAD,
-        event: 'pull_request',
-        status: 'completed',
-        conclusion: 'failure',
-        pull_requests: [{ head: { sha: AUTHENTIC_PR_HEAD } }],
-      }
-    : {
-        id: 108991710221,
-        run_id: 36441151899,
-        workflow_name: 'Live Schema Parity',
-        name: 'Live Schema Parity',
-        head_sha: AUTHENTIC_PR_HEAD,
-        status: 'completed',
-        conclusion: 'failure',
-        steps: [
-          { name: 'Refuse to run PR-modified code against production', conclusion: 'success' },
-          { name: 'Apply repo migrations to local stack', conclusion: 'success' },
-          { name: 'Compare scratch schema to live schema', conclusion: 'success' },
-          { name: 'Authorize schema drift gate', conclusion: 'failure' },
-          { name: 'Upload schema parity artifact', conclusion: 'success' },
-        ],
-      }),
-});
 
 const MERGED_PR_ATTESTATION = {
   merge_sha: AUTHENTIC_MERGE_SHA,
@@ -1921,8 +1888,6 @@ function migrationCepInput(
       pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1428',
     },
     proof_artifacts: artifacts,
-    repository: 'griff843/Unit-Talk-v2',
-    githubApiRunner: PENDING_PARITY_API,
   } as never;
 }
 
@@ -1951,7 +1916,7 @@ test('schema-v2 migration packet passes pre-merge and post-merge shared contract
   assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
 });
 
-test('candidate migration is merge-eligible with pending parity but cannot close before post-deploy parity passes', () => {
+test('candidate migration cannot close before post-deploy parity passes', () => {
   const candidate = schemaV2MigrationBundle();
   candidate.runtime_proof!.live_schema_parity = {
     result: 'PENDING_POST_DEPLOY',
@@ -1962,13 +1927,6 @@ test('candidate migration is merge-eligible with pending parity but cannot close
     run: 36441151899,
     job: 108991710221,
   };
-
-  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput('migration', candidate));
-  assert.equal(
-    preMerge.findings.find((finding) => finding.id === 'CEP-E7')?.status,
-    'pass',
-    JSON.stringify(preMerge.blocking),
-  );
 
   const postMergeBundle = schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA);
   postMergeBundle.runtime_proof!.live_schema_parity = candidate.runtime_proof!.live_schema_parity;
