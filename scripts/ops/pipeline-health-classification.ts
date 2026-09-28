@@ -351,3 +351,43 @@ export function partitionReceiptAuthority<Row extends ReceiptRowLike>(
   for (const row of rows) out[classifyReceiptDestination(row)].push(row);
   return out;
 }
+
+// ── delivery freshness from receipts (WORK-2026092811) ────────────────────
+
+/**
+ * A `sent` outbox row is not evidence of delivery: the worker marks a row
+ * `sent`, and writes no receipt, when its pick is already settled or voided
+ * (`apps/worker/src/distribution-worker.ts`). Only a receipt for a real
+ * destination — `governed` or the `control` canary — shows something was
+ * delivered. `simulated` receipts delivered nothing and `unrecognized` ones
+ * cannot be shown to be authorized, so neither counts.
+ */
+export function newestDeliveredReceiptAt(rows: readonly ReceiptRowLike[]): string | null {
+  let newest: string | null = null;
+  let newestMs = Number.NEGATIVE_INFINITY;
+  for (const row of rows) {
+    const cls = classifyReceiptDestination(row);
+    if (cls !== 'governed' && cls !== 'control') continue;
+    const ms = row.recorded_at ? Date.parse(row.recorded_at) : Number.NaN;
+    if (Number.isFinite(ms) && ms > newestMs) {
+      newest = row.recorded_at ?? null;
+      newestMs = ms;
+    }
+  }
+  return newest;
+}
+
+/** Newest governed receipt per logical target, for the operator readout. */
+export function newestGovernedReceiptByTarget(rows: readonly ReceiptRowLike[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    if (classifyReceiptDestination(row) !== 'governed' || !row.recorded_at) continue;
+    const target = receiptLogicalTarget(row);
+    if (target === null) continue;
+    const ms = Date.parse(row.recorded_at);
+    if (!Number.isFinite(ms)) continue;
+    const current = out[target];
+    if (current === undefined || ms > Date.parse(current)) out[target] = row.recorded_at;
+  }
+  return out;
+}

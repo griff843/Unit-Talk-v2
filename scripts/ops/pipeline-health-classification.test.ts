@@ -6,6 +6,8 @@ import {
   classifyReceiptDestination,
   deadLetterBucket,
   killSwitchKeyForTarget,
+  newestDeliveredReceiptAt,
+  newestGovernedReceiptByTarget,
   partitionDeadLetters,
   partitionHeldPendingRows,
   partitionReceiptAuthority,
@@ -399,4 +401,65 @@ test('the partition places every row exactly once', () => {
     { g: p.governed.map((r) => r.id), c: p.control.map((r) => r.id), s: p.simulated.map((r) => r.id), u: p.unrecognized.map((r) => r.id) },
     { g: ['a'], c: ['b'], s: ['c'], u: ['d'] },
   );
+});
+
+// ── delivery freshness from receipts (WORK-2026092811) ────────────────────
+
+const receiptAt = (id: string, channel: string | null, target: string | undefined, at: string) => ({
+  ...receipt(id, channel, target),
+  recorded_at: at,
+});
+
+test('delivery freshness is the newest governed or control receipt', () => {
+  const rows = [
+    receiptAt('old-governed', '1384052464189440120', 'discord:official-picks', minutesAgo(600)),
+    receiptAt('canary', 'discord:#canary', undefined, minutesAgo(120)),
+  ];
+  assert.equal(newestDeliveredReceiptAt(rows), minutesAgo(120));
+});
+
+test('a newer simulated or unrecognized receipt never counts as a delivery', () => {
+  const rows = [
+    receiptAt('governed', '1384052464189440120', 'discord:official-picks', minutesAgo(600)),
+    receiptAt('simulated', 'simulated:discord:official-picks', undefined, minutesAgo(5)),
+    receiptAt('unrecognized', 'discord:game-threads', undefined, minutesAgo(1)),
+  ];
+  assert.equal(newestDeliveredReceiptAt(rows), minutesAgo(600));
+});
+
+test('no qualifying receipt means no successful delivery, not a sent-row fallback', () => {
+  assert.equal(newestDeliveredReceiptAt([]), null);
+  assert.equal(
+    newestDeliveredReceiptAt([receiptAt('sim', 'simulated:discord:canary', undefined, minutesAgo(1))]),
+    null,
+  );
+  // With null supplied and only non-sent rows passed in, the evaluation reports no delivery.
+  const health = evaluateQueueHealth({
+    observedAt: NOW.toISOString(),
+    workerTargets: ['discord:official-picks'],
+    lastSuccessfulDeliveryAt: newestDeliveredReceiptAt([]),
+    outboxRows: [],
+  });
+  assert.equal(health.lastSuccessfulDeliveryAt, null);
+});
+
+test('a receipt with an unparseable recorded_at is ignored', () => {
+  assert.equal(
+    newestDeliveredReceiptAt([receiptAt('bad', 'discord:#canary', undefined, 'not-a-date')]),
+    null,
+  );
+});
+
+test('newest governed receipt is reported per logical target, control and simulated excluded', () => {
+  const rows = [
+    receiptAt('op-old', '1384052464189440120', 'discord:official-picks', minutesAgo(900)),
+    receiptAt('op-new', '1384052464189440121', 'discord:official-picks', minutesAgo(300)),
+    receiptAt('bb', 'discord:best-bets', undefined, minutesAgo(700)),
+    receiptAt('canary', 'discord:#canary', undefined, minutesAgo(10)),
+    receiptAt('sim', 'simulated:discord:official-picks', undefined, minutesAgo(1)),
+  ];
+  assert.deepEqual(newestGovernedReceiptByTarget(rows), {
+    'discord:official-picks': minutesAgo(300),
+    'discord:best-bets': minutesAgo(700),
+  });
 });
