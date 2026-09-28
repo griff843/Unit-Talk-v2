@@ -49,6 +49,10 @@ for `/live` and the registry wiring). With the file restored, all 99 pass.
 - [x] `tsc -p apps/discord-bot --noEmit`: exit 0
 - [x] eslint on the four changed files: exit 0
 - [x] Mutation drill: removing the `/live` gate turns 2 tests red
+- [x] `pnpm verify` passed in the required CI `verify` context on head `c9c4c75320906edabd5d4b09fc5fe352814e6ed9`, which carries this lane's implementation unchanged.
+- [x] `pnpm type-check` is included in that `pnpm verify` run and passed.
+- [x] `pnpm test` is included in that `pnpm verify` run and passed.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base 3b071d9d6514cc9943a4e875371940337f38b600 --head 4a694a0b968bf25f1a31fe0c2f4a2d6f7dc90a0b`: Verdict PASS, 9 changed files, rule matched `discord-delivery`.
 
 ## Runtime Verification
 
