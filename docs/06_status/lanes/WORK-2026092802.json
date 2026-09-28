@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092802/.out/worktrees/claude__work-2026092802-track-only-intent",
   "branch": "claude/work-2026092802-track-only-intent",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "3e5bdb10a0b175c2c0069c6376240954fda13a3e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1675",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026092802.md",
@@ -28,9 +28,9 @@
     "docs/06_status/proof/WORK-2026092802/evidence.json",
     "docs/06_status/proof/WORK-2026092802/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-09-28T10:18:08.519Z",
-  "heartbeat_at": "2026-09-28T10:18:08.519Z",
+  "heartbeat_at": "2026-09-28T11:58:46.212Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026092802-track-only-intent.json",
