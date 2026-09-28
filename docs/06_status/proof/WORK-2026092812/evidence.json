@@ -7,9 +7,9 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "pending implementation commit",
+    "verified_source_sha": "79b1c9b95a77288ba36ae6da03f4b7b3e58f1d71",
     "evidence_commit_sha": "pending proof commit",
-    "current_pr_head_sha": "pending PR",
+    "current_pr_head_sha": "79b1c9b95a77288ba36ae6da03f4b7b3e58f1d71",
     "sha_type": "pending_merge",
     "bound_at": "2026-09-28T20:30:01.097Z"
   },

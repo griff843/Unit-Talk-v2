@@ -34,4 +34,4 @@ Writable live-DB proof is deferred as required: the lane makes no database write
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1685
