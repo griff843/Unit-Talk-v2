@@ -76,7 +76,7 @@ jobs:
       - name: Prove fail-closed plan, bounded prune, protected truth, and recovery
         env:
           WAREHOUSE_RETENTION_TEST_DSN: postgres://postgres:postgres@localhost:5432/retention_proof
-        run: pnpm exec tsx --test scripts/warehouse/retention.test.ts scripts/warehouse/retention-workflow.test.ts
+        run: pnpm exec tsx --test scripts/warehouse/retention.test.ts apps/api/src/t1-proof-warehouse-retention.test.ts
 
   plan:
     if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.mode == 'plan' }}

@@ -786,10 +786,22 @@ $assert_privileges$;
 -- The obsolete cron remains disabled. Never update cron.job directly; this is
 -- an assertion only, and it refuses migration if production drift reactivated it.
 do $assert_legacy_cron_disabled$
+declare
+  v_legacy_cron_active boolean := false;
 begin
-  if to_regclass('cron.job') is not null and exists (
-    select 1 from cron.job where jobname = 'nightly-retention-prune' and active
-  ) then
+  if to_regclass('cron.job') is not null then
+    execute $sql$
+      select exists (
+        select 1
+        from cron.job
+        where jobname = 'nightly-retention-prune'
+          and active
+      )
+    $sql$
+    into v_legacy_cron_active;
+  end if;
+
+  if v_legacy_cron_active then
     raise check_violation using message = 'legacy nightly-retention-prune is active; refusing governed retention installation';
   end if;
 end
