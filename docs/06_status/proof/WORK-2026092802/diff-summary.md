@@ -21,5 +21,5 @@ enqueue, containment, and client-authorization stripping.
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3e5bdb10a0b175c2c0069c6376240954fda13a3e
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1675

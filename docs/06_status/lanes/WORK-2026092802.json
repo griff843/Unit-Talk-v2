@@ -28,14 +28,22 @@
     "docs/06_status/proof/WORK-2026092802/evidence.json",
     "docs/06_status/proof/WORK-2026092802/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-09-28T10:18:08.519Z",
-  "heartbeat_at": "2026-09-28T11:58:46.212Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-28T12:59:45.009Z",
+  "closed_at": "2026-09-28T12:59:45.009Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092802-track-only-intent.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-28T12:59:41.877Z",
+      "verdict": "pass",
+      "merge_sha": "3e5bdb10a0b175c2c0069c6376240954fda13a3e",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {

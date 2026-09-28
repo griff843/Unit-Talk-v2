@@ -5,13 +5,13 @@
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "3e5bdb10a0b175c2c0069c6376240954fda13a3e",
     "verified_source_sha": "d04e63d759e576a0f398804a87f419da73f44c25",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
     "note": "d04e63d759e576a0f398804a87f419da73f44c25 is the last commit on this lane that changes anything outside the proof directory and the lane manifest. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
-    "bound_at": "2026-09-28T11:00:00.000Z"
+    "bound_at": "2026-09-28T12:59:41.873Z"
   },
   "what_this_lane_delivers": {
     "defect": "An authenticated allow-listed capper's explicit Track Only submission was widened server-side to delivery-eligible (production pick c12f1e2f, 2026-09-28: queued, discord:official-picks outbox row 5005f461; only the killed switch prevented delivery).",
@@ -20,9 +20,24 @@
   },
   "static_proof": {
     "focused_suites": [
-      { "file": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts", "tests": 49, "pass": 49, "fail": 0 },
-      { "file": "apps/api/src/capper-delivery-authorization.test.ts", "tests": 15, "pass": 15, "fail": 0 },
-      { "file": "apps/api/src/http-integration.test.ts", "tests": 27, "pass": 27, "fail": 0 }
+      {
+        "file": "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
+        "tests": 49,
+        "pass": 49,
+        "fail": 0
+      },
+      {
+        "file": "apps/api/src/capper-delivery-authorization.test.ts",
+        "tests": 15,
+        "pass": 15,
+        "fail": 0
+      },
+      {
+        "file": "apps/api/src/http-integration.test.ts",
+        "tests": 27,
+        "pass": 27,
+        "fail": 0
+      }
     ],
     "type_check": "pass",
     "lint": "pass",
@@ -65,17 +80,50 @@
       "fixture_note": "run-namespaced cappers and the manual canonical-coverage-gap path; production used the canonical path; the defect lived only in the mode decision"
     },
     "queries": [
-      { "table": "picks,distribution_outbox,distribution_receipts,execution_intents", "description": "live test 1 (staging, run 36409289475): allow-listed capper under production posture submits track-only; picks read back by id; distribution_outbox and execution_intents filtered on pick_id; distribution_receipts filtered on the outbox ids" },
-      { "table": "picks,distribution_outbox,distribution_receipts", "description": "live test 2: same capper and posture requests delivery-eligible; distribution_outbox filtered on pick_id (target and status asserted); distribution_receipts filtered on the outbox ids" },
-      { "table": "picks", "description": "live test 3: capper not on the allow-list requests delivery-eligible; 403 CAPPER_TRACK_ONLY_REQUIRED; picks filtered on the run-namespaced selection" }
+      {
+        "table": "picks,distribution_outbox,distribution_receipts,execution_intents",
+        "description": "live test 1 (staging, run 36409289475): allow-listed capper under production posture submits track-only; picks read back by id; distribution_outbox and execution_intents filtered on pick_id; distribution_receipts filtered on the outbox ids"
+      },
+      {
+        "table": "picks,distribution_outbox,distribution_receipts",
+        "description": "live test 2: same capper and posture requests delivery-eligible; distribution_outbox filtered on pick_id (target and status asserted); distribution_receipts filtered on the outbox ids"
+      },
+      {
+        "table": "picks",
+        "description": "live test 3: capper not on the allow-list requests delivery-eligible; 403 CAPPER_TRACK_ONLY_REQUIRED; picks filtered on the run-namespaced selection"
+      }
     ],
     "row_counts": [
-      { "table": "distribution_outbox", "count": 0, "status": "track-only pick (live test 1)" },
-      { "table": "distribution_receipts", "count": 0, "status": "track-only pick (live test 1)" },
-      { "table": "execution_intents", "count": 0, "status": "track-only pick (live test 1)" },
-      { "table": "distribution_outbox", "count": 1, "status": "delivery-eligible pick, pending on the human target (live test 2)" },
-      { "table": "distribution_receipts", "count": 0, "status": "delivery-eligible pick (live test 2)" },
-      { "table": "picks", "count": 0, "status": "refused non-allow-listed submission (live test 3)" }
+      {
+        "table": "distribution_outbox",
+        "count": 0,
+        "status": "track-only pick (live test 1)"
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "track-only pick (live test 1)"
+      },
+      {
+        "table": "execution_intents",
+        "count": 0,
+        "status": "track-only pick (live test 1)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 1,
+        "status": "delivery-eligible pick, pending on the human target (live test 2)"
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "delivery-eligible pick (live test 2)"
+      },
+      {
+        "table": "picks",
+        "count": 0,
+        "status": "refused non-allow-listed submission (live test 3)"
+      }
     ]
   },
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1675"

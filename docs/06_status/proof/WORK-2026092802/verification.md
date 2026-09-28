@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092802
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3e5bdb10a0b175c2c0069c6376240954fda13a3e
 
 Issue: WORK-2026092802
 Tier: T1
@@ -154,5 +154,5 @@ None of them is in this lane's scope.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `3e5bdb10a0b175c2c0069c6376240954fda13a3e`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1675
