@@ -146,6 +146,10 @@ Any future lane that needs one of those actions must carry explicit scope and ap
 - Type generation diff, if applicable.
 - `pnpm type-check`, `pnpm test`, and issue-specific DB tests required by that lane.
 - Preview branch teardown plan when a branch is approved.
+- Exact candidate receipts for refusal behavior, empty-scratch apply, rollback/reapply, and
+  governed writable staging behavior. When the candidate is intentionally absent from production,
+  live parity is recorded as the explicit `PENDING_POST_DEPLOY` obligation defined by
+  `DB_MIGRATION_WORKFLOW.md`, never as a PASS or an allowlisted drift.
 
 **Stop conditions:**
 
@@ -221,6 +225,9 @@ Any future lane that needs one of those actions must carry explicit scope and ap
 - Post-apply `pnpm supabase:types`, `pnpm type-check`, and `pnpm test:db` where required.
 - Ledger state after apply.
 - Runtime smoke result for affected surface.
+- Production Live Schema Parity `PASS`, with exact run/job ids, before the migration lane may
+  close. A pre-merge `PENDING_POST_DEPLOY` receipt remains a hard closeout refusal until replaced
+  by that post-deploy PASS.
 
 **Stop conditions:**
 

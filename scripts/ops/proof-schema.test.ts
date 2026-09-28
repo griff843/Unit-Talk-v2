@@ -12,6 +12,7 @@ import {
   validateEvidenceBundleContract,
   verifyExternalVerifierProvenanceBinding,
   validateProofMergeShaIdentity,
+  type EvidenceGithubApiRunner,
   type ProofSchemaV2,
 } from './proof-schema.js';
 import {
@@ -164,6 +165,58 @@ function migrationEvidence() {
   };
 }
 
+const PARITY_RUN_ID = 36441151899;
+const PARITY_JOB_ID = 108991710221;
+
+function authoritativePendingParityApi(overrides: {
+  run?: Record<string, unknown>;
+  job?: Record<string, unknown>;
+} = {}): EvidenceGithubApiRunner {
+  const run = {
+    id: PARITY_RUN_ID,
+    name: 'Live Schema Parity',
+    path: '.github/workflows/live-schema-parity.yml',
+    head_sha: VALID_SHA,
+    event: 'pull_request',
+    status: 'completed',
+    conclusion: 'failure',
+    pull_requests: [{ head: { sha: VALID_SHA } }],
+    ...overrides.run,
+  };
+  const job = {
+    id: PARITY_JOB_ID,
+    run_id: PARITY_RUN_ID,
+    workflow_name: 'Live Schema Parity',
+    name: 'Live Schema Parity',
+    head_sha: VALID_SHA,
+    status: 'completed',
+    conclusion: 'failure',
+    steps: [
+      { name: 'Refuse to run PR-modified code against production', conclusion: 'success' },
+      { name: 'Apply repo migrations to local stack', conclusion: 'success' },
+      { name: 'Compare scratch schema to live schema', conclusion: 'success' },
+      { name: 'Authorize schema drift gate', conclusion: 'failure' },
+      { name: 'Upload schema parity artifact', conclusion: 'success' },
+    ],
+    ...overrides.job,
+  };
+  return (endpoint) => ({
+    status: 0,
+    stdout: JSON.stringify(endpoint.includes('/actions/runs/') ? run : job),
+    stderr: '',
+  });
+}
+
+function pendingParityContext(githubApiRunner = authoritativePendingParityApi()) {
+  return {
+    gate: 'pre-merge' as const,
+    laneType: 'migration',
+    tier: 'T1',
+    repository: 'griff843/Unit-Talk-v2',
+    githubApiRunner,
+  };
+}
+
 test('version-aware evidence contract accepts schema-v1 only for post-merge historical reads', () => {
   const result = validateEvidenceBundleContract(
     { schema_version: 1 },
@@ -180,6 +233,159 @@ test('schema-v2 migration profile accepts executed receipts without queries or r
   );
   assert.equal(result.valid, true, JSON.stringify(result.failures));
   assert.equal(result.profile, 'migration');
+});
+
+test('pre-merge migration proof accepts only the strict post-deploy parity obligation', () => {
+  const evidence = migrationEvidence();
+  evidence.runtime_proof.live_schema_parity = {
+    result: 'PENDING_POST_DEPLOY',
+    observed_result: 'FAIL',
+    production_ddl_applied: false,
+    required_phase: 'post-deploy-before-lane-close',
+    reason: 'candidate migration is intentionally unapplied before merge',
+    run: PARITY_RUN_ID,
+    job: PARITY_JOB_ID,
+  };
+
+  const result = validateEvidenceBundleContract(
+    evidence,
+    pendingParityContext(),
+  );
+  assert.equal(result.valid, true, JSON.stringify(result.failures));
+});
+
+test('pre-merge migration proof rejects fabricated parity run and job ids', () => {
+  for (const mutation of [
+    { run: 99999999999, job: PARITY_JOB_ID, expected: /run id/ },
+    { run: PARITY_RUN_ID, job: 88888888888, expected: /job id/ },
+  ]) {
+    const evidence = migrationEvidence();
+    evidence.runtime_proof.live_schema_parity = {
+      result: 'PENDING_POST_DEPLOY',
+      observed_result: 'FAIL',
+      production_ddl_applied: false,
+      required_phase: 'post-deploy-before-lane-close',
+      reason: 'candidate migration is intentionally unapplied before merge',
+      run: mutation.run,
+      job: mutation.job,
+    };
+
+    const result = validateEvidenceBundleContract(evidence, pendingParityContext());
+    assert.equal(result.valid, false);
+    assert.match(
+      result.failures.find((failure) => failure.code === 'migration_schema_parity_receipt_unverified')?.message ?? '',
+      mutation.expected,
+    );
+  }
+});
+
+test('pre-merge pending parity receipt is exact-head, workflow, completion, and expected-failure bound', () => {
+  const mutations: Array<{ name: string; api: EvidenceGithubApiRunner; expected: RegExp }> = [
+    {
+      name: 'wrong workflow',
+      api: authoritativePendingParityApi({ run: { name: 'CI' } }),
+      expected: /workflow name/,
+    },
+    {
+      name: 'wrong head',
+      api: authoritativePendingParityApi({ run: { head_sha: OTHER_SHA } }),
+      expected: /head SHA/,
+    },
+    {
+      name: 'unfinished run',
+      api: authoritativePendingParityApi({ run: { status: 'in_progress', conclusion: null } }),
+      expected: /completed status/,
+    },
+    {
+      name: 'unrelated job failure',
+      api: authoritativePendingParityApi({
+        job: {
+          steps: [
+            { name: 'Refuse to run PR-modified code against production', conclusion: 'success' },
+            { name: 'Apply repo migrations to local stack', conclusion: 'failure' },
+            { name: 'Compare scratch schema to live schema', conclusion: 'skipped' },
+            { name: 'Authorize schema drift gate', conclusion: 'skipped' },
+            { name: 'Upload schema parity artifact', conclusion: 'success' },
+          ],
+        },
+      }),
+      expected: /candidate scratch apply/,
+    },
+  ];
+
+  for (const mutation of mutations) {
+    const evidence = migrationEvidence();
+    evidence.runtime_proof.live_schema_parity = {
+      result: 'PENDING_POST_DEPLOY',
+      observed_result: 'FAIL',
+      production_ddl_applied: false,
+      required_phase: 'post-deploy-before-lane-close',
+      reason: 'candidate migration is intentionally unapplied before merge',
+      run: PARITY_RUN_ID,
+      job: PARITY_JOB_ID,
+    };
+    const result = validateEvidenceBundleContract(evidence, pendingParityContext(mutation.api));
+    assert.equal(result.valid, false, mutation.name);
+    assert.match(
+      result.failures.find((failure) => failure.code === 'migration_schema_parity_receipt_unverified')?.message ?? '',
+      mutation.expected,
+      mutation.name,
+    );
+  }
+});
+
+test('pre-merge migration proof rejects generic parity failures and malformed pending markers', () => {
+  const failed = migrationEvidence();
+  failed.runtime_proof.live_schema_parity = { result: 'FAIL', run: 1, job: 2 };
+  const failedResult = validateEvidenceBundleContract(
+    failed,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.ok(
+    failedResult.failures.some((failure) => failure.code === 'migration_schema_parity_pending_invalid'),
+  );
+
+  const malformed = migrationEvidence();
+  malformed.runtime_proof.live_schema_parity = {
+    result: 'PENDING_POST_DEPLOY',
+    observed_result: 'FAIL',
+    production_ddl_applied: false,
+    required_phase: 'post-deploy-before-lane-close',
+    reason: '',
+    run: 1,
+    job: 2,
+  };
+  const malformedResult = validateEvidenceBundleContract(
+    malformed,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.ok(
+    malformedResult.failures.some((failure) => failure.code === 'migration_schema_parity_pending_invalid'),
+  );
+});
+
+test('post-merge migration proof rejects pending parity until production is actually green', () => {
+  const evidence = migrationEvidence();
+  evidence.sha_binding.merge_sha = OTHER_SHA;
+  evidence.runtime_proof.live_schema_parity = {
+    result: 'PENDING_POST_DEPLOY',
+    observed_result: 'FAIL',
+    production_ddl_applied: false,
+    required_phase: 'post-deploy-before-lane-close',
+    reason: 'candidate migration is intentionally unapplied before merge',
+    run: 36441151899,
+    job: 108991710221,
+  };
+
+  const result = validateEvidenceBundleContract(
+    evidence,
+    { gate: 'post-merge-read', laneType: 'migration', tier: 'T1' },
+  );
+  assert.ok(result.failures.some((failure) => failure.code === 'migration_schema_parity_missing'));
+  assert.match(
+    result.failures.find((failure) => failure.code === 'migration_schema_parity_missing')?.message ?? '',
+    /cannot close a lane/,
+  );
 });
 
 test('schema-v2 evidence fails without valid sha_binding', () => {
