@@ -49,7 +49,10 @@ With the file restored, all 37 pass.
 - [x] `pnpm exec tsx --test apps/smart-form/test/api-client.test.ts`: 37 pass, 0 fail
 - [x] Smart Form `tsc --noEmit`: exit 0
 - [x] Mutation drill: removing the posture branches turns 2 tests red
-- [x] CI `verify` green on the PR head (run 36469015542)
+- [x] `pnpm verify` passed in the required CI `verify` context on the merged head `f6f6a34cb32152a92d97aec0587d4d7b9d255076` (run 36476232947), and on `main` at merge `a6ca76a2b` (run 36477669170).
+- [x] `pnpm type-check` is included in that `pnpm verify` run and passed.
+- [x] `pnpm test` is included in that `pnpm verify` run and passed.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base a6ca76a2b3205b459580dfa09f5d1a98f28d7e8f^ --head a6ca76a2b3205b459580dfa09f5d1a98f28d7e8f`: Verdict PASS, 9 changed files, rule matched `operator-ui`. Recorded after merge by WORK-2026092813.
 
 ## Runtime Verification
 

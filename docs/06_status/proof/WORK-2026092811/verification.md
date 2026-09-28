@@ -47,6 +47,10 @@ diverge only once a voided pick's row is marked `sent` without a receipt.
 - [x] eslint on the three changed files: exit 0
 - [x] esbuild parse of `scripts/pipeline-health.ts`: ok
 - [x] Mutation drill: 2 tests red
+- [x] `pnpm verify` passed in the required CI `verify` context on the merged head `cd844586bfd277ed414121ea52fac85e7eafcdf1` (run 36477702603).
+- [x] `pnpm type-check` is included in that `pnpm verify` run and passed.
+- [x] `pnpm test` is included in that `pnpm verify` run and passed.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base 3b071d9d6514cc9943a4e875371940337f38b600^ --head 3b071d9d6514cc9943a4e875371940337f38b600`: Verdict PASS, 8 changed files, no rule matched. Recorded after merge by WORK-2026092813.
 
 ## Runtime Verification
 
