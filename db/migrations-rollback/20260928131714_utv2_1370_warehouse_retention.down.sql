@@ -45,21 +45,12 @@ begin
 end
 $function$;
 
-do $drop_roles$
-declare
-  v_role text;
-begin
-  foreach v_role in array array[
-    'warehouse_retention_planner',
-    'warehouse_retention_executor',
-    'warehouse_retention_recovery'
-  ] loop
-    if exists (select 1 from pg_roles where rolname = v_role) then
-      execute format('drop owned by %I', v_role);
-      execute format('drop role %I', v_role);
-    end if;
-  end loop;
-end
-$drop_roles$;
+-- Phase roles are cluster-wide and may be shared by another database in the
+-- same cluster. Make them inert in this database; do not make rollback depend
+-- on cross-database DROP ROLE side effects.
+revoke all privileges on schema public from warehouse_retention_planner, warehouse_retention_executor, warehouse_retention_recovery;
+revoke all privileges on all tables in schema public from warehouse_retention_planner, warehouse_retention_executor, warehouse_retention_recovery;
+revoke all privileges on all sequences in schema public from warehouse_retention_planner, warehouse_retention_executor, warehouse_retention_recovery;
+revoke all privileges on all functions in schema public from warehouse_retention_planner, warehouse_retention_executor, warehouse_retention_recovery;
 
 commit;

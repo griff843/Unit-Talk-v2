@@ -40,16 +40,50 @@ begin
     'warehouse_retention_executor',
     'warehouse_retention_recovery'
   ] loop
-    if exists (select 1 from pg_roles where rolname = v_name) then
-      raise duplicate_object using message = format('role %s already exists; refusing before DDL', v_name);
+    if exists (
+      select 1
+      from pg_roles
+      where rolname = v_name
+        and (
+          rolcanlogin
+          or rolinherit
+          or rolsuper
+          or rolcreatedb
+          or rolcreaterole
+          or rolreplication
+          or rolbypassrls
+        )
+    ) then
+      raise invalid_authorization_specification using message = format(
+        'role %s exists with broader attributes than the governed retention contract',
+        v_name
+      );
     end if;
   end loop;
 end
 $guard$;
 
-create role warehouse_retention_planner nologin noinherit nosuperuser nocreatedb nocreaterole noreplication;
-create role warehouse_retention_executor nologin noinherit nosuperuser nocreatedb nocreaterole noreplication;
-create role warehouse_retention_recovery nologin noinherit nosuperuser nocreatedb nocreaterole noreplication;
+-- PostgreSQL roles are cluster-wide, not database-local. Scratch verification
+-- deliberately uses multiple databases in one cluster, so matching inert group
+-- roles are reusable; any broader pre-existing role is refused above.
+do $create_phase_roles$
+declare
+  v_name text;
+begin
+  foreach v_name in array array[
+    'warehouse_retention_planner',
+    'warehouse_retention_executor',
+    'warehouse_retention_recovery'
+  ] loop
+    if not exists (select 1 from pg_roles where rolname = v_name) then
+      execute format(
+        'create role %I nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls',
+        v_name
+      );
+    end if;
+  end loop;
+end
+$create_phase_roles$;
 
 create table public.warehouse_retention_plans (
   id uuid primary key default gen_random_uuid(),
