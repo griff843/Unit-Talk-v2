@@ -78,6 +78,24 @@ Operator approves in Linear (comment or label change) or in the PR. Chat approva
 
 The PR must be green on `pnpm verify` before any migration apply is considered. CI-failing migrations are never applied to production.
 
+Migration proof is phase-aware:
+
+- **Before merge**, the candidate must pass the refusal drill, empty-scratch application,
+  apply/rollback/reapply convergence, and governed writable staging proof. Production parity may
+  be recorded only as `PENDING_POST_DEPLOY` when the receipt includes the exact failed parity
+  run/job, states `production_ddl_applied: false`, and declares
+  `required_phase: post-deploy-before-lane-close`. A generic failure, skip, missing receipt, or
+  malformed pending marker fails the pre-merge proof gate.
+- A real production parity `PASS` remains acceptable before merge for migrations that merely
+  capture schema already present through a separately sanctioned action. The proof contract never
+  manufactures or infers that result.
+- **After merge and sanctioned deployment**, `PENDING_POST_DEPLOY` is no longer acceptable.
+  Production Live Schema Parity must return a real `PASS`, with exact run/job ids, before
+  `ops:lane-close` can succeed.
+
+The phase distinction changes when parity is required, not what parity means. The comparison and
+deny-by-default drift authorization remain unchanged; expected migration drift is not allowlisted.
+
 ### Step 5: Ledger alignment check
 
 Before applying:
@@ -93,6 +111,9 @@ Compare against local `supabase/migrations/`. Every migration in the local direc
 If the ledger is diverged (remote has rows local doesn't, or vice versa), surface the divergence to the operator before proceeding. Do not apply blindly.
 
 ### Step 6: Apply
+
+Apply is permitted only after the migration PR has merged and the operator has authorized the
+exact merged migration through the sanctioned deployment path.
 
 ```bash
 supabase db push --linked
@@ -117,7 +138,9 @@ pnpm type-check
 pnpm test:db
 ```
 
-All three must pass. If `test:db` fails post-apply, the migration produced a broken runtime state. Escalate immediately — do not ship the PR.
+All three must pass. Production Live Schema Parity must also pass before the migration lane closes.
+If any post-apply check fails, stop the deployment verification and leave the lane open; do not
+claim closeout or continue dependent production work.
 
 ### Step 8: Types commit
 
