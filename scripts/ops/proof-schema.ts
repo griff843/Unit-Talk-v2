@@ -122,6 +122,7 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'migration_empty_scratch_missing'
     | 'migration_roundtrip_missing'
     | 'migration_schema_parity_missing'
+    | 'migration_schema_parity_pending_invalid'
     | 'migration_staging_proof_missing'
     | 'author_verifier_forbidden';
 }
@@ -228,6 +229,24 @@ function isPositiveRunId(value: unknown): boolean {
 function migrationReceiptPass(value: unknown): value is Record<string, unknown> {
   if (!isPopulatedRecord(value)) return false;
   return String(value['result'] ?? '').toUpperCase() === 'PASS' &&
+    isPositiveRunId(value['run']) &&
+    isPositiveRunId(value['job']);
+}
+
+/**
+ * A candidate migration cannot truthfully have production parity before its
+ * sanctioned post-merge apply. Pre-merge gates accept only this explicit,
+ * receipt-backed obligation in place of a PASS. Generic FAIL/SKIP values are
+ * deliberately excluded, and post-merge readers never call this helper.
+ */
+function migrationParityPendingPostDeploy(value: unknown): value is Record<string, unknown> {
+  if (!isPopulatedRecord(value)) return false;
+  return value['result'] === 'PENDING_POST_DEPLOY' &&
+    value['observed_result'] === 'FAIL' &&
+    value['production_ddl_applied'] === false &&
+    value['required_phase'] === 'post-deploy-before-lane-close' &&
+    typeof value['reason'] === 'string' &&
+    value['reason'].trim().length > 0 &&
     isPositiveRunId(value['run']) &&
     isPositiveRunId(value['job']);
 }
@@ -1194,11 +1213,6 @@ function validateProfileEvidence(
       message: 'migration proof requires passing apply/rollback/reapply convergence with exact run and job ids',
     },
     {
-      field: 'live_schema_parity',
-      code: 'migration_schema_parity_missing',
-      message: 'migration proof requires passing live schema parity with exact run and job ids',
-    },
-    {
       field: 'writable_db_proof_staging',
       code: 'migration_staging_proof_missing',
       message: 'migration proof requires passing staging writable-DB proof with exact run and job ids',
@@ -1212,6 +1226,28 @@ function validateProfileEvidence(
         message: receipt.message,
       });
     }
+  }
+
+  const liveParity = runtimeProof['live_schema_parity'];
+  if (context.gate === 'pre-merge') {
+    if (!migrationReceiptPass(liveParity) && !migrationParityPendingPostDeploy(liveParity)) {
+      failures.push({
+        code: 'migration_schema_parity_pending_invalid',
+        field: 'runtime_proof.live_schema_parity',
+        message:
+          'pre-merge migration proof requires either a real parity PASS or an exact PENDING_POST_DEPLOY receipt ' +
+          '(observed_result=FAIL, production_ddl_applied=false, required_phase=post-deploy-before-lane-close, ' +
+          'non-empty reason, and exact run/job ids)',
+      });
+    }
+  } else if (!migrationReceiptPass(liveParity)) {
+    failures.push({
+      code: 'migration_schema_parity_missing',
+      field: 'runtime_proof.live_schema_parity',
+      message:
+        'post-merge migration close requires passing production live schema parity with exact run and job ids; ' +
+        'PENDING_POST_DEPLOY cannot close a lane',
+    });
   }
 }
 

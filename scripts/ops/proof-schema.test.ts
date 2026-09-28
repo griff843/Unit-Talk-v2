@@ -182,6 +182,79 @@ test('schema-v2 migration profile accepts executed receipts without queries or r
   assert.equal(result.profile, 'migration');
 });
 
+test('pre-merge migration proof accepts only the strict post-deploy parity obligation', () => {
+  const evidence = migrationEvidence();
+  evidence.runtime_proof.live_schema_parity = {
+    result: 'PENDING_POST_DEPLOY',
+    observed_result: 'FAIL',
+    production_ddl_applied: false,
+    required_phase: 'post-deploy-before-lane-close',
+    reason: 'candidate migration is intentionally unapplied before merge',
+    run: 36441151899,
+    job: 108991710221,
+  };
+
+  const result = validateEvidenceBundleContract(
+    evidence,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.equal(result.valid, true, JSON.stringify(result.failures));
+});
+
+test('pre-merge migration proof rejects generic parity failures and malformed pending markers', () => {
+  const failed = migrationEvidence();
+  failed.runtime_proof.live_schema_parity = { result: 'FAIL', run: 1, job: 2 };
+  const failedResult = validateEvidenceBundleContract(
+    failed,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.ok(
+    failedResult.failures.some((failure) => failure.code === 'migration_schema_parity_pending_invalid'),
+  );
+
+  const malformed = migrationEvidence();
+  malformed.runtime_proof.live_schema_parity = {
+    result: 'PENDING_POST_DEPLOY',
+    observed_result: 'FAIL',
+    production_ddl_applied: false,
+    required_phase: 'post-deploy-before-lane-close',
+    reason: '',
+    run: 1,
+    job: 2,
+  };
+  const malformedResult = validateEvidenceBundleContract(
+    malformed,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.ok(
+    malformedResult.failures.some((failure) => failure.code === 'migration_schema_parity_pending_invalid'),
+  );
+});
+
+test('post-merge migration proof rejects pending parity until production is actually green', () => {
+  const evidence = migrationEvidence();
+  evidence.sha_binding.merge_sha = OTHER_SHA;
+  evidence.runtime_proof.live_schema_parity = {
+    result: 'PENDING_POST_DEPLOY',
+    observed_result: 'FAIL',
+    production_ddl_applied: false,
+    required_phase: 'post-deploy-before-lane-close',
+    reason: 'candidate migration is intentionally unapplied before merge',
+    run: 36441151899,
+    job: 108991710221,
+  };
+
+  const result = validateEvidenceBundleContract(
+    evidence,
+    { gate: 'post-merge-read', laneType: 'migration', tier: 'T1' },
+  );
+  assert.ok(result.failures.some((failure) => failure.code === 'migration_schema_parity_missing'));
+  assert.match(
+    result.failures.find((failure) => failure.code === 'migration_schema_parity_missing')?.message ?? '',
+    /cannot close a lane/,
+  );
+});
+
 test('schema-v2 evidence fails without valid sha_binding', () => {
   const evidence = migrationEvidence();
   Reflect.deleteProperty(evidence, 'sha_binding');

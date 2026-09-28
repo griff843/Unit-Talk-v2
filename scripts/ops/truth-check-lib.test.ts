@@ -1916,6 +1916,46 @@ test('schema-v2 migration packet passes pre-merge and post-merge shared contract
   assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
 });
 
+test('candidate migration is merge-eligible with pending parity but cannot close before post-deploy parity passes', () => {
+  const candidate = schemaV2MigrationBundle();
+  candidate.runtime_proof!.live_schema_parity = {
+    result: 'PENDING_POST_DEPLOY',
+    observed_result: 'FAIL',
+    production_ddl_applied: false,
+    required_phase: 'post-deploy-before-lane-close',
+    reason: 'candidate migration is intentionally unapplied before merge',
+    run: 36441151899,
+    job: 108991710221,
+  };
+
+  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput('migration', candidate));
+  assert.equal(
+    preMerge.findings.find((finding) => finding.id === 'CEP-E7')?.status,
+    'pass',
+    JSON.stringify(preMerge.blocking),
+  );
+
+  const postMergeBundle = schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA);
+  postMergeBundle.runtime_proof!.live_schema_parity = candidate.runtime_proof!.live_schema_parity;
+  const postMerge: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => postMerge.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: postMergeBundle },
+    {
+      laneType: 'migration',
+      verifierProvenance: EXTERNAL_VERIFIER,
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
+    },
+  );
+  assert.equal(postMerge.find((check) => check.id === 'R1')?.status, 'fail');
+  assert.equal(postMerge.find((check) => check.id === 'R2')?.status, 'fail');
+  assert.match(postMerge.find((check) => check.id === 'R1')?.detail ?? '', /PENDING_POST_DEPLOY/);
+});
+
 test('schema-v1 is rejected pre-merge but remains readable by the historical post-merge path', () => {
   const legacyBundle: EvidenceBundleV1 = {
     schema_version: 1,
