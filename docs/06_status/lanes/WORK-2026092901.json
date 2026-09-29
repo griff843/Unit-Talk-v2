@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092901/.out/worktrees/claude__work-2026092901-official-picks-exactly-once",
   "branch": "claude/work-2026092901-official-picks-exactly-once",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2139ebe071fdf68c9f65a3d0172e63f78b72617d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1697",
   "files_changed": [],
   "file_scope_lock": [
@@ -45,14 +45,22 @@
     "docs/06_status/proof/WORK-2026092901/evidence.json",
     "docs/06_status/proof/WORK-2026092901/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-09-29T14:10:57.694Z",
-  "heartbeat_at": "2026-09-29T14:10:57.694Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-29T18:21:41.801Z",
+  "closed_at": "2026-09-29T18:21:41.801Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/work-2026092901-official-picks-exactly-once.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-29T18:21:39.101Z",
+      "verdict": "pass",
+      "merge_sha": "2139ebe071fdf68c9f65a3d0172e63f78b72617d",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
