@@ -68,10 +68,11 @@ Each box is asserted by a named test at the Execution SHA.
       price), Units, Capper, Game Time, Thesis; no confidence, edge, implied probability, record or
       CLV. The canary lane keeps its footer (`official-picks-embed.test.ts`, 10 tests).
 - [x] **Game Time is always rendered.** An eventless or manual pick, an empty time or an
-      unparseable time shows `TBD`; a pick with `eventTime` or `gameTime` shows that time. Asserted
-      by `an eventless or manual official pick always shows Game Time as TBD`, `an official pick with
-      an event time shows that time, never TBD` and `the official pick field set always includes
-      Game Time, in contract order`.
+      unparseable time shows the `OFFICIAL_GAME_TIME_UNKNOWN` fallback (the "to be determined"
+      marker exported from `delivery-adapters.ts`); a pick with `eventTime` or `gameTime` shows that
+      time. Asserted by the three Game Time tests in `official-picks-embed.test.ts`: the eventless
+      and manual cases, the real-time case, and the exact field order `Market, Odds, Units, Capper,
+      Game Time, Thesis`.
 
 ### D. Recap containment
 
