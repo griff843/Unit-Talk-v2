@@ -20,10 +20,11 @@ Result: ready for T1 review with production parity pending until sanctioned post
 
 ## Verification
 
-- Exact refreshed execution SHA: `12e0f4b936586ab86cf2db300c07ccefdcb32c51`.
-- Migration run `36471754685`, job `109095473654`: apply → rollback → byte-equivalent schema → reapply passed. The same job's ephemeral PostgreSQL lifecycle proved stale/mismatched evidence refusal, 1 → 0 bounded prune, independent archive readback of 1 row, reference protection, unchanged quarantine/business rows, disabled legacy cron, no direct executor DELETE, and 0 → 1 recovery.
-- Migration run `36471754685`, job `109095473395`: fail-closed precondition drill and empty-scratch application passed.
-- Proof Gate run `36471754947`, job `109095745470`: canonical T1 live-DB proof ran against governed staging and passed for the refreshed execution SHA.
+- Exact refreshed execution SHA: `c1fe804e2b23cfdd6bf6aa2209559ae1c2cf7c1d`.
+- The sanctioned update commit has parents `850e30675a993c3bba7e9192326a31b66fbc54c3` and `ef965df59d0a5e3edbdd8d0c9161362525eb6817`; the migration and retention implementation are byte-identical to the prior reviewed head.
+- Migration run `36521893433`, job `109256369477`: apply → rollback → byte-equivalent schema → reapply passed. The same job's ephemeral PostgreSQL lifecycle proved stale/mismatched evidence refusal, 1 → 0 bounded prune, independent archive readback of 1 row, reference protection, unchanged quarantine/business rows, disabled legacy cron, no direct executor DELETE, and 0 → 1 recovery.
+- Migration run `36521893433`, job `109256369236`: fail-closed precondition drill and empty-scratch application passed.
+- CI run `36521893463`, job `109256371093`: canonical writable DB and T1 live-proof suites ran against governed staging and passed for the refreshed execution SHA; the same-run proof receipt uploaded successfully.
 - Local `pnpm verify:static`: passed, including lint, type-check, build, 3,524 tests, Smart Form verification, migration version uniqueness, and migration lint.
 - Local focused retention/proof suites: 18 passed, 0 failed, 1 live-DB case skipped without an explicit test DSN.
 - `pnpm ci:db-client-boundary`: passed; all privileged driver construction sites remain classified and unreachable from `pnpm test`.
@@ -32,7 +33,7 @@ Result: ready for T1 review with production parity pending until sanctioned post
 
 ## Phase-aware production parity obligation
 
-Live Schema Parity run `36471754689`, job `109095503592` is the authoritative exact-head receipt for the candidate execution SHA. The trusted workflow applied the repository migrations to scratch, compared scratch with production, uploaded its parity artifact, and completed with the expected failure at `Authorize schema drift gate` because production does not yet contain this unapplied migration.
+Live Schema Parity run `36521893334`, job `109256391877` is the authoritative exact-source receipt for the candidate execution SHA. GitHub records the canonical `.github/workflows/live-schema-parity.yml` workflow, `pull_request` event, PR #1678, and immutable `run.head_sha=c1fe804e2b23cfdd6bf6aa2209559ae1c2cf7c1d`. The trusted workflow guard, scratch migration apply, schema comparison, and parity-artifact upload succeeded; the job completed with the expected failure only at `Authorize schema drift gate` because production does not yet contain this unapplied migration.
 
 The phase-aware migration contract records this pre-merge state as `PENDING_POST_DEPLOY` only because all of the following are independently true:
 
@@ -47,4 +48,4 @@ After merge and sanctioned deployment, lane close still refuses this pending sta
 
 Merge SHA: pending merge  
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1678  
-Execution SHA: 12e0f4b936586ab86cf2db300c07ccefdcb32c51
+Execution SHA: c1fe804e2b23cfdd6bf6aa2209559ae1c2cf7c1d
