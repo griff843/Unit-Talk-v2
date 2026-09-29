@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > verified implementation identity. `post-merge-lane-close.yml` rebinds merge authority only
 > after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-29T14:19:21.000Z
+Generated at: 2026-09-29T15:45:00.000Z
 Issue: WORK-2026092901
 Tier: T1
 Lane type: runtime
 Branch: claude/work-2026092901-official-picks-exactly-once
-Head SHA: fcaabcf82c25dceb6f425b93e9bc53b70a037d5c
-Execution SHA: fcaabcf82c25dceb6f425b93e9bc53b70a037d5c
+Head SHA: 6b7ea5733b37f747bfae660d61a881dc55d322cf
+Execution SHA: 6b7ea5733b37f747bfae660d61a881dc55d322cf
 Diff base: f81c65e57c60d9fd6968aa711ebab6e52183dd22
 result: pass
 
@@ -35,6 +35,14 @@ Each box is asserted by a named test at the Execution SHA.
       eventName, eventTime and thesis only. Asserted by `GET /api/member/picks returns only
       posted/settled authorized official picks` and `member metadata is projected to …`.
 - [x] The route fails closed: a missing status is 400, and a repository without the reader is 503.
+- [x] **The route is not public.** It is dispatched below the API auth gate. An anonymous request
+      and an unconfigured bearer token are 401; an authenticated generic submitter or worker key is
+      403; neither response contains any pick id or content. The Discord bot's service key
+      (`submitter:discord-bot`) and an operator key read exactly the member-visible picks. Asserted
+      by `anonymous GET /api/member/picks is refused with 401 and leaks no pick`, `an authenticated
+      key that is neither operator nor the Discord bot is refused with 403`, `the Discord bot service
+      key and an operator key read exactly the member-visible picks` and `canReadMemberPicks admits
+      only an operator or the Discord bot service identity`.
 
 ### B. Exactly-once delivery
 
@@ -57,8 +65,13 @@ Each box is asserted by a named test at the Execution SHA.
 ### C. Official-pick presentation
 
 - [x] Footer "Unit Talk | Official Picks", never the Canary footer. Market, Odds (bare American
-      price), Units, Capper; no confidence, edge, implied probability, record or CLV. The canary lane
-      keeps its footer (`official-picks-embed.test.ts`, 7 tests).
+      price), Units, Capper, Game Time, Thesis; no confidence, edge, implied probability, record or
+      CLV. The canary lane keeps its footer (`official-picks-embed.test.ts`, 10 tests).
+- [x] **Game Time is always rendered.** An eventless or manual pick, an empty time or an
+      unparseable time shows `TBD`; a pick with `eventTime` or `gameTime` shows that time. Asserted
+      by `an eventless or manual official pick always shows Game Time as TBD`, `an official pick with
+      an event time shows that time, never TBD` and `the official pick field set always includes
+      Game Time, in contract order`.
 
 ### D. Recap containment
 
@@ -82,7 +95,7 @@ Each box is asserted by a named test at the Execution SHA.
 Each mutation was applied and the file restored byte-identical afterwards (`git status --porcelain`
 empty). They were measured on the lane's first implementation commit `809462886`. The lane was then
 restarted to move its live proof into an already-classified live-proof file. `git diff --stat
-809462886 fcaabcf82c25dceb6f425b93e9bc53b70a037d5c -- apps packages package.json` shows that only
+809462886 6b7ea5733b37f747bfae660d61a881dc55d322cf -- apps packages package.json` shows that only
 the live-proof files, `package.json`, and Command Center files merged to `main` by another lane
 differ, plus the UTV2-1923 test's release helper (it now also releases `human-capper-recaps`). Every file mutated below is byte-identical at the Execution SHA.
 
@@ -92,7 +105,13 @@ differ, plus the UTV2-1923 test's release helper (it now also releases `human-ca
 | M2 — `enforce_nonce: false` | exactly-once + embed | **2 fail** / 28 pass |
 | M3 — recap gate follows `official-picks` only | release-controls | **3 fail** / 15 pass |
 | M4 — member predicate ignores the delivery authorization | member-picks | **3 fail** / 7 pass |
+| M5 — Game Time dropped when no time is known (the previous behavior) | embed | **2 fail** / 8 pass |
+| M6 — member route dispatched outside the auth gate | member-picks | **2 fail** / 12 pass |
+| M7 — access policy admits any submitter or worker key | member-picks | **2 fail** / 12 pass |
 | Baseline | all four | 58 pass / 0 fail |
+
+M5–M7 were measured at the Execution SHA `6b7ea5733b37f747bfae660d61a881dc55d322cf` and each file was restored
+byte-identical afterwards.
 
 ## EVIDENCE:
 
@@ -132,9 +151,9 @@ has no row and therefore reads as killed.
 ```text
 focused suites at the Execution SHA
 official-picks-exactly-once.test.ts   pass 23 fail 0
-official-picks-embed.test.ts          pass 7  fail 0
+official-picks-embed.test.ts          pass 10 fail 0
 dispatch-ledger.test.ts               pass 10 fail 0
-member-picks.test.ts                  pass 10 fail 0
+member-picks.test.ts                  pass 14 fail 0
 official-picks-release-controls.test.ts pass 18 fail 0
 replay-failed-delivery.test.ts        pass 18 fail 0
 delivery-adapters.test.ts             pass 8  fail 0
@@ -149,7 +168,7 @@ http-integration.test.ts              pass 27 fail 0
 
 - [x] `pnpm type-check` — exit 0 at the Execution SHA.
 - [x] `pnpm lint` (eslint over every changed `.ts` file) — exit 0.
-- [x] `pnpm test` — exit 0 at the Execution SHA: 7185 pass, 0 fail (after `pnpm build`). Every test file referenced by `package.json` was also run independently: 317 files, 0 failing.
+- [x] `pnpm test` — exit 0 at the Execution SHA: 7192 pass, 0 fail, 1 skipped (after `pnpm build`). At the previous Execution SHA `fcaabcf82` every test file referenced by `package.json` was also run independently: 317 files, 0 failing; this change adds no test file.
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — Verdict PASS,
       33 changed files, rules matched: lifecycle-fsm; r4-fault-report advisory only [PM-gated].
 - [x] The two live read cases in `apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts`
@@ -166,4 +185,4 @@ CI. No production write, kill-switch change, containment change or deploy was ma
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: fcaabcf82c25dceb6f425b93e9bc53b70a037d5c
+Execution SHA: 6b7ea5733b37f747bfae660d61a881dc55d322cf

@@ -7,28 +7,80 @@
   "status": "pending_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "fcaabcf82c25dceb6f425b93e9bc53b70a037d5c",
+    "verified_source_sha": "6b7ea5733b37f747bfae660d61a881dc55d322cf",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "note": "fcaabcf82c25dceb6f425b93e9bc53b70a037d5c is the last commit on this lane that changes anything outside the proof directory and the lane manifest. merge_sha is null until post-merge-lane-close.yml rebinds it."
+    "note": "6b7ea5733b37f747bfae660d61a881dc55d322cf is the last commit on this lane that changes anything outside the proof directory and the lane manifest. merge_sha is null until post-merge-lane-close.yml rebinds it."
   },
   "static_proof": {
     "status": "pass",
-    "measured_at": "2026-09-29T13:40:00Z",
-    "measured_against_sha": "fcaabcf82c25dceb6f425b93e9bc53b70a037d5c",
+    "measured_at": "2026-09-29T15:45:00Z",
+    "measured_against_sha": "6b7ea5733b37f747bfae660d61a881dc55d322cf",
     "commands": [
-      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
-      { "command": "pnpm exec eslint <changed .ts files>", "exit_code": 0, "result": "pass" },
-      { "command": "pnpm test", "exit_code": 0, "result": "pass", "note": "7185 pass, 0 fail after pnpm build; every package.json-referenced test file also run independently: 317 files, 0 failing" },
-      { "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "exit_code": 0, "result": "pass", "note": "Verdict PASS; 33 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]" }
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm exec eslint <changed .ts files>",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "7192 pass, 0 fail, 1 skipped after pnpm build"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; 33 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]"
+      }
     ],
-    "focused_suites": { "pass": 382, "fail": 0 },
+    "focused_suites": {
+      "pass": 389,
+      "fail": 0
+    },
     "mutation_battery": [
-      { "id": "M1", "mutation": "isLedgerGovernedTarget returns false (ledger off)", "observed": "red (12)" },
-      { "id": "M2", "mutation": "enforce_nonce false", "observed": "red (2)" },
-      { "id": "M3", "mutation": "recap gate follows official-picks only", "observed": "red (3)" },
-      { "id": "M4", "mutation": "member predicate ignores delivery authorization", "observed": "red (3)" }
+      {
+        "id": "M1",
+        "mutation": "isLedgerGovernedTarget returns false (ledger off)",
+        "observed": "red (12)"
+      },
+      {
+        "id": "M2",
+        "mutation": "enforce_nonce false",
+        "observed": "red (2)"
+      },
+      {
+        "id": "M3",
+        "mutation": "recap gate follows official-picks only",
+        "observed": "red (3)"
+      },
+      {
+        "id": "M4",
+        "mutation": "member predicate ignores delivery authorization",
+        "observed": "red (3)"
+      },
+      {
+        "id": "M5",
+        "mutation": "Game Time dropped when no time is known",
+        "observed": "red (2)"
+      },
+      {
+        "id": "M6",
+        "mutation": "member route dispatched outside the auth gate",
+        "observed": "red (2)"
+      },
+      {
+        "id": "M7",
+        "mutation": "member route access policy admits any submitter or worker key",
+        "observed": "red (2)"
+      }
     ]
   },
   "runtime_proof": {
@@ -50,13 +102,34 @@
       }
     ],
     "row_counts": [
-      { "name": "posted_or_settled_picks_total", "value": 25594 },
-      { "name": "member_visible_official_picks", "value": 2 },
-      { "name": "track_only_picks_total", "value": 7 },
-      { "name": "track_only_member_visible", "value": 0 },
-      { "name": "dispatch_ledger_audit_rows", "value": 0 },
-      { "name": "human_capper_recaps_control_rows", "value": 0 },
-      { "name": "rows_written_by_this_proof", "value": 0 }
+      {
+        "name": "posted_or_settled_picks_total",
+        "value": 25594
+      },
+      {
+        "name": "member_visible_official_picks",
+        "value": 2
+      },
+      {
+        "name": "track_only_picks_total",
+        "value": 7
+      },
+      {
+        "name": "track_only_member_visible",
+        "value": 0
+      },
+      {
+        "name": "dispatch_ledger_audit_rows",
+        "value": 0
+      },
+      {
+        "name": "human_capper_recaps_control_rows",
+        "value": 0
+      },
+      {
+        "name": "rows_written_by_this_proof",
+        "value": 0
+      }
     ],
     "limitations": "The live staging proof runs only in CI (local SUPABASE_URL is the containment placeholder). Exactly-once behavior under a real Discord outage is proven by fault-injection tests, not by a production post; the first watched release is governed by DELIVERY_KILL_SWITCH.md section 8."
   }
