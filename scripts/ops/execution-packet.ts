@@ -2087,7 +2087,7 @@ const BRIEF_SECTION_ROUTES: readonly {
       ),
   },
   {
-    sections: [6, 7, 8, 9],
+    sections: [3, 4, 6, 7, 8, 9],
     matches: scope =>
       scope.some(file =>
         /^(?:apps\/worker|apps\/api\/src\/(?:distribution|submit-pick|retry|requeue)|packages\/db\/src\/lifecycle)/u.test(
@@ -2141,15 +2141,21 @@ export function buildScopedRepoBrief(
       .slice(match.index!, matches[index + 1]?.index ?? source.length)
       .trim(),
   }));
-  const byId = new Map(sections.map(section => [section.id, section.text]));
   const selectedIds = selectRepoBriefSectionIds(manifest);
-  const selected = selectedIds.map(id => byId.get(id)).filter((value): value is string => Boolean(value));
+  const sectionsById = new Map<number, string[]>();
+  for (const section of sections) {
+    const existing = sectionsById.get(section.id) ?? [];
+    existing.push(section.text);
+    sectionsById.set(section.id, existing);
+  }
 
-  // Missing universal sections means the source format drifted. Preserve the
+  // Every requested section must resolve exactly once. Any missing, renamed,
+  // or duplicate heading makes scoped selection ambiguous, so preserve the
   // complete safety brief instead of silently dropping instructions.
-  if (UNIVERSAL_BRIEF_SECTIONS.some(id => !byId.has(id)) || selected.length === 0) {
+  if (selectedIds.some(id => sectionsById.get(id)?.length !== 1)) {
     return source;
   }
+  const selected = selectedIds.map(id => sectionsById.get(id)![0]!);
 
   return [
     '# Unit Talk V2 — Scoped Agent Brief',

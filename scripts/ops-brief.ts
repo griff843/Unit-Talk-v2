@@ -26,7 +26,7 @@ type BriefState = {
 const env = loadEnvironment();
 const args = process.argv.slice(2);
 const json = args.includes('--json');
-const agent = args.includes('--agent');
+const staticOnly = args.includes('--static') || args.includes('--agent');
 const explicitIssueId = readOption('issue');
 const pickIds = readMultiOption('pick');
 
@@ -39,8 +39,8 @@ async function main(): Promise<void> {
   const repo = readRepoContext();
   const issueId = explicitIssueId ?? repo.inferredIssueId;
 
-  const sections: SectionResult[] = agent
-    ? [buildOverviewSection(repo, issueId, pickIds), buildCodexLanesSection(), buildAgentModeSection()]
+  const sections: SectionResult[] = staticOnly
+    ? [buildOverviewSection(repo, issueId, pickIds), buildCodexLanesSection(), buildStaticModeSection()]
     : [
         buildOverviewSection(repo, issueId, pickIds),
         buildCodexLanesSection(),
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
         buildProductTruthSection(),
         buildProofSection(issueId, pickIds),
       ];
-  if (!agent) {
+  if (!staticOnly) {
     sections.push(buildCloseoutSection(issueId, pickIds, sections));
   }
 
@@ -59,8 +59,8 @@ async function main(): Promise<void> {
     issueId,
     pickIds,
     sections,
-    recommendation: agent
-      ? ['local agent snapshot only; request live or issue-specific state when the task requires it']
+    recommendation: staticOnly
+      ? ['local static snapshot only; request live or issue-specific state when the task requires it']
       : buildRecommendation(repo, issueId, pickIds, sections),
   };
 
@@ -80,12 +80,12 @@ async function main(): Promise<void> {
   }
 }
 
-function buildAgentModeSection(): SectionResult {
+function buildStaticModeSection(): SectionResult {
   return {
-    name: 'Agent Mode',
+    name: 'Static Mode',
     ok: true,
     lines: [
-      'external checks skipped: Linear, GitHub, pipeline, product truth, proof, closeout',
+      'external checks skipped: Linear, GitHub, runtime, pipeline, product truth, DB/live, proof, closeout',
       'run pnpm ops:brief for the full operational snapshot',
     ],
   };

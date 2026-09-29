@@ -391,7 +391,7 @@ test('scoped repo brief selects DB, delivery, provider and proof guidance by sco
       lane_type: 'runtime',
       file_scope_lock: ['apps/worker/src/worker-runtime.ts'],
     })),
-    [6, 7, 8, 9, 11, 13, 16],
+    [3, 4, 6, 7, 8, 9, 11, 13, 16],
   );
   assert.deepEqual(
     selectRepoBriefSectionIds(createTestManifest({
@@ -412,6 +412,33 @@ test('scoped repo brief selects DB, delivery, provider and proof guidance by sco
 test('scoped repo brief fails safe to the full source when headings drift', () => {
   const source = '# Safety brief\n\nNo numbered sections remain.';
   assert.equal(buildScopedRepoBrief(source, createTestManifest()), source);
+});
+
+test('worker scoped brief includes scanner quiescence and stranded-row protections', () => {
+  const manifest = createTestManifest({
+    lane_type: 'runtime',
+    file_scope_lock: ['apps/worker/src/worker-runtime.ts'],
+  });
+  const source = fs.readFileSync(path.join(ROOT, '.claude', 'agent-brief.md'), 'utf8');
+  const brief = buildScopedRepoBrief(source, manifest);
+
+  assert.match(brief, /## 3\. Scanner quiescence posture/u);
+  assert.match(brief, /do NOT flip this flag/u);
+  assert.match(brief, /## 4\. Stranded rows — do not touch/u);
+  assert.match(brief, /status='awaiting_approval'/u);
+  assert.match(brief, /your task cannot mutate stranded rows/u);
+});
+
+test('scoped repo brief returns full source when a selected lane-specific section is missing', () => {
+  const manifest = createTestManifest({
+    lane_type: 'runtime',
+    file_scope_lock: ['apps/worker/src/worker-runtime.ts'],
+  });
+  const source = fs
+    .readFileSync(path.join(ROOT, '.claude', 'agent-brief.md'), 'utf8')
+    .replace('## 4. Stranded rows — do not touch', '## Four. Stranded rows — do not touch');
+
+  assert.equal(buildScopedRepoBrief(source, manifest), source);
 });
 
 test('missing expected_proof_paths does not prevent packet generation', () => {
