@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092901",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pending_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fcaabcf82c25dceb6f425b93e9bc53b70a037d5c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "fcaabcf82c25dceb6f425b93e9bc53b70a037d5c is the last commit on this lane that changes anything outside the proof directory and the lane manifest. merge_sha is null until post-merge-lane-close.yml rebinds it."
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-29T13:40:00Z",
+    "measured_against_sha": "fcaabcf82c25dceb6f425b93e9bc53b70a037d5c",
+    "commands": [
+      { "command": "pnpm type-check", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm exec eslint <changed .ts files>", "exit_code": 0, "result": "pass" },
+      { "command": "pnpm test", "exit_code": 0, "result": "pass", "note": "7185 pass, 0 fail after pnpm build; every package.json-referenced test file also run independently: 317 files, 0 failing" },
+      { "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "exit_code": 0, "result": "pass", "note": "Verdict PASS; 33 changed files; rules matched lifecycle-fsm; r4-fault-report advisory only [PM-gated]" }
+    ],
+    "focused_suites": { "pass": 382, "fail": 0 },
+    "mutation_battery": [
+      { "id": "M1", "mutation": "isLedgerGovernedTarget returns false (ledger off)", "observed": "red (12)" },
+      { "id": "M2", "mutation": "enforce_nonce false", "observed": "red (2)" },
+      { "id": "M3", "mutation": "recap gate follows official-picks only", "observed": "red (3)" },
+      { "id": "M4", "mutation": "member predicate ignores delivery authorization", "observed": "red (3)" }
+    ]
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-29T13:35:00Z",
+    "note": "Measured read-only against production zfzdnfwdarxucxtaojxm. No row was written, updated or deleted; no kill switch, containment setting or delivery target was touched. The Database reads added by this lane are additionally exercised live by apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts under test:t1-proof:live in CI's staging environment.",
+    "queries": [
+      {
+        "name": "member-visible official picks under the route's predicate",
+        "method": "read-only SELECT from picks WHERE status IN ('posted','settled') AND metadata->>'distributionMode'='delivery-eligible' AND metadata->'deliveryAuthorization'->>'decision'='authorized'",
+        "result": "2 rows: ed0ed43c posted, 816a84c7 settled; both human-capper-delivery/v1, server-allowlist",
+        "significance": "The member route admits exactly the two official picks actually delivered to official-picks, out of 25,594 posted or settled picks."
+      },
+      {
+        "name": "exclusions and starting state",
+        "method": "read-only counts over picks, audit_log and delivery_kill_switch",
+        "result": "track-only posted/settled 0 (of 7 track-only picks); dispatch ledger audit rows 0; human-capper-recaps control rows 0",
+        "significance": "No Track Only pick can reach a member surface; the ledger starts empty so no existing row is reinterpreted; the recap control reads as killed until separately released."
+      }
+    ],
+    "row_counts": [
+      { "name": "posted_or_settled_picks_total", "value": 25594 },
+      { "name": "member_visible_official_picks", "value": 2 },
+      { "name": "track_only_picks_total", "value": 7 },
+      { "name": "track_only_member_visible", "value": 0 },
+      { "name": "dispatch_ledger_audit_rows", "value": 0 },
+      { "name": "human_capper_recaps_control_rows", "value": 0 },
+      { "name": "rows_written_by_this_proof", "value": 0 }
+    ],
+    "limitations": "The live staging proof runs only in CI (local SUPABASE_URL is the containment placeholder). Exactly-once behavior under a real Discord outage is proven by fault-injection tests, not by a production post; the first watched release is governed by DELIVERY_KILL_SWITCH.md section 8."
+  }
+}
