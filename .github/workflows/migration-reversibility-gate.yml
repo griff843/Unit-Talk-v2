@@ -21,6 +21,7 @@ on:
       - '.github/workflows/migration-reversibility-gate.yml'
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -67,6 +68,8 @@ jobs:
         run: npx tsx --test scripts/ci/migration-reversibility-gate.test.ts
 
       - name: Validate schema v2 proof binding (fail-closed)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Detect issue ID from PR branch name — validates the current PR's proof.
           BRANCH="${{ github.head_ref }}"

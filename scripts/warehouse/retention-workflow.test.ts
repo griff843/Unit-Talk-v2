@@ -17,6 +17,10 @@ const migrationPath = path.join(
   root,
   'supabase/migrations/20260928131714_utv2_1370_warehouse_retention.sql',
 );
+const migrationWorkflowPath = path.join(
+  root,
+  '.github/workflows/migration-reversibility-gate.yml',
+);
 test('migration is allowlisted, bounded, fail-closed, and keeps legacy cron disabled', () => {
   const sql = fs.readFileSync(migrationPath, 'utf8');
   assert.match(
@@ -42,6 +46,15 @@ test('migration is allowlisted, bounded, fail-closed, and keeps legacy cron disa
   assert.match(sql, /legacy nightly-retention-prune is active; refusing/);
   assert.doesNotMatch(sql, /^\s*update\s+cron\.job/im);
   assert.doesNotMatch(sql, /^\s*(?:select\s+)?cron\.schedule\s*\(/im);
+});
+
+test('migration proof authenticates authoritative parity receipt reads', () => {
+  const workflow = fs.readFileSync(migrationWorkflowPath, 'utf8');
+  assert.match(workflow, /permissions:\n\s+actions: read\n\s+contents: read/);
+  assert.match(
+    workflow,
+    /name: Validate schema v2 proof binding \(fail-closed\)[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}[\s\S]*?proof-binding-validator\.ts/,
+  );
 });
 
 test(
