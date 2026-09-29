@@ -115,3 +115,32 @@ test('the canary lane keeps its own footer (the change is scoped to official pic
   const { embed } = embedOf(outbox);
   assert.equal(embed.footer?.text, 'Unit Talk | Canary');
 });
+
+function withMetadata(extra: Record<string, unknown>): OutboxRecord {
+  const base = officialOutbox();
+  const metadata = (base.payload as { metadata: Record<string, unknown> }).metadata;
+  return officialOutbox({ metadata: { ...metadata, ...extra } });
+}
+
+test('an eventless or manual official pick always shows Game Time as TBD', () => {
+  // The default fixture carries no eventTime and no gameTime: an eventless pick.
+  assert.equal(field(embedOf(officialOutbox()).embed, 'Game Time'), 'TBD');
+  assert.equal(field(embedOf(withMetadata({ eventTime: null })).embed, 'Game Time'), 'TBD');
+  assert.equal(field(embedOf(withMetadata({ eventTime: '' })).embed, 'Game Time'), 'TBD');
+  assert.equal(field(embedOf(withMetadata({ eventTime: 'not-a-time' })).embed, 'Game Time'), 'TBD');
+});
+
+test('an official pick with an event time shows that time, never TBD', () => {
+  const fromEventTime = field(embedOf(withMetadata({ eventTime: '2026-09-29T23:05:00.000Z' })).embed, 'Game Time');
+  assert.ok(fromEventTime);
+  assert.notEqual(fromEventTime, 'TBD');
+  assert.match(fromEventTime, /Sep 29|Sep 30/u);
+
+  const fromGameTime = field(embedOf(withMetadata({ gameTime: '2026-09-29T23:05:00.000Z' })).embed, 'Game Time');
+  assert.equal(fromGameTime, fromEventTime);
+});
+
+test('the official pick field set always includes Game Time, in contract order', () => {
+  const names = (embedOf(officialOutbox()).embed.fields ?? []).map((f) => f.name);
+  assert.deepEqual(names, ['Market', 'Odds', 'Units', 'Capper', 'Game Time', 'Thesis']);
+});

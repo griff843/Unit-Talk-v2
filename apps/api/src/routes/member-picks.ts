@@ -1,10 +1,30 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies } from '../server.js';
+import type { AuthContext } from '../auth.js';
 import { writeJson, readOptionalInteger } from '../http-utils.js';
 import {
   isMemberVisibleOfficialPickStatus,
   type MemberVisibleOfficialPickStatus,
 } from '@unit-talk/contracts';
+
+/**
+ * The Discord bot's service key authenticates as `submitter` with this
+ * identity prefix (`UNIT_TALK_BOT_API_KEY` in auth.ts `loadAuthConfig`).
+ */
+const DISCORD_BOT_IDENTITY_PREFIX = 'submitter:discord-bot:';
+
+/**
+ * WORK-2026092901: who may read the member pick list. An operator, or the
+ * Discord bot's own service key -- the one surface that renders it to members.
+ * A generic submitter key, a capper JWT or any other role is refused, and an
+ * anonymous caller never reaches this check (401 at the gate).
+ */
+export function canReadMemberPicks(auth: AuthContext): boolean {
+  if (auth.role === 'operator') {
+    return true;
+  }
+  return auth.role === 'submitter' && auth.identity.startsWith(DISCORD_BOT_IDENTITY_PREFIX);
+}
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -21,8 +41,10 @@ const MEMBER_METADATA_KEYS = ['capper', 'sport', 'eventName', 'eventTime', 'thes
  * settled (`isMemberVisibleOfficialPick`). Track Only picks, fixtures,
  * scanner/board output and picks held behind the kill switch (`queued`) can
  * never appear, whatever the caller asks for: the filter is server-side and
- * is not a parameter. Discord role gating decides WHO may ask; this route
- * decides WHAT any asker can see.
+ * is not a parameter. The route is not public: the API gate admits only an
+ * operator or the Discord bot's service key (`canReadMemberPicks`); Discord
+ * role gating decides which member may ask the bot; this route decides WHAT
+ * any asker can see.
  *
  * Fails closed: a runtime whose pick repository cannot answer the question
  * returns 503, never a broader list.

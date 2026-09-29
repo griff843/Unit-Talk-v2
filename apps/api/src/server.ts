@@ -71,6 +71,7 @@ import {
   handleMemberTiers,
   handlePicksQuery,
   handleMemberPicksQuery,
+  canReadMemberPicks,
   handleSettlementsRecent,
   handleShadowModelSummaries,
   handleShadowComparison,
@@ -508,10 +509,6 @@ export async function routeRequest(
     return handlePicksQuery(request, response, runtime);
   }
 
-  if (method === 'GET' && url.pathname === '/api/member/picks') {
-    return handleMemberPicksQuery(request, response, runtime);
-  }
-
   const routingPreviewMatch =
     method === 'GET'
       ? /^\/api\/picks\/([^/]+)\/routing-preview$/.exec(url.pathname)
@@ -616,7 +613,19 @@ export async function routeRequest(
       ? /^\/api\/picks\/([^/]+)\/trace$/.exec(url.pathname)
       : null;
 
-  if (method === 'POST' || url.pathname === '/api/discord/kill-switch' || traceMatch) {
+  // WORK-2026092901: the member pick list is member-facing content, so it is
+  // not public. Its handler is dispatched below this gate for the same reason
+  // the trace GET is, and its role policy is stated here for the same reason:
+  // auth.ts is outside this lane. Only an operator or the Discord bot's own
+  // service key may read it (`canReadMemberPicks`).
+  const memberPicksRoute = method === 'GET' && url.pathname === '/api/member/picks';
+
+  if (
+    method === 'POST' ||
+    url.pathname === '/api/discord/kill-switch' ||
+    traceMatch ||
+    memberPicksRoute
+  ) {
     const auth = await authenticateRequest(request, runtime.authConfig);
     if (!auth) {
       requestLogger.warn('api auth denied', {
@@ -644,7 +653,9 @@ export async function routeRequest(
     // to touch auth.ts.
     const routeAuthorized = traceMatch
       ? auth.role === 'operator'
-      : authorizeRoute(auth, url.pathname);
+      : memberPicksRoute
+        ? canReadMemberPicks(auth)
+        : authorizeRoute(auth, url.pathname);
     if (!routeAuthorized) {
       requestLogger.warn('api auth forbidden', {
         authOutcome: 'role_denied',
@@ -671,6 +682,10 @@ export async function routeRequest(
     }
     // Attach auth context to request for downstream use
     (request as IncomingMessage & { auth?: AuthContext }).auth = auth;
+  }
+
+  if (memberPicksRoute) {
+    return handleMemberPicksQuery(request, response, runtime);
   }
 
   if (method === 'POST' && url.pathname === '/api/qa/seed-pick') {

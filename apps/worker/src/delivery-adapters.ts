@@ -576,12 +576,14 @@ export function buildDiscordMessagePayload(outbox: OutboxRecord) {
       inline: true,
     });
     fields.push({ name: 'Capper', value: capper ?? 'Unit Talk', inline: true });
-    if (eventTime) {
-      const formatted = formatGameTime(eventTime);
-      if (formatted) {
-        fields.push({ name: 'Game Time', value: formatted, inline: true });
-      }
-    }
+    // Game Time is always present on an official pick. Eventless and manual
+    // picks are valid, so a pick with no event time -- or one that does not
+    // parse -- says `TBD` rather than dropping the field or inventing a time.
+    fields.push({
+      name: 'Game Time',
+      value: (eventTime ? formatGameTime(eventTime) : null) ?? OFFICIAL_GAME_TIME_UNKNOWN,
+      inline: true,
+    });
     if (thesis) {
       fields.push({ name: 'Thesis', value: thesis, inline: false });
     }
@@ -790,6 +792,9 @@ const SPORT_ICONS: Record<string, string> = {
 function getSportIcon(sport: string): string | null {
   return SPORT_ICONS[sport] ?? null;
 }
+
+/** The official pick's Game Time when no event time is known. */
+export const OFFICIAL_GAME_TIME_UNKNOWN = 'TBD';
 
 function formatGameTime(isoString: string): string | null {
   try {

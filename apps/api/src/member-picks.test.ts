@@ -15,6 +15,7 @@ import {
 } from '@unit-talk/contracts';
 import type { RepositoryBundle } from '@unit-talk/db';
 import { createApiServer } from './server.js';
+import { canReadMemberPicks } from './routes/member-picks.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
 function authorization(decision: 'authorized' | 'refused') {
@@ -193,4 +194,103 @@ test('a pick repository without the member reader fails closed with 503', async 
     assert.equal(response.status, 503);
     assert.equal(body.error?.code, 'MEMBER_PICKS_UNAVAILABLE');
   });
+});
+
+// --- Access boundary -------------------------------------------------------
+//
+// With no API key configured and fail_open, authenticateRequest falls back to
+// an operator bypass context, so an anonymous request would be authorized and
+// a 401 assertion would be vacuous. These tests configure real keys and
+// restore the environment afterwards.
+
+const AUTH_KEYS = {
+  UNIT_TALK_API_KEY_OPERATOR: 'op-member-picks-key',
+  UNIT_TALK_BOT_API_KEY: 'bot-member-picks-key',
+  UNIT_TALK_API_KEY_SUBMITTER: 'sub-member-picks-key',
+  UNIT_TALK_API_KEY_WORKER: 'wkr-member-picks-key',
+} as const;
+
+async function withAuthKeys<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = new Map<string, string | undefined>();
+  for (const [name, value] of Object.entries(AUTH_KEYS)) {
+    previous.set(name, process.env[name]);
+    process.env[name] = value;
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
+
+async function getMemberPicks(base: string, token?: string) {
+  const response = await fetch(`${base}/api/member/picks?status=posted,settled`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+  return { status: response.status, raw: await response.text() };
+}
+
+test('anonymous GET /api/member/picks is refused with 401 and leaks no pick', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    const ids = await seed(repositories);
+    await withServer(repositories, async (base) => {
+      for (const token of [undefined, 'not-a-configured-key']) {
+        const { status, raw } = await getMemberPicks(base, token);
+        assert.equal(status, 401, `token=${token ?? 'none'}`);
+        assert.equal((JSON.parse(raw) as Body).error?.code, 'UNAUTHORIZED');
+        for (const id of ids.values()) {
+          assert.ok(!raw.includes(id), 'a refused response must not contain any pick id');
+        }
+        assert.ok(!raw.includes('Bullpen edge.'), 'a refused response must not contain pick content');
+      }
+    });
+  });
+});
+
+test('an authenticated key that is neither operator nor the Discord bot is refused with 403', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    const ids = await seed(repositories);
+    await withServer(repositories, async (base) => {
+      for (const token of [AUTH_KEYS.UNIT_TALK_API_KEY_SUBMITTER, AUTH_KEYS.UNIT_TALK_API_KEY_WORKER]) {
+        const { status, raw } = await getMemberPicks(base, token);
+        assert.equal(status, 403, token);
+        assert.equal((JSON.parse(raw) as Body).error?.code, 'FORBIDDEN');
+        for (const id of ids.values()) {
+          assert.ok(!raw.includes(id), 'a refused response must not contain any pick id');
+        }
+      }
+    });
+  });
+});
+
+test('the Discord bot service key and an operator key read exactly the member-visible picks', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    const ids = await seed(repositories);
+    const visible = new Set(cases.filter((c) => c.visible).map((c) => ids.get(c.label)!));
+    await withServer(repositories, async (base) => {
+      for (const token of [AUTH_KEYS.UNIT_TALK_BOT_API_KEY, AUTH_KEYS.UNIT_TALK_API_KEY_OPERATOR]) {
+        const { status, raw } = await getMemberPicks(base, token);
+        assert.equal(status, 200, token);
+        const body = JSON.parse(raw) as Body;
+        assert.deepEqual(new Set(body.picks?.map((p) => p.id)), visible, token);
+      }
+    });
+  });
+});
+
+test('canReadMemberPicks admits only an operator or the Discord bot service identity', () => {
+  assert.equal(canReadMemberPicks({ role: 'operator', identity: 'operator:abcd1234' }), true);
+  assert.equal(canReadMemberPicks({ role: 'submitter', identity: 'submitter:discord-bot:abcd1234' }), true);
+  assert.equal(canReadMemberPicks({ role: 'submitter', identity: 'submitter:abcd1234' }), false);
+  assert.equal(canReadMemberPicks({ role: 'worker', identity: 'submitter:discord-bot:abcd1234' }), false);
+  assert.equal(
+    canReadMemberPicks({ role: 'capper', identity: 'capper:griff843', capperId: 'griff843' }),
+    false,
+  );
 });
