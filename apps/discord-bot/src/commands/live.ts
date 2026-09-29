@@ -14,7 +14,8 @@ import { loadBotConfig } from '../config.js';
 import { requireActivePickRoles } from '../role-guard.js';
 import type { CommandHandler } from '../command-registry.js';
 
-const LIVE_STATUSES = ['validated', 'queued', 'posted'];
+// WORK-2026092901: member-visible official picks only (server-enforced).
+const LIVE_STATUSES: Array<'posted' | 'settled'> = ['posted'];
 const PAGE_SIZE = 10;
 
 export function createLiveCommand(apiClient: ApiClient, requiredRoles: string[]): CommandHandler {
@@ -25,10 +26,10 @@ export function createLiveCommand(apiClient: ApiClient, requiredRoles: string[])
       .setDescription('Show active picks that are still live on the board'),
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       try {
-        const response = apiClient.getPicksByStatus
-          ? await apiClient.getPicksByStatus(LIVE_STATUSES, 50)
+        const response = apiClient.getMemberOfficialPicks
+          ? await apiClient.getMemberOfficialPicks(LIVE_STATUSES, 50)
           : await apiClient.get<PicksQueryResponse>(
-              `/api/picks?status=${LIVE_STATUSES.join(',')}&limit=50`,
+              `/api/member/picks?status=${LIVE_STATUSES.join(',')}&limit=50`,
             );
 
         if (response.count === 0) {

@@ -14,7 +14,8 @@ import { loadBotConfig } from '../config.js';
 import { requireActivePickRoles } from '../role-guard.js';
 import type { CommandHandler } from '../command-registry.js';
 
-const TODAY_STATUSES = ['validated', 'queued', 'posted', 'settled'];
+// WORK-2026092901: member-visible official picks only (server-enforced).
+const TODAY_STATUSES: Array<'posted' | 'settled'> = ['posted', 'settled'];
 const PAGE_SIZE = 10;
 
 export function createTodayCommand(apiClient: ApiClient, requiredRoles: string[]): CommandHandler {
@@ -25,10 +26,10 @@ export function createTodayCommand(apiClient: ApiClient, requiredRoles: string[]
       .setDescription("Show picks created in today's board window"),
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       try {
-        const response = apiClient.getPicksByStatus
-          ? await apiClient.getPicksByStatus(TODAY_STATUSES, 200)
+        const response = apiClient.getMemberOfficialPicks
+          ? await apiClient.getMemberOfficialPicks(TODAY_STATUSES, 200)
           : await apiClient.get<PicksQueryResponse>(
-              `/api/picks?status=${TODAY_STATUSES.join(',')}&limit=200`,
+              `/api/member/picks?status=${TODAY_STATUSES.join(',')}&limit=200`,
             );
 
         const todayPicks = filterTodayPicks(response.picks);

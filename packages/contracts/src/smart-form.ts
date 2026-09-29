@@ -154,6 +154,56 @@ export function isHumanCapperDeliveryAuthorized(
 }
 
 // ---------------------------------------------------------------------------
+// WORK-2026092901: which picks a member surface may show
+// ---------------------------------------------------------------------------
+
+/**
+ * Lifecycle states in which an official pick is visible to members.
+ *
+ * `posted` is the only active state: a pick reaches it solely through the
+ * worker's confirmed delivery (`confirmDeliveryAtomic`, queued -> posted with
+ * its receipt), so a pick the kill switch is still holding at `queued` is not
+ * shown -- a member surface must never publish what the channel has not.
+ * `settled` is the public settled record (membership contract §3.3).
+ */
+export const memberVisibleOfficialPickStatuses = ['posted', 'settled'] as const;
+export type MemberVisibleOfficialPickStatus = (typeof memberVisibleOfficialPickStatuses)[number];
+
+export function isMemberVisibleOfficialPickStatus(
+  value: unknown,
+): value is MemberVisibleOfficialPickStatus {
+  return (
+    typeof value === 'string' &&
+    (memberVisibleOfficialPickStatuses as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Whether a pick is an official pick a member surface may show.
+ *
+ * All three conditions are required, and each is a server-recorded fact, never
+ * a client claim:
+ *   1. the capper asked for delivery (`distributionMode: delivery-eligible`),
+ *      so a Track Only pick can never qualify;
+ *   2. the server authorized that delivery (`deliveryAuthorization.decision`
+ *      is `authorized`, read through the one strict reader) -- fixtures, test
+ *      harness picks and historical scanner rows carry no such record;
+ *   3. the pick is in a member-visible lifecycle state.
+ */
+export function isMemberVisibleOfficialPick(pick: {
+  status: string;
+  metadata: Record<string, unknown> | null | undefined;
+}): boolean {
+  if (!isMemberVisibleOfficialPickStatus(pick.status)) {
+    return false;
+  }
+  if (readSmartFormDistributionMode(pick.metadata) !== 'delivery-eligible') {
+    return false;
+  }
+  return isHumanCapperDeliveryAuthorized(pick.metadata);
+}
+
+// ---------------------------------------------------------------------------
 // UTV2-1923 (destination routing): the capper's own Discord destination
 // ---------------------------------------------------------------------------
 

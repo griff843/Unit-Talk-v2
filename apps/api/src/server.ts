@@ -70,6 +70,7 @@ import {
   handleRecapPost,
   handleMemberTiers,
   handlePicksQuery,
+  handleMemberPicksQuery,
   handleSettlementsRecent,
   handleShadowModelSummaries,
   handleShadowComparison,
@@ -505,6 +506,10 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/picks') {
     return handlePicksQuery(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/member/picks') {
+    return handleMemberPicksQuery(request, response, runtime);
   }
 
   const routingPreviewMatch =

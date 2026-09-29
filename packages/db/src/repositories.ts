@@ -2,6 +2,7 @@ import type {
   CanonicalPick,
   LifecycleEvent,
   MemberTier,
+  MemberVisibleOfficialPickStatus,
   ProviderOfferInsert,
   SubmissionPayload,
   ValidatedSubmission,
@@ -165,6 +166,17 @@ export interface PickRepository {
     lifecycleStates: readonly CanonicalPick['lifecycleState'][],
     promotionStatuses: readonly string[],
   ): Promise<PromotedPickCandidate[]>;
+  /**
+   * WORK-2026092901: the picks a paying member may see -- delivery-eligible,
+   * server-authorized human-capper picks that reached members (`posted`) or
+   * have since settled -- newest first. Every row satisfies
+   * `isMemberVisibleOfficialPick`; implementations re-check it after the
+   * query so a loose filter can never widen the answer.
+   */
+  listMemberVisibleOfficialPicks?(
+    statuses: readonly MemberVisibleOfficialPickStatus[],
+    limit: number,
+  ): Promise<PickRecord[]>;
   persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult>;
@@ -937,6 +949,17 @@ export interface AuditLogRepository {
     entityType: string,
     since: string,
     action?: string | undefined,
+  ): Promise<AuditLogRow[]>;
+  /**
+   * WORK-2026092901: every audit row for one entity whose action starts with
+   * `actionPrefix`, oldest first. Throws rather than return a partial list.
+   * Optional so existing fakes compile; a caller that needs it fails closed
+   * when it is absent.
+   */
+  listByEntity?(
+    entityType: string,
+    entityId: string,
+    actionPrefix?: string | undefined,
   ): Promise<AuditLogRow[]>;
 }
 

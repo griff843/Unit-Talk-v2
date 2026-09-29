@@ -14,6 +14,15 @@ export interface ApiClient {
   get<T>(path: string): Promise<T>;
   post<T>(path: string, body: unknown): Promise<T>;
   getPicksByStatus?(statuses: string[], limit?: number): Promise<PicksQueryResponse>;
+  /**
+   * WORK-2026092901: member-facing pick list. The server returns only picks a
+   * paying member may see; member commands must use this, never
+   * `getPicksByStatus`, which lists every pick in a lifecycle state.
+   */
+  getMemberOfficialPicks?(
+    statuses: Array<'posted' | 'settled'>,
+    limit?: number,
+  ): Promise<PicksQueryResponse>;
   getRecentSettlements?(limit?: number): Promise<SettlementsRecentResponse>;
   getRecentAlerts?(
     limit?: number,
@@ -177,6 +186,16 @@ export function createApiClient(baseUrl: string, apiKey?: string, fetchImpl: Fet
         limit: String(limit),
       });
       return request<PicksQueryResponse>(`/api/picks?${params.toString()}`);
+    },
+    getMemberOfficialPicks(
+      statuses: Array<'posted' | 'settled'>,
+      limit = 50,
+    ): Promise<PicksQueryResponse> {
+      const params = new URLSearchParams({
+        status: statuses.join(','),
+        limit: String(limit),
+      });
+      return request<PicksQueryResponse>(`/api/member/picks?${params.toString()}`);
     },
     getRecentSettlements(limit = 50): Promise<SettlementsRecentResponse> {
       const params = new URLSearchParams({

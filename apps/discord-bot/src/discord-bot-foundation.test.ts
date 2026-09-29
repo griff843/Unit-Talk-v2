@@ -519,18 +519,23 @@ test('createApiClient.getRecentSettlements calls GET /api/settlements/recent wit
   assert.equal(result?.count, 0);
 });
 
-test('/live command renders active picks from the picks query API', async () => {
+test('/live command reads only member-visible official picks from the member route', async () => {
+  // WORK-2026092901: /live must never read the unfiltered picks query.
   type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+  const requestedStatuses: string[][] = [];
   const apiClient: ApiClient = {
     get: async <T>() => ({ picks: [], count: 0 } as T),
     post: async <T>() => ({} as T),
-    getPicksByStatus: async () => ({
-      count: 2,
-      picks: [
-        makeQueriedPick({ id: 'pick-1', status: 'validated', selection: 'Knicks ML' }),
-        makeQueriedPick({ id: 'pick-2', status: 'posted', selection: 'Suns ML' }),
-      ],
-    }),
+    getPicksByStatus: async () => {
+      throw new Error('/live must not read the unfiltered picks query');
+    },
+    getMemberOfficialPicks: async (statuses) => {
+      requestedStatuses.push([...statuses]);
+      return {
+        count: 1,
+        picks: [makeQueriedPick({ id: 'pick-2', status: 'posted', selection: 'Suns ML' })],
+      };
+    },
   };
   const command = createLiveCommand(apiClient, ['role-vip']);
   let payload: Payload | null = null;
@@ -541,12 +546,45 @@ test('/live command renders active picks from the picks query API', async () => 
     },
   } as never);
 
+  assert.deepEqual(requestedStatuses, [['posted']]);
   assert.ok(payload);
   const settledPayload = payload as Payload;
   const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
   assert.equal(embed.title, 'Live Board');
-  assert.match(embed.description ?? '', /\[VALIDATED\].*Knicks ML/);
   assert.match(embed.description ?? '', /\[POSTED\].*Suns ML/);
+});
+
+test('/live and /today fall back to the member route, never /api/picks', async () => {
+  const urls: string[] = [];
+  const apiClient: ApiClient = {
+    get: async <T>(path: string) => {
+      urls.push(path);
+      return { picks: [], count: 0 } as T;
+    },
+    post: async <T>() => ({} as T),
+  };
+  const noopReply = { editReply: async () => undefined } as never;
+  await createLiveCommand(apiClient, ['role-vip']).execute(noopReply);
+  await createTodayCommand(apiClient, ['role-vip']).execute(noopReply);
+
+  assert.deepEqual(urls, [
+    '/api/member/picks?status=posted&limit=50',
+    '/api/member/picks?status=posted,settled&limit=200',
+  ]);
+});
+
+test('api client getMemberOfficialPicks calls the member route', async () => {
+  let capturedUrl = '';
+  const mockFetch: typeof fetch = async (input) => {
+    capturedUrl = String(input);
+    return new Response(JSON.stringify({ picks: [], count: 0 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch);
+  await client.getMemberOfficialPicks?.(['posted', 'settled'], 25);
+  assert.equal(capturedUrl, 'http://localhost:4000/api/member/picks?status=posted%2Csettled&limit=25');
 });
 
 test('buildLiveEmbeds paginates after 10 picks', () => {

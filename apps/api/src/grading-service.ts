@@ -5,7 +5,7 @@ import {
   resolveStakeUnits,
 } from '@unit-talk/domain';
 import type { StakeUnitsResolution } from '@unit-talk/domain';
-import type { CanonicalPick } from '@unit-talk/contracts';
+import { isHumanCapperDeliveryAuthorized, type CanonicalPick } from '@unit-talk/contracts';
 import type {
   EventRow,
   PickRecord,
@@ -14,6 +14,7 @@ import type {
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
 import { observeSettlementRecap, type SettlementRecapOutcome } from './settlement-recap-observation.js';
+import { isHumanCapperRecapStopped } from './human-capper-recap-gate.js';
 import {
   isEvidencePlanePick,
   recordGradedSettlement,
@@ -198,7 +199,8 @@ export async function runGradingPass(
     | 'outbox'
     | 'receipts'
     | 'runs'
-  >,
+  > &
+    Partial<Pick<RepositoryBundle, 'killSwitch'>>,
   options: RunGradingPassOptions = {},
 ): Promise<GradingPassResult> {
   const thresholdMs =
@@ -336,7 +338,8 @@ async function executeGradingPass(
     | 'outbox'
     | 'receipts'
     | 'runs'
-  >,
+  > &
+    Partial<Pick<RepositoryBundle, 'killSwitch'>>,
   options: RunGradingPassOptions,
 ): Promise<GradingPassExecution> {
   // Evidence plane: also process awaiting_approval picks so outcome data
@@ -676,6 +679,8 @@ async function executeGradingPass(
             outbox: repositories.outbox,
             receipts: repositories.receipts,
             runs: repositories.runs,
+            // WORK-2026092901: the recap gate needs the live kill switch.
+            ...(repositories.killSwitch ? { killSwitch: repositories.killSwitch } : {}),
           },
           options,
         );
@@ -1076,10 +1081,25 @@ export type { SettlementRecapOutcome } from './settlement-recap-observation.js';
 export async function postSettlementRecapIfPossible(
   pick: PickRecord,
   settlementRecord: SettlementRecord,
-  repositories: Pick<RepositoryBundle, 'outbox' | 'receipts' | 'runs'>,
+  repositories: Pick<RepositoryBundle, 'outbox' | 'receipts' | 'runs'> &
+    Partial<Pick<RepositoryBundle, 'killSwitch'>>,
   options: RunGradingPassOptions,
 ): Promise<SettlementRecapOutcome> {
   return observeSettlementRecap(pick.id, settlementRecord.id, repositories.runs, async () => {
+    // WORK-2026092901 HUMAN_CAPPER_RECAP_GATE_START
+    // The chokepoint for every per-pick recap, including the automated grading
+    // pass, which never checked a kill switch. A recap about an authorized
+    // human-capper pick is member-facing publication; it waits on both
+    // official-picks and the separate recap control. Fails closed when the
+    // caller supplies no kill switch.
+    if (
+      isHumanCapperDeliveryAuthorized(asRecord(pick.metadata)) &&
+      (await isHumanCapperRecapStopped(repositories))
+    ) {
+      return { posted: false, reason: 'human-capper-recap-stopped' };
+    }
+    // WORK-2026092901 HUMAN_CAPPER_RECAP_GATE_END
+
     const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
     if (!botToken) {
       return { posted: false, reason: 'no_discord_bot_token' };
