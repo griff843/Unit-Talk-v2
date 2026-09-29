@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-VERIFIED_SOURCE_SHA: 87971f5ea8e01bc379aa0db60783cc43d7922fa0
+VERIFIED_SOURCE_SHA: f03e0ce0b73f011584f122bce87fe35b1e0dc20a
 
 Result: static_pass_live_db_deferred_to_ci
 
@@ -33,7 +33,7 @@ immutable_deferral: deferred_to_ci
 static_gate: PASS
 r_level_audit: PASS
 proof_binding: PASS
-runtime_verifier_source: 87971f5ea8e01bc379aa0db60783cc43d7922fa0
+runtime_verifier_source: f03e0ce0b73f011584f122bce87fe35b1e0dc20a
 local_writable_db_access: REFUSED_BEFORE_DB_ACCESS
 staging_ci_obligation: REQUIRED
 ```
@@ -43,7 +43,7 @@ staging_ci_obligation: REQUIRED
 - Static repository gate: PASS.
 - R-level path audit: PASS with no matching rules.
 - Versioned evidence binding: PASS with the evidence commit and current PR head resolved from Git.
-- Runtime-verifier gate: bound to refreshed substantive SHA `87971f5ea8e01bc379aa0db60783cc43d7922fa0`.
+- Runtime-verifier gate: bound to refreshed substantive SHA `f03e0ce0b73f011584f122bce87fe35b1e0dc20a`.
 - Writable DB access: refused before database access and retained as `deferred_to_ci`.
 
 ## Verification
@@ -68,8 +68,9 @@ requires a genuine G6 staging-CI receipt.
 
 ## Merge SHA Binding
 
-Verified source SHA: `87971f5ea8e01bc379aa0db60783cc43d7922fa0`
+Verified source SHA: `f03e0ce0b73f011584f122bce87fe35b1e0dc20a`
 
 Merge SHA: pending merge
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1700
+Execution SHA: f03e0ce0b73f011584f122bce87fe35b1e0dc20a
