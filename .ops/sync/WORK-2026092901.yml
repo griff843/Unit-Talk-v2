@@ -1,0 +1,213 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092901
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092901
+  objective: >-
+    Make it safe to release exactly one intentionally delivery-eligible official
+    pick to a paying-member Discord surface, with:
+
+    no Track Only leakage;
+
+    no fixture or test leakage;
+
+    no duplicate Discord post;
+
+    correct presentation;
+
+    no unrelated recap release.
+  acceptance_criteria:
+    - "**Member pick truth.**"
+    - "`GET /api/member/picks` returns only `posted`/`settled` picks with
+      `distributionMode: delivery-eligible` and an `authorized` delivery
+      decision, and projects member-safe metadata only."
+    - Bot `/live` and `/today` read that route and never `/api/picks`.
+    - Track Only, fixture, queued and refused picks never appear. Eligibility is
+      enforced server-side.
+    - "**Exactly-once official-picks delivery.** A dispatch ledger on the outbox
+      row's audit trail records started, not-created and delivered outcomes."
+    - An unresolved attempt (timeout, crash, watchdog, 5xx, confirm failure) is
+      dead-lettered and never posted again.
+    - A delivered attempt is confirmed without posting.
+    - A sent receipt refuses dispatch.
+    - "Every Discord post carries `nonce` and `enforce_nonce: true`."
+    - Retry refuses when delivered, and when ambiguous unless the operator
+      attests `confirmedNotDelivered` (audited as
+      `distribution.dispatch_reconciled`).
+    - Replay excludes official-picks. This is pinned by a test.
+    - "**Official-pick presentation.**"
+    - The footer reads `Unit Talk | Official Picks`. There is no Canary footer.
+    - "Fields: Market, Odds, Units, Capper, Game Time, Thesis."
+    - No Confidence, Edge or CLV.
+    - "**Recap containment.** Human-capper recap traffic stays stopped unless
+      both `official-picks` and a separate `human-capper-recaps` control are
+      released. That covers:"
+    - settle-controller settlement recaps;
+    - automated-grading settlement recaps;
+    - daily, weekly and monthly aggregates.
+    - A missing row reads as killed.
+    - "**Release controls.**"
+    - The kill-switch route accepts `human-capper-recaps`.
+    - A release requires a non-empty reason.
+    - Listing the recap control in Command Center's kill-switch panel is a
+      follow-up. The control must stay killed for the first release, and the API
+      route operates it.
+  guardrails:
+    - No kill-switch change.
+    - No SGO, ingestion or containment change.
+    - No migration.
+    - No production write by this lane.
+    - The voided picks `2cc92f4b` and `c12f1e2f`, and their outbox rows, are
+      untouched.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - The PR is merged on green CI with `t1-approved` and a `pm-verdict/v1`
+      APPROVED comment from Griff. The T1 runtime proof runs against real
+      Supabase.
+  unmapped_sections:
+    - >-
+      WORK-2026092901 — official-picks first controlled release: exactly-once
+      delivery, member pick truth, presentation, recap containment
+
+      Tier: T1 · Lane type: runtime · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. This is the runtime lane
+      of the bounded official-picks controlled-release fix wave PM authorized on
+      2026-09-29. Its companions are WORK-2026092902 (Command Center stage) and
+      WORK-2026092911 (release runbook).
+
+
+      Required reading: `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`,
+      `docs/05_operations/DELIVERY_KILL_SWITCH.md`,
+      `docs/03_product/smart-form/intent.md`.
+
+
+      ## Proof requirements
+
+
+      - `verification.md` names `pnpm type-check`, `pnpm test` and
+      `scripts/ci/r-level-check.ts`.
+
+      - Its EVIDENCE section contains a fenced code block (closeout and ERV
+      gates).
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092901.md
+    title: "WORK-2026092901 — official-picks first controlled release: exactly-once
+      delivery, member pick truth, presentation, recap containment"
+    description: >-
+      # WORK-2026092901 — official-picks first controlled release: exactly-once
+      delivery, member pick truth, presentation, recap containment
+
+
+      Tier: T1 · Lane type: runtime · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. This is the runtime lane
+      of the bounded official-picks controlled-release fix wave PM authorized on
+      2026-09-29. Its companions are WORK-2026092902 (Command Center stage) and
+      WORK-2026092911 (release runbook).
+
+
+      Required reading: `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md`,
+      `docs/05_operations/DELIVERY_KILL_SWITCH.md`,
+      `docs/03_product/smart-form/intent.md`.
+
+
+      ## Objective
+
+
+      Make it safe to release exactly one intentionally delivery-eligible
+      official pick to a paying-member Discord surface, with:
+
+
+      - no Track Only leakage;
+
+      - no fixture or test leakage;
+
+      - no duplicate Discord post;
+
+      - correct presentation;
+
+      - no unrelated recap release.
+
+
+      ## Acceptance Criteria
+
+
+      1. **Member pick truth.**
+         - `GET /api/member/picks` returns only `posted`/`settled` picks with `distributionMode: delivery-eligible` and an `authorized` delivery decision, and projects member-safe metadata only.
+         - Bot `/live` and `/today` read that route and never `/api/picks`.
+         - Track Only, fixture, queued and refused picks never appear. Eligibility is enforced server-side.
+      2. **Exactly-once official-picks delivery.** A dispatch ledger on the
+      outbox row's audit trail records started, not-created and delivered
+      outcomes.
+         - An unresolved attempt (timeout, crash, watchdog, 5xx, confirm failure) is dead-lettered and never posted again.
+         - A delivered attempt is confirmed without posting.
+         - A sent receipt refuses dispatch.
+         - Every Discord post carries `nonce` and `enforce_nonce: true`.
+         - Retry refuses when delivered, and when ambiguous unless the operator attests `confirmedNotDelivered` (audited as `distribution.dispatch_reconciled`).
+         - Replay excludes official-picks. This is pinned by a test.
+      3. **Official-pick presentation.**
+         - The footer reads `Unit Talk | Official Picks`. There is no Canary footer.
+         - Fields: Market, Odds, Units, Capper, Game Time, Thesis.
+         - No Confidence, Edge or CLV.
+      4. **Recap containment.** Human-capper recap traffic stays stopped unless
+      both `official-picks` and a separate `human-capper-recaps` control are
+      released. That covers:
+         - settle-controller settlement recaps;
+         - automated-grading settlement recaps;
+         - daily, weekly and monthly aggregates.
+
+         A missing row reads as killed.
+      5. **Release controls.**
+         - The kill-switch route accepts `human-capper-recaps`.
+         - A release requires a non-empty reason.
+         - Listing the recap control in Command Center's kill-switch panel is a follow-up. The control must stay killed for the first release, and the API route operates it.
+
+      ## Guardrails
+
+
+      - No kill-switch change.
+
+      - No SGO, ingestion or containment change.
+
+      - No migration.
+
+      - No production write by this lane.
+
+      - The voided picks `2cc92f4b` and `c12f1e2f`, and their outbox rows, are
+      untouched.
+
+
+      ## Proof requirements
+
+
+      - `verification.md` names `pnpm type-check`, `pnpm test` and
+      `scripts/ci/r-level-check.ts`.
+
+      - Its EVIDENCE section contains a fenced code block (closeout and ERV
+      gates).
+
+
+      ## Exit Criteria
+
+
+      - The PR is merged on green CI with `t1-approved` and a `pm-verdict/v1`
+      APPROVED comment from Griff. The T1 runtime proof runs against real
+      Supabase.
+    captured_at: 2026-09-29T14:10:50.095Z
+    description_sha256: d8c2e0db4fb4b532194150d91dbc3bfce981a235350d0edab29b55e620fb9b21
+  contract_hash: bb5cd8b7deff62c5bb49f36765b9ea14dc9677e1a1ac2829b1721b17a91dfd4a

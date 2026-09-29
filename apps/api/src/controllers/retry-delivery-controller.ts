@@ -1,4 +1,11 @@
-import { isTrackOnlyPickMetadata } from '@unit-talk/contracts';
+import {
+  dispatchLedgerActions,
+  isDispatchAmbiguous,
+  isHumanDeliveryTarget,
+  isTrackOnlyPickMetadata,
+  parseGovernedTargetFromDeliveryTarget,
+  readDispatchLedger,
+} from '@unit-talk/contracts';
 import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { successResponse, errorResponse } from '../http.js';
@@ -6,6 +13,13 @@ import { successResponse, errorResponse } from '../http.js';
 export interface RetryDeliveryRequest {
   reason: string;
   actor: string;
+  /**
+   * WORK-2026092901: the operator's attestation, after checking the channel,
+   * that no message exists for this row's unresolved dispatch attempts.
+   * Required to retry a human-capper row whose ledger is ambiguous; recorded
+   * as `distribution.dispatch_reconciled`. Never inferred.
+   */
+  confirmedNotDelivered?: boolean;
 }
 
 export interface RetryDeliveryResult {
@@ -70,7 +84,78 @@ export async function retryDeliveryController(
     );
   }
 
+  // WORK-2026092901 RETRY_DUPLICATE_GUARD_START
+  // A retry re-posts. Refuse it whenever the message may already exist.
+  const sentReceipt = await repositories.receipts.findLatestByOutboxId(retryable.id);
+  if (sentReceipt?.status === 'sent') {
+    return errorResponse(
+      409,
+      'ALREADY_DELIVERED',
+      `Cannot retry: outbox ${retryable.id} already has sent receipt ${sentReceipt.id}`,
+    );
+  }
+
+  const governedTarget = parseGovernedTargetFromDeliveryTarget(retryable.target);
+  const ledgerGoverned = governedTarget !== null && isHumanDeliveryTarget(governedTarget);
+  let reconciledThroughAttempt: number | null = null;
+  if (ledgerGoverned) {
+    if (!repositories.audit.listByEntity) {
+      return errorResponse(
+        503,
+        'DISPATCH_LEDGER_UNAVAILABLE',
+        `Cannot retry: the dispatch ledger for outbox ${retryable.id} cannot be read`,
+      );
+    }
+    const ledger = readDispatchLedger(
+      await repositories.audit.listByEntity('distribution_outbox', retryable.id, 'distribution.dispatch_'),
+    );
+    if (ledger.delivered) {
+      return errorResponse(
+        409,
+        'ALREADY_DELIVERED',
+        `Cannot retry: outbox ${retryable.id} was delivered as message ${ledger.delivered.receipt.externalId} (attempt ${ledger.delivered.attempt}); confirm it, do not re-post`,
+      );
+    }
+    if (isDispatchAmbiguous(ledger)) {
+      if (payload.confirmedNotDelivered !== true) {
+        return errorResponse(
+          409,
+          'DELIVERY_OUTCOME_AMBIGUOUS',
+          `Cannot retry: dispatch attempt(s) ${ledger.unresolvedAttempts.join(',') || '(unreadable ledger rows)'} for outbox ${retryable.id} may already have posted. ` +
+            'Check the channel; retry only with confirmedNotDelivered: true if no message exists.',
+        );
+      }
+      if (ledger.malformed > 0) {
+        return errorResponse(
+          409,
+          'DISPATCH_LEDGER_MALFORMED',
+          `Cannot retry: ${ledger.malformed} dispatch ledger row(s) for outbox ${retryable.id} are unreadable`,
+        );
+      }
+      reconciledThroughAttempt = ledger.lastAttempt;
+    }
+  }
+  // WORK-2026092901 RETRY_DUPLICATE_GUARD_END
+
   const previousStatus = retryable.status;
+
+  if (reconciledThroughAttempt !== null) {
+    // Written BEFORE the reset: a row back in `pending` without this
+    // attestation would dead-letter again, never post twice.
+    await repositories.audit.record({
+      entityType: 'distribution_outbox',
+      entityId: retryable.id,
+      entityRef: pickId,
+      action: dispatchLedgerActions.reconciled,
+      actor: payload.actor.trim(),
+      payload: {
+        outboxId: retryable.id,
+        target: retryable.target,
+        throughAttempt: reconciledThroughAttempt,
+        reason: payload.reason.trim(),
+      },
+    });
+  }
 
   // Reset to pending with attempt_count = 0
   await repositories.outbox.resetForRetry(retryable.id);
@@ -86,6 +171,7 @@ export async function retryDeliveryController(
       previousStatus,
       outboxId: retryable.id,
       target: retryable.target,
+      ...(reconciledThroughAttempt !== null ? { reconciledThroughAttempt } : {}),
     },
   });
 
