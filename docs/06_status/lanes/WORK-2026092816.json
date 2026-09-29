@@ -1,0 +1,34 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092816",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092816/.out/worktrees/claude__work-2026092816-record-1685-binding",
+  "branch": "claude/work-2026092816-record-1685-binding",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026092816.md",
+    "docs/06_status/lanes/WORK-2026092812.json"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-09-29T00:49:30.508Z",
+  "heartbeat_at": "2026-09-29T00:49:30.508Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026092816-record-1685-binding.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092816/.out/worktrees/claude__work-2026092816-record-1685-binding",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
