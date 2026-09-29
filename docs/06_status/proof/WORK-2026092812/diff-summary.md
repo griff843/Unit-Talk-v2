@@ -11,5 +11,5 @@ Display-only Command Center work. No API route, database reader, write path, or 
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 617ceb93c26c13cbea597971306b4a9a5609a8f1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1685

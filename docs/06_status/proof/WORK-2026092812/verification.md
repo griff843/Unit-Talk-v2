@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092812
 
-MERGE_SHA: pending merge
+MERGE_SHA: 617ceb93c26c13cbea597971306b4a9a5609a8f1
 
 Issue: WORK-2026092812
 Tier: T2
@@ -46,5 +46,5 @@ Writable live-DB proof is deferred as required: the lane makes no database write
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `617ceb93c26c13cbea597971306b4a9a5609a8f1`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1685
