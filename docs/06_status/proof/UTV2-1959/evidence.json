@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "title": "Bind recovered T1 live-DB deferral to immutable preflight evidence",
   "status": "ready_for_review",
-  "generated_at": "2026-09-29T18:26:38Z",
+  "generated_at": "2026-09-29T18:33:30Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "69937ab36546b585a0e250b19a7c291cb3ea7c7d",
+    "verified_source_sha": "87971f5ea8e01bc379aa0db60783cc43d7922fa0",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
