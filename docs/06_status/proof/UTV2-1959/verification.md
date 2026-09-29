@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-VERIFIED_SOURCE_SHA: 5072855a4387ae7e82a0be610a7c3319d96371cd
+VERIFIED_SOURCE_SHA: 2c64ad8028af068d61bf6f5e2da2cd50f1c3b15d
 
 Result: static_pass_live_db_deferred_to_ci
 
@@ -25,7 +25,7 @@ scope-lock failures still stop before token reconstruction.
 - Static repository gate: PASS.
 - R-level path audit: PASS with no matching rules.
 - Versioned evidence binding: PASS with the evidence commit and current PR head resolved from Git.
-- Runtime-verifier gate: PASS for substantive SHA `5072855a4387ae7e82a0be610a7c3319d96371cd`.
+- Runtime-verifier gate: PASS for refreshed substantive SHA `2c64ad8028af068d61bf6f5e2da2cd50f1c3b15d`.
 - Writable DB access: refused before database access and retained as `deferred_to_ci`.
 
 ## Verification
@@ -49,7 +49,7 @@ receipt.
 
 ## Merge SHA Binding
 
-Verified source SHA: `5072855a4387ae7e82a0be610a7c3319d96371cd`
+Verified source SHA: `2c64ad8028af068d61bf6f5e2da2cd50f1c3b15d`
 
 Merge SHA: pending merge
 

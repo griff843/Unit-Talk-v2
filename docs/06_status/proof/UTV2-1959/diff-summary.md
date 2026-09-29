@@ -15,6 +15,6 @@ artifacts. No warehouse, runtime, database, or live-DB waiver behavior changes.
 
 ## SHA Binding
 
-- Verified source SHA: `5072855a4387ae7e82a0be610a7c3319d96371cd`
+- Verified source SHA: `2c64ad8028af068d61bf6f5e2da2cd50f1c3b15d`
 - Merge SHA: pending merge
 - PR: https://github.com/griff843/Unit-Talk-v2/pull/1700

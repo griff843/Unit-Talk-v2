@@ -9,7 +9,7 @@
   "generated_at": "2026-09-29T16:29:10Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "5072855a4387ae7e82a0be610a7c3319d96371cd",
+    "verified_source_sha": "2c64ad8028af068d61bf6f5e2da2cd50f1c3b15d",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
