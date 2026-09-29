@@ -20,23 +20,24 @@ result: pass
 ## EVIDENCE:
 
 ```
--- read-only, zfzdnfwdarxucxtaojxm, 2026-09-29
-select target, killed, actor, updated_at from delivery_kill_switches order by target;
-  best-bets                        | t | claude-session-utv2-1601-containment | 2026-08-01
-  exclusive-insights               | t | system-bootstrap                     | 2026-07-14
-  official-picks                   | t | claude:human-capper-e2e-window-close | 2026-09-19 02:24Z
-  t1-proof-utv2-1427-kill-switch   | f | t1-proof-runner                      |
-  trader-insights                  | t | claude-session-utv2-1601-containment | 2026-08-01
+-- read-only, zfzdnfwdarxucxtaojxm, 2026-09-29 (re-measured at proof time)
+select target, killed, actor, updated_at from delivery_kill_switch order by target;
+  best-bets                      | true  | claude-session-utv2-1601-containment | 2026-08-01 14:08Z
+  exclusive-insights             | true  | system-bootstrap                     | 2026-07-14 23:13Z
+  official-picks                 | true  | claude:human-capper-e2e-window-close | 2026-09-19 02:24Z
+  t1-proof-utv2-1427-kill-switch | false | t1-proof-runner                      | 2026-07-14 23:14Z
+  trader-insights                | true  | claude-session-utv2-1601-containment | 2026-08-01 14:08Z
   (no human-capper-recaps row)
 
-select id, status, pick_id from distribution_outbox where target = 'discord:official-picks';
-  684ba33f | sent    | 816a84c7 (settled)
-  3447bb03 | sent    | ed0ed43c (posted)
-  68f922a2 | pending | voided sample pick
-  5005f461 | pending | voided sample pick
+select o.id, o.status, o.pick_id, p.status from distribution_outbox o join picks p on p.id = o.pick_id
+ where o.target = 'discord:official-picks';
+  3447bb03 | sent    | ed0ed43c | posted
+  5005f461 | pending | c12f1e2f | voided
+  684ba33f | sent    | 816a84c7 | settled
+  68f922a2 | pending | 2cc92f4b | voided
 ```
 
-- Read-only SQL on `zfzdnfwdarxucxtaojxm`: `delivery_kill_switches` rows and `distribution_outbox` rows for `discord:official-picks`, 2026-09-29.
+- Read-only SQL on `zfzdnfwdarxucxtaojxm`: `delivery_kill_switch` rows and `distribution_outbox` rows for `discord:official-picks`, 2026-09-29.
 - Code read on `main` 400c2962c: `apps/api/src/distribution-service.ts` (`evaluateDistributionTargetGate`), `apps/api/src/run-audit-service.ts` (`releaseHumanCapperDeliveryWithRunTracking`), `apps/worker/src/distribution-worker.ts`, `apps/worker/src/runner.ts`.
 
 ## Verification
