@@ -8,7 +8,7 @@
   "branch": "claude/work-2026092901-official-picks-exactly-once",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1697",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/controllers/retry-delivery-controller.ts",
