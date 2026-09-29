@@ -1,0 +1,103 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092911
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092911
+  objective: WORK-2026092911 — Official-picks first controlled release runbook
+  acceptance_criteria:
+    - The doc states the current posture measured live (all governed targets
+      killed; the official-picks backlog is two pending rows for voided picks,
+      which are skipped).
+    - "The doc states the preconditions: the deployed SHA contains the
+      WORK-2026092901 hardening (dispatch ledger, nonce, official-picks embed,
+      recap gate, member pick route) and the WORK-2026092902 Command Center
+      fix."
+    - "The doc gives the step sequence: baseline → one fresh delivery-eligible
+      pick → un-kill with reason → observe exactly one message, one receipt, and
+      one `dispatch_delivered` ledger row → re-kill."
+    - The doc states the rollback and containment behavior, including that
+      re-killing stops new claims only, and the ambiguous-dispatch
+      reconciliation path.
+    - The doc states that replay and retry are not used during the first
+      release, and that the `human-capper-recaps` control stays killed
+      throughout.
+    - No code, kill switch, or containment setting is changed.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026092911 — Official-picks first controlled release runbook
+
+      Tier: T2 · Lane type: governance (docs)
+
+
+      Codify, in `docs/05_operations/DELIVERY_KILL_SWITCH.md`, the operator
+      procedure for the first
+
+      controlled `official-picks` release: kill-switch baseline, one fresh
+      intentional pick, un-kill,
+
+      observe exactly one post and one receipt, re-kill on any deviation.
+      Procedure only — it authorizes
+
+      no release; un-killing remains Griff's reserved member-delivery decision.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092911.md
+    title: WORK-2026092911 — Official-picks first controlled release runbook
+    description: >-
+      # WORK-2026092911 — Official-picks first controlled release runbook
+
+
+      Tier: T2 · Lane type: governance (docs)
+
+
+      Codify, in `docs/05_operations/DELIVERY_KILL_SWITCH.md`, the operator
+      procedure for the first
+
+      controlled `official-picks` release: kill-switch baseline, one fresh
+      intentional pick, un-kill,
+
+      observe exactly one post and one receipt, re-kill on any deviation.
+      Procedure only — it authorizes
+
+      no release; un-killing remains Griff's reserved member-delivery decision.
+
+
+      ## Acceptance Criteria
+
+
+      - The doc states the current posture measured live (all governed targets
+      killed; the official-picks backlog is two pending rows for voided picks,
+      which are skipped).
+
+      - The doc states the preconditions: the deployed SHA contains the
+      WORK-2026092901 hardening (dispatch ledger, nonce, official-picks embed,
+      recap gate, member pick route) and the WORK-2026092902 Command Center fix.
+
+      - The doc gives the step sequence: baseline → one fresh delivery-eligible
+      pick → un-kill with reason → observe exactly one message, one receipt, and
+      one `dispatch_delivered` ledger row → re-kill.
+
+      - The doc states the rollback and containment behavior, including that
+      re-killing stops new claims only, and the ambiguous-dispatch
+      reconciliation path.
+
+      - The doc states that replay and retry are not used during the first
+      release, and that the `human-capper-recaps` control stays killed
+      throughout.
+
+      - No code, kill switch, or containment setting is changed.
+    captured_at: 2026-09-29T12:08:08.533Z
+    description_sha256: 7de22bd7a3c85c1a32fec2c94eb1627ca5bab880cfeefdac745edaba3273d9a3
+  contract_hash: 0b1ddeeb316287a5c5e8ab172d3ea90424683b88c1a29187343f921912d58dd9

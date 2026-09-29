@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092911",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "in_review",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "f0dd769afb78c30f893789679f031e6a723ad130",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "f0dd769afb78c30f893789679f031e6a723ad130 is the only content commit on this lane. Later commits change only the lane manifest and this proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "static_proof": {
+    "unit_tests": { "pass": 0, "fail": 0, "note": "documentation-only lane; CI verify runs the full suite" },
+    "type_check": "pass"
+  },
+  "production_writes_by_this_change": 0
+}
