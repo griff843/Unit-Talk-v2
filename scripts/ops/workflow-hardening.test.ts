@@ -944,6 +944,22 @@ test('codex return review extracts issue IDs without sed delimiter traps', () =>
   );
 });
 
+test('review and tier workflows accept repository-owned WORK identities', () => {
+  for (const workflowName of ['return-review-packet.yml', 'tier-classifier-advisory.yml']) {
+    const workflow = readWorkflow(workflowName);
+    assert.match(
+      workflow,
+      /work\|WORK/u,
+      `${workflowName} must recognize WORK-### identities alongside tracker IDs`,
+    );
+    assert.match(
+      workflow,
+      /tr '\[:lower:\]' '\[:upper:\]'/u,
+      `${workflowName} must normalize the captured identity before manifest lookup`,
+    );
+  }
+});
+
 test('proof and runtime gates watch proof, lane, and ops control-plane paths', () => {
   // proof-gate.yml (UTV2-1378) triggers on all PRs (no path filter); the detect job
   // checks path changes at runtime and gates downstream jobs. Verify the detect job
