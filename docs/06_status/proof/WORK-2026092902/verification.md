@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092902
 
-MERGE_SHA: pending merge
+MERGE_SHA: a675e9ac1ea01724f298ca22d56ac2fd68050abd
 
 Issue: WORK-2026092902
 Tier: T2
@@ -51,6 +51,6 @@ This lane is T2 and presentation-only. It reads rows the pick detail page alread
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: a675e9ac1ea01724f298ca22d56ac2fd68050abd
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1692
 Execution SHA: 29b84d6b4b9464ccb7b1ba044672415b62163ec6
