@@ -7,7 +7,7 @@
   "status": "READY_FOR_T1_REVIEW_PENDING_POST_DEPLOY_PARITY",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "c1fe804e2b23cfdd6bf6aa2209559ae1c2cf7c1d",
+    "verified_source_sha": "14e25d858486d16925aa0eb6862fcc1f8edbcf45",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -31,12 +31,12 @@
     }
   },
   "runtime_proof": {
-    "head": "c1fe804e2b23cfdd6bf6aa2209559ae1c2cf7c1d",
+    "head": "14e25d858486d16925aa0eb6862fcc1f8edbcf45",
     "precondition_drill": {
       "result": "PASS",
-      "run": 36521893433,
-      "job": 109256369236,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36521893433/job/109256369236",
+      "run": 36530964452,
+      "job": 109284327033,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36530964452/job/109284327033",
       "cases": [
         "refuses when a governed object already exists before DDL",
         "applies on an empty scratch schema",
@@ -45,20 +45,21 @@
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
-      "run": 36521893433,
-      "job": 109256369477,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36521893433/job/109256369477"
+      "run": 36530964452,
+      "job": 109284326913,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36530964452/job/109284326913"
     },
     "bounded_retention_lifecycle": {
       "result": "PASS",
-      "run": 36521893433,
-      "job": 109256369477,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36521893433/job/109256369477",
+      "run": 36530964452,
+      "job": 109284326913,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36530964452/job/109284326913",
       "observed": [
         "mismatched and stale evidence refused",
         "provider_offer_history canary changed 1 hot row to 0",
         "reader-only Parquet readback still returned 1 archived row",
-        "recovery changed 0 hot rows back to 1",
+        "same-count changed archive content was refused before insert",
+        "exact execution-bound manifest and object fingerprints recovered 0 hot rows back to 1",
         "referenced raw_payloads, odds_snapshots, and system_runs refused",
         "quarantine, picks, audit_log, and disabled legacy cron remained unchanged",
         "executor had no direct DELETE privilege"
@@ -69,16 +70,16 @@
       "observed_result": "FAIL",
       "production_ddl_applied": false,
       "required_phase": "post-deploy-before-lane-close",
-      "run": 36521893334,
-      "job": 109256391877,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36521893334/job/109256391877",
+      "run": 36530964332,
+      "job": 109284355979,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36530964332/job/109284355979",
       "reason": "The authoritative exact-head Live Schema Parity job applied all candidate migrations to scratch, completed the production comparison, and failed only at the drift authorization step because this approved candidate migration has not been applied to production. Production parity remains mandatory after sanctioned deployment and before lane close."
     },
     "writable_db_proof_staging": {
       "result": "PASS",
-      "run": 36521893463,
-      "job": 109256371093,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36521893463/job/109256371093"
+      "run": 36530964394,
+      "job": 109284452858,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36530964394/job/109284452858"
     }
   },
   "canary_contract": {
