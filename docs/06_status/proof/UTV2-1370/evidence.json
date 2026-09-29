@@ -1,0 +1,95 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1370",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "status": "READY_FOR_T1_REVIEW_PENDING_POST_DEPLOY_PARITY",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fec795f7a0997180bb61d146eac0b0755147bf52",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "result": "PASS",
+    "commands": [
+      "pnpm verify:static",
+      "node scripts/check-migration-versions.mjs",
+      "node scripts/lint-migrations.mjs",
+      "pnpm ci:db-client-boundary",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "pnpm exec tsx --test scripts/ci/migration-reversibility-gate.test.ts scripts/ci/required-db-smoke.test.ts scripts/warehouse/retention.test.ts scripts/warehouse/retention-workflow.test.ts apps/api/src/t1-proof-warehouse-retention.test.ts"
+    ],
+    "assertions": {
+      "lane_authority": "PASS",
+      "migration_versions": "137 unique",
+      "migration_lint": "136 forward migrations checked; no findings",
+      "r_level": "PASS; no additional R-level artifacts matched",
+      "production_writes": 0,
+      "production_deletes": 0
+    }
+  },
+  "runtime_proof": {
+    "head": "fec795f7a0997180bb61d146eac0b0755147bf52",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 36532308051,
+      "job": 109288504197,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36532308051/job/109288504197",
+      "cases": [
+        "refuses when a governed object already exists before DDL",
+        "applies on an empty scratch schema",
+        "adversarial non-refusing guard is rejected"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 36532308051,
+      "job": 109288503908,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36532308051/job/109288503908"
+    },
+    "bounded_retention_lifecycle": {
+      "result": "PASS",
+      "run": 36532308051,
+      "job": 109288503908,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36532308051/job/109288503908",
+      "observed": [
+        "mismatched and stale evidence refused",
+        "provider_offer_history canary changed 1 hot row to 0",
+        "reader-only Parquet readback still returned 1 archived row",
+        "same-count changed archive content was refused before insert",
+        "exact execution-bound manifest and object fingerprints recovered 0 hot rows back to 1",
+        "referenced raw_payloads, odds_snapshots, and system_runs refused",
+        "quarantine, picks, audit_log, and disabled legacy cron remained unchanged",
+        "executor had no direct DELETE privilege"
+      ]
+    },
+    "live_schema_parity": {
+      "result": "PENDING_POST_DEPLOY",
+      "observed_result": "FAIL",
+      "production_ddl_applied": false,
+      "required_phase": "post-deploy-before-lane-close",
+      "run": 36532308305,
+      "job": 109288572716,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36532308305/job/109288572716",
+      "reason": "The authoritative exact-head Live Schema Parity job applied all candidate migrations to scratch, completed the production comparison, and failed only at the drift authorization step because this approved candidate migration has not been applied to production. Production parity remains mandatory after sanctioned deployment and before lane close."
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 36532307979,
+      "job": 109288828750,
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36532307979/job/109288828750"
+    }
+  },
+  "canary_contract": {
+    "source": "provider_offer_history",
+    "window_start": "2026-06-14T00:00:00Z",
+    "window_end": "2026-06-15T00:00:00Z",
+    "expected_hot_before": 1,
+    "expected_archive_rows": 1,
+    "expected_hot_after": 0,
+    "executed_in_production": false
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1678"
+}

@@ -1,0 +1,41 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1370
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1370
+  objective: Hot DB retention execution wave 1
+  acceptance_criteria:
+    - Execute the first PM-gated hot database retention reduction wave based on
+      [UTV2-1306](https://linear.app/unit-talk-v2/issue/UTV2-1306/g-const-11-retention-execution-preflight-schema-verified-gate-before).
+      Target raw or historical data that does not belong in hot production
+      truth. Must include backup proof, dry-run counts, rollback plan, and
+      post-run size proof before any mutation.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Execute the first PM-gated hot database retention reduction wave based on [UTV2-1306](https://linear.app/unit-talk-v2/issue/UTV2-1306/g-const-11-retention-execution-preflight-schema-verified-gate-before). Target raw or historical data that does not belong in hot production truth. Must include backup proof, dry-run counts, rollback plan, and post-run size proof before any mutation.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1
+    title: Hot DB retention execution wave 1
+    description: Execute the first PM-gated hot database retention reduction wave
+      based on
+      [UTV2-1306](https://linear.app/unit-talk-v2/issue/UTV2-1306/g-const-11-retention-execution-preflight-schema-verified-gate-before).
+      Target raw or historical data that does not belong in hot production
+      truth. Must include backup proof, dry-run counts, rollback plan, and
+      post-run size proof before any mutation.
+    captured_at: 2026-09-28T13:21:36.758Z
+    description_sha256: d3f03e867647ae9547645fdb53aa39727beb0df3d49af19812be205471706bec
+  contract_hash: 91ed0e6a5fabcba7d30e65064ec46a55c5547e5049ebfc715495ae7a77cf3e4b
