@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092815
 
-MERGE_SHA: pending merge
+MERGE_SHA: 31e3e4f0989bcf237a4393133c71c2d7f8df3d4c
 
 Issue: WORK-2026092815
 Tier: T2
@@ -81,6 +81,6 @@ operators only through a deploy, which is reserved to Griff.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 31e3e4f0989bcf237a4393133c71c2d7f8df3d4c
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1689
 Execution SHA: 23bb844b1131ba25006cc7335c58f8b8bb671c55
