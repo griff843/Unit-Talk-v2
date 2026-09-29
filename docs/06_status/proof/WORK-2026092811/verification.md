@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092811
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3b071d9d6514cc9943a4e875371940337f38b600
 
 Issue: WORK-2026092811
 Tier: T2
@@ -59,6 +59,6 @@ above shows the input it will judge.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3b071d9d6514cc9943a4e875371940337f38b600
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1684
 Execution SHA: d9b27e5b10f645166c751d8d0303ab59f661c720
