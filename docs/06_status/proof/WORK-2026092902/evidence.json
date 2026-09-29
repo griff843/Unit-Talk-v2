@@ -1,0 +1,25 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092902",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "in_review",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "29b84d6b4b9464ccb7b1ba044672415b62163ec6",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "29b84d6b4b9464ccb7b1ba044672415b62163ec6 is the only implementation commit on this lane. Later commits change only the lane manifest and this proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "static_proof": {
+    "unit_tests": { "pass": 20, "fail": 0, "note": "apps/command-center/src/app/command-center-pages.test.tsx" },
+    "type_check": "pass",
+    "mutation_battery": [
+      { "id": "M1", "mutation": "ignore receipt status in resolvePickDeliveryStage", "observed": "red: a failed receipt is not a delivery" },
+      { "id": "M2", "mutation": "drop the official-picks outbox join", "observed": "red: a sent receipt on another target's outbox row" }
+    ]
+  },
+  "production_writes_by_this_change": 0
+}
