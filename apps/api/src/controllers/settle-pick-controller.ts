@@ -1,5 +1,4 @@
 import {
-  humanDeliveryTargets,
   isHumanCapperDeliveryAuthorized,
   type SettlementRequest,
 } from '@unit-talk/contracts';
@@ -10,6 +9,7 @@ import { isEvidencePlanePick, recordPickSettlement } from '../settlement-service
 import { postSettlementRecapIfPossible } from '../grading-service.js';
 import { loadEnvironment } from '@unit-talk/config';
 import { observeSettlementRecap } from '../settlement-recap-observation.js';
+import { isHumanCapperRecapStopped } from '../human-capper-recap-gate.js';
 
 export interface SettlePickControllerResult {
   pickId: string;
@@ -83,9 +83,8 @@ export async function settlePickController(
   //   3. `resolveRecapChannel` finds a `sent` delivery for this pick, which it
   //      enforces itself — a pick that never reached members gets no recap.
   if (!isEvidencePlanePick(result.pickRecord) && isHumanCapperDelivery) {
-    const killed = repositories.killSwitch
-      ? await repositories.killSwitch.isKilled(humanDeliveryTargets[0])
-      : true;
+    // WORK-2026092901: the separate recap control must also be released.
+    const killed = await isHumanCapperRecapStopped(repositories);
     if (killed) {
       humanCapperRecap = await observeSettlementRecap(
         result.pickRecord.id, result.settlementRecord.id, repositories.runs,
