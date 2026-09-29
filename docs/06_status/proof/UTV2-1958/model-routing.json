@@ -18,5 +18,11 @@
     "execution_context": "Codex desktop session",
     "runtime_model_attested": false,
     "note": "Model/profile/effort fields record the policy routing selected by lane-start. This desktop session does not expose independent concrete runtime model/effort attestation. No codex-exec subprocess was launched; the null exit code does not assert a successful CLI execution."
+  },
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "93f699c550db5d7b1dae0ca5c1fd7e4b021ae630",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1699",
+    "bound_at": "2026-09-29T16:34:18.957Z"
   }
 }

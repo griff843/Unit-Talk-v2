@@ -1,6 +1,6 @@
 # PROOF: UTV2-1958
 
-MERGE_SHA: pending merge
+MERGE_SHA: 93f699c550db5d7b1dae0ca5c1fd7e4b021ae630
 
 Issue: UTV2-1958
 Tier: T2
@@ -40,6 +40,6 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 93f699c550db5d7b1dae0ca5c1fd7e4b021ae630
 PR: pending
 Execution SHA: 1256de9bf67c1bc86354f7a9480aaba954fe1580
