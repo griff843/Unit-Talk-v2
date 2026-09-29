@@ -16,7 +16,7 @@ import { renderClvSummary } from '@/lib/clv-summary';
 import { getPickDetail } from '@/lib/data';
 import { getDeliveryKillSwitchStatuses } from '@/lib/data/discord-ops';
 import { getPickLineMovement } from '@/lib/data/odds-intel';
-import { GovernedPickTruth, type DeliveryKillSwitchTruth } from '@/components/GovernedPickTruth';
+import { GovernedPickTruth, resolvePickDeliveryStage, type DeliveryKillSwitchTruth, type PickDeliveryStage } from '@/components/GovernedPickTruth';
 import { LineMovementChart } from '@/components/LineMovementChart';
 import { notFound } from 'next/navigation';
 
@@ -302,8 +302,14 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
     marketKey: resolvedMarketKey,
   });
 
+  // A delivered or voided pick is not held, whatever the kill switch says now; the
+  // switch is read only for a pick still awaiting delivery.
+  let deliveryStage: PickDeliveryStage | undefined;
   let deliveryKillSwitch: DeliveryKillSwitchTruth | undefined;
   if (pick.metadata['distributionMode'] === 'delivery-eligible' && promotion.humanCapperDelivery) {
+    deliveryStage = resolvePickDeliveryStage({ pickStatus: pick.status, outboxRows: detail.outboxRows, receipts: detail.receipts });
+  }
+  if (deliveryStage?.stage === 'awaiting-delivery') {
     const target = 'official-picks';
     try {
       const switchStatus = (await getDeliveryKillSwitchStatuses()).find((entry) => entry.target === target);
@@ -321,6 +327,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         metadata={pick.metadata}
         hasEventLink={rawEventId !== null}
         voided={pick.status === 'voided'}
+        deliveryStage={deliveryStage}
         deliveryKillSwitch={deliveryKillSwitch}
       />
       <Card>

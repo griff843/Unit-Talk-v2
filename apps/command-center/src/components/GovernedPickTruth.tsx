@@ -1,5 +1,5 @@
 import React from 'react';
-import { readHumanCapperDeliveryAuthorization } from '@unit-talk/contracts';
+import { parseGovernedTargetFromDeliveryTarget, readHumanCapperDeliveryAuthorization } from '@unit-talk/contracts';
 import { Card } from '@/components/ui/Card';
 
 function KV({ label, value }: { label: string; value: React.ReactNode }) {
@@ -71,10 +71,41 @@ export type DeliveryKillSwitchTruth =
   | { state: 'missing'; target: string }
   | { state: 'unavailable'; target: string };
 
-export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryKillSwitch }: {
+export type PickDeliveryStage =
+  | { stage: 'voided' }
+  | { stage: 'delivered'; target: 'official-picks'; recordedAt: string; channel: string | null; externalId: string | null }
+  | { stage: 'awaiting-delivery' };
+
+/**
+ * Where a delivery-eligible pick is in delivery, from rows the detail page already
+ * loads. Pure. A voided pick is voided whatever its rows say. A pick is delivered
+ * only by a `sent` receipt joined to an official-picks outbox row; any other
+ * receipt (failed, unknown status, or on another target's row) leaves it awaiting
+ * delivery, where the kill switch decides whether it is held.
+ */
+export function resolvePickDeliveryStage(input: {
+  pickStatus: string;
+  outboxRows: ReadonlyArray<{ id: string; target: string }>;
+  receipts: ReadonlyArray<{ outboxId: string; status: string | null; recordedAt: string; channel: string | null; externalId: string | null }>;
+}): PickDeliveryStage {
+  if (input.pickStatus === 'voided') return { stage: 'voided' };
+
+  const officialOutboxIds = new Set(
+    input.outboxRows
+      .filter((row) => parseGovernedTargetFromDeliveryTarget(row.target) === 'official-picks')
+      .map((row) => row.id),
+  );
+  const sent = input.receipts.find((receipt) => receipt.status === 'sent' && officialOutboxIds.has(receipt.outboxId));
+  return sent
+    ? { stage: 'delivered', target: 'official-picks', recordedAt: sent.recordedAt, channel: sent.channel, externalId: sent.externalId }
+    : { stage: 'awaiting-delivery' };
+}
+
+export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryStage, deliveryKillSwitch }: {
   metadata: Record<string, unknown>;
   hasEventLink: boolean;
   voided: boolean;
+  deliveryStage?: PickDeliveryStage;
   deliveryKillSwitch?: DeliveryKillSwitchTruth;
 }) {
   const authorization = readHumanCapperDeliveryAuthorization(metadata);
@@ -112,7 +143,19 @@ export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryKill
             </div>
           ) : <p className="mt-2 text-gray-300">No delivery authorization recorded.</p>}
         </div>
-        {deliveryKillSwitch ? (
+        {deliveryStage?.stage === 'delivered' ? (
+          <div className="mt-4 rounded border border-emerald-500/40 bg-emerald-950/20 p-3 text-sm text-emerald-100">
+            <p className="font-medium">Delivered to <code>{deliveryStage.target}</code> — receipt recorded {deliveryStage.recordedAt}</p>
+            <div className="mt-2 flex flex-col gap-1">
+              {deliveryStage.channel ? <KV label="Channel" value={deliveryStage.channel} /> : null}
+              {deliveryStage.externalId ? <KV label="Message id" value={deliveryStage.externalId} /> : null}
+            </div>
+          </div>
+        ) : deliveryStage?.stage === 'voided' ? (
+          <div className="mt-4 rounded border border-rose-500/40 bg-rose-950/20 p-3 text-sm text-rose-100">
+            <p className="font-medium">Voided — will not be delivered</p>
+          </div>
+        ) : deliveryKillSwitch ? (
           <div className="mt-4 rounded border border-amber-500/40 bg-amber-950/20 p-3 text-sm text-amber-100">
             {deliveryKillSwitch.state === 'killed' ? (
               <>
