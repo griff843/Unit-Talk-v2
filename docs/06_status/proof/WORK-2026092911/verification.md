@@ -19,6 +19,23 @@ result: pass
 
 ## EVIDENCE:
 
+```
+-- read-only, zfzdnfwdarxucxtaojxm, 2026-09-29
+select target, killed, actor, updated_at from delivery_kill_switches order by target;
+  best-bets                        | t | claude-session-utv2-1601-containment | 2026-08-01
+  exclusive-insights               | t | system-bootstrap                     | 2026-07-14
+  official-picks                   | t | claude:human-capper-e2e-window-close | 2026-09-19 02:24Z
+  t1-proof-utv2-1427-kill-switch   | f | t1-proof-runner                      |
+  trader-insights                  | t | claude-session-utv2-1601-containment | 2026-08-01
+  (no human-capper-recaps row)
+
+select id, status, pick_id from distribution_outbox where target = 'discord:official-picks';
+  684ba33f | sent    | 816a84c7 (settled)
+  3447bb03 | sent    | ed0ed43c (posted)
+  68f922a2 | pending | voided sample pick
+  5005f461 | pending | voided sample pick
+```
+
 - Read-only SQL on `zfzdnfwdarxucxtaojxm`: `delivery_kill_switches` rows and `distribution_outbox` rows for `discord:official-picks`, 2026-09-29.
 - Code read on `main` 400c2962c: `apps/api/src/distribution-service.ts` (`evaluateDistributionTargetGate`), `apps/api/src/run-audit-service.ts` (`releaseHumanCapperDeliveryWithRunTracking`), `apps/worker/src/distribution-worker.ts`, `apps/worker/src/runner.ts`.
 
