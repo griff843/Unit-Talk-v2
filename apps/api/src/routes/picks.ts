@@ -3,7 +3,10 @@ import type { ApiRuntimeDependencies } from '../server.js';
 import { handleSettlePick } from '../handlers/index.js';
 import { requeuePickController } from '../controllers/requeue-controller.js';
 import { reviewPickController } from '../controllers/review-pick-controller.js';
-import { retryDeliveryController } from '../controllers/retry-delivery-controller.js';
+import {
+  retryDeliveryController,
+  type RetryDeliveryRequest,
+} from '../controllers/retry-delivery-controller.js';
 import { rerunPromotionController } from '../controllers/rerun-promotion-controller.js';
 import { overridePromotionController } from '../controllers/override-promotion-controller.js';
 import { routingPreviewController } from '../controllers/routing-preview-controller.js';
@@ -47,7 +50,7 @@ export async function handleRetryDeliveryRoute(
   pickId: string,
 ): Promise<void> {
   const body = await readJsonBody(request, runtime.bodyLimitBytes);
-  const apiResponse = await retryDeliveryController(pickId, body as { reason: string; actor: string }, runtime.repositories);
+  const apiResponse = await retryDeliveryController(pickId, body as unknown as RetryDeliveryRequest, runtime.repositories);
   writeJson(response, apiResponse.status, apiResponse.body);
 }
 

@@ -1,6 +1,7 @@
 import { loadEnvironment } from '@unit-talk/config';
 import type { OutboxRecord } from '@unit-talk/db';
 import {
+  discordMessageNonce,
   isHumanDeliveryTarget,
   parseGovernedTargetFromDeliveryTarget,
   readPinnedDeliveryDestination,
@@ -116,6 +117,10 @@ export function createDiscordDeliveryAdapter(options?: {
         resolveDiscordChannelId(outbox.target, targetMap);
       }
 
+      // WORK-2026092901: whether the message POST was ever issued. Before it,
+      // a failure is `not-sent`; after it, a failure without a definitive
+      // Discord answer is `ambiguous` -- the message may exist.
+      let requestIssued = false;
       try {
         const route = await resolveDiscordDeliveryRoute(outbox, {
           targetMap,
@@ -132,6 +137,7 @@ export function createDiscordDeliveryAdapter(options?: {
 
         let response: Response;
         try {
+          requestIssued = true;
           response = await fetchImpl(`${apiBaseUrl}/channels/${route.channelId}/messages`, {
             method: 'POST',
             headers: {
@@ -153,6 +159,9 @@ export function createDiscordDeliveryAdapter(options?: {
           return {
             receiptType: 'discord.message',
             status: isTerminal ? 'terminal-failure' : 'retryable-failure',
+            // A 4xx (including 429) is Discord refusing the request: no message
+            // was created. A 5xx says nothing about whether one was.
+            dispatch: response.status >= 400 && response.status < 500 ? 'rejected' : 'ambiguous',
             // UTV2-1929: the channel a receipt records is where the message
             // actually went, not the logical target that was asked for. See
             // the success receipt below for why that distinction is
@@ -170,11 +179,31 @@ export function createDiscordDeliveryAdapter(options?: {
           };
         }
 
-        const body = (await response.json()) as { id: string };
+        const body = (await response.json()) as { id?: unknown };
+        if (typeof body?.id !== 'string' || body.id.length === 0) {
+          // Discord answered 2xx: the message was created, but its id is
+          // unreadable. Not a failure to retry -- a delivery to reconcile.
+          return {
+            receiptType: 'discord.message',
+            status: 'retryable-failure',
+            dispatch: 'ambiguous',
+            channel: route.channelId,
+            reason: 'Discord accepted the message but returned no message id',
+            payload: {
+              adapter: 'discord',
+              dryRun: false,
+              target: outbox.target,
+              outboxId: outbox.id,
+              ...route.payload,
+              httpStatus: response.status,
+            },
+          };
+        }
 
         return {
           receiptType: 'discord.message',
           status: 'sent',
+          dispatch: 'delivered',
           // UTV2-1929 RECEIPT_CHANNEL_IS_THE_RESOLVED_DESTINATION.
           //
           // This used to record `outbox.target` -- the logical target name,
@@ -208,6 +237,7 @@ export function createDiscordDeliveryAdapter(options?: {
         return {
           receiptType: 'discord.message',
           status: 'retryable-failure',
+          dispatch: requestIssued ? 'ambiguous' : 'not-sent',
           channel: outbox.target,
           reason: error instanceof Error ? error.message : 'network error',
           payload: {
@@ -456,9 +486,11 @@ function resolveDiscordChannelId(target: string, targetMap: Record<string, strin
   );
 }
 
-function buildDiscordMessagePayload(outbox: OutboxRecord) {
+export function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const payload = isRecord(outbox.payload) ? outbox.payload : {};
-  const _market = typeof payload.market === 'string' ? payload.market : 'Unknown market';
+  const market = typeof payload.market === 'string' && payload.market.trim() ? payload.market : null;
+  const governedTarget = parseGovernedTargetFromDeliveryTarget(outbox.target);
+  const officialPick = governedTarget !== null && isHumanDeliveryTarget(governedTarget);
   const selection =
     typeof payload.selection === 'string' ? payload.selection : 'Unknown selection';
   const line = formatLine(payload.line);
@@ -471,7 +503,7 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const sport = typeof metadata.sport === 'string' ? metadata.sport : null;
   const eventName = typeof metadata.eventName === 'string' ? metadata.eventName : null;
   const capper = typeof metadata.capper === 'string' ? metadata.capper : null;
-  const stakeUnits = typeof payload.stakeUnits === 'number' ? payload.stakeUnits : null;
+  const stakeUnits = readStakeUnits(payload.stakeUnits);
 
   // Sport icon prefix (UTV2-559)
   const sportIcon = sport ? getSportIcon(sport) : null;
@@ -526,6 +558,55 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
       : null;
 
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
+
+  // WORK-2026092901 OFFICIAL_PICK_PRESENTATION: a paying member's official
+  // pick carries the membership contract's pick fields (§3.3: capper, sport,
+  // event, market, selection, odds, stake units) and nothing the product
+  // cannot yet stand behind -- no confidence score, no edge, no implied
+  // probability, no capper CLV. Those remain on the internal lanes only.
+  if (officialPick) {
+    if (market) {
+      fields.push({ name: 'Market', value: market, inline: true });
+    }
+    // American odds as a bare value (-143, +120), not the title's parenthesised form.
+    fields.push({ name: 'Odds', value: odds.trim().replace(/^\((.*)\)$/u, '$1') || '—', inline: true });
+    fields.push({
+      name: 'Units',
+      value: stakeUnits != null ? formatUnits(stakeUnits) : '—',
+      inline: true,
+    });
+    fields.push({ name: 'Capper', value: capper ?? 'Unit Talk', inline: true });
+    // Game Time is always present on an official pick. Eventless and manual
+    // picks are valid, so a pick with no event time -- or one that does not
+    // parse -- says `TBD` rather than dropping the field or inventing a time.
+    fields.push({
+      name: 'Game Time',
+      value: (eventTime ? formatGameTime(eventTime) : null) ?? OFFICIAL_GAME_TIME_UNKNOWN,
+      inline: true,
+    });
+    if (thesis) {
+      fields.push({ name: 'Thesis', value: thesis, inline: false });
+    }
+
+    return {
+      content: presentation.content,
+      nonce: discordMessageNonce(outbox.id),
+      enforce_nonce: true,
+      embeds: [
+        {
+          title: presentation.title,
+          description: presentation.description,
+          color: presentation.color,
+          fields,
+          footer: {
+            text: presentation.footer,
+          },
+          timestamp: new Date().toISOString(),
+          ...(thumbnailUrl ? { thumbnail: { url: thumbnailUrl } } : {}),
+        },
+      ],
+    };
+  }
 
   // Pick is now the embed title — no longer duplicated as a field.
   fields.push({ name: 'Odds', value: odds || '—', inline: true });
@@ -586,6 +667,9 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
 
   return {
     content: presentation.content,
+    // WORK-2026092901: Discord de-duplicates a re-sent nonce within its window.
+    nonce: discordMessageNonce(outbox.id),
+    enforce_nonce: true,
     embeds: [
       {
         title: presentation.title,
@@ -638,6 +722,18 @@ function buildTargetPresentation(
     };
   }
 
+  const governed = parseGovernedTargetFromDeliveryTarget(target);
+  if (governed !== null && isHumanDeliveryTarget(governed)) {
+    return {
+      content: undefined,
+      title: input.pickTitle,
+      description: input.description || 'Official pick',
+      color: 0x16a34a,
+      leadField: null,
+      footer: 'Unit Talk | Official Picks',
+    };
+  }
+
   return {
     content: undefined,
     title: input.pickTitle,
@@ -646,6 +742,20 @@ function buildTargetPresentation(
     leadField: null,
     footer: 'Unit Talk | Canary',
   };
+}
+
+function readStakeUnits(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function formatUnits(value: number) {
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded}u`;
 }
 
 function formatLine(value: unknown) {
@@ -682,6 +792,9 @@ const SPORT_ICONS: Record<string, string> = {
 function getSportIcon(sport: string): string | null {
   return SPORT_ICONS[sport] ?? null;
 }
+
+/** The official pick's Game Time when no event time is known. */
+export const OFFICIAL_GAME_TIME_UNKNOWN = 'TBD';
 
 function formatGameTime(isoString: string): string | null {
   try {

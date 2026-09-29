@@ -25,6 +25,10 @@ export function createDistributionWorkItem(
       selection: pick.selection,
       line: pick.line,
       odds: pick.odds,
+      // WORK-2026092901: the member-facing embed renders units from the payload
+      // it was enqueued with. Omitting them rendered every official pick with no
+      // stake at all, which the membership contract requires (§3.3).
+      stakeUnits: pick.stakeUnits ?? null,
       source: pick.source,
       lifecycleState: pick.lifecycleState,
       metadata: pick.metadata,
