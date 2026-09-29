@@ -26,6 +26,18 @@ reconstruction.
 
 ## EVIDENCE:
 
+```text
+focused_suite: PASS (23 passed, 0 failed)
+immutable_source_commit: edbbfd143f21ea18d4f45a759ad7464bd2102f2b
+immutable_deferral: deferred_to_ci
+static_gate: PASS
+r_level_audit: PASS
+proof_binding: PASS
+runtime_verifier_source: 87971f5ea8e01bc379aa0db60783cc43d7922fa0
+local_writable_db_access: REFUSED_BEFORE_DB_ACCESS
+staging_ci_obligation: REQUIRED
+```
+
 - Focused recovery suite: 23 tests passed, 0 failed.
 - Real repository resolution: source commit `edbbfd143f21ea18d4f45a759ad7464bd2102f2b`, deferral `deferred_to_ci`.
 - Static repository gate: PASS.
