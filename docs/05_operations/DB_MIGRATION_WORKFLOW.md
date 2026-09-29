@@ -130,17 +130,32 @@ This is the only sanctioned apply path. Never apply via:
 
 ### Step 7: Post-apply verification
 
-After apply:
+After apply, regenerate types from the linked production project and inspect the
+diff before accepting it:
 
 ```bash
 pnpm supabase:types
 pnpm type-check
-pnpm test:db
 ```
 
-All three must pass. Production Live Schema Parity must also pass before the migration lane closes.
-If any post-apply check fails, stop the deployment verification and leave the lane open; do not
-claim closeout or continue dependent production work.
+Do not silently commit unrelated production drift exposed by type generation. Record that drift as
+a separate reconciliation blocker and leave the migration lane open.
+
+`pnpm test:db` is intentionally absent here. It is a writable integration proof suite guarded by
+`pnpm ci:assert-staging`; it proves migration behavior on governed staging before merge and must
+continue to refuse production.
+
+For production closeout, dispatch the manual `Production Post-Migration Verification` workflow from
+`main` for the applied migration profile. Its production-environment job uses the production-bound
+`warehouse_reader` login, forces and observes a read-only PostgreSQL transaction, compares the exact
+local/remote migration ledger, and checks the migration's schema/RPC and privilege contract without
+calling mutation RPCs or issuing DML/DDL. The resulting receipt must say `environment: production`,
+`read_only: true`, `mutated: false`, and `verdict: PASS`; a staging receipt cannot substitute.
+
+Production Live Schema Parity must then return a separate real `PASS`, with exact run/job IDs, before
+the migration lane closes. If type reconciliation, the production read-only receipt, or parity is not
+green, stop verification and leave the lane open; do not claim closeout or continue dependent
+production work.
 
 ### Step 8: Types commit
 
@@ -184,7 +199,10 @@ Approval is tied to the specific migration file SHA. If the file changes after a
 - Draft migration files
 - Run `supabase migration list --linked` (read-only)
 - Run `pnpm supabase:types` (type regen, no DB write)
-- Run `pnpm type-check`, `pnpm test:db` (read-only DB probes)
+- Run `pnpm type-check`
+- Run `pnpm test:db` only against governed staging; the suite is writable and production is refused
+- Dispatch the production-bound, read-only `Production Post-Migration Verification` workflow after a
+  sanctioned apply
 - Surface migration candidates with risk classification
 - Produce proof artifacts documenting DB state
 
