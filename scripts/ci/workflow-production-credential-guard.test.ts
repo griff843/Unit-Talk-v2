@@ -18,6 +18,20 @@ import {
 } from './workflow-production-credential-guard.js';
 import { ROOT } from '../ops/shared.js';
 import { createTempWorkspace } from '../ops/temp-workspace.js';
+import {
+  DB_FACTS_SQL,
+  EXPECTED_MIGRATION_VERSION,
+  READ_ONLY_PREAMBLE,
+  READ_ONLY_STATE_SQL,
+  RECEIPT_SCHEMA,
+  assertLedgerCredentialMode,
+  assertProductionIdentity,
+  assertReadOnlyStatement,
+  buildPsqlEnvironment,
+  parseMigrationLedger,
+  receiptPasses,
+  type VerificationReceipt,
+} from './production-post-migration-verify.js';
 
 const WORKFLOW_DIR = join(ROOT, '.github', 'workflows');
 
@@ -601,4 +615,276 @@ test('the scanner reads real workflows and does not pass vacuously', () => {
     scanned.length >= READ_ONLY_EXEMPTIONS.length,
     'scanner found fewer production-credential jobs than there are exemptions — trigger parsing is likely broken',
   );
+});
+
+// Production post-migration verifier regression coverage lives in this already-wired
+// CI guard so the verifier does not need to expand the active package.json lock.
+const PRODUCTION_REF = 'zfzdnfwdarxucxtaojxm';
+const STAGING_REF = 'xskgrzbteyqdufktjrjx';
+
+function passingReceipt(): VerificationReceipt {
+  return {
+    schema: RECEIPT_SCHEMA,
+    environment: 'production',
+    project_ref: PRODUCTION_REF,
+    migration_version: EXPECTED_MIGRATION_VERSION,
+    generated_at: '2026-09-29T00:00:00.000Z',
+    github: {
+      repository: 'griff843/Unit-Talk-v2',
+      workflow_ref:
+        'griff843/Unit-Talk-v2/.github/workflows/production-post-migration-verify.yml@refs/heads/main',
+      event_name: 'workflow_dispatch',
+      ref: 'refs/heads/main',
+      run_id: '123',
+      run_attempt: '1',
+      job: 'verify',
+      sha: 'a'.repeat(40),
+    },
+    read_only: true,
+    mutated: false,
+    ledger: {
+      aligned: true,
+      expectedVersion: EXPECTED_MIGRATION_VERSION,
+      local: [EXPECTED_MIGRATION_VERSION],
+      remote: [EXPECTED_MIGRATION_VERSION],
+    },
+    database: {
+      current_user: 'warehouse_reader',
+      transaction_read_only: 'on',
+      objects_present: true,
+      phase_roles_inert: true,
+      phase_privileges_exact: true,
+      phase_roles_have_no_direct_dml: true,
+      data_api_execute_denied: true,
+      public_execute_denied: true,
+      reader_is_least_privilege: true,
+      control_tables_rls: true,
+      control_immutability_triggers: true,
+      runtime_functions_security_definer: true,
+    },
+    live_schema_parity: {
+      required: true,
+      evidence: 'separate-authoritative-workflow-run-and-job',
+    },
+    verdict: 'PASS',
+  };
+}
+
+test('writable DB suites remain mechanically staging-only', () => {
+  const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
+    scripts: Record<string, string>;
+  };
+  assert.match(packageJson.scripts['test:db'] ?? '', /^pnpm ci:assert-staging &&/u);
+  assert.match(packageJson.scripts['test:t1-proof:live'] ?? '', /^pnpm ci:assert-staging &&/u);
+
+  const guard = readFileSync('scripts/ci/assert-staging-target.ts', 'utf8');
+  assert.match(guard, /CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF/u);
+  assert.match(guard, /REFUSED/u);
+});
+
+test('production verifier accepts only the canonical project and warehouse_reader identity', () => {
+  assert.doesNotThrow(() =>
+    assertProductionIdentity(
+      `https://${PRODUCTION_REF}.supabase.co`,
+      `postgresql://warehouse_reader.${PRODUCTION_REF}:secret@aws-0-us-east-1.pooler.supabase.com:5432/postgres`,
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertProductionIdentity(
+      `https://${PRODUCTION_REF}.supabase.co`,
+      `postgresql://warehouse_reader:secret@db.${PRODUCTION_REF}.supabase.co:5432/postgres`,
+    ),
+  );
+  assert.throws(
+    () =>
+      assertProductionIdentity(
+        `https://${STAGING_REF}.supabase.co`,
+        `postgresql://warehouse_reader.${PRODUCTION_REF}:secret@pooler.supabase.com:5432/postgres`,
+      ),
+    /refused API project ref/u,
+  );
+  assert.throws(
+    () =>
+      assertProductionIdentity(
+        `https://${PRODUCTION_REF}.supabase.co`,
+        `postgresql://warehouse_reader.${STAGING_REF}:secret@pooler.supabase.com:5432/postgres`,
+      ),
+    /requires warehouse_reader bound/u,
+  );
+  assert.throws(
+    () =>
+      assertProductionIdentity(
+        `https://${PRODUCTION_REF}.supabase.co`,
+        `postgresql://warehouse_reader.${PRODUCTION_REF}:secret@attacker.example:5432/postgres`,
+      ),
+    /refused a non-Supabase pooler host/u,
+  );
+  assert.throws(
+    () =>
+      assertProductionIdentity(
+        `https://${PRODUCTION_REF}.supabase.co`,
+        `postgresql://postgres.${PRODUCTION_REF}:secret@pooler.supabase.com:5432/postgres`,
+      ),
+    /requires warehouse_reader bound/u,
+  );
+});
+
+test('every production SQL operation is select/show or the read-only transaction preamble', () => {
+  for (const statement of [READ_ONLY_PREAMBLE, READ_ONLY_STATE_SQL, DB_FACTS_SQL]) {
+    assert.doesNotThrow(() => assertReadOnlyStatement(statement));
+  }
+  for (const mutation of [
+    'INSERT INTO public.picks DEFAULT VALUES',
+    'UPDATE public.picks SET status = status',
+    'DELETE FROM public.picks',
+    'CALL public.warehouse_retention_execute_window()',
+    'ALTER TABLE public.picks ADD COLUMN unsafe text',
+    'SELECT setval(\'unsafe_sequence\', 1)',
+    'SELECT public.warehouse_retention_execute_window()',
+    'SELECT 1; DELETE FROM public.picks',
+    'SELECT 1 INTO TEMP TABLE unsafe',
+  ]) {
+    assert.throws(() => assertReadOnlyStatement(mutation), /production verifier refused/u);
+  }
+});
+
+test('immutability trigger proof binds every enabled trigger to its table and function', () => {
+  for (const [triggerName, tableName] of [
+    ['warehouse_retention_plans_immutable', 'warehouse_retention_plans'],
+    ['warehouse_retention_executions_immutable', 'warehouse_retention_executions'],
+    ['warehouse_retention_recoveries_immutable', 'warehouse_retention_recoveries'],
+  ]) {
+    assert.match(DB_FACTS_SQL, new RegExp(triggerName, 'u'));
+    assert.match(DB_FACTS_SQL, new RegExp(tableName, 'u'));
+  }
+  assert.match(DB_FACTS_SQL, /trigger_function\.proname = 'warehouse_retention_control_immutable'/u);
+  assert.match(DB_FACTS_SQL, /t\.tgenabled = 'O'/u);
+  assert.doesNotMatch(DB_FACTS_SQL, /t\.tgenabled[^\n]*'R'/u);
+
+  const disabledTriggerReceipt = passingReceipt();
+  disabledTriggerReceipt.database.control_immutability_triggers = false;
+  assert.equal(receiptPasses(disabledTriggerReceipt), false);
+});
+
+test('phase roles are refused any direct table or helper-function privilege', () => {
+  for (const privilege of ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) {
+    assert.match(
+      DB_FACTS_SQL,
+      new RegExp(`has_table_privilege\\(r\\.role_name, 'public\\.' \\|\\| t\\.table_name, '${privilege}'\\)`, 'u'),
+    );
+  }
+  for (const helper of [
+    'warehouse_retention_control_immutable',
+    'warehouse_retention_source_config',
+    'warehouse_retention_assert_fk_contract',
+    'warehouse_retention_window_counts',
+  ]) {
+    assert.match(DB_FACTS_SQL, new RegExp(helper, 'u'));
+  }
+  const leakedPrivilege = passingReceipt();
+  leakedPrivilege.database.phase_privileges_exact = false;
+  assert.equal(receiptPasses(leakedPrivilege), false);
+});
+
+test('ledger-file mode refuses the management token and strips it from psql', () => {
+  assert.doesNotThrow(() => assertLedgerCredentialMode('artifacts/ledger.txt', ''));
+  assert.doesNotThrow(() => assertLedgerCredentialMode(null, 'management-token'));
+  assert.throws(
+    () => assertLedgerCredentialMode('artifacts/ledger.txt', 'management-token'),
+    /refused SUPABASE_ACCESS_TOKEN in ledger-file mode/u,
+  );
+  assert.throws(
+    () => assertLedgerCredentialMode(null, ''),
+    /required when the verifier captures the ledger/u,
+  );
+
+  const childEnvironment = buildPsqlEnvironment(
+    { SUPABASE_ACCESS_TOKEN: 'must-not-cross-process-boundary', KEEP_ME: 'yes' },
+    'postgresql://warehouse_reader:secret@example.invalid/postgres',
+  );
+  assert.equal(childEnvironment['SUPABASE_ACCESS_TOKEN'], undefined);
+  assert.equal(childEnvironment['KEEP_ME'], 'yes');
+  assert.match(childEnvironment['PGOPTIONS'] ?? '', /default_transaction_read_only=on/u);
+
+  const workflow = readFileSync('.github/workflows/production-post-migration-verify.yml', 'utf8');
+  const verifierStep = workflow.match(
+    /- name: Verify production schema[\s\S]*?(?=\n\s+- name: Upload immutable verification receipt)/u,
+  )?.[0];
+  assert.ok(verifierStep, 'production verifier workflow step must exist');
+  assert.doesNotMatch(verifierStep, /SUPABASE_ACCESS_TOKEN/u);
+});
+
+test('ledger evidence requires exact local/remote alignment and the applied migration', () => {
+  const versions = ['202609280001', EXPECTED_MIGRATION_VERSION];
+  const aligned = parseMigrationLedger(
+    ` Local | Remote | Time\n ${versions[0]} | ${versions[0]} | now\n ${versions[1]} | ${versions[1]} | now\n`,
+    EXPECTED_MIGRATION_VERSION,
+    versions,
+  );
+  assert.equal(aligned.aligned, true);
+
+  const missingRemote = parseMigrationLedger(
+    ` Local | Remote | Time\n ${versions[0]} | ${versions[0]} | now\n ${versions[1]} | | now\n`,
+    EXPECTED_MIGRATION_VERSION,
+    versions,
+  );
+  assert.equal(missingRemote.aligned, false);
+});
+
+test('a staging or non-read-only receipt cannot substitute for production truth', () => {
+  assert.equal(receiptPasses(passingReceipt()), true);
+  assert.equal(receiptPasses({ ...passingReceipt(), environment: 'staging' as 'production' }), false);
+  assert.equal(receiptPasses({ ...passingReceipt(), project_ref: STAGING_REF }), false);
+  assert.equal(
+    receiptPasses({
+      ...passingReceipt(),
+      github: {
+        ...passingReceipt().github,
+        workflow_ref:
+          'griff843/Unit-Talk-v2/.github/workflows/staging-db-proof.yml@refs/heads/main',
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    receiptPasses({
+      ...passingReceipt(),
+      github: { ...passingReceipt().github, ref: 'refs/heads/feature' },
+    }),
+    false,
+  );
+  assert.equal(
+    receiptPasses({
+      ...passingReceipt(),
+      database: { ...passingReceipt().database, transaction_read_only: 'off' },
+    }),
+    false,
+  );
+  assert.equal(receiptPasses({ ...passingReceipt(), ledger: { ...passingReceipt().ledger, aligned: false } }), false);
+  assert.equal(receiptPasses({ ...passingReceipt(), migration_version: '20260928000000' }), false);
+  assert.equal(
+    receiptPasses({
+      ...passingReceipt(),
+      ledger: { ...passingReceipt().ledger, expectedVersion: '20260928000000' },
+    }),
+    false,
+  );
+  assert.equal(
+    receiptPasses({
+      ...passingReceipt(),
+      ledger: { ...passingReceipt().ledger, local: [], remote: [] },
+    }),
+    false,
+  );
+});
+
+test('workflow is manual, production-bound, reader-only, and keeps parity mandatory', () => {
+  const workflow = readFileSync('.github/workflows/production-post-migration-verify.yml', 'utf8');
+  assert.match(workflow, /^\s*workflow_dispatch:/mu);
+  assert.doesNotMatch(workflow, /^\s*pull_request:/mu);
+  assert.match(workflow, /environment: production/u);
+  assert.match(workflow, /UNIT_TALK_WAREHOUSE_SOURCE_DSN/u);
+  assert.doesNotMatch(workflow, /SUPABASE_SERVICE_ROLE_KEY/u);
+  assert.match(workflow, /Live Schema Parity/u);
+  assert.match(workflow, /production-post-migration-verify\.ts/u);
 });
