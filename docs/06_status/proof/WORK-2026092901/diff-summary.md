@@ -27,5 +27,5 @@ the recap control in Command Center's kill-switch panel.
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 2139ebe071fdf68c9f65a3d0172e63f78b72617d
 PR: pending

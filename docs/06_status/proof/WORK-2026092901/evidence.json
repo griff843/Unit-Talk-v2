@@ -6,12 +6,13 @@
   "proof_profile": "app-runtime",
   "status": "pending_merge",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "2139ebe071fdf68c9f65a3d0172e63f78b72617d",
     "verified_source_sha": "6b7ea5733b37f747bfae660d61a881dc55d322cf",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "note": "6b7ea5733b37f747bfae660d61a881dc55d322cf is the last commit on this lane that changes anything outside the proof directory and the lane manifest. merge_sha is null until post-merge-lane-close.yml rebinds it."
+    "note": "6b7ea5733b37f747bfae660d61a881dc55d322cf is the last commit on this lane that changes anything outside the proof directory and the lane manifest. merge_sha is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-29T18:21:39.095Z"
   },
   "static_proof": {
     "status": "pass",
