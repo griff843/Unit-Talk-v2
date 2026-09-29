@@ -8,11 +8,11 @@
 | `scripts/warehouse/retention.test.ts` | Proves allowlisting, credential separation, reader-only evidence verification, and fail-closed corruption/missing-object behavior. |
 | `scripts/warehouse/retention-workflow.test.ts` | Proves the complete bounded 1 → 0 → 1 lifecycle in isolated schemas/roles, same-count changed-content recovery refusal, exact-fingerprint recovery, protected-reference behavior, and operational-truth invariants. |
 | `apps/api/src/t1-proof-warehouse-retention.test.ts` | Canonical T1 proof entrypoint for the retention lifecycle. |
-| `.github/workflows/migration-reversibility-gate.yml` | Runs the bounded lifecycle proof in ephemeral PostgreSQL for this migration. |
+| `.github/workflows/migration-reversibility-gate.yml` | Runs the bounded lifecycle proof in ephemeral PostgreSQL and supplies read-only workflow-token access for fail-closed authoritative parity receipt validation. |
 | `package.json` | Wires retention tests and CLI into existing commands. |
 
 ## SHA Binding
 
 Merge SHA: pending merge  
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1678  
-Execution SHA: 14e25d858486d16925aa0eb6862fcc1f8edbcf45
+Execution SHA: fec795f7a0997180bb61d146eac0b0755147bf52
