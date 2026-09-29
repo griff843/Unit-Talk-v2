@@ -1,69 +1,84 @@
 {
-  "policy_version": "1.0.0",
+  "policy_version": "2.0.0",
   "schema_version": 1,
-  "description": "Canonical Codex model-profile routing policy. Logical profiles map to concrete Codex CLI model IDs and reasoning-effort values. This file is the sole source of truth for model selection -- three-brain.md documents the routing rules in prose, scripts/ops/model-routing.ts and scripts/ops/codex-exec.ts are the only code paths permitted to resolve or validate a profile, and no other file may hardcode a concrete Codex model ID.",
+  "description": "Canonical usage-optimized Codex model-profile routing policy. Luna handles bounded high-volume work, Sol handles work requiring broader judgment, and Astra is reserved for explicit escalation. Logical profiles are resolved only by scripts/ops/model-routing.ts and scripts/ops/codex-exec.ts.",
   "verified_against": {
-    "codex_cli_version": "0.144.1",
-    "verified_at": "2026-07-13",
-    "verification_method": "codex --version / codex exec --help / ~/.codex/models_cache.json model catalog inspected directly on the installed CLI -- concrete model slugs and supported_reasoning_levels are copied from that catalog, not guessed."
+    "codex_cli_version": "0.153.3",
+    "verified_at": "2026-09-29",
+    "verification_method": "Official OpenAI model-selection and Codex configuration documentation plus the installed Codex 0.153.3 model catalog and live model acceptance smoke test. The signed-in ChatGPT account rejects gpt-6-luna for Codex CLI, so executable efficient profiles use the supported 5.6 Luna/Sol slugs; GPT-6 Astra remains a disabled escalation."
   },
   "profiles": {
-    "codex-terra-medium": {
-      "model": "gpt-5.6-terra",
+    "codex-luna-low": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "low",
+      "enabled": true,
+      "permitted_tiers": ["T2"],
+      "use_cases": ["fine-grained-edit", "simple-data-extraction", "narrow-test-fix", "formatting-or-mechanical-update"],
+      "requires_pm_authorization": false,
+      "description": "Lowest-cost profile for narrow, deterministic T2 work. Select explicitly when the packet is small and verification is straightforward."
+    },
+    "codex-luna-medium": {
+      "model": "gpt-5.6-luna",
       "reasoning_effort": "medium",
       "enabled": true,
       "permitted_tiers": ["T2"],
-      "use_cases": [
-        "clear-scope-t2-implementation",
-        "bounded-work-deterministic-acceptance-criteria"
-      ],
+      "use_cases": ["clear-scope-t2-implementation", "bounded-work-deterministic-acceptance-criteria", "coordinated-update-from-clear-brief"],
       "requires_pm_authorization": false,
-      "description": "Balanced agentic coding model for everyday work. Default profile for normal clear-scope T2 Codex lanes."
+      "description": "Default profile for normal clear-scope T2 implementation from a complete work packet."
+    },
+    "codex-sol-medium": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "enabled": true,
+      "permitted_tiers": ["T1", "T2"],
+      "use_cases": ["complex-t2-multi-file-or-multi-package", "root-cause-investigation", "bounded-t1-implementation-under-existing-t1-guardrails", "governance-tool-implementation-after-architecture-approval"],
+      "requires_pm_authorization": false,
+      "description": "Balanced profile for everyday coding that needs judgment. Default for guarded T1 lanes and complex T2 lanes."
     },
     "codex-sol-high": {
       "model": "gpt-5.6-sol",
       "reasoning_effort": "high",
       "enabled": true,
       "permitted_tiers": ["T1", "T2"],
-      "use_cases": [
-        "complex-t2-multi-file-or-multi-package",
-        "failure-rescue-lane",
-        "root-cause-investigation",
-        "bounded-t1-implementation-under-existing-t1-guardrails",
-        "governance-tool-implementation-after-claude-architecture-approval"
-      ],
+      "use_cases": ["failure-rescue-lane", "deep-analysis-after-sol-medium-failed", "thorough-verification-or-careful-review"],
       "requires_pm_authorization": false,
-      "description": "Frontier agentic coding model. Used for complex or higher-stakes Codex lanes that still pass through the full Rule 1 / Rule 6 guardrail chain in three-brain.md (Claude critique, runtime verification, human review before merge). This profile does not itself grant T1 merge authority or bypass any existing gate."
+      "description": "Explicit escalation for rescue, deep analysis, or verification after the medium profile is insufficient. It is never a tier default."
+    },
+    "codex-astra-medium": {
+      "model": "gpt-6-astra",
+      "reasoning_effort": "medium",
+      "enabled": false,
+      "permitted_tiers": ["T1", "T2"],
+      "use_cases": ["ambiguous-cross-system-architecture", "demanding-rescue-after-sol-high-failed", "explicit-griff-authorization"],
+      "requires_pm_authorization": true,
+      "description": "Frontier escalation only. Disabled until a trusted external authorization mechanism can prove explicit approval; caller-supplied override text cannot unlock it."
+    },
+    "codex-terra-medium": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "medium",
+      "enabled": true,
+      "permitted_tiers": ["T2"],
+      "use_cases": ["deprecated-profile-alias-for-codex-luna-medium"],
+      "requires_pm_authorization": false,
+      "description": "Deprecated compatibility alias for existing operator commands. New manifests must use codex-luna-medium."
     },
     "codex-sol-max": {
       "model": "gpt-5.6-sol",
       "reasoning_effort": "max",
       "enabled": false,
       "permitted_tiers": ["T1", "T2"],
-      "use_cases": [
-        "rescue-threshold-exceeded-after-sol-high-failed",
-        "explicit-griff-authorization"
-      ],
+      "use_cases": ["deprecated-unavailable-escalation"],
       "requires_pm_authorization": true,
-      "description": "Maximum reasoning depth. Reserved for a stuck lane that has already failed under codex-sol-high, or an explicitly PM-authorized escalation. Mechanically UNAVAILABLE (enabled: false) as of PM review on UTV2-1526 (2026-07-13): a caller-supplied authorized_by/reason override is not proof of PM authorization -- it is self-asserted, the same loophole UTV2-1521 already closed for file-scope overrides. scripts/ops/model-routing.ts#resolveModelProfile rejects any requires_pm_authorization:true profile unconditionally, regardless of override content, as defense in depth beyond this enabled flag. Re-enabling this profile requires a trusted external authorization mechanism (e.g. an authenticated PR-comment scheme mirroring docs/05_operations/schemas/scope-override-v1.md, verified against CODEOWNERS) landing in a follow-up governance lane -- do not flip enabled:true without it."
-    },
-    "codex-luna-low": {
-      "model": "gpt-5.6-luna",
-      "reasoning_effort": "low",
-      "enabled": false,
-      "permitted_tiers": [],
-      "use_cases": [],
-      "requires_pm_authorization": true,
-      "description": "Fast and affordable agentic coding model. Defined for future use but reserved/disabled -- no ratified use case exists yet. Resolution must fail closed with profile_disabled while enabled=false. Do not enable to manufacture work for this profile; enabling requires a separate ratified policy change."
+      "description": "Deprecated and unavailable. Use codex-sol-high, or the separately governed codex-astra-medium escalation."
     }
   },
   "reasoning_effort_catalog": {
+    "gpt-5.6-luna": ["low", "medium", "high", "xhigh", "max"],
     "gpt-5.6-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
-    "gpt-5.6-terra": ["low", "medium", "high", "xhigh", "max", "ultra"],
-    "gpt-5.6-luna": ["low", "medium", "high", "xhigh", "max"]
+    "gpt-6-astra": ["low", "medium", "high", "xhigh", "max", "ultra"]
   },
   "legacy_compatibility": {
-    "default_profile": "codex-terra-medium",
-    "description": "The real compatibility boundary is the lane manifest's schema_version field (1 vs 2), not model_routing's presence or absence -- presence alone cannot distinguish 'predates this field' from 'was deleted from a schema_version-2 manifest' (PM review finding #2 on UTV2-1526). schema_version-1 manifests (created by ops:lane-start before this policy shipped) may lack model_routing; scripts/ops/codex-exec.ts resolves default_profile for those, at execution time only, and never writes it back into the historical manifest -- it is recorded solely in that run's evidence output (legacy_compatibility_used: true) and printed as a visible stderr warning. A schema_version-2 Codex-executor manifest MUST have model_routing; scripts/ops/shared.ts#validateManifest and codex-exec.ts#resolveExecModelRouting both reject one that is missing it, deleted or not."
+    "default_profile": "codex-luna-medium",
+    "description": "Schema-version-1 manifests without model_routing resolve to the current low-cost T2 default for that execution only. Schema-version-2 manifests still fail closed when model_routing is absent."
   }
 }

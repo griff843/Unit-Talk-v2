@@ -9,6 +9,7 @@ import {
   assertSufficientTaskContract,
   assertTaskContract,
   buildSyncYmlWithTaskContract,
+  buildScopedRepoBrief,
   buildTaskContract,
   captureOrReadTaskContract,
   localTaskSourcePath,
@@ -25,6 +26,7 @@ import {
   PREAMBLE_KEY,
   readTaskContract,
   renderTaskContract,
+  selectRepoBriefSectionIds,
   skillRoutingSpecsForTest,
   taskContractFullText,
   TaskContractError,
@@ -358,6 +360,58 @@ test('repo_brief is present and returns test stub in test mode', () => {
   const packet = generateExecutionPacket(createTestManifest());
   assert.strictEqual(packet.repo_brief, '[test-brief-stub]');
   delete process.env.UNIT_TALK_TEST_MODE;
+});
+
+test('scoped repo brief keeps universal sections for a scripts-only lane', () => {
+  const manifest = createTestManifest({
+    lane_type: 'hygiene',
+    file_scope_lock: ['scripts/ops/execution-packet.ts'],
+  });
+  const source = fs.readFileSync(path.join(ROOT, '.claude', 'agent-brief.md'), 'utf8');
+  const brief = buildScopedRepoBrief(source, manifest);
+
+  assert.deepEqual(selectRepoBriefSectionIds(manifest), [11, 13, 16]);
+  assert.match(brief, /## 11\./u);
+  assert.match(brief, /## 13\./u);
+  assert.match(brief, /## 16\./u);
+  assert.doesNotMatch(brief, /## 1\./u);
+  assert.ok(brief.length < source.length / 2);
+});
+
+test('scoped repo brief selects DB, delivery, provider and proof guidance by scope', () => {
+  assert.deepEqual(
+    selectRepoBriefSectionIds(createTestManifest({
+      lane_type: 'migration',
+      file_scope_lock: ['supabase/migrations/20260929_example.sql'],
+    })),
+    [1, 2, 5, 8, 9, 10, 11, 12, 13, 16],
+  );
+  assert.deepEqual(
+    selectRepoBriefSectionIds(createTestManifest({
+      lane_type: 'runtime',
+      file_scope_lock: ['apps/worker/src/worker-runtime.ts'],
+    })),
+    [6, 7, 8, 9, 11, 13, 16],
+  );
+  assert.deepEqual(
+    selectRepoBriefSectionIds(createTestManifest({
+      lane_type: 'runtime',
+      file_scope_lock: ['apps/ingestor/src/results-resolver.ts'],
+    })),
+    [11, 13, 14, 16],
+  );
+  assert.deepEqual(
+    selectRepoBriefSectionIds(createTestManifest({
+      lane_type: 'verification',
+      file_scope_lock: ['scripts/ops/runtime-proof.ts'],
+    })),
+    [11, 13, 16, 18],
+  );
+});
+
+test('scoped repo brief fails safe to the full source when headings drift', () => {
+  const source = '# Safety brief\n\nNo numbered sections remain.';
+  assert.equal(buildScopedRepoBrief(source, createTestManifest()), source);
 });
 
 test('missing expected_proof_paths does not prevent packet generation', () => {

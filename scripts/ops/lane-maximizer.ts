@@ -1384,7 +1384,7 @@ export function evaluateCandidates(
     // an operator or /three-brain-informed orchestrator can still override it before running.
     const modelProfileArgs =
       candidate.executor === 'codex-cli' || candidate.executor === 'codex-cloud'
-        ? ['--model-profile', candidate.tier === 'T1' ? 'codex-sol-high' : 'codex-terra-medium']
+        ? ['--model-profile', candidate.tier === 'T1' ? 'codex-sol-medium' : 'codex-luna-medium']
         : [];
     // UTV2-1533 lane-maximizer P2 fix: verification_target is never guessed from
     // candidate.issue_id. By the time pushPlan runs for a lane_type:"verification"

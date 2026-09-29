@@ -393,6 +393,9 @@ export interface ModelRoutingEvidence {
   override_used: boolean;
   override_authorized_by: string | null;
   codex_exit_code: number | null;
+  prompt_bytes: number | null;
+  estimated_prompt_tokens: number | null;
+  wall_time_ms: number | null;
   generated_at: string;
 }
 
@@ -403,6 +406,8 @@ export function buildModelRoutingEvidence(input: {
   legacyCompatibilityUsed: boolean;
   codexCliVersion: string | null;
   codexExitCode: number | null;
+  promptBytes?: number;
+  wallTimeMs?: number;
   now?: string;
 }): ModelRoutingEvidence {
   return {
@@ -417,6 +422,10 @@ export function buildModelRoutingEvidence(input: {
     override_used: Boolean(input.modelRouting.override),
     override_authorized_by: input.modelRouting.override?.authorized_by ?? null,
     codex_exit_code: input.codexExitCode,
+    prompt_bytes: input.promptBytes ?? null,
+    estimated_prompt_tokens:
+      input.promptBytes === undefined ? null : Math.ceil(input.promptBytes / 4),
+    wall_time_ms: input.wallTimeMs ?? null,
     generated_at: input.now ?? new Date().toISOString(),
   };
 }
@@ -573,7 +582,7 @@ export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string):
     // would tempt it to start the investigation over.
     ...(resumeBrief ? [``, resumeBrief] : []),
     ``,
-    `## Repo brief (critical — read before touching any code)`,
+    `## Scoped repo brief (critical — read before touching any code)`,
     packet.repo_brief,
   ].join('\n');
 }
@@ -896,6 +905,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   );
 
   const codexArgs = ['exec', ...buildCodexModelArgs(modelRouting), '-s', 'danger-full-access', prompt];
+  const executionStartedAt = Date.now();
   const child = spawnSync('codex', codexArgs, {
     cwd: resolvedCwd,
     stdio: 'inherit',
@@ -920,6 +930,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     legacyCompatibilityUsed: routing.legacy_compatibility_used,
     codexCliVersion: health.version,
     codexExitCode: child.error ? null : exitCode,
+    promptBytes: Buffer.byteLength(prompt, 'utf8'),
+    wallTimeMs: Date.now() - executionStartedAt,
   });
   const evidencePath = writeModelRoutingEvidence(resolvedCwd, issueId, evidence);
   const evidenceRelativePath = path.relative(resolvedCwd, evidencePath).split(path.sep).join('/');

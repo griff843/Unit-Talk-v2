@@ -415,7 +415,7 @@ export function generateExecutionPacket(
       tier,
       verificationPlan,
     ),
-    repo_brief: loadRepoBrief(),
+    repo_brief: loadScopedRepoBrief(manifest, root),
     source_of_truth: {
       linear_url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
       branch: manifest.branch,
@@ -2070,7 +2070,101 @@ function buildRequiredVerification(
   return values;
 }
 
-function loadRepoBrief(): string {
+const UNIVERSAL_BRIEF_SECTIONS = [11, 13, 16] as const;
+
+const BRIEF_SECTION_ROUTES: readonly {
+  sections: readonly number[];
+  matches: (scope: string[], laneType: string) => boolean;
+}[] = [
+  {
+    sections: [1, 2, 5, 8, 9, 10, 12],
+    matches: (scope, laneType) =>
+      laneType === 'migration' ||
+      scope.some(file =>
+        file.startsWith('supabase/migrations/') ||
+        file.startsWith('packages/db/') ||
+        (file.startsWith('apps/api/src/') && /(?:service|controller|routes?)/u.test(file)),
+      ),
+  },
+  {
+    sections: [6, 7, 8, 9],
+    matches: scope =>
+      scope.some(file =>
+        /^(?:apps\/worker|apps\/api\/src\/(?:distribution|submit-pick|retry|requeue)|packages\/db\/src\/lifecycle)/u.test(
+          file,
+        ),
+      ),
+  },
+  {
+    sections: [14],
+    matches: scope =>
+      scope.some(file => /^(?:apps\/ingestor|packages\/intelligence)/u.test(file)),
+  },
+  {
+    sections: [18],
+    matches: (scope, laneType) =>
+      laneType === 'verification' ||
+      scope.some(file => /(?:^|\/)(?:proof|verification)(?:\/|\.|-)/u.test(file)),
+  },
+];
+
+interface ParsedBriefSection {
+  id: number;
+  text: string;
+}
+
+export function selectRepoBriefSectionIds(
+  manifest: Pick<LaneManifest, 'file_scope_lock' | 'lane_type'>,
+): number[] {
+  const scope = manifest.file_scope_lock ?? [];
+  const laneType = manifest.lane_type ?? 'unknown';
+  const selected = new Set<number>(UNIVERSAL_BRIEF_SECTIONS);
+  for (const route of BRIEF_SECTION_ROUTES) {
+    if (route.matches(scope, laneType)) {
+      for (const section of route.sections) selected.add(section);
+    }
+  }
+  return [...selected].sort((a, b) => a - b);
+}
+
+export function buildScopedRepoBrief(
+  source: string,
+  manifest: Pick<LaneManifest, 'file_scope_lock' | 'lane_type'>,
+): string {
+  const headingPattern = /^## (\d+)\. .+$/gmu;
+  const matches = [...source.matchAll(headingPattern)];
+  if (matches.length === 0) return source;
+
+  const sections: ParsedBriefSection[] = matches.map((match, index) => ({
+    id: Number(match[1]),
+    text: source
+      .slice(match.index!, matches[index + 1]?.index ?? source.length)
+      .trim(),
+  }));
+  const byId = new Map(sections.map(section => [section.id, section.text]));
+  const selectedIds = selectRepoBriefSectionIds(manifest);
+  const selected = selectedIds.map(id => byId.get(id)).filter((value): value is string => Boolean(value));
+
+  // Missing universal sections means the source format drifted. Preserve the
+  // complete safety brief instead of silently dropping instructions.
+  if (UNIVERSAL_BRIEF_SECTIONS.some(id => !byId.has(id)) || selected.length === 0) {
+    return source;
+  }
+
+  return [
+    '# Unit Talk V2 — Scoped Agent Brief',
+    '',
+    `Selected sections: ${selectedIds.join(', ')}`,
+    'Selection is derived from the lane type and allowed file scope.',
+    '',
+    ...selected,
+  ].join('\n\n');
+}
+
+function loadScopedRepoBrief(
+  manifest: Pick<LaneManifest, 'file_scope_lock' | 'lane_type'>,
+  root: string,
+): string {
   if (
     process.env.UNIT_TALK_TEST_MODE === '1' ||
     process.env.NODE_ENV === 'test'
@@ -2078,8 +2172,8 @@ function loadRepoBrief(): string {
     return '[test-brief-stub]';
   }
   try {
-    const briefPath = path.join(ROOT, '.claude', 'agent-brief.md');
-    return fs.readFileSync(briefPath, 'utf8');
+    const briefPath = path.join(root, '.claude', 'agent-brief.md');
+    return buildScopedRepoBrief(fs.readFileSync(briefPath, 'utf8'), manifest);
   } catch {
     return '[agent-brief.md not found — check .claude/agent-brief.md exists in repo root]';
   }

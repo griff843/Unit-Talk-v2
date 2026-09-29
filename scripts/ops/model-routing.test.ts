@@ -23,8 +23,8 @@ function fixturePolicy(): ModelRoutingPolicy {
     description: 'test fixture',
     verified_against: {},
     profiles: {
-      'codex-terra-medium': {
-        model: 'gpt-5.6-terra',
+      'codex-luna-medium': {
+        model: 'gpt-5.6-luna',
         reasoning_effort: 'medium',
         enabled: true,
         permitted_tiers: ['T2'],
@@ -32,14 +32,23 @@ function fixturePolicy(): ModelRoutingPolicy {
         requires_pm_authorization: false,
         description: 'default T2 profile',
       },
+      'codex-sol-medium': {
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'medium',
+        enabled: true,
+        permitted_tiers: ['T1', 'T2'],
+        use_cases: ['complex-t2-multi-file-or-multi-package', 'failure-rescue-lane'],
+        requires_pm_authorization: false,
+        description: 'complex work',
+      },
       'codex-sol-high': {
         model: 'gpt-5.6-sol',
         reasoning_effort: 'high',
         enabled: true,
         permitted_tiers: ['T1', 'T2'],
-        use_cases: ['complex-t2-multi-file-or-multi-package', 'failure-rescue-lane'],
+        use_cases: ['failure-rescue-lane'],
         requires_pm_authorization: false,
-        description: 'complex work / rescue',
+        description: 'rescue escalation',
       },
       'codex-sol-max': {
         model: 'gpt-5.6-sol',
@@ -53,20 +62,19 @@ function fixturePolicy(): ModelRoutingPolicy {
       'codex-luna-low': {
         model: 'gpt-5.6-luna',
         reasoning_effort: 'low',
-        enabled: false,
-        permitted_tiers: [],
-        use_cases: [],
-        requires_pm_authorization: true,
-        description: 'reserved, disabled',
+        enabled: true,
+        permitted_tiers: ['T2'],
+        use_cases: ['fine-grained-edit'],
+        requires_pm_authorization: false,
+        description: 'narrow work',
       },
     },
     reasoning_effort_catalog: {
       'gpt-5.6-sol': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-      'gpt-5.6-terra': ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
       'gpt-5.6-luna': ['low', 'medium', 'high', 'xhigh', 'max'],
     },
     legacy_compatibility: {
-      default_profile: 'codex-terra-medium',
+      default_profile: 'codex-luna-medium',
       description: 'test fixture legacy default',
     },
   };
@@ -77,26 +85,37 @@ test('the real canonical policy file loads and validates', () => {
   const policy = loadModelRoutingPolicy();
   assert.strictEqual(policy.schema_version, 1);
   assert.ok(policy.policy_version.length > 0);
-  for (const name of ['codex-sol-high', 'codex-terra-medium', 'codex-luna-low', 'codex-sol-max']) {
+  for (const name of ['codex-luna-low', 'codex-luna-medium', 'codex-sol-medium', 'codex-sol-high', 'codex-astra-medium']) {
     assert.ok(policy.profiles[name], `expected profile ${name} to be defined`);
   }
+  assert.deepStrictEqual(
+    [policy.profiles['codex-luna-medium']!.model, policy.profiles['codex-luna-medium']!.reasoning_effort],
+    ['gpt-5.6-luna', 'medium'],
+  );
+  assert.deepStrictEqual(
+    [policy.profiles['codex-sol-medium']!.model, policy.profiles['codex-sol-medium']!.reasoning_effort],
+    ['gpt-5.6-sol', 'medium'],
+  );
+  assert.strictEqual(policy.profiles['codex-astra-medium']!.enabled, false);
+  assert.strictEqual(policy.profiles['codex-astra-medium']!.requires_pm_authorization, true);
+  assert.strictEqual(policy.legacy_compatibility.default_profile, 'codex-luna-medium');
 });
 
-test('scenario 1: standard clear-scope T2 resolves to codex-terra-medium', () => {
+test('scenario 1: standard clear-scope T2 resolves to codex-luna-medium', () => {
   const policy = fixturePolicy();
-  const result = resolveModelProfile({ profileName: 'codex-terra-medium', tier: 'T2', policy });
+  const result = resolveModelProfile({ profileName: 'codex-luna-medium', tier: 'T2', policy });
   assert.strictEqual(result.ok, true);
-  assert.strictEqual(result.model_routing?.model, 'gpt-5.6-terra');
+  assert.strictEqual(result.model_routing?.model, 'gpt-5.6-luna');
   assert.strictEqual(result.model_routing?.reasoning_effort, 'medium');
   assert.strictEqual(result.model_routing?.selected_by, 'three-brain');
 });
 
-test('scenario 2: complex multi-package T2 resolves to codex-sol-high', () => {
+test('scenario 2: complex multi-package T2 resolves to codex-sol-medium', () => {
   const policy = fixturePolicy();
-  const result = resolveModelProfile({ profileName: 'codex-sol-high', tier: 'T2', policy });
+  const result = resolveModelProfile({ profileName: 'codex-sol-medium', tier: 'T2', policy });
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.model_routing?.model, 'gpt-5.6-sol');
-  assert.strictEqual(result.model_routing?.reasoning_effort, 'high');
+  assert.strictEqual(result.model_routing?.reasoning_effort, 'medium');
 });
 
 test('scenario 3: failure-rescue lane resolves to codex-sol-high', () => {
@@ -160,11 +179,12 @@ test('the real canonical policy disables codex-sol-max as defense in depth beyon
   assert.strictEqual(policy.profiles['codex-sol-max']!.requires_pm_authorization, true);
 });
 
-test('scenario 5 & 9: codex-luna-low is disabled and fails closed by default', () => {
+test('scenario 5: codex-luna-low is enabled for narrow T2 work', () => {
   const policy = fixturePolicy();
   const result = resolveModelProfile({ profileName: 'codex-luna-low', tier: 'T2', policy });
-  assert.strictEqual(result.ok, false);
-  assert.strictEqual(result.code, 'PROFILE_DISABLED');
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.model_routing?.model, 'gpt-5.6-luna');
+  assert.strictEqual(result.model_routing?.reasoning_effort, 'low');
 });
 
 test('scenario 8: unknown profile fails closed', () => {
@@ -176,8 +196,8 @@ test('scenario 8: unknown profile fails closed', () => {
 
 test('profile not permitted for the requested tier fails closed', () => {
   const policy = fixturePolicy();
-  // codex-terra-medium is T2-only in the fixture policy.
-  const result = resolveModelProfile({ profileName: 'codex-terra-medium', tier: 'T1', policy });
+  // codex-luna-medium is T2-only in the fixture policy.
+  const result = resolveModelProfile({ profileName: 'codex-luna-medium', tier: 'T1', policy });
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.code, 'PROFILE_NOT_PERMITTED_FOR_TIER');
 });
@@ -186,8 +206,8 @@ test('scenario 11: invalid reasoning effort fails closed', () => {
   const policy = fixturePolicy();
   // Bypass loadModelRoutingPolicy's own load-time shape validation to exercise
   // resolveModelProfile's independent, defensive re-check of the effort catalog.
-  policy.profiles['codex-terra-medium']!.reasoning_effort = 'ludicrous' as never;
-  const result = resolveModelProfile({ profileName: 'codex-terra-medium', tier: 'T2', policy });
+  policy.profiles['codex-luna-medium']!.reasoning_effort = 'ludicrous' as never;
+  const result = resolveModelProfile({ profileName: 'codex-luna-medium', tier: 'T2', policy });
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.code, 'REASONING_EFFORT_INVALID');
 });
@@ -196,7 +216,7 @@ test('scenario 10: manifest model drift from policy fails closed (tamper detecti
   const policy = fixturePolicy();
   const result = validatePersistedModelRouting(
     {
-      profile: 'codex-terra-medium',
+      profile: 'codex-luna-medium',
       model: 'gpt-9.9-fictional', // does not match what policy defines for this profile
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
@@ -213,8 +233,8 @@ test('manifest reasoning_effort drift from policy fails closed', () => {
   const policy = fixturePolicy();
   const result = validatePersistedModelRouting(
     {
-      profile: 'codex-terra-medium',
-      model: 'gpt-5.6-terra',
+      profile: 'codex-luna-medium',
+      model: 'gpt-5.6-luna',
       reasoning_effort: 'ultra', // policy says medium for this profile
       selected_by: 'three-brain',
       policy_version: '1.0.0',
@@ -230,8 +250,8 @@ test('scenario 12: policy-version mismatch is handled deterministically (fail cl
   const policy = fixturePolicy();
   const result = validatePersistedModelRouting(
     {
-      profile: 'codex-terra-medium',
-      model: 'gpt-5.6-terra',
+      profile: 'codex-luna-medium',
+      model: 'gpt-5.6-luna',
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: '0.9.0', // stale
@@ -247,8 +267,8 @@ test('validatePersistedModelRouting accepts a manifest that matches current poli
   const policy = fixturePolicy();
   const result = validatePersistedModelRouting(
     {
-      profile: 'codex-terra-medium',
-      model: 'gpt-5.6-terra',
+      profile: 'codex-luna-medium',
+      model: 'gpt-5.6-luna',
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: '1.0.0',
@@ -268,8 +288,8 @@ test('scenario 13: legacy manifest resolution is explicit and reports legacy_res
 });
 
 test('scenario 14 & 15 & 17: buildCodexModelArgs always emits explicit --model and reasoning effort', () => {
-  const args = buildCodexModelArgs({ model: 'gpt-5.6-terra', reasoning_effort: 'medium' });
-  assert.deepStrictEqual(args, ['--model', 'gpt-5.6-terra', '-c', 'model_reasoning_effort=medium']);
+  const args = buildCodexModelArgs({ model: 'gpt-5.6-luna', reasoning_effort: 'medium' });
+  assert.deepStrictEqual(args, ['--model', 'gpt-5.6-luna', '-c', 'model_reasoning_effort=medium']);
   assert.ok(args.includes('--model'));
   assert.ok(args.some((a) => a.startsWith('model_reasoning_effort=')));
 });
@@ -292,7 +312,7 @@ test('validateOverride treats an absent override as valid (no override present)'
 test('an override on a profile that does not require one is still structurally validated', () => {
   const policy = fixturePolicy();
   const result = resolveModelProfile({
-    profileName: 'codex-terra-medium',
+    profileName: 'codex-luna-medium',
     tier: 'T2',
     policy,
     override: { authorized_by: 'griff', reason: '' },
@@ -307,7 +327,7 @@ test('loadModelRoutingPolicy throws on a missing file', () => {
 
 test('loadModelRoutingPolicy rejects a profile whose reasoning_effort is outside its model catalog', () => {
   const policy = fixturePolicy();
-  policy.profiles['codex-terra-medium']!.reasoning_effort = 'ultra-plus' as never;
+  policy.profiles['codex-luna-medium']!.reasoning_effort = 'ultra-plus' as never;
   const tmpPath = path.join(os.tmpdir(), `codex-model-routing-fixture-${process.pid}-${Date.now()}.json`);
   fs.writeFileSync(tmpPath, JSON.stringify(policy));
   try {
