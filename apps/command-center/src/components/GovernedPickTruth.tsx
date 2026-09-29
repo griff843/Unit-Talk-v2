@@ -65,10 +65,17 @@ function participantResolutionSummary(metadata: Record<string, unknown>): React.
   return 'No participant resolution recorded.';
 }
 
-export function GovernedPickTruth({ metadata, hasEventLink, voided }: {
+export type DeliveryKillSwitchTruth =
+  | { state: 'killed'; target: string; reason: string | null; actor: string | null; updatedAt: string }
+  | { state: 'open'; target: string; reason: string | null; actor: string | null; updatedAt: string }
+  | { state: 'missing'; target: string }
+  | { state: 'unavailable'; target: string };
+
+export function GovernedPickTruth({ metadata, hasEventLink, voided, deliveryKillSwitch }: {
   metadata: Record<string, unknown>;
   hasEventLink: boolean;
   voided: boolean;
+  deliveryKillSwitch?: DeliveryKillSwitchTruth;
 }) {
   const authorization = readHumanCapperDeliveryAuthorization(metadata);
   const persistedMode = distributionModeLabel(metadata['distributionMode']);
@@ -105,6 +112,33 @@ export function GovernedPickTruth({ metadata, hasEventLink, voided }: {
             </div>
           ) : <p className="mt-2 text-gray-300">No delivery authorization recorded.</p>}
         </div>
+        {deliveryKillSwitch ? (
+          <div className="mt-4 rounded border border-amber-500/40 bg-amber-950/20 p-3 text-sm text-amber-100">
+            {deliveryKillSwitch.state === 'killed' ? (
+              <>
+                <p className="font-medium">Delivery held: <code>{deliveryKillSwitch.target}</code> kill switch engaged</p>
+                <div className="mt-2 flex flex-col gap-1">
+                  <KV label="Reason" value={deliveryKillSwitch.reason ?? 'No reason recorded'} />
+                  <KV label="Actor" value={deliveryKillSwitch.actor ?? 'No actor recorded'} />
+                  <KV label="Updated at" value={deliveryKillSwitch.updatedAt} />
+                </div>
+              </>
+            ) : deliveryKillSwitch.state === 'missing' ? (
+              <p>Delivery held: the worker fails closed because <code>{deliveryKillSwitch.target}</code> has no kill-switch row.</p>
+            ) : deliveryKillSwitch.state === 'unavailable' ? (
+              <p>Kill-switch state unavailable</p>
+            ) : (
+              <>
+                <p className="font-medium">Delivery target: <code>{deliveryKillSwitch.target}</code> kill switch disengaged</p>
+                <div className="mt-2 flex flex-col gap-1">
+                  <KV label="Reason" value={deliveryKillSwitch.reason ?? 'No reason recorded'} />
+                  <KV label="Actor" value={deliveryKillSwitch.actor ?? 'No actor recorded'} />
+                  <KV label="Updated at" value={deliveryKillSwitch.updatedAt} />
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
         {!hasEventLink ? (
           <p className="mt-4 rounded border border-amber-500/40 bg-amber-950/20 p-3 text-sm text-amber-100">
             No event link is recorded. Automated grading skips this pick at <code>event_link_not_found</code>; it settles by operator action.

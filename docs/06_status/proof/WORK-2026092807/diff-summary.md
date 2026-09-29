@@ -17,5 +17,5 @@ Diff target: cf050e518d4296f4b8a2b9b51da06ed3a6f32468
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: a6ca76a2b3205b459580dfa09f5d1a98f28d7e8f
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1681

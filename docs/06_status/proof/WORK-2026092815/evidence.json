@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092815",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "in_review",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "23bb844b1131ba25006cc7335c58f8b8bb671c55",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "verified_source_sha",
+    "note": "23bb844b1131ba25006cc7335c58f8b8bb671c55 is the only implementation commit on this lane. Later commits change only the lane manifest and this proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it."
+  },
+  "static_proof": {
+    "unit_tests": { "pass": 20, "fail": 0, "note": "command-center-pages.test.tsx 13, picks-explorer-query.test.ts 2, operations-home.test.ts 5" },
+    "type_check": "pass",
+    "mutation_battery": [
+      { "id": "M1", "mutation": "drop the mode eq filter", "observed": "red: 2 tests" },
+      { "id": "M2", "mutation": "drop distributionMode from paging href", "observed": "red: 1 test" },
+      { "id": "M3", "mutation": "unavailable renders as open", "observed": "red: 1 test" },
+      { "id": "M4", "mutation": "drop the missing-row target phrase", "observed": "green: survives; the test pins the fail-closed prefix only" },
+      { "id": "M5", "mutation": "disable the killed branch", "observed": "red: 1 test" }
+    ]
+  },
+  "production_writes_by_this_change": 0
+}

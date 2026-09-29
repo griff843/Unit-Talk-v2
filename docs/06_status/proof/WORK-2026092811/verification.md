@@ -1,6 +1,6 @@
 # PROOF: WORK-2026092811
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3b071d9d6514cc9943a4e875371940337f38b600
 
 Issue: WORK-2026092811
 Tier: T2
@@ -47,6 +47,10 @@ diverge only once a voided pick's row is marked `sent` without a receipt.
 - [x] eslint on the three changed files: exit 0
 - [x] esbuild parse of `scripts/pipeline-health.ts`: ok
 - [x] Mutation drill: 2 tests red
+- [x] `pnpm verify` passed in the required CI `verify` context on the merged head `cd844586bfd277ed414121ea52fac85e7eafcdf1` (run 36477702603).
+- [x] `pnpm type-check` is included in that `pnpm verify` run and passed.
+- [x] `pnpm test` is included in that `pnpm verify` run and passed.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base 3b071d9d6514cc9943a4e875371940337f38b600^ --head 3b071d9d6514cc9943a4e875371940337f38b600`: Verdict PASS, 8 changed files, no rule matched. Recorded after merge by WORK-2026092813.
 
 ## Runtime Verification
 
@@ -55,6 +59,6 @@ above shows the input it will judge.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3b071d9d6514cc9943a4e875371940337f38b600
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1684
 Execution SHA: d9b27e5b10f645166c751d8d0303ab59f661c720
