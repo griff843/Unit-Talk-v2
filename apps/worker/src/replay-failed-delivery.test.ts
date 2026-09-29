@@ -409,6 +409,39 @@ test('REPLAYABLE_STATUSES includes failed and dead_letter', () => {
   assert.ok(REPLAYABLE_STATUSES.includes('dead_letter'));
 });
 
+// WORK-2026092901: the replay CLI bypasses the worker's dispatch ledger (it
+// resets rows straight to pending), so it must never reach official picks.
+// Their only re-post path is the audited retry route, which reads the ledger.
+test('WORK-2026092901: discord:official-picks is not an accepted replay target', () => {
+  assert.throws(
+    () => parseReplayArgs(['--target', 'discord:official-picks']),
+    /--target must be/u,
+  );
+  assert.throws(
+    () => parseReplayArgs(['--target=discord:official-picks']),
+    /--target must be/u,
+  );
+});
+
+test('WORK-2026092901: --target all never replays an official-picks row', async () => {
+  const db = new FakeReplayDatabase([
+    makeRow('official-dl', { target: 'discord:official-picks', status: 'dead_letter' }),
+    makeRow('official-failed', { target: 'discord:official-picks', status: 'failed' }),
+    makeRow('canary-1', { target: 'discord:canary', status: 'failed' }),
+  ]);
+
+  const result = await replayFailedDeliveries(
+    db as unknown as ReplayDatabaseClient,
+    replayOptions({ target: 'all', status: 'all' }),
+    NOW,
+  );
+
+  assert.ok(!Array.isArray(result));
+  assert.equal(result.replayed, 1);
+  assert.deepEqual(db.updates.map((u) => u.id), ['canary-1']);
+  assert.equal(db.rows.find((r) => r.id === 'official-dl')?.status, 'dead_letter');
+});
+
 function replayOptions(overrides: Partial<ReplayOptions> = {}): ReplayOptions {
   return {
     limit: 10,

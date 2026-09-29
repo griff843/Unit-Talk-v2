@@ -26,6 +26,7 @@ export { handleGradingRun } from './grading.js';
 export { handleRecapPost } from './recap.js';
 export { handleMemberTiers } from './member-tiers.js';
 export { handlePicksQuery } from './picks-query.js';
+export { handleMemberPicksQuery } from './member-picks.js';
 export { handleSettlementsRecent } from './settlements-query.js';
 export { handleShadowModelSummaries, handleShadowComparison } from './shadow-models.js';
 export { handleHealthConfig } from './config.js';
