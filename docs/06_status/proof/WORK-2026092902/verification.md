@@ -41,6 +41,8 @@ $ cd apps/command-center && pnpm exec tsx --test src/app/command-center-pages.te
 - [x] `pnpm exec tsx --test src/app/command-center-pages.test.tsx` (from `apps/command-center`): 20 pass, 0 fail
 - [x] `pnpm type-check` for `apps/command-center` (`tsc --noEmit`): exit 0
 - [x] `pnpm test` and `pnpm verify` run in the required CI `verify` context on this PR's head
+- [x] `pnpm type-check` and `pnpm test` both run inside the required CI `verify` context (green on this PR's head)
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS, rules matched: operator-ui
 - [x] eslint on the three changed files: clean
 
 ## Runtime Verification
