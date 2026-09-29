@@ -400,6 +400,61 @@ function createPendingParityDescendantRepo(changePath: string): {
   return { repoRoot, evidenceHead, currentPrHead };
 }
 
+function createShallowPendingParityDescendantRepo(): {
+  fixtureRoot: string;
+  repoRoot: string;
+  evidenceHead: string;
+  currentPrHead: string;
+} {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-shallow-pending-parity-'));
+  const sourceRoot = path.join(fixtureRoot, 'source');
+  const remoteRoot = path.join(fixtureRoot, 'remote.git');
+  const repoRoot = path.join(fixtureRoot, 'checkout');
+  fs.mkdirSync(sourceRoot);
+  const sourceGit = (...args: string[]): string =>
+    execFileSync('git', args, { cwd: sourceRoot, encoding: 'utf8' }).trim();
+  const write = (relativePath: string, content: string): void => {
+    const absolutePath = path.join(sourceRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, content);
+  };
+
+  sourceGit('init', '-b', 'codex/utv2-9000-migration-proof');
+  sourceGit('config', 'user.email', 'pending-parity@example.test');
+  sourceGit('config', 'user.name', 'Pending Parity Test');
+  write('scripts/ops/candidate.ts', 'export const candidate = true;\n');
+  sourceGit('add', '.');
+  sourceGit('commit', '-m', 'UTV2-9000 candidate source');
+  const evidenceHead = sourceGit('rev-parse', 'HEAD');
+
+  write('docs/06_status/proof/UTV2-9000/evidence.json', '{"receipt":true}\n');
+  sourceGit('add', '.');
+  sourceGit('commit', '-m', 'UTV2-9000 record authoritative receipt');
+  const currentPrHead = sourceGit('rev-parse', 'HEAD');
+
+  execFileSync('git', ['clone', '--bare', sourceRoot, remoteRoot], { encoding: 'utf8' });
+  execFileSync(
+    'git',
+    ['--git-dir', remoteRoot, 'update-ref', 'refs/pull/1678/head', currentPrHead],
+    { encoding: 'utf8' },
+  );
+  execFileSync(
+    'git',
+    [
+      'clone',
+      '--depth',
+      '1',
+      '--branch',
+      'codex/utv2-9000-migration-proof',
+      `file://${remoteRoot}`,
+      repoRoot,
+    ],
+    { encoding: 'utf8' },
+  );
+
+  return { fixtureRoot, repoRoot, evidenceHead, currentPrHead };
+}
+
 function pendingParityEvidenceAt(head: string) {
   const evidence = migrationEvidence();
   evidence.sha_binding.verified_source_sha = head;
@@ -440,6 +495,54 @@ test('pre-merge pending parity accepts an authoritative receipt recorded by a pr
     assert.equal(result.valid, true, JSON.stringify(result.failures));
   } finally {
     fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('UTV2 migration Close Eligibility deepens a shallow proof-only descendant before validating', () => {
+  const repo = createShallowPendingParityDescendantRepo();
+  try {
+    assert.equal(
+      execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
+        cwd: repo.repoRoot,
+        encoding: 'utf8',
+      }).trim(),
+      'true',
+    );
+    assert.notEqual(
+      spawnSync('git', ['cat-file', '-e', `${repo.evidenceHead}^{commit}`], { cwd: repo.repoRoot }).status,
+      0,
+      'depth-1 checkout must reproduce the missing immutable evidence object',
+    );
+
+    const api = authoritativePendingParityApi({
+      run: {
+        head_sha: repo.evidenceHead,
+        pull_requests: [{
+          number: 1678,
+          url: 'https://api.github.com/repos/griff843/Unit-Talk-v2/pulls/1678',
+          head: {
+            sha: repo.currentPrHead,
+            repo: { url: 'https://api.github.com/repos/griff843/Unit-Talk-v2' },
+          },
+        }],
+      },
+      job: { head_sha: repo.evidenceHead },
+    });
+    const evidence = pendingParityEvidenceAt(repo.evidenceHead);
+    assert.equal(evidence.issue_id, 'UTV2-9000');
+    const result = validateEvidenceBundleContract(
+      evidence,
+      { ...pendingParityContext(api), repoRoot: repo.repoRoot },
+    );
+
+    assert.equal(result.valid, true, JSON.stringify(result.failures));
+    assert.equal(
+      spawnSync('git', ['cat-file', '-e', `${repo.evidenceHead}^{commit}`], { cwd: repo.repoRoot }).status,
+      0,
+      'validator must obtain the exact immutable evidence commit from the authoritative PR ref',
+    );
+  } finally {
+    fs.rmSync(repo.fixtureRoot, { recursive: true, force: true });
   }
 });
 

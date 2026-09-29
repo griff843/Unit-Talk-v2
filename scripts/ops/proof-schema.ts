@@ -436,36 +436,27 @@ function verifyPendingParityProofOnlyDescendant(
   }
 
   const repoRoot = context.repoRoot?.trim() || process.cwd();
-  const sourceUnavailable = verifyCommitAvailable(evidenceHead, 'immutable parity run head', {
-    ...context,
-    repoRoot,
-  });
-  if (sourceUnavailable) return { valid: false, detail: sourceUnavailable.detail };
-
-  let currentUnavailable = verifyCommitAvailable(currentPrHead, 'GitHub-recorded current PR head', {
-    ...context,
-    repoRoot,
-  });
-  if (currentUnavailable) {
-    const fetched = runEvidenceGit(
-      ['fetch', '--no-tags', 'origin', `refs/pull/${prNumber}/head`],
-      repoRoot,
-      context.gitRunner,
-    );
-    if (fetched.error || fetched.status !== 0) {
-      return {
-        valid: false,
-        detail: fetched.error?.message ||
-          String(fetched.stderr ?? '').trim() ||
-          `${currentUnavailable.detail}; immutable PR-head fetch did not complete`,
-      };
-    }
-    currentUnavailable = verifyCommitAvailable(currentPrHead, 'GitHub-recorded current PR head after fetch', {
+  const sourceUnavailable = ensurePendingParityPrCommitAvailable(
+    evidenceHead,
+    'immutable parity run head',
+    prNumber,
+    {
       ...context,
       repoRoot,
-    });
-    if (currentUnavailable) return { valid: false, detail: currentUnavailable.detail };
-  }
+    },
+  );
+  if (sourceUnavailable) return { valid: false, detail: sourceUnavailable.detail };
+
+  const currentUnavailable = ensurePendingParityPrCommitAvailable(
+    currentPrHead,
+    'GitHub-recorded current PR head',
+    prNumber,
+    {
+      ...context,
+      repoRoot,
+    },
+  );
+  if (currentUnavailable) return { valid: false, detail: currentUnavailable.detail };
 
   const ancestry = runEvidenceGit(
     ['merge-base', '--is-ancestor', evidenceHead, currentPrHead],
@@ -682,6 +673,57 @@ function verifyCommitAvailable(
       result.error?.message || String(result.stderr ?? '').trim() || 'git cat-file did not complete'
     }`,
   };
+}
+
+/**
+ * Makes a pending-parity commit available from GitHub's authoritative PR ref.
+ *
+ * Close Eligibility intentionally checks out only the current PR head. When a
+ * later proof-only commit records the Actions receipt, the immutable run head
+ * is normally just beyond that shallow boundary. Fetching an arbitrary SHA
+ * would weaken PR provenance, so this only deepens refs/pull/<n>/head. A
+ * shallow checkout is fully deepened because only an exact object check plus
+ * the subsequent ancestry/path walk can decide when enough history has been
+ * obtained. Complete repositories perform one ordinary authoritative-ref
+ * fetch, which covers locally missing PR objects without trusting a raw SHA.
+ */
+function ensurePendingParityPrCommitAvailable(
+  sha: string,
+  label: string,
+  prNumber: number,
+  context: EvidenceContractContext,
+): Extract<MigrationReceiptBindingResult, { status: 'unverified' }> | null {
+  const unavailable = verifyCommitAvailable(sha, label, context);
+  if (!unavailable) return null;
+
+  const shallow = runEvidenceGit(
+    ['rev-parse', '--is-shallow-repository'],
+    context.repoRoot!,
+    context.gitRunner,
+  );
+  if (shallow.error || shallow.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: shallow.error?.message ||
+        String(shallow.stderr ?? '').trim() ||
+        `${unavailable.detail}; shallow-checkout state could not be determined`,
+    };
+  }
+
+  const fetchArgs = String(shallow.stdout ?? '').trim() === 'true'
+    ? ['fetch', '--no-tags', '--unshallow', 'origin', `refs/pull/${prNumber}/head`]
+    : ['fetch', '--no-tags', 'origin', `refs/pull/${prNumber}/head`];
+  const fetched = runEvidenceGit(fetchArgs, context.repoRoot!, context.gitRunner);
+  if (fetched.error || fetched.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: fetched.error?.message ||
+        String(fetched.stderr ?? '').trim() ||
+        `${unavailable.detail}; authoritative PR-history fetch did not complete`,
+    };
+  }
+
+  return verifyCommitAvailable(sha, `${label} after authoritative PR-history fetch`, context);
 }
 
 function ensureAttestedPrHeadAvailable(
