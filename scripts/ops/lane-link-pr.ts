@@ -245,6 +245,9 @@ export function recoverMissingPreflightToken(
       'docs/05_operations/LANE_MANIFEST_SPEC.md',
       'docs/05_operations/TRUTH_CHECK_SPEC.md',
     ],
+    ...(manifest.t1_live_db_precondition
+      ? { t1_live_db_precondition: manifest.t1_live_db_precondition }
+      : {}),
   };
   (deps.writeToken ?? writeJsonFile)(expectedTokenPath, token);
 }

@@ -165,6 +165,78 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
   }
 });
 
+test('missing-token recovery preserves only the manifest-bound T1 live-DB deferral', () => {
+  const manifest = recoveryManifest('UTV2-99118');
+  manifest.t1_live_db_precondition = 'deferred_to_ci';
+  const tokenPath = preflightTokenPathForBranch(manifest.branch);
+  fs.rmSync(tokenPath, { force: true });
+  let writtenToken: Record<string, unknown> | undefined;
+  try {
+    recoverMissingPreflightToken(
+      manifest,
+      manifest.branch,
+      'https://github.com/example/unit-talk/pull/137',
+      {
+        cwd: ROOT,
+        currentBranch: () => manifest.branch,
+        currentHead: () => 'c'.repeat(40),
+        isClean: () => true,
+        dependenciesReady: () => true,
+        readPullRequest: () => ({
+          url: 'https://github.com/example/unit-talk/pull/137',
+          headRefName: manifest.branch,
+          headRefOid: 'c'.repeat(40),
+          baseRefName: 'main',
+          state: 'OPEN',
+        }),
+        activeManifests: () => [manifest],
+        writeToken: (_path, token) => {
+          writtenToken = token as unknown as Record<string, unknown>;
+        },
+      },
+    );
+    assert.strictEqual(
+      writtenToken?.['t1_live_db_precondition'],
+      'deferred_to_ci',
+    );
+
+    delete manifest.t1_live_db_precondition;
+    writtenToken = undefined;
+    recoverMissingPreflightToken(
+      manifest,
+      manifest.branch,
+      'https://github.com/example/unit-talk/pull/137',
+      {
+        cwd: ROOT,
+        currentBranch: () => manifest.branch,
+        currentHead: () => 'c'.repeat(40),
+        isClean: () => true,
+        dependenciesReady: () => true,
+        readPullRequest: () => ({
+          url: 'https://github.com/example/unit-talk/pull/137',
+          headRefName: manifest.branch,
+          headRefOid: 'c'.repeat(40),
+          baseRefName: 'main',
+          state: 'OPEN',
+        }),
+        activeManifests: () => [manifest],
+        writeToken: (_path, token) => {
+          writtenToken = token as unknown as Record<string, unknown>;
+        },
+      },
+    );
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(
+        writtenToken,
+        't1_live_db_precondition',
+      ),
+      false,
+    );
+  } finally {
+    fs.rmSync(tokenPath, { force: true });
+  }
+});
+
 test('missing-token recovery fails closed when only the PR head ref differs', () => {
   const manifest = recoveryManifest('UTV2-99117');
   const tokenPath = preflightTokenPathForBranch(manifest.branch);
