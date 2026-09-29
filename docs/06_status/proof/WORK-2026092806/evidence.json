@@ -7,16 +7,16 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "e1db7f7ac347e3a2d8741e036a6f20d329d4c069",
+    "verified_source_sha": "2181fa3ada25ddb667de5563ae9ee6bac970552d",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
     "focused_tests": {
-      "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
-      "tests": 263,
-      "pass": 263,
+      "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts",
+      "tests": 108,
+      "pass": 108,
       "fail": 0
     },
     "type_check": "pass",
@@ -38,8 +38,17 @@
     "migration_contract_regression": {
       "pre_merge_strict_pending": "pass",
       "authoritative_github_run_job_binding": "pass",
+      "authoritative_repository_and_pr_binding": "pass",
+      "proof_only_descendant_receipt_commit": "pass",
+      "depth_1_utv2_migration_checkout": "pass",
+      "authoritative_pr_history_deepening": "pass",
+      "raw_sha_fetch_forbidden": "pass",
       "fabricated_run_or_job_refusal": "pass",
+      "wrong_pr_or_repository_refusal": "pass",
+      "wrong_job_run_binding_refusal": "pass",
       "wrong_workflow_head_or_completion_refusal": "pass",
+      "implementation_after_evidence_refusal": "pass",
+      "implementation_change_then_revert_refusal": "pass",
       "unrelated_failure_refusal": "pass",
       "generic_or_malformed_pending_refusal": "pass",
       "post_merge_pending_refusal": "pass",
@@ -47,9 +56,10 @@
       "non_migration_profiles": "pass"
     },
     "pr_1678_fixture": {
-      "source_head": "308b46eb93e725627817c1469e352d9ae8aeac4f",
-      "parity_run_id": 36441151899,
-      "parity_job_id": 108991710221,
+      "source_head": "12e0f4b936586ab86cf2db300c07ccefdcb32c51",
+      "proof_descendant_head": "850e30675a993c3bba7e9192326a31b66fbc54c3",
+      "parity_run_id": 36471754689,
+      "parity_job_id": 109095503592,
       "pre_merge_with_strict_pending": "valid",
       "post_merge_with_strict_pending": "refused",
       "production_ddl_applied": false,

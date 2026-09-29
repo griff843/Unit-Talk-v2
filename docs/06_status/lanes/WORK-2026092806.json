@@ -8,7 +8,7 @@
   "branch": "codex/work-2026092806-migration-proof-phases",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1680",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1687",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026092806.md",
@@ -27,7 +27,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-09-28T16:05:55.030Z",
-  "heartbeat_at": "2026-09-28T16:39:21.708Z",
+  "heartbeat_at": "2026-09-28T21:28:33.689Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026092806-migration-proof-phases.json",

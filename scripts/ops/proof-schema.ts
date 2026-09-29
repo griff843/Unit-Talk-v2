@@ -151,6 +151,8 @@ export interface EvidenceContractContext {
   gitRunner?: EvidenceGitRunner;
   /** Repository containing authoritative GitHub Actions run/job receipts. */
   repository?: string | null;
+  /** Authoritative identity of the open PR whose pre-merge proof is being validated. */
+  pullRequest?: PendingParityPrIdentity | null;
   /** Deterministic test seam; production callers resolve immutable GitHub API records. */
   githubApiRunner?: EvidenceGithubApiRunner;
 }
@@ -274,6 +276,7 @@ interface GithubWorkflowRunRecord {
   status?: unknown;
   conclusion?: unknown;
   pull_requests?: unknown;
+  repository?: unknown;
 }
 
 interface GithubWorkflowJobRecord {
@@ -290,6 +293,11 @@ interface GithubWorkflowJobRecord {
 type MigrationParityReceiptVerification =
   | { valid: true }
   | { valid: false; detail: string };
+
+export interface PendingParityPrIdentity {
+  repository: string;
+  number: number;
+}
 
 function parseGithubRepository(remote: string): string | null {
   const normalized = remote.trim().replace(/\.git$/u, '');
@@ -350,6 +358,157 @@ function idEquals(actual: unknown, expected: unknown): boolean {
   return String(actual ?? '') === String(expected ?? '');
 }
 
+function parsePendingParityPrIdentity(
+  prUrl: unknown,
+  authoritativeRepository: string,
+): PendingParityPrIdentity | null {
+  if (typeof prUrl !== 'string') return null;
+  const match = prUrl.trim().match(/^https:\/\/github\.com\/([^/\s]+\/[^/\s]+)\/pull\/([1-9][0-9]*)\/?$/iu);
+  if (!match) return null;
+  const repository = match[1]!;
+  if (repository.toLowerCase() !== authoritativeRepository.toLowerCase()) return null;
+  return { repository, number: Number(match[2]) };
+}
+
+function resolveAuthoritativePendingParityPrIdentity(
+  repository: string,
+  context: EvidenceContractContext,
+): PendingParityPrIdentity | null {
+  const explicit = context.pullRequest;
+  if (
+    explicit &&
+    Number.isSafeInteger(explicit.number) &&
+    explicit.number > 0 &&
+    explicit.repository.toLowerCase() === repository.toLowerCase()
+  ) {
+    return explicit;
+  }
+
+  const eventPath = process.env['GITHUB_EVENT_PATH']?.trim();
+  if (eventPath) {
+    try {
+      const event = JSON.parse(readFileSync(eventPath, 'utf8')) as Record<string, unknown>;
+      const eventRepository = isPopulatedRecord(event['repository']) ? event['repository']['full_name'] : null;
+      const eventPr = isPopulatedRecord(event['pull_request']) ? event['pull_request'] : null;
+      const eventPrNumber = eventPr?.['number'];
+      if (
+        typeof eventRepository === 'string' &&
+        eventRepository.toLowerCase() === repository.toLowerCase() &&
+        typeof eventPrNumber === 'number' &&
+        Number.isSafeInteger(eventPrNumber) &&
+        eventPrNumber > 0
+      ) {
+        return { repository: eventRepository, number: eventPrNumber };
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  const githubRef = process.env['GITHUB_REF']?.trim();
+  const githubEvent = process.env['GITHUB_EVENT_NAME']?.trim();
+  const githubRepository = process.env['GITHUB_REPOSITORY']?.trim();
+  const refMatch = githubRef?.match(/^refs\/pull\/([1-9][0-9]*)\/(?:head|merge)$/u);
+  if (
+    githubEvent === 'pull_request' &&
+    githubRepository?.toLowerCase() === repository.toLowerCase() &&
+    refMatch
+  ) {
+    return { repository: githubRepository, number: Number(refMatch[1]) };
+  }
+
+  return null;
+}
+
+function verifyPendingParityProofOnlyDescendant(
+  evidenceHead: string,
+  currentPrHead: string,
+  issueId: string,
+  prNumber: number,
+  context: EvidenceContractContext,
+): MigrationParityReceiptVerification {
+  if (currentPrHead === evidenceHead) return { valid: true };
+  if (!SHA_RE.test(currentPrHead)) {
+    return { valid: false, detail: 'GitHub-recorded current PR head is not a full Git SHA' };
+  }
+  if (!/^(?:UTV2|UNI|WORK)-\d+$/u.test(issueId)) {
+    return { valid: false, detail: 'proof-only descendant verification requires a valid issue_id' };
+  }
+
+  const repoRoot = context.repoRoot?.trim() || process.cwd();
+  const sourceUnavailable = ensurePendingParityPrCommitAvailable(
+    evidenceHead,
+    'immutable parity run head',
+    prNumber,
+    {
+      ...context,
+      repoRoot,
+    },
+  );
+  if (sourceUnavailable) return { valid: false, detail: sourceUnavailable.detail };
+
+  const currentUnavailable = ensurePendingParityPrCommitAvailable(
+    currentPrHead,
+    'GitHub-recorded current PR head',
+    prNumber,
+    {
+      ...context,
+      repoRoot,
+    },
+  );
+  if (currentUnavailable) return { valid: false, detail: currentUnavailable.detail };
+
+  const ancestry = runEvidenceGit(
+    ['merge-base', '--is-ancestor', evidenceHead, currentPrHead],
+    repoRoot,
+    context.gitRunner,
+  );
+  if (ancestry.error || ancestry.status === null || ancestry.status > 1) {
+    return {
+      valid: false,
+      detail: ancestry.error?.message ||
+        String(ancestry.stderr ?? '').trim() ||
+        'current PR head ancestry check did not complete',
+    };
+  }
+  if (ancestry.status !== 0) {
+    return { valid: false, detail: 'current PR head is not a descendant of the immutable parity run head' };
+  }
+
+  // Inspect every intervening commit, not only the final tree delta. A runtime
+  // change followed by a revert is still not a proof-only descendant.
+  const changed = runEvidenceGit(
+    ['log', '--format=', '--name-only', `${evidenceHead}..${currentPrHead}`],
+    repoRoot,
+    context.gitRunner,
+  );
+  if (changed.error || changed.status !== 0) {
+    return {
+      valid: false,
+      detail: changed.error?.message ||
+        String(changed.stderr ?? '').trim() ||
+        'proof-only descendant commit-path check did not complete',
+    };
+  }
+
+  const proofPrefix = `docs/06_status/proof/${issueId}/`;
+  const bookkeepingPaths = new Set([
+    `docs/06_status/lanes/${issueId}.json`,
+    `.ops/sync/${issueId}.yml`,
+  ]);
+  const nonProofPaths = [...new Set(
+    changed.stdout.split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean),
+  )].filter((filePath) => !filePath.startsWith(proofPrefix) && !bookkeepingPaths.has(filePath));
+  if (nonProofPaths.length > 0) {
+    return {
+      valid: false,
+      detail: `implementation/runtime files changed after the immutable parity run head: ${nonProofPaths.join(', ')}`,
+    };
+  }
+
+  return { valid: true };
+}
+
 /**
  * Independently binds a pending production-parity obligation to GitHub's
  * immutable Actions run and job records. The expected failure is deliberately
@@ -361,10 +520,27 @@ function idEquals(actual: unknown, expected: unknown): boolean {
 function verifyPendingMigrationParityReceipt(
   pending: Record<string, unknown>,
   expectedHead: string,
+  issueId: string,
+  prUrl: unknown,
   context: EvidenceContractContext,
 ): MigrationParityReceiptVerification {
   const repository = resolveGithubRepository(context);
   if (!repository) return { valid: false, detail: 'could not resolve the authoritative GitHub repository' };
+  const authoritativePrIdentity = resolveAuthoritativePendingParityPrIdentity(repository, context);
+  if (!authoritativePrIdentity) {
+    return { valid: false, detail: 'could not resolve the authoritative open pull-request identity' };
+  }
+  const evidencePrIdentity = parsePendingParityPrIdentity(prUrl, repository);
+  if (
+    !evidencePrIdentity ||
+    evidencePrIdentity.number !== authoritativePrIdentity.number ||
+    evidencePrIdentity.repository.toLowerCase() !== authoritativePrIdentity.repository.toLowerCase()
+  ) {
+    return {
+      valid: false,
+      detail: 'evidence pr_url does not identify the authoritative open pull request in this repository',
+    };
+  }
 
   const runId = pending['run'];
   const jobId = pending['job'];
@@ -376,9 +552,21 @@ function verifyPendingMigrationParityReceipt(
 
   const run = runResponse.value;
   const pullRequests = Array.isArray(run.pull_requests) ? run.pull_requests : [];
-  const exactPrHead = pullRequests.some((entry) =>
-    isPopulatedRecord(entry) && isPopulatedRecord(entry['head']) && entry['head']['sha'] === expectedHead,
-  );
+  const apiRepositoryUrl = `https://api.github.com/repos/${authoritativePrIdentity.repository}`;
+  const runRepository = isPopulatedRecord(run.repository) ? run.repository : null;
+  const runRepositoryName = typeof runRepository?.['full_name'] === 'string'
+    ? runRepository['full_name']
+    : '';
+  const pullRequest = pullRequests.find((entry) => {
+    if (!isPopulatedRecord(entry) || !isPopulatedRecord(entry['head'])) return false;
+    const headRepository = isPopulatedRecord(entry['head']['repo']) ? entry['head']['repo'] : null;
+    return idEquals(entry['number'], authoritativePrIdentity.number) &&
+      entry['url'] === `${apiRepositoryUrl}/pulls/${authoritativePrIdentity.number}` &&
+      headRepository?.['url'] === apiRepositoryUrl;
+  });
+  const currentPrHead = isPopulatedRecord(pullRequest) && isPopulatedRecord(pullRequest['head'])
+    ? pullRequest['head']['sha']
+    : null;
   const runMismatch = [
     !idEquals(run.id, runId) && 'run id',
     run.name !== 'Live Schema Parity' && 'workflow name',
@@ -387,11 +575,22 @@ function verifyPendingMigrationParityReceipt(
     run.event !== 'pull_request' && 'pull_request event',
     run.status !== 'completed' && 'completed status',
     run.conclusion !== 'failure' && 'failure conclusion',
-    !exactPrHead && 'pull-request head binding',
+    runRepositoryName.toLowerCase() !== authoritativePrIdentity.repository.toLowerCase() &&
+      'repository identity',
+    !pullRequest && 'pull-request identity',
   ].filter(Boolean);
   if (runMismatch.length > 0) {
     return { valid: false, detail: `Live Schema Parity run receipt mismatched: ${runMismatch.join(', ')}` };
   }
+
+  const descendant = verifyPendingParityProofOnlyDescendant(
+    expectedHead,
+    String(currentPrHead ?? ''),
+    issueId,
+    authoritativePrIdentity.number,
+    context,
+  );
+  if (!descendant.valid) return descendant;
 
   const jobResponse = parseGithubApiRecord<GithubWorkflowJobRecord>(
     `repos/${repository}/actions/jobs/${String(jobId)}`,
@@ -474,6 +673,57 @@ function verifyCommitAvailable(
       result.error?.message || String(result.stderr ?? '').trim() || 'git cat-file did not complete'
     }`,
   };
+}
+
+/**
+ * Makes a pending-parity commit available from GitHub's authoritative PR ref.
+ *
+ * Close Eligibility intentionally checks out only the current PR head. When a
+ * later proof-only commit records the Actions receipt, the immutable run head
+ * is normally just beyond that shallow boundary. Fetching an arbitrary SHA
+ * would weaken PR provenance, so this only deepens refs/pull/<n>/head. A
+ * shallow checkout is fully deepened because only an exact object check plus
+ * the subsequent ancestry/path walk can decide when enough history has been
+ * obtained. Complete repositories perform one ordinary authoritative-ref
+ * fetch, which covers locally missing PR objects without trusting a raw SHA.
+ */
+function ensurePendingParityPrCommitAvailable(
+  sha: string,
+  label: string,
+  prNumber: number,
+  context: EvidenceContractContext,
+): Extract<MigrationReceiptBindingResult, { status: 'unverified' }> | null {
+  const unavailable = verifyCommitAvailable(sha, label, context);
+  if (!unavailable) return null;
+
+  const shallow = runEvidenceGit(
+    ['rev-parse', '--is-shallow-repository'],
+    context.repoRoot!,
+    context.gitRunner,
+  );
+  if (shallow.error || shallow.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: shallow.error?.message ||
+        String(shallow.stderr ?? '').trim() ||
+        `${unavailable.detail}; shallow-checkout state could not be determined`,
+    };
+  }
+
+  const fetchArgs = String(shallow.stdout ?? '').trim() === 'true'
+    ? ['fetch', '--no-tags', '--unshallow', 'origin', `refs/pull/${prNumber}/head`]
+    : ['fetch', '--no-tags', 'origin', `refs/pull/${prNumber}/head`];
+  const fetched = runEvidenceGit(fetchArgs, context.repoRoot!, context.gitRunner);
+  if (fetched.error || fetched.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: fetched.error?.message ||
+        String(fetched.stderr ?? '').trim() ||
+        `${unavailable.detail}; authoritative PR-history fetch did not complete`,
+    };
+  }
+
+  return verifyCommitAvailable(sha, `${label} after authoritative PR-history fetch`, context);
 }
 
 function ensureAttestedPrHeadAvailable(
@@ -1413,7 +1663,13 @@ function validateProfileEvidence(
           'non-empty reason, and exact run/job ids)',
       });
     } else if (pendingParity && typeof receiptHead === 'string' && SHA_RE.test(receiptHead)) {
-      const receipt = verifyPendingMigrationParityReceipt(liveParity, receiptHead, context);
+      const receipt = verifyPendingMigrationParityReceipt(
+        liveParity,
+        receiptHead,
+        String(bundle['issue_id'] ?? ''),
+        bundle['pr_url'],
+        context,
+      );
       if (!receipt.valid) {
         failures.push({
           code: 'migration_schema_parity_receipt_unverified',
