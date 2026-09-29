@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1959",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Preserve T1 live-DB deferral during preflight token recovery",
+  "status": "ready_for_review",
+  "generated_at": "2026-09-29T16:29:10Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "5072855a4387ae7e82a0be610a7c3319d96371cd",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "scope": {
+    "substantive_files": [
+      "scripts/ops/lane-link-pr.ts",
+      "scripts/ops/lane-link-pr.test.ts"
+    ],
+    "warehouse_runtime_changed": false,
+    "live_db_waived": false
+  },
+  "acceptance_criteria": {
+    "manifest_deferral_preserved": true,
+    "ordinary_recovery_unchanged": true,
+    "token_manifest_agreement_regressed": true,
+    "fail_closed_recovery_green": true
+  },
+  "static_proof": {
+    "status": "pass",
+    "pnpm_verify_static": "pass",
+    "type_check": "pass",
+    "focused_test": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-link-pr.test.ts",
+      "tests": 20,
+      "passed": 20,
+      "failed": 0
+    },
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    },
+    "pnpm_verify": "Static stages passed; the live-DB phase deferred at the staging identity guard."
+  },
+  "live_db_precondition": {
+    "status": "deferred_to_ci",
+    "local_command": "pnpm test:db",
+    "local_result": "Refused before DB access because host=127.0.0.1 resolved as unidentified.",
+    "closeout_instruction": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable).",
+    "required_project": "xskgrzbteyqdufktjrjx",
+    "required_environment": "staging-ci with CI_SUPABASE_* credentials",
+    "claim": "No writable live-DB pass is claimed; truth-check G6 must validate a genuine CI receipt."
+  },
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false
+  }
+}
