@@ -65,7 +65,8 @@ Local writable-DB containment:
 ## Verification
 
 - `pnpm exec tsx --test scripts/ops/proof-schema.test.ts` — PASS (108/108), including the depth-1 UTV2 migration-lane checkout.
-- `pnpm verify:static` — PASS at implementation source `1591c258d681c0a801a9760338e1a2d18c44a690` after the current `main` sync.
+- Sanctioned `pr-update-branch` source `2181fa3ada25ddb667de5563ae9ee6bac970552d` has parents `693bde7a77c0b6bdfaccdcd407badd069a659530` and `49e5f13e2edaeff39bc7bab91941f815fc83b972`; the refresh completed without conflict, and the implementation files are byte-identical to the previously approved head.
+- `pnpm verify:static` — PASS at candidate source `2181fa3ada25ddb667de5563ae9ee6bac970552d` after the sanctioned `main` refresh.
 - `pnpm type-check` — PASS.
 - `pnpm lint` — PASS.
 - `git diff --check` — PASS before implementation commit.
@@ -76,4 +77,4 @@ Local writable-DB containment:
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1687
-Execution SHA: 1591c258d681c0a801a9760338e1a2d18c44a690
+Execution SHA: 2181fa3ada25ddb667de5563ae9ee6bac970552d
