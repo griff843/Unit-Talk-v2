@@ -126,6 +126,65 @@ function recoveryManifest(issueId: string): LaneManifest {
   };
 }
 
+function immutablePreflightEvidenceRunner(
+  manifest: LaneManifest,
+  options: {
+    historicalDeferral?: 'deferred_to_ci';
+    introductions?: string[];
+    mutateEvidence?: (evidence: Record<string, unknown>) => void;
+  } = {},
+) {
+  const sourceCommit = '1'.repeat(40);
+  const evidence = {
+    ...manifest,
+    status: 'started',
+    pr_url: null,
+    commit_sha: null,
+    files_changed: [],
+    blocked_by: [],
+    truth_check_history: [],
+    reopen_history: [],
+    heartbeat_at: manifest.started_at,
+  } as Record<string, unknown>;
+  if (options.historicalDeferral) {
+    evidence['t1_live_db_precondition'] = options.historicalDeferral;
+  } else {
+    delete evidence['t1_live_db_precondition'];
+  }
+  options.mutateEvidence?.(evidence);
+
+  return (args: string[]) => {
+    if (args[0] === 'log') {
+      return {
+        ok: true,
+        stdout: (options.introductions ?? [sourceCommit]).join('\n'),
+        stderr: '',
+      };
+    }
+    if (args[0] === 'merge-base') {
+      return { ok: true, stdout: '', stderr: '' };
+    }
+    if (args[0] === 'diff-tree') {
+      return {
+        ok: true,
+        stdout: `A\tdocs/06_status/lanes/${manifest.issue_id}.json`,
+        stderr: '',
+      };
+    }
+    if (args[0] === 'show') {
+      return { ok: true, stdout: JSON.stringify(evidence), stderr: '' };
+    }
+    if (args[0] === 'rev-parse' && args[1] === '--is-shallow-repository') {
+      return { ok: true, stdout: 'false', stderr: '' };
+    }
+    return {
+      ok: false,
+      stdout: '',
+      stderr: `unexpected git command: ${args.join(' ')}`,
+    };
+  };
+}
+
 test('missing-token recovery re-proves ownership, PR binding, dependencies, and scope', () => {
   const manifest = recoveryManifest('UTV2-99110');
   const tokenPath = preflightTokenPathForBranch(manifest.branch);
@@ -150,6 +209,7 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
           state: 'OPEN',
         }),
         activeManifests: () => [manifest],
+        gitRunner: immutablePreflightEvidenceRunner(manifest),
         now: () => new Date('2026-08-08T12:00:00.000Z'),
         randomUUID: () => 'recovery-run-id',
         writeToken: (_path, token) => {
@@ -165,7 +225,7 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
   }
 });
 
-test('missing-token recovery preserves only the manifest-bound T1 live-DB deferral', () => {
+test('missing-token recovery derives T1 live-DB deferral from immutable lane-start evidence', () => {
   const manifest = recoveryManifest('UTV2-99118');
   manifest.t1_live_db_precondition = 'deferred_to_ci';
   const tokenPath = preflightTokenPathForBranch(manifest.branch);
@@ -190,6 +250,9 @@ test('missing-token recovery preserves only the manifest-bound T1 live-DB deferr
           state: 'OPEN',
         }),
         activeManifests: () => [manifest],
+        gitRunner: immutablePreflightEvidenceRunner(manifest, {
+          historicalDeferral: 'deferred_to_ci',
+        }),
         writeToken: (_path, token) => {
           writtenToken = token as unknown as Record<string, unknown>;
         },
@@ -220,6 +283,7 @@ test('missing-token recovery preserves only the manifest-bound T1 live-DB deferr
           state: 'OPEN',
         }),
         activeManifests: () => [manifest],
+        gitRunner: immutablePreflightEvidenceRunner(manifest),
         writeToken: (_path, token) => {
           writtenToken = token as unknown as Record<string, unknown>;
         },
@@ -235,6 +299,173 @@ test('missing-token recovery preserves only the manifest-bound T1 live-DB deferr
   } finally {
     fs.rmSync(tokenPath, { force: true });
   }
+});
+
+test('missing-token recovery refuses a manifest-manufactured T1 live-DB deferral', () => {
+  const manifest = recoveryManifest('UTV2-99119');
+  manifest.t1_live_db_precondition = 'deferred_to_ci';
+  const tokenPath = preflightTokenPathForBranch(manifest.branch);
+  fs.rmSync(tokenPath, { force: true });
+  let tokenWritten = false;
+  try {
+    assert.throws(
+      () =>
+        recoverMissingPreflightToken(
+          manifest,
+          manifest.branch,
+          'https://github.com/example/unit-talk/pull/138',
+          {
+            cwd: ROOT,
+            currentBranch: () => manifest.branch,
+            currentHead: () => 'd'.repeat(40),
+            isClean: () => true,
+            dependenciesReady: () => true,
+            readPullRequest: () => ({
+              url: 'https://github.com/example/unit-talk/pull/138',
+              headRefName: manifest.branch,
+              headRefOid: 'd'.repeat(40),
+              baseRefName: 'main',
+              state: 'OPEN',
+            }),
+            activeManifests: () => [manifest],
+            gitRunner: immutablePreflightEvidenceRunner(manifest),
+            writeToken: () => {
+              tokenWritten = true;
+            },
+          },
+        ),
+      /does not match immutable preflight evidence/,
+    );
+    assert.equal(tokenWritten, false);
+  } finally {
+    fs.rmSync(tokenPath, { force: true });
+  }
+});
+
+test('missing-token recovery refuses missing, ambiguous, or incomplete immutable evidence', () => {
+  const manifest = recoveryManifest('UTV2-99120');
+  manifest.t1_live_db_precondition = 'deferred_to_ci';
+  const commonDeps = {
+    cwd: ROOT,
+    currentBranch: () => manifest.branch,
+    currentHead: () => 'e'.repeat(40),
+    isClean: () => true,
+    dependenciesReady: () => true,
+    readPullRequest: () => ({
+      url: 'https://github.com/example/unit-talk/pull/139',
+      headRefName: manifest.branch,
+      headRefOid: 'e'.repeat(40),
+      baseRefName: 'main',
+      state: 'OPEN',
+    }),
+    activeManifests: () => [manifest],
+    writeToken: () => assert.fail('token must not be written'),
+  };
+
+  assert.throws(
+    () =>
+      recoverMissingPreflightToken(
+        manifest,
+        manifest.branch,
+        'https://github.com/example/unit-talk/pull/139',
+        {
+          ...commonDeps,
+          gitRunner: immutablePreflightEvidenceRunner(manifest, {
+            historicalDeferral: 'deferred_to_ci',
+            introductions: [],
+          }),
+        },
+      ),
+    /Immutable preflight evidence is missing/,
+  );
+  assert.throws(
+    () =>
+      recoverMissingPreflightToken(
+        manifest,
+        manifest.branch,
+        'https://github.com/example/unit-talk/pull/139',
+        {
+          ...commonDeps,
+          gitRunner: immutablePreflightEvidenceRunner(manifest, {
+            historicalDeferral: 'deferred_to_ci',
+            introductions: ['1'.repeat(40), '2'.repeat(40)],
+          }),
+        },
+      ),
+    /Immutable preflight evidence is ambiguous/,
+  );
+  assert.throws(
+    () =>
+      recoverMissingPreflightToken(
+        manifest,
+        manifest.branch,
+        'https://github.com/example/unit-talk/pull/139',
+        {
+          ...commonDeps,
+          gitRunner: immutablePreflightEvidenceRunner(manifest, {
+            historicalDeferral: 'deferred_to_ci',
+            mutateEvidence: (evidence) => {
+              evidence['status'] = 'in_review';
+            },
+          }),
+        },
+      ),
+    /manifest introduction is not a pristine lane-start record/,
+  );
+});
+
+test('missing-token recovery refuses when shallow history cannot be deepened to immutable evidence', () => {
+  const manifest = recoveryManifest('UTV2-99121');
+  manifest.t1_live_db_precondition = 'deferred_to_ci';
+  const commands: string[][] = [];
+
+  assert.throws(
+    () =>
+      recoverMissingPreflightToken(
+        manifest,
+        manifest.branch,
+        'https://github.com/example/unit-talk/pull/140',
+        {
+          cwd: ROOT,
+          currentBranch: () => manifest.branch,
+          currentHead: () => 'f'.repeat(40),
+          isClean: () => true,
+          dependenciesReady: () => true,
+          readPullRequest: () => ({
+            url: 'https://github.com/example/unit-talk/pull/140',
+            headRefName: manifest.branch,
+            headRefOid: 'f'.repeat(40),
+            baseRefName: 'main',
+            state: 'OPEN',
+          }),
+          activeManifests: () => [manifest],
+          gitRunner: (args) => {
+            commands.push(args);
+            if (args[0] === 'rev-parse') {
+              return { ok: true, stdout: 'true', stderr: '' };
+            }
+            if (args[0] === 'fetch') {
+              return {
+                ok: false,
+                stdout: '',
+                stderr: 'authoritative history unavailable',
+              };
+            }
+            return {
+              ok: false,
+              stdout: '',
+              stderr: `unexpected git command: ${args.join(' ')}`,
+            };
+          },
+          writeToken: () => assert.fail('token must not be written'),
+        },
+      ),
+    /authoritative branch history could not be deepened/,
+  );
+  assert.deepEqual(
+    commands.map((args) => args[0]),
+    ['rev-parse', 'fetch'],
+  );
 });
 
 test('missing-token recovery fails closed when only the PR head ref differs', () => {
