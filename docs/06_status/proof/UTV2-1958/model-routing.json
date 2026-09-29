@@ -4,7 +4,7 @@
   "model_profile": "codex-terra-medium",
   "model": "gpt-5.6-terra",
   "reasoning_effort": "medium",
-  "execution_sha": "ea3d77727c27df37c4dc4a88c303dfe9caf58e66",
+  "execution_sha": "1256de9bf67c1bc86354f7a9480aaba954fe1580",
   "policy_version": "1.0.0",
   "codex_cli_version": "codex-cli 0.153.3",
   "legacy_compatibility_used": false,
