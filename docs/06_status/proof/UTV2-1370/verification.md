@@ -8,15 +8,24 @@ Result: ready for T1 review with production parity pending until sanctioned post
 
 ## ASSERTIONS:
 
-- Archive evidence is re-read through the reader-only object-store path and independently checked for manifest validity, checksum, Parquet readability, exact source/window, and row count before planning.
-- Planning and execution refuse stale or changed evidence, count mismatches, protected references, expired or oversized plans, active legacy pruning, wrong phase credentials, and any unsupported source.
-- The execution routine holds an advisory lock, locks the bounded source relation/partition, recounts, deletes an exact maximum-10,000-row window, verifies zero rows remain, and appends an immutable receipt.
-- `provider_offers_legacy_quarantine`, picks, settlements, lifecycle, delivery/outbox, receipts, audit/business truth, and archive objects are outside the deletion path.
-- `raw_payloads` and `odds_snapshots` immutability exceptions are transaction-local and exact-plan/window scoped inside SECURITY DEFINER routines; no caller receives direct table DELETE.
-- Recovery requires the original execution receipt, newly verified archive evidence, an empty hot window, a bounded payload, exact row restoration, and an immutable recovery receipt.
-- The disabled `nightly-retention-prune` job is asserted inactive and is never scheduled or enabled.
+- [x] Archive evidence is re-read through the reader-only object-store path and independently checked for manifest validity, checksum, Parquet readability, exact source/window, and row count before planning.
+- [x] Planning and execution refuse stale or changed evidence, count mismatches, protected references, expired or oversized plans, active legacy pruning, wrong phase credentials, and any unsupported source.
+- [x] The execution routine holds an advisory lock, locks the bounded source relation/partition, recounts, deletes an exact maximum-10,000-row window, verifies zero rows remain, and appends an immutable receipt.
+- [x] `provider_offers_legacy_quarantine`, picks, settlements, lifecycle, delivery/outbox, receipts, audit/business truth, and archive objects are outside the deletion path.
+- [x] `raw_payloads` and `odds_snapshots` immutability exceptions are transaction-local and exact-plan/window scoped inside SECURITY DEFINER routines; no caller receives direct table DELETE.
+- [x] Recovery requires the original execution receipt, newly verified archive evidence, an empty hot window, a bounded payload, exact row restoration, and an immutable recovery receipt.
+- [x] The disabled `nightly-retention-prune` job is asserted inactive and is never scheduled or enabled.
 
 ## EVIDENCE:
+
+```text
+candidate_source_sha=c1fe804e2b23cfdd6bf6aa2209559ae1c2cf7c1d
+parity_run_id=36521893334
+parity_job_id=109256391877
+parity_state=PENDING_POST_DEPLOY
+production_ddl_applied=false
+post_deploy_obligation=post-deploy-before-lane-close
+```
 
 ## Verification
 
