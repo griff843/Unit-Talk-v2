@@ -1,0 +1,22 @@
+{
+  "issue_id": "UTV2-1958",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-terra-medium",
+  "model": "gpt-5.6-terra",
+  "reasoning_effort": "medium",
+  "execution_sha": "ea3d77727c27df37c4dc4a88c303dfe9caf58e66",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.153.3",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "generated_at": "2026-09-29T15:59:47Z",
+  "provenance": {
+    "kind": "lane_manifest_routing_record",
+    "source": "docs/06_status/lanes/UTV2-1958.json",
+    "execution_context": "Codex desktop session",
+    "runtime_model_attested": false,
+    "note": "Model/profile/effort fields record the policy routing selected by lane-start. This desktop session does not expose independent concrete runtime model/effort attestation. No codex-exec subprocess was launched; the null exit code does not assert a successful CLI execution."
+  }
+}
