@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1957",
+  "lane_type": "verification",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1957-production-post-migration",
+  "branch": "codex/utv2-1957-production-post-migration",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/production-post-migration-verify.yml",
+    "docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md",
+    "docs/05_operations/DB_MIGRATION_WORKFLOW.md",
+    "docs/05_operations/db-writer-classification.json",
+    "scripts/ci/production-post-migration-verify.ts",
+    "scripts/ci/workflow-production-credential-guard.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1957/diff-summary.md",
+    "docs/06_status/proof/UTV2-1957/evidence.json",
+    "docs/06_status/proof/UTV2-1957/verification.md",
+    "docs/06_status/proof/UTV2-1957/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-09-29T15:38:12.193Z",
+  "heartbeat_at": "2026-09-29T15:38:12.193Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1957-production-post-migration.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "verification_target": "UTV2-1370",
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1957-production-post-migration",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
