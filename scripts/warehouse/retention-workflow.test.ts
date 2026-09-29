@@ -30,6 +30,14 @@ test('migration is allowlisted, bounded, fail-closed, and keeps legacy cron disa
   assert.doesNotMatch(sql, /on delete\s+(?:cascade|set null)/i);
   assert.match(sql, /bounded canary ceiling is 10000 rows/);
   assert.match(sql, /manifest fingerprint changed since dry run/);
+  assert.match(
+    sql,
+    /recovery manifest fingerprint does not match execution receipt/,
+  );
+  assert.match(
+    sql,
+    /recovery object fingerprint does not match execution receipt/,
+  );
   assert.match(sql, /row\(s\) became reference-protected; prune refused/);
   assert.match(sql, /legacy nightly-retention-prune is active; refusing/);
   assert.doesNotMatch(sql, /^\s*update\s+cron\.job/im);
@@ -317,13 +325,87 @@ test(
     });
     assert.equal(postDeleteEvidence.rows?.length, 1);
 
+    const changedArchiveFile = path.join(archiveRoot, 'changed-canary.parquet');
+    const changedDuck = await openDuckDb();
+    await changedDuck.run(
+      'CREATE TABLE changed_canary(id UUID, snapshot_at TIMESTAMPTZ, source_run_id UUID)',
+    );
+    await changedDuck.run(
+      `INSERT INTO changed_canary VALUES ('99999999-9999-4999-8999-999999999999','2026-06-14T12:00:00Z',NULL)`,
+    );
+    await changedDuck.run(
+      `COPY changed_canary TO ${quote(changedArchiveFile)} (FORMAT PARQUET, COMPRESSION ZSTD)`,
+    );
+    await changedDuck.close();
+    const changedArchiveBytes = fs.readFileSync(changedArchiveFile);
+    const changedManifest = structuredClone(manifest);
+    changedManifest.object.byte_size = changedArchiveBytes.length;
+    changedManifest.object.checksum_sha256 = sha256Hex(changedArchiveBytes);
+    await store.put(
+      changedManifest.object.data_key,
+      changedArchiveBytes,
+      'application/vnd.apache.parquet',
+    );
+    await store.put(
+      changedManifest.object.manifest_key,
+      Buffer.from(serializeManifest(changedManifest)),
+      'application/json',
+    );
+    const changedEvidence = await verifyRetentionEvidence({
+      store,
+      source: 'provider_offer_history',
+      date: '2026-06-14',
+      includeRows: true,
+    });
+    assert.equal(changedEvidence.rows?.length, 1);
+    await assert.rejects(
+      callAs(
+        'warehouse_retention_recovery',
+        `select public.warehouse_retention_recover_window($1::uuid,$2::jsonb,$3,$4,$5::timestamptz,$6) result`,
+        [
+          execution.execution_id,
+          JSON.stringify(changedEvidence.rows),
+          changedEvidence.manifestSha256,
+          changedEvidence.objectSha256,
+          changedEvidence.evidenceCheckedAt,
+          'ci',
+        ],
+      ),
+      /recovery manifest fingerprint does not match execution receipt/,
+    );
+    assert.equal(
+      Number(
+        await scalar('select count(*)::int from public.provider_offer_history'),
+      ),
+      0,
+    );
+
+    await store.put(
+      manifest.object.data_key,
+      archiveBytes,
+      'application/vnd.apache.parquet',
+    );
+    await store.put(
+      manifest.object.manifest_key,
+      Buffer.from(serializeManifest(manifest)),
+      'application/json',
+    );
+    const exactRecoveryEvidence = await verifyRetentionEvidence({
+      store,
+      source: 'provider_offer_history',
+      date: '2026-06-14',
+      includeRows: true,
+    });
+
     const recovery = await callAs(
       'warehouse_retention_recovery',
-      `select public.warehouse_retention_recover_window($1::uuid,$2::jsonb,$3::timestamptz,$4) result`,
+      `select public.warehouse_retention_recover_window($1::uuid,$2::jsonb,$3,$4,$5::timestamptz,$6) result`,
       [
         execution.execution_id,
-        JSON.stringify(postDeleteEvidence.rows),
-        fresh,
+        JSON.stringify(exactRecoveryEvidence.rows),
+        exactRecoveryEvidence.manifestSha256,
+        exactRecoveryEvidence.objectSha256,
+        exactRecoveryEvidence.evidenceCheckedAt,
         'ci',
       ],
     );

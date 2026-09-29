@@ -39,6 +39,7 @@ export type RetentionSource =
 export interface ArchiveEvidence {
   manifest: ArchiveManifestV1;
   manifestSha256: string;
+  objectSha256: string;
   evidenceCheckedAt: string;
   rows?: Array<Record<string, unknown>>;
 }
@@ -60,6 +61,8 @@ export interface RetentionDb {
   recover(input: {
     executionId: string;
     rows: Array<Record<string, unknown>>;
+    manifestSha256: string;
+    objectSha256: string;
     evidenceCheckedAt: string;
     requestedBy: string;
   }): Promise<unknown>;
@@ -194,7 +197,8 @@ export async function verifyRetentionEvidence(input: {
       'archive object byte size no longer matches its verified manifest',
     );
   }
-  if (sha256Hex(objectBytes) !== manifest.object.checksum_sha256) {
+  const objectSha256 = sha256Hex(objectBytes);
+  if (objectSha256 !== manifest.object.checksum_sha256) {
     throw new Error(
       'archive object checksum no longer matches its verified manifest',
     );
@@ -245,6 +249,7 @@ export async function verifyRetentionEvidence(input: {
         .createHash('sha256')
         .update(manifestBytes)
         .digest('hex'),
+      objectSha256,
       evidenceCheckedAt: now.toISOString(),
       rows,
     };
@@ -308,11 +313,14 @@ export function createRetentionDb(dsn: string): RetentionDb {
     recover: (input) =>
       one(
         `select public.warehouse_retention_recover_window(
-          :'execution_id'::uuid, :'rows'::jsonb, :'checked_at'::timestamptz, :'requested_by'
+          :'execution_id'::uuid, :'rows'::jsonb, :'manifest_sha256', :'object_sha256',
+          :'checked_at'::timestamptz, :'requested_by'
         )::text`,
         {
           execution_id: input.executionId,
           rows: JSON.stringify(input.rows),
+          manifest_sha256: input.manifestSha256,
+          object_sha256: input.objectSha256,
           checked_at: input.evidenceCheckedAt,
           requested_by: input.requestedBy,
         },
@@ -449,6 +457,8 @@ export async function runRetentionCli(
         '--execution-id',
       ),
       rows: evidence.rows ?? [],
+      manifestSha256: evidence.manifestSha256,
+      objectSha256: evidence.objectSha256,
       evidenceCheckedAt: evidence.evidenceCheckedAt,
       requestedBy,
     });

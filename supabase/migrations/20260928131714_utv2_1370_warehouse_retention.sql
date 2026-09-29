@@ -7,7 +7,7 @@
 -- counts, inbound references, evidence freshness, plan expiry and the bounded
 -- row ceiling inside the deleting transaction.
 --
--- FAIL-CLOSED-PRECONDITION: public.warehouse_retention_plans, public.warehouse_retention_executions, public.warehouse_retention_recoveries, public.warehouse_retention_control_immutable(), public.warehouse_retention_source_config(text), public.warehouse_retention_assert_fk_contract(text), public.warehouse_retention_window_counts(text, timestamp with time zone, timestamp with time zone), public.warehouse_retention_plan_window(text, date, text, text, text, bigint, timestamp with time zone, timestamp with time zone, text, text, text), public.warehouse_retention_execute_window(uuid, text, timestamp with time zone, text), public.warehouse_retention_recover_window(uuid, jsonb, timestamp with time zone, text)
+-- FAIL-CLOSED-PRECONDITION: public.warehouse_retention_plans, public.warehouse_retention_executions, public.warehouse_retention_recoveries, public.warehouse_retention_control_immutable(), public.warehouse_retention_source_config(text), public.warehouse_retention_assert_fk_contract(text), public.warehouse_retention_window_counts(text, timestamp with time zone, timestamp with time zone), public.warehouse_retention_plan_window(text, date, text, text, text, bigint, timestamp with time zone, timestamp with time zone, text, text, text), public.warehouse_retention_execute_window(uuid, text, timestamp with time zone, text), public.warehouse_retention_recover_window(uuid, jsonb, text, text, timestamp with time zone, text)
 
 begin;
 
@@ -31,7 +31,7 @@ begin
      or to_regprocedure('public.warehouse_retention_window_counts(text,timestamp with time zone,timestamp with time zone)') is not null
      or to_regprocedure('public.warehouse_retention_plan_window(text,date,text,text,text,bigint,timestamp with time zone,timestamp with time zone,text,text,text)') is not null
      or to_regprocedure('public.warehouse_retention_execute_window(uuid,text,timestamp with time zone,text)') is not null
-     or to_regprocedure('public.warehouse_retention_recover_window(uuid,jsonb,timestamp with time zone,text)') is not null then
+     or to_regprocedure('public.warehouse_retention_recover_window(uuid,jsonb,text,text,timestamp with time zone,text)') is not null then
     raise duplicate_function using message = 'warehouse retention routine already exists; refusing before DDL';
   end if;
 
@@ -576,6 +576,8 @@ $function$;
 create function public.warehouse_retention_recover_window(
   p_execution_id uuid,
   p_rows jsonb,
+  p_manifest_sha256 text,
+  p_object_sha256 text,
   p_evidence_checked_at timestamptz,
   p_requested_by text
 )
@@ -600,6 +602,12 @@ begin
   end if;
   if exists (select 1 from public.warehouse_retention_recoveries where execution_id = p_execution_id) then
     raise unique_violation using message = 'retention execution was already recovered';
+  end if;
+  if p_manifest_sha256 is distinct from v_execution.manifest_sha256 then
+    raise check_violation using message = 'recovery manifest fingerprint does not match execution receipt';
+  end if;
+  if p_object_sha256 is distinct from v_execution.object_sha256 then
+    raise check_violation using message = 'recovery object fingerprint does not match execution receipt';
   end if;
   if jsonb_typeof(p_rows) <> 'array' then
     raise check_violation using message = 'recovery payload must be a JSON array';
@@ -734,7 +742,7 @@ revoke execute on function public.warehouse_retention_assert_fk_contract(text) f
 revoke execute on function public.warehouse_retention_window_counts(text, timestamptz, timestamptz) from public;
 revoke execute on function public.warehouse_retention_plan_window(text, date, text, text, text, bigint, timestamptz, timestamptz, text, text, text) from public;
 revoke execute on function public.warehouse_retention_execute_window(uuid, text, timestamptz, text) from public;
-revoke execute on function public.warehouse_retention_recover_window(uuid, jsonb, timestamptz, text) from public;
+revoke execute on function public.warehouse_retention_recover_window(uuid, jsonb, text, text, timestamptz, text) from public;
 
 do $revoke_functions$
 declare
@@ -750,7 +758,7 @@ begin
         'public.warehouse_retention_window_counts(text,timestamptz,timestamptz)',
         'public.warehouse_retention_plan_window(text,date,text,text,text,bigint,timestamptz,timestamptz,text,text,text)',
         'public.warehouse_retention_execute_window(uuid,text,timestamptz,text)',
-        'public.warehouse_retention_recover_window(uuid,jsonb,timestamptz,text)'
+        'public.warehouse_retention_recover_window(uuid,jsonb,text,text,timestamptz,text)'
       ] loop
         execute format('revoke execute on function %s from %I', v_signature, v_role);
       end loop;
@@ -764,7 +772,7 @@ grant execute on function public.warehouse_retention_plan_window(text, date, tex
   to warehouse_retention_planner;
 grant execute on function public.warehouse_retention_execute_window(uuid, text, timestamptz, text)
   to warehouse_retention_executor;
-grant execute on function public.warehouse_retention_recover_window(uuid, jsonb, timestamptz, text)
+grant execute on function public.warehouse_retention_recover_window(uuid, jsonb, text, text, timestamptz, text)
   to warehouse_retention_recovery;
 
 do $assert_privileges$
@@ -794,22 +802,22 @@ begin
     if exists (select 1 from pg_roles where rolname = v_role) then
       if has_function_privilege(v_role, 'public.warehouse_retention_plan_window(text,date,text,text,text,bigint,timestamptz,timestamptz,text,text,text)', 'EXECUTE')
          or has_function_privilege(v_role, 'public.warehouse_retention_execute_window(uuid,text,timestamptz,text)', 'EXECUTE')
-         or has_function_privilege(v_role, 'public.warehouse_retention_recover_window(uuid,jsonb,timestamptz,text)', 'EXECUTE') then
+         or has_function_privilege(v_role, 'public.warehouse_retention_recover_window(uuid,jsonb,text,text,timestamptz,text)', 'EXECUTE') then
         raise insufficient_privilege using message = format('warehouse retention capability leaked EXECUTE to %s', v_role);
       end if;
     end if;
   end loop;
   if not has_function_privilege('warehouse_retention_planner', 'public.warehouse_retention_plan_window(text,date,text,text,text,bigint,timestamptz,timestamptz,text,text,text)', 'EXECUTE')
      or has_function_privilege('warehouse_retention_planner', 'public.warehouse_retention_execute_window(uuid,text,timestamptz,text)', 'EXECUTE')
-     or has_function_privilege('warehouse_retention_planner', 'public.warehouse_retention_recover_window(uuid,jsonb,timestamptz,text)', 'EXECUTE') then
+     or has_function_privilege('warehouse_retention_planner', 'public.warehouse_retention_recover_window(uuid,jsonb,text,text,timestamptz,text)', 'EXECUTE') then
     raise insufficient_privilege using message = 'planner privilege boundary is incorrect';
   end if;
   if not has_function_privilege('warehouse_retention_executor', 'public.warehouse_retention_execute_window(uuid,text,timestamptz,text)', 'EXECUTE')
      or has_function_privilege('warehouse_retention_executor', 'public.warehouse_retention_plan_window(text,date,text,text,text,bigint,timestamptz,timestamptz,text,text,text)', 'EXECUTE')
-     or has_function_privilege('warehouse_retention_executor', 'public.warehouse_retention_recover_window(uuid,jsonb,timestamptz,text)', 'EXECUTE') then
+     or has_function_privilege('warehouse_retention_executor', 'public.warehouse_retention_recover_window(uuid,jsonb,text,text,timestamptz,text)', 'EXECUTE') then
     raise insufficient_privilege using message = 'executor privilege boundary is incorrect';
   end if;
-  if not has_function_privilege('warehouse_retention_recovery', 'public.warehouse_retention_recover_window(uuid,jsonb,timestamptz,text)', 'EXECUTE')
+  if not has_function_privilege('warehouse_retention_recovery', 'public.warehouse_retention_recover_window(uuid,jsonb,text,text,timestamptz,text)', 'EXECUTE')
      or has_function_privilege('warehouse_retention_recovery', 'public.warehouse_retention_plan_window(text,date,text,text,text,bigint,timestamptz,timestamptz,text,text,text)', 'EXECUTE')
      or has_function_privilege('warehouse_retention_recovery', 'public.warehouse_retention_execute_window(uuid,text,timestamptz,text)', 'EXECUTE') then
     raise insufficient_privilege using message = 'recovery privilege boundary is incorrect';

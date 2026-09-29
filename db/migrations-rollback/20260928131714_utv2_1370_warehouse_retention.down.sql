@@ -13,7 +13,7 @@ begin
 end
 $refuse_after_use$;
 
-drop function if exists public.warehouse_retention_recover_window(uuid, jsonb, timestamptz, text);
+drop function if exists public.warehouse_retention_recover_window(uuid, jsonb, text, text, timestamptz, text);
 drop function if exists public.warehouse_retention_execute_window(uuid, text, timestamptz, text);
 drop function if exists public.warehouse_retention_plan_window(text, date, text, text, text, bigint, timestamptz, timestamptz, text, text, text);
 drop function if exists public.warehouse_retention_window_counts(text, timestamptz, timestamptz);

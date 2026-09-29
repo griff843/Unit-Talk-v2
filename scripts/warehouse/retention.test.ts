@@ -143,6 +143,7 @@ test('evidence is independently read, hashed and counted through the reader path
   });
   assert.equal(result.manifest.manifest_id, h.manifest.manifest_id);
   assert.match(result.manifestSha256, /^[0-9a-f]{64}$/);
+  assert.equal(result.objectSha256, h.manifest.object.checksum_sha256);
   assert.equal(result.rows?.length, 1);
   assert.equal(result.rows?.[0]?.id, '11111111-1111-4111-8111-111111111111');
 });
