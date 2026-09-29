@@ -1,5 +1,7 @@
 # Diff summary: UTV2-1959
 
+MERGE_SHA: pending merge
+
 The substantive change is limited to the sanctioned missing-token recovery and
 its focused `node:test` regression.
 

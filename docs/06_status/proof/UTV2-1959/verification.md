@@ -11,13 +11,22 @@ carry `t1_live_db_precondition: deferred_to_ci`. Ordinary recovery omits the
 field, and the pre-existing ownership, PR-head, dependency, cleanliness, and
 scope-lock failures still stop before token reconstruction.
 
-## Assertions
+## ASSERTIONS:
 
 - [x] Recovery preserves the manifest-bound deferral exactly.
 - [x] The copy occurs only after the existing fail-closed checks pass.
 - [x] Ordinary recovery does not manufacture a deferral.
 - [x] Existing fail-closed recovery tests remain green.
 - [ ] Writable live-DB verification is completed by staging CI against project `xskgrzbteyqdufktjrjx`.
+
+## EVIDENCE:
+
+- Focused recovery suite: 20 tests passed, 0 failed.
+- Static repository gate: PASS.
+- R-level path audit: PASS with no matching rules.
+- Versioned evidence binding: PASS with the evidence commit and current PR head resolved from Git.
+- Runtime-verifier gate: PASS for substantive SHA `5072855a4387ae7e82a0be610a7c3319d96371cd`.
+- Writable DB access: refused before database access and retained as `deferred_to_ci`.
 
 ## Verification
 
