@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "9509091ad8f8c3304edca75950e3efa101a3fafb",
+    "verified_source_sha": "1591c258d681c0a801a9760338e1a2d18c44a690",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -15,8 +15,8 @@
     "status": "pass",
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts",
-      "tests": 107,
-      "pass": 107,
+      "tests": 108,
+      "pass": 108,
       "fail": 0
     },
     "type_check": "pass",
@@ -40,6 +40,9 @@
       "authoritative_github_run_job_binding": "pass",
       "authoritative_repository_and_pr_binding": "pass",
       "proof_only_descendant_receipt_commit": "pass",
+      "depth_1_utv2_migration_checkout": "pass",
+      "authoritative_pr_history_deepening": "pass",
+      "raw_sha_fetch_forbidden": "pass",
       "fabricated_run_or_job_refusal": "pass",
       "wrong_pr_or_repository_refusal": "pass",
       "wrong_job_run_binding_refusal": "pass",

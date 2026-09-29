@@ -10,6 +10,7 @@ result: pass (static governance behavior); governed staging DB receipt pending C
 
 - [x] A candidate migration may use `PENDING_POST_DEPLOY` before merge only when GitHub independently confirms the cited run/job belongs to `.github/workflows/live-schema-parity.yml`, targets the exact immutable evidence head, completed with the comparison path green and drift gate failed, and the evidence states `production_ddl_applied: false` plus `post-deploy-before-lane-close`.
 - [x] The run is bound to the authoritative repository and PR number; GitHub's mutable PR-head field may advance only through commits whose complete commit-level touched-path history is limited to the lane's proof and bookkeeping files.
+- [x] Close Eligibility can recover an absent immutable evidence commit from a depth-1 checkout only by deepening GitHub's authoritative `refs/pull/<number>/head`; it never fetches or trusts a caller-supplied raw SHA.
 - [x] An implementation/runtime change after the evidence source is refused even if a later commit reverts it and leaves a clean net diff.
 - [x] Generic `FAIL`, missing evidence, `SKIP`, fake `PASS`, stale/malformed pending evidence, and pending evidence without exact run/job identity are refused.
 - [x] Post-merge lane close refuses `PENDING_POST_DEPLOY`; only a genuine production live-schema-parity `PASS` with exact run/job identity satisfies close.
@@ -22,9 +23,19 @@ result: pass (static governance behavior); governed staging DB receipt pending C
 Focused contract suite:
 
 ```text
-tests 107
-pass 107
+tests 108
+pass 108
 fail 0
+```
+
+Real shallow-checkout regression, using a `codex/utv2-9000-migration-proof` branch and a bare remote that exposes the candidate only through `refs/pull/1678/head`:
+
+```text
+checkout_depth: 1
+immutable_evidence_commit_before_validation: absent
+authoritative_ref_fetched: refs/pull/1678/head
+immutable_evidence_commit_after_validation: present
+ancestry_and_proof_only_path_check: pass
 ```
 
 PR #1678 receipt fixture, using its real failed parity receipt (`run 36471754689`, `job 109095503592`) at immutable evidence source `12e0f4b936586ab86cf2db300c07ccefdcb32c51`, with proof-only descendant `850e30675a993c3bba7e9192326a31b66fbc54c3`:
@@ -53,8 +64,8 @@ Local writable-DB containment:
 
 ## Verification
 
-- `pnpm exec tsx --test scripts/ops/proof-schema.test.ts` — PASS (107/107).
-- `pnpm verify:static` — PASS at implementation source `320422c91970360f5b461bf832ab284dbf64d215`; the subsequent merge from current `main` was conflict-free and changed no lane implementation file.
+- `pnpm exec tsx --test scripts/ops/proof-schema.test.ts` — PASS (108/108), including the depth-1 UTV2 migration-lane checkout.
+- `pnpm verify:static` — PASS at implementation source `1591c258d681c0a801a9760338e1a2d18c44a690` after the current `main` sync.
 - `pnpm type-check` — PASS.
 - `pnpm lint` — PASS.
 - `git diff --check` — PASS before implementation commit.
@@ -65,4 +76,4 @@ Local writable-DB containment:
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1687
-Execution SHA: 9509091ad8f8c3304edca75950e3efa101a3fafb
+Execution SHA: 1591c258d681c0a801a9760338e1a2d18c44a690
