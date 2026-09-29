@@ -85,7 +85,6 @@ jobs:
 
       - name: Verify production schema and retention privilege boundary (read-only)
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           UNIT_TALK_WAREHOUSE_SOURCE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_SOURCE_DSN }}
         run: >-

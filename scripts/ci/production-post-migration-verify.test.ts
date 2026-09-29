@@ -7,8 +7,10 @@ import {
   READ_ONLY_PREAMBLE,
   READ_ONLY_STATE_SQL,
   RECEIPT_SCHEMA,
+  assertLedgerCredentialMode,
   assertProductionIdentity,
   assertReadOnlyStatement,
+  buildPsqlEnvironment,
   parseMigrationLedger,
   receiptPasses,
   type VerificationReceipt,
@@ -133,6 +135,52 @@ test('every production SQL operation is select/show or the read-only transaction
   ]) {
     assert.throws(() => assertReadOnlyStatement(mutation), /production verifier refused/u);
   }
+});
+
+test('immutability trigger proof binds every enabled trigger to its table and function', () => {
+  for (const [triggerName, tableName] of [
+    ['warehouse_retention_plans_immutable', 'warehouse_retention_plans'],
+    ['warehouse_retention_executions_immutable', 'warehouse_retention_executions'],
+    ['warehouse_retention_recoveries_immutable', 'warehouse_retention_recoveries'],
+  ]) {
+    assert.match(DB_FACTS_SQL, new RegExp(triggerName, 'u'));
+    assert.match(DB_FACTS_SQL, new RegExp(tableName, 'u'));
+  }
+  assert.match(DB_FACTS_SQL, /trigger_function\.proname = 'warehouse_retention_control_immutable'/u);
+  assert.match(DB_FACTS_SQL, /t\.tgenabled IN \('O', 'A', 'R'\)/u);
+  assert.doesNotMatch(DB_FACTS_SQL, /t\.tgenabled IN \([^)]*'D'/u);
+
+  const disabledTriggerReceipt = passingReceipt();
+  disabledTriggerReceipt.database.control_immutability_triggers = false;
+  assert.equal(receiptPasses(disabledTriggerReceipt), false);
+});
+
+test('ledger-file mode refuses the management token and strips it from psql', () => {
+  assert.doesNotThrow(() => assertLedgerCredentialMode('artifacts/ledger.txt', ''));
+  assert.doesNotThrow(() => assertLedgerCredentialMode(null, 'management-token'));
+  assert.throws(
+    () => assertLedgerCredentialMode('artifacts/ledger.txt', 'management-token'),
+    /refused SUPABASE_ACCESS_TOKEN in ledger-file mode/u,
+  );
+  assert.throws(
+    () => assertLedgerCredentialMode(null, ''),
+    /required when the verifier captures the ledger/u,
+  );
+
+  const childEnvironment = buildPsqlEnvironment(
+    { SUPABASE_ACCESS_TOKEN: 'must-not-cross-process-boundary', KEEP_ME: 'yes' },
+    'postgresql://warehouse_reader:secret@example.invalid/postgres',
+  );
+  assert.equal(childEnvironment['SUPABASE_ACCESS_TOKEN'], undefined);
+  assert.equal(childEnvironment['KEEP_ME'], 'yes');
+  assert.match(childEnvironment['PGOPTIONS'] ?? '', /default_transaction_read_only=on/u);
+
+  const workflow = readFileSync('.github/workflows/production-post-migration-verify.yml', 'utf8');
+  const verifierStep = workflow.match(
+    /- name: Verify production schema[\s\S]*?(?=\n\s+- name: Upload immutable verification receipt)/u,
+  )?.[0];
+  assert.ok(verifierStep, 'production verifier workflow step must exist');
+  assert.doesNotMatch(verifierStep, /SUPABASE_ACCESS_TOKEN/u);
 });
 
 test('ledger evidence requires exact local/remote alignment and the applied migration', () => {

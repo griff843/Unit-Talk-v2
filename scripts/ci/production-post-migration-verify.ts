@@ -136,14 +136,26 @@ SELECT json_build_object(
       ])
   ),
   'control_immutability_triggers', (
-    SELECT count(*) = 3
-    FROM pg_catalog.pg_trigger
-    WHERE NOT tgisinternal
-      AND tgname = ANY(ARRAY[
-        'warehouse_retention_plans_immutable',
-        'warehouse_retention_executions_immutable',
-        'warehouse_retention_recoveries_immutable'
-      ])
+    SELECT count(t.oid) = 3 AND bool_and(
+      table_namespace.nspname = 'public'
+      AND table_relation.relname = expected.table_name
+      AND function_namespace.nspname = 'public'
+      AND trigger_function.proname = 'warehouse_retention_control_immutable'
+      AND t.tgenabled IN ('O', 'A', 'R')
+    )
+    FROM (VALUES
+      ('warehouse_retention_plans_immutable', 'warehouse_retention_plans'),
+      ('warehouse_retention_executions_immutable', 'warehouse_retention_executions'),
+      ('warehouse_retention_recoveries_immutable', 'warehouse_retention_recoveries')
+    ) AS expected(trigger_name, table_name)
+    LEFT JOIN pg_catalog.pg_trigger t
+      ON t.tgname = expected.trigger_name AND NOT t.tgisinternal
+    LEFT JOIN pg_catalog.pg_class table_relation ON table_relation.oid = t.tgrelid
+    LEFT JOIN pg_catalog.pg_namespace table_namespace
+      ON table_namespace.oid = table_relation.relnamespace
+    LEFT JOIN pg_catalog.pg_proc trigger_function ON trigger_function.oid = t.tgfoid
+    LEFT JOIN pg_catalog.pg_namespace function_namespace
+      ON function_namespace.oid = trigger_function.pronamespace
   ),
   'runtime_functions_security_definer', (
     SELECT count(*) = 3 AND bool_and(prosecdef)
@@ -269,6 +281,7 @@ const NON_CALL_KEYWORDS = new Set([
   'not',
   'or',
   'select',
+  'values',
   'where',
 ]);
 
@@ -382,6 +395,28 @@ export function assertProductionIdentity(apiUrl: string, dsn: string): void {
   }
 }
 
+export function assertLedgerCredentialMode(ledgerPath: string | null, accessToken: string): void {
+  if (ledgerPath && accessToken) {
+    throw new Error('production verifier refused SUPABASE_ACCESS_TOKEN in ledger-file mode');
+  }
+  if (!ledgerPath && !accessToken) {
+    throw new Error('SUPABASE_ACCESS_TOKEN is required when the verifier captures the ledger');
+  }
+}
+
+export function buildPsqlEnvironment(
+  environment: NodeJS.ProcessEnv,
+  dsn: string,
+): NodeJS.ProcessEnv {
+  const childEnvironment = {
+    ...environment,
+    PGDATABASE: dsn,
+    PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=15000',
+  };
+  delete childEnvironment['SUPABASE_ACCESS_TOKEN'];
+  return childEnvironment;
+}
+
 function migrationPrefixes(): string[] {
   return readdirSync('supabase/migrations')
     .filter((name) => name.endsWith('.sql'))
@@ -461,11 +496,10 @@ async function main(): Promise<void> {
   const receiptPath = readArg('--receipt') ?? 'artifacts/production-post-migration-verification.json';
   const ledgerPath = readArg('--ledger-file');
 
-  if (!dsn || !apiUrl || !token) {
-    throw new Error(
-      'SUPABASE_URL, SUPABASE_ACCESS_TOKEN and UNIT_TALK_WAREHOUSE_SOURCE_DSN are required',
-    );
+  if (!dsn || !apiUrl) {
+    throw new Error('SUPABASE_URL and UNIT_TALK_WAREHOUSE_SOURCE_DSN are required');
   }
+  assertLedgerCredentialMode(ledgerPath, token);
   assertProductionIdentity(apiUrl, dsn);
   for (const statement of [READ_ONLY_PREAMBLE, READ_ONLY_STATE_SQL, DB_FACTS_SQL]) {
     assertReadOnlyStatement(statement);
@@ -498,11 +532,7 @@ async function main(): Promise<void> {
     ],
     {
       encoding: 'utf8',
-      env: {
-        ...process.env,
-        PGDATABASE: dsn,
-        PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=15000',
-      },
+      env: buildPsqlEnvironment(process.env, dsn),
       timeout: 30_000,
     },
   );
