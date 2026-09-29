@@ -1,0 +1,160 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092810
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092810
+  objective: >-
+    `/live` and `/today` answer only members holding the Trial (when
+    configured), VIP, VIP+, Capper or Operator (when configured) role. Every
+    other member is refused by the existing router role guard before any API
+    call is made.
+
+    `/results` and every other command keep their current access.
+
+    Contract basis: `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md` §3.3 —
+    "Free access to settled results never grants access to an active paid pick
+    before settlement."
+  acceptance_criteria:
+    - "`createLiveCommand` and `createTodayCommand` take the required role list
+      explicitly; `createDefaultCommand` supplies it from bot config through one
+      helper in `role-guard.ts`."
+    - The helper returns Trial (only when configured), VIP, VIP+, Capper, and
+      Operator (only when configured). It never returns an empty list.
+    - "Unit tests prove: both commands declare the roles; a member with only a
+      non-listed role is refused by the router and the API is never called; a
+      VIP member reaches the command; an unconfigured Trial or Operator role is
+      omitted."
+    - Existing test file extended; no new test file.
+  guardrails:
+    - Only `apps/discord-bot/src/**` changes. No API, DB, delivery, kill-switch
+      or containment change.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI per the Merge Gate's T2 path, then closed through
+      `post-merge-lane-close.yml` without `pr`.
+  unmapped_sections:
+    - >-
+      WORK-2026092810 — Free members cannot read active picks in Discord
+
+      Tier: T2 · Lane type: delivery-ui (app: discord-bot) · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Why
+
+
+      Measured 2026-09-28 on `main` `d6ece6b45`:
+      `apps/discord-bot/src/commands/live.ts` and `today.ts` declare no
+      `requiredRoles`, so the router runs them for any guild member, including
+      Free.
+
+
+      ## Split from WORK-2026092809
+
+
+      WORK-2026092809 (T1, runtime) keeps the member-scoped picks read
+      (repository method, `GET /api/picks?scope=member`, bot client). It cannot
+      start while the migration lane UTV2-1370 is active
+      (`LANE_CONCURRENCY_POLICY.md` §3: Migration × Runtime is forbidden, and a
+      Migration lane forbids any concurrent lane touching `packages/db/src/**`).
+      This lane touches only `apps/discord-bot/`, the Delivery/UI app root the
+      taxonomy assigns to it, and is independently valuable: the gate holds
+      whatever the board returns.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092810.md
+    title: WORK-2026092810 — Free members cannot read active picks in Discord
+    description: >-
+      # WORK-2026092810 — Free members cannot read active picks in Discord
+
+
+      Tier: T2 · Lane type: delivery-ui (app: discord-bot) · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      - `/live` and `/today` answer only members holding the Trial (when
+      configured), VIP, VIP+, Capper or Operator (when configured) role. Every
+      other member is refused by the existing router role guard before any API
+      call is made.
+
+      - `/results` and every other command keep their current access.
+
+
+      Contract basis: `docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md` §3.3 —
+      "Free access to settled results never grants access to an active paid pick
+      before settlement."
+
+
+      ## Why
+
+
+      Measured 2026-09-28 on `main` `d6ece6b45`:
+      `apps/discord-bot/src/commands/live.ts` and `today.ts` declare no
+      `requiredRoles`, so the router runs them for any guild member, including
+      Free.
+
+
+      ## Split from WORK-2026092809
+
+
+      WORK-2026092809 (T1, runtime) keeps the member-scoped picks read
+      (repository method, `GET /api/picks?scope=member`, bot client). It cannot
+      start while the migration lane UTV2-1370 is active
+      (`LANE_CONCURRENCY_POLICY.md` §3: Migration × Runtime is forbidden, and a
+      Migration lane forbids any concurrent lane touching `packages/db/src/**`).
+      This lane touches only `apps/discord-bot/`, the Delivery/UI app root the
+      taxonomy assigns to it, and is independently valuable: the gate holds
+      whatever the board returns.
+
+
+      ## Acceptance Criteria
+
+
+      - `createLiveCommand` and `createTodayCommand` take the required role list
+      explicitly; `createDefaultCommand` supplies it from bot config through one
+      helper in `role-guard.ts`.
+
+      - The helper returns Trial (only when configured), VIP, VIP+, Capper, and
+      Operator (only when configured). It never returns an empty list.
+
+      - Unit tests prove: both commands declare the roles; a member with only a
+      non-listed role is refused by the router and the API is never called; a
+      VIP member reaches the command; an unconfigured Trial or Operator role is
+      omitted.
+
+      - Existing test file extended; no new test file.
+
+
+      ## Guardrails
+
+
+      - Only `apps/discord-bot/src/**` changes. No API, DB, delivery,
+      kill-switch or containment change.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI per the Merge Gate's T2 path, then closed through
+      `post-merge-lane-close.yml` without `pr`.
+    captured_at: 2026-09-28T20:01:21.903Z
+    description_sha256: 19c146f6e677467ea2e8a898f6b8788d0bc904ca04c8b6fa25f43eea6849aacf
+  contract_hash: c55bf72d09f29705ed940355e5d2a28cd1f29f05edfa33a02c5e4bb6339002da

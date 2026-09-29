@@ -14,7 +14,9 @@ import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { buildPromotionPresentation, readRealEdgePresence } from '@/lib/promotion-presentation';
 import { renderClvSummary } from '@/lib/clv-summary';
 import { getPickDetail } from '@/lib/data';
+import { getDeliveryKillSwitchStatuses } from '@/lib/data/discord-ops';
 import { getPickLineMovement } from '@/lib/data/odds-intel';
+import { GovernedPickTruth, type DeliveryKillSwitchTruth } from '@/components/GovernedPickTruth';
 import { LineMovementChart } from '@/components/LineMovementChart';
 import { notFound } from 'next/navigation';
 
@@ -221,6 +223,12 @@ function summarizeSettlementContext(detail: PickDetailViewResponse) {
   return latest.result ?? latest.status;
 }
 
+function distributionModeLabel(value: unknown): string | null {
+  if (value === 'track-only') return 'Track Only';
+  if (value === 'delivery-eligible') return 'Delivery eligible';
+  return null;
+}
+
 
 export async function generateMetadata({ params }: PickDetailPageProps) {
   const { id } = await params;
@@ -294,8 +302,27 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
     marketKey: resolvedMarketKey,
   });
 
+  let deliveryKillSwitch: DeliveryKillSwitchTruth | undefined;
+  if (pick.metadata['distributionMode'] === 'delivery-eligible' && promotion.humanCapperDelivery) {
+    const target = 'official-picks';
+    try {
+      const switchStatus = (await getDeliveryKillSwitchStatuses()).find((entry) => entry.target === target);
+      deliveryKillSwitch = switchStatus
+        ? { state: switchStatus.killed ? 'killed' : 'open', target, reason: switchStatus.reason, actor: switchStatus.actor, updatedAt: switchStatus.updatedAt }
+        : { state: 'missing', target };
+    } catch {
+      deliveryKillSwitch = { state: 'unavailable', target };
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      <GovernedPickTruth
+        metadata={pick.metadata}
+        hasEventLink={rawEventId !== null}
+        voided={pick.status === 'voided'}
+        deliveryKillSwitch={deliveryKillSwitch}
+      />
       <Card>
         <div className="flex flex-col gap-4">
           <PickIdentityPanel
@@ -354,11 +381,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
 
       <Card title="Distribution mode">
         <p className="text-sm text-gray-100">
-          {pick.metadata['distributionMode'] === 'track-only'
-            ? 'Track Only'
-            : pick.metadata['distributionMode'] === 'delivery-eligible'
-              ? 'Delivery eligible'
-              : 'Distribution mode not recorded'}
+          {distributionModeLabel(pick.metadata['distributionMode']) ?? 'Distribution mode not recorded'}
         </p>
         {pick.metadata['distributionMode'] === 'track-only' && (
           <p className="mt-2 text-sm text-gray-400">

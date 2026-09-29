@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092813",
+  "tier": "T3",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "35b986ab3b739b770c3ad0fce680c8ebc09a8f47",
+    "verified_source_sha": "88371ab11ae99279bfb16b017b4a41b7e4150e86",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "88371ab11ae99279bfb16b017b4a41b7e4150e86 is the only implementation commit on this lane. Later commits change only the lane manifest and this proof directory. Merge SHA is null until post-merge-lane-close.yml rebinds it.",
+    "bound_at": "2026-09-28T23:32:48.514Z"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "pass": 0,
+      "fail": 0,
+      "note": "documentation-only change to two proof files; no code or test changed"
+    },
+    "type_check": "pass",
+    "command_mentions": "each repaired verification.md names pnpm type-check, pnpm test, pnpm verify and scripts/ci/r-level-check.ts"
+  },
+  "production_writes_by_this_change": 0
+}

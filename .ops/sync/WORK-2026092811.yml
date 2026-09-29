@@ -1,0 +1,147 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026092811
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026092811
+  objective: "`scripts/pipeline-health.ts` reports the last successful delivery
+    from `distribution_receipts`: the newest receipt whose destination is
+    `governed` or `control` (`classifyReceiptDestination`). A `sent` outbox row
+    with no receipt is not evidence of delivery."
+  acceptance_criteria:
+    - A pure function in `scripts/ops/pipeline-health-classification.ts` returns
+      the newest `recorded_at` among `governed` and `control` receipts.
+      `simulated` and `unrecognized` receipts never count.
+    - "`pipeline-health.ts` passes that value to `evaluateQueueHealth`. A
+      receipt read that is incomplete reports no successful delivery rather than
+      a guess."
+    - The output prints the newest governed receipt per logical target.
+    - Unit tests in the existing
+      `scripts/ops/pipeline-health-classification.test.ts` prove that a
+      simulated or unrecognized newest receipt is ignored, that a governed
+      receipt wins, and that no qualifying receipts yield null.
+    - No new test file. No runtime app, DB, delivery, kill-switch or containment
+      change.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI per the Merge Gate's T2 path, then closed through
+      `post-merge-lane-close.yml` without `pr`.
+  unmapped_sections:
+    - >-
+      WORK-2026092811 — Pipeline health reads delivery freshness from receipts,
+      not sent rows
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Why
+
+
+      Measured 2026-09-28 on `main` `d6ece6b45`:
+
+
+      - `pipeline-health.ts:113-120` takes `lastSuccessfulDeliveryAt` from the
+      newest `distribution_outbox` row with `status = 'sent'`.
+
+      - `apps/worker/src/distribution-worker.ts:176` marks a claimed row `sent`,
+      and writes no receipt, when its pick is already `settled` or `voided`.
+
+      - Production holds two such rows: `68f922a2` and `5005f461`, belonging to
+      the voided sample picks, `pending` behind the killed `official-picks`
+      switch. On an un-kill the worker would mark both `sent`, and the monitor
+      would report two fresh deliveries that delivered nothing.
+
+
+      This is §4.2 item 1 of `docs/mission/plan.md` (official-picks launch
+      readiness), and it closes before any un-kill.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026092811.md
+    title: WORK-2026092811 — Pipeline health reads delivery freshness from receipts,
+      not sent rows
+    description: >-
+      # WORK-2026092811 — Pipeline health reads delivery freshness from
+      receipts, not sent rows
+
+
+      Tier: T2 · Lane type: governance · Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design.
+
+
+      ## Objective
+
+
+      `scripts/pipeline-health.ts` reports the last successful delivery from
+      `distribution_receipts`: the newest receipt whose destination is
+      `governed` or `control` (`classifyReceiptDestination`). A `sent` outbox
+      row with no receipt is not evidence of delivery.
+
+
+      ## Why
+
+
+      Measured 2026-09-28 on `main` `d6ece6b45`:
+
+
+      - `pipeline-health.ts:113-120` takes `lastSuccessfulDeliveryAt` from the
+      newest `distribution_outbox` row with `status = 'sent'`.
+
+      - `apps/worker/src/distribution-worker.ts:176` marks a claimed row `sent`,
+      and writes no receipt, when its pick is already `settled` or `voided`.
+
+      - Production holds two such rows: `68f922a2` and `5005f461`, belonging to
+      the voided sample picks, `pending` behind the killed `official-picks`
+      switch. On an un-kill the worker would mark both `sent`, and the monitor
+      would report two fresh deliveries that delivered nothing.
+
+
+      This is §4.2 item 1 of `docs/mission/plan.md` (official-picks launch
+      readiness), and it closes before any un-kill.
+
+
+      ## Acceptance Criteria
+
+
+      - A pure function in `scripts/ops/pipeline-health-classification.ts`
+      returns the newest `recorded_at` among `governed` and `control` receipts.
+      `simulated` and `unrecognized` receipts never count.
+
+      - `pipeline-health.ts` passes that value to `evaluateQueueHealth`. A
+      receipt read that is incomplete reports no successful delivery rather than
+      a guess.
+
+      - The output prints the newest governed receipt per logical target.
+
+      - Unit tests in the existing
+      `scripts/ops/pipeline-health-classification.test.ts` prove that a
+      simulated or unrecognized newest receipt is ignored, that a governed
+      receipt wins, and that no qualifying receipts yield null.
+
+      - No new test file. No runtime app, DB, delivery, kill-switch or
+      containment change.
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI per the Merge Gate's T2 path, then closed through
+      `post-merge-lane-close.yml` without `pr`.
+    captured_at: 2026-09-28T20:10:08.909Z
+    description_sha256: 6f87bf041da2b2159246dfcef626744dd32edecab64038b5fa453c11fd81ab5f
+  contract_hash: 452aaa3eb1e4803cc94712cf37d85b004798b3e0c0a74aad38e06086241f50a4

@@ -11,13 +11,15 @@ import {
   type QueriedPick,
 } from '../api-client.js';
 import { loadBotConfig } from '../config.js';
+import { requireActivePickRoles } from '../role-guard.js';
 import type { CommandHandler } from '../command-registry.js';
 
 const TODAY_STATUSES = ['validated', 'queued', 'posted', 'settled'];
 const PAGE_SIZE = 10;
 
-export function createTodayCommand(apiClient: ApiClient): CommandHandler {
+export function createTodayCommand(apiClient: ApiClient, requiredRoles: string[]): CommandHandler {
   return {
+    requiredRoles,
     data: new SlashCommandBuilder()
       .setName('today')
       .setDescription("Show picks created in today's board window"),
@@ -119,5 +121,5 @@ function paginate<T>(items: T[], pageSize: number) {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createTodayCommand(createApiClient(config.apiUrl, config.apiKey));
+  return createTodayCommand(createApiClient(config.apiUrl, config.apiKey), requireActivePickRoles(config));
 }
