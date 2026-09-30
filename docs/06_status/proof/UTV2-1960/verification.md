@@ -50,6 +50,8 @@ Rules matched: discord-delivery
 - `pnpm exec tsx --test apps/discord-bot/src/discord-bot-foundation.test.ts` — PASS, 103/103.
 - `pnpm --filter @unit-talk/discord-bot type-check` — PASS.
 - `pnpm --filter @unit-talk/discord-bot command-manifest:check` — PASS, 14 definitions.
+- `pnpm type-check` — PASS as the root type-check stage of `pnpm verify:static`.
+- `pnpm test` — PASS as the full unit-test stage of `pnpm verify:static`.
 - `pnpm verify` — the complete `verify:static` phase passed, including lint, root type-check, build, full unit suite, Smart Form verification, command-manifest verification, and migration lint. The subsequent `test:live-db` phase was truthfully refused by `ci:assert-staging` because the local URL identifies `127.0.0.1`, not sanctioned staging `xskgrzbteyqdufktjrjx`. This T2 lane touches no DB/API service path.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; `discord-delivery` matched, R1 required, no artifact requirement.
 

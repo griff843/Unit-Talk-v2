@@ -36,6 +36,18 @@
         "note": "14 command definitions verified"
       },
       {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Executed by the successful verify:static phase."
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Executed by the successful verify:static phase."
+      },
+      {
         "command": "pnpm verify (verify:static phase)",
         "exit_code": 0,
         "result": "pass",
