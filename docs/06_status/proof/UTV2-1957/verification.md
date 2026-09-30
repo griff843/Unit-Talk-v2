@@ -6,7 +6,7 @@ Issue: UTV2-1957
 Tier: T1
 result: pass
 
-| Commit SHA(s) | `9096a08c47d91d1237de3beb78a0edff7dde1630` (verified source SHA) |
+| Commit SHA(s) | `fd948c664315bf6de30d1dfa0dc8b398f4ce01b5` (verified source SHA) |
 | --- | --- |
 
 ## ASSERTIONS:
@@ -21,7 +21,7 @@ result: pass
 ## EVIDENCE:
 
 ```text
-Verified source SHA: 9096a08c47d91d1237de3beb78a0edff7dde1630
+Verified source SHA: fd948c664315bf6de30d1dfa0dc8b398f4ce01b5
 
 pnpm test:production-post-migration
 tests 11; pass 11; fail 0
@@ -32,9 +32,9 @@ tests 75; pass 75; fail 0
 pnpm type-check
 PASS
 
-pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head 9096a08c47d91d1237de3beb78a0edff7dde1630
+pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head fd948c664315bf6de30d1dfa0dc8b398f4ce01b5
 Verdict: PASS
-Changed files: 14
+Changed files: 10
 Rules matched: (none)
 
 pnpm verify:static
@@ -46,7 +46,7 @@ PASS, including the dedicated production post-migration verifier suite, lint, ty
 - [x] `pnpm test:production-post-migration`: 11 pass, 0 fail.
 - [x] `pnpm exec tsx --test scripts/ci/workflow-production-credential-guard.test.ts scripts/ci/staging-path-enforcement.test.ts`: 75 pass, 0 fail.
 - [x] `pnpm type-check`: PASS.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head 9096a08c47d91d1237de3beb78a0edff7dde1630`: PASS; no R-level rules matched.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head fd948c664315bf6de30d1dfa0dc8b398f4ce01b5`: PASS; no R-level rules matched.
 - [x] `pnpm verify:static` (via `pnpm verify`): PASS.
 - [ ] `pnpm test:live-db`: intentionally not satisfied locally; local containment URL was refused. Required exact-head `staging-ci` proof must pass before PM review.
 - [ ] Production read-only verifier: intentionally not run before merge and PM authorization.
@@ -56,4 +56,4 @@ PASS, including the dedicated production post-migration verifier suite, lint, ty
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1698
-Execution SHA: 9096a08c47d91d1237de3beb78a0edff7dde1630
+Execution SHA: fd948c664315bf6de30d1dfa0dc8b398f4ce01b5
