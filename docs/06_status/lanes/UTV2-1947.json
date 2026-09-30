@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1947-member-pick-command-route",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1702",
   "files_changed": [],
   "file_scope_lock": [
     "apps/discord-bot/src/commands/heat-signal.ts",
@@ -24,9 +24,9 @@
     "docs/06_status/proof/UTV2-1947/verification.md",
     "docs/06_status/proof/UTV2-1947/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-30T01:59:01.033Z",
-  "heartbeat_at": "2026-09-30T01:59:01.033Z",
+  "heartbeat_at": "2026-09-30T02:22:30.437Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1947-member-pick-command-route.json",
