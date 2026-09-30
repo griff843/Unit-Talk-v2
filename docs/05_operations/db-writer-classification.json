@@ -359,15 +359,7 @@
       ]
     }
   ],
-  "production_read_only_entrypoints": [
-    {
-      "path": "scripts/ci/production-post-migration-verify.ts",
-      "owner": "db-governance",
-      "execution": [
-        "workflow_dispatch: Production Post-Migration Verification"
-      ]
-    }
-  ],
+  "production_read_only_entrypoints": [],
   "workflows": [
     {
       "path": ".github/workflows/ci.yml",

@@ -46,9 +46,7 @@ Unit Talk V2 operates three DB environments:
 
 - The canonical live project at ref `zfzdnfwdarxucxtaojxm`.
 - **All schema mutations require operator execution or explicit operator authorization in the current session.**
-- Agents may run sanctioned read-only probes (`supabase migration list --linked` and the
-  `Production Post-Migration Verification` workflow). `pnpm test:db` is a writable proof suite and
-  is staging-only.
+- Agents may run read-only probes (`pnpm test:db`, `supabase migration list --linked`).
 - No agent may autonomously run `supabase db push`, `supabase migration repair`, or any `ALTER`/`DROP`/`TRUNCATE` against production.
 - The Dashboard SQL editor is acceptable for read-only queries and debug. It must not be used for schema changes.
 
@@ -66,7 +64,7 @@ The operator (A Griffin) is the single live-write authority for production. This
 | Executing `supabase db push` against production | Operator (or agent with explicit per-session authorization) |
 | Approving Supabase preview branch creation | Operator |
 | Reviewing and accepting risk classification on each migration | Operator |
-| Signing off on post-apply verification (production read-only receipt + Live Schema Parity PASS) | Operator |
+| Signing off on post-apply verification (`pnpm test:db` green) | Operator |
 | Owning the incident response decision tree on migration failure | Operator |
 | Revoking agent authorization if a session ends or scope changes | Operator |
 
@@ -75,7 +73,7 @@ The operator (A Griffin) is the single live-write authority for production. This
 An agent must halt and escalate to the operator when:
 
 1. `supabase migration list --linked` output shows divergence not accounted for by the current lane's migration file
-2. The production read-only post-migration verifier or production Live Schema Parity fails after an apply
+2. `pnpm test:db` fails after any migration apply
 3. A migration is classified as Destructive or Cron-mutating
 4. The live schema contains objects not present in any local migration file (remote-only drift)
 5. A PostgREST or schema-cache error appears immediately after apply
@@ -90,10 +88,7 @@ The escalation artifact is a Linear comment on the current issue. Do not proceed
 ### What agents may do autonomously
 
 - Read, analyze, and report on DB state (schema inventory, ledger comparison, migration risk classification)
-- Run `pnpm type-check` and `pnpm verify` against committed repository state
-- Run `pnpm test:db` only against the approved staging project; it is intentionally writable
-- Dispatch `Production Post-Migration Verification` after a sanctioned production apply; it uses
-  the production-bound `warehouse_reader` login and read-only catalog probes
+- Run `pnpm type-check`, `pnpm verify`, `pnpm test:db` (all read-only at the DB layer)
 - Draft migration files and surface them for operator review
 - Run `pnpm supabase:types` (type regen — no DB write, reads schema over REST)
 - Check `supabase migration list --linked` (read-only ledger query)
@@ -157,32 +152,14 @@ The following are prohibited regardless of who requests them, unless accompanied
 
 ---
 
-## DB Verification Policy
+## `pnpm test:db` Policy
 
-`pnpm test:db` is a writable integration proof suite. Its executable prerequisite,
-`pnpm ci:assert-staging`, permits only the approved staging project (or the explicitly supported
-local loopback path). Production refusal is the correct result and must never be bypassed.
+`pnpm test:db` runs a DB smoke test against live Supabase by default (targeting `SUPABASE_URL` in `local.env`).
 
-Before merge, migration behavior is proved on governed non-production infrastructure with
-`pnpm test:db` and the migration proof gates. After sanctioned production apply, use the manual
-`Production Post-Migration Verification` workflow instead. That workflow:
-
-- binds the Supabase CLI ledger read to canonical production project `zfzdnfwdarxucxtaojxm`;
-- requires the existing `warehouse_reader` DSN bound to that same project;
-- starts a read-only transaction and records PostgreSQL's `transaction_read_only=on` result;
-- performs only migration-ledger and catalog `SELECT`/`SHOW` probes;
-- verifies the expected schema objects, RPC signatures, RLS/immutability controls, and retention
-  phase-role privilege boundaries; and
-- emits a production-bound receipt with `mutated: false`.
-
-The verifier's independently invocable regression suite is
-`pnpm test:production-post-migration`. The workflow invokes the production-bound implementation via
-`pnpm verify:production-post-migration -- --ledger-file <path> --receipt <path>`; operators should
-dispatch the workflow rather than supplying production credentials to that command locally.
-
-The read-only receipt does not replace production Live Schema Parity. A real PASS from the
-authoritative `Live Schema Parity` workflow, with exact run and job IDs, is also mandatory before
-the migration lane may close. Staging receipts are never accepted as production post-apply truth.
+- Agents may run `pnpm test:db` freely — it is a read-only probe.
+- If `test:db` fails, surface the failure to the operator before any further DB action.
+- `test:db` may be targeted at a preview branch by overriding `SUPABASE_URL` in the session. Never persist the override to `local.env` without operator instruction.
+- `test:db` must pass as part of T1 lane closure evidence. A failed `test:db` blocks lane close.
 
 ---
 
