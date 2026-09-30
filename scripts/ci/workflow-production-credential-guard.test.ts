@@ -653,6 +653,7 @@ function passingReceipt(): VerificationReceipt {
       transaction_read_only: 'on',
       objects_present: true,
       phase_roles_inert: true,
+      phase_roles_have_no_memberships: true,
       phase_privileges_exact: true,
       phase_roles_have_no_direct_dml: true,
       data_api_execute_denied: true,
@@ -758,8 +759,9 @@ test('immutability trigger proof binds every enabled trigger to its table and fu
     assert.match(DB_FACTS_SQL, new RegExp(tableName, 'u'));
   }
   assert.match(DB_FACTS_SQL, /trigger_function\.proname = 'warehouse_retention_control_immutable'/u);
-  assert.match(DB_FACTS_SQL, /t\.tgenabled = 'O'/u);
-  assert.doesNotMatch(DB_FACTS_SQL, /t\.tgenabled[^\n]*'R'/u);
+  assert.match(DB_FACTS_SQL, /t\.tgenabled IN \('O', 'A'\)/u);
+  assert.doesNotMatch(DB_FACTS_SQL, /t\.tgenabled IN \([^)]*'D'/u);
+  assert.doesNotMatch(DB_FACTS_SQL, /t\.tgenabled IN \([^)]*'R'/u);
 
   const disabledTriggerReceipt = passingReceipt();
   disabledTriggerReceipt.database.control_immutability_triggers = false;
@@ -784,6 +786,16 @@ test('phase roles are refused any direct table or helper-function privilege', ()
   const leakedPrivilege = passingReceipt();
   leakedPrivilege.database.phase_privileges_exact = false;
   assert.equal(receiptPasses(leakedPrivilege), false);
+});
+
+test('phase roles with direct or transitive memberships are refused', () => {
+  assert.match(DB_FACTS_SQL, /WITH RECURSIVE phase_role_membership_paths/u);
+  assert.match(DB_FACTS_SQL, /pg_catalog\.pg_auth_members membership/u);
+  assert.match(DB_FACTS_SQL, /membership\.member = membership_path\.reachable_role_oid/u);
+
+  const membershipEscalation = passingReceipt();
+  membershipEscalation.database.phase_roles_have_no_memberships = false;
+  assert.equal(receiptPasses(membershipEscalation), false);
 });
 
 test('ledger-file mode refuses the management token and strips it from psql', () => {
@@ -886,5 +898,5 @@ test('workflow is manual, production-bound, reader-only, and keeps parity mandat
   assert.match(workflow, /UNIT_TALK_WAREHOUSE_SOURCE_DSN/u);
   assert.doesNotMatch(workflow, /SUPABASE_SERVICE_ROLE_KEY/u);
   assert.match(workflow, /Live Schema Parity/u);
-  assert.match(workflow, /production-post-migration-verify\.ts/u);
+  assert.match(workflow, /pnpm verify:production-post-migration --/u);
 });

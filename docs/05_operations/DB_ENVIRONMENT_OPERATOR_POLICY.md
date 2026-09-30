@@ -175,6 +175,11 @@ Before merge, migration behavior is proved on governed non-production infrastruc
   phase-role privilege boundaries; and
 - emits a production-bound receipt with `mutated: false`.
 
+The verifier's independently invocable regression suite is
+`pnpm test:production-post-migration`. The workflow invokes the production-bound implementation via
+`pnpm verify:production-post-migration -- --ledger-file <path> --receipt <path>`; operators should
+dispatch the workflow rather than supplying production credentials to that command locally.
+
 The read-only receipt does not replace production Live Schema Parity. A real PASS from the
 authoritative `Live Schema Parity` workflow, with exact run and job IDs, is also mandatory before
 the migration lane may close. Staging receipts are never accepted as production post-apply truth.

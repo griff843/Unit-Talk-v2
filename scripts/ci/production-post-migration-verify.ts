@@ -30,6 +30,16 @@ const PHASE_ROLES = [
   'warehouse_retention_recovery',
 ] as const;
 
+export const ACCEPTED_IMMUTABILITY_TRIGGER_STATES = ['O', 'A'] as const;
+
+export function isAcceptedImmutabilityTriggerState(state: string): boolean {
+  return (ACCEPTED_IMMUTABILITY_TRIGGER_STATES as readonly string[]).includes(state);
+}
+
+function acceptedTriggerStateSql(column: string): string {
+  return `${column} IN (${ACCEPTED_IMMUTABILITY_TRIGGER_STATES.map((state) => `'${state}'`).join(', ')})`;
+}
+
 const PLAN_FUNCTION =
   'public.warehouse_retention_plan_window(text,date,text,text,text,bigint,timestamptz,timestamptz,text,text,text)';
 const EXECUTE_FUNCTION =
@@ -59,6 +69,29 @@ SELECT json_build_object(
     )
     FROM pg_catalog.pg_roles
     WHERE rolname = ANY(ARRAY['${PHASE_ROLES.join("','")}'])
+  ),
+  'phase_roles_have_no_memberships', NOT EXISTS (
+    WITH RECURSIVE phase_role_membership_paths AS (
+      SELECT
+        phase_role.rolname AS phase_role,
+        membership.roleid AS reachable_role_oid,
+        ARRAY[membership.member, membership.roleid]::oid[] AS membership_path
+      FROM pg_catalog.pg_auth_members membership
+      JOIN pg_catalog.pg_roles phase_role ON phase_role.oid = membership.member
+      WHERE phase_role.rolname = ANY(ARRAY['${PHASE_ROLES.join("','")}'])
+
+      UNION ALL
+
+      SELECT
+        membership_path.phase_role,
+        membership.roleid,
+        membership_path.membership_path || membership.roleid
+      FROM phase_role_membership_paths membership_path
+      JOIN pg_catalog.pg_auth_members membership
+        ON membership.member = membership_path.reachable_role_oid
+      WHERE NOT membership.roleid = ANY(membership_path.membership_path)
+    )
+    SELECT 1 FROM phase_role_membership_paths
   ),
   'phase_privileges_exact',
     has_function_privilege('warehouse_retention_planner', '${PLAN_FUNCTION}', 'EXECUTE')
@@ -155,7 +188,7 @@ SELECT json_build_object(
       AND table_relation.relname = expected.table_name
       AND function_namespace.nspname = 'public'
       AND trigger_function.proname = 'warehouse_retention_control_immutable'
-      AND t.tgenabled = 'O'
+      AND ${acceptedTriggerStateSql('t.tgenabled')}
     )
     FROM (VALUES
       ('warehouse_retention_plans_immutable', 'warehouse_retention_plans'),
@@ -197,6 +230,7 @@ export interface DatabaseFacts {
   transaction_read_only: string;
   objects_present: boolean;
   phase_roles_inert: boolean;
+  phase_roles_have_no_memberships: boolean;
   phase_privileges_exact: boolean;
   phase_roles_have_no_direct_dml: boolean;
   data_api_execute_denied: boolean;
@@ -471,6 +505,7 @@ export function parseMigrationLedger(
 const REQUIRED_FACTS: Array<keyof DatabaseFacts> = [
   'objects_present',
   'phase_roles_inert',
+  'phase_roles_have_no_memberships',
   'phase_privileges_exact',
   'phase_roles_have_no_direct_dml',
   'data_api_execute_denied',

@@ -15,6 +15,8 @@
     "docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md",
     "docs/05_operations/DB_MIGRATION_WORKFLOW.md",
     "docs/05_operations/db-writer-classification.json",
+    "package.json",
+    "scripts/ci/production-post-migration-verify.test.ts",
     "scripts/ci/production-post-migration-verify.ts",
     "scripts/ci/workflow-production-credential-guard.test.ts"
   ],

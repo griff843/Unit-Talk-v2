@@ -151,6 +151,8 @@ For production closeout, dispatch the manual `Production Post-Migration Verifica
 local/remote migration ledger, and checks the migration's schema/RPC and privilege contract without
 calling mutation RPCs or issuing DML/DDL. The resulting receipt must say `environment: production`,
 `read_only: true`, `mutated: false`, and `verdict: PASS`; a staging receipt cannot substitute.
+The focused verifier regression command is `pnpm test:production-post-migration` and remains part of
+the required static verification graph.
 
 Production Live Schema Parity must then return a separate real `PASS`, with exact run/job IDs, before
 the migration lane closes. If type reconciliation, the production read-only receipt, or parity is not
