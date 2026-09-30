@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import {
   findProductionCredentialExposures,
   findUnboundStagingCredentialJobs,
@@ -34,6 +34,35 @@ import {
 } from './production-post-migration-verify.js';
 
 const WORKFLOW_DIR = join(ROOT, '.github', 'workflows');
+const PRODUCTION_WORKFLOW = join(WORKFLOW_DIR, 'production-post-migration-verify.yml');
+const VERIFIER_ENTRYPOINT = 'scripts/ci/production-post-migration-verify.ts';
+
+function readRegisteredProductionWorkflow(): string | null {
+  const inventory = JSON.parse(
+    readFileSync(join(ROOT, 'docs', '05_operations', 'db-writer-classification.json'), 'utf8'),
+  ) as {
+    production_read_only_entrypoints: Array<{ path: string }>;
+  };
+  const registered = inventory.production_read_only_entrypoints.some(
+    (entry) => entry.path === VERIFIER_ENTRYPOINT,
+  );
+
+  if (!registered) {
+    assert.equal(
+      existsSync(PRODUCTION_WORKFLOW),
+      false,
+      'the production workflow must remain absent until its governance companion registers the verifier',
+    );
+    return null;
+  }
+
+  assert.equal(
+    existsSync(PRODUCTION_WORKFLOW),
+    true,
+    'a registered production verifier must have its governed workflow',
+  );
+  return readFileSync(PRODUCTION_WORKFLOW, 'utf8');
+}
 
 function fixtureDir(files: Record<string, string>): string {
   const dir = createTempWorkspace('utv2-1630-wf-');
@@ -818,7 +847,8 @@ test('ledger-file mode refuses the management token and strips it from psql', ()
   assert.equal(childEnvironment['KEEP_ME'], 'yes');
   assert.match(childEnvironment['PGOPTIONS'] ?? '', /default_transaction_read_only=on/u);
 
-  const workflow = readFileSync('.github/workflows/production-post-migration-verify.yml', 'utf8');
+  const workflow = readRegisteredProductionWorkflow();
+  if (!workflow) return;
   const verifierStep = workflow.match(
     /- name: Verify production schema[\s\S]*?(?=\n\s+- name: Upload immutable verification receipt)/u,
   )?.[0];
@@ -891,7 +921,8 @@ test('a staging or non-read-only receipt cannot substitute for production truth'
 });
 
 test('workflow is manual, production-bound, reader-only, and keeps parity mandatory', () => {
-  const workflow = readFileSync('.github/workflows/production-post-migration-verify.yml', 'utf8');
+  const workflow = readRegisteredProductionWorkflow();
+  if (!workflow) return;
   assert.match(workflow, /^\s*workflow_dispatch:/mu);
   assert.doesNotMatch(workflow, /^\s*pull_request:/mu);
   assert.match(workflow, /environment: production/u);

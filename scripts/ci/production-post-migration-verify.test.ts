@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   DB_FACTS_SQL,
@@ -19,6 +19,35 @@ import {
 
 const PRODUCTION_REF = 'zfzdnfwdarxucxtaojxm';
 const STAGING_REF = 'xskgrzbteyqdufktjrjx';
+const PRODUCTION_WORKFLOW = '.github/workflows/production-post-migration-verify.yml';
+const VERIFIER_ENTRYPOINT = 'scripts/ci/production-post-migration-verify.ts';
+
+function readRegisteredProductionWorkflow(): string | null {
+  const inventory = JSON.parse(
+    readFileSync('docs/05_operations/db-writer-classification.json', 'utf8'),
+  ) as {
+    production_read_only_entrypoints: Array<{ path: string }>;
+  };
+  const registered = inventory.production_read_only_entrypoints.some(
+    (entry) => entry.path === VERIFIER_ENTRYPOINT,
+  );
+
+  if (!registered) {
+    assert.equal(
+      existsSync(PRODUCTION_WORKFLOW),
+      false,
+      'the production workflow must remain absent until its governance companion registers the verifier',
+    );
+    return null;
+  }
+
+  assert.equal(
+    existsSync(PRODUCTION_WORKFLOW),
+    true,
+    'a registered production verifier must have its governed workflow',
+  );
+  return readFileSync(PRODUCTION_WORKFLOW, 'utf8');
+}
 
 function passingReceipt(): VerificationReceipt {
   return {
@@ -86,11 +115,10 @@ test('the dedicated verifier commands are discoverable and wired into static ver
     /pnpm test:production-post-migration/u,
   );
 
-  const workflow = readFileSync(
-    '.github/workflows/production-post-migration-verify.yml',
-    'utf8',
-  );
-  assert.match(workflow, /pnpm verify:production-post-migration --/u);
+  const workflow = readRegisteredProductionWorkflow();
+  if (workflow) {
+    assert.match(workflow, /pnpm verify:production-post-migration --/u);
+  }
 });
 
 test('writable DB suites remain mechanically staging-only', () => {
@@ -320,10 +348,8 @@ test('staging, mutable, or non-authoritative receipts cannot substitute for prod
 });
 
 test('workflow is manual, production-bound, reader-only, and keeps parity mandatory', () => {
-  const workflow = readFileSync(
-    '.github/workflows/production-post-migration-verify.yml',
-    'utf8',
-  );
+  const workflow = readRegisteredProductionWorkflow();
+  if (!workflow) return;
   assert.match(workflow, /^\s*workflow_dispatch:/mu);
   assert.doesNotMatch(workflow, /^\s*pull_request:/mu);
   assert.match(workflow, /environment: production/u);
