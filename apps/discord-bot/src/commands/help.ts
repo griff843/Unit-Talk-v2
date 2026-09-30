@@ -9,7 +9,7 @@ import type { CommandHandler } from '../command-registry.js';
  */
 const COMMAND_ENTRIES: ReadonlyArray<{ name: string; description: string }> = [
   { name: 'alerts-setup', description: 'Show alert agent status (operator only)' },
-  { name: 'heat-signal', description: 'Show recent notable line movement signals' },
+  { name: 'heat-signal', description: 'Line-movement alerts (not live yet)' },
   { name: 'live', description: 'Show active picks that are still live on the board' },
   { name: 'today', description: "Show picks created in today's board window" },
   { name: 'my-picks', description: 'Show picks that match your Discord identity' },

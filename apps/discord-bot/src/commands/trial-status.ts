@@ -78,9 +78,9 @@ function resolveTierDescription(tier: MemberTierContext['tier']) {
     case 'trial':
       return "You're on a trial. You have temporary VIP-level access. Upgrade before your trial ends to keep it.";
     case 'vip':
-      return "You're a VIP member. You have access to Best Bets, recaps, and the full capper board.";
+      return "You're a VIP member. You have access to official capper picks, recaps, results, and the capper board.";
     case 'vip-plus':
-      return "You're VIP+. You have access to all VIP surfaces plus Trader Insights.";
+      return "You're VIP+. You have access to everything in VIP. VIP+ market-intelligence features are not live yet.";
     case 'black-label':
       return "You're on a reserved tier.";
     case 'free':

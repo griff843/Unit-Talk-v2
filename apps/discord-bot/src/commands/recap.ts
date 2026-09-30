@@ -130,7 +130,7 @@ function buildRecapField(pick: CapperRecapPick): APIEmbedField {
       `**${fields.get('Market') ?? pick.market}**`,
       fields.get('Selection') ?? pick.selection,
       `P/L: ${fields.get('P/L') ?? '0.0u'}`,
-      `CLV: ${fields.get('CLV% (vs SGO close)') ?? fields.get('CLV%') ?? '—'}`,
+      `CLV: ${pick.clvPercent === null || pick.clvPercent === undefined ? 'unavailable' : fields.get('CLV% (vs SGO close)') ?? fields.get('CLV%') ?? 'unavailable'}`,
       `Stake: ${fields.get('Stake') ?? '—'}`,
     ].join('\n'),
     inline: false,

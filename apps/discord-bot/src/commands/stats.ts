@@ -119,7 +119,7 @@ export function buildStatsEmbed(stats: CapperStatsResponse) {
 
   if (stats.picks >= 5 && stats.picksWithClv > 0) {
     embed.addFields({
-      name: 'Avg CLV% (vs SGO close)',
+      name: 'Avg CLV%',
       value: `${formatSignedPercent(stats.avgClvPct)} (${stats.picksWithClv} picks with closing line data)`,
       inline: false,
     });
@@ -127,6 +127,14 @@ export function buildStatsEmbed(stats: CapperStatsResponse) {
       name: 'Beats Line',
       value: formatFractionPercent(stats.beatsLine),
       inline: true,
+    });
+  }
+
+  if (stats.picks >= 5 && stats.picksWithClv === 0) {
+    embed.addFields({
+      name: 'CLV',
+      value: 'unavailable (no closing-line data)',
+      inline: false,
     });
   }
 

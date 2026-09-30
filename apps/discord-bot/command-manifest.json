@@ -17,7 +17,7 @@
       }
     ],
     "name": "heat-signal",
-    "description": "Show recent notable line movement signals",
+    "description": "Line-movement alerts (not live yet)",
     "type": 1
   },
   {

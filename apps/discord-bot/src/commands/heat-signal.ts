@@ -11,14 +11,14 @@ import {
 import { loadBotConfig } from '../config.js';
 import type { CommandHandler } from '../command-registry.js';
 
-const EMPTY_MESSAGE = 'No notable line movements detected in the current window.';
+const EMPTY_MESSAGE = 'Line-movement alerts are not live yet. There are no detections to show.';
 const ERROR_MESSAGE = 'Alert data temporarily unavailable.';
 
 export function createHeatSignalCommand(apiClient: ApiClient): CommandHandler {
   return {
     data: new SlashCommandBuilder()
       .setName('heat-signal')
-      .setDescription('Show recent notable line movement signals')
+      .setDescription('Line-movement alerts (not live yet)')
       .addIntegerOption((option) =>
         option
           .setName('count')
