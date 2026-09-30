@@ -1,6 +1,6 @@
 # PROOF: UTV2-1959
 
-MERGE_SHA: pending merge
+MERGE_SHA: 211b82551bf4ac31d2ad4634004fbdb0967026ae
 
 VERIFIED_SOURCE_SHA: f03e0ce0b73f011584f122bce87fe35b1e0dc20a
 
@@ -70,7 +70,7 @@ requires a genuine G6 staging-CI receipt.
 
 Verified source SHA: `f03e0ce0b73f011584f122bce87fe35b1e0dc20a`
 
-Merge SHA: pending merge
+Merge SHA: 211b82551bf4ac31d2ad4634004fbdb0967026ae
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1700
 Execution SHA: f03e0ce0b73f011584f122bce87fe35b1e0dc20a

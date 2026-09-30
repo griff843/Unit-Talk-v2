@@ -8,10 +8,12 @@
   "status": "ready_for_review",
   "generated_at": "2026-09-29T18:33:30Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "211b82551bf4ac31d2ad4634004fbdb0967026ae",
     "verified_source_sha": "f03e0ce0b73f011584f122bce87fe35b1e0dc20a",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-30T00:59:53.911Z"
   },
   "scope": {
     "substantive_files": [
