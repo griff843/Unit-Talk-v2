@@ -17,5 +17,5 @@ No `/live` or `/today` authorization, live Discord state, Whop/Stripe, official-
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 4954bab5f4b1f5417d695a82d7ec6e8afb8d5788
 PR: pending

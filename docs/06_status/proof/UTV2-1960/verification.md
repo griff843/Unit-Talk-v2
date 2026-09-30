@@ -1,6 +1,6 @@
 # PROOF: UTV2-1960
 
-MERGE_SHA: pending merge
+MERGE_SHA: 4954bab5f4b1f5417d695a82d7ec6e8afb8d5788
 
 Issue: UTV2-1960
 Tier: T2
@@ -57,6 +57,6 @@ Rules matched: discord-delivery
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 4954bab5f4b1f5417d695a82d7ec6e8afb8d5788
 PR: pending
 Execution SHA: 19b32b7b2e9d608653d271c42e40cd7b5dd7e30c
