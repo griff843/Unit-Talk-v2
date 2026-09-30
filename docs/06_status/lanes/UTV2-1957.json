@@ -11,10 +11,6 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1698",
   "files_changed": [],
   "file_scope_lock": [
-    ".github/workflows/production-post-migration-verify.yml",
-    "docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md",
-    "docs/05_operations/DB_MIGRATION_WORKFLOW.md",
-    "docs/05_operations/db-writer-classification.json",
     "package.json",
     "scripts/ci/production-post-migration-verify.test.ts",
     "scripts/ci/production-post-migration-verify.ts",
@@ -50,5 +46,65 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "scope_release_history": [
+    {
+      "released_at": "2026-09-30T16:13:56.173Z",
+      "actor": "codex",
+      "reason": "PM-authorized bounded ownership split to governance companion UTV2-1961",
+      "pr_number": 1698,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1698",
+      "head_sha": "6baf123497a69c1f1d0db926fe106263fdf19271",
+      "previous_lock_hash": "c862e2c19c518fa8edb3d0e75524348155b279207360c23eaf7dbe06a6beb235",
+      "resulting_lock_hash": "84b9e0bd945c38d41ed3d2b32f205c13e0138cfa0dc92cd5d3bc339f05b789a3",
+      "released_paths": [
+        ".github/workflows/production-post-migration-verify.yml",
+        "docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md",
+        "docs/05_operations/DB_MIGRATION_WORKFLOW.md",
+        "docs/05_operations/db-writer-classification.json"
+      ],
+      "verifications": [
+        {
+          "check": "lane_worktree",
+          "status": "pass",
+          "detail": "ran in /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1957-production-post-migration on branch codex/utv2-1957-production-post-migration"
+        },
+        {
+          "check": "manifest_identity",
+          "status": "pass",
+          "detail": "issue UTV2-1957, pr_url https://github.com/griff843/Unit-Talk-v2/pull/1698"
+        },
+        {
+          "check": "pr_head",
+          "status": "pass",
+          "detail": "PR #1698 OPEN at 6baf123497a69c1f1d0db926fe106263fdf19271"
+        },
+        {
+          "check": "previous_lock_hash",
+          "status": "pass",
+          "detail": "c862e2c19c518fa8edb3d0e75524348155b279207360c23eaf7dbe06a6beb235"
+        },
+        {
+          "check": "paths_absent_from_pr_diff",
+          "status": "pass",
+          "detail": "10 changed file(s) scanned"
+        },
+        {
+          "check": "paths_absent_from_local_work",
+          "status": "pass",
+          "detail": "staged=0 unstaged=0 untracked=0 unpushed=0"
+        },
+        {
+          "check": "no_concurrent_lane_dependency",
+          "status": "pass",
+          "detail": "912 other manifest(s) scanned"
+        },
+        {
+          "check": "resulting_lock_valid",
+          "status": "pass",
+          "detail": "4 entries remain"
+        }
+      ]
+    }
+  ]
 }
