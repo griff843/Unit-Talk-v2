@@ -1,10 +1,10 @@
 import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
 import {
-  humanDeliveryTargets,
   isHumanCapperDeliveryAuthorized,
   isTrackOnlyPickMetadata,
 } from '@unit-talk/contracts';
 import { recordDistributionReceipt } from './distribution-receipt-service.js';
+import { isHumanCapperRecapStopped } from './human-capper-recap-gate.js';
 
 export type RecapPeriod = 'daily' | 'weekly' | 'monthly';
 
@@ -84,10 +84,8 @@ type RecapComputeRepositories = Pick<
 async function isHumanDeliveryStopped(
   repositories: Pick<RepositoryBundle, 'killSwitch'>,
 ): Promise<boolean> {
-  if (!repositories.killSwitch) {
-    return true;
-  }
-  return repositories.killSwitch.isKilled(humanDeliveryTargets[0]);
+  // WORK-2026092901: official-picks AND the separate recap control.
+  return isHumanCapperRecapStopped(repositories);
 }
 
 export type PostRecapResult =

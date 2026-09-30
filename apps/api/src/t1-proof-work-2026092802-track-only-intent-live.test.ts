@@ -55,6 +55,7 @@ import { loadEnvironment } from '@unit-talk/config';
 import {
   humanDeliveryTargets,
   isHumanCapperDeliveryAuthorized,
+  isMemberVisibleOfficialPick,
   readHumanCapperDeliveryAuthorization,
 } from '@unit-talk/contracts';
 import {
@@ -326,5 +327,63 @@ test(
     const selection = encodeURIComponent(`Northgate Foundry ${RUN_NAMESPACE} ML ${label}`);
     const rows = await restQuery<{ id: string }>(`picks?selection=eq.${selection}&select=id`);
     assert.equal(rows.length, 0, 'a refused request persists no pick');
+  },
+);
+
+// ---------------------------------------------------------------------------
+// WORK-2026092901: the member read and the dispatch-ledger read, against real
+// Postgres. Both are READ-ONLY. The JSON-path filters behind
+// listMemberVisibleOfficialPicks and the prefix filter behind listByEntity are
+// only checked by PostgREST at run time, so an in-memory test cannot prove them.
+// ---------------------------------------------------------------------------
+
+test(
+  'WORK-2026092901 live: the member read returns only member-visible official picks, never this run\'s Track Only or queued fixtures',
+  { skip: skipReason },
+  async () => {
+    const reader = repositories.picks.listMemberVisibleOfficialPicks;
+    assert.ok(reader, 'the Database pick repository implements the member read');
+    const rows = await reader.call(repositories.picks, ['posted', 'settled'], 200);
+
+    for (const row of rows) {
+      assert.ok(
+        isMemberVisibleOfficialPick({
+          status: row.status,
+          metadata: row.metadata as Record<string, unknown> | null,
+        }),
+        `pick ${row.id} (${row.status}) is not member-visible but was returned`,
+      );
+    }
+    for (let index = 1; index < rows.length; index += 1) {
+      assert.ok((rows[index - 1]?.created_at ?? '') >= (rows[index]?.created_at ?? ''), 'rows are newest first');
+    }
+
+    const runPicks = await restQuery<{ id: string }>(
+      `picks?selection=like.*${encodeURIComponent(RUN_NAMESPACE)}*&select=id`,
+    );
+    assert.ok(
+      runPicks.length >= 2,
+      `expected this run's Track Only and queued delivery-eligible fixtures, found ${runPicks.length}`,
+    );
+    const returned = new Set(rows.map((row) => row.id));
+    for (const pick of runPicks) {
+      assert.ok(!returned.has(pick.id), `this run's fixture pick ${pick.id} must not be member-visible`);
+    }
+
+    const postedOnly = await reader.call(repositories.picks, ['posted'], 200);
+    assert.ok(postedOnly.every((row) => row.status === 'posted'), 'the status filter is applied');
+  },
+);
+
+test(
+  'WORK-2026092901 live: the dispatch ledger reads through listByEntity with its prefix filter',
+  { skip: skipReason },
+  async () => {
+    const reader = repositories.audit.listByEntity;
+    assert.ok(reader, 'the Database audit repository implements the ledger read');
+    const ledger = await reader.call(repositories.audit, 'distribution_outbox', randomUUID(), 'distribution.dispatch_');
+    assert.deepEqual(ledger, [], 'an entity with no ledger rows reads as an empty ledger, not an error');
+    const unprefixed = await reader.call(repositories.audit, 'distribution_outbox', randomUUID());
+    assert.deepEqual(unprefixed, []);
   },
 );
