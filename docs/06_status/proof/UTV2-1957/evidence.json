@@ -1,0 +1,66 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1957",
+  "pr_number": 1698,
+  "source_sha": "7c8d6acda30729d48934d97b5595350586d340fb",
+  "reviewed_head_sha": "7c8d6acda30729d48934d97b5595350586d340fb",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "7c8d6acda30729d48934d97b5595350586d340fb",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "commands": [
+      "pnpm exec tsx --test scripts/ci/workflow-production-credential-guard.test.ts scripts/ci/staging-path-enforcement.test.ts scripts/ops/lane-link-pr.test.ts",
+      "pnpm type-check",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head 7c8d6acda30729d48934d97b5595350586d340fb",
+      "pnpm verify:static"
+    ],
+    "focused_tests": {
+      "tests": 97,
+      "pass": 97,
+      "fail": 0
+    },
+    "live_db_disposition": "deferred_to_exact_head_staging_ci",
+    "local_refusal": "127.0.0.1 is not governed staging project xskgrzbteyqdufktjrjx"
+  },
+  "gate_results": [
+    {
+      "gate": "focused_verifier_and_recovery_tests",
+      "verdict": "PASS",
+      "detail": "97 tests passed; 0 failed"
+    },
+    {
+      "gate": "type_check",
+      "verdict": "PASS",
+      "detail": "pnpm type-check completed successfully"
+    },
+    {
+      "gate": "r_level",
+      "verdict": "PASS",
+      "detail": "No R-level rules matched the 10 implementation files"
+    },
+    {
+      "gate": "verify_static",
+      "verdict": "PASS",
+      "detail": "Static verify phases completed successfully"
+    },
+    {
+      "gate": "live_db_local",
+      "verdict": "SKIP",
+      "detail": "Fail-closed local refusal; exact-head staging-ci proof remains mandatory"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-09-30T01:14:30.000Z"
+}
