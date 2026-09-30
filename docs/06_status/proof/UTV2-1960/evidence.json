@@ -7,14 +7,14 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "51bde4530b90ecfe3905132e881b6f6df06e6b97",
+    "verified_source_sha": "19b32b7b2e9d608653d271c42e40cd7b5dd7e30c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
     "measured_at": "2026-09-30T01:00:00.000Z",
-    "measured_against_sha": "51bde4530b90ecfe3905132e881b6f6df06e6b97",
+    "measured_against_sha": "19b32b7b2e9d608653d271c42e40cd7b5dd7e30c",
     "commands": [
       {
         "command": "pnpm exec tsx --test apps/discord-bot/src/discord-bot-foundation.test.ts",
