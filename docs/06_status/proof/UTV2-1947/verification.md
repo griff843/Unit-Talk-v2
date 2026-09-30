@@ -1,6 +1,6 @@
 # PROOF: UTV2-1947
 
-MERGE_SHA: pending merge
+MERGE_SHA: 24c5f778d65c124251190e2ac680add4257f035b
 
 Issue: UTV2-1947
 Tier: T1
@@ -65,6 +65,6 @@ BLOCKED: live Discord browser/session unavailable
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 24c5f778d65c124251190e2ac680add4257f035b
 PR: pending
 Execution SHA: b7ad1a63fd25f3f47fd92c2db8c004f1624a97cf

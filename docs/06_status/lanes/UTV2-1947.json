@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1947-member-pick-command-route",
   "branch": "codex/utv2-1947-member-pick-command-route",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "24c5f778d65c124251190e2ac680add4257f035b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1702",
   "files_changed": [],
   "file_scope_lock": [
@@ -24,14 +24,22 @@
     "docs/06_status/proof/UTV2-1947/verification.md",
     "docs/06_status/proof/UTV2-1947/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-30T01:59:01.033Z",
-  "heartbeat_at": "2026-09-30T02:22:30.437Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-30T22:02:05.012Z",
+  "closed_at": "2026-09-30T22:02:05.012Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1947-member-pick-command-route.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-30T22:02:01.618Z",
+      "verdict": "pass",
+      "merge_sha": "24c5f778d65c124251190e2ac680add4257f035b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

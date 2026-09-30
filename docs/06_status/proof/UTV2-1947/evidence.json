@@ -6,10 +6,12 @@
   "proof_profile": "app-runtime",
   "status": "review_pending_ci",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "24c5f778d65c124251190e2ac680add4257f035b",
     "verified_source_sha": "b7ad1a63fd25f3f47fd92c2db8c004f1624a97cf",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-30T22:02:01.613Z"
   },
   "static_proof": {
     "status": "pass_with_t1_live_db_deferred_to_ci",

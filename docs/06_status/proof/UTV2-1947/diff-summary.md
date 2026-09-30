@@ -13,6 +13,6 @@ Generated lane/proof metadata records the T1 CI deferral and model-routing decis
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 24c5f778d65c124251190e2ac680add4257f035b
 PR: pending
 Execution SHA: b7ad1a63fd25f3f47fd92c2db8c004f1624a97cf
