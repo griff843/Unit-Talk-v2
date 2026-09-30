@@ -18,9 +18,9 @@
     "docs/06_status/proof/WORK-2026092814/evidence.json",
     "docs/06_status/proof/WORK-2026092814/verification.md"
   ],
-  "status": "started",
+  "status": "superseded",
   "started_at": "2026-09-28T21:41:48.821Z",
-  "heartbeat_at": "2026-09-28T21:41:48.821Z",
+  "heartbeat_at": "2026-09-30T00:34:56.644Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026092814-bot-truthful-copy.json",
