@@ -1,0 +1,70 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1960",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "19b32b7b2e9d608653d271c42e40cd7b5dd7e30c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-09-30T01:00:00.000Z",
+    "measured_against_sha": "19b32b7b2e9d608653d271c42e40cd7b5dd7e30c",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test apps/discord-bot/src/discord-bot-foundation.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 103,
+        "pass": 103,
+        "fail": 0
+      },
+      {
+        "command": "pnpm --filter @unit-talk/discord-bot type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm --filter @unit-talk/discord-bot command-manifest:check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "14 command definitions verified"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Executed by the successful verify:static phase."
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Executed by the successful verify:static phase."
+      },
+      {
+        "command": "pnpm verify (verify:static phase)",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Environment, lint, type-check, build, full unit suite, Smart Form verification, command manifest, and migration lint passed before the live-DB phase."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Matched discord-delivery; R1 required with no artifact requirement."
+      }
+    ],
+    "live_db": {
+      "status": "refused",
+      "command": "pnpm verify (test:live-db phase)",
+      "exit_code": 1,
+      "note": "ci:assert-staging refused local host 127.0.0.1 because it is not the sanctioned staging project xskgrzbteyqdufktjrjx. This T2 lane changes no database, package DB, API service, or migration path."
+    }
+  }
+}

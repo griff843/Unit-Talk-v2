@@ -59,19 +59,19 @@ function resolveUpgradeDescription(tier: MemberTierContext['tier']) {
     case 'trial':
       return [
         "You're currently on a trial with VIP-level access.",
-        '**VIP** - Keep everything you have now, permanently.',
-        '**VIP+** - Add Trader Insights on top.',
+        '**VIP** - Keep everything you have now for as long as you are a member.',
+        '**VIP+** - Everything in VIP. Its market-intelligence features are not live yet.',
       ].join('\n');
     case 'vip':
-      return '**VIP+** - Adds Trader Insights and higher-access surfaces to your current VIP access.';
+      return '**VIP+** - Everything in VIP. Its market-intelligence features are not live yet.';
     case 'black-label':
     case 'vip-plus':
       return HIGHEST_TIER_REPLY;
     case 'free':
     default:
       return [
-        '**VIP** - Full pick board, capper board access, Best Bets, recaps.',
-        '**VIP+** - Everything in VIP plus Trader Insights.',
+        '**VIP** - Official capper picks, recaps, results, and capper board access.',
+        '**VIP+** - Everything in VIP. Its market-intelligence features are not live yet.',
       ].join('\n');
   }
 }
