@@ -1,0 +1,192 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1960
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1960
+  objective: >-
+    Supersede GitHub PR #1688 / WORK-2026092814 with one canonical UTV2 lane so
+    the already-valid Discord truthful-copy changes can ship without opening a
+    general governance repair.
+
+    This is a bounded Discord product lane, not a governance-system project.
+  acceptance_criteria:
+    - |-
+      ## Objective
+
+      Supersede GitHub PR #1688 / WORK-2026092814 with one canonical UTV2 lane so the already-valid Discord truthful-copy changes can ship without opening a general governance repair.
+
+      This is a bounded Discord product lane, not a governance-system project.
+
+      ## Why
+
+      PR #1688 contains valid member-facing copy/test work in `apps/discord-bot/**`, but its WORK identity cannot currently complete the mandatory Return Review / file-scope path cleanly. [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) is separately scoped to Discord command authorization containment and must not absorb or overwrite #1688.
+
+      The product priority is to preserve the valid #1688 behavior, release its file ownership, then allow [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) to continue.
+
+      ## Scope
+
+      Preserve and reverify the truthful-copy behavior already implemented in #1688, limited to the actual files/behavior necessary for:
+
+      * /trial-status and /upgrade truthful VIP/VIP+ capability wording;
+      * /heat-signal and /help truthful not-live-yet wording;
+      * /recap CLV unavailable rendering;
+      * /stats CLV unavailable rendering;
+      * existing focused tests proving those claims.
+
+      Use current main as the base. Reconcile rather than blindly cherry-pick if current main has changed.
+
+      Generated lane/proof metadata may be included through the canonical lane tooling.
+
+      ## Non-scope
+
+      Do not:
+
+      * widen into [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and)'s /live /today authorization work;
+      * change Discord server configuration;
+      * change Whop/Stripe;
+      * un-kill official-picks;
+      * touch SGO;
+      * launch Black Label;
+      * perform a general WORK-namespace governance repair.
+
+      ## Acceptance
+
+      * The valid #1688 behavior is preserved on current main under this UTV2 identity.
+      * Focused Discord tests pass.
+      * Type-check/lint/static verification pass.
+      * No product claim is widened beyond the canonical membership contract.
+      * #1688 / WORK-2026092814 is truthfully superseded/closed through sanctioned lane closeout.
+      * apps/discord-bot file ownership is released so [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) can proceed.
+      * Return packet states exact source provenance from #1688 and any intentional deviations.
+
+      ## Relationship
+
+      * Predecessor: GitHub PR #1688 / WORK-2026092814.
+      * Related: [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) (must remain separately scoped).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why
+      PR #1688 contains valid member-facing copy/test work in `apps/discord-bot/**`, but its WORK identity cannot currently complete the mandatory Return Review / file-scope path cleanly. [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) is separately scoped to Discord command authorization containment and must not absorb or overwrite #1688.
+
+      The product priority is to preserve the valid #1688 behavior, release its file ownership, then allow [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) to continue.
+    - >-
+      Scope
+
+      Preserve and reverify the truthful-copy behavior already implemented in
+      #1688, limited to the actual files/behavior necessary for:
+
+
+      * /trial-status and /upgrade truthful VIP/VIP+ capability wording;
+
+      * /heat-signal and /help truthful not-live-yet wording;
+
+      * /recap CLV unavailable rendering;
+
+      * /stats CLV unavailable rendering;
+
+      * existing focused tests proving those claims.
+
+
+      Use current main as the base. Reconcile rather than blindly cherry-pick if
+      current main has changed.
+
+
+      Generated lane/proof metadata may be included through the canonical lane
+      tooling.
+    - |-
+      Non-scope
+      Do not:
+
+      * widen into [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and)'s /live /today authorization work;
+      * change Discord server configuration;
+      * change Whop/Stripe;
+      * un-kill official-picks;
+      * touch SGO;
+      * launch Black Label;
+      * perform a general WORK-namespace governance repair.
+    - |-
+      Acceptance
+      * The valid #1688 behavior is preserved on current main under this UTV2 identity.
+      * Focused Discord tests pass.
+      * Type-check/lint/static verification pass.
+      * No product claim is widened beyond the canonical membership contract.
+      * #1688 / WORK-2026092814 is truthfully superseded/closed through sanctioned lane closeout.
+      * apps/discord-bot file ownership is released so [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) can proceed.
+      * Return packet states exact source provenance from #1688 and any intentional deviations.
+    - |-
+      Relationship
+      * Predecessor: GitHub PR #1688 / WORK-2026092814.
+      * Related: [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) (must remain separately scoped).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1960/supersede-1688-preserve-truthful-discord-bot-copy-under-canonical-utv2
+    title: "Supersede #1688: preserve truthful Discord bot copy under canonical UTV2
+      lane"
+    description: |-
+      ## Objective
+
+      Supersede GitHub PR #1688 / WORK-2026092814 with one canonical UTV2 lane so the already-valid Discord truthful-copy changes can ship without opening a general governance repair.
+
+      This is a bounded Discord product lane, not a governance-system project.
+
+      ## Why
+
+      PR #1688 contains valid member-facing copy/test work in `apps/discord-bot/**`, but its WORK identity cannot currently complete the mandatory Return Review / file-scope path cleanly. [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) is separately scoped to Discord command authorization containment and must not absorb or overwrite #1688.
+
+      The product priority is to preserve the valid #1688 behavior, release its file ownership, then allow [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) to continue.
+
+      ## Scope
+
+      Preserve and reverify the truthful-copy behavior already implemented in #1688, limited to the actual files/behavior necessary for:
+
+      * /trial-status and /upgrade truthful VIP/VIP+ capability wording;
+      * /heat-signal and /help truthful not-live-yet wording;
+      * /recap CLV unavailable rendering;
+      * /stats CLV unavailable rendering;
+      * existing focused tests proving those claims.
+
+      Use current main as the base. Reconcile rather than blindly cherry-pick if current main has changed.
+
+      Generated lane/proof metadata may be included through the canonical lane tooling.
+
+      ## Non-scope
+
+      Do not:
+
+      * widen into [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and)'s /live /today authorization work;
+      * change Discord server configuration;
+      * change Whop/Stripe;
+      * un-kill official-picks;
+      * touch SGO;
+      * launch Black Label;
+      * perform a general WORK-namespace governance repair.
+
+      ## Acceptance
+
+      * The valid #1688 behavior is preserved on current main under this UTV2 identity.
+      * Focused Discord tests pass.
+      * Type-check/lint/static verification pass.
+      * No product claim is widened beyond the canonical membership contract.
+      * #1688 / WORK-2026092814 is truthfully superseded/closed through sanctioned lane closeout.
+      * apps/discord-bot file ownership is released so [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) can proceed.
+      * Return packet states exact source provenance from #1688 and any intentional deviations.
+
+      ## Relationship
+
+      * Predecessor: GitHub PR #1688 / WORK-2026092814.
+      * Related: [UTV2-1947](https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and) (must remain separately scoped).
+    captured_at: 2026-09-30T00:48:22.426Z
+    description_sha256: 8cf1cde310d0a900b06ba09e3004d58c40f6699c255e3bfb2ca4568d3b50b1c6
+  contract_hash: 29b3fa7da07aa44e29be89c702b1a8530fcc7a732420b737fe38009df221cb00
