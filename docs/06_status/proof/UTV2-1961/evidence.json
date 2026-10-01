@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1961",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "7004fd4adc1e3c7d121d4aeeca8223e90c996509",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "commands": ["pnpm verify:static", "pnpm test:production-post-migration", "pnpm exec tsx --test scripts/ci/workflow-production-credential-guard.test.ts scripts/ci/staging-path-enforcement.test.ts", "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD"],
+    "focused_tests": {"tests": 86, "pass": 86, "fail": 0},
+    "live_db_disposition": "deferred_to_exact_head_staging_ci",
+    "local_refusal": "127.0.0.1 does not resolve to governed staging project xskgrzbteyqdufktjrjx"
+  }
+}
