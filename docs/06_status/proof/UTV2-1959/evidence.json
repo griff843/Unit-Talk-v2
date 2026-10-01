@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1959",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Bind recovered T1 live-DB deferral to immutable preflight evidence",
+  "status": "ready_for_review",
+  "generated_at": "2026-09-29T18:33:30Z",
+  "sha_binding": {
+    "merge_sha": "211b82551bf4ac31d2ad4634004fbdb0967026ae",
+    "verified_source_sha": "f03e0ce0b73f011584f122bce87fe35b1e0dc20a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-30T00:59:53.911Z"
+  },
+  "scope": {
+    "substantive_files": [
+      "scripts/ops/lane-link-pr.ts",
+      "scripts/ops/lane-link-pr.test.ts"
+    ],
+    "warehouse_runtime_changed": false,
+    "live_db_waived": false
+  },
+  "acceptance_criteria": {
+    "immutable_preflight_authority_enforced": true,
+    "manifest_cannot_manufacture_deferral": true,
+    "missing_ambiguous_incomplete_provenance_refused": true,
+    "shallow_history_refuses_when_unavailable": true,
+    "legitimate_immutable_recovery_succeeds": true,
+    "ordinary_recovery_unchanged": true,
+    "token_manifest_agreement_regressed": true,
+    "fail_closed_recovery_green": true
+  },
+  "static_proof": {
+    "status": "pass",
+    "pnpm_verify_static": "pass",
+    "type_check": "pass",
+    "focused_test": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-link-pr.test.ts",
+      "tests": 23,
+      "passed": 23,
+      "failed": 0
+    },
+    "real_history_resolution": {
+      "source_commit": "edbbfd143f21ea18d4f45a759ad7464bd2102f2b",
+      "t1_live_db_precondition": "deferred_to_ci",
+      "verdict": "PASS"
+    },
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": []
+    },
+    "pnpm_verify": "Static stages passed; the live-DB phase deferred at the staging identity guard."
+  },
+  "live_db_precondition": {
+    "status": "deferred_to_ci",
+    "local_command": "pnpm test:db",
+    "local_result": "Refused before DB access because host=127.0.0.1 resolved as unidentified.",
+    "closeout_instruction": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable).",
+    "required_project": "xskgrzbteyqdufktjrjx",
+    "required_environment": "staging-ci with CI_SUPABASE_* credentials",
+    "claim": "No writable live-DB pass is claimed; truth-check G6 must validate a genuine CI receipt."
+  },
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false
+  }
+}

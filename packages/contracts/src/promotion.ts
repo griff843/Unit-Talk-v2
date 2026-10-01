@@ -48,6 +48,33 @@ export function isGovernedDeliveryTarget(value: string): value is GovernedDelive
   return (governedDeliveryTargets as readonly string[]).includes(value);
 }
 
+/**
+ * WORK-2026092901: the recap release control for human-capper picks.
+ *
+ * Recaps are not outbox deliveries -- the per-pick settlement recap and the
+ * daily/weekly/monthly aggregate post by direct fetch -- so the worker's
+ * kill-switch check never sees them. Before this control existed, recaps about
+ * human-capper picks were gated only on the `official-picks` switch, which
+ * made releasing one pick implicitly release every recap about every settled
+ * human-capper pick. This key is a separate row in the same
+ * `delivery_kill_switch` table, read through the same fail-closed `isKilled`:
+ * a missing row holds recaps. It is NOT a delivery target -- nothing is ever
+ * enqueued to it -- so it is deliberately kept out of `governedDeliveryTargets`.
+ */
+export const humanCapperRecapControl = 'human-capper-recaps' as const;
+export type HumanCapperRecapControl = typeof humanCapperRecapControl;
+
+/** Every key the delivery kill switch accepts: the governed targets plus the recap control. */
+export const deliveryControlKeys = [
+  ...governedDeliveryTargets,
+  humanCapperRecapControl,
+] as const;
+export type DeliveryControlKey = (typeof deliveryControlKeys)[number];
+
+export function isDeliveryControlKey(value: unknown): value is DeliveryControlKey {
+  return typeof value === 'string' && (deliveryControlKeys as readonly string[]).includes(value);
+}
+
 export const approvalStatuses = [
   'pending',
   'approved',

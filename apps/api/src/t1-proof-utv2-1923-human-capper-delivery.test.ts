@@ -27,6 +27,7 @@ import {
   governedDeliveryTargets,
   governedTargetRegistry,
   humanDeliveryTargetRegistry,
+  humanCapperRecapControl,
   humanDeliveryTargets,
   isHumanCapperDeliveryAuthorized,
   isTargetEnabled,
@@ -789,6 +790,25 @@ async function deliverApprovedPick(seed: string) {
   return { repositories, pickId: data.pickId, outboxId: claimed.id };
 }
 
+// WORK-2026092901: recap traffic about human-capper picks is stopped unless
+// BOTH the delivery target and the separate `human-capper-recaps` control are
+// released. Releasing the delivery target alone releases no recap; that is
+// pinned in the recap-gate tests.
+const releaseHumanTargetAndRecaps = async (
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) => {
+  await repositories.killSwitch?.setKilled({
+    target: HUMAN_TARGET,
+    killed: false,
+    actor: 'griff',
+  });
+  await repositories.killSwitch?.setKilled({
+    target: humanCapperRecapControl,
+    killed: false,
+    actor: 'griff',
+  });
+};
+
 const SETTLEMENT = {
   status: 'settled' as const,
   result: 'win' as const,
@@ -827,11 +847,9 @@ test('UTV2-1923: a manually settled human pick settles, and its recap is gated b
 
 test('UTV2-1923: with the target released, the recap is attempted and reports why it did not post', async () => {
   const { repositories, pickId } = await deliverApprovedPick('settle-released');
-  await repositories.killSwitch?.setKilled({
-    target: HUMAN_TARGET,
-    killed: false,
-    actor: 'griff',
-  });
+  // WORK-2026092901: a recap needs its own release as well as the delivery
+  // target's, so "released" here means both controls.
+  await releaseHumanTargetAndRecaps(repositories);
 
   const response = await withEnv(
     { UNIT_TALK_APP_ENV: 'production', DISCORD_BOT_TOKEN: undefined },
@@ -1195,14 +1213,6 @@ async function recapWindowFixture(seed: string) {
   return { repositories, humanPickId, ordinarySelection: `Ordinary Play ${seed}` };
 }
 
-const releaseHumanTarget = (
-  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
-) =>
-  repositories.killSwitch?.setKilled({
-    target: HUMAN_TARGET,
-    killed: false,
-    actor: 'griff',
-  });
 
 test('UTV2-1923: a stopped human target keeps human-cap results out of the scheduled aggregate recap', async () => {
   const { repositories, ordinarySelection } = await recapWindowFixture('recap-stopped');
@@ -1224,7 +1234,7 @@ test('UTV2-1923: a stopped human target keeps human-cap results out of the sched
 
 test('UTV2-1923: releasing the human target is what puts the result back in the aggregate', async () => {
   const { repositories } = await recapWindowFixture('recap-released');
-  await releaseHumanTarget(repositories);
+  await releaseHumanTargetAndRecaps(repositories);
 
   const summary = await computeRecapSummary('daily', repositories, RECAP_NOW);
 
@@ -1244,7 +1254,7 @@ test('UTV2-1923: the stop does not disable non-human recap behaviour', async () 
   const { repositories, ordinarySelection } = await recapWindowFixture('recap-nonhuman');
 
   const stopped = await computeRecapSummary('daily', repositories, RECAP_NOW);
-  await releaseHumanTarget(repositories);
+  await releaseHumanTargetAndRecaps(repositories);
   const released = await computeRecapSummary('daily', repositories, RECAP_NOW);
 
   // The ordinary pick is reported identically either way. A delivery stop is
@@ -1274,7 +1284,7 @@ test('UTV2-1923: Track Only exclusion is unchanged in both stop states', async (
   await settleIntoRecapWindow(repositories, trackOnly.pick.id, 'win');
 
   const stopped = await computeRecapSummary('daily', repositories, RECAP_NOW);
-  await releaseHumanTarget(repositories);
+  await releaseHumanTargetAndRecaps(repositories);
   const released = await computeRecapSummary('daily', repositories, RECAP_NOW);
 
   for (const [label, summary] of [['stopped', stopped], ['released', released]] as const) {

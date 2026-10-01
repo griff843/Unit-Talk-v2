@@ -5,7 +5,9 @@ import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
 import { PickCandidatesSchemaCacheDriftError } from './repositories.js';
 import {
   V1_REFERENCE_DATA,
+  isMemberVisibleOfficialPick,
   isTrackOnlyPickMetadata,
+  type MemberVisibleOfficialPickStatus,
   type ProviderOfferInsert,
   type ReferenceDataCatalog,
   type MemberTier,
@@ -628,6 +630,20 @@ export class InMemoryPickRepository implements PickRepository {
       .sort((left, right) => left.created_at.localeCompare(right.created_at))
       .slice(start);
     return limit === undefined ? sorted : sorted.slice(0, limit);
+  }
+
+  async listMemberVisibleOfficialPicks(
+    statuses: readonly MemberVisibleOfficialPickStatus[],
+    limit: number,
+  ): Promise<PickRecord[]> {
+    return Array.from(this.picks.values())
+      .filter(
+        (pick) =>
+          statuses.includes(pick.status as MemberVisibleOfficialPickStatus) &&
+          isMemberVisibleOfficialPick({ status: pick.status, metadata: asPickMetadata(pick.metadata) }),
+      )
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+      .slice(0, limit);
   }
 
   async listPromotedByLifecycleStates(
@@ -2406,6 +2422,19 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
       )
       .sort((left, right) => right.created_at.localeCompare(left.created_at));
   }
+
+  async listByEntity(
+    entityType: string,
+    entityId: string,
+    actionPrefix?: string | undefined,
+  ): Promise<AuditLogRow[]> {
+    return this.records.filter(
+      (record) =>
+        record.entity_type === entityType &&
+        record.entity_id === entityId &&
+        (actionPrefix === undefined || record.action.startsWith(actionPrefix)),
+    );
+  }
 }
 
 export class InMemoryDeliveryKillSwitchRepository implements DeliveryKillSwitchRepository {
@@ -3447,6 +3476,31 @@ export class DatabasePickRepository implements PickRepository {
     }
 
     return data ?? [];
+  }
+
+  async listMemberVisibleOfficialPicks(
+    statuses: readonly MemberVisibleOfficialPickStatus[],
+    limit: number,
+  ): Promise<PickRecord[]> {
+    const { data, error } = await this.client
+      .from('picks')
+      .select('*')
+      .in('status', [...statuses])
+      .eq('metadata->>distributionMode', 'delivery-eligible')
+      .eq('metadata->deliveryAuthorization->>decision', 'authorized')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list member-visible official picks: ${error.message}`);
+    }
+
+    // The query is a narrowing; the contract predicate is the authority.
+    return (data ?? []).filter(
+      (pick) =>
+        statuses.includes(pick.status as MemberVisibleOfficialPickStatus) &&
+        isMemberVisibleOfficialPick({ status: pick.status, metadata: asPickMetadata(pick.metadata) }),
+    );
   }
 
   async listPromotedByLifecycleStates(
@@ -6108,7 +6162,46 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
 
     return data ?? [];
   }
+
+  async listByEntity(
+    entityType: string,
+    entityId: string,
+    actionPrefix?: string | undefined,
+  ): Promise<AuditLogRow[]> {
+    let query = this.client
+      .from('audit_log')
+      .select('*')
+      .eq('entity_type', entityType)
+      .eq('entity_id', entityId);
+
+    if (actionPrefix !== undefined) {
+      query = query.like('action', `${actionPrefix}%`);
+    }
+
+    const { data, error } = await query
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(0, AUDIT_ENTITY_READ_LIMIT - 1);
+
+    if (error) {
+      throw new Error(`Failed to list audit log rows for entity: ${error.message}`);
+    }
+
+    const rows = data ?? [];
+    // A full page may be a truncated one (PostgREST max-rows). A caller
+    // deciding whether a message was already posted cannot act on half a
+    // ledger, so refuse instead of answering.
+    if (rows.length >= AUDIT_ENTITY_READ_LIMIT) {
+      throw new Error(
+        `Refusing a possibly truncated audit read: ${rows.length} rows for ${entityType} ${entityId}`,
+      );
+    }
+
+    return rows;
+  }
 }
+
+const AUDIT_ENTITY_READ_LIMIT = 1000;
 
 /**
  * UTV2-1923: the canonical `cappers` row, read-only.
@@ -10972,4 +11065,10 @@ export class DatabaseTeamScheduleRepository implements TeamScheduleRepository {
 
     return data?.event_date ?? null;
   }
+}
+
+function asPickMetadata(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }

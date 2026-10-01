@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026092901",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092901/.out/worktrees/claude__work-2026092901-official-picks-exactly-once",
+  "branch": "claude/work-2026092901-official-picks-exactly-once",
+  "base_branch": "main",
+  "commit_sha": "2139ebe071fdf68c9f65a3d0172e63f78b72617d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1697",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/controllers/retry-delivery-controller.ts",
+    "apps/api/src/controllers/settle-pick-controller.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/human-capper-recap-gate.ts",
+    "apps/api/src/member-picks.test.ts",
+    "apps/api/src/official-picks-release-controls.test.ts",
+    "apps/api/src/recap-service.ts",
+    "apps/api/src/routes/index.ts",
+    "apps/api/src/routes/kill-switch.ts",
+    "apps/api/src/routes/member-picks.ts",
+    "apps/api/src/routes/picks.ts",
+    "apps/api/src/server.ts",
+    "apps/api/src/t1-proof-utv2-1923-human-capper-delivery.test.ts",
+    "apps/api/src/t1-proof-work-2026092802-track-only-intent-live.test.ts",
+    "apps/worker/src/delivery-adapters.ts",
+    "apps/worker/src/distribution-worker.ts",
+    "apps/worker/src/official-picks-embed.test.ts",
+    "apps/worker/src/official-picks-exactly-once.test.ts",
+    "apps/worker/src/replay-failed-delivery.test.ts",
+    "package.json",
+    "packages/contracts/src/dispatch-ledger.test.ts",
+    "packages/contracts/src/dispatch-ledger.ts",
+    "packages/contracts/src/distribution.ts",
+    "packages/contracts/src/index.ts",
+    "packages/contracts/src/promotion.ts",
+    "packages/contracts/src/smart-form.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026092901/diff-summary.md",
+    "docs/06_status/proof/WORK-2026092901/evidence.json",
+    "docs/06_status/proof/WORK-2026092901/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-29T14:10:57.694Z",
+  "heartbeat_at": "2026-09-29T18:21:41.801Z",
+  "closed_at": "2026-09-29T18:21:41.801Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-29T18:21:39.101Z",
+      "verdict": "pass",
+      "merge_sha": "2139ebe071fdf68c9f65a3d0172e63f78b72617d",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/preflight__work-2026092901/.out/worktrees/claude__work-2026092901-official-picks-exactly-once",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

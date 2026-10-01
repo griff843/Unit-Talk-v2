@@ -8,6 +8,7 @@ import {
   type PreflightToken,
   ROOT,
   TERMINAL_STATUSES,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
   activeManifestOverlap,
   currentHeadSha,
   emitJson,
@@ -62,7 +63,13 @@ type RecoveryDeps = {
   activeManifests?: () => LaneManifest[];
   now?: () => Date;
   randomUUID?: () => string;
+  gitRunner?: typeof git;
   writeToken?: (tokenPath: string, token: PreflightToken) => void;
+};
+
+type ImmutablePreflightEvidence = {
+  sourceCommit: string;
+  t1LiveDbPrecondition?: typeof T1_LIVE_DB_PRECONDITION_DEFERRED;
 };
 
 function isMissingPreflightTokenError(entry: string): boolean {
@@ -106,6 +113,185 @@ function readPullRequestBinding(prUrl: string): PullRequestBinding {
     );
   }
   return JSON.parse(result.stdout) as PullRequestBinding;
+}
+
+function gitOutput(
+  runner: typeof git,
+  args: string[],
+  cwd: string,
+  failure: string,
+): string {
+  const result = runner(args, cwd);
+  if (!result.ok) {
+    throw new Error(`${failure}: ${result.stderr || result.stdout || 'git command failed'}`);
+  }
+  return result.stdout.trim();
+}
+
+/**
+ * Resolve the T1 deferral only from the immutable manifest blob introduced by
+ * the lane-start commit. The working-tree manifest is deliberately not an
+ * authority source: it is compared with prior evidence, never used to create
+ * that evidence.
+ */
+export function readImmutablePreflightEvidence(
+  manifest: LaneManifest,
+  headSha: string,
+  cwd: string,
+  runner: typeof git = git,
+): ImmutablePreflightEvidence {
+  const manifestPath = relativeToRoot(issueToManifestPath(manifest.issue_id));
+  const listIntroductions = () =>
+    gitOutput(
+      runner,
+      ['log', '--format=%H', '--diff-filter=A', '--', manifestPath],
+      cwd,
+      'Unable to inspect immutable preflight evidence history',
+    )
+      .split(/\r?\n/u)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+  const shallow = gitOutput(
+    runner,
+    ['rev-parse', '--is-shallow-repository'],
+    cwd,
+    'Unable to determine whether immutable preflight evidence history is shallow',
+  );
+  if (shallow === 'true') {
+    const fetchResult = runner(
+      [
+        'fetch',
+        '--no-tags',
+        '--unshallow',
+        'origin',
+        `refs/heads/${manifest.branch}`,
+      ],
+      cwd,
+    );
+    if (!fetchResult.ok) {
+      throw new Error(
+        `Immutable preflight evidence is unavailable and authoritative branch history could not be deepened: ${fetchResult.stderr || fetchResult.stdout || 'git fetch failed'}`,
+      );
+    }
+  }
+  const introductions = listIntroductions();
+
+  if (introductions.length === 0) {
+    throw new Error('Immutable preflight evidence is missing: no lane manifest introduction commit was found');
+  }
+  if (introductions.length !== 1) {
+    throw new Error(
+      `Immutable preflight evidence is ambiguous: found ${introductions.length} lane manifest introduction commits`,
+    );
+  }
+
+  const sourceCommit = introductions[0]!;
+  const introductionStatus = gitOutput(
+    runner,
+    [
+      'diff-tree',
+      '--root',
+      '--no-commit-id',
+      '--name-status',
+      '-r',
+      sourceCommit,
+      '--',
+      manifestPath,
+    ],
+    cwd,
+    'Unable to verify immutable preflight evidence introduction',
+  );
+  if (introductionStatus !== `A\t${manifestPath}`) {
+    throw new Error(
+      'Immutable preflight evidence is invalid: source commit did not introduce the lane manifest',
+    );
+  }
+  const ancestry = runner(
+    ['merge-base', '--is-ancestor', sourceCommit, headSha],
+    cwd,
+  );
+  if (!ancestry.ok) {
+    throw new Error(
+      `Immutable preflight evidence commit ${sourceCommit} is not an ancestor of current HEAD ${headSha}`,
+    );
+  }
+
+  const raw = gitOutput(
+    runner,
+    ['show', `${sourceCommit}:${manifestPath}`],
+    cwd,
+    'Unable to read immutable preflight evidence',
+  );
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      `Immutable preflight evidence is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    throw new Error('Immutable preflight evidence is not a lane manifest object');
+  }
+  const evidence = candidate as Record<string, unknown>;
+
+  const immutableFields = [
+    'issue_id',
+    'lane_type',
+    'executor',
+    'tier',
+    'worktree_path',
+    'branch',
+    'base_branch',
+    'started_at',
+    'preflight_token',
+    'created_by',
+  ] as const;
+  for (const field of immutableFields) {
+    if (evidence[field] !== manifest[field]) {
+      throw new Error(
+        `Immutable preflight evidence does not match current lane identity at ${field}`,
+      );
+    }
+  }
+
+  const hasLaneStartShape =
+    evidence['status'] === 'started' &&
+    evidence['pr_url'] === null &&
+    evidence['commit_sha'] === null &&
+    Array.isArray(evidence['files_changed']) &&
+    evidence['files_changed'].length === 0 &&
+    Array.isArray(evidence['blocked_by']) &&
+    evidence['blocked_by'].length === 0 &&
+    Array.isArray(evidence['truth_check_history']) &&
+    evidence['truth_check_history'].length === 0 &&
+    Array.isArray(evidence['reopen_history']) &&
+    evidence['reopen_history'].length === 0 &&
+    evidence['heartbeat_at'] === evidence['started_at'];
+  if (!hasLaneStartShape) {
+    throw new Error('Immutable preflight evidence is incomplete: manifest introduction is not a pristine lane-start record');
+  }
+
+  const historicalDeferral = evidence['t1_live_db_precondition'];
+  if (
+    historicalDeferral !== undefined &&
+    historicalDeferral !== T1_LIVE_DB_PRECONDITION_DEFERRED
+  ) {
+    throw new Error('Immutable preflight evidence contains an unrecognized T1 live-DB deferral');
+  }
+  if (historicalDeferral !== manifest.t1_live_db_precondition) {
+    throw new Error(
+      'Current lane manifest T1 live-DB deferral does not match immutable preflight evidence',
+    );
+  }
+
+  return {
+    sourceCommit,
+    ...(historicalDeferral === T1_LIVE_DB_PRECONDITION_DEFERRED
+      ? { t1LiveDbPrecondition: historicalDeferral }
+      : {}),
+  };
 }
 
 /**
@@ -223,6 +409,16 @@ export function recoverMissingPreflightToken(
     );
   }
 
+  const immutablePreflightEvidence =
+    manifest.tier === 'T1'
+      ? readImmutablePreflightEvidence(
+          manifest,
+          headSha,
+          cwd,
+          deps.gitRunner ?? git,
+        )
+      : null;
+
   const now = (deps.now ?? (() => new Date()))();
   const expiresAt = new Date(
     now.getTime() + (manifest.tier === 'T1' ? 15 : 30) * 60_000,
@@ -245,6 +441,9 @@ export function recoverMissingPreflightToken(
       'docs/05_operations/LANE_MANIFEST_SPEC.md',
       'docs/05_operations/TRUTH_CHECK_SPEC.md',
     ],
+    ...(immutablePreflightEvidence?.t1LiveDbPrecondition
+      ? { t1_live_db_precondition: immutablePreflightEvidence.t1LiveDbPrecondition }
+      : {}),
   };
   (deps.writeToken ?? writeJsonFile)(expectedTokenPath, token);
 }

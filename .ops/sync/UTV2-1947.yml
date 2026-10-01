@@ -1,0 +1,115 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1947
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1947
+  objective: "Contain Discord command disclosure before member-feed and
+    entitlement implementation. Explicitly authorized T1 by Griff's Discord Wave
+    1 packet (2026-09-19). Parent: Discord Product Excellence."
+  acceptance_criteria:
+    - "Free: /live denied; /today no active paid output; /heat-signal denied;
+      /my-picks never exposes active selections."
+    - Trial and VIP pass paid-read authorization and fail VIP+ authorization;
+      VIP+ passes both.
+    - Capper without paid role passes paid/VIP+ staff-read authorization
+      independently of commercial tier, without operator authority.
+    - Missing, blank, overlapping/conflicting role configuration,
+      malformed/partial role state and DM/no-guild context fail closed.
+    - Lifecycle validated/queued/posted/settled is not member-publication
+      eligibility. Current raw picks response does not prove
+      official/public-safe content. /live and /today return unavailable without
+      fetching protected content until a governed member feed exists.
+    - /heat-signal authorization does not activate intelligence.
+      Unknown/inactive capability returns unavailable with zero protected
+      requests.
+    - Mutable username/global name/display name/metadata name never grants
+      active selection access. /my-picks returns unavailable without fetching
+      until canonical identity and safe population exist.
+    - Every denied/unavailable path makes zero protected API requests. node:test
+      coverage proves all personas and malformed contexts.
+    - Run focused tests, full pnpm verify and T1 DB proof; preserve truthful
+      failures. Open exact-head review-ready PR for independent PM review; do
+      not self-merge.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Scope
+
+      Only apps/discord-bot/src/role-guard.ts; commands/live.ts;
+      commands/today.ts; commands/heat-signal.ts; commands/my-picks.ts;
+      discord-bot-foundation.test.ts, plus generated lane/proof metadata.
+      Reverify scope before dispatch. No API auth, runtime activation,
+      Discord/Whop mutations, commerce or architecture redesign.
+    - |-
+      Dependencies
+      Historical dependency observation (superseded by the 2026-09-20 PM packet admitting this Discord-only scope as T1 delivery-ui): Runtime singleton was held by [UTV2-1605](https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success) / PR [feat(ops): UTV2-1605 grading observability outcomes](https://linear.app/unit-talk-v2/review/featops-utv2-1605-grading-observability-outcomes-2fd1fbf1a440) (canonical execution-state 2026-09-19T21:31:15Z). Prepare only until released; rerun execution-state/preflight then sanctioned lane-start. Track A2 is separate successor.
+    - >-
+      Current evidence
+
+      Current main 92a7e5d32: live.ts reads raw validated/queued/posted without
+      role gate; today.ts adds settled; heat-signal.ts reads recent alerts
+      ungated; my-picks.ts queries active+settled then matches mutable names.
+      role-guard.ts allows an empty required-role list and assumes cache.has
+      callable. No implementation started.
+    - >-
+      PM dispatch update — 2026-09-20
+
+      Execute as T1 `delivery-ui` under canonical taxonomy; do not force runtime
+      or reclassify after admission. Refresh main, canonical union discovery,
+      exact six-file conflict checks and preflight immediately before admission.
+      No material changes to commands, scope expansion, new
+      publication/identity/activation contract, Tier C path or API edits
+      permitted without PM review. Denied/unavailable responses private and zero
+      protected API calls. Required exact-head CI and executor-result/v1; return
+      PR for independent PM review, do not merge.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1947/discord-command-authorization-containment-block-active-paid-pick-and
+    title: Discord command authorization containment — block active paid-pick and
+      VIP+ intelligence leaks
+    description: |-
+      ## Objective
+
+      Contain Discord command disclosure before member-feed and entitlement implementation. Explicitly authorized T1 by Griff's Discord Wave 1 packet (2026-09-19). Parent: Discord Product Excellence.
+
+      ## Scope
+
+      Only apps/discord-bot/src/role-guard.ts; commands/live.ts; commands/today.ts; commands/heat-signal.ts; commands/my-picks.ts; discord-bot-foundation.test.ts, plus generated lane/proof metadata. Reverify scope before dispatch. No API auth, runtime activation, Discord/Whop mutations, commerce or architecture redesign.
+
+      ## Acceptance criteria
+
+      * Free: /live denied; /today no active paid output; /heat-signal denied; /my-picks never exposes active selections.
+      * Trial and VIP pass paid-read authorization and fail VIP+ authorization; VIP+ passes both.
+      * Capper without paid role passes paid/VIP+ staff-read authorization independently of commercial tier, without operator authority.
+      * Missing, blank, overlapping/conflicting role configuration, malformed/partial role state and DM/no-guild context fail closed.
+      * Lifecycle validated/queued/posted/settled is not member-publication eligibility. Current raw picks response does not prove official/public-safe content. /live and /today return unavailable without fetching protected content until a governed member feed exists.
+      * /heat-signal authorization does not activate intelligence. Unknown/inactive capability returns unavailable with zero protected requests.
+      * Mutable username/global name/display name/metadata name never grants active selection access. /my-picks returns unavailable without fetching until canonical identity and safe population exist.
+      * Every denied/unavailable path makes zero protected API requests. node:test coverage proves all personas and malformed contexts.
+      * Run focused tests, full pnpm verify and T1 DB proof; preserve truthful failures. Open exact-head review-ready PR for independent PM review; do not self-merge.
+
+      ## Dependencies
+
+      Historical dependency observation (superseded by the 2026-09-20 PM packet admitting this Discord-only scope as T1 delivery-ui): Runtime singleton was held by [UTV2-1605](https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success) / PR [feat(ops): UTV2-1605 grading observability outcomes](https://linear.app/unit-talk-v2/review/featops-utv2-1605-grading-observability-outcomes-2fd1fbf1a440) (canonical execution-state 2026-09-19T21:31:15Z). Prepare only until released; rerun execution-state/preflight then sanctioned lane-start. Track A2 is separate successor.
+
+      ## Current evidence
+
+      Current main 92a7e5d32: live.ts reads raw validated/queued/posted without role gate; today.ts adds settled; heat-signal.ts reads recent alerts ungated; my-picks.ts queries active+settled then matches mutable names. role-guard.ts allows an empty required-role list and assumes cache.has callable. No implementation started.
+
+      ## PM dispatch update — 2026-09-20
+
+      Execute as T1 `delivery-ui` under canonical taxonomy; do not force runtime or reclassify after admission. Refresh main, canonical union discovery, exact six-file conflict checks and preflight immediately before admission. No material changes to commands, scope expansion, new publication/identity/activation contract, Tier C path or API edits permitted without PM review. Denied/unavailable responses private and zero protected API calls. Required exact-head CI and executor-result/v1; return PR for independent PM review, do not merge.
+    captured_at: 2026-09-30T01:58:53.300Z
+    description_sha256: 6c1012522af5bf8e4542229ec09c490ebabc16900b2d3e7e59d49ccf03f36914
+  contract_hash: b82c009a0517dd1a3aedbc30032f7d14d82b0dd1b245d36c6284eddca9844d39

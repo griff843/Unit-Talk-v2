@@ -1,0 +1,140 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1957
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1957
+  objective: >-
+    Provide the production-safe post-migration verification control required to
+    close UTV2-1370 after its already-applied production migration.
+
+    This is a bounded control lane. It does not change retention behavior, apply
+    DDL, create a retention plan, run a canary, prune rows, or delete data.
+  acceptance_criteria:
+    - Preserve pnpm test:db and all writable/live DB suites as staging-only
+      behind ci:assert-staging.
+    - Provide a main-only, production-bound verifier using warehouse_reader, a
+      session default of read-only, and an explicit read-only transaction.
+    - Require exact local/remote migration-ledger alignment and the applied
+      UTV2-1370 migration.
+    - Verify the expected retention tables and RPCs, exact phase-role privilege
+      boundaries, RLS, SECURITY DEFINER functions, and each immutability trigger
+      bound to its expected table/function with tgenabled not disabled.
+    - In --ledger-file mode, reject SUPABASE_ACCESS_TOKEN; keep it only on
+      required Supabase CLI steps and remove it from every spawned psql
+      environment.
+    - Keep a separate authoritative production Live Schema Parity PASS mandatory
+      before UTV2-1370 lane close.
+    - Reject staging evidence as a substitute for production truth.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      File scope
+      * .github/workflows/production-post-migration-verify.yml
+      * docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md
+      * docs/05_operations/DB_MIGRATION_WORKFLOW.md
+      * docs/05_operations/db-writer-classification.json
+      * package.json
+      * scripts/ci/production-post-migration-verify.test.ts
+      * scripts/ci/production-post-migration-verify.ts
+    - >-
+      Verification
+
+      * pnpm test:production-post-migration
+
+      * pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts
+      scripts/ci/workflow-production-credential-guard.test.ts
+
+      * pnpm verify:static
+
+      * pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+
+      * exact-head protected CI and staging proof where required
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1957/production-safe-post-migration-verification-for-utv2-1370-closeout
+    title: Production-safe post-migration verification for UTV2-1370 closeout
+    description: >-
+      ## Objective
+
+
+      Provide the production-safe post-migration verification control required
+      to close UTV2-1370 after its already-applied production migration.
+
+
+      This is a bounded control lane. It does not change retention behavior,
+      apply DDL, create a retention plan, run a canary, prune rows, or delete
+      data.
+
+
+      ## File scope
+
+
+      * .github/workflows/production-post-migration-verify.yml
+
+      * docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md
+
+      * docs/05_operations/DB_MIGRATION_WORKFLOW.md
+
+      * docs/05_operations/db-writer-classification.json
+
+      * package.json
+
+      * scripts/ci/production-post-migration-verify.test.ts
+
+      * scripts/ci/production-post-migration-verify.ts
+
+
+      ## Acceptance Criteria
+
+
+      * Preserve pnpm test:db and all writable/live DB suites as staging-only
+      behind ci:assert-staging.
+
+      * Provide a main-only, production-bound verifier using warehouse_reader, a
+      session default of read-only, and an explicit read-only transaction.
+
+      * Require exact local/remote migration-ledger alignment and the applied
+      UTV2-1370 migration.
+
+      * Verify the expected retention tables and RPCs, exact phase-role
+      privilege boundaries, RLS, SECURITY DEFINER functions, and each
+      immutability trigger bound to its expected table/function with tgenabled
+      not disabled.
+
+      * In --ledger-file mode, reject SUPABASE_ACCESS_TOKEN; keep it only on
+      required Supabase CLI steps and remove it from every spawned psql
+      environment.
+
+      * Keep a separate authoritative production Live Schema Parity PASS
+      mandatory before UTV2-1370 lane close.
+
+      * Reject staging evidence as a substitute for production truth.
+
+
+      ## Verification
+
+
+      * pnpm test:production-post-migration
+
+      * pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts
+      scripts/ci/workflow-production-credential-guard.test.ts
+
+      * pnpm verify:static
+
+      * pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+
+      * exact-head protected CI and staging proof where required
+    captured_at: 2026-09-29T15:38:03.003Z
+    description_sha256: d2e8d2d07c924b66ae46043a19b820ba99053e13cd863b99c4c72a52cea3883c
+  contract_hash: 794cbc4d0d8220e954d083c7b226b8c8e0519d513886d567c84581d06f33f445

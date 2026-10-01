@@ -7,7 +7,7 @@ import { IntelligenceWorkspace, filterRequestLog, sortModelBreakdown } from '../
 import { OpsWorkspace, filterAuditRows, normalizeRole } from '../components/OpsWorkspace';
 import { PicksExplorerClient } from '../components/PicksExplorerClient';
 import { humanCapperDeliveryAuthorizationVersion } from '@unit-talk/contracts';
-import { GovernedPickTruth } from '../components/GovernedPickTruth';
+import { GovernedPickTruth, resolvePickDeliveryStage } from '../components/GovernedPickTruth';
 
 test('agents page renders agent cards and log drawer surface', () => {
   const html = renderToStaticMarkup(<AgentsWorkspace />);
@@ -142,6 +142,78 @@ test('Track Only picks do not render a delivery-held block', () => {
     metadata={{ distributionMode: 'track-only' }} hasEventLink={true} voided={false}
   />);
 
+  assert.doesNotMatch(html, /Delivery held|Kill-switch state unavailable/);
+});
+
+const officialOutbox = { id: 'outbox-official', target: 'discord:official-picks' };
+const sentReceipt = {
+  outboxId: 'outbox-official', status: 'sent', recordedAt: '2026-09-18T01:00:00.000Z',
+  channel: 'discord:1234', externalId: 'message-5678',
+};
+
+test('delivery stage: a voided pick is voided even with a sent official-picks receipt', () => {
+  assert.deepEqual(
+    resolvePickDeliveryStage({ pickStatus: 'voided', outboxRows: [officialOutbox], receipts: [sentReceipt] }),
+    { stage: 'voided' },
+  );
+});
+
+test('delivery stage: a sent receipt on the official-picks outbox row is delivered', () => {
+  assert.deepEqual(
+    resolvePickDeliveryStage({ pickStatus: 'posted', outboxRows: [officialOutbox], receipts: [sentReceipt] }),
+    { stage: 'delivered', target: 'official-picks', recordedAt: '2026-09-18T01:00:00.000Z', channel: 'discord:1234', externalId: 'message-5678' },
+  );
+});
+
+test('delivery stage: a failed receipt is not a delivery', () => {
+  assert.deepEqual(
+    resolvePickDeliveryStage({ pickStatus: 'queued', outboxRows: [officialOutbox], receipts: [{ ...sentReceipt, status: 'failed' }] }),
+    { stage: 'awaiting-delivery' },
+  );
+});
+
+test('delivery stage: a sent receipt on another target\'s outbox row is not an official-picks delivery', () => {
+  assert.deepEqual(
+    resolvePickDeliveryStage({
+      pickStatus: 'queued',
+      outboxRows: [officialOutbox, { id: 'outbox-canary', target: 'discord:canary' }],
+      receipts: [{ ...sentReceipt, outboxId: 'outbox-canary' }],
+    }),
+    { stage: 'awaiting-delivery' },
+  );
+});
+
+test('delivery stage: no receipts is awaiting delivery', () => {
+  assert.deepEqual(
+    resolvePickDeliveryStage({ pickStatus: 'queued', outboxRows: [officialOutbox], receipts: [] }),
+    { stage: 'awaiting-delivery' },
+  );
+});
+
+test('a delivered pick renders Delivered and never Delivery held, even with the switch killed', () => {
+  const html = renderToStaticMarkup(<GovernedPickTruth
+    metadata={{ distributionMode: 'delivery-eligible', deliveryAuthorization: authorization('authorized') }}
+    hasEventLink={true}
+    voided={false}
+    deliveryStage={resolvePickDeliveryStage({ pickStatus: 'posted', outboxRows: [officialOutbox], receipts: [sentReceipt] })}
+    deliveryKillSwitch={{ state: 'killed', target: 'official-picks', reason: 'maintenance', actor: 'operator-1', updatedAt: '2026-09-28T21:00:00.000Z' }}
+  />);
+
+  assert.match(html, /Delivered to.*official-picks.*receipt recorded 2026-09-18T01:00:00\.000Z/);
+  assert.match(html, /message-5678/);
+  assert.doesNotMatch(html, /Delivery held|Kill-switch state unavailable/);
+});
+
+test('a voided delivery-eligible pick renders the voided panel and never Delivery held', () => {
+  const html = renderToStaticMarkup(<GovernedPickTruth
+    metadata={{ distributionMode: 'delivery-eligible', deliveryAuthorization: authorization('authorized') }}
+    hasEventLink={true}
+    voided={true}
+    deliveryStage={resolvePickDeliveryStage({ pickStatus: 'voided', outboxRows: [officialOutbox], receipts: [] })}
+    deliveryKillSwitch={{ state: 'killed', target: 'official-picks', reason: 'maintenance', actor: 'operator-1', updatedAt: '2026-09-28T21:00:00.000Z' }}
+  />);
+
+  assert.match(html, /Voided — will not be delivered/);
   assert.doesNotMatch(html, /Delivery held|Kill-switch state unavailable/);
 });
 

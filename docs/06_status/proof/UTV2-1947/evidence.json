@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1947",
+  "tier": "T1",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "review_pending_ci",
+  "sha_binding": {
+    "merge_sha": "24c5f778d65c124251190e2ac680add4257f035b",
+    "verified_source_sha": "b7ad1a63fd25f3f47fd92c2db8c004f1624a97cf",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-30T22:02:01.613Z"
+  },
+  "static_proof": {
+    "status": "pass_with_t1_live_db_deferred_to_ci",
+    "measured_against_sha": "b7ad1a63fd25f3f47fd92c2db8c004f1624a97cf",
+    "commands": [
+      {
+        "command": "pnpm --filter @unit-talk/discord-bot exec tsx --test src/discord-bot-foundation.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 109,
+        "pass": 109,
+        "fail": 0
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "static_pass_live_db_refused",
+        "note": "verify:static completed successfully. test:live-db then refused because the local target was host 127.0.0.1/ref unidentified rather than sanctioned staging xskgrzbteyqdufktjrjx. The admitted lane records t1_live_db_precondition=deferred_to_ci; no local green verify is claimed."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Matched discord-delivery; R1 required; no artifact requirement."
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "in_process_pass_live_discord_blocked_ci_db_pending",
+    "environment": "contained lane worktree",
+    "queries": [
+      {
+        "surface": "/live",
+        "request": "GET /api/member/picks?status=posted&limit=50",
+        "observed": "The command made exactly the member-safe request through an injected ApiClient; the raw picks helper was configured to throw if called."
+      },
+      {
+        "surface": "/today",
+        "request": "GET /api/member/picks?status=posted,settled&limit=200",
+        "observed": "The command made exactly the member-safe request through an injected ApiClient; the raw picks helper was configured to throw if called."
+      },
+      {
+        "surface": "/heat-signal and /my-picks",
+        "request": "none",
+        "observed": "Authorized unavailable paths and every denied path made zero protected API requests."
+      }
+    ],
+    "row_counts": [
+      {
+        "subject": "apps/discord-bot/src/discord-bot-foundation.test.ts",
+        "tests": 109,
+        "pass": 109,
+        "fail": 0
+      }
+    ],
+    "live_discord": "BLOCKED: live Discord browser/session unavailable",
+    "t1_database_proof": "deferred_to_ci",
+    "note": "No live Discord state is inferred from this in-process evidence. The authorized staging CI job must supply the exact-head T1 database proof before merge."
+  },
+  "scope": {
+    "implementation_paths": [
+      "apps/discord-bot/src/role-guard.ts",
+      "apps/discord-bot/src/commands/live.ts",
+      "apps/discord-bot/src/commands/today.ts",
+      "apps/discord-bot/src/commands/heat-signal.ts",
+      "apps/discord-bot/src/commands/my-picks.ts",
+      "apps/discord-bot/src/discord-bot-foundation.test.ts"
+    ],
+    "live_discord_mutations": 0,
+    "whop_mutations": 0,
+    "stripe_mutations": 0,
+    "official_picks_released": false,
+    "sgo_activated": false,
+    "black_label_launched": false
+  },
+  "known_gaps": [
+    "BLOCKED: live Discord browser/session unavailable",
+    "The required exact-head verify and Writable DB proof (staging only) checks remain pending until the PR runs in the sanctioned GitHub staging environment.",
+    "The first official-picks release remains prohibited and is not part of this lane."
+  ]
+}

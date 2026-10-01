@@ -1,0 +1,72 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1958
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1958
+  objective: "Commit only `.ops/work/WORK-20260929.md` to `main` through a normal
+    governed T2 lane so the repository's existing-branch readmission control can
+    admit PR [WORK-20260929: optimize Codex context and model
+    usage](https://linear.app/unit-talk-v2/review/work-20260929-optimize-codex-\
+    context-and-model-usage-e021028c6f73)."
+  acceptance_criteria:
+    - "`.ops/work/WORK-20260929.md` is present on `main` through the sanctioned
+      PR/merge path."
+    - The bootstrap lane is closed cleanly.
+    - PR
+      [griff843/Unit-Talk-v2#1695](https://linear.app/unit-talk-v2/review/work-20260929-optimize-codex-context-and-model-usage-e021028c6f73)
+      can then pass `--readmit-existing-branch` preflight.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Scope
+
+      * Add the already-reviewed work-order artifact for `WORK-20260929`.
+
+      * No implementation changes.
+
+      * No protection changes, bypass, direct-main write, or unrelated
+      governance work.
+    - >-
+      Admission note
+
+      Declared T2 (mechanical floor T3) because the current ratified Codex
+      routing policy on `main` has no enabled T3 Codex profile. This preserves
+      truthful Codex executor identity; it does not lower risk.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1958/bootstrap-repository-owned-work-authority-for-pr-1695
+    title: "Bootstrap repository-owned work authority for PR #1695"
+    description: |-
+      ## Objective
+
+      Commit only `.ops/work/WORK-20260929.md` to `main` through a normal governed T2 lane so the repository's existing-branch readmission control can admit PR [WORK-20260929: optimize Codex context and model usage](https://linear.app/unit-talk-v2/review/work-20260929-optimize-codex-context-and-model-usage-e021028c6f73).
+
+      ## Scope
+
+      * Add the already-reviewed work-order artifact for `WORK-20260929`.
+      * No implementation changes.
+      * No protection changes, bypass, direct-main write, or unrelated governance work.
+
+      ## Acceptance criteria
+
+      * `.ops/work/WORK-20260929.md` is present on `main` through the sanctioned PR/merge path.
+      * The bootstrap lane is closed cleanly.
+      * PR [griff843/Unit-Talk-v2#1695](https://linear.app/unit-talk-v2/review/work-20260929-optimize-codex-context-and-model-usage-e021028c6f73) can then pass `--readmit-existing-branch` preflight.
+
+      ## Admission note
+
+      Declared T2 (mechanical floor T3) because the current ratified Codex routing policy on `main` has no enabled T3 Codex profile. This preserves truthful Codex executor identity; it does not lower risk.
+    captured_at: 2026-09-29T15:47:18.141Z
+    description_sha256: 8050b8deafdfc5fe6461b7d6dbfcb96682bb785e637e01acde2c745168d502cd
+  contract_hash: 02b856cf30ea04487f0fc2f4ef7dae4b6f736d9fac7566aef6db439e0353ac40

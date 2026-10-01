@@ -6,7 +6,16 @@ import type {
   SystemRunRecord,
 } from '@unit-talk/db';
 import { transitionPickLifecycle } from '@unit-talk/db';
-import { checkRolloutControls, type TargetRegistryEntry } from '@unit-talk/contracts';
+import {
+  checkRolloutControls,
+  dispatchLedgerActions,
+  isDispatchAmbiguous,
+  isHumanDeliveryTarget,
+  parseGovernedTargetFromDeliveryTarget,
+  readDispatchLedger,
+  type DispatchOutcome,
+  type TargetRegistryEntry,
+} from '@unit-talk/contracts';
 
 export interface DeliveryResult {
   receiptType: string;
@@ -16,6 +25,13 @@ export interface DeliveryResult {
   idempotencyKey?: string | undefined;
   reason?: string | undefined;
   payload: Record<string, unknown>;
+  /**
+   * WORK-2026092901: what the adapter knows about whether its request created
+   * a message. Absent is read conservatively: a `sent` result is `delivered`,
+   * anything else is `ambiguous` -- an adapter that cannot say a message was
+   * NOT created has not established that it is safe to post again.
+   */
+  dispatch?: DispatchOutcome | undefined;
 }
 
 export type DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure';
@@ -42,6 +58,16 @@ const SYNTHETIC_EVENT_PATTERNS = [
   /^test event/i,
   /^proof/i,
 ];
+
+/**
+ * WORK-2026092901: member-facing human-capper delivery runs under the dispatch
+ * ledger (see `packages/contracts/src/dispatch-ledger.ts`). Other targets keep
+ * their existing retry semantics; every Discord post carries a nonce.
+ */
+function isLedgerGovernedTarget(target: string): boolean {
+  const governed = parseGovernedTargetFromDeliveryTarget(target);
+  return governed !== null && isHumanDeliveryTarget(governed);
+}
 
 function isSyntheticEvent(metadata: Record<string, unknown> | null | undefined): boolean {
   if (!metadata) return false;
@@ -333,14 +359,63 @@ export async function processNextDistributionWork(
       }
     }
 
-    const delivery = await deliverWithHeartbeat({
-      repositories,
-      outbox: claimed,
-      workerId,
-      deliver,
-      ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
-      watchdogMs,
-    });
+    // WORK-2026092901 DISPATCH_LEDGER_GUARD_START
+    // For member-facing human-capper delivery the worker never posts a message
+    // it cannot prove it has not already posted. The ledger is read AFTER every
+    // skip/block decision above (none of which posts) and BEFORE the network.
+    const ledgerGoverned = isLedgerGovernedTarget(target);
+    let delivery: DeliveryResult;
+    let dispatchLedgerWriteError: string | null = null;
+    if (ledgerGoverned) {
+      const gate = await gateLedgerDispatch({ repositories, claimed, pick, target, workerId });
+      if (gate.kind === 'refused') {
+        return deadLetterWithoutDispatch({
+          repositories,
+          runId: run.id,
+          claimed,
+          target,
+          workerId,
+          reason: gate.reason,
+          auditAction: gate.auditAction,
+          auditPayload: gate.auditPayload,
+        });
+      }
+
+      if (gate.kind === 'recover') {
+        // The message exists. Confirm it from the recorded receipt; do not post.
+        delivery = gate.delivery;
+      } else {
+        delivery = await deliverWithHeartbeat({
+          repositories,
+          outbox: claimed,
+          workerId,
+          deliver,
+          ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
+          watchdogMs,
+        });
+        try {
+          await recordDispatchOutcome(repositories, claimed, workerId, gate.attempt, delivery);
+        } catch (ledgerError) {
+          // Not swallowed into a retry: an unwritten resolution leaves the
+          // attempt unresolved, so any later claim dead-letters instead of
+          // posting. A delivered message still proceeds to confirm below,
+          // which writes the authoritative receipt.
+          dispatchLedgerWriteError =
+            ledgerError instanceof Error ? ledgerError.message : String(ledgerError);
+        }
+      }
+    } else {
+      delivery = await deliverWithHeartbeat({
+        repositories,
+        outbox: claimed,
+        workerId,
+        deliver,
+        ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
+        watchdogMs,
+      });
+    }
+    // WORK-2026092901 DISPATCH_LEDGER_GUARD_END
+
     if (delivery.status === 'terminal-failure') {
       return handleFailedDelivery({
         repositories,
@@ -434,6 +509,7 @@ export async function processNextDistributionWork(
         receiptId: receipt.id,
         target,
         postedLifecycleEventId,
+        ...(dispatchLedgerWriteError ? { dispatchLedgerWriteError } : {}),
       },
     });
 
@@ -457,6 +533,201 @@ export async function processNextDistributionWork(
       deadLetterImmediately: false,
     });
   }
+}
+
+type LedgerGate =
+  | { kind: 'dispatch'; attempt: number }
+  | { kind: 'recover'; delivery: DeliveryResult }
+  | {
+      kind: 'refused';
+      reason: string;
+      auditAction: string;
+      auditPayload: Record<string, unknown>;
+    };
+
+/**
+ * Decide whether a claimed human-capper row may be posted. Fails closed on
+ * every question it cannot answer: a missing pick, an unreadable ledger, an
+ * attempt whose outcome was never recorded. The `started` record is written
+ * here, before the adapter runs; if that write throws, the caller's catch
+ * schedules a retry and nothing was posted.
+ */
+async function gateLedgerDispatch(input: {
+  repositories: RepositoryBundle;
+  claimed: OutboxRecord;
+  pick: { status: string } | null;
+  target: string;
+  workerId: string;
+}): Promise<LedgerGate> {
+  const { repositories, claimed, target, workerId } = input;
+  const base = { outboxId: claimed.id, pickId: claimed.pick_id, target };
+
+  if (!input.pick) {
+    return {
+      kind: 'refused',
+      reason: 'human-delivery-pick-missing: the pick behind this row could not be read',
+      auditAction: 'distribution.blocked',
+      auditPayload: { ...base, reason: 'human-delivery-pick-missing' },
+    };
+  }
+
+  if (!repositories.audit.listByEntity) {
+    return {
+      kind: 'refused',
+      reason: 'dispatch-ledger-unavailable: cannot prove this row was never posted',
+      auditAction: dispatchLedgerActions.ambiguous,
+      auditPayload: { ...base, reason: 'dispatch-ledger-unavailable' },
+    };
+  }
+
+  const existingReceipt = await repositories.receipts.findLatestByOutboxId(claimed.id);
+  const rows = await repositories.audit.listByEntity(
+    'distribution_outbox',
+    claimed.id,
+    'distribution.dispatch_',
+  );
+  const ledger = readDispatchLedger(rows);
+
+  if (ledger.delivered) {
+    const receipt = ledger.delivered.receipt;
+    return {
+      kind: 'recover',
+      delivery: {
+        receiptType: receipt.receiptType,
+        status: 'sent',
+        channel: receipt.channel,
+        externalId: receipt.externalId,
+        idempotencyKey: receipt.idempotencyKey ?? `${claimed.id}:${claimed.target}:receipt`,
+        payload: { ...receipt.payload, recoveredFromDispatchLedger: true },
+        dispatch: 'delivered',
+      },
+    };
+  }
+
+  if (existingReceipt?.status === 'sent') {
+    return {
+      kind: 'refused',
+      reason: `already-receipted: sent receipt ${existingReceipt.id} exists for this row`,
+      auditAction: dispatchLedgerActions.ambiguous,
+      auditPayload: { ...base, reason: 'already-receipted', receiptId: existingReceipt.id },
+    };
+  }
+
+  if (isDispatchAmbiguous(ledger)) {
+    return {
+      kind: 'refused',
+      reason:
+        `ambiguous-prior-dispatch: attempt(s) ${ledger.unresolvedAttempts.join(',') || 'unreadable'} ` +
+        'may already have posted; reconcile against the channel before any retry',
+      auditAction: dispatchLedgerActions.ambiguous,
+      auditPayload: {
+        ...base,
+        reason: 'ambiguous-prior-dispatch',
+        unresolvedAttempts: ledger.unresolvedAttempts,
+        malformedLedgerRows: ledger.malformed,
+      },
+    };
+  }
+
+  const attempt = ledger.nextAttempt;
+  await repositories.audit.record({
+    entityType: 'distribution_outbox',
+    entityId: claimed.id,
+    entityRef: claimed.pick_id,
+    action: dispatchLedgerActions.started,
+    actor: workerId,
+    payload: { ...base, attempt },
+  });
+  return { kind: 'dispatch', attempt };
+}
+
+/**
+ * Record what the adapter established. `delivered` keeps the receipt so a
+ * later claim confirms without posting; `not-sent`/`rejected` clear the
+ * attempt; `ambiguous` (or an unknown outcome) is recorded as nothing, which
+ * leaves the attempt unresolved -- the safe reading.
+ */
+async function recordDispatchOutcome(
+  repositories: RepositoryBundle,
+  claimed: OutboxRecord,
+  workerId: string,
+  attempt: number,
+  delivery: DeliveryResult,
+): Promise<void> {
+  const outcome: DispatchOutcome =
+    delivery.dispatch ?? (delivery.status === 'sent' ? 'delivered' : 'ambiguous');
+  const base = { outboxId: claimed.id, pickId: claimed.pick_id, target: claimed.target, attempt };
+
+  if (outcome === 'delivered' && delivery.status === 'sent' && delivery.externalId) {
+    await repositories.audit.record({
+      entityType: 'distribution_outbox',
+      entityId: claimed.id,
+      entityRef: claimed.pick_id,
+      action: dispatchLedgerActions.delivered,
+      actor: workerId,
+      payload: {
+        ...base,
+        receipt: {
+          receiptType: delivery.receiptType,
+          channel: delivery.channel ?? '',
+          externalId: delivery.externalId,
+          idempotencyKey: delivery.idempotencyKey ?? null,
+          payload: delivery.payload ?? {},
+        },
+      },
+    });
+    return;
+  }
+
+  if (outcome === 'not-sent' || outcome === 'rejected') {
+    await repositories.audit.record({
+      entityType: 'distribution_outbox',
+      entityId: claimed.id,
+      entityRef: claimed.pick_id,
+      action: dispatchLedgerActions.notCreated,
+      actor: workerId,
+      payload: { ...base, outcome, reason: delivery.reason ?? null },
+    });
+  }
+}
+
+async function deadLetterWithoutDispatch(input: {
+  repositories: RepositoryBundle;
+  runId: string;
+  claimed: OutboxRecord;
+  target: string;
+  workerId: string;
+  reason: string;
+  auditAction: string;
+  auditPayload: Record<string, unknown>;
+}): Promise<WorkerProcessFailureResult> {
+  const finalOutbox = await input.repositories.outbox.markDeadLetter(input.claimed.id, input.reason);
+  const completedRun = await input.repositories.runs.completeRun({
+    runId: input.runId,
+    status: 'failed',
+    details: {
+      outboxId: input.claimed.id,
+      target: input.target,
+      error: input.reason,
+      deadLettered: true,
+      dispatched: false,
+    },
+  });
+  await recordWorkerAudit(input.repositories.audit, {
+    entityType: 'distribution_outbox',
+    entityId: input.claimed.id,
+    action: input.auditAction,
+    actor: input.workerId,
+    payload: input.auditPayload,
+  });
+
+  return {
+    status: 'failed',
+    target: input.target,
+    workerId: input.workerId,
+    outbox: finalOutbox,
+    run: completedRun,
+  };
 }
 
 async function deliverWithHeartbeat(input: {

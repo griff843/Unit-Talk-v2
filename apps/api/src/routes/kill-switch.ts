@@ -4,8 +4,9 @@ import { readJsonBody } from '../server.js';
 import { writeJson } from '../http-utils.js';
 import type { AuthContext } from '../auth.js';
 import {
-  governedDeliveryTargets,
-  type GovernedDeliveryTarget,
+  deliveryControlKeys,
+  isDeliveryControlKey,
+  type DeliveryControlKey,
 } from '@unit-talk/contracts';
 
 /**
@@ -25,8 +26,11 @@ interface KillSwitchRequestBody {
 // operator who cannot name a target here cannot kill it, so a target missing
 // from this list is a delivery lane with no stop control -- which is exactly
 // the hole `discord:<channelId>` left open in the worker.
-function isValidTarget(value: unknown): value is GovernedDeliveryTarget {
-  return typeof value === 'string' && (governedDeliveryTargets as readonly string[]).includes(value);
+//
+// WORK-2026092901: plus the human-capper recap control, which stops settlement
+// and daily/weekly/monthly recap posts independently of `official-picks`.
+function isValidTarget(value: unknown): value is DeliveryControlKey {
+  return isDeliveryControlKey(value);
 }
 
 export async function handleKillSwitchSet(
@@ -39,7 +43,7 @@ export async function handleKillSwitchSet(
   if (!isValidTarget(body.target)) {
     return writeJson(response, 400, {
       ok: false,
-      error: { code: 'INVALID_TARGET', message: `target must be one of: ${governedDeliveryTargets.join(', ')}` },
+      error: { code: 'INVALID_TARGET', message: `target must be one of: ${deliveryControlKeys.join(', ')}` },
     });
   }
   if (typeof body.killed !== 'boolean') {
@@ -60,7 +64,18 @@ export async function handleKillSwitchSet(
     });
   }
   const actor = auth.identity;
-  const reason = typeof body.reason === 'string' ? body.reason : undefined;
+  const reason =
+    typeof body.reason === 'string' && body.reason.trim().length > 0 ? body.reason.trim() : undefined;
+
+  // WORK-2026092901: releasing a control is member-delivery activation and
+  // must say why. Engaging one is always allowed, reason or not -- stopping
+  // delivery is never made harder.
+  if (body.killed === false && reason === undefined) {
+    return writeJson(response, 400, {
+      ok: false,
+      error: { code: 'REASON_REQUIRED', message: 'a non-empty reason is required to release a delivery control' },
+    });
+  }
 
   if (!runtime.repositories.killSwitch) {
     return writeJson(response, 503, {

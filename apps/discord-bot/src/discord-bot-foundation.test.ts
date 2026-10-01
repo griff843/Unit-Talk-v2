@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 
 import type { AppEnv } from '@unit-talk/config';
 import { parseBotConfig, parseQaBotConfig } from './config.js';
-import { checkRoles, requireActivePickRoles } from './role-guard.js';
+import { checkRoles, requireActivePickRoles, requireVipPlusRoles } from './role-guard.js';
 import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
 import {
@@ -50,6 +50,7 @@ import {
   createUpgradeCommand,
 } from './commands/upgrade.js';
 import {
+  buildHeatSignalEmbed,
   createHeatSignalCommand,
 } from './commands/heat-signal.js';
 import {
@@ -64,7 +65,6 @@ import {
 import {
   buildMyPicksEmbeds,
   createMyPicksCommand,
-  filterPicksForIdentity,
 } from './commands/my-picks.js';
 import {
   buildResultsEmbeds,
@@ -215,6 +215,7 @@ function makeMockInteraction(opts: {
   commandName?: string;
   roles?: MockRoles | null;
   isChatInputCommand?: boolean;
+  guildId?: string | null;
 } = {}): {
   interaction: Interaction;
   replies: string[];
@@ -238,6 +239,7 @@ function makeMockInteraction(opts: {
   const mock = {
     commandName: opts.commandName ?? 'test-cmd',
     isChatInputCommand: () => opts.isChatInputCommand ?? true,
+    guildId: opts.guildId === undefined ? 'guild-1' : opts.guildId,
     member: opts.roles === null ? null : {
       roles: {
         cache: {
@@ -519,18 +521,19 @@ test('createApiClient.getRecentSettlements calls GET /api/settlements/recent wit
   assert.equal(result?.count, 0);
 });
 
-test('/live command renders active picks from the picks query API', async () => {
+test('/live command reads only posted picks from the member-safe route', async () => {
   type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+  let requestedPath = '';
   const apiClient: ApiClient = {
-    get: async <T>() => ({ picks: [], count: 0 } as T),
+    get: async <T>(path: string) => {
+      requestedPath = path;
+      return ({
+        count: 1,
+        picks: [makeQueriedPick({ id: 'pick-1', status: 'posted', selection: 'Knicks ML' })],
+      } as T);
+    },
     post: async <T>() => ({} as T),
-    getPicksByStatus: async () => ({
-      count: 2,
-      picks: [
-        makeQueriedPick({ id: 'pick-1', status: 'validated', selection: 'Knicks ML' }),
-        makeQueriedPick({ id: 'pick-2', status: 'posted', selection: 'Suns ML' }),
-      ],
-    }),
+    getPicksByStatus: async () => assert.fail('raw picks route must not be called'),
   };
   const command = createLiveCommand(apiClient, ['role-vip']);
   let payload: Payload | null = null;
@@ -545,8 +548,23 @@ test('/live command renders active picks from the picks query API', async () => 
   const settledPayload = payload as Payload;
   const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
   assert.equal(embed.title, 'Live Board');
-  assert.match(embed.description ?? '', /\[VALIDATED\].*Knicks ML/);
-  assert.match(embed.description ?? '', /\[POSTED\].*Suns ML/);
+  assert.match(embed.description ?? '', /\[POSTED\].*Knicks ML/);
+  assert.equal(requestedPath, '/api/member/picks?status=posted&limit=50');
+});
+
+test('/today reads posted and settled picks from the member-safe route', async () => {
+  let requestedPath = '';
+  const apiClient: ApiClient = {
+    get: async <T>(path: string) => {
+      requestedPath = path;
+      return ({ picks: [], count: 0 } as T);
+    },
+    post: async <T>() => ({} as T),
+    getPicksByStatus: async () => assert.fail('raw picks route must not be called'),
+  };
+  const command = createTodayCommand(apiClient, ['role-vip']);
+  await command.execute({ editReply: async () => {} } as never);
+  assert.equal(requestedPath, '/api/member/picks?status=posted,settled&limit=200');
 });
 
 test('buildLiveEmbeds paginates after 10 picks', () => {
@@ -582,34 +600,15 @@ test('buildTodayEmbeds paginates after 10 picks', () => {
   assert.equal(embeds.length, 2);
 });
 
-test('filterPicksForIdentity matches metadata submittedBy against Discord usernames and display names', () => {
-  const picks = [
-    makeQueriedPick({ id: 'mine', metadata: { submittedBy: 'Griff Display' } }),
-    makeQueriedPick({ id: 'other', metadata: { submittedBy: 'Casey' } }),
-  ];
-
-  const filtered = filterPicksForIdentity(picks, {
-    user: { username: 'griff843', globalName: 'Griff' },
-    member: { displayName: 'Griff Display' },
-  } as never);
-
-  assert.deepEqual(filtered.map((pick) => pick.id), ['mine']);
-});
-
-test('/my-picks command renders only picks matching the caller identity', async () => {
-  type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+test('/my-picks ignores mutable Discord names and makes zero protected reads', async () => {
+  type Payload = { content?: string; embeds?: unknown[] };
+  let apiCalls = 0;
   const apiClient: ApiClient = {
-    get: async <T>() => ({ picks: [], count: 0 } as T),
+    get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
     post: async <T>() => ({} as T),
-    getPicksByStatus: async () => ({
-      count: 2,
-      picks: [
-        makeQueriedPick({ id: 'mine', selection: 'My Pick', metadata: { submittedBy: 'griff843' } }),
-        makeQueriedPick({ id: 'other', selection: 'Other Pick', metadata: { submittedBy: 'casey' } }),
-      ],
-    }),
+    getPicksByStatus: async () => { apiCalls += 1; return { picks: [], count: 0 }; },
   };
-  const command = createMyPicksCommand(apiClient);
+  const command = createMyPicksCommand(apiClient, ['role-vip']);
   let payload: Payload | null = null;
 
   await command.execute({
@@ -621,11 +620,9 @@ test('/my-picks command renders only picks matching the caller identity', async 
   } as never);
 
   assert.ok(payload);
-  const settledPayload = payload as Payload;
-  const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
-  assert.equal(embed.title, 'My Picks');
-  assert.match(embed.description ?? '', /My Pick/);
-  assert.doesNotMatch(embed.description ?? '', /Other Pick/);
+  assert.match((payload as Payload).content ?? '', /canonical member identity/);
+  assert.deepEqual((payload as Payload).embeds, []);
+  assert.equal(apiCalls, 0);
 });
 
 test('buildMyPicksEmbeds paginates after 10 picks', () => {
@@ -938,6 +935,7 @@ test('/upgrade command short-circuits when the member is already vip-plus', asyn
 
 test('checkRoles returns true when member holds one of the required roles', () => {
   const interaction = {
+    guildId: 'guild-1',
     member: { roles: { cache: { has: (id: string) => id === 'role-capper' } } },
   } as unknown as ChatInputCommandInteraction;
 
@@ -946,22 +944,25 @@ test('checkRoles returns true when member holds one of the required roles', () =
 
 test('checkRoles returns false when member holds none of the required roles', () => {
   const interaction = {
+    guildId: 'guild-1',
     member: { roles: { cache: { has: () => false } } },
   } as unknown as ChatInputCommandInteraction;
 
   assert.equal(checkRoles(interaction, ['role-admin']), false);
 });
 
-test('checkRoles returns true when requiredRoles is empty (no restriction)', () => {
+test('checkRoles fails closed when requiredRoles is empty', () => {
   const interaction = {
+    guildId: 'guild-1',
     member: { roles: { cache: { has: () => false } } },
   } as unknown as ChatInputCommandInteraction;
 
-  assert.equal(checkRoles(interaction, []), true);
+  assert.equal(checkRoles(interaction, []), false);
 });
 
 test('checkRoles returns false when member is null', () => {
   const interaction = {
+    guildId: 'guild-1',
     member: null,
   } as unknown as ChatInputCommandInteraction;
 
@@ -971,10 +972,21 @@ test('checkRoles returns false when member is null', () => {
 test('checkRoles returns false when member lacks roles.cache', () => {
   // APIInteractionGuildMember shape - roles is a string array, no .cache
   const interaction = {
+    guildId: 'guild-1',
     member: { roles: ['role-a', 'role-b'] },
   } as unknown as ChatInputCommandInteraction;
 
   assert.equal(checkRoles(interaction, ['role-a']), false);
+});
+
+test('checkRoles fails closed in a DM or malformed guild context', () => {
+  const roles = { cache: { has: () => true } };
+  assert.equal(checkRoles({ guildId: null, member: { roles } } as never, ['role-vip']), false);
+  assert.equal(checkRoles({ member: { roles } } as never, ['role-vip']), false);
+  assert.equal(
+    checkRoles({ guildId: 'guild-1', member: { roles: { cache: { has: true } } } } as never, ['role-vip']),
+    false,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1015,7 +1027,26 @@ test('requireActivePickRoles never returns an empty (unrestricted) role list', (
     operatorRoleId: undefined,
   });
   assert.ok(roles.length > 0, 'an empty list would disable the router role guard');
-  assert.deepEqual(roles, ['__active_pick_roles_not_configured__']);
+  assert.deepEqual(roles, ['__member_access_role_config_invalid__']);
+});
+
+test('member access role helpers fail closed on blank or overlapping role configuration', () => {
+  assert.deepEqual(
+    requireActivePickRoles({ ...ACTIVE_PICK_ROLE_CONFIG, trialRoleId: '' }),
+    ['__member_access_role_config_invalid__'],
+  );
+  assert.deepEqual(
+    requireVipPlusRoles({ ...ACTIVE_PICK_ROLE_CONFIG, vipPlusRoleId: 'role-vip' }),
+    ['__member_access_role_config_invalid__'],
+  );
+});
+
+test('requireVipPlusRoles admits only VIP+, Capper and Operator', () => {
+  assert.deepEqual(requireVipPlusRoles(ACTIVE_PICK_ROLE_CONFIG), [
+    'role-vip-plus',
+    'role-capper',
+    'role-operator',
+  ]);
 });
 
 for (const [name, create] of [
@@ -1058,6 +1089,86 @@ for (const [name, create] of [
   });
 }
 
+test('Trial, VIP, VIP+, Capper and Operator personas can read the member-safe pick commands', async () => {
+  for (const role of ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator']) {
+    for (const [name, create] of [
+      ['live', createLiveCommand],
+      ['today', createTodayCommand],
+    ] as const) {
+      let apiCalls = 0;
+      const apiClient: ApiClient = {
+        get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
+        post: async <T>() => ({} as T),
+      };
+      const handler = createInteractionHandler(
+        makeRegistry([create(apiClient, requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG))]),
+      );
+      const mock = makeMockInteraction({ commandName: name, roles: { heldRoles: [role] } });
+
+      await handler(mock.interaction);
+
+      assert.equal(mock.deferred, true, `${role} should pass /${name} authorization`);
+      assert.equal(apiCalls, 1, `${role} should make one member-safe /${name} read`);
+    }
+  }
+});
+
+test('/heat-signal enforces VIP+ authorization while inactive capability makes zero requests', async () => {
+  const requiredRoles = requireVipPlusRoles(ACTIVE_PICK_ROLE_CONFIG);
+  for (const role of ['role-free', 'role-trial', 'role-vip']) {
+    let apiCalls = 0;
+    const apiClient: ApiClient = {
+      get: async <T>() => { apiCalls += 1; return ({} as T); },
+      post: async <T>() => ({} as T),
+    };
+    const handler = createInteractionHandler(
+      makeRegistry([createHeatSignalCommand(apiClient, requiredRoles)]),
+    );
+    const mock = makeMockInteraction({ commandName: 'heat-signal', roles: { heldRoles: [role] } });
+    await handler(mock.interaction);
+    assert.equal(mock.deferred, false, `${role} must be denied`);
+    assert.equal(apiCalls, 0);
+  }
+
+  for (const role of ['role-vip-plus', 'role-capper', 'role-operator']) {
+    let apiCalls = 0;
+    const apiClient: ApiClient = {
+      get: async <T>() => { apiCalls += 1; return ({} as T); },
+      post: async <T>() => ({} as T),
+    };
+    const handler = createInteractionHandler(
+      makeRegistry([createHeatSignalCommand(apiClient, requiredRoles)]),
+    );
+    const mock = makeMockInteraction({ commandName: 'heat-signal', roles: { heldRoles: [role] } });
+    await handler(mock.interaction);
+    assert.equal(mock.deferred, true, `${role} should pass staff/VIP+ authorization`);
+    assert.equal(apiCalls, 0, 'authorization must not activate dormant intelligence');
+    assert.match(mock.edited[0] ?? '', /not live yet/);
+  }
+});
+
+test('/my-picks gates paid readers but remains unavailable without canonical identity or API reads', async () => {
+  const requiredRoles = requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG);
+  let apiCalls = 0;
+  const apiClient: ApiClient = {
+    get: async <T>() => { apiCalls += 1; return ({} as T); },
+    post: async <T>() => ({} as T),
+  };
+  const command = createMyPicksCommand(apiClient, requiredRoles);
+
+  const free = makeMockInteraction({ commandName: 'my-picks', roles: { heldRoles: ['role-free'] } });
+  await createInteractionHandler(makeRegistry([command]))(free.interaction);
+  assert.equal(free.deferred, false);
+
+  for (const role of ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator']) {
+    const admitted = makeMockInteraction({ commandName: 'my-picks', roles: { heldRoles: [role] } });
+    await createInteractionHandler(makeRegistry([command]))(admitted.interaction);
+    assert.equal(admitted.deferred, true, `${role} should pass the paid-read gate`);
+    assert.match(admitted.edited[0] ?? '', /canonical member identity/);
+  }
+  assert.equal(apiCalls, 0);
+});
+
 test('loadCommandRegistry gates /live and /today to the active-pick roles from config', async () => {
   await withEnvVars(
     makeRegistryEnv(),
@@ -1066,6 +1177,12 @@ test('loadCommandRegistry gates /live and /today to the active-pick roles from c
       const expected = ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator'];
       assert.deepEqual(registry.get('live')?.requiredRoles, expected);
       assert.deepEqual(registry.get('today')?.requiredRoles, expected);
+      assert.deepEqual(registry.get('my-picks')?.requiredRoles, expected);
+      assert.deepEqual(registry.get('heat-signal')?.requiredRoles, [
+        'role-vip-plus',
+        'role-capper',
+        'role-operator',
+      ]);
       assert.equal(registry.get('results')?.requiredRoles, undefined, '/results stays open to every member');
     },
   );
@@ -1964,99 +2081,43 @@ test('/help command execute calls editReply with a single embed containing all c
   }
 });
 
-test('/heat-signal command renders an embed for mixed-tier detections', async () => {
-  type HeatSignalPayload = {
-    content?: string;
-    embeds?: Array<{ toJSON(): Record<string, unknown> }>;
-  };
-  const apiClient: ApiClient = {
-    async get<T>() {
-      return {} as T;
-    },
-    async post<T>() {
-      return {} as T;
-    },
-    async getRecentAlerts() {
-      return {
-        total: 2,
-        detections: [
-          {
-            id: 'd1',
-            eventId: 'e1',
-            marketKey: 'spreads/nfl',
-            bookmakerKey: 'fanduel',
-            marketType: 'spread' as const,
-            direction: 'down' as const,
-            tier: 'alert-worthy' as const,
-            oldLine: -3,
-            newLine: -5.5,
-            lineChange: -2.5,
-            lineChangeAbs: 2.5,
-            velocity: 0.25,
-            timeElapsedMinutes: 10,
-            currentSnapshotAt: '2026-03-28T12:10:00.000Z',
-            notified: true,
-            cooldownExpiresAt: null,
-          },
-          {
-            id: 'd2',
-            eventId: 'e2',
-            marketKey: 'totals/nba',
-            bookmakerKey: 'draftkings',
-            marketType: 'total' as const,
-            direction: 'up' as const,
-            tier: 'notable' as const,
-            oldLine: 224.5,
-            newLine: 226,
-            lineChange: 1.5,
-            lineChangeAbs: 1.5,
-            velocity: 0.05,
-            timeElapsedMinutes: 30,
-            currentSnapshotAt: '2026-03-28T12:05:00.000Z',
-            notified: false,
-            cooldownExpiresAt: null,
-          },
-        ],
-      };
-    },
-  };
-  const command = createHeatSignalCommand(apiClient);
-  let payload: HeatSignalPayload | null = null;
-
-  await command.execute({
-    options: {
-      getInteger(name: string) {
-        return name === 'count' ? 2 : null;
+test('buildHeatSignalEmbed preserves the dormant capability renderer', () => {
+  const embed = buildHeatSignalEmbed({
+    total: 2,
+    detections: [
+      {
+        id: 'd1', eventId: 'e1', marketKey: 'spreads/nfl', bookmakerKey: 'fanduel',
+        marketType: 'spread', direction: 'down', tier: 'alert-worthy', oldLine: -3,
+        newLine: -5.5, lineChange: -2.5, lineChangeAbs: 2.5, velocity: 0.25,
+        timeElapsedMinutes: 10, currentSnapshotAt: '2026-03-28T12:10:00.000Z',
+        notified: true, cooldownExpiresAt: null,
       },
-    },
-    editReply: async (next: HeatSignalPayload) => {
-      payload = next;
-    },
-  } as never);
-
-  assert.ok(payload);
-  const settledPayload = payload as HeatSignalPayload;
-  assert.equal(settledPayload.content, '');
-  const embed = settledPayload.embeds?.[0]?.toJSON() as {
-    title?: string;
-    description?: string;
-  };
+      {
+        id: 'd2', eventId: 'e2', marketKey: 'totals/nba', bookmakerKey: 'draftkings',
+        marketType: 'total', direction: 'up', tier: 'notable', oldLine: 224.5,
+        newLine: 226, lineChange: 1.5, lineChangeAbs: 1.5, velocity: 0.05,
+        timeElapsedMinutes: 30, currentSnapshotAt: '2026-03-28T12:05:00.000Z',
+        notified: false, cooldownExpiresAt: null,
+      },
+    ],
+  }, 2).toJSON() as { title?: string; description?: string };
   assert.equal(embed.title, 'Heat Signal - Top 2 Line Movements');
   assert.match(embed.description ?? '', /\[ALERT\].*spreads\/nfl/);
   assert.match(embed.description ?? '', /\[NOTE\].*totals\/nba/);
 });
 
-test('/heat-signal command returns empty-state copy when no detections exist', async () => {
+test('/heat-signal returns truthful unavailability with zero protected requests', async () => {
   type EmptyHeatSignalPayload = {
     content?: string;
     embeds?: unknown[];
   };
+  let apiCalls = 0;
   const apiClient: ApiClient = {
-    get: async <T>() => ({} as T),
+    get: async <T>() => { apiCalls += 1; return ({} as T); },
     post: async <T>() => ({} as T),
-    getRecentAlerts: async () => ({ detections: [], total: 0 }),
+    getRecentAlerts: async () => { apiCalls += 1; return { detections: [], total: 0 }; },
   };
-  const command = createHeatSignalCommand(apiClient);
+  const command = createHeatSignalCommand(apiClient, ['role-vip-plus']);
   let payload: EmptyHeatSignalPayload | null = null;
 
   await command.execute({
@@ -2072,7 +2133,8 @@ test('/heat-signal command returns empty-state copy when no detections exist', a
 
   assert.ok(payload);
   const emptyPayload = payload as EmptyHeatSignalPayload;
-  assert.equal(emptyPayload.content, 'No notable line movements detected in the current window.');
+  assert.equal(emptyPayload.content, 'Line-movement alerts are not live yet. There are no detections to show.');
+  assert.equal(apiCalls, 0);
 });
 
 test('/alerts-setup command requires operator role and registers private visibility', () => {
@@ -2403,4 +2465,81 @@ test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier'
 
   // Must not throw — handler swallows all errors
   await assert.doesNotReject(async () => handler(oldMember as never, newMember as never));
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1960 supersedes WORK-2026092814 / PR #1688 and preserves its valid
+// member-facing truthful-copy behavior on the canonical issue lane.
+// ---------------------------------------------------------------------------
+
+const NOT_LIVE_CLAIMS = [/Best Bets/, /Trader Insights/, /permanently/];
+
+function tierContext(tier: 'free' | 'trial' | 'vip' | 'vip-plus') {
+  return {
+    discordUserId: 'user-123',
+    tier,
+    isCapper: false,
+    isVip: tier === 'vip',
+    isVipPlus: tier === 'vip-plus',
+    isTrial: tier === 'trial',
+    resolvedAt: '2026-09-28T12:00:00.000Z',
+  } as const;
+}
+
+test('UTV2-1960: /trial-status and /upgrade name no surface that is not live', () => {
+  for (const tier of ['free', 'trial', 'vip', 'vip-plus'] as const) {
+    const texts = [
+      String(buildTrialStatusEmbed(tierContext(tier)).toJSON().description ?? ''),
+      String(buildUpgradeEmbed(tierContext(tier)).toJSON().description ?? ''),
+    ];
+    for (const text of texts) {
+      for (const claim of NOT_LIVE_CLAIMS) {
+        assert.doesNotMatch(text, claim, `${tier}: ${text}`);
+      }
+    }
+  }
+  assert.match(
+    String(buildTrialStatusEmbed(tierContext('vip-plus')).toJSON().description ?? ''),
+    /not live yet/,
+  );
+  assert.match(
+    String(buildUpgradeEmbed(tierContext('free')).toJSON().description ?? ''),
+    /\*\*VIP\+\*\* - Everything in VIP\. Its market-intelligence features are not live yet\./,
+  );
+});
+
+test('UTV2-1960: /heat-signal describes line-movement alerts as not live', () => {
+  const apiClient: ApiClient = {
+    get: async <T>() => ({ detections: [] } as T),
+    post: async <T>() => ({} as T),
+  };
+  const command = createHeatSignalCommand(apiClient);
+  assert.match(command.data.toJSON().description, /not live yet/);
+  assert.doesNotMatch(command.data.toJSON().description, /Show recent notable/);
+});
+
+test('UTV2-1960: a recap pick with no CLV renders "unavailable", not a dash', () => {
+  const embed = buildCapperRecapEmbed(makeRecapResponse()).toJSON() as {
+    fields?: Array<{ value?: unknown }>;
+  };
+  assert.match(String(embed.fields?.[0]?.value ?? ''), /CLV: \+3\.8%/);
+  assert.match(String(embed.fields?.[1]?.value ?? ''), /CLV: unavailable/);
+  assert.doesNotMatch(String(embed.fields?.[1]?.value ?? ''), /CLV: —/);
+});
+
+test('UTV2-1960: /stats says CLV is unavailable instead of dropping it silently', () => {
+  const withoutClv = buildStatsEmbed({
+    ...makeStatsResponse(),
+    picksWithClv: 0,
+    avgClvPct: null,
+    beatsLine: null,
+  }).toJSON();
+  const clvField = withoutClv.fields?.find((field) => field.name === 'CLV');
+  assert.equal(clvField?.value, 'unavailable (no closing-line data)');
+  assert.equal(withoutClv.fields?.some((field) => field.name === 'Avg CLV%'), false);
+
+  const withClv = buildStatsEmbed(makeStatsResponse()).toJSON();
+  assert.equal(withClv.fields?.some((field) => field.name === 'CLV'), false);
+  assert.equal(withClv.fields?.some((field) => field.name === 'Avg CLV%'), true);
+  assert.equal(withClv.fields?.some((field) => field.name.includes('SGO close')), false);
 });

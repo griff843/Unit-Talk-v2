@@ -4,21 +4,26 @@ import {
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import {
-  createApiClient,
   type AlertsRecentResponse,
   type ApiClient,
+  createApiClient,
 } from '../api-client.js';
 import { loadBotConfig } from '../config.js';
+import { requireVipPlusRoles } from '../role-guard.js';
 import type { CommandHandler } from '../command-registry.js';
 
-const EMPTY_MESSAGE = 'No notable line movements detected in the current window.';
-const ERROR_MESSAGE = 'Alert data temporarily unavailable.';
+const EMPTY_MESSAGE =
+  'Line-movement alerts are not live yet. There are no detections to show.';
 
-export function createHeatSignalCommand(apiClient: ApiClient): CommandHandler {
+export function createHeatSignalCommand(
+  _apiClient: ApiClient,
+  requiredRoles: string[] = ['__vip_plus_roles_not_configured__'],
+): CommandHandler {
   return {
+    requiredRoles,
     data: new SlashCommandBuilder()
       .setName('heat-signal')
-      .setDescription('Show recent notable line movement signals')
+      .setDescription('Line-movement alerts (not live yet)')
       .addIntegerOption((option) =>
         option
           .setName('count')
@@ -29,30 +34,7 @@ export function createHeatSignalCommand(apiClient: ApiClient): CommandHandler {
       ),
     responseVisibility: 'private',
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      const count = interaction.options.getInteger('count') ?? 5;
-
-      try {
-        const response = apiClient.getRecentAlerts
-          ? await apiClient.getRecentAlerts(count, 'notable')
-          : await apiClient.get<AlertsRecentResponse>(
-              `/api/alerts/recent?limit=${count}&minTier=notable`,
-            );
-
-        if (response.detections.length === 0) {
-          await interaction.editReply({ content: EMPTY_MESSAGE, embeds: [] });
-          return;
-        }
-
-        await interaction.editReply({
-          content: '',
-          embeds: [buildHeatSignalEmbed(response, count)],
-        });
-      } catch {
-        await interaction.editReply({
-          content: ERROR_MESSAGE,
-          embeds: [],
-        });
-      }
+      await interaction.editReply({ content: EMPTY_MESSAGE, embeds: [] });
     },
   };
 }
@@ -63,7 +45,8 @@ export function buildHeatSignalEmbed(
 ): EmbedBuilder {
   const detections = response.detections.slice(0, 5);
   const dominantTier = resolveDominantTier(detections);
-  const footerTimestamp = detections[0]?.currentSnapshotAt ?? new Date().toISOString();
+  const footerTimestamp =
+    detections[0]?.currentSnapshotAt ?? new Date().toISOString();
 
   return new EmbedBuilder()
     .setTitle(`Heat Signal - Top ${requestedCount} Line Movements`)
@@ -84,7 +67,9 @@ function resolveDominantTier(detections: AlertsRecentResponse['detections']) {
   return counts['alert-worthy'] > counts.notable ? 'alert-worthy' : 'notable';
 }
 
-function formatDetectionLine(detection: AlertsRecentResponse['detections'][number]) {
+function formatDetectionLine(
+  detection: AlertsRecentResponse['detections'][number],
+) {
   const tierIcon = detection.tier === 'alert-worthy' ? 'ALERT' : 'NOTE';
   const arrow = detection.direction === 'up' ? 'UP' : 'DOWN';
   const unit = detection.marketType === 'moneyline' ? 'juice' : 'pts';
@@ -97,7 +82,9 @@ function formatDetectionLine(detection: AlertsRecentResponse['detections'][numbe
     `- ${detection.bookmakerKey}`,
     `- ${arrow}`,
     `- ${detection.timeElapsedMinutes}m`,
-    detection.velocity != null ? `- velocity ${detection.velocity.toFixed(2)}/min` : '',
+    detection.velocity != null
+      ? `- velocity ${detection.velocity.toFixed(2)}/min`
+      : '',
   ].join(' ');
 }
 
@@ -107,5 +94,8 @@ function formatLineValue(value: number) {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createHeatSignalCommand(createApiClient(config.apiUrl, config.apiKey));
+  return createHeatSignalCommand(
+    createApiClient(config.apiUrl, config.apiKey),
+    requireVipPlusRoles(config),
+  );
 }
