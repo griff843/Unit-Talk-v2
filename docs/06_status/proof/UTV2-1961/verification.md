@@ -15,6 +15,7 @@ result: pass
 - [x] Receipt and ledger use immutable artifact v4; separate production parity remains mandatory.
 - [x] Four owned files remain byte-identical to reviewed companion commit ca628341519f363b9ee80660064f2604b3b5e76a.
 - [x] Verifier dependency merged in main at 80eb0f2d579d19f9c1de2db4d3196a266580be0a.
+- [x] Canonical inventory now records token ledger dependency, production identity URL, and protected production warehouse_reader DSN; no workflow behavior changed.
 
 ## EVIDENCE:
 
@@ -26,9 +27,14 @@ Environment, lint, type-check, build, tests, verifier tests and command gates pa
 [command-manifest] Verified 14 command definition(s)
 [check-migration-versions] 137 migration file(s) verified — no duplicate versions.
 [lint-migrations] 136 migration file(s) checked — no findings.
-R-level: PASS; 8 changed files; no matching rules.
+R-level: PASS; 11 changed files; no matching rules.
 pnpm test:db: REFUSED before DB client construction; local placeholder is not governed staging.
 Writable live proof remains mandatory in protected staging CI.
+pnpm ops:ci-doctor -- --scope secrets: FAIL, not a claimed PASS.
+CS1 PASS; CS2/CS3 existing repo-name failures plus environment-only DSN;
+CS4 INFRA_ERROR: environment-scoped validation not implemented in Phase 1;
+CS5 FAIL: existing possible plaintext secret references in workflows.
+Production environment secret metadata: total_count=0. No secret value read or changed.
 ```
 
 ## Verification
@@ -41,8 +47,13 @@ Production workflow has not been dispatched. This proves integration, not produc
 Production read-only receipt and separate authoritative parity remain pending governed merge.
 No production DDL, retention, canary, pruning or deletion occurred.
 
+Secret-check limitations are recorded as existing debt, not repaired in this bounded lane.
+The actual reader DSN must be configured in protected production before dispatch.
+The added REQUIRED_SECRETS.md path requires externally authored exact-head scope override;
+the original four-path lane lock remains unchanged. Fresh T1 approval remains required.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: 7004fd4adc1e3c7d121d4aeeca8223e90c996509
+Execution SHA: 6615fd9d079426e1c7c5aab663ac229654b80d4e

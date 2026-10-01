@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "7004fd4adc1e3c7d121d4aeeca8223e90c996509",
+    "verified_source_sha": "6615fd9d079426e1c7c5aab663ac229654b80d4e",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -16,6 +16,15 @@
     "commands": ["pnpm verify:static", "pnpm test:production-post-migration", "pnpm exec tsx --test scripts/ci/workflow-production-credential-guard.test.ts scripts/ci/staging-path-enforcement.test.ts", "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD"],
     "focused_tests": {"tests": 86, "pass": 86, "fail": 0},
     "live_db_disposition": "deferred_to_exact_head_staging_ci",
-    "local_refusal": "127.0.0.1 does not resolve to governed staging project xskgrzbteyqdufktjrjx"
+    "local_refusal": "127.0.0.1 does not resolve to governed staging project xskgrzbteyqdufktjrjx",
+    "secret_inventory_check": {
+      "status": "fail",
+      "CS1": "pass",
+      "CS2_CS3": "repository-only inventory reports existing missing names and the environment-only reader DSN",
+      "CS4": "infra_error: environment-scoped secret validation is not implemented in Phase 1",
+      "CS5": "fail: existing possible plaintext secret references in workflows",
+      "production_environment_secret_count": 0,
+      "runtime_prerequisite": "Griff must configure existing warehouse_reader DSN in protected production before first dispatch"
+    }
   }
 }
