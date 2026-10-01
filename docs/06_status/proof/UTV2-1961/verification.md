@@ -1,6 +1,6 @@
 # PROOF: UTV2-1961
 
-MERGE_SHA: pending merge
+MERGE_SHA: 89602c7d033be1054c9407dc95d954a168ab433f
 
 Issue: UTV2-1961
 Tier: T1
@@ -54,6 +54,6 @@ the original four-path lane lock remains unchanged. Fresh T1 approval remains re
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 89602c7d033be1054c9407dc95d954a168ab433f
 PR: pending
 Execution SHA: 6615fd9d079426e1c7c5aab663ac229654b80d4e

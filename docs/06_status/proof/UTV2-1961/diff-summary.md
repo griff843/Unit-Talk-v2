@@ -15,5 +15,5 @@ is unchanged; an external exact-head scope override is required for the added do
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 89602c7d033be1054c9407dc95d954a168ab433f
 PR: pending
