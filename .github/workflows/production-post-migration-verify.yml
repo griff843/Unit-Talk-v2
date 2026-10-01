@@ -1,0 +1,109 @@
+name: Production Post-Migration Verification
+
+# Production closeout probe only. Writable/live DB suites remain staging-only.
+# This workflow uses the existing warehouse_reader login and the Supabase
+# management API's read-only migration-list command. It never applies DDL,
+# invokes a retention RPC, or mutates production data.
+on:
+  workflow_dispatch:
+    inputs:
+      migration_version:
+        description: Applied migration version expected in both ledger columns
+        required: true
+        default: '20260928131714'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Production read-only migration verification
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    env:
+      UNIT_TALK_DB_ACCESS_MODE: production-read-only
+      PRODUCTION_PROJECT_REF: zfzdnfwdarxucxtaojxm
+      RECEIPT_PATH: artifacts/production-post-migration-verification.json
+      LEDGER_PATH: artifacts/production-migration-ledger.txt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse non-main or non-dispatch execution
+        env:
+          SOURCE_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_REF" = "refs/heads/main"
+          test "$EVENT_NAME" = "workflow_dispatch"
+
+      - name: Refuse unsupported migration profile
+        env:
+          REQUESTED_MIGRATION: ${{ inputs.migration_version }}
+        run: |
+          set -euo pipefail
+          test "$REQUESTED_MIGRATION" = "20260928131714" || {
+            echo "::error title=Unsupported migration profile::This verifier currently carries the UTV2-1370 object and privilege contract only."
+            exit 1
+          }
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bind CLI to canonical production project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase link --project-ref "$PRODUCTION_PROJECT_REF"
+
+      - name: Capture production migration ledger (read-only)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          supabase migration list --linked | tee "$LEDGER_PATH"
+
+      - name: Verify production schema and retention privilege boundary (read-only)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          UNIT_TALK_WAREHOUSE_SOURCE_DSN: ${{ secrets.UNIT_TALK_WAREHOUSE_SOURCE_DSN }}
+        run: >-
+          pnpm exec tsx scripts/ci/production-post-migration-verify.ts
+          --ledger-file "$LEDGER_PATH"
+          --receipt "$RECEIPT_PATH"
+
+      - name: Upload immutable verification receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-post-migration-${{ inputs.migration_version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.RECEIPT_PATH }}
+            ${{ env.LEDGER_PATH }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Keep production Live Schema Parity mandatory
+        run: |
+          echo "This receipt proves the read-only production post-apply checks only." >> "$GITHUB_STEP_SUMMARY"
+          echo "A separate authoritative Live Schema Parity PASS, with exact run and job IDs, remains mandatory before lane close." >> "$GITHUB_STEP_SUMMARY"
