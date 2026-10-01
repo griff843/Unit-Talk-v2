@@ -26,3 +26,19 @@ result: not_run
 
 Merge SHA: pending merge
 PR: pending
+Execution SHA: 0b87906c03359b128d53a61daa539d8bc8715239
+# Verification Results
+
+UTV2-1962 adds Trial role forwarding to both governed deployment environment writers.
+Focused deploy regression tests: 34/34 pass, including configured Trial preservation and omission when absent.
+pnpm verify: env check, lint, type-check, build and local test suites passed; final writable DB phase REFUSED the unidentified localhost target. Full pnpm verify is not claimed green locally. Governed CI staging verification is required before merge.
+R-level check: PASS; no runtime/domain/lifecycle/UI paths match artifact rules.
+
+## Scope Audit
+
+Implementation changes only .github/workflows/deploy.yml and scripts/ci/deploy-parked-mode.test.ts; generated lane/proof metadata is separate. No kill-switch, target, provider, permission, role assignment or commerce changes. Production deployment acceptance remains pending.
+
+## Mutation Safety
+
+Trial serialization must emit the selected role ID exactly. An absent or empty setting emits no Trial environment entry, preserving optional-role semantics; regressions exercise both stages with bash. Existing containment regression coverage remains intact.
+
