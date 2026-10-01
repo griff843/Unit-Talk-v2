@@ -1,0 +1,126 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-20260929
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-20260929
+  objective: Reduce Codex token and reasoning cost across Unit Talk without
+    weakening repository safety, verification, or production governance.
+  acceptance_criteria:
+    - Compact always-loaded repository instructions while preserving
+      architectural, Tier C, testing,
+    - and PR-closeout controls.
+    - Select agent-brief context from lane type and file scope, with full-brief
+      fallback on parser or
+    - classification uncertainty.
+    - Route bounded work to efficient supported models and reserve expensive
+      reasoning for explicit
+    - rescue or escalation.
+    - Provide compact local repo briefing, focused search, and concise full-gate
+      verification tools.
+    - Record prompt-size and wall-time evidence for Codex lane executions.
+    - Preserve compatibility with the installed GitHub CLI and verify all
+      changed behavior with
+    - "`node:test` tests."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-20260929 — Optimize Codex usage
+
+      Tier: T1
+
+
+      ## Constraints
+
+
+      - Do not change product runtime behavior, domain contracts, database
+      schema, or delivery targets.
+
+      - Do not bypass `pnpm verify`, file-scope, tier, R-level, or protected
+      staging checks.
+
+
+      ## Verification
+
+
+      - Run focused agent-tooling, routing, execution-packet, executor, and
+      lane-governance tests.
+
+      - Run `pnpm verify`; protected CI supplies staging-only credentials for
+      the live-DB phase.
+
+      - Run the R-level compliance check against `origin/main`.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-20260929.md
+    title: WORK-20260929 — Optimize Codex usage
+    description: >-
+      # WORK-20260929 — Optimize Codex usage
+
+
+      Tier: T1
+
+
+      ## Objective
+
+
+      Reduce Codex token and reasoning cost across Unit Talk without weakening
+      repository safety,
+
+      verification, or production governance.
+
+
+      ## Acceptance Criteria
+
+
+      - Compact always-loaded repository instructions while preserving
+      architectural, Tier C, testing,
+        and PR-closeout controls.
+      - Select agent-brief context from lane type and file scope, with
+      full-brief fallback on parser or
+        classification uncertainty.
+      - Route bounded work to efficient supported models and reserve expensive
+      reasoning for explicit
+        rescue or escalation.
+      - Provide compact local repo briefing, focused search, and concise
+      full-gate verification tools.
+
+      - Record prompt-size and wall-time evidence for Codex lane executions.
+
+      - Preserve compatibility with the installed GitHub CLI and verify all
+      changed behavior with
+        `node:test` tests.
+
+      ## Constraints
+
+
+      - Do not change product runtime behavior, domain contracts, database
+      schema, or delivery targets.
+
+      - Do not bypass `pnpm verify`, file-scope, tier, R-level, or protected
+      staging checks.
+
+
+      ## Verification
+
+
+      - Run focused agent-tooling, routing, execution-packet, executor, and
+      lane-governance tests.
+
+      - Run `pnpm verify`; protected CI supplies staging-only credentials for
+      the live-DB phase.
+
+      - Run the R-level compliance check against `origin/main`.
+    captured_at: 2026-10-01T03:09:07.157Z
+    description_sha256: 64744d77e71f98808977584f249005a7551155a7b1f5b193a5e6262fa02ee983
+  contract_hash: 5adb45f30c51cb92510673b4cafb079745d2b22b7e9ead9d5496dbe17cf8cc3f

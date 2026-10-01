@@ -1,14 +1,17 @@
 ---
 name: db-verify
-description: Verify live Unit Talk DB truth after implementation. Use after DB-writing changes, during proof capture, or when runtime, operator, and persistence state may disagree.
+description: Verify live persistence truth when a task explicitly requires DB/runtime evidence or surfaces disagree. Do not use for ordinary in-memory or static verification.
 category: verification
 owner: codex
-trigger: After DB-writing changes, during proof capture, or when runtime, operator, and persistence state may disagree.
+trigger: Required live-DB proof, production read-only observation, or a concrete persistence/runtime truth mismatch.
 ---
 
 # DB Verify
 
 Use this after implementation that writes persistence state, or when debugging truth mismatches.
+Do not invoke it merely because code can write data; follow the packet's
+verification plan and use it when live evidence is required or two truth
+surfaces disagree.
 
 ## Verification order
 

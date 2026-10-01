@@ -239,3 +239,28 @@ Canonical spec: `docs/05_operations/LANE_MANIFEST_SPEC.md §14`
 ## 17. This brief is append-only
 
 When a new drift class is found, add a numbered section. Do not delete sections without PM approval — they exist because an incident happened. If a gotcha is fully remediated (e.g. the constraint is now enforced at CI time), mark it `[REMEDIATED: <date> via <issue>]` and keep the section as historical context.
+
+---
+
+## 19. Progressive disclosure supersedes full-brief prompt injection
+
+**[POLICY UPDATE: 2026-09-29, PM-authorized Codex usage optimization]**
+
+This file remains the append-only incident catalog, but executors no longer need every section on
+every lane. The execution packet selects the applicable numbered sections from tier, lane type,
+allowed file scope, and proof requirements. The introductory instruction to prepend this entire
+file is therefore historical and is superseded by this section.
+
+Routing principles:
+
+- database, migration, lifecycle, audit, distribution, or review work receives the related
+  persistence and state-transition sections;
+- delivery and worker work receives scanner, stranded-row, lifecycle/promotion separation, brake,
+  and atomic-transition sections when those boundaries are in scope;
+- SGO/ingestor/intelligence work receives the market-key section;
+- runtime proof work receives the proof-file and lane-type section;
+- every lane retains compact stop-condition and test-runner guidance through `AGENTS.md` and its
+  execution packet.
+
+If scoped selection cannot safely parse or classify this brief, fail safe by including the full
+brief. Do not silently omit a potentially applicable production invariant.

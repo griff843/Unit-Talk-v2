@@ -132,7 +132,7 @@ export function buildClaudePrompt(packet: ExecutionPacket): string {
     '## Closeout instructions',
     packet.closeout_instructions.map((step) => `- ${step}`).join('\n'),
     '',
-    '## Repo brief',
+    '## Scoped repo brief',
     packet.repo_brief,
   ].join('\n');
 }

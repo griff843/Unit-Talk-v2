@@ -1,14 +1,16 @@
 ---
 name: outbox-worker
-description: Guard Unit Talk outbox and worker changes. Use when touching apps/worker, distribution_outbox, distribution_receipts, delivery adapters, retry logic, or circuit breakers.
+description: Guard worker-owned delivery execution. Use for apps/worker, claim/attempt handling, adapters, retries, receipts, or circuit breakers; use runtime-delivery for cross-boundary flows.
 category: implementation
 owner: codex
-trigger: Touching apps/worker, distribution_outbox, distribution_receipts, delivery adapters, retry logic, or circuit breakers.
+trigger: Touching apps/worker or worker-owned claim, attempt, adapter, retry, receipt, or circuit-breaker behavior.
 ---
 
 # Outbox Worker
 
 Use this before changing worker, outbox, receipt, or delivery-adapter behavior.
+Use `runtime-delivery` as well only when the change crosses the API/worker
+boundary or changes end-to-end delivery-health semantics.
 
 ## Invariants
 

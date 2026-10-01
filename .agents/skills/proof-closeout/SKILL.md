@@ -1,21 +1,25 @@
 ---
 name: proof-closeout
-description: Run Unit Talk proof and closeout workflows efficiently. Use when verifying implementation, preparing closeout evidence, checking runtime health, or building a compact proof bundle for a task.
+description: Produce final governed evidence and close a lane. Use for proof bundles, runtime closeout evidence, or lane finalization; not ordinary edit-test loops.
 category: verification
 owner: codex
-trigger: Verifying implementation, preparing closeout evidence, checking runtime health, or building proof bundles.
+trigger: Preparing required proof artifacts, final runtime evidence, or lane/PR closeout.
 ---
 
 # Proof Closeout
 
 Use this when the task needs verification, proof, or closeout evidence.
+Do not load it for ordinary focused tests during implementation; use it at the
+final evidence or lane-closeout phase.
 
 ## Default flow
 
-1. Start with:
+1. For static closeout, start with:
 ```bash
-pnpm ops:brief
+pnpm ops:brief -- --static
 ```
+Use full `pnpm ops:brief` when the required proof includes runtime, database,
+tracker, or PR truth.
 2. For focused proof:
 ```bash
 pnpm proof:t1 -- --issue <UTV2-ID> --change "<summary>" --pick <pick-id>

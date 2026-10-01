@@ -2,16 +2,22 @@
 # Codex CLI project configuration.
 # See: https://developers.openai.com/codex/config-reference
 
-# Increase file context ceiling from default 32 KiB.
-# The monorepo spans multiple packages with deep file trees.
-# 131072 (128 KiB) prevents silent context truncation on package-level tasks.
-project_doc_max_bytes = 131_072
+# Keep project instructions and tool transcripts bounded. Task-specific skills and
+# targeted reads can still load deeper context when a lane actually needs it.
+project_doc_max_bytes = 32_768
+tool_output_token_limit = 6_000
 
-# Default approval mode for interactive sessions.
-# Use --approval never for CI/headless dispatch.
-approval = "suggest"
+# Current Codex config keys. Headless lane execution overrides the sandbox explicitly.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
 
-# Sandbox: allow file writes within workspace, restrict network.
-[sandbox]
-network = "blocked"
-filesystem = "workspace-write"
+[sandbox_workspace_write]
+network_access = false
+
+[skills]
+max_context_tokens = 4_000
+
+# Automated Unit Talk lanes use shell and the explicitly configured MCP servers.
+# Keep unrelated discoverable connector catalogs out of their default context.
+[apps._default]
+enabled = false

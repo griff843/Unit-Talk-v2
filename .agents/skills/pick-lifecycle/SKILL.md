@@ -1,14 +1,16 @@
 ---
 name: pick-lifecycle
-description: Guard Unit Talk lifecycle transitions. Use before changing picks.status, pick_lifecycle, settlement records, distribution enqueue paths, or any code that transitions a pick across lifecycle states.
+description: Guard actual pick-state transitions and settlement correction chains. Use when code reads or writes picks.status, pick_lifecycle, or settlement transitions; not for routing-only work.
 category: implementation
 owner: codex
-trigger: Before changing pick lifecycle state, settlement records, distribution enqueue paths, or lifecycle transition code.
+trigger: Changing lifecycle-state transition code, pick_lifecycle persistence, or settlement/correction behavior.
 ---
 
 # Pick Lifecycle
 
 Use this before changing lifecycle or settlement behavior.
+Routing or promotion work that does not change lifecycle transitions belongs to
+`promotion-routing` or `runtime-delivery` instead.
 
 ## Allowed state machine
 

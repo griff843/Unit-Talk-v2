@@ -1,14 +1,16 @@
 ---
 name: runtime-delivery
-description: Guard Unit Talk runtime delivery behavior across API enqueue, worker processing, delivery adapters, and runtime health semantics. Use when changing delivery flow or runtime observability.
+description: Guard cross-boundary delivery behavior spanning API enqueue, worker processing, receipts, or runtime delivery health. Do not use for a worker-only edit.
 category: implementation
 owner: codex
-trigger: Changing API enqueue, worker processing, delivery adapters, runtime health, or delivery observability.
+trigger: A change crosses API-to-worker delivery boundaries or changes end-to-end delivery health semantics.
 ---
 
 # Runtime Delivery
 
-Use this when a change crosses API enqueue, worker delivery, adapter behavior, or runtime health.
+Use this only when a change crosses API enqueue, worker delivery, receipts, or
+end-to-end delivery health. For `apps/worker/**`-only work, use `outbox-worker`.
+For lifecycle transitions without delivery semantics, use `pick-lifecycle`.
 
 ## Focus areas
 

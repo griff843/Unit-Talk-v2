@@ -316,8 +316,8 @@ test('resolveExecModelRouting validates a manifest that already carries model_ro
     tier: 'T2',
     schema_version: 2,
     model_routing: {
-      profile: 'codex-terra-medium',
-      model: 'gpt-5.6-terra',
+      profile: 'codex-luna-medium',
+      model: 'gpt-5.6-luna',
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: REAL_POLICY_VERSION,
@@ -325,7 +325,7 @@ test('resolveExecModelRouting validates a manifest that already carries model_ro
   });
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.legacy_compatibility_used, false);
-  assert.strictEqual(result.model_routing?.model, 'gpt-5.6-terra');
+  assert.strictEqual(result.model_routing?.model, 'gpt-5.6-luna');
 });
 
 test('scenario 13: schema_version-1 legacy manifest (no model_routing) resolves via the documented default and is flagged', () => {
@@ -352,8 +352,8 @@ test('resolveExecModelRouting fails closed on a policy-version mismatch', () => 
     tier: 'T2',
     schema_version: 2,
     model_routing: {
-      profile: 'codex-terra-medium',
-      model: 'gpt-5.6-terra',
+      profile: 'codex-luna-medium',
+      model: 'gpt-5.6-luna',
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: '0.0.1-stale',
@@ -368,9 +368,9 @@ test('resolveExecModelRouting fails closed on a disabled profile', () => {
     tier: 'T2',
     schema_version: 2,
     model_routing: {
-      profile: 'codex-luna-low',
-      model: 'gpt-5.6-luna',
-      reasoning_effort: 'low',
+      profile: 'codex-astra-medium',
+      model: 'gpt-6-astra',
+      reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: REAL_POLICY_VERSION,
     },
@@ -400,6 +400,8 @@ test('scenario 8: buildModelRoutingEvidence records all required evidence fields
     legacyCompatibilityUsed: false,
     codexCliVersion: 'codex-cli 0.144.1',
     codexExitCode: 0,
+    promptBytes: 4000,
+    wallTimeMs: 12_345,
     now: '2026-07-13T00:00:00.000Z',
   });
   assert.strictEqual(evidence.issue_id, 'UTV2-1526');
@@ -411,6 +413,9 @@ test('scenario 8: buildModelRoutingEvidence records all required evidence fields
   assert.strictEqual(evidence.legacy_compatibility_used, false);
   assert.strictEqual(evidence.override_used, false);
   assert.strictEqual(evidence.codex_exit_code, 0);
+  assert.strictEqual(evidence.prompt_bytes, 4000);
+  assert.strictEqual(evidence.estimated_prompt_tokens, 1000);
+  assert.strictEqual(evidence.wall_time_ms, 12_345);
 });
 
 test('buildModelRoutingEvidence records override authority when a manual override was used', () => {
@@ -439,8 +444,8 @@ test('buildModelRoutingEvidence marks legacy resolutions explicitly', () => {
     issueId: 'UTV2-1526',
     manifestSchemaVersion: 1,
     modelRouting: {
-      profile: 'codex-terra-medium',
-      model: 'gpt-5.6-terra',
+      profile: 'codex-luna-medium',
+      model: 'gpt-5.6-luna',
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: '1.0.0',
@@ -840,8 +845,8 @@ function buildLaneRoot(issueId: string, executor: 'claude' | 'codex-cli'): LaneR
   // manifest must never carry it. Both rules are enforced at runtime.
   if (!isClaude) {
     manifest['model_routing'] = {
-      profile: 'codex-terra-medium',
-      model: 'gpt-5.6-terra',
+      profile: 'codex-luna-medium',
+      model: 'gpt-5.6-luna',
       reasoning_effort: 'medium',
       selected_by: 'three-brain',
       policy_version: REAL_POLICY_VERSION,
@@ -925,7 +930,11 @@ test('codex-exec --dry-run executes to a rendered packet carrying the captured c
   const lane = buildLaneRoot(issueId, 'codex-cli');
   const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
 
-  assert.equal(run.status, 0, `dry run must reach DRY_RUN; stderr: ${run.stderr}`);
+  assert.equal(
+    run.status,
+    0,
+    `dry run must reach DRY_RUN; stderr: ${run.stderr}; stdout: ${run.stdout}`,
+  );
   const parsed = parseLeadingJson(run.stdout);
   assert.equal(parsed['code'], 'DRY_RUN');
   assert.equal(parsed['ok'], true);

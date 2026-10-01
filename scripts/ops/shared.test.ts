@@ -1229,7 +1229,13 @@ test('UTV2-1634: the open-PR listing limit is a truncation detector, not a page 
 // rethrown so the caller's fail-closed path is unchanged.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { isRetryableDiscoveryFailure, withDiscoveryRetry } from './shared.js';
+import {
+  isGhSlurpUnsupported,
+  isRetryableDiscoveryFailure,
+  parseOpenPullRequestPages,
+  parseOpenPullRequestTsv,
+  withDiscoveryRetry,
+} from './shared.js';
 
 function ghError(stderr: string, status = 1): Error & { stderr: string; status: number } {
   return Object.assign(new Error(stderr), { stderr, status });
@@ -1353,6 +1359,35 @@ test('UTV2-1634 retry: transport and server faults are retryable, and unknown er
   ]) {
     assert.strictEqual(isRetryableDiscoveryFailure(stderr, 1), true, `${stderr} should be retryable`);
   }
+});
+
+test('open PR discovery recognizes only gh slurp compatibility errors', () => {
+  assert.strictEqual(isGhSlurpUnsupported('unknown flag: --slurp'), true);
+  assert.strictEqual(isGhSlurpUnsupported('flag provided but not defined: --slurp'), true);
+  assert.strictEqual(isGhSlurpUnsupported('HTTP 502 Bad Gateway'), false);
+});
+
+test('open PR discovery parses both slurped pages and the older-gh TSV fallback', () => {
+  const expected = [
+    { number: 17, headRefName: 'codex/utv2-17-fix', url: 'https://github.test/pull/17' },
+    { number: 18, headRefName: 'claude/utv2-18-fix', url: 'https://github.test/pull/18' },
+  ];
+  assert.deepStrictEqual(
+    parseOpenPullRequestPages(
+      JSON.stringify([
+        [{ number: 17, head: { ref: 'codex/utv2-17-fix' }, html_url: 'https://github.test/pull/17' }],
+        [{ number: 18, head: { ref: 'claude/utv2-18-fix' }, html_url: 'https://github.test/pull/18' }],
+      ]),
+    ),
+    expected,
+  );
+  assert.deepStrictEqual(
+    parseOpenPullRequestTsv(
+      '17\tcodex/utv2-17-fix\thttps://github.test/pull/17\n' +
+        '18\tclaude/utv2-18-fix\thttps://github.test/pull/18\n',
+    ),
+    expected,
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

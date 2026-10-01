@@ -1,9 +1,9 @@
 ---
 name: system-state-loader
-description: Load current Unit Talk repo state at session start or after context loss. Use when beginning work, after a reset, or whenever repo, queue, and runtime truth may have drifted from memory.
+description: Load local Unit Talk repo state at session start or after context loss; add remote/runtime state only when the task needs it.
 category: governance
 owner: codex
-trigger: Beginning work, after reset/context loss, or whenever repo, queue, and runtime truth may have drifted.
+trigger: Beginning work, after reset/context loss, or when local repo state may have drifted.
 ---
 
 # System State Loader
@@ -12,17 +12,19 @@ Use this at the start of a session, after `/clear`, or when repo/queue truth is 
 
 ## Core workflow
 
-1. Run:
+1. For ordinary code, review, and static-analysis work, run:
 ```bash
-pnpm ops:brief
+pnpm ops:brief -- --static
 ```
 2. Read the output fully before acting.
-3. If the task is queue or branch related, also inspect:
+3. Run full `pnpm ops:brief` only when the task needs tracker, PR, runtime,
+   database, production, or proof truth.
+4. If the task is specifically queue or branch related, also inspect:
 ```bash
 pnpm linear:work
 pnpm github:current
 ```
-4. Confirm three things before proceeding:
+5. Confirm three things before proceeding:
    - active branch and repo state
    - executable issue or requested task
    - current blocker, if any
@@ -35,7 +37,7 @@ pnpm github:current
 
 ## Stop and reconcile when
 
-- `ops:brief` fails
+- the applicable static or full `ops:brief` fails
 - Linear state conflicts with repo truth
 - mainline health is unclear
 - you cannot name the next concrete lane

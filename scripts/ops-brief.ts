@@ -26,6 +26,7 @@ type BriefState = {
 const env = loadEnvironment();
 const args = process.argv.slice(2);
 const json = args.includes('--json');
+const staticOnly = args.includes('--static') || args.includes('--agent');
 const explicitIssueId = readOption('issue');
 const pickIds = readMultiOption('pick');
 
@@ -38,23 +39,29 @@ async function main(): Promise<void> {
   const repo = readRepoContext();
   const issueId = explicitIssueId ?? repo.inferredIssueId;
 
-  const sections: SectionResult[] = [
-    buildOverviewSection(repo, issueId, pickIds),
-    buildCodexLanesSection(),
-    buildLinearSection(issueId),
-    buildGitHubSection(),
-    buildPipelineSection(),
-    buildProductTruthSection(),
-    buildProofSection(issueId, pickIds),
-  ];
-  sections.push(buildCloseoutSection(issueId, pickIds, sections));
+  const sections: SectionResult[] = staticOnly
+    ? [buildOverviewSection(repo, issueId, pickIds), buildCodexLanesSection(), buildStaticModeSection()]
+    : [
+        buildOverviewSection(repo, issueId, pickIds),
+        buildCodexLanesSection(),
+        buildLinearSection(issueId),
+        buildGitHubSection(),
+        buildPipelineSection(),
+        buildProductTruthSection(),
+        buildProofSection(issueId, pickIds),
+      ];
+  if (!staticOnly) {
+    sections.push(buildCloseoutSection(issueId, pickIds, sections));
+  }
 
   const state: BriefState = {
     repo,
     issueId,
     pickIds,
     sections,
-    recommendation: buildRecommendation(repo, issueId, pickIds, sections),
+    recommendation: staticOnly
+      ? ['local static snapshot only; request live or issue-specific state when the task requires it']
+      : buildRecommendation(repo, issueId, pickIds, sections),
   };
 
   if (json) {
@@ -71,6 +78,17 @@ async function main(): Promise<void> {
   for (const section of state.sections) {
     printSection(section);
   }
+}
+
+function buildStaticModeSection(): SectionResult {
+  return {
+    name: 'Static Mode',
+    ok: true,
+    lines: [
+      'external checks skipped: Linear, GitHub, runtime, pipeline, product truth, DB/live, proof, closeout',
+      'run pnpm ops:brief for the full operational snapshot',
+    ],
+  };
 }
 
 function buildOverviewSection(
