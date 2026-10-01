@@ -1,0 +1,83 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1963
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1963
+  objective: Register authoritative Discord guild commands in governed production
+    deployment
+  acceptance_criteria:
+    - "Griff-authorized bounded production-acceptance defect. Shipped commands
+      exist but production guild registration is omitted from Deploy. Implement
+      durable post-promotion registration using
+      apps/discord-bot/scripts/deploy-commands.ts, guild-scoped full replacement
+      only; validate configured application identity, read back exact
+      authoritative manifest inventory, safe failure logging and fail-visible
+      workflow. No global commands, delivery release, role changes, watched
+      picks, or command redesign. Scope: .github/workflows/deploy.yml;
+      apps/discord-bot/scripts/deploy-commands.ts and focused registration
+      tests; focused deployment workflow test; package.json only to include the
+      two new regression files in required test gates. Acceptance: focused
+      tests/static/type/lint/pnpm verify/R-level green; review through normal
+      gate; authorized production workflow and live guild inventory proof
+      including live/today; bot/API/worker healthy; containment and zero
+      official-message/receipt deltas. Named proof artifact
+      docs/06_status/proof/<assigned issue>/verification.md. Production PASS
+      only after actual registration acceptance; park before persona retest."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Griff-authorized bounded production-acceptance defect. Shipped commands
+      exist but production guild registration is omitted from Deploy. Implement
+      durable post-promotion registration using
+      apps/discord-bot/scripts/deploy-commands.ts, guild-scoped full replacement
+      only; validate configured application identity, read back exact
+      authoritative manifest inventory, safe failure logging and fail-visible
+      workflow. No global commands, delivery release, role changes, watched
+      picks, or command redesign. Scope: .github/workflows/deploy.yml;
+      apps/discord-bot/scripts/deploy-commands.ts and focused registration
+      tests; focused deployment workflow test; package.json only to include the
+      two new regression files in required test gates. Acceptance: focused
+      tests/static/type/lint/pnpm verify/R-level green; review through normal
+      gate; authorized production workflow and live guild inventory proof
+      including live/today; bot/API/worker healthy; containment and zero
+      official-message/receipt deltas. Named proof artifact
+      docs/06_status/proof/<assigned issue>/verification.md. Production PASS
+      only after actual registration acceptance; park before persona retest.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1963/register-authoritative-discord-guild-commands-in-governed-production
+    title: Register authoritative Discord guild commands in governed production
+      deployment
+    description: "Griff-authorized bounded production-acceptance defect. Shipped
+      commands exist but production guild registration is omitted from Deploy.
+      Implement durable post-promotion registration using
+      apps/discord-bot/scripts/deploy-commands.ts, guild-scoped full replacement
+      only; validate configured application identity, read back exact
+      authoritative manifest inventory, safe failure logging and fail-visible
+      workflow. No global commands, delivery release, role changes, watched
+      picks, or command redesign. Scope: .github/workflows/deploy.yml;
+      apps/discord-bot/scripts/deploy-commands.ts and focused registration
+      tests; focused deployment workflow test; package.json only to include the
+      two new regression files in required test gates. Acceptance: focused
+      tests/static/type/lint/pnpm verify/R-level green; review through normal
+      gate; authorized production workflow and live guild inventory proof
+      including live/today; bot/API/worker healthy; containment and zero
+      official-message/receipt deltas. Named proof artifact
+      docs/06_status/proof/<assigned issue>/verification.md. Production PASS
+      only after actual registration acceptance; park before persona retest."
+    captured_at: 2026-10-01T19:43:05.195Z
+    description_sha256: a5829153492d7f08569d2410c10e9aeea1ec30954483994a8ee844930a6d961b
+  contract_hash: 79e6ba97265e0f8cb53ab3385de165dc6241a8f3cdc6a4092d4c063bfe4ce397
