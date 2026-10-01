@@ -37,6 +37,9 @@ Rules matched: discord-delivery
 
 ## Verification
 
+- `pnpm type-check`: PASS, executed inside the successful static phase of `pnpm verify`.
+- `pnpm test`: PASS, executed inside the successful static phase of `pnpm verify`.
+
 - `pnpm exec tsx --test apps/discord-bot/scripts/deploy-commands.test.ts scripts/ci/deploy-discord-commands.test.ts`: PASS, 11/11.
 - `pnpm exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --esModuleInterop --skipLibCheck apps/discord-bot/scripts/deploy-commands.ts apps/discord-bot/scripts/deploy-commands.test.ts scripts/ci/deploy-discord-commands.test.ts`: PASS.
 - `pnpm exec eslint apps/discord-bot/scripts/deploy-commands.ts apps/discord-bot/scripts/deploy-commands.test.ts scripts/ci/deploy-discord-commands.test.ts`: PASS.
@@ -48,6 +51,26 @@ Rules matched: discord-delivery
 
 Production registration has not run. No production deployment, pick submission, switch or role change was performed. Unit tests are not live acceptance.
 
+Read-only production baseline at 2026-10-01T20:04Z:
+
+```text
+Deployed SHA: cdca09a4ccc64d295b79474413139323c486e5fe
+API / worker / Discord bot: healthy on that exact image tag
+Application: 1418387196116861049
+Guild: 1284478946171293736
+Guild commands: stats, pick, leaderboard, help, recap
+Global commands: []
+official-picks killed: true
+human-capper-recaps killed: true; recapStopped: true
+Pending/processing official rows: 2, both pending, both picks voided
+Official receipts: 2, latest 2026-09-18T23:37:46.580849+00:00
+Official destination latest message: 1550652082896375962 (2026-09-18)
+Member API: anonymous 401; bot 200; queued status refused 400
+Registry writes: 0
+```
+
+Raw local read-only captures: .out/discord-wave1/utv2-1963-before-registry.json, utv2-1963-before-runtime.json, utv2-1963-before-recaps.json and utv2-1963-before-health.jsonl.
+
 After approved deployment, capture deployed SHA/workflow results, full guild inventory and source comparison, unchanged global inventory, API/worker/bot health, killed official-picks, fail-closed recaps, pending-row classification and zero official message/receipt deltas. No watched pick.
 
 Recovery: full replacement is idempotent. Failed read-back fails acceptance even if PUT succeeded. Diagnose and rerun the authorized deployment. Registry updates are external to container rollback; rollback acceptance must also register the rollback release manifest through the governed path.
@@ -55,6 +78,10 @@ Recovery: full replacement is idempotent. Failed read-back fails acceptance even
 ## Execution provenance
 
 Desktop session turn metadata reports gpt-6.1-sol at medium effort. Admission selected codex-sol-medium, which CLI policy resolves to gpt-5.6-sol. No CLI executor ran and no CLI success receipt is claimed. Actual desktop provenance is recorded truthfully. Sanctioned PM reconciliation of this narrow mismatch is required before binding/closeout; no routing-policy repair is proposed.
+
+## Admission finding
+
+CI Lane authority fails because runtime does not admit apps/discord-bot/scripts/deploy-commands.ts or its focused test. The delivery-ui lane admits those files but excludes .github/workflows/deploy.yml and package.json. The existing packet spans both. No allowlist was modified and no scope override was fabricated. PM must authorize a narrow admission correction or a split-lane plan before merge.
 
 ## Merge SHA Binding
 
