@@ -34,6 +34,8 @@ Focused deploy regression tests: 34/34 pass, including configured Trial preserva
 pnpm verify: env check, lint, type-check, build and local test suites passed; final writable DB phase REFUSED the unidentified localhost target. Full pnpm verify is not claimed green locally. Governed CI staging verification is required before merge.
 R-level check: PASS; no runtime/domain/lifecycle/UI paths match artifact rules.
 
+`pnpm type-check` and `pnpm test` passed within the local `pnpm verify` run. `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` returned PASS. The final staging-only DB phase remains subject to governed CI verification as stated above.
+
 ## Scope Audit
 
 Implementation changes only .github/workflows/deploy.yml and scripts/ci/deploy-parked-mode.test.ts; generated lane/proof metadata is separate. No kill-switch, target, provider, permission, role assignment or commerce changes. Production deployment acceptance remains pending.
