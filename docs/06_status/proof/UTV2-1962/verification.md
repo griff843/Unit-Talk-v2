@@ -2,9 +2,7 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
+Implementation verification is recorded below. Production deployment acceptance remains pending. The trusted post-merge lane workflow binds the merge SHA.
 
 Issue: UTV2-1962
 Tier: T2
@@ -12,15 +10,34 @@ result: not_run
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] Both deployment stages preserve the configured Trial role exactly.
+- [x] Both stages omit the optional Trial entry when empty.
+- [x] Existing containment regression coverage remains green.
+- [ ] Production mapping and deployed guard acceptance, after protected deployment.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+Focused command: `pnpm exec tsx --test scripts/ci/deploy-parked-mode.test.ts`.
+
+```text
+# tests 34
+# pass 34
+# fail 0
+```
+
+Local `pnpm verify` final DB phase (static phases and local tests passed):
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+ELIFECYCLE Command failed with exit code 1.
+```
+
+Governed CI run 36802455727 on predecessor proof head 0a1ed61df0a97f8c4c8aeb0773111ff0741074c2 measured both `Writable DB proof (staging only)` and `verify` SUCCESS. Its runtime implementation is identical; the final proof-format correction still requires fresh exact-head CI. No production DB was used for writable testing.
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+`pnpm verify`: static/local phases PASS, local writable DB REFUSED; governed staging CI above PASS. `pnpm type-check` and `pnpm test` passed in the local verify run. `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, no matched rules.
 
 ## Merge SHA Binding
 
