@@ -15,7 +15,7 @@ This file is the **single source of truth** for which GitHub Actions secrets the
 2. The list of secret names configured on the GitHub repo (`CS2`, `CS3`).
 3. The secrets referenced by the Supabase preview-branch workflow (`CV2`).
 
-Drift in any direction is a `fail`. This file is therefore a contract: workflows may not reference secrets that are not listed here, and the repo may not be missing any secret listed here.
+Drift in any direction is a `fail`. Workflows may not reference secrets that are not listed here, and required secrets must exist at their declared scope. The current Phase 1 checker compares names at repository scope only; environment-scoped entries return `CS4: infra_error` rather than proving availability. An environment requirement must be independently checked at that environment before dispatch; a repo-name check is not that proof.
 
 Secret **values** are never recorded here. Only names, purpose, and scope.
 
@@ -73,21 +73,36 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
     },
     {
       "name": "SUPABASE_ACCESS_TOKEN",
-      "required": false,
-      "source": "manual",
-      "scope": "repo",
-      "used_by": [],
-      "purpose": "Supabase management API token. UNUSED BY CI since UTV2-1629 deleted supabase-pr-db-branch.yml \u2014 no workflow references it. Retained only for operator-run local scripts (scripts/generate-types.mjs, scripts/utv2-356-migration-audit.ts, scripts/disk-growth-alert.ts) which read it from local.env. Because it is org-wide management API (create/delete projects, read any project's credentials), it must not be reintroduced into any pull-request-reachable job."
-    },
-    {
-      "name": "SUPABASE_URL",
-      "required": false,
+      "required": true,
       "source": "manual",
       "scope": "repo",
       "used_by": [
-        ".github/workflows/proof-regression.yml"
+        ".github/workflows/production-post-migration-verify.yml"
       ],
-      "purpose": "Supabase project URL used by proof-regression workflow to run live DB proof scripts. Optional \u2014 workflow skips proof runs when absent (HAS_SUPABASE guard)."
+      "purpose": "Required for trusted main-only manual production verification: supabase link and migration list --linked read the canonical production ledger. The job is gated by the protected production environment. This broad management API token is not a database identity, never reaches the PostgreSQL verifier, and must not reach pull-request jobs. Removing it blocks production verification."
+    },
+    {
+      "name": "SUPABASE_URL",
+      "required": true,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/proof-regression.yml",
+        ".github/workflows/production-post-migration-verify.yml"
+      ],
+      "required_for": ["production-post-migration-verify"],
+      "purpose": "Optional for guarded proof-regression runs, but required production identity input for production-post-migration-verify. Must identify https://zfzdnfwdarxucxtaojxm.supabase.co; missing or mismatched identity refuses verification. The protected production job resolves this repo secret unless an environment override exists; any override must identify the same canonical project."
+    },
+    {
+      "name": "UNIT_TALK_WAREHOUSE_SOURCE_DSN",
+      "environment": "production",
+      "required": true,
+      "source": "operator",
+      "scope": "environment",
+      "used_by": [
+        ".github/workflows/production-post-migration-verify.yml"
+      ],
+      "purpose": "Existing canonical production warehouse_reader PostgreSQL DSN, required in the protected production environment before verifier dispatch. Read-only catalog/schema/privilege verification only: no service-role, owner, migration writer or retention identity substitution. Missing DSN, wrong project/role or broader privileges refuses closed. A secret in warehouse-archive is not available to production and does not satisfy this requirement."
     },
     {
       "name": "SUPABASE_SERVICE_ROLE_KEY",
@@ -572,17 +587,17 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
 
 ### 3.3 `SUPABASE_ACCESS_TOKEN`
 
-- **Required:** No longer required in CI. UTV2-1629 deleted `supabase-pr-db-branch.yml`, the only workflow that used it; no workflow references the name today.
+- **Required:** Yes for the trusted production post-migration verifier workflow. Deleting the old preview workflow removed its earlier CI consumer, not this newly admitted dependency.
 - **Scope:** Repo-level secret. Scoped to the Supabase **management API** — this is the broadest credential in the inventory: it can create, pause and delete projects across the organisation and read any project's database credentials. It is not a database credential and must never be treated as one.
-- **Used by:** no workflow. Operator-run local scripts only (`scripts/generate-types.mjs`, `scripts/utv2-356-migration-audit.ts`, `scripts/utv2-phase9-schema-reconciliation.ts`, `scripts/disk-growth-alert.ts`), which read it from `local.env` or the host environment.
+- **Used by:** `.github/workflows/production-post-migration-verify.yml`, only for `supabase link` and `supabase migration list --linked`. The job requires manual dispatch on `main` and protected `production` environment approval. It performs no migration apply. Local type-generation and audit scripts also use the token.
 - **Standing rule:** do not reintroduce this secret into any pull-request-reachable job. `scripts/ci/workflow-production-credential-guard.ts` tracks it in `PRODUCTION_DB_SECRET_NAMES` and will fail the guard test if a PR-reachable job references it without an explicit exemption.
 - **Companion variables (not secrets):**
   - `vars.SUPABASE_PROJECT_REF` — repo variable, set to `zfzdnfwdarxucxtaojxm`. Not a secret; tracked outside this inventory.
 - **Local vs CI:**
-  - **CI:** unused.
+  - **CI:** available only to the linked-project ledger steps of this trusted production job; excluded from the PostgreSQL verifier command environment.
   - **Local:** developers regenerating types or auditing migration state supply it from `local.env`.
-- **Fail-closed implications when missing:** none in CI. Locally, `pnpm supabase:types` and the migration-audit scripts exit with an explicit error naming the variable.
-- **Deletion:** deleting the repository secret is safe from CI's point of view, but would not remove the operator's local need for the token. Left in place deliberately.
+- **Fail-closed implications when missing:** linking/ledger retrieval cannot complete and the production verifier cannot report PASS. Local type-generation/audit scripts also require it.
+- **Deletion:** not safe while this workflow depends on it. Never substitute broad database credentials for the reader DSN.
 - **Related churn history:**
   - Commit `1212856` — quoted env parsing (fixed by `sed -E 's/^([A-Z][A-Z0-9_]*)="(.*)"$/\1=\2/'`). `ci-doctor` check `CV3` enforces.
   - Commit `36d9f75` — pooled DB URL for migration validation. `ci-doctor` check `CV4` enforces.
@@ -626,6 +641,14 @@ on the mutation it names.
 
 ---
 
+### 3.5 Protected production warehouse-verifier inputs
+
+- **`UNIT_TALK_WAREHOUSE_SOURCE_DSN`:** required secret in GitHub environment `production`. Griff must make the existing canonical `warehouse_reader` DSN available there before the first dispatch. Its existing presence in `warehouse-archive` is not sufficient; environments do not inherit each other's secrets. No new role, writer credential or repository-wide DSN is required or authorized by this inventory repair.
+- **`SUPABASE_URL`:** existing repository secret, additionally required by this workflow as canonical production identity input. Optional only for the older `HAS_SUPABASE`-guarded proof-regression path. An environment override must still identify `zfzdnfwdarxucxtaojxm`.
+- **Containment:** the job remains on protected `production`; manual dispatch, trusted `main`, environment approval and verifier read-only enforcement all remain required. The PostgreSQL step receives the URL and reader DSN, not the management token.
+- **Fail closed:** absent/mismatched inputs or failed ledger/role/schema/read-only assertions cannot produce a successful receipt. Do not dispatch until the required production DSN is configured and independently confirmed by name/scope; never print its value.
+- **Inventory-check limitation:** Phase 1 `ci-doctor` cannot validate environment-scoped existence (`CS4: infra_error`), and its repository-only `CS2`/`CS3` may flag this environment-only DSN. Report those results, not a fabricated inventory PASS. They do not authorize changing the secret's protected scope or bypassing runtime approval.
+
 ## 4. What is NOT in the inventory
 
 The following are intentionally excluded and must stay out of the fenced JSON block:
@@ -652,7 +675,7 @@ None at this time. When a future workflow introduces a new secret reference, it 
 
 ## 5. Change procedure
 
-1. Adding a secret reference to a workflow: in the same PR, add the secret name and full metadata block to the fenced JSON in §2 and provide the detail block in §3. Configure the secret in the GitHub repo before merge.
+1. Adding a secret reference to a workflow: in the same PR, add the secret name and full metadata block to the fenced JSON in §2 and provide the detail block in §3. Configure it at its declared scope, never substitute repository-wide availability for a protected-environment requirement. For the manual production verifier, the existing reader DSN is an external prerequisite before first dispatch; merging this contract alone does not prove runtime availability or authorize dispatch.
 2. Removing a secret reference from a workflow: in the same PR, remove the entry from §2 and §3. Delete the secret from the GitHub repo in a follow-up, not in the same PR, to avoid transient `CS2` failures on the feature branch.
 3. Renaming: treat as add-then-remove across two commits with overlap to keep `ci-doctor` green.
 
