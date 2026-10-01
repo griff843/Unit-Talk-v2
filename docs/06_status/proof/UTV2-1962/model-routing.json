@@ -1,0 +1,16 @@
+{
+  "issue_id": "UTV2-1962",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "override_used": false,
+  "provenance": "Lane manifest routing selection; work executed in the existing Codex desktop conversation. This is not a Codex CLI invocation or CLI model attestation.",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "52fcf55f92c41c534deca68218cd3adc7b95bcda",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1703",
+    "bound_at": "2026-10-01T02:21:03.787Z"
+  }
+}

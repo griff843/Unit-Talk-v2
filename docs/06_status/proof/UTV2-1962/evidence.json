@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1962",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "52fcf55f92c41c534deca68218cd3adc7b95bcda",
+    "verified_source_sha": "0b87906c03359b128d53a61daa539d8bc8715239",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-01T02:21:01.537Z"
+  },
+  "static_proof": {
+    "status": "not_run",
+    "note": "Populate with measured gate results before review; proof-generate does not execute verification."
+  }
+}

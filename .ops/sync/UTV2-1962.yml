@@ -1,0 +1,75 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1962
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1962
+  objective: Production Discord role mapping wiring and contained access proof
+  acceptance_criteria:
+    - "Griff authorized configuring and proving production role mappings,
+      preserving every delivery control. Selected live roles: Trial
+      1419342804634828951; VIP 1288831350710865972; VIP+ 1288831367291080745;
+      Capper 1288140783643267092; Operator/Owner 1287971921832710276. Scope:
+      .github/workflows/deploy.yml and scripts/ci/deploy-parked-mode.test.ts;
+      add optional DISCORD_TRIAL_ROLE_ID serialization in both canary/production
+      without 0 fallback. Preserve containment, existing role behavior, image
+      identity and rollback. Focused deploy regressions, pnpm verify, static
+      checks required. Configure repository role-ID settings through governed
+      path and prove running roles and member route/guard using read-only
+      real-member roles where available; no Discord role assignments, permission
+      changes, commerce changes or message sends. Return to Griff for first
+      watched-pick authorization after proof. Trial channel visibility gap must
+      be reported, not changed in this lane. No auth.ts/worker/contracts
+      changes."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Griff authorized configuring and proving production role mappings,
+      preserving every delivery control. Selected live roles: Trial
+      1419342804634828951; VIP 1288831350710865972; VIP+ 1288831367291080745;
+      Capper 1288140783643267092; Operator/Owner 1287971921832710276. Scope:
+      .github/workflows/deploy.yml and scripts/ci/deploy-parked-mode.test.ts;
+      add optional DISCORD_TRIAL_ROLE_ID serialization in both canary/production
+      without 0 fallback. Preserve containment, existing role behavior, image
+      identity and rollback. Focused deploy regressions, pnpm verify, static
+      checks required. Configure repository role-ID settings through governed
+      path and prove running roles and member route/guard using read-only
+      real-member roles where available; no Discord role assignments, permission
+      changes, commerce changes or message sends. Return to Griff for first
+      watched-pick authorization after proof. Trial channel visibility gap must
+      be reported, not changed in this lane. No auth.ts/worker/contracts
+      changes.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1962/production-discord-role-mapping-wiring-and-contained-access-proof
+    title: Production Discord role mapping wiring and contained access proof
+    description: "Griff authorized configuring and proving production role mappings,
+      preserving every delivery control. Selected live roles: Trial
+      1419342804634828951; VIP 1288831350710865972; VIP+ 1288831367291080745;
+      Capper 1288140783643267092; Operator/Owner 1287971921832710276. Scope:
+      .github/workflows/deploy.yml and scripts/ci/deploy-parked-mode.test.ts;
+      add optional DISCORD_TRIAL_ROLE_ID serialization in both canary/production
+      without 0 fallback. Preserve containment, existing role behavior, image
+      identity and rollback. Focused deploy regressions, pnpm verify, static
+      checks required. Configure repository role-ID settings through governed
+      path and prove running roles and member route/guard using read-only
+      real-member roles where available; no Discord role assignments, permission
+      changes, commerce changes or message sends. Return to Griff for first
+      watched-pick authorization after proof. Trial channel visibility gap must
+      be reported, not changed in this lane. No auth.ts/worker/contracts
+      changes."
+    captured_at: 2026-10-01T01:30:03.402Z
+    description_sha256: 407fc8753912d1850a2e7f2b7e0f8a7b2d4aefa94977f49748d1bbf7ce2c4bb5
+  contract_hash: 514427560cab6d2e13ca7189511e76215b8be34cda796161bf91be69637d8ae8

@@ -14,10 +14,12 @@ import { loadBotConfig } from '../config.js';
 import { requireActivePickRoles } from '../role-guard.js';
 import type { CommandHandler } from '../command-registry.js';
 
-const LIVE_STATUSES = ['validated', 'queued', 'posted'];
 const PAGE_SIZE = 10;
 
-export function createLiveCommand(apiClient: ApiClient, requiredRoles: string[]): CommandHandler {
+export function createLiveCommand(
+  apiClient: ApiClient,
+  requiredRoles: string[],
+): CommandHandler {
   return {
     requiredRoles,
     data: new SlashCommandBuilder()
@@ -25,11 +27,9 @@ export function createLiveCommand(apiClient: ApiClient, requiredRoles: string[])
       .setDescription('Show active picks that are still live on the board'),
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
       try {
-        const response = apiClient.getPicksByStatus
-          ? await apiClient.getPicksByStatus(LIVE_STATUSES, 50)
-          : await apiClient.get<PicksQueryResponse>(
-              `/api/picks?status=${LIVE_STATUSES.join(',')}&limit=50`,
-            );
+        const response = await apiClient.get<PicksQueryResponse>(
+          '/api/member/picks?status=posted&limit=50',
+        );
 
         if (response.count === 0) {
           await interaction.editReply({
@@ -89,8 +89,8 @@ function readSubmittedBy(pick: QueriedPick) {
     typeof metadata?.['submittedBy'] === 'string'
       ? metadata['submittedBy']
       : typeof metadata?.['capper'] === 'string'
-      ? metadata['capper']
-      : null;
+        ? metadata['capper']
+        : null;
 
   return submittedBy?.trim() || 'Unit Talk';
 }
@@ -138,5 +138,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createLiveCommand(createApiClient(config.apiUrl, config.apiKey), requireActivePickRoles(config));
+  return createLiveCommand(
+    createApiClient(config.apiUrl, config.apiKey),
+    requireActivePickRoles(config),
+  );
 }
