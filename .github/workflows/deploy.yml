@@ -497,6 +497,7 @@ jobs:
           DISCORD_CAPPER_ROLE_ID: ${{ secrets.DISCORD_CAPPER_ROLE_ID }}
           DISCORD_VIP_ROLE_ID: ${{ secrets.DISCORD_VIP_ROLE_ID }}
           DISCORD_VIP_PLUS_ROLE_ID: ${{ secrets.DISCORD_VIP_PLUS_ROLE_ID }}
+          DISCORD_TRIAL_ROLE_ID: ${{ secrets.DISCORD_TRIAL_ROLE_ID }}
           DISCORD_CAPPER_CHANNEL_ID: ${{ secrets.DISCORD_CAPPER_CHANNEL_ID }}
           DISCORD_OPERATOR_ROLE_ID: ${{ secrets.DISCORD_OPERATOR_ROLE_ID }}
           UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
@@ -675,6 +676,7 @@ jobs:
             "DISCORD_CAPPER_ROLE_ID=$_capper_role" \
             "DISCORD_VIP_ROLE_ID=$_vip_role" \
             "DISCORD_VIP_PLUS_ROLE_ID=$_vip_plus_role" \
+            "${DISCORD_TRIAL_ROLE_ID:+DISCORD_TRIAL_ROLE_ID=$DISCORD_TRIAL_ROLE_ID}" \
             "DISCORD_CAPPER_CHANNEL_ID=$_capper_channel" \
             "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-0}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
@@ -1313,6 +1315,7 @@ jobs:
           DISCORD_CAPPER_ROLE_ID: ${{ secrets.DISCORD_CAPPER_ROLE_ID }}
           DISCORD_VIP_ROLE_ID: ${{ secrets.DISCORD_VIP_ROLE_ID }}
           DISCORD_VIP_PLUS_ROLE_ID: ${{ secrets.DISCORD_VIP_PLUS_ROLE_ID }}
+          DISCORD_TRIAL_ROLE_ID: ${{ secrets.DISCORD_TRIAL_ROLE_ID }}
           DISCORD_CAPPER_CHANNEL_ID: ${{ secrets.DISCORD_CAPPER_CHANNEL_ID }}
           DISCORD_OPERATOR_ROLE_ID: ${{ secrets.DISCORD_OPERATOR_ROLE_ID }}
           UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
@@ -1491,6 +1494,7 @@ jobs:
             "DISCORD_CAPPER_ROLE_ID=$_capper_role" \
             "DISCORD_VIP_ROLE_ID=$_vip_role" \
             "DISCORD_VIP_PLUS_ROLE_ID=$_vip_plus_role" \
+            "${DISCORD_TRIAL_ROLE_ID:+DISCORD_TRIAL_ROLE_ID=$DISCORD_TRIAL_ROLE_ID}" \
             "DISCORD_CAPPER_CHANNEL_ID=$_capper_channel" \
             "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-0}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \

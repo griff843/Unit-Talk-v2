@@ -9,6 +9,25 @@ import { parse as parseYaml } from 'yaml';
 const DEPLOY_WORKFLOW_PATH = resolve(process.cwd(), '.github/workflows/deploy.yml');
 const deployWorkflowSource = readFileSync(DEPLOY_WORKFLOW_PATH, 'utf8');
 
+for (const jobId of ['canary', 'promote']) {
+  test(`UTV2-1962 ${jobId} preserves the selected Trial role and omits an unconfigured role`, () => {
+    const workflow = parseYaml(deployWorkflowSource) as WorkflowRecord;
+    const step = workflowStep(workflowJob(workflow, jobId), 'Write .env.production to server');
+    assert.equal(objectField(step, 'env')['DISCORD_TRIAL_ROLE_ID'], '${{ secrets.DISCORD_TRIAL_ROLE_ID }}');
+    const line = runScript(step).split('\n').find((value) => value.includes('DISCORD_TRIAL_ROLE_ID='));
+    assert.ok(line, 'Trial role must reach the generated production environment');
+    const expression = line.trim().replace(/\s*\\$/u, '');
+    for (const value of ['1419342804634828951', '']) {
+      const result = spawnSync('bash', ['-eu', '-c', `printf '%s\\n' ${expression}`], {
+        env: { ...process.env, DISCORD_TRIAL_ROLE_ID: value },
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), value ? `DISCORD_TRIAL_ROLE_ID=${value}` : '');
+    }
+  });
+}
+
 type WorkflowRecord = Record<string, unknown>;
 type WorkflowStep = Record<string, unknown>;
 
