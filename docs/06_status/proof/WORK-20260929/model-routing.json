@@ -1,0 +1,11 @@
+{
+  "issue_id": "WORK-20260929",
+  "manifest_schema_version": 2,
+  "execution_sha": "c4a930972604c60b6a0e34d9087b2a4311b5c629",
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "override_used": false,
+  "provenance": "Sanctioned existing-branch readmission selected this route from the lane manifest. Recovery and verification continued in the existing Codex desktop conversation; this is execution identity, not merge authority."
+}

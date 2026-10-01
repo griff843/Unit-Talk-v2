@@ -8,7 +8,7 @@
   "branch": "codex/work-20260929-codex-usage-optimization",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1695",
   "files_changed": [],
   "file_scope_lock": [
     ".agents/skills/betting-domain/SKILL.md",
@@ -57,9 +57,9 @@
     "docs/06_status/proof/WORK-20260929/verification.md",
     "docs/06_status/proof/WORK-20260929/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-01T03:09:07.146Z",
-  "heartbeat_at": "2026-10-01T03:09:07.146Z",
+  "heartbeat_at": "2026-10-01T03:18:48.635Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-20260929-codex-usage-optimization.json",
