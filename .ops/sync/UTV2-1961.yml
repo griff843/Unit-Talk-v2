@@ -1,0 +1,96 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1961
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1961
+  objective: "Carry the four production-safe post-migration verifier
+    workflow/policy files removed from PR #1698 in a properly admitted
+    governance lane, preserving the exact reviewed behavior."
+  acceptance_criteria:
+    - "Preserve the reviewed #1698 production read-only verifier workflow and
+      policy/classification content byte-for-byte except for proof binding
+      required by this lane."
+    - Lane Authority and File Scope Lock pass under lane_type governance.
+    - Exact-head CI, proof, and T1 controls pass.
+    - "Merge only after #1698 so the workflow cannot exist on main before
+      scripts/ci/production-post-migration-verify.ts and its package command."
+    - No production workflow dispatch, DDL, retention plan, canary, pruning,
+      archive deletion, or production-row deletion.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      File scope
+      * .github/workflows/production-post-migration-verify.yml
+      * docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md
+      * docs/05_operations/DB_MIGRATION_WORKFLOW.md
+      * docs/05_operations/db-writer-classification.json
+    - |-
+      Verification
+      * pnpm verify:static
+      * pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+      * protected exact-head CI and required proof gates.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1961/warehouse-verifier-workflow-and-policy-ownership-split
+    title: Warehouse verifier workflow and policy ownership split
+    description: >-
+      ## Objective
+
+
+      Carry the four production-safe post-migration verifier workflow/policy
+      files removed from PR #1698 in a properly admitted governance lane,
+      preserving the exact reviewed behavior.
+
+
+      ## File scope
+
+
+      * .github/workflows/production-post-migration-verify.yml
+
+      * docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md
+
+      * docs/05_operations/DB_MIGRATION_WORKFLOW.md
+
+      * docs/05_operations/db-writer-classification.json
+
+
+      ## Acceptance criteria
+
+
+      * Preserve the reviewed #1698 production read-only verifier workflow and
+      policy/classification content byte-for-byte except for proof binding
+      required by this lane.
+
+      * Lane Authority and File Scope Lock pass under lane_type governance.
+
+      * Exact-head CI, proof, and T1 controls pass.
+
+      * Merge only after #1698 so the workflow cannot exist on main before
+      scripts/ci/production-post-migration-verify.ts and its package command.
+
+      * No production workflow dispatch, DDL, retention plan, canary, pruning,
+      archive deletion, or production-row deletion.
+
+
+      ## Verification
+
+
+      * pnpm verify:static
+
+      * pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+
+      * protected exact-head CI and required proof gates.
+    captured_at: 2026-09-30T16:43:03.073Z
+    description_sha256: 9c36823b6c583c9e2ceead27c053419fe830df0778952316a274477bbd06ffc3
+  contract_hash: 36a46014ef4810ccfb387b4209e36f1f73769cf618f4aaa5194e0e490620f92a

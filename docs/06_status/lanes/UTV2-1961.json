@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1961",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1961-warehouse-verifier-policy",
+  "branch": "codex/utv2-1961-warehouse-verifier-policy",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1704",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/production-post-migration-verify.yml",
+    "docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md",
+    "docs/05_operations/DB_MIGRATION_WORKFLOW.md",
+    "docs/05_operations/db-writer-classification.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1961/diff-summary.md",
+    "docs/06_status/proof/UTV2-1961/evidence.json",
+    "docs/06_status/proof/UTV2-1961/verification.md",
+    "docs/06_status/proof/UTV2-1961/model-routing.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-30T16:43:12.151Z",
+  "heartbeat_at": "2026-10-01T03:09:42.106Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1961-warehouse-verifier-policy.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1961-warehouse-verifier-policy",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
