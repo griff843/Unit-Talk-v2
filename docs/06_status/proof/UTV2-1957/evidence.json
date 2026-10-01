@@ -2,8 +2,8 @@
   "schema_version": 2,
   "issue_id": "UTV2-1957",
   "pr_number": 1698,
-  "source_sha": "fd948c664315bf6de30d1dfa0dc8b398f4ce01b5",
-  "reviewed_head_sha": "fd948c664315bf6de30d1dfa0dc8b398f4ce01b5",
+  "source_sha": "7f8283390a6da09df812535edb6d208681311b2c",
+  "reviewed_head_sha": "7f8283390a6da09df812535edb6d208681311b2c",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "tier": "T1",
@@ -12,7 +12,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "fd948c664315bf6de30d1dfa0dc8b398f4ce01b5",
+    "verified_source_sha": "7f8283390a6da09df812535edb6d208681311b2c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -22,7 +22,7 @@
       "pnpm test:production-post-migration",
       "pnpm exec tsx --test scripts/ci/workflow-production-credential-guard.test.ts scripts/ci/staging-path-enforcement.test.ts",
       "pnpm type-check",
-      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head fd948c664315bf6de30d1dfa0dc8b398f4ce01b5",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head 7f8283390a6da09df812535edb6d208681311b2c",
       "pnpm verify:static"
     ],
     "focused_tests": {
@@ -62,5 +62,5 @@
   ],
   "reviewer_verdict": null,
   "pm_verdict": null,
-  "generated_at": "2026-09-30T16:57:34.000Z"
+  "generated_at": "2026-10-01T00:32:59.000Z"
 }
