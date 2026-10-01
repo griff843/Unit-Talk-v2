@@ -17,6 +17,6 @@ The sanctioned refresh merged current `main` without conflicts. Its merge commit
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 80eb0f2d579d19f9c1de2db4d3196a266580be0a
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1698
 Execution SHA: 7f8283390a6da09df812535edb6d208681311b2c

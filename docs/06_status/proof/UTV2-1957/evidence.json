@@ -9,12 +9,14 @@
   "tier": "T1",
   "lane_type": "verification",
   "proof_profile": "static",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "80eb0f2d579d19f9c1de2db4d3196a266580be0a",
     "verified_source_sha": "7f8283390a6da09df812535edb6d208681311b2c",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-01T01:24:27.326Z"
   },
   "static_proof": {
     "status": "pass",
