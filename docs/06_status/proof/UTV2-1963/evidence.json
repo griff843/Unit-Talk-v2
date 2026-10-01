@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1963",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "2c56becfe8ff1be9dfbc2313c78d637962522bda",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_against_sha": "2c56becfe8ff1be9dfbc2313c78d637962522bda",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test apps/discord-bot/scripts/deploy-commands.test.ts scripts/ci/deploy-discord-commands.test.ts",
+        "exit_code": 0,
+        "tests": 11,
+        "pass": 11,
+        "fail": 0
+      },
+      {
+        "command": "Explicit strict TypeScript compile of registration script and both tests",
+        "exit_code": 0
+      },
+      { "command": "Focused ESLint", "exit_code": 0 },
+      {
+        "command": "pnpm verify (static phase)",
+        "exit_code": 0,
+        "note": "Environment, lint, type-check, build, full unit suite, Smart Form unit verification, manifest and migration checks passed."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "note": "PASS; discord-delivery."
+      }
+    ],
+    "live_db": {
+      "status": "refused",
+      "command": "pnpm verify (test:live-db / pnpm test:db phase)",
+      "exit_code": 1,
+      "note": "Localhost is not sanctioned staging project xskgrzbteyqdufktjrjx. Approved staging CI proof pending."
+    },
+    "note": "Static pass does not claim local full verify or live production acceptance."
+  },
+  "production_acceptance": {
+    "status": "not_run",
+    "note": "Independent review, merge and authorized governed deployment/registration remain pending. No watched pick."
+  }
+}

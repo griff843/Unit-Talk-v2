@@ -1,0 +1,17 @@
+{
+  "issue_id": "UTV2-1963",
+  "manifest_schema_version": 2,
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "medium",
+  "override_used": false,
+  "execution_environment": "Codex desktop",
+  "execution_sha": "2c56becfe8ff1be9dfbc2313c78d637962522bda",
+  "provenance_source": "Current desktop session turn_context model and effort metadata",
+  "codex_cli_version": null,
+  "codex_exit_code": null,
+  "admission_profile": "codex-sol-medium",
+  "admission_model": "gpt-5.6-sol",
+  "admission_policy_version": "2.0.0",
+  "routing_status": "actual_desktop_model_differs_from_admission_cli_profile",
+  "note": "No CLI execution or manual override approval is claimed. Sanctioned provenance reconciliation is pending PM review."
+}
