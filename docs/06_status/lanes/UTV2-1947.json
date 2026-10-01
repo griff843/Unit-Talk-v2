@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1947",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1947-member-pick-command-route",
+  "branch": "codex/utv2-1947-member-pick-command-route",
+  "base_branch": "main",
+  "commit_sha": "24c5f778d65c124251190e2ac680add4257f035b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1702",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/discord-bot/src/commands/heat-signal.ts",
+    "apps/discord-bot/src/commands/live.ts",
+    "apps/discord-bot/src/commands/my-picks.ts",
+    "apps/discord-bot/src/commands/today.ts",
+    "apps/discord-bot/src/discord-bot-foundation.test.ts",
+    "apps/discord-bot/src/role-guard.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1947/diff-summary.md",
+    "docs/06_status/proof/UTV2-1947/evidence.json",
+    "docs/06_status/proof/UTV2-1947/verification.md",
+    "docs/06_status/proof/UTV2-1947/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-30T01:59:01.033Z",
+  "heartbeat_at": "2026-09-30T22:02:05.012Z",
+  "closed_at": "2026-09-30T22:02:05.012Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-30T22:02:01.618Z",
+      "verdict": "pass",
+      "merge_sha": "24c5f778d65c124251190e2ac680add4257f035b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1947-member-pick-command-route",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
