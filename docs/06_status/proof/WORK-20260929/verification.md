@@ -8,6 +8,8 @@ Result: static_pass_ci_db_pending
 
 ## Assertions
 
+ASSERTIONS:
+
 - [x] `pnpm ops:brief -- --static` selects the local-only brief and does not
   build GitHub, Linear, runtime, pipeline, product-truth, DB, or other live
   sections.
@@ -40,6 +42,16 @@ token-spend savings.
 
 ## Verification
 
+EVIDENCE:
+
+```text
+Focused regression suite: PASS (302/302)
+PM-finding regression subset: PASS (137/137)
+Static verification: PASS
+Exact-head protected CI, writable DB proof, Live Schema Parity, T1 Proof Gate,
+Proof Auditor, R-level, lane authority, and file-scope checks: PASS
+```
+
 - Focused agent-tooling, routing, execution-packet, executor, workflow, and
   lane-manifest suite — PASS, 302 tests, 0 failed.
 - `pnpm verify:static` — PASS (exit 0): DB-client boundary, sync/alignment,
@@ -70,7 +82,7 @@ policy introduced by UTV2-1759; no lock was widened and no override was used.
 3. Fail-safe briefing: satisfied by exact-one resolution for every requested
    section and full-source fallback coverage for lane-specific heading drift.
 
-## Merge SHA binding
+## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1695
