@@ -1086,14 +1086,6 @@
         "note": "One-shot phase-proof generator from an earlier program."
       },
       {
-        "path": "scripts/ops/runtime-proof.ts",
-        "disposition": "archive-delete-candidate",
-        "owner": "claude-governance",
-        "issue": "UTV2-1638",
-        "expiry": "2026-10-31",
-        "note": "One-shot phase-proof generator from an earlier program."
-      },
-      {
         "path": "scripts/ops/service-runtime-proof.ts",
         "disposition": "archive-delete-candidate",
         "owner": "claude-governance",

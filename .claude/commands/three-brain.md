@@ -236,17 +236,18 @@ inputs (lane tier, package/file count touched, rescue status, verification stren
 
 | Condition (first match wins) | Profile |
 |---|---|
-| Rescue threshold exceeded after `codex-sol-high` already failed on this lane, or explicit Griff authorization | `codex-sol-max` — **mechanically unavailable**, see below |
-| Complex T2 spanning several files/packages, failure-rescue lane (Rule 6), root-cause investigation, bounded T1 already permitted under Rule 1's guardrails, or governance-tool implementation after Claude has approved the architecture | `codex-sol-high` |
-| Normal clear-scope T2 with deterministic acceptance criteria, no Tier C path, no scope ambiguity, no repeated failure | `codex-terra-medium` |
-| — | `codex-luna-low` is defined but disabled; do not select it to manufacture work for it |
+| Ambiguous cross-system architecture, rescue after `codex-sol-high` failed, or explicit Griff authorization | `codex-astra-medium` — **mechanically unavailable**, see below |
+| Failure-rescue lane (Rule 6), deep analysis after `codex-sol-medium` failed, or unusually demanding verification | `codex-sol-high` |
+| Complex T2 spanning several files/packages, root-cause investigation, bounded T1 already permitted under Rule 1's guardrails, or governance-tool implementation after architecture approval | `codex-sol-medium` |
+| Normal clear-scope T2 with deterministic acceptance criteria, no Tier C path, no scope ambiguity, no repeated failure | `codex-luna-medium` |
+| Narrow deterministic T2 edit with straightforward verification | `codex-luna-low` |
 
-**`codex-sol-max` is mechanically unavailable** (`enabled: false` in policy, and
+**`codex-astra-medium` is mechanically unavailable** (`enabled: false` in policy, and
 `scripts/ops/model-routing.ts#resolveModelProfile` unconditionally rejects any
 `requires_pm_authorization: true` profile regardless of any caller-supplied override). A
 caller-supplied `authorized_by`/`reason` string is self-asserted, not proof of PM
 authorization — the same self-certification loophole UTV2-1521 already closed for
-file-scope overrides. There is currently no way to route to `codex-sol-max`; re-enabling
+file-scope overrides. There is currently no way to route to `codex-astra-medium`; re-enabling
 it requires a trusted external authorization mechanism (e.g. an authenticated PR-comment
 scheme mirroring `docs/05_operations/schemas/scope-override-v1.md`, verified against
 CODEOWNERS) landing in a follow-up governance lane. Do not route to it, and do not add an
@@ -259,7 +260,7 @@ Pass the resolved profile to lane-start explicitly (Codex lanes only):
 
 ```bash
 pnpm ops:lane-start UTV2-{number} --tier T2 --branch codex/utv2-{number}-slug \
-  --lane-type <type> --executor codex-cli --model-profile codex-terra-medium \
+  --lane-type <type> --executor codex-cli --model-profile codex-luna-medium \
   --files <path1> [--files <path2> ...]
 ```
 
@@ -276,7 +277,7 @@ policy immediately before invoking `codex exec`, and passes the model and reason
 explicitly (`--model`, `-c model_reasoning_effort=...`) — it never relies on the Codex
 CLI's own default and never falls back silently. Lane manifests created before this policy
 shipped simply have no `model_routing` block; `codex-exec.ts` resolves the documented
-legacy default (`codex-terra-medium`) for those, with a visible warning, and records that
+legacy default (`codex-luna-medium`) for those, with a visible warning, and records that
 resolution only in that run's evidence — it never rewrites the historical manifest. Full
 compatibility behavior: `docs/05_operations/LANE_MANIFEST_SPEC.md` §15.
 
@@ -307,7 +308,7 @@ creating a malformed lane manifest.
 Examples:
 
 ```
-executor: codex-cli model_profile: codex-terra-medium announce: false  escalate: false  reason: T2 clear-scope, health OK
+executor: codex-cli model_profile: codex-luna-medium  announce: false  escalate: false  reason: T2 clear-scope, health OK
 executor: claude   model_profile: null              announce: false  escalate: true   reason: T1 — Tier C, PM plan required
 executor: claude   model_profile: null              announce: false  escalate: false  reason: Codex unavailable, fallback
 executor: codex-cli model_profile: codex-sol-high     announce: true   escalate: false  reason: failure rescue — 2× same test

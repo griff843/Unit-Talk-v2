@@ -121,12 +121,12 @@ test('codex-dispatch leaves lease reservation to lane-start', () => {
   assert.match(source, /laneStartJson\.lease_path/, 'dispatch should report the lease created by lane-start');
 });
 
-test('UTV2-1526 scenario 1: codex-dispatch resolves codex-terra-medium for T2 by default', () => {
-  assert.strictEqual(resolveDispatchModelProfile('T2', undefined), 'codex-terra-medium');
+test('codex-dispatch uses Luna medium for T2 by default', () => {
+  assert.strictEqual(resolveDispatchModelProfile('T2', undefined), 'codex-luna-medium');
 });
 
-test('UTV2-1526 scenario 2: codex-dispatch resolves codex-sol-high for T1 by default', () => {
-  assert.strictEqual(resolveDispatchModelProfile('T1', undefined), 'codex-sol-high');
+test('codex-dispatch uses Sol medium for guarded T1 work by default', () => {
+  assert.strictEqual(resolveDispatchModelProfile('T1', undefined), 'codex-sol-medium');
 });
 
 test('UTV2-1526: codex-dispatch honors an explicit --model-profile override from an already-run /three-brain routing decision', () => {
@@ -137,8 +137,12 @@ test('UTV2-1526: codex-dispatch fails closed on an unknown --model-profile rathe
   assert.throws(() => resolveDispatchModelProfile('T2', 'codex-nonexistent'), /model-profile resolution failed/);
 });
 
-test('UTV2-1526: codex-dispatch fails closed when the resolved profile is disabled (codex-luna-low)', () => {
-  assert.throws(() => resolveDispatchModelProfile('T2', 'codex-luna-low'), /PROFILE_DISABLED/);
+test('codex-dispatch permits explicit Luna low for narrow T2 work', () => {
+  assert.strictEqual(resolveDispatchModelProfile('T2', 'codex-luna-low'), 'codex-luna-low');
+});
+
+test('codex-dispatch fails closed when the resolved Astra profile is disabled', () => {
+  assert.throws(() => resolveDispatchModelProfile('T1', 'codex-astra-medium'), /PROFILE_DISABLED/);
 });
 
 test('UTV2-1526: codex-dispatch passes --model-profile through to ops:lane-start', () => {

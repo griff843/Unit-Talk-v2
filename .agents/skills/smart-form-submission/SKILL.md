@@ -1,14 +1,16 @@
 ---
 name: smart-form-submission
-description: Guard Unit Talk smart-form and submission pipeline changes. Use when touching smart-form intake, browse/manual fallback, submission payloads, capper attribution, or smart-form promotion routing.
+description: Guard Smart Form intake and its API submission handoff. Use for apps/smart-form, form payload/provenance, manual fallback, or capper attribution.
 category: implementation
 owner: codex
-trigger: Touching smart-form intake, browse/manual fallback, submission payloads, capper attribution, or promotion routing.
+trigger: Touching apps/smart-form or Smart Form-specific payload, provenance, manual fallback, or capper attribution behavior.
 ---
 
 # Smart Form Submission
 
 Use this when changing `apps/smart-form`, submission wiring, or smart-form-specific promotion behavior.
+Use `promotion-routing` separately only when the shared promotion decision or
+target policy also changes.
 
 ## Invariants
 

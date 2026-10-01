@@ -51,9 +51,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ISSUE="$(echo "${{ github.event.pull_request.head.ref }}" | sed -nE 's/.*(utv2|UTV2)-([0-9]+).*/UTV2-\2/p')"
+          ISSUE="$(echo "${{ github.event.pull_request.head.ref }}" | sed -nE 's#.*((utv2|UTV2|uni|UNI|work|WORK)-[0-9]+).*#\1#p' | tr '[:lower:]' '[:upper:]')"
           if [ -z "$ISSUE" ]; then
-            echo "Unable to infer UTV2 issue id from branch ${{ github.event.pull_request.head.ref }}"
+            echo "Unable to infer work identity from branch ${{ github.event.pull_request.head.ref }}"
             exit 1
           fi
           pnpm ops:pr-review-packet -- \

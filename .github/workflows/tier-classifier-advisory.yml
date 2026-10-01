@@ -55,9 +55,9 @@ jobs:
 
           BRANCH="${{ github.event.pull_request.head.ref }}"
           TITLE="${{ github.event.pull_request.title }}"
-          ISSUE="$(echo "$BRANCH" | sed -nE 's#.*(utv2|UTV2)-([0-9]+).*#UTV2-\2#p')"
+          ISSUE="$(echo "$BRANCH" | sed -nE 's#.*((utv2|UTV2|uni|UNI|work|WORK)-[0-9]+).*#\1#p' | tr '[:lower:]' '[:upper:]')"
           if [ -z "$ISSUE" ]; then
-            ISSUE="$(echo "$TITLE" | sed -nE 's/.*(UTV2|utv2)-([0-9]+).*/UTV2-\2/p')"
+            ISSUE="$(echo "$TITLE" | sed -nE 's#.*((utv2|UTV2|uni|UNI|work|WORK)-[0-9]+).*#\1#p' | tr '[:lower:]' '[:upper:]')"
           fi
 
           DECLARED_TIER=""

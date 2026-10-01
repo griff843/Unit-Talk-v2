@@ -33,7 +33,7 @@ import { resolveModelProfile } from './ops/model-routing.js';
  * or an orchestrator that already ran /three-brain can override with --model-profile.
  */
 function defaultModelProfileForTier(tier: string): string {
-  return tier === 'T1' ? 'codex-sol-high' : 'codex-terra-medium';
+  return tier === 'T1' ? 'codex-sol-medium' : 'codex-luna-medium';
 }
 
 export function resolveDispatchModelProfile(tier: string, explicitProfile: string | undefined): string {

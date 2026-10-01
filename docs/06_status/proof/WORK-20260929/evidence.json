@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-20260929",
+  "pr_number": 1695,
+  "source_sha": "c4a930972604c60b6a0e34d9087b2a4311b5c629",
+  "reviewed_head_sha": "c4a930972604c60b6a0e34d9087b2a4311b5c629",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "merged",
+  "sha_binding": {
+    "merge_sha": "d298cb4a4ba67d7e1bcd0aa3884151bdb9fde0d0",
+    "verified_source_sha": "c4a930972604c60b6a0e34d9087b2a4311b5c629",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-01T05:12:37.407Z"
+  },
+  "static_proof": {
+    "focused_regressions": {
+      "status": "PASS",
+      "tests_passed": 302,
+      "tests_failed": 0
+    },
+    "verify_static": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "pnpm_verify": {
+      "status": "STATIC_PASS_DB_REFUSED_LOCAL",
+      "note": "All static phases passed. The writable phase failed closed because local target 127.0.0.1 is not protected staging ref xskgrzbteyqdufktjrjx; authoritative writable proof is delegated to staging CI."
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": 0
+    },
+    "file_scope_guard": {
+      "status": "PASS",
+      "override_used": false,
+      "conflicts": 0,
+      "outside_scope": 0
+    },
+    "context_measurements": {
+      "baseline_sha": "cdca09a4ccc64d295b79474413139323c486e5fe",
+      "candidate_sha": "c4a930972604c60b6a0e34d9087b2a4311b5c629",
+      "agents_bytes_before": 17009,
+      "agents_bytes_after": 6682,
+      "agents_byte_reduction_percent": 60.7,
+      "scoped_brief_bytes_before": 15830,
+      "scoped_brief_bytes_after": 2270,
+      "scoped_brief_byte_reduction_percent": 85.7,
+      "scoped_brief_words_before": 2200,
+      "scoped_brief_words_after": 368,
+      "scoped_brief_word_reduction_percent": 83.3,
+      "combined_bytes_before": 32839,
+      "combined_bytes_after": 8952,
+      "combined_byte_reduction_percent": 72.7
+    },
+    "safety_context": {
+      "static_brief_local_only": "PASS",
+      "worker_scanner_quiescence": "PRESENT",
+      "worker_stranded_awaiting_approval": "PRESENT",
+      "worker_existing_row_no_mutation": "PRESENT",
+      "unresolved_section_full_context_fallback": "PASS",
+      "current_main_preflight_recovery_preserved": "PASS"
+    }
+  },
+  "gate_results": [
+    {
+      "gate": "focused_regressions",
+      "verdict": "PASS",
+      "detail": "302 focused agent-tooling, routing, execution-packet, executor, workflow-hardening, and lane-manifest tests passed; 0 failed."
+    },
+    {
+      "gate": "verify_static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static completed with exit 0."
+    },
+    {
+      "gate": "r_level",
+      "verdict": "PASS",
+      "detail": "No R-level rules matched the current-main diff."
+    },
+    {
+      "gate": "file_scope",
+      "verdict": "PASS",
+      "detail": "The authoritative git-backed guard found no outside-scope file and no active-lane conflict; no override was used."
+    },
+    {
+      "gate": "writable_db_local",
+      "verdict": "SKIP",
+      "detail": "Fail-closed local refusal: 127.0.0.1 is not protected staging ref xskgrzbteyqdufktjrjx. Exact-head staging CI remains mandatory."
+    },
+    {
+      "gate": "independent_pm_review",
+      "verdict": "SKIP",
+      "detail": "Pending independent PM review of the final pushed head."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-01T03:28:00.000Z"
+}

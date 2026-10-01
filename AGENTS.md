@@ -1,364 +1,142 @@
 # AGENTS.md — Unit Talk V2
 
-This file is read by Codex before every task. Follow every rule here exactly.
+This is the compact, always-loaded instruction set. Load deeper context only when the task requires
+it. The assigned work packet remains the bounded implementation authority.
 
----
+## Start with current state
 
-## Mission Context
+Run `pnpm ops:brief -- --static` at session start and after context loss. Use full `pnpm ops:brief`
+only for work that needs tracker, PR, runtime, database, or production truth.
 
-Before executing work, read:
+Read mission documents progressively:
 
-- `docs/mission/intent.md`
-- `docs/mission/spec.md`
-- `docs/mission/plan.md`
+- Read `docs/mission/intent.md` and `docs/mission/spec.md` for product behavior, mission, readiness,
+  governance, or operating-model decisions.
+- Read relevant sections of `docs/mission/plan.md` only when the work packet or brief identifies a
+  current-plan dependency. Claude owns this file; Codex does not edit it unless explicitly assigned.
+- Never modify `docs/mission/intent.md` or redefine the mission.
 
-These provide the shared Unit Talk mission and current production direction.
+For product-behavior changes, including backend behavior that changes what a product can do or
+record, read the product intent and the contracts it indexes:
 
-### Product intent — required reading when your packet touches a product surface
+- Smart Form: `docs/03_product/smart-form/intent.md` and its indexed submission, sportsbook,
+  live-offer, confidence, runtime-mode, and delivery-kill-switch contracts.
+- Command Center: `apps/command-center/CLAUDE.md` and the canonical Command Center contract.
+- Pipeline/grading/settlement/CLV: the applicable automated-grading and closing-line contracts.
 
-If your work packet changes how a product behaves for its operator — **including backend work in
-`apps/api`, `packages/domain` or the pipeline** that changes what the product can do or what it
-records — read that product's intent document and the canonical contracts it indexes before you
-start, and satisfy the acceptance criteria your packet quotes.
+Canonical contracts win over intent documents. Report disagreement; do not silently choose.
 
-| Product | Intent | Also read |
-|---|---|---|
-| Smart Form (operator pick intake) | `docs/03_product/smart-form/intent.md` | `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md`, `SMART_FORM_SPORTSBOOK_CONSTRAINT_CONTRACT.md`, `T1_SMART_FORM_LIVE_OFFER_UX_CONTRACT.md`, `T1_SMART_FORM_V1_CONTRACT.md`, `T2_SMART_FORM_CONFIDENCE_CONTRACT.md`; and `DELIVERY_KILL_SWITCH.md` + `RUNTIME_MODE_CONTRACT.md` for anything near distribution |
-| Command Center | *written when that product is next worked* | `apps/command-center/CLAUDE.md` |
-| Pipeline (grading, settlement, CLV) | *written when that product is next worked* | `T1_AUTOMATED_GRADING_CONTRACT.md`, `T1_CLV_CLOSING_LINE_WIRING_CONTRACT.md` |
+## Workspace and execution
 
-These are product intent, not gates: they add no check and no approval artifact. Where an intent
-document and a canonical contract disagree, the contract wins and the intent document is stale —
-report it, do not silently follow either.
+- Repository: `/home/griff843/code/Unit-Talk-v2` (`C:\Dev\Unit-Talk-v2-main`).
+- Legacy `C:\dev\unit-talk-production` is read-only reference; never copy behavior without V2
+  re-ratification.
+- The main checkout is control/merge only. Execute implementation in the worktree created or resumed
+  by `pnpm ops:lane-start`; never branch-switch the main checkout for lane work.
+- Concurrency authority is `docs/governance/CONCURRENCY_CONFIG.json`; never hard-code or infer caps.
+  Runtime, migration, modeling, and data-canonical work classes are singletons.
+- Merge, branch refresh, tracker completion, and lane closeout remain serialized by the merge mutex.
+- Prefer OpenAI developer-docs MCP for OpenAI APIs/Codex and Linear MCP for Linear workflows; use repo
+  CLI fallbacks only when MCP is unavailable.
 
-The assigned Codex work packet defines your bounded implementation slice.
-
-Do not redefine the mission, widen your task, or modify `docs/mission/intent.md`.
-
-Claude owns `plan.md`; Codex may use it as context but does not change orchestration unless explicitly assigned.
-
----
-
-## Workspace
-
-- Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
-- Legacy repo: `C:\dev\unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
-
-**Execution model:** Parallel lanes run in dedicated git worktrees. The main checkout (`C:\Dev\Unit-Talk-v2-main` / `/home/griff843/code/Unit-Talk-v2`) is the control and merge checkout only. `/dispatch` and `/dispatch-board` must start each executable lane through `pnpm ops:lane-start`, which creates or resumes the lane worktree, records `worktree_path`, reserves the file-scope lock, and verifies the lane cwd. Do not execute parallel lane work by branch-switching the main checkout. Merge, branch-refresh, Linear Done, and lane closeout remain serialized through the merge mutex.
-
-**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Use Linear MCP (`linear`) for Linear issue lookup/update workflows when available; fall back to the repo CLI commands only when MCP is unavailable.
-
----
-
-## Package Manager + Commands
+## Package and test rules
 
 ```bash
-pnpm install           # install deps
-pnpm test              # all unit tests — THIS IS THE TEST COMMAND
-pnpm test:db           # DB smoke test (requires live Supabase credentials)
-pnpm type-check        # TypeScript project-references type check
-pnpm build             # compile all packages and apps
-pnpm lint              # ESLint
-pnpm verify            # env:check + lint + type-check + build + test — THE GATE COMMAND
-
-# Run a single test file
-tsx --test apps/api/src/submission-service.test.ts
-
-# Regenerate Supabase DB types after a migration
-pnpm supabase:types
-```
-
-**CRITICAL — test framework:**
-- Tests use **`node:test`** and **`tsx --test`**
-- Assertions use **`node:assert/strict`**
-- **NO Jest. NO Vitest. NO describe/it/expect.** Use `test()`, `assert.strictEqual()`, `assert.deepStrictEqual()` etc.
-- Every new test file must be discoverable by `tsx --test <path>`
-
----
-
-## Monorepo Structure
-
-```
-apps/
-  api/            ← only canonical DB writer; node:http server
-  worker/         ← polls distribution_outbox, delivers to Discord
-  discord-bot/    ← Discord slash commands + event handlers
-  smart-form/     ← browser HTML intake form
-  alert-agent/    ← alert detection + notification pass runner
-  ingestor/       ← external results ingestion (SGO + league data)
-packages/
-  contracts/      ← pure types and domain contracts (no runtime deps)
-  domain/         ← pure business logic (imports contracts only)
-  db/             ← DB types, repository interfaces + implementations
-  config/         ← env loading only
-  observability/  ← logging, metrics (supporting)
-  events/         ← event types (supporting)
-  intelligence/   ← scoring/analysis (supporting)
-  verification/   ← scenario registry + run history
-```
-
-**Package dependency DAG — never violate this:**
-```
-@unit-talk/contracts
-  ↑
-@unit-talk/domain
-  ↑
-@unit-talk/db
-  ↑
-apps/* (import from packages, NEVER from each other)
-```
-
-Apps must not import from other apps. Packages must not import from apps.
-
----
-
-## TypeScript Build
-
-This is a **TypeScript project references build**. Each package/app has a `tsconfig.json` with `references` pointing to its dependencies.
-
-- Run `pnpm build` to compile all packages in correct dependency order
-- Run `pnpm type-check` to check types without emitting
-- Never hand-edit `dist/` or `*.js`/`*.d.ts`/`*.map` files under `src/` — these are build artifacts
-- `packages/db/src/database.types.ts` is **generated** — never hand-edit it; run `pnpm supabase:types` after migrations
-
----
-
-## Repository Pattern
-
-All services use a **repository abstraction** with two implementations:
-
-| Implementation | When used |
-|---|---|
-| `InMemory*Repository` | Unit tests — no live DB required |
-| `Database*Repository` | Production — requires Supabase credentials |
-
-Services receive a `RepositoryBundle` (or individual repos) and must work with either implementation. Never call Supabase directly from a service — always go through a repository interface.
-
-When writing tests: use `InMemory*` repos. When writing DB implementations: implement the same interface as the InMemory version.
-
----
-
-## Data Flow: Submission → Settlement
-
-```
-POST /api/submissions
-  → submission-service: validate, create CanonicalPick (status=validated)
-  → promotion-service: evaluate promotion eligibility, persist to pick_promotion_history
-  → distribution-service: enqueue to distribution_outbox (gated)
-  → worker polls outbox → claims row → calls DeliveryAdapter (Discord)
-  → on success: record distribution_receipt, transition pick status, write audit_log
-  → POST /api/picks/:id/settle
-  → settlement-service: write settlement_records, transition to settled, write audit_log
-```
-
----
-
-## Key Schema Facts
-
-Get these wrong and tests will fail or data will corrupt:
-
-- `picks.status` = lifecycle state field name (NOT `lifecycle_state`)
-- `pick_lifecycle` = table name (NOT `pick_lifecycle_events`)
-- `audit_log.entity_id` = FK to the primary entity (outbox row, settlement record, promotion history row) — **NOT** the pick id
-- `audit_log.entity_ref` = pick id stored as text
-- `submission_events.event_name` (NOT `event_type`)
-- `settlement_records.corrects_id` = self-referencing FK for corrections; original row is **never mutated**
-- `audit_log` = immutable, append-only; enforced by DB trigger — never UPDATE or DELETE from it
-- Pick lifecycle: `validated → queued → posted → settled` (or `→ voided` from most states)
-
----
-
-## Environment Loading
-
-- Load order: `local.env` → `.env` → `.env.example`
-- No dotenv package — `@unit-talk/config` parses env files directly
-- `local.env` and `.env` are gitignored (contain real credentials)
-- `.env.example` is the template — add new env vars here when you add them to the app
-- Supabase project ref: `zfzdnfwdarxucxtaojxm`
-
----
-
-## Lane Discipline — What Codex Owns
-
-Codex is the **implementation lane**. You own:
-
-- runtime implementation (services, handlers, adapters)
-- database migrations
-- schema/type updates
-- tests
-- CI changes
-- service wiring
-- endpoint implementation
-- repository implementations (InMemory + Database)
-
-**Codex does NOT own:**
-- docs in `docs/` (Claude lane) — do not create or edit docs files unless an AC explicitly requires a specific doc as proof
-- `PROGRAM_STATUS.md`, `ISSUE_QUEUE.md`, `status_source_of_truth.md` — Claude lane only
-- readiness decisions, closeout artifacts, proof templates
-- Linear / Notion syncing
-
-## Executor Concurrency Limits
-
-These limits are set by PM and enforced mechanically by `ops:lane-start` reading `docs/governance/CONCURRENCY_CONFIG.json`. Codex does not self-authorize lane expansion. **Do not hard-code numeric caps here or anywhere else in prose** — the config file is the only source of truth and it has already changed once (a prior concurrency-ramp lane raised it above its original stabilization-era ceiling; see `docs/governance/LANE_CONCURRENCY_POLICY.md`'s provenance note for the historical values). Any number shown below is illustrative of the mechanism only, not authoritative.
-
-| Executor | Default limit | Notes |
-|---|---|---|
-| Claude Code | the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `executors.claude`) | Governed by config and lane-start enforcement |
-| Codex CLI | the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `executors.codex`) | Governed by config and lane-start enforcement |
-
-**Current total cap:** the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `total`). To read the live values, run `pnpm ops:execution-state -- --json` (`.dispatch_slots`) or `pnpm exec tsx scripts/ops/lane-maximizer.ts`.
-
-**Hard singleton work classes:** runtime, migration, modeling, data-canonical.
-
-Canonical policy: `docs/governance/LANE_CONCURRENCY_POLICY.md`; machine-readable authority: `docs/governance/CONCURRENCY_CONFIG.json`.
-
----
-
-## Tier C Paths — Stop and Report, Do Not Touch
-
-If your task requires modifying any path below, **stop immediately and report** what decision is needed. Do not proceed or make partial edits. Leave the working tree clean.
-
-These paths require PM plan approval + PM merge approval (Delegation Policy Tier C):
-
-| Path | Reason |
-|---|---|
-| `supabase/migrations/**` | Migrations — serial merge required, never two in one deploy |
-| `packages/contracts/src/**` | Cross-package contracts |
-| `packages/domain/src/**` | Pure domain logic — no I/O allowed |
-| `packages/db/src/lifecycle.ts` | Lifecycle FSM write authority |
-| `packages/db/src/repositories.ts` | Repository authority |
-| `packages/db/src/runtime-repositories.ts` | Runtime repository authority |
-| `apps/api/src/distribution-service.ts` | Routing, gating, GOVERNANCE_BRAKE_SOURCES |
-| `apps/api/src/auth.ts` | Auth/RBAC — always escalate |
-| `apps/worker/**` | Delivery adapters — one DeliveryOutcome per attempt |
-| `packages/db/src/database.types.ts` | Generated — never hand-edit; run pnpm supabase:types |
-
----
-
-## Hard Rules — Never Do These
-
-- **Never** install Jest, Vitest, Mocha, or any test runner. Use `node:test` + `tsx --test`.
-- **Never** import from another app (e.g., `apps/api` must not import from `apps/worker`)
-- **Never** hand-edit `packages/db/src/database.types.ts` — generated only
-- **Never** activate a blocked Discord target (`discord:exclusive-insights`, `discord:game-threads`, `discord:strategy-room`) — requires a written contract
-- **Never** mutate `settlement_records` rows — corrections use `corrects_id`
-- **Never** UPDATE or DELETE from `audit_log` — append-only
-- **Never** create new packages without a clear justification
-- **Never** widen the scope of an issue beyond its acceptance criteria
-- **Never** skip `pnpm verify` — it is the gate; all PRs must pass it
-
----
-
-## Live Discord Targets
-
-| Target | Channel ID | Status |
-|---|---|---|
-| `discord:canary` | `1296531122234327100` | Live |
-| `discord:best-bets` | `1288613037539852329` | Live |
-| `discord:trader-insights` | `1356613995175481405` | **Blocked** |
-| `discord:exclusive-insights` | `1288613114815840466` | **Blocked** |
-| `discord:game-threads` | — | **Blocked** |
-| `discord:strategy-room` | — | **Blocked** |
-
----
-
-## Promotion Gate
-
-`evaluateAndPersistBestBetsPromotion()` in `apps/api/src/promotion-service.ts` evaluates five components (`edge`, `trust`, `readiness`, `uniqueness`, `boardFit`) from `pick.metadata.promotionScores`, runs them through `bestBetsPromotionPolicy` (minimumScore: 70.00), and persists to `pick_promotion_history`.
-
-`distribution-service.ts` enforces: picks not `qualified` or with a wrong `promotion_target` cannot reach a live channel.
-
-Approval and promotion are separate concepts. Never collapse them.
-
----
-
-## Verification Gate
-
-Before marking any task done, run:
-
-```bash
+pnpm install
+pnpm test
+pnpm type-check
+pnpm build
+pnpm lint
 pnpm verify
-```
-
-This runs: env:check + lint + type-check + build + test. All must pass. If any fail, fix before submitting.
-
-**`pnpm test:db` requirements:**
-```bash
 pnpm test:db
-```
-T1 issues ALWAYS require `pnpm test:db` regardless of whether they explicitly touch the DB layer.
-T2/T3 issues: run `pnpm test:db` only if changed files include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts`. When in doubt, run it — it's non-destructive.
-
----
-
-## Codex Pre-PR Checklist
-
-Before opening any PR, complete all 7 steps in order:
-
-1. **R-level lookup** — open `docs/05_operations/r1-r5-rules.json`, identify which rules match your changed file paths, and confirm all `artifactRequirements[]` are satisfied. If any required artifact is absent, produce it or document why it is not applicable.
-2. **pnpm verify** — must be green. No exceptions.
-   Run `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`.
-   If it prints FAIL, generate the missing artifacts from the NEXT_ACTION_COMMANDS output, then re-run until PASS.
-   Paste the final PASS output into the PR body under `## R-level compliance`.
-3. **Scope check** — every file you changed must be within the issue's acceptance criteria. Revert any scope bleed.
-4. **No new `any` casts** — unless the existing code already uses them and the issue does not require typed fixes.
-5. **Tests** — new runtime behavior requires new `node:test` tests. No test count decrease.
-6. **Commit message** — must reference the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
-7. **Tier label** — after opening the PR with `gh pr create`, immediately run:
-   ```bash
-   gh pr edit <PR-URL-or-number> --add-label "tier:T2"
-   ```
-   Replace `T2` with the actual tier from the Linear issue labels. Never skip this step — tier-label-check CI will block the merge gate.
-
-### Forbidden actions (never do these in a PR)
-
-1. Install Jest, Vitest, Mocha, or any test runner — use `node:test` + `tsx --test` only
-2. Import from another app (`apps/api` must not import from `apps/worker`)
-3. Hand-edit `packages/db/src/database.types.ts` — run `pnpm supabase:types`
-4. Activate a blocked Discord target (`discord:exclusive-insights`, `discord:game-threads`, `discord:strategy-room`)
-5. Mutate `settlement_records` rows — corrections use `corrects_id`
-6. UPDATE or DELETE from `audit_log` — append-only, enforced by DB trigger
-7. Create new packages without explicit justification in the issue AC
-
----
-
-## Required PR Body Template
-
-Every PR body must include these sections exactly:
-
-```markdown
-## Summary
-<1-3 bullet points describing what changed and why>
-
-## Files changed
-<list of files modified and what each does>
-
-## Verification
-<paste last 20 lines of `pnpm verify` output>
-
-## R-level compliance
-<which rules in r1-r5-rules.json were triggered by the changed paths>
-<for each triggered rule: list required[] levels and whether artifacts are present>
-<if no runtime paths triggered: write "N/A — no lifecycle/domain/strategy/UI paths touched">
-
-## Test coverage
-<list new or updated test files and what scenario each covers>
-
-## Merge order
-State whether this PR must merge before or after any other currently open PR.
-- If independent: "No open lanes share overlapping files — no merge dependency."
-- If dependent: "Must merge after PR #NNN (UTV2-###) — that lane changes X which this PR imports."
+pnpm exec tsx --test path/to/file.test.ts
 ```
 
----
+- `pnpm verify` is the required final gate; never skip it.
+- Tests use `node:test`, `node:assert/strict`, and `tsx --test`. Never install or use Jest, Vitest,
+  Mocha, `describe`, `it`, or `expect`.
+- New runtime behavior requires focused tests, and every new test must run directly with
+  `tsx --test <path>`.
+- This is a TypeScript project-references build. Never hand-edit generated `dist/`, `*.js`, `*.d.ts`,
+  or `*.map` artifacts under `src/`.
 
-## What a Good PR Looks Like
+Live DB verification:
 
-- Only touches files relevant to the issue's acceptance criteria
-- Adds or updates tests in the same PR as the implementation
-- All new tests use `node:test` + `node:assert/strict`
-- `pnpm verify` passes
-- No new `any` casts unless the existing code already uses them and the issue doesn't require typed fixes
-- No new packages added without clear necessity
-- No docs files modified unless the AC explicitly requires it
-- Commit message references the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`)
+- T1 always requires `pnpm test:db`.
+- T2/T3 require it when changed files include migrations, `packages/db/**`, or
+  `apps/api/src/**-service.ts`; when uncertain, run it.
+
+## Architecture boundaries
+
+Dependency direction is strict:
+
+```text
+@unit-talk/contracts <- @unit-talk/domain <- @unit-talk/db <- apps/*
+```
+
+- Apps never import from other apps. Packages never import from apps.
+- `packages/domain` is pure business logic with no I/O.
+- Services use repository interfaces and must work with InMemory and Database implementations.
+  Services never call Supabase directly.
+- `apps/api` is the only canonical DB writer.
+- Add no package without explicit issue justification.
+
+Persistent-data invariants:
+
+- Lifecycle column is `picks.status`; lifecycle table is `pick_lifecycle`.
+- Lifecycle is `validated -> queued -> posted -> settled`, with allowed transitions to `voided`.
+- `submission_events.event_name` is the event field.
+- `audit_log.entity_id` points to the primary entity; `entity_ref` carries the pick ID as text.
+- `audit_log` is immutable and append-only: never UPDATE or DELETE it.
+- Settlement corrections insert a new row linked by `corrects_id`; never mutate the original.
+- `packages/db/src/database.types.ts` is generated; regenerate with `pnpm supabase:types`.
+- Env load order is `local.env` -> `.env` -> `.env.example`; add new variables to `.env.example`.
+
+Use the relevant repository skill for detailed domain, lifecycle, promotion, delivery, Smart Form,
+operator-surface, migration, or DB-proof invariants. Do not load unrelated skills.
+
+## Scope and ownership
+
+Codex owns bounded runtime implementation, endpoints, service wiring, repository implementations,
+schema/type updates, migrations, tests, and CI changes.
+
+Codex does not own general documentation, program/status files, readiness decisions, orchestration,
+proof templates, or tracker/Notion synchronization. Do not edit `docs/**` unless acceptance criteria
+explicitly require a named proof or document. Never widen the issue beyond its acceptance criteria.
+
+## Tier C — stop and report before editing
+
+These paths require PM plan approval and PM merge approval. If the assigned task does not explicitly
+authorize them, stop with the exact decision needed and leave the tree clean:
+
+- `supabase/migrations/**`
+- `packages/contracts/src/**`
+- `packages/domain/src/**`
+- `packages/db/src/lifecycle.ts`
+- `packages/db/src/repositories.ts`
+- `packages/db/src/runtime-repositories.ts`
+- `packages/db/src/database.types.ts` (generated; never hand-edit)
+- `apps/api/src/distribution-service.ts`
+- `apps/api/src/auth.ts`
+- `apps/worker/**`
+
+Never activate blocked Discord targets. Currently blocked: `discord:trader-insights`,
+`discord:exclusive-insights`, `discord:game-threads`, and `discord:strategy-room`. Approval and
+promotion remain separate concepts; never collapse them.
+
+## Verification and PR closeout
+
+Before a PR:
+
+1. Inspect `docs/05_operations/r1-r5-rules.json` for rules matching changed paths and satisfy every
+   required artifact.
+2. Run `pnpm verify`, then
+   `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` until PASS.
+3. Confirm every changed file is in scope, no test count decreased, and no new `any` cast was added
+   without an existing-code justification.
+4. Use a commit message referencing the repository work ID or Linear ID when one exists.
+5. Open the PR using `.github/pull_request_template.md`; paste verification and R-level evidence.
+6. Apply the actual issue tier label immediately: `gh pr edit <PR> --add-label "tier:T#"`.
+
+Never claim completion with a red gate. Do not fix unrelated baseline debt while checking; report it
+with precise evidence and keep the assigned scope bounded.

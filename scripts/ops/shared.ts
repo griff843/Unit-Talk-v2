@@ -1558,29 +1558,14 @@ function stderrOf(error: unknown): { stderr: string; status: number | null } {
   return { stderr, status: err.status ?? null };
 }
 
-function defaultListOpenPullRequests(retry: DiscoveryRetryDeps = {}): OpenPullRequestRef[] {
-  // --paginate walks every page; --slurp merges them into one array. The limit
-  // below is a truncation *detector*, not a page size.
-  const stdout = withDiscoveryRetry(
-    () =>
-      execFileSync(
-        'gh',
-        [
-          'api',
-          '--paginate',
-          '--slurp',
-          `repos/{owner}/{repo}/pulls?state=open&per_page=100`,
-        ],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 },
-      ),
-    (error) => {
-      const { stderr, status } = stderrOf(error);
-      return isRetryableDiscoveryFailure(stderr, status);
-    },
-    retry,
-  );
+export function isGhSlurpUnsupported(stderr: string): boolean {
+  return /(?:unknown flag|unknown option|flag provided but not defined).*--slurp|--slurp.*(?:unknown|not defined)/iu.test(stderr);
+}
 
-  const pages = JSON.parse(stdout) as Array<Array<{ number?: number; head?: { ref?: string }; html_url?: string }>>;
+type OpenPullRequestApiEntry = { number?: number; head?: { ref?: string }; html_url?: string };
+
+export function parseOpenPullRequestPages(stdout: string): OpenPullRequestRef[] {
+  const pages = JSON.parse(stdout) as OpenPullRequestApiEntry[][];
   if (!Array.isArray(pages)) {
     throw new Error('gh api --paginate --slurp did not return an array of pages');
   }
@@ -1596,6 +1581,62 @@ function defaultListOpenPullRequests(retry: DiscoveryRetryDeps = {}): OpenPullRe
       }
       refs.push({ number: entry.number, headRefName: entry.head.ref, url: entry.html_url });
     }
+  }
+  return refs;
+}
+
+export function parseOpenPullRequestTsv(stdout: string): OpenPullRequestRef[] {
+  return stdout
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map((line) => {
+      const [numberText, headRefName, url] = line.split('\t');
+      const number = Number(numberText);
+      if (!Number.isInteger(number) || !headRefName) {
+        throw new Error(`gh api paginated fallback returned a malformed row: ${line}`);
+      }
+      return { number, headRefName, url: url || undefined };
+    });
+}
+
+function defaultListOpenPullRequests(retry: DiscoveryRetryDeps = {}): OpenPullRequestRef[] {
+  // --paginate walks every page; --slurp merges them into one array. The limit
+  // below is a truncation *detector*, not a page size.
+  const endpoint = 'repos/{owner}/{repo}/pulls?state=open&per_page=100';
+  let refs: OpenPullRequestRef[];
+  try {
+    const stdout = withDiscoveryRetry(
+      () =>
+        execFileSync('gh', ['api', '--paginate', '--slurp', endpoint], {
+          encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024,
+        }),
+      (error) => {
+        const { stderr, status } = stderrOf(error);
+        return !isGhSlurpUnsupported(stderr) && isRetryableDiscoveryFailure(stderr, status);
+      },
+      retry,
+    );
+    refs = parseOpenPullRequestPages(stdout);
+  } catch (error) {
+    const { stderr } = stderrOf(error);
+    if (!isGhSlurpUnsupported(stderr)) throw error;
+
+    // Older gh releases still support --paginate and --jq. Emit one row per
+    // PR so every page stays parseable without guessing JSON boundaries.
+    const stdout = withDiscoveryRetry(
+      () =>
+        execFileSync(
+          'gh',
+          ['api', '--paginate', endpoint, '--jq', '.[] | [.number, .head.ref, .html_url] | @tsv'],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 },
+        ),
+      (fallbackError) => {
+        const { stderr: fallbackStderr, status } = stderrOf(fallbackError);
+        return isRetryableDiscoveryFailure(fallbackStderr, status);
+      },
+      retry,
+    );
+    refs = parseOpenPullRequestTsv(stdout);
   }
 
   if (refs.length >= OPEN_PR_LISTING_LIMIT) {

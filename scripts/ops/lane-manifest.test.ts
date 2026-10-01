@@ -182,7 +182,7 @@ test('lane-manifest create rejects --model-profile for a non-Codex executor', ()
     ['files', ['scripts/ops/lane-manifest.ts']],
     ['preflight-token', ['.out/ops/preflight/claude/utv2-9902-repair.json']],
     ['executor', ['claude']],
-    ['model-profile', ['codex-terra-medium']],
+    ['model-profile', ['codex-luna-medium']],
   ]);
   assert.throws(() => createCommand(flags), /model_routing is Codex-only/);
 });
@@ -215,12 +215,12 @@ test('lane-manifest create resolves and persists model_routing for a valid Codex
       ['files', ['scripts/ops/lane-manifest.ts']],
       ['preflight-token', [tokenPath]],
       ['executor', ['codex-cli']],
-      ['model-profile', ['codex-terra-medium']],
+      ['model-profile', ['codex-luna-medium']],
     ]);
     createCommand(flags);
     const written = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as LaneManifest;
-    assert.strictEqual(written.model_routing?.profile, 'codex-terra-medium');
-    assert.strictEqual(written.model_routing?.model, 'gpt-5.6-terra');
+    assert.strictEqual(written.model_routing?.profile, 'codex-luna-medium');
+    assert.strictEqual(written.model_routing?.model, 'gpt-5.6-luna');
     assert.strictEqual(written.schema_version, 2);
   } finally {
     fs.rmSync(manifestPath, { force: true });

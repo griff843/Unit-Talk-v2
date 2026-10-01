@@ -1,14 +1,16 @@
 ---
 name: promotion-routing
-description: Guard Unit Talk promotion policy and routing behavior. Use when changing promotion scores, target selection, routing gates, edge/trust/readiness interpretation, or promotion history persistence.
+description: Guard promotion qualification and target-selection policy. Use for score interpretation, promotion gates/history, or promotion_target decisions; not worker delivery execution.
 category: implementation
 owner: codex
-trigger: Changing promotion scores, target selection, routing gates, edge/trust/readiness interpretation, or promotion history.
+trigger: Changing promotion qualification, component interpretation, promotion_target selection, or promotion-history persistence.
 ---
 
 # Promotion Routing
 
 Use this for promotion policy or target-routing changes.
+Use `runtime-delivery` instead for enqueue-to-receipt behavior that leaves the
+promotion decision unchanged.
 
 ## Invariants
 
