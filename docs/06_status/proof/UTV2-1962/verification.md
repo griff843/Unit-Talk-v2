@@ -1,6 +1,6 @@
 # PROOF: UTV2-1962
 
-MERGE_SHA: pending merge
+MERGE_SHA: 52fcf55f92c41c534deca68218cd3adc7b95bcda
 
 Implementation verification is recorded below. Production deployment acceptance remains pending. The trusted post-merge lane workflow binds the merge SHA.
 
@@ -41,7 +41,7 @@ Governed CI run 36802455727 on predecessor proof head 0a1ed61df0a97f8c4c8aeb0773
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 52fcf55f92c41c534deca68218cd3adc7b95bcda
 PR: pending
 Execution SHA: 0b87906c03359b128d53a61daa539d8bc8715239
 # Verification Results

@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1962-discord-role-mappings",
   "branch": "codex/utv2-1962-discord-role-mappings",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "52fcf55f92c41c534deca68218cd3adc7b95bcda",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1703",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/UTV2-1962/verification.md",
     "docs/06_status/proof/UTV2-1962/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-01T01:30:11.366Z",
-  "heartbeat_at": "2026-10-01T01:39:25.765Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-01T02:21:06.694Z",
+  "closed_at": "2026-10-01T02:21:06.694Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1962-discord-role-mappings.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-01T02:21:04.650Z",
+      "verdict": "pass",
+      "merge_sha": "52fcf55f92c41c534deca68218cd3adc7b95bcda",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
