@@ -1,6 +1,6 @@
 # PROOF: WORK-20260929
 
-MERGE_SHA: pending merge
+MERGE_SHA: d298cb4a4ba67d7e1bcd0aa3884151bdb9fde0d0
 
 Issue: WORK-20260929
 Tier: T1
@@ -84,6 +84,6 @@ policy introduced by UTV2-1759; no lock was widened and no override was used.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d298cb4a4ba67d7e1bcd0aa3884151bdb9fde0d0
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1695
 Execution SHA: c4a930972604c60b6a0e34d9087b2a4311b5c629

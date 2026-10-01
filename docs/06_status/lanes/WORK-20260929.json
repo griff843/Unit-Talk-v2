@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-20260929-codex-usage-optimization",
   "branch": "codex/work-20260929-codex-usage-optimization",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d298cb4a4ba67d7e1bcd0aa3884151bdb9fde0d0",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1695",
   "files_changed": [],
   "file_scope_lock": [
@@ -57,14 +57,22 @@
     "docs/06_status/proof/WORK-20260929/verification.md",
     "docs/06_status/proof/WORK-20260929/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-01T03:09:07.146Z",
-  "heartbeat_at": "2026-10-01T03:18:48.635Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-01T05:12:40.346Z",
+  "closed_at": "2026-10-01T05:12:40.346Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/work-20260929-codex-usage-optimization.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-01T05:12:37.411Z",
+      "verdict": "pass",
+      "merge_sha": "d298cb4a4ba67d7e1bcd0aa3884151bdb9fde0d0",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

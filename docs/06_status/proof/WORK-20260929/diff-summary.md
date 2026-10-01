@@ -31,4 +31,4 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1695
 ## SHA binding
 
 Verified source SHA: `c4a930972604c60b6a0e34d9087b2a4311b5c629`
-Merge SHA: pending merge
+Merge SHA: d298cb4a4ba67d7e1bcd0aa3884151bdb9fde0d0
