@@ -76,7 +76,7 @@ Static branding/presentation exception:
   or any other file uses normal CI. Renames examine both source and destination paths.
 - Qualified presentation-only work has no mandatory R1-R5, writable staging DB, or runtime proof.
   Its required `verify` context runs static verification, both affected apps' build/type-check,
-  and `pnpm exec tsx --test scripts/ci/branding-components.test.ts` (isolated logo geometry/rendering).
+  and `pnpm exec tsx --test --test-name-pattern='Brand component:' scripts/ci/staging-path-enforcement.test.ts` (isolated logo geometry/rendering).
 - This does not exempt T1, runtime, DB, migration, API-service, or delivery changes, or alter their
   proof/approval requirements. See `docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md`.
 

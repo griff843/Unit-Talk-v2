@@ -29,7 +29,7 @@ Failed checkout/classification, missing or ambiguous output, missing tier, T1, a
 runtime/product/data/backend/configuration file cannot silently opt out.
 
 For this class, required `verify` runs `pnpm verify:static`, Smart Form and Command Center
-build/type-check, and `scripts/ci/branding-components.test.ts`: real React SSR in an isolated
+build/type-check, and the `Brand component:` cases in `scripts/ci/staging-path-enforcement.test.ts`: real React SSR in an isolated
 harness checks exact canonical SVG paths, accessible identity, expanded/collapsed rendering,
 and PNG/icon signatures without routing/services/DB access. There is **no writable staging DB
 proof and no runtime proof requirement**, and no mandatory R1-R5. Operator-UI QA artifacts and
