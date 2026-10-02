@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-Execution source: 8aaa9ef69027530046b1d9d45f593b213695724c
+Execution source: a8f9a03866ac854d90c5e1d816b305dcfb586d31
 Execution approval: explicit Griff T1 approval in chat, 2026-10-02.
 Merge approval: NOT GRANTED. This packet is for review, not authority to merge.
 

@@ -7,7 +7,7 @@
   "proof_profile": "static",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "8aaa9ef69027530046b1d9d45f593b213695724c",
+    "verified_source_sha": "a8f9a03866ac854d90c5e1d816b305dcfb586d31",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
