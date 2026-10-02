@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "dfe39fdf22258818121c1145f7672205483012a1",
+    "verified_source_sha": "21e71f086daa864880740d60350e614f524ed6a6",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -24,6 +24,9 @@
       "immutable_historical_authority_only": true,
       "no_token_or_pass_fabricated": true,
       "canonical_work_followup_required": true,
+      "work_pr_independently_attested_to_actual_merge": true,
+      "existing_legacy_terminal_token_compatibility_preserved": true,
+      "actual_depth_one_history_recovery": true,
       "existing_required_check_gates_unchanged": true,
       "actual_original_head_executor_result_validation": 111001369799,
       "production_mutations": 0

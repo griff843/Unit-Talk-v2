@@ -13,7 +13,9 @@ result: focused/static checks PASS; canonical staging CI proof pending
 - [x] Historical missing-token recovery validates canonical original merged PR, reachable merge, exact original head, pristine immutable introduction and obligation; it creates no token or PASS.
 - [x] Forged editable deferral, incomplete/missing/ambiguous/non-ancestral evidence, wrong repository/branch/head and active-lane use refuse before restoration.
 - [x] Shallow original PR history is deepened before immutable evidence lookup and exact fetched head must match the attested historical head.
-- [x] WORK text alone does not satisfy G5; canonical owned lane evidence must exist at the exact touching commit and cover every overlapping implementation path.
+- [x] WORK text alone does not satisfy G5; canonical owned lane evidence must exist at the exact touching commit and cover every overlapping implementation path, and GitHub must independently attest the exact PR number/repository/branch/main base/merged state/head and touching merge SHA.
+- [x] Existing already-merged legacy `dispatch-auto` remains compatible without creating a sentinel, token, PASS or deferral for an active/new lane.
+- [x] A real depth-one clone with missing original evidence history deepens trusted main and original PR history before ancestry checks; forged/unavailable authority fails closed.
 - [x] Real original UTV2-1370 admission and actual WORK-2026092901 follow-up pass the repaired logic without writing a manifest.
 - [x] Original PR/merge/source remain bound; independently inspected immutable production verifier and parity artifacts genuinely PASS.
 
@@ -40,4 +42,4 @@ Focused suites ran directly with `pnpm exec tsx --test scripts/ops/lane-close.te
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: 5c41a8a248241efebcee9f51fe530a32836c85ae
+Execution SHA: 21e71f086daa864880740d60350e614f524ed6a6
