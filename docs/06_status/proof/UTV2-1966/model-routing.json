@@ -1,0 +1,27 @@
+{
+  "issue_id": "UTV2-1966",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "execution_sha": "b56870d86a69a54aad7796c9d075d3810debade5",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "generated_at": "2026-10-02T13:07:00Z",
+  "provenance": {
+    "kind": "lane_manifest_routing_record",
+    "source": "docs/06_status/lanes/UTV2-1966.json",
+    "execution_context": "Codex desktop session",
+    "runtime_model_attested": false,
+    "note": "Routing fields record lane-start policy selection, not independently attested runtime model identity. No codex-exec subprocess was launched; null exit code makes no CLI execution claim."
+  },
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "2c4e754652830967bf006db6dff3f96f55c9f9a1",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1708",
+    "bound_at": "2026-10-02T14:12:44.491Z"
+  }
+}
