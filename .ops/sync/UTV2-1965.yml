@@ -61,6 +61,28 @@ task_contract:
       Whop/Stripe, SGO, Black Label, system picks or unrelated scope. Delivery
       containment remains untouched. Actual production deployment/registry
       acceptance require separate authorization.
+    - |-
+      Where to look
+      * Current main .github/workflows/deploy.yml production promote job and downstream smoke dependency; registration must follow existing production health/containment confirmation and precede image cleanup.
+      * Already merged apps/discord-bot/scripts/deploy-commands.ts and deploy-commands.test.ts: consume this guild-only mechanism without modifying bot files.
+      * Root package.json test:ops and test:apps-rest; append focused test wiring, retain all existing tests.
+      * Predecessor [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e) accepted implementation commit 2c56becfe8ff1be9dfbc2313c78d637962522bda, reconcile deployment/test changes on current main. [UTV2-1964](https://linear.app/unit-talk-v2/issue/UTV2-1964/harden-guild-only-discord-command-registration-before-governed-deploy) merge 35f9db79e85f5f67692b5ffb29ad471408c7361d plus trusted terminal closeout 5051245de0b4d92d59caffbe464fb09b419ab120 are provenance.
+    - >-
+      Definition of done
+
+      * Exact three substantive files implement mandatory production-only
+      promoted-image registration; meaningful shell failure-path tests and
+      executable wiring pass.
+
+      * Required verification and T1 staging DB CI proof pass; exact-head proof
+      and truthful admitted executor/model receipt are posted.
+
+      * A clean T1 PR, normal lane/scope checks and predecessor provenance are
+      ready for independent PM review; no self-approval or production mutation.
+
+      * Production deployment, registry acceptance, persona retest and watched
+      delivery remain outside this PR execution and require their separately
+      reserved authorization.
   source:
     kind: linear-issue-snapshot
     issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1965/wire-hardened-guild-command-registration-into-governed-production
@@ -87,6 +109,20 @@ task_contract:
       ## Boundaries
 
       No bot source changes, lane-policy changes, production deployment or command registration, role changes, delivery activation, watched pick, Whop/Stripe, SGO, Black Label, system picks or unrelated scope. Delivery containment remains untouched. Actual production deployment/registry acceptance require separate authorization.
-    captured_at: 2026-10-02T12:49:45.999Z
-    description_sha256: 051667c8e72d58fe59fc9b020e5d1e0a8a4b692b50ba662be0553be184bf60c6
-  contract_hash: 976315e8a8880afa66214782991371309f186567f2121f93acbd8bfd7fa78103
+
+      ## Where to look
+
+      * Current main .github/workflows/deploy.yml production promote job and downstream smoke dependency; registration must follow existing production health/containment confirmation and precede image cleanup.
+      * Already merged apps/discord-bot/scripts/deploy-commands.ts and deploy-commands.test.ts: consume this guild-only mechanism without modifying bot files.
+      * Root package.json test:ops and test:apps-rest; append focused test wiring, retain all existing tests.
+      * Predecessor [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e) accepted implementation commit 2c56becfe8ff1be9dfbc2313c78d637962522bda, reconcile deployment/test changes on current main. [UTV2-1964](https://linear.app/unit-talk-v2/issue/UTV2-1964/harden-guild-only-discord-command-registration-before-governed-deploy) merge 35f9db79e85f5f67692b5ffb29ad471408c7361d plus trusted terminal closeout 5051245de0b4d92d59caffbe464fb09b419ab120 are provenance.
+
+      ## Definition of done
+
+      * Exact three substantive files implement mandatory production-only promoted-image registration; meaningful shell failure-path tests and executable wiring pass.
+      * Required verification and T1 staging DB CI proof pass; exact-head proof and truthful admitted executor/model receipt are posted.
+      * A clean T1 PR, normal lane/scope checks and predecessor provenance are ready for independent PM review; no self-approval or production mutation.
+      * Production deployment, registry acceptance, persona retest and watched delivery remain outside this PR execution and require their separately reserved authorization.
+    captured_at: 2026-10-02T12:52:29.530Z
+    description_sha256: fa938a57f5dfd1b703d777de4f195932c2fdaa737b07af9dbbd87a82741225f7
+  contract_hash: f8b3e4e05fa4c13148862104c89012c314ac3614d52370a6949809abd541dcdc

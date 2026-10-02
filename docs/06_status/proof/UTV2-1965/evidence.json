@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1965",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "21c45451fa8df4bd18ea6bf0b34ee7859bc888c9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_against_sha": "21c45451fa8df4bd18ea6bf0b34ee7859bc888c9",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test scripts/ci/deploy-discord-commands.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 3,
+        "pass": 3,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/discord-bot/scripts/deploy-commands.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Lane sync, system alignment, executable wiring, lint, type-check, build, 3,567-test repository suite, local T1 proofs, Smart Form verification, command-manifest verification, and migration checks passed."
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "No R-level rule matched the authorized workflow, root test wiring, CI regression, or lane/proof paths."
+      }
+    ],
+    "live_db": {
+      "status": "blocked_deferred",
+      "command": "pnpm test:db",
+      "exit_code": 1,
+      "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. The local observed target was loopback/unidentified and was refused before tests ran."
+    }
+  },
+  "runtime_proof": {
+    "status": "static_simulation_pass",
+    "detail": "The focused node:test executes the exact extracted remote shell against fake Docker. It proves the promoted-container command, success path, registry exit propagation, stale release refusal, stale image refusal, production-only placement, and downstream smoke dependency without contacting Discord or production."
+  },
+  "known_gaps": [
+    "The required writable T1 DB proof must be produced by the sanctioned staging-ci GitHub environment and harvested into exact-head evidence.",
+    "No production deployment or Discord command registration was attempted or authorized.",
+    "The exact-head executor-result receipt is posted by the governed lane closeout path after the admitted Codex execution returns."
+  ]
+}
