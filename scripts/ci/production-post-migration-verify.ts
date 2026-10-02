@@ -461,13 +461,62 @@ export function buildPsqlEnvironment(
   environment: NodeJS.ProcessEnv,
   dsn: string,
 ): NodeJS.ProcessEnv {
-  const childEnvironment = {
-    ...environment,
-    PGDATABASE: dsn,
+  assertProductionIdentity(`https://${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`, dsn);
+  const parsed = new URL(dsn);
+  const sslModes = parsed.searchParams.getAll('sslmode');
+  const sslMode = sslModes[0] ?? 'require';
+  if (sslModes.length > 1 || !['require', 'verify-ca', 'verify-full'].includes(sslMode)) {
+    throw new Error('production verifier refused insecure or ambiguous SSL mode');
+  }
+  if ([...parsed.searchParams.keys()].some((key) => key !== 'sslmode') || parsed.hash) {
+    throw new Error('production verifier refused unsupported reader DSN options');
+  }
+  let database: string;
+  let username: string;
+  let password: string;
+  try {
+    database = decodeURIComponent(parsed.pathname.slice(1));
+    username = decodeURIComponent(parsed.username);
+    password = decodeURIComponent(parsed.password);
+  } catch {
+    throw new Error('production verifier refused malformed reader DSN encoding');
+  }
+  if (!database || database.includes('/') || !password ||
+      [database, username, password].some((value) => [...value].some((character) => {
+        const code = character.charCodeAt(0);
+        return code < 32 || code === 127;
+      }))) {
+    throw new Error('production verifier requires an explicit database and reader password');
+  }
+  // PGDATABASE alone does not expand a URI in this psql/libpq path. Resolve
+  // every connection field explicitly, and discard inherited libpq/service
+  // overrides so they cannot redirect the already validated reader identity.
+  const childEnvironment: NodeJS.ProcessEnv = {
+    ...Object.fromEntries(Object.entries(environment).filter(([key]) => !key.startsWith('PG'))),
+    PGHOST: parsed.hostname,
+    PGPORT: parsed.port || '5432',
+    PGUSER: username,
+    PGPASSWORD: password,
+    PGDATABASE: database,
+    PGSSLMODE: sslMode,
     PGOPTIONS: '-c default_transaction_read_only=on -c statement_timeout=15000',
   };
   delete childEnvironment['SUPABASE_ACCESS_TOKEN'];
+  delete childEnvironment['UNIT_TALK_WAREHOUSE_SOURCE_DSN'];
   return childEnvironment;
+}
+
+export function buildPsqlArguments(): string[] {
+  return [
+    '--no-psqlrc',
+    '--quiet',
+    '--tuples-only',
+    '--no-align',
+    '--set=ON_ERROR_STOP=1',
+    '--single-transaction',
+    '--command',
+    `${READ_ONLY_PREAMBLE}; ${READ_ONLY_STATE_SQL}; ${DB_FACTS_SQL}`,
+  ];
 }
 
 function migrationPrefixes(): string[] {
@@ -485,16 +534,29 @@ export function parseMigrationLedger(
 ): LedgerEvidence {
   const remote: string[] = [];
   const cliLocal: string[] = [];
+  let malformedVersionCell = false;
+  const normalizeVersionCell = (cell: string): string | null => {
+    const normalized = /^`[^`]*`$/u.test(cell) ? cell.slice(1, -1) : cell;
+    return /^\d{12,14}$/u.test(normalized) ? normalized : null;
+  };
   for (const rawLine of output.split('\n')) {
     const columns = rawLine.split('|').map((part) => part.trim());
     if (columns.length < 2) continue;
-    if (/^\d{12,14}$/u.test(columns[0] ?? '')) cliLocal.push(columns[0] as string);
-    if (/^\d{12,14}$/u.test(columns[1] ?? '')) remote.push(columns[1] as string);
+    const localCell = columns[0] ?? '';
+    const remoteCell = columns[1] ?? '';
+    if (localCell === 'Local' && remoteCell === 'Remote') continue;
+    if (/^[-:\s]+$/u.test(localCell) && /^[-:\s]+$/u.test(remoteCell)) continue;
+    const localVersion = normalizeVersionCell(localCell);
+    const remoteVersion = normalizeVersionCell(remoteCell);
+    if ((localCell && !localVersion) || (remoteCell && !remoteVersion)) malformedVersionCell = true;
+    if (localVersion) cliLocal.push(localVersion);
+    if (remoteVersion) remote.push(remoteVersion);
   }
   const sortedLocal = [...new Set(local)].sort();
   const sortedCliLocal = [...new Set(cliLocal)].sort();
   const sortedRemote = [...new Set(remote)].sort();
   const aligned =
+    !malformedVersionCell &&
     sortedLocal.length > 0 &&
     JSON.stringify(sortedLocal) === JSON.stringify(sortedCliLocal) &&
     JSON.stringify(sortedLocal) === JSON.stringify(sortedRemote) &&
@@ -578,16 +640,7 @@ async function main(): Promise<void> {
   // argv and logs.
   const databaseOutput = execFileSync(
     'psql',
-    [
-      '--no-psqlrc',
-      '--quiet',
-      '--tuples-only',
-      '--no-align',
-      '--set=ON_ERROR_STOP=1',
-      '--single-transaction',
-      '--command',
-      `${READ_ONLY_PREAMBLE}; ${READ_ONLY_STATE_SQL}; ${DB_FACTS_SQL}`,
-    ],
+    buildPsqlArguments(),
     {
       encoding: 'utf8',
       env: buildPsqlEnvironment(process.env, dsn),
