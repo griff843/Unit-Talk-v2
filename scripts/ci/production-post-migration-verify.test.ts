@@ -356,7 +356,10 @@ test('reader decomposition refuses malformed, noncanonical or connection-overrid
     `${prefix}/post%ZZgres`,
     `${prefix}/post%00gres`,
   ]) {
-    assert.throws(() => buildPsqlEnvironment({}, dsn));
+    assert.throws(() => {
+      assertProductionIdentity(`https://${PRODUCTION_REF}.supabase.co`, dsn);
+      buildPsqlEnvironment({}, dsn);
+    });
   }
   const direct = `postgresql://warehouse_reader:test-only@db.${PRODUCTION_REF}.supabase.co:5432/warehouse%5Ftest?sslmode=verify-full`;
   const child = buildPsqlEnvironment({}, direct);

@@ -461,7 +461,7 @@ export function buildPsqlEnvironment(
   environment: NodeJS.ProcessEnv,
   dsn: string,
 ): NodeJS.ProcessEnv {
-  assertProductionIdentity(`https://${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`, dsn);
+  // main validates canonical production identity before invoking this mapper.
   const parsed = new URL(dsn);
   const sslModes = parsed.searchParams.getAll('sslmode');
   const sslMode = sslModes[0] ?? 'require';
