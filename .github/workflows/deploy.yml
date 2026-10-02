@@ -183,6 +183,22 @@ jobs:
           echo "{\"service\":\"deploy\",\"event\":\"syndicate_machine_mode.validated\",\"mode\":\"$syndicate_machine_mode\"}"
           echo "All required production secrets are present."
 
+      # UTV2-1965: production promotion performs mandatory guild-scoped
+      # command registration. Refuse missing or malformed configuration in the
+      # verify job, before canary or production can mutate the host, rather
+      # than discovering it after production activation. Never echo the ID.
+      - name: Validate production Discord guild identity
+        env:
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+        run: |
+          LC_ALL=C
+          guild_id="${DISCORD_GUILD_ID:-}"
+          if ! [[ "$guild_id" =~ ^[1-9][0-9]{16,19}$ ]] || \
+             { [ "${#guild_id}" -eq 20 ] && [[ "$guild_id" > "18446744073709551615" ]]; }; then
+            echo "::error::DISCORD_GUILD_ID must be a valid nonzero unsigned 64-bit Discord snowflake (17-20 decimal digits without leading zeros)."
+            exit 1
+          fi
+
       - name: Create CI local.env (dev defaults + Supabase — required for t1-proof tests)
         run: |
           cat .env.example > local.env
@@ -2296,6 +2312,27 @@ jobs:
 
           printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s","releaseTag":"%s","killSwitchEngaged":true}\n' \
             "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" "$RELEASE_TAG"
+
+      # UTV2-1965: canary must not mutate the shared production guild registry.
+      # Register only the promoted container's authoritative manifest, after
+      # production health/containment checks. Failure blocks deployment success.
+      - name: Register and verify production Discord guild commands
+        shell: bash
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          set -euo pipefail
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$DEPLOY_PATH' '$IMAGE_TAG' '$IMAGE_NAMESPACE'" <<'DISCORD_COMMANDS_REMOTE'
+          set -euo pipefail
+          cd "$1"
+          IMAGE_TAG="$2"
+          test "$(cat .unit-talk-release)" = "$IMAGE_TAG"
+          BOT_CONTAINER="$(UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose ps -q discord-bot)"
+          test -n "$BOT_CONTAINER"
+          test "$(docker inspect --format '{{.Config.Image}}' "$BOT_CONTAINER")" = "$3/discord-bot:$IMAGE_TAG"
+          UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose exec -T discord-bot \
+            /repo/node_modules/.bin/tsx /repo/apps/discord-bot/scripts/deploy-commands.ts
+          DISCORD_COMMANDS_REMOTE
 
       # WORK-2026092403: nothing ever removed a superseded release image. On
       # 2026-09-24 the host held 398 images (141 GB, 80 GB reclaimable) --
