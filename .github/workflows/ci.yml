@@ -14,12 +14,76 @@ on:
       - 'docs/06_status/proof/**'
       - '.ops/sync/**'
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  classify:
+    name: Classify brand-only diff
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      brand_only: ${{ steps.brand.outputs.brand_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/github-script@v7
+        id: brand
+        with:
+          script: |
+            const { execFileSync } = require('node:child_process');
+            const logos = new Set([
+              'apps/smart-form/app/submit/components/BrandLogo.tsx',
+              'apps/command-center/src/components/WorkspaceSidebar.tsx',
+            ]);
+            const isBrand = file => file.startsWith('docs/03_product/brand/') || logos.has(file);
+            const isMetadata = file => /^(?:docs\/06_status\/lanes\/(?:WORK|UTV2)-\d+\.json|docs\/06_status\/proof\/(?:WORK|UTV2)-\d+\/(?:[^/]+\/)*[^/]+\.(?:md|json|png)|\.ops\/sync\/(?:WORK|UTV2)-\d+\.yml|\.ops\/work\/WORK-\d+\.md)$/.test(file);
+            let brandOnly = false;
+            try {
+              const prEvent = context.payload.pull_request;
+              const base = prEvent?.base.sha || context.payload.before;
+              const head = prEvent?.head.sha || context.sha;
+              if (![base, head].every(sha => typeof sha === 'string' && /^[0-9a-f]{40}$/.test(sha) && !/^0+$/.test(sha))) {
+                throw new Error('No complete comparison range');
+              }
+              let pr;
+              if (prEvent) {
+                pr = (await github.rest.pulls.get({ ...context.repo, pull_number: prEvent.number })).data;
+                if (pr.head.sha !== head) throw new Error('PR HEAD changed during classification');
+              } else {
+                const associated = await github.paginate(github.rest.repos.listPullRequestsAssociatedWithCommit, {
+                  ...context.repo, commit_sha: head,
+                });
+                const merged = associated.filter(candidate => candidate.merged_at && candidate.merge_commit_sha === head);
+                if (merged.length !== 1) throw new Error('No unique merged PR tier for this push');
+                pr = merged[0];
+              }
+              const tiers = pr.labels.map(label => label.name).filter(name => name.startsWith('tier:'));
+              if (tiers.length !== 1 || !['tier:T2', 'tier:T3'].includes(tiers[0]) || pr.labels.some(label => label.name === 'proof-required')) {
+                throw new Error('T1, proof-required, missing, or ambiguous tier uses normal CI');
+              }
+              // Full git diff, not an API page. Disabling rename detection exposes
+              // BOTH sides of a rename, including a runtime file moved into brand/.
+              const range = prEvent ? `${base}...${head}` : `${base}..${head}`;
+              const raw = execFileSync('git', ['diff', '--name-only', '--no-renames', '-z', range, '--'], { encoding: 'utf8' });
+              if (!raw.endsWith('\0')) throw new Error('Empty or incomplete diff');
+              const files = raw.slice(0, -1).split('\0');
+              brandOnly = files.some(isBrand) && files.every(file =>
+                file && !/[\\\x00-\x1f]/.test(file) && !file.split('/').some(part => part === '.' || part === '..') &&
+                (isBrand(file) || isMetadata(file)));
+              core.info(`brand-only=${brandOnly}; changed files=${files.length}`);
+            } catch (error) {
+              core.warning(`Normal CI fallback: ${error.message}`);
+            }
+            core.setOutput('brand_only', String(brandOnly));
+
   # UTV2-1630 — the writable DB proof PRODUCER.
   #
   # Split out of `verify` so the required context can depend on it. `verify` is
@@ -36,6 +100,10 @@ jobs:
   # rebase onto this version rather than restore its own.
   staging-db-proof:
     name: Writable DB proof (staging only)
+    needs: classify
+    # Only a positive classification may skip the credential-bearing producer.
+    # Missing/failed classification runs normal proof; verify also fails closed.
+    if: ${{ !cancelled() && needs.classify.outputs.brand_only != 'true' }}
     runs-on: ubuntu-latest
     # Binding the environment is what releases CI_SUPABASE_*. This is the ONLY
     # job in this workflow with any database credential.
@@ -169,7 +237,8 @@ jobs:
     runs-on: ubuntu-latest
     # UTV2-1630: `verify` is a REQUIRED status check. It depends on the producer
     # above and verifies that run's receipt, so a merge cannot proceed without a
-    # genuine staging DB proof bound to this exact run and SHA.
+    # genuine staging DB proof bound to this exact run and SHA, except for the
+    # positively classified non-T1 branding-only path above.
     #
     # This job holds NO database credential of any kind. It does not bind an
     # environment, so `staging-ci` secrets are not released to it.
@@ -179,18 +248,25 @@ jobs:
     # check does not report red. That would invert the gate: a broken DB proof
     # would stop reporting instead of blocking. The job therefore always runs
     # and asserts the producer's result itself, as its very first step.
-    needs: staging-db-proof
+    needs: [classify, staging-db-proof]
     if: always()
     steps:
-      - name: Assert the DB proof producer succeeded
+      - name: Assert classification and required DB proof succeeded
+        env:
+          CLASSIFICATION_RESULT: ${{ needs.classify.result }}
+          BRAND_ONLY: ${{ needs.classify.outputs.brand_only }}
+          DB_PROOF_RESULT: ${{ needs.staging-db-proof.result }}
         run: |
           set -euo pipefail
-          result="${{ needs.staging-db-proof.result }}"
-          echo "staging-db-proof result: $result"
-          if [ "$result" != "success" ]; then
-            echo "::error::staging-db-proof did not succeed ($result). The required verify context fails closed."
+          if [ "$CLASSIFICATION_RESULT" != "success" ]; then
+            echo "::error::Classification failed. The required verify context fails closed."
             exit 1
           fi
+          case "$BRAND_ONLY:$DB_PROOF_RESULT" in
+            true:skipped) echo "Static brand-only path: no staging DB or runtime proof required." ;;
+            false:success) echo "Normal path: staging-db-proof succeeded." ;;
+            *) echo "::error::Unexpected classification/DB proof result ($BRAND_ONLY:$DB_PROOF_RESULT)."; exit 1 ;;
+          esac
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -277,6 +353,25 @@ jobs:
         id: command_center
         run: pnpm test:command-center
 
+      - name: Branding classifier regression tests
+        run: pnpm exec tsx --test --test-name-pattern='Brand CI:' scripts/ci/staging-path-enforcement.test.ts
+
+      - name: Affected branding app builds and type-checks
+        if: needs.classify.outputs.brand_only == 'true'
+        env:
+          AUTH_SECRET: ci-static-not-a-real-secret
+          NEXTAUTH_SECRET: ci-static-not-a-real-secret
+          COMMAND_CENTER_AUTH_TOKEN: ci-command-center-token
+        run: |
+          pnpm --filter @unit-talk/smart-form type-check
+          pnpm --filter @unit-talk/smart-form build
+          pnpm --filter @unit-talk/command-center type-check
+          pnpm --filter @unit-talk/command-center build
+
+      - name: Targeted logo component verification (no services)
+        if: needs.classify.outputs.brand_only == 'true'
+        run: pnpm exec tsx --test --test-name-pattern='Brand component:' scripts/ci/staging-path-enforcement.test.ts
+
       # UTV2-1630 — the merge gate for writable DB proof.
       #
       # `verify` is required; `Proof Auditor Gate` is not. Verifying the receipt
@@ -287,6 +382,7 @@ jobs:
       # receipt cannot be substituted, and `if-no-files-found: error` means a
       # deleted upload fails the required context rather than skipping it.
       - name: Download staging DB proof receipt (this run)
+        if: needs.classify.outputs.brand_only != 'true'
         uses: actions/download-artifact@v4
         with:
           name: utv2-1630-db-proof-receipt-${{ github.run_id }}-${{ github.run_attempt }}
@@ -295,6 +391,7 @@ jobs:
 
       - name: Verify staging DB proof receipt
         id: live_db
+        if: needs.classify.outputs.brand_only != 'true'
         run: |
           set -euo pipefail
           pnpm exec tsx scripts/ci/verify-db-proof-receipt.ts \
@@ -308,6 +405,7 @@ jobs:
         run: |
           {
             echo "### CI truth gate"
+            echo "- brand_only: ${{ needs.classify.outputs.brand_only }}"
             echo "- verify_static: ${{ steps.verify.outcome }}"
             echo "- live_db (classified): ${{ steps.live_db.outcome }}"
             echo "- command_center_tests: ${{ steps.command_center.outcome }}"

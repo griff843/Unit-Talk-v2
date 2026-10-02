@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100202",
+  "lane_type": "verification",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100202-branding-ci",
+  "branch": "codex/work-2026100202-branding-ci",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1711",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/ci.yml",
+    ".ops/work/WORK-2026100202.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md",
+    "docs/05_operations/R1_R5_OPERATING_RULE.md",
+    "scripts/ci/branding-ci.test.ts",
+    "scripts/ci/branding-components.test.ts",
+    "scripts/ci/staging-path-enforcement.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026100202/diff-summary.md",
+    "docs/06_status/proof/WORK-2026100202/evidence.json",
+    "docs/06_status/proof/WORK-2026100202/verification.md",
+    "docs/06_status/proof/WORK-2026100202/model-routing.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-10-02T21:08:31.504Z",
+  "heartbeat_at": "2026-10-02T21:33:29.181Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026100202-branding-ci.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "verification_target": "WORK-2026100202",
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100202-branding-ci",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

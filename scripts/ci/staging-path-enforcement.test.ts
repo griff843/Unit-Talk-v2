@@ -10,11 +10,16 @@
  *     bypassed the guard that lived only inside `ci:db-smoke`.
  */
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import vm from 'node:vm';
+import ts from 'typescript';
+import { parse } from 'yaml';
+import { createTempWorkspace, releaseTempWorkspace } from '../ops/temp-workspace.js';
 import { assertStagingTarget } from './assert-staging-target.js';
 import {
   DEFAULT_DRAIN_MARGIN_MS,
@@ -261,7 +266,7 @@ test('the required verify job depends on the staging DB proof producer', () => {
   assert.match(CI_YML, /^\s+verify:/mu, 'the required context job must be named verify');
   assert.match(
     CI_YML,
-    /needs:\s*staging-db-proof/,
+    /needs:\s*\[classify, staging-db-proof\]/,
     'verify must depend on the producer, so a failed DB proof fails the required context',
   );
 });
@@ -625,3 +630,235 @@ test('drain does not generalize a signature: near-miss fixtures are left alone',
     assert.equal(matchFixtureSignature(row), null, `matched: ${JSON.stringify(row)}`);
   }
 });
+
+// Bounded branding classification and component regressions share the script-wired guard entrypoint.
+{
+type Step = { name?: string; id?: string; if?: string; run?: string; with?: { script?: string }; env?: Record<string, string> };
+type Job = { needs?: string | string[]; if?: string; environment?: string; steps: Step[] };
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const workflow = parse(readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8')) as { jobs: Record<string, Job> };
+const classifier = workflow.jobs.classify.steps.find(step => step.id === 'brand')?.with?.script;
+assert.ok(classifier, 'execute the classifier CI actually uses');
+const base = 'a'.repeat(40);
+const head = 'b'.repeat(40);
+const brand = [
+  'docs/03_product/brand/assets/unit-talk-mark-white.svg',
+  'apps/smart-form/app/submit/components/BrandLogo.tsx',
+  'apps/command-center/src/components/WorkspaceSidebar.tsx',
+];
+const metadata = [
+  '.ops/work/WORK-2026100201.md', '.ops/sync/WORK-2026100201.yml',
+  'docs/06_status/lanes/WORK-2026100201.json',
+  'docs/06_status/proof/WORK-2026100201/verification.md',
+  'docs/06_status/proof/WORK-2026100201/evidence.json',
+];
+
+async function classify(files: string[], options: {
+  labels?: string[]; push?: boolean; associated?: boolean; fail?: boolean;
+  base?: string; head?: string; observedHead?: string; cwd?: string;
+} = {}): Promise<string> {
+  let output: string | undefined;
+  const labels = (options.labels ?? ['tier:T2']).map(name => ({ name }));
+  const pr = { labels, head: { sha: options.observedHead ?? options.head ?? head }, merged_at: '2026-10-02', merge_commit_sha: options.head ?? head };
+  await vm.runInNewContext(`(async () => { ${classifier} })()`, {
+    context: {
+      repo: { owner: 'example', repo: 'unit-talk' }, sha: options.head ?? head,
+      payload: options.push ? { before: options.base ?? base } : {
+        pull_request: { number: 1709, base: { sha: options.base ?? base }, head: { sha: options.head ?? head } },
+      },
+    },
+    core: { info() {}, warning() {}, setOutput(name: string, value: string) { assert.equal(name, 'brand_only'); output = value; } },
+    github: {
+      rest: { pulls: { get: async () => ({ data: pr }) }, repos: { listPullRequestsAssociatedWithCommit() {} } },
+      paginate: async () => options.associated === false ? [] : [pr],
+    },
+    require(id: string) {
+      assert.equal(id, 'node:child_process');
+      return { execFileSync(command: string, args: string[]) {
+        if (options.fail) throw new Error('git comparison unavailable');
+        assert.equal(command, 'git');
+        assert.ok(args.includes('--no-renames'));
+        assert.ok(args.includes('-z'));
+        return options.cwd ? execFileSync(command, args, { cwd: options.cwd, encoding: 'utf8' }) : files.length ? files.join('\0') + '\0' : '';
+      } };
+    },
+  });
+  assert.ok(output, 'classification always produces an explicit decision');
+  return output;
+}
+
+test('Brand CI: synthetic git diff: brand-only is lightweight; brand + runtime is normal', async () => {
+  const cwd = createTempWorkspace('brand-ci-diff-');
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  const put = (file: string) => { mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true }); writeFileSync(path.join(cwd, file), 'synthetic fixture\n'); };
+  const commit = () => { git('add', '.'); git('-c', 'user.name=CI Test', '-c', 'user.email=ci@example.invalid', 'commit', '-qm', 'synthetic diff'); return git('rev-parse', 'HEAD'); };
+  try {
+    git('init', '-q'); put('README.md'); const baseSha = commit();
+    for (const file of [...brand, ...metadata]) put(file);
+    const brandHead = commit();
+    assert.equal(await classify([], { cwd, base: baseSha, head: brandHead }), 'true');
+    put('apps/api/src/submission-service.ts'); const mixedHead = commit();
+    assert.equal(await classify([], { cwd, base: baseSha, head: mixedHead }), 'false');
+    assert.equal(await classify([], { cwd, base: baseSha, head: brandHead, push: true }), 'true');
+  } finally { releaseTempWorkspace(cwd); }
+});
+
+test('Brand CI: all three brand surfaces qualify individually with ordinary proof metadata', async () => {
+  for (const file of brand) assert.equal(await classify([file, ...metadata]), 'true');
+});
+
+for (const file of [
+  'apps/api/src/submission-service.ts', 'apps/worker/src/outbox-worker.ts',
+  'packages/db/src/repositories.ts', 'packages/domain/src/lifecycle/fsm.ts',
+  'supabase/migrations/20261002000000_change.sql', 'apps/discord-bot/src/delivery.ts',
+  'apps/smart-form/app/submit/page.tsx', 'apps/command-center/src/lib/data/picks.ts',
+  'pnpm-lock.yaml', '.github/workflows/ci.yml', 'AGENTS.md',
+  'docs/03_product/brandish/README.md', '.ops/config.json',
+  'docs/06_status/proof/WORK-1/runtime.ts',
+]) {
+  test(`Brand CI: mixed diff falls back to normal CI: ${file}`, async () => {
+    assert.equal(await classify([...brand, file]), 'false');
+  });
+}
+
+test('Brand CI: rename from runtime into brand is normal because both paths are examined', async () => {
+  assert.equal(await classify(['apps/api/src/auth.ts', 'docs/03_product/brand/auth.ts']), 'false');
+});
+
+test('Brand CI: T1, conflicting/missing tier, and explicit proof requirements never opt out', async () => {
+  for (const labels of [[], ['tier:T1'], ['tier:T2', 'tier:T1'], ['tier:T2', 'tier:T3'], ['tier:T2', 'proof-required']]) {
+    assert.equal(await classify(brand, { labels }), 'false');
+  }
+  assert.equal(await classify(brand, { labels: ['tier:T3'] }), 'true');
+});
+
+test('Brand CI: unknown comparison, moved HEAD, empty diff, metadata-only, and path tricks fail closed', async () => {
+  assert.equal(await classify(brand, { fail: true }), 'false');
+  assert.equal(await classify(brand, { base: '0'.repeat(40) }), 'false');
+  assert.equal(await classify(brand, { observedHead: 'c'.repeat(40) }), 'false');
+  assert.equal(await classify(brand, { push: true, associated: false }), 'false');
+  assert.equal(await classify([]), 'false');
+  assert.equal(await classify(metadata), 'false');
+  for (const file of ['docs/03_product/brand/../runtime.ts', 'docs/03_product/brand/evil\nfile.svg', 'docs/03_product/brand/evil\\file.svg']) {
+    assert.equal(await classify([file]), 'false');
+  }
+});
+
+test('Brand CI: required verify rejects every failed/missing/cancelled producer or classifier', () => {
+  const gate = workflow.jobs.verify.steps[0];
+  assert.ok(gate.run);
+  for (const [classification, brandOnly, producer, expected] of [
+    ['success', 'true', 'skipped', 0], ['success', 'false', 'success', 0],
+    ['failure', 'true', 'skipped', 1], ['cancelled', 'false', 'success', 1],
+    ['success', '', 'success', 1], ['success', 'false', 'failure', 1],
+    ['success', 'false', 'cancelled', 1], ['success', 'false', 'skipped', 1],
+    ['success', 'true', 'failure', 1], ['success', 'true', 'success', 1],
+  ] as const) {
+    const result = spawnSync('bash', ['-c', gate.run], { env: {
+      ...process.env, CLASSIFICATION_RESULT: classification, BRAND_ONLY: brandOnly, DB_PROOF_RESULT: producer,
+    } });
+    assert.equal(result.status, expected, `${classification}:${brandOnly}:${producer}`);
+  }
+});
+
+test('Brand CI: workflow wiring keeps static/component checks required and receipts on normal path', () => {
+  assert.deepEqual(workflow.jobs.verify.needs, ['classify', 'staging-db-proof']);
+  assert.equal(workflow.jobs.verify.if, 'always()');
+  assert.equal(workflow.jobs['staging-db-proof'].needs, 'classify');
+  assert.equal(workflow.jobs['staging-db-proof'].if, "${{ !cancelled() && needs.classify.outputs.brand_only != 'true' }}");
+  assert.equal(workflow.jobs['staging-db-proof'].environment, 'staging-ci');
+  const steps = workflow.jobs.verify.steps;
+  assert.equal(steps.find(step => step.id === 'verify')?.run, 'pnpm verify:static');
+  for (const name of ['Download staging DB proof receipt (this run)', 'Verify staging DB proof receipt']) {
+    assert.equal(steps.find(step => step.name === name)?.if, "needs.classify.outputs.brand_only != 'true'");
+  }
+  const builds = steps.find(step => step.name === 'Affected branding app builds and type-checks');
+  assert.equal(builds?.if, "needs.classify.outputs.brand_only == 'true'");
+  assert.equal(builds?.env?.AUTH_SECRET, 'ci-static-not-a-real-secret');
+  assert.ok(!Object.keys(builds?.env ?? {}).some(name => name.startsWith('SUPABASE')));
+  for (const app of ['smart-form', 'command-center']) for (const command of ['type-check', 'build']) {
+    assert.ok(builds?.run?.includes(`pnpm --filter @unit-talk/${app} ${command}`));
+  }
+  const components = steps.find(step => step.name === 'Targeted logo component verification (no services)');
+  assert.equal(components?.if, "needs.classify.outputs.brand_only == 'true'");
+  assert.equal(components?.run, "pnpm exec tsx --test --test-name-pattern='Brand component:' scripts/ci/staging-path-enforcement.test.ts");
+  assert.ok(steps.some(step => step.run === "pnpm exec tsx --test --test-name-pattern='Brand CI:' scripts/ci/staging-path-enforcement.test.ts"));
+});
+}
+
+{
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const appRequire = createRequire(path.join(root, 'apps/smart-form/package.json'));
+const React = appRequire('react') as { createElement(component: unknown, props?: unknown): unknown };
+const { renderToStaticMarkup } = appRequire('react-dom/server') as { renderToStaticMarkup(element: unknown): string };
+const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
+const assets = 'docs/03_product/brand/assets';
+const paths = (svg: string) => [...svg.matchAll(/<path\b[^>]*\bd="([^"]+)"/g)].map(match => match[1]);
+
+function loadComponent(file: string, name: string): unknown {
+  const compiled = ts.transpileModule(read(file), {
+    compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const exports: Record<string, unknown> = {};
+  // Real React components, isolated from routing and services. Any unexpected
+  // import fails instead of opening a service/database connection.
+  vm.runInNewContext(compiled, {
+    exports,
+    require(id: string) {
+      if (id === '@/components/OperatorLink') return { default: () => null };
+      assert.ok(['react', 'react/jsx-runtime'].includes(id), `unexpected branding dependency: ${id}`);
+      return appRequire(id);
+    },
+  }, { filename: file });
+  assert.equal(typeof exports[name], 'function');
+  return exports[name];
+}
+
+function assertLogo(markup: string, wordmark: boolean): void {
+  const mark = markup.match(/<svg\b[^>]*viewBox="0 0 1000 800"[^>]*>[\s\S]*?<\/svg>/g);
+  const word = markup.match(/<svg\b[^>]*viewBox="0 0 1500 320"[^>]*>[\s\S]*?<\/svg>/g);
+  assert.equal(mark?.length, 1, 'one UT monogram');
+  assert.deepEqual(paths(mark![0]), paths(read(`${assets}/unit-talk-mark-white.svg`)));
+  assert.equal(word?.length ?? 0, wordmark ? 1 : 0);
+  if (wordmark) {
+    assert.deepEqual(paths(word![0]), paths(read(`${assets}/unit-talk-wordmark-white.svg`)));
+    assert.match(word![0], /transform="translate\(0,-20\)"/);
+  }
+  assert.equal([...markup.matchAll(/role="img" aria-label="Unit Talk"/g)].length, 1);
+  assert.doesNotMatch(markup, /<text\b/, 'outlined master geometry, not replacement font text');
+}
+
+test('Brand component: Smart Form logo renders canonical monogram and outlined wordmark', () => {
+  const component = loadComponent('apps/smart-form/app/submit/components/BrandLogo.tsx', 'BrandLogo');
+  const markup = renderToStaticMarkup(React.createElement(component));
+  assertLogo(markup, true);
+  assert.match(markup, /width="42" height="42"/);
+  assert.match(markup, /width="140" height="30"/);
+});
+
+for (const collapsed of [false, true]) {
+  test(`Brand component: Command Center logo renders canonical geometry (${collapsed ? 'collapsed' : 'expanded'})`, () => {
+    const component = loadComponent('apps/command-center/src/components/WorkspaceSidebar.tsx', 'WorkspaceSidebar');
+    const markup = renderToStaticMarkup(React.createElement(component, {
+      navGroups: [], activeRoute: '/', healthStatus: 'healthy', collapsed, mobileOpen: true,
+      onToggle() {}, onCloseMobile() {},
+    }));
+    assertLogo(markup, !collapsed);
+    assert.match(markup, /class="h-10 w-10" viewBox="0 0 1000 800"/);
+    assert.ok(markup.includes(collapsed ? 'Expand navigation' : 'Collapse navigation'));
+  });
+}
+
+test('Brand component: black/white masters share geometry and PNG/icon exports remain valid', () => {
+  for (const kind of ['mark', 'wordmark']) {
+    const white = read(`${assets}/unit-talk-${kind}-white.svg`);
+    const black = read(`${assets}/unit-talk-${kind}.svg`);
+    assert.ok(paths(white).length > 0);
+    assert.deepEqual(paths(white), paths(black));
+  }
+  for (const file of ['unit-talk-mark-white-2048.png', 'unit-talk-mark-2048.png', 'unit-talk-icon-32.png', 'favicon-32.png']) {
+    const png = readFileSync(path.join(root, assets, file));
+    assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  }
+});
+}

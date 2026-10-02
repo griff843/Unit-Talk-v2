@@ -1,0 +1,163 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100202
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100202
+  objective: Add a fail-closed brand-only CI fast path without weakening runtime
+    or database proof.
+  acceptance_criteria:
+    - Restrict fast-path product files to canonical brand assets, BrandLogo.tsx,
+      and WorkspaceSidebar.tsx plus normal lane/proof metadata.
+    - Run static verification, affected app builds/type-checks, and targeted
+      component/visual checks without writable staging or runtime proof for that
+      class.
+    - Fall back to normal CI for mixed diffs, unknown classification, or T1 work.
+    - Document the static branding exception in the four named
+      instruction/policy documents.
+    - Demonstrate synthetic brand-only and mixed brand/runtime diffs with
+      focused CI tests.
+  guardrails:
+    - No product behavior changes, broader governance redesign, or reduction of
+      T1/runtime/data/migration/API-service/delivery proof.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100202 - Static branding CI isolation
+
+      Tier: T1
+
+      Lane type: verification
+
+      Executor: codex-cli
+
+
+      ## File Scope
+
+
+      - .github/workflows/ci.yml
+
+      - docs/05_operations/R1_R5_OPERATING_RULE.md
+
+      - docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - scripts/ci/branding-ci.test.ts
+
+      - scripts/ci/branding-components.test.ts
+
+      - scripts/ci/staging-path-enforcement.test.ts
+
+      - .ops/work/WORK-2026100202.md
+
+      - Normal lane/proof metadata for WORK-2026100202
+
+
+      ## Execution Approval
+
+
+      Griff explicitly approved T1 execution for this bounded CI-policy fix on
+      2026-10-02.
+
+      This is execution approval only, not merge approval. Return the PR, exact
+      HEAD,
+
+      changed files, checks, and proof packet for review.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100202.md
+    title: WORK-2026100202 - Static branding CI isolation
+    description: >-
+      # WORK-2026100202 - Static branding CI isolation
+
+
+      Tier: T1
+
+      Lane type: verification
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Add a fail-closed brand-only CI fast path without weakening runtime or
+      database proof.
+
+
+      ## Acceptance Criteria
+
+
+      - Restrict fast-path product files to canonical brand assets,
+      BrandLogo.tsx, and WorkspaceSidebar.tsx plus normal lane/proof metadata.
+
+      - Run static verification, affected app builds/type-checks, and targeted
+      component/visual checks without writable staging or runtime proof for that
+      class.
+
+      - Fall back to normal CI for mixed diffs, unknown classification, or T1
+      work.
+
+      - Document the static branding exception in the four named
+      instruction/policy documents.
+
+      - Demonstrate synthetic brand-only and mixed brand/runtime diffs with
+      focused CI tests.
+
+
+      ## File Scope
+
+
+      - .github/workflows/ci.yml
+
+      - docs/05_operations/R1_R5_OPERATING_RULE.md
+
+      - docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md
+
+      - AGENTS.md
+
+      - CLAUDE.md
+
+      - scripts/ci/branding-ci.test.ts
+
+      - scripts/ci/branding-components.test.ts
+
+      - scripts/ci/staging-path-enforcement.test.ts
+
+      - .ops/work/WORK-2026100202.md
+
+      - Normal lane/proof metadata for WORK-2026100202
+
+
+      ## Guardrails
+
+
+      No product behavior changes, broader governance redesign, or reduction of
+      T1/runtime/data/migration/API-service/delivery proof.
+
+
+      ## Execution Approval
+
+
+      Griff explicitly approved T1 execution for this bounded CI-policy fix on
+      2026-10-02.
+
+      This is execution approval only, not merge approval. Return the PR, exact
+      HEAD,
+
+      changed files, checks, and proof packet for review.
+    captured_at: 2026-10-02T21:08:22.819Z
+    description_sha256: 2d1bc258cb608af9de380dbdf6aa416cc50bc5acca9d67a96f813090b4e3147b
+  contract_hash: e4bbe6cab28e22ad3e0b4efd8f6c5e25eb92d15747a9c681580f62e3b23ba098
