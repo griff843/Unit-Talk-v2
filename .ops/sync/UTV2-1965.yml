@@ -1,0 +1,92 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1965
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1965
+  objective: Wire hardened guild command registration into governed production promotion
+  acceptance_criteria:
+    - Production promote runs already-merged
+      apps/discord-bot/scripts/deploy-commands.ts from the actual promoted bot
+      container after health/containment checks; verifies release tag and image
+      identity before registering.
+    - Canary and global Discord command registration are never invoked. Existing
+      guild-only application-identity validation, full replacement, safe error
+      reporting and manifest read-back remain authoritative.
+    - Registration failure propagates and blocks successful promotion/smoke
+      acceptance; no credentials or raw REST errors logged.
+    - Focused node:test executes real extracted remote shell against fake
+      docker, covering success, registry failure, stale release/image refusal
+      and production-only placement. New test wired into required package
+      verification without removing existing tests.
+    - Focused tests, type-check/lint/static verification, pnpm verify,
+      applicable R-level, T1 staging test:db, normal lane/scope/receipt/proof
+      gates. Named proof docs/06_status/proof/<this issue>/verification.md;
+      genuine admitted executor/model provenance.
+    - Return exact-head T1 PR for independent PM review. Record
+      [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e)/[UTV2-1963](https://linear.app/unit-talk-v2/issue/UTV2-1963/register-authoritative-discord-guild-commands-in-governed-production)
+      predecessor provenance and supersede through sanctioned path once
+      replacement is safely captured.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      PM-authorized second split of PR [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e), after [UTV2-1964](https://linear.app/unit-talk-v2/issue/UTV2-1964/harden-guild-only-discord-command-registration-before-governed-deploy)/#1706 merged at 35f9db79e85f5f67692b5ffb29ad471408c7361d and its ownership is released. T1 mechanical risk floor from deploy.yml. Clean runtime lane on current main; preserve predecessor accepted deployment behavior from commit 2c56becfe8ff1be9dfbc2313c78d637962522bda, reconcile current workflow instead of overwriting it.
+    - >-
+      Scope
+
+      * .github/workflows/deploy.yml
+
+      * package.json (root; append focused tests to existing verification
+      scripts)
+
+      * scripts/ci/deploy-discord-commands.test.ts
+
+      * Only canonical lane/proof/sync artifacts required for this issue.
+    - >-
+      Boundaries
+
+      No bot source changes, lane-policy changes, production deployment or
+      command registration, role changes, delivery activation, watched pick,
+      Whop/Stripe, SGO, Black Label, system picks or unrelated scope. Delivery
+      containment remains untouched. Actual production deployment/registry
+      acceptance require separate authorization.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1965/wire-hardened-guild-command-registration-into-governed-production
+    title: Wire hardened guild command registration into governed production promotion
+    description: |-
+      PM-authorized second split of PR [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e), after [UTV2-1964](https://linear.app/unit-talk-v2/issue/UTV2-1964/harden-guild-only-discord-command-registration-before-governed-deploy)/#1706 merged at 35f9db79e85f5f67692b5ffb29ad471408c7361d and its ownership is released. T1 mechanical risk floor from deploy.yml. Clean runtime lane on current main; preserve predecessor accepted deployment behavior from commit 2c56becfe8ff1be9dfbc2313c78d637962522bda, reconcile current workflow instead of overwriting it.
+
+      ## Scope
+
+      * .github/workflows/deploy.yml
+      * package.json (root; append focused tests to existing verification scripts)
+      * scripts/ci/deploy-discord-commands.test.ts
+      * Only canonical lane/proof/sync artifacts required for this issue.
+
+      ## Acceptance Criteria
+
+      * Production promote runs already-merged apps/discord-bot/scripts/deploy-commands.ts from the actual promoted bot container after health/containment checks; verifies release tag and image identity before registering.
+      * Canary and global Discord command registration are never invoked. Existing guild-only application-identity validation, full replacement, safe error reporting and manifest read-back remain authoritative.
+      * Registration failure propagates and blocks successful promotion/smoke acceptance; no credentials or raw REST errors logged.
+      * Focused node:test executes real extracted remote shell against fake docker, covering success, registry failure, stale release/image refusal and production-only placement. New test wired into required package verification without removing existing tests.
+      * Focused tests, type-check/lint/static verification, pnpm verify, applicable R-level, T1 staging test:db, normal lane/scope/receipt/proof gates. Named proof docs/06_status/proof/<this issue>/verification.md; genuine admitted executor/model provenance.
+      * Return exact-head T1 PR for independent PM review. Record [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e)/[UTV2-1963](https://linear.app/unit-talk-v2/issue/UTV2-1963/register-authoritative-discord-guild-commands-in-governed-production) predecessor provenance and supersede through sanctioned path once replacement is safely captured.
+
+      ## Boundaries
+
+      No bot source changes, lane-policy changes, production deployment or command registration, role changes, delivery activation, watched pick, Whop/Stripe, SGO, Black Label, system picks or unrelated scope. Delivery containment remains untouched. Actual production deployment/registry acceptance require separate authorization.
+    captured_at: 2026-10-02T12:49:45.999Z
+    description_sha256: 051667c8e72d58fe59fc9b020e5d1e0a8a4b692b50ba662be0553be184bf60c6
+  contract_hash: 976315e8a8880afa66214782991371309f186567f2121f93acbd8bfd7fa78103
