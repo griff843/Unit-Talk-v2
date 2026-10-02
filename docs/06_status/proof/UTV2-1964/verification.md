@@ -14,11 +14,12 @@ result: blocked
 - [x] Read-back verifies inventory count, unique command names, application/guild identity, and all authored nested fields while tolerating Discord-omitted defaults.
 - [x] Importing the module does not register commands, and the CLI failure path emits no raw REST error or credential.
 - [x] The implementation and focused test are byte-identical to the two accepted files in commit `2c56becfe8ff1be9dfbc2313c78d637962522bda`.
-- [ ] The new test is executable from a package/workflow command. The final gate correctly refuses it because `apps/discord-bot/package.json` is outside this lane's authorized scope and no explicit PM response has authorized the pending minimal wiring edit.
+- [x] The new test is executable from the Discord bot package command and the repository executable-wiring guard passes.
+- [ ] File Scope Lock accepts the PM-authorized `apps/discord-bot/package.json` edit. The human approval requires an external `scope-override/v1` comment bound to the eventual PR number and exact final head SHA.
 
 ## EVIDENCE:
 
-Execution SHA: `4bc8f3d6b3e9c71fcaf8a07d0d02ff2ad06ae704`
+Execution SHA: `9097cfc0b1dac0598c8cc64d99f17115494255ce`
 
 Focused suite:
 
@@ -31,41 +32,38 @@ fail 0
 Final executable-wiring result:
 
 ```text
-[executable-wiring] verdict=FAIL
-[FAIL] WIRING_TEST_UNWIRED_NEW apps/discord-bot/scripts/deploy-commands.test.ts
-test file is not reachable from any package script or workflow command
+[executable-wiring] verdict=PASS required_roots=verify
+optional-reachable=56 unwired=119 (baselined=119 new=0)
 ```
 
 R-level compliance:
 
 ```text
 Verdict: PASS
-Changed files: 6
+Changed files: 9
 Rules matched: discord-delivery
 ```
 
 ## Verification
 
 - `pnpm exec tsx --test 'apps/discord-bot/scripts/deploy-commands.test.ts'` — PASS, 8/8.
+- `pnpm --filter @unit-talk/discord-bot test` — PASS, 8/8 through the added package command.
 - `pnpm --filter @unit-talk/discord-bot type-check` — PASS.
-- Supplemental desktop verification after CLI return: `pnpm exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --esModuleInterop --skipLibCheck apps/discord-bot/scripts/deploy-commands.ts apps/discord-bot/scripts/deploy-commands.test.ts` — PASS. This verifies the script and focused test directly; it is not represented as CLI execution provenance.
-- `pnpm lint` — PASS.
-- `pnpm test` — PASS.
-- `pnpm verify:static` before the source commit — PASS, but not accepted as final evidence because the executable-wiring scan did not include the then-untracked test.
-- `pnpm verify` on committed source SHA `4bc8f3d6b3e9c71fcaf8a07d0d02ff2ad06ae704` — FAIL at `ops:automation-coverage-check`; the new test is not wired into any package or workflow command. No later stages were claimed.
+- `pnpm exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --esModuleInterop --skipLibCheck apps/discord-bot/scripts/deploy-commands.ts apps/discord-bot/scripts/deploy-commands.test.ts` — PASS under the admitted Codex CLI execution.
+- `pnpm verify:static` — PASS after the PM-authorized package wiring; this includes executable wiring, lint, repository type-check, build, full test, Smart Form verification, and command verification.
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; `discord-delivery` matched, R1 required, no artifact requirement.
+- `pnpm exec tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --branch codex/utv2-1964-guild-registration --manifest-source git --head-sha 9097cfc0b1dac0598c8cc64d99f17115494255ce` — expected FAIL only for `apps/discord-bot/package.json`; the historical two-file lock is intentionally preserved until the PM posts the exact-head external override.
 - Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (`host=unparseable`). Writable DB verification requires `xskgrzbteyqdufktjrjx` and must run through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials. This lane performs no DB operation.
 
 ## Blocker
 
-The smallest fix is a minimal test-script wiring change in
-`apps/discord-bot/package.json`. The work packet explicitly says that authorization is pending and
-forbids editing that file without an explicit response. The authoritative PR discussion contains
-no later PM authorization, so the lane cannot truthfully reach a green final gate or open a
-reviewable PR within its current file-scope lock.
+The human PM explicitly authorized the minimal `apps/discord-bot/package.json` test wiring while
+preserving the historical two-file lock. Per that decision, the remaining blocker is the external
+`scope-override/v1` PR comment, which must name the PR number and exact final head SHA. The PR is
+opened first so that immutable binding can be supplied without weakening repository policy.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: 4bc8f3d6b3e9c71fcaf8a07d0d02ff2ad06ae704
+Execution SHA: 9097cfc0b1dac0598c8cc64d99f17115494255ce
