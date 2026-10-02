@@ -1,6 +1,6 @@
 # PROOF: UTV2-1965
 
-MERGE_SHA: pending merge
+MERGE_SHA: 41d659c36cec45c622cbcaaa16fa5ae28bdb1b27
 
 Issue: UTV2-1965
 Tier: T1
@@ -83,6 +83,6 @@ This PR supersedes only the deployment/test-wiring slice from `griff843/Unit-Tal
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 41d659c36cec45c622cbcaaa16fa5ae28bdb1b27
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1707
 Execution SHA: b1fc2fe2fb3bb99beca507270200f0b832dea241
