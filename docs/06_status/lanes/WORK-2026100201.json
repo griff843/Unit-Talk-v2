@@ -11,6 +11,7 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1709",
   "files_changed": [],
   "file_scope_lock": [
+    ".ops/work/WORK-2026100201.md",
     "apps/command-center/src/components/WorkspaceSidebar.tsx",
     "apps/smart-form/app/submit/components/BrandLogo.tsx",
     "docs/03_product/brand/**"
