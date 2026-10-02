@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
@@ -10,6 +11,7 @@ import {
   assertLedgerCredentialMode,
   assertProductionIdentity,
   assertReadOnlyStatement,
+  buildPsqlArguments,
   buildPsqlEnvironment,
   isAcceptedImmutabilityTriggerState,
   parseMigrationLedger,
@@ -283,7 +285,7 @@ test('ledger-file mode refuses the management token and strips it from psql', ()
       SUPABASE_ACCESS_TOKEN: 'must-not-cross-process-boundary',
       KEEP_ME: 'yes',
     },
-    'postgresql://warehouse_reader:secret@example.invalid/postgres',
+    `postgresql://warehouse_reader.${PRODUCTION_REF}:test-only@aws-0-us-east-1.pooler.supabase.com:5432/postgres`,
   );
   assert.equal(childEnvironment['SUPABASE_ACCESS_TOKEN'], undefined);
   assert.equal(childEnvironment['KEEP_ME'], 'yes');
@@ -291,6 +293,79 @@ test('ledger-file mode refuses the management token and strips it from psql', ()
     childEnvironment['PGOPTIONS'] ?? '',
     /default_transaction_read_only=on/u,
   );
+});
+
+test('canonical pooler URI becomes explicit libpq fields, never a URI database or argv credential', () => {
+  // Synthetic credential only; never load production secrets into tests.
+  const dsn = `postgresql://warehouse_reader.${PRODUCTION_REF}:test%40only%3Avalue@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require`;
+  const child = buildPsqlEnvironment({
+    ...process.env,
+    SUPABASE_ACCESS_TOKEN: 'test-management-token',
+    UNIT_TALK_WAREHOUSE_SOURCE_DSN: dsn,
+    PGHOST: '/var/run/postgresql',
+    PGHOSTADDR: '127.0.0.1',
+    PGSERVICE: 'untrusted-connection',
+    PGSERVICEFILE: '/untrusted/service.conf',
+    PGOPTIONS: '-c default_transaction_read_only=off',
+    PGSSLMODE: 'disable',
+  }, dsn);
+  assert.equal(child['PGHOST'], 'aws-0-us-east-1.pooler.supabase.com');
+  assert.equal(child['PGPORT'], '5432');
+  assert.equal(child['PGUSER'], `warehouse_reader.${PRODUCTION_REF}`);
+  assert.equal(child['PGDATABASE'], 'postgres');
+  assert.equal(child['PGPASSWORD'], 'test@only:value');
+  assert.equal(child['PGSSLMODE'], 'require');
+  assert.equal(child['PGOPTIONS'], '-c default_transaction_read_only=on -c statement_timeout=15000');
+  for (const key of ['SUPABASE_ACCESS_TOKEN', 'UNIT_TALK_WAREHOUSE_SOURCE_DSN', 'PGHOSTADDR', 'PGSERVICE', 'PGSERVICEFILE']) {
+    assert.equal(child[key], undefined);
+  }
+  const args = buildPsqlArguments();
+  assert.equal(args.some((arg) => arg.includes(dsn) || arg.includes(child['PGPASSWORD'] as string)), false);
+  assert.ok(args.includes('--single-transaction'));
+  assert.ok(args.at(-1)?.startsWith(`${READ_ONLY_PREAMBLE}; ${READ_ONLY_STATE_SQL};`));
+
+  // A real child boundary, without a DB connection: emit booleans only, never
+  // passwords or a full env dump. This reproduces the production env handoff.
+  const observed = JSON.parse(execFileSync(process.execPath, ['-e', `
+    console.log(JSON.stringify({
+      host: process.env.PGHOST === 'aws-0-us-east-1.pooler.supabase.com',
+      database: process.env.PGDATABASE === 'postgres',
+      reader: process.env.PGUSER === 'warehouse_reader.${PRODUCTION_REF}',
+      password: process.env.PGPASSWORD === 'test@only:value',
+      tokenStripped: !process.env.SUPABASE_ACCESS_TOKEN,
+      dsnStripped: !process.env.UNIT_TALK_WAREHOUSE_SOURCE_DSN,
+      readOnly: process.env.PGOPTIONS === '-c default_transaction_read_only=on -c statement_timeout=15000'
+    }));
+  `], { env: child, encoding: 'utf8' })) as Record<string, boolean>;
+  assert.ok(Object.values(observed).every((value) => value));
+});
+
+test('reader decomposition refuses malformed, noncanonical or connection-override DSNs before psql', () => {
+  const prefix = `postgresql://warehouse_reader.${PRODUCTION_REF}:test-only@aws-0-us-east-1.pooler.supabase.com:5432`;
+  for (const dsn of [
+    'not-a-url',
+    `postgresql://postgres.${PRODUCTION_REF}:test-only@aws-0-us-east-1.pooler.supabase.com:5432/postgres`,
+    `postgresql://warehouse_reader.${STAGING_REF}:test-only@aws-0-us-east-1.pooler.supabase.com:5432/postgres`,
+    `postgresql://warehouse_reader.${PRODUCTION_REF}:test-only@untrusted.invalid:5432/postgres`,
+    `${prefix}/`,
+    `${prefix}/postgres?sslmode=disable`,
+    `${prefix}/postgres?sslmode=require&sslmode=disable`,
+    `${prefix}/postgres?host=untrusted.invalid`,
+    `${prefix}/postgres?options=-c%20default_transaction_read_only=off`,
+    `${prefix}/postgres#ignored`,
+    `${prefix}/post%ZZgres`,
+    `${prefix}/post%00gres`,
+  ]) {
+    assert.throws(() => {
+      assertProductionIdentity(`https://${PRODUCTION_REF}.supabase.co`, dsn);
+      buildPsqlEnvironment({}, dsn);
+    });
+  }
+  const direct = `postgresql://warehouse_reader:test-only@db.${PRODUCTION_REF}.supabase.co:5432/warehouse%5Ftest?sslmode=verify-full`;
+  const child = buildPsqlEnvironment({}, direct);
+  assert.equal(child['PGDATABASE'], 'warehouse_test');
+  assert.equal(child['PGSSLMODE'], 'verify-full');
+  assert.equal(buildPsqlEnvironment({}, `${prefix}/postgres`)['PGSSLMODE'], 'require');
 });
 
 test('ledger evidence requires exact local/remote alignment and the applied migration', () => {
@@ -308,6 +383,23 @@ test('ledger evidence requires exact local/remote alignment and the applied migr
     versions,
   );
   assert.equal(missingRemote.aligned, false);
+});
+
+test('production Markdown ledger shape passes only with exact numeric version sets', () => {
+  const versions = ['00000000000000', '202603200001', EXPECTED_MIGRATION_VERSION];
+  const header = ' Local | Remote | Time (UTC)\n ----------|----------|----------\n';
+  const rows = versions.map((version) => `  \`${version}\`  | \`${version}\` | \`2026-09-28 13:17:14\``).join('\n');
+  const ledger = parseMigrationLedger(header + rows, EXPECTED_MIGRATION_VERSION, versions);
+  assert.equal(ledger.aligned, true);
+  assert.ok(ledger.remote.includes('20260928131714'));
+  for (const badCell of ['`arbitrary text`', '``20260928131714``', '`20260928131714', '20260928131714`', '` 20260928131714 `', '`123`', '`202609281317140`']) {
+    assert.equal(parseMigrationLedger(`${header}${rows}\n${badCell} | ${badCell} | now`, EXPECTED_MIGRATION_VERSION, versions).aligned, false);
+  }
+  for (const remote of ['', '`20260928131713`', '`nonnumeric`']) {
+    const changedRows = rows.replace(/`20260928131714`\s+\|\s+`20260928131714`/u, `\`20260928131714\` | ${remote}`);
+    assert.equal(parseMigrationLedger(header + changedRows, EXPECTED_MIGRATION_VERSION, versions).aligned, false);
+  }
+  assert.equal(parseMigrationLedger(header + rows, EXPECTED_MIGRATION_VERSION, versions.slice(0, 2)).aligned, false);
 });
 
 test('staging, mutable, or non-authoritative receipts cannot substitute for production truth', () => {
