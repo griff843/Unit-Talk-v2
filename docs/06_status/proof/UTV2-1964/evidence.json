@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1964",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "blocked",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4bc8f3d6b3e9c71fcaf8a07d0d02ff2ad06ae704",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "fail",
+    "measured_against_sha": "4bc8f3d6b3e9c71fcaf8a07d0d02ff2ad06ae704",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test 'apps/discord-bot/scripts/deploy-commands.test.ts'",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm --filter @unit-talk/discord-bot type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "fail",
+        "note": "ops:automation-coverage-check reports WIRING_TEST_UNWIRED_NEW for apps/discord-bot/scripts/deploy-commands.test.ts. The minimal apps/discord-bot/package.json wiring edit is outside the authorized scope and pending explicit PM response."
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Matched discord-delivery; R1 required with no artifact requirement."
+      }
+    ],
+    "live_db": {
+      "status": "blocked_deferred",
+      "note": "Target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx through the staging-ci GitHub environment with CI_SUPABASE_* credentials. No DB behavior changed or ran in this lane."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "The focused test exercises the registration policy against an in-memory fake Discord REST client. No Discord API or production registration was contacted."
+  },
+  "known_gaps": [
+    "The new focused test is not reachable from a package or workflow command. The final executable-wiring gate correctly fails until PM authorizes the minimal apps/discord-bot/package.json test-script edit or reshapes the lane scope.",
+    "No production guild registration was attempted or authorized.",
+    "Writable live-DB proof is deferred to sanctioned staging CI and is unrelated to this DB-free source change."
+  ]
+}
