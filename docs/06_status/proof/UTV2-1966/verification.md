@@ -2,27 +2,47 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
+Measured on implementation source b56870d86a69a54aad7796c9d075d3810debade5.
 
 Issue: UTV2-1966
 Tier: T2
-result: not_run
+result: pass
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] Canonical identity validation remains unchanged and precedes psql execution.
+- [x] Explicit libpq fields preserve reader/pooler/database identity, secure SSL and mandatory read-only PGOPTIONS.
+- [x] Credentials remain out of argv; management token, original DSN and inherited libpq overrides do not cross the psql boundary.
+- [x] Exact numeric repository/local/remote ledger alignment remains mandatory; one backtick pair and surrounding whitespace are accepted.
+- [x] Existing membership, trigger, privilege, transaction and immutable receipt assertions remain intact.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+```text
+Focused verifier + credential guard: tests 51, pass 51, fail 0
+Staging enforcement: tests 38, pass 38, fail 0
+Full operations suite: tests 3564, pass 3564, fail 0
+pnpm verify: static chain passed (lint, type-check, build, all test suites,
+dedicated production-verifier suite, Smart Form verification, command verification).
+Final local live-DB phase: REFUSED before connection; host=127.0.0.1,
+expected staging=xskgrzbteyqdufktjrjx. Full command exit=1, not a live-DB PASS.
+Exact-head protected staging CI remains required before merge.
+R-level: PASS; no matching rules.
+```
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+- `pnpm exec tsx --test scripts/ci/production-post-migration-verify.test.ts scripts/ci/workflow-production-credential-guard.test.ts`: PASS 51/51.
+- `pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts`: PASS 38/38.
+- `pnpm verify`: static PASS; local live-DB fail-closed refusal as documented above. Full log: `.out/utv2-1966-verify.log` (local ignored).
+- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS.
+- `git diff --check`: PASS.
+
+No production PASS, mutation or closeout is claimed by this static repair proof.
+Fresh trusted-main production read-only verification and separate Live Schema Parity remain mandatory after merge.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
+Execution SHA: b56870d86a69a54aad7796c9d075d3810debade5

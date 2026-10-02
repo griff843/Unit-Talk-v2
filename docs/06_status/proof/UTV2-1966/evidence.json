@@ -1,0 +1,29 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1966",
+  "tier": "T2",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b56870d86a69a54aad7796c9d075d3810debade5",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "commands": [
+      "pnpm exec tsx --test scripts/ci/production-post-migration-verify.test.ts scripts/ci/workflow-production-credential-guard.test.ts",
+      "pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "pnpm verify"
+    ],
+    "focused_tests": { "tests": 89, "pass": 89, "fail": 0 },
+    "r_level": "PASS: no matching R-level rules",
+    "verify_static": "PASS: all static phases completed",
+    "operations_tests": { "tests": 3564, "pass": 3564, "fail": 0 },
+    "full_verify": "exit 1 only at local staging identity guard: 127.0.0.1 refused before connection; exact-head protected staging CI required before merge",
+    "production_verification": "not_run; fresh trusted-main verifier and separate Live Schema Parity required after merge"
+  }
+}
