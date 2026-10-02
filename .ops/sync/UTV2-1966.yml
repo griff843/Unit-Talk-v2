@@ -1,0 +1,116 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1966
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1966
+  objective: Repair production warehouse verifier libpq connection and CLI ledger parsing
+  acceptance_criteria:
+    - Parse the identity-validated PostgreSQL URI into libpq child env PGHOST,
+      PGPORT, PGUSER, PGPASSWORD, PGDATABASE from the URL path, and applicable
+      secure SSL parameters. No DSN/password in argv/logs/fixtures/proof.
+      Preserve mandatory PGOPTIONS read-only and statement timeout. Remove
+      SUPABASE_ACCESS_TOKEN and original UNIT_TALK_WAREHOUSE_SOURCE_DSN from
+      child env; refuse malformed/noncanonical DSNs before psql. Do not weaken
+      assertProductionIdentity or substitute a broader DB identity.
+    - Parse ledger version cells allowing whitespace and exactly one matching
+      pair of Markdown backticks. Require exactly 12–14 numeric digits after
+      normalization. Preserve exact equality of repository, CLI Local and CLI
+      Remote sets and require 20260928131714. Arbitrary malformed text must
+      refuse, not silently align.
+    - Regression coverage for canonical pooler decomposition, decoded
+      username/password, preserved production host, secret-free argv, stripped
+      broad token/source DSN, enforced read-only options, malformed/noncanonical
+      input refusal; bare and actual-production backtick ledger formats,
+      expected version detection, missing/mismatched Remote and malformed
+      wrapped text refusal.
+    - Focused tests directly executable via tsx --test; full pnpm verify and
+      applicable R-level; exact-head CI, scope, lane, proof and review/merge
+      controls. No gate bypass. Named proof
+      docs/06_status/proof/<issue>/verification.md.
+    - After normal merge resume
+      [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1)
+      verification with fresh current-main production read-only verifier,
+      independently inspect immutable receipt, then authoritative Live Schema
+      Parity PASS and governed closeout. This repair does not itself assert
+      production acceptance.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      PM-approved bounded repair after production verification run 37007294364 /
+      job 110838466433 at 5051245de0b4d92d59caffbe464fb09b419ab120 failed before
+      any production connection or mutation. Objective: make the existing
+      read-only warehouse verifier reliably use the validated canonical reader
+      DSN and current Supabase CLI ledger format without weakening any
+      assertion.
+    - >-
+      Scope
+
+      * scripts/ci/production-post-migration-verify.ts
+
+      * scripts/ci/production-post-migration-verify.test.ts
+
+      * Canonical lane/sync/proof metadata for this issue only. Existing
+      dedicated test command already wires this test; no package change
+      expected.
+    - >-
+      Boundaries
+
+      No migration/schema change, production DDL, retention
+      plan/execution/recovery/canary, pruning, archive/row deletion, role or
+      privilege change, credential rotation/reset, broader credentials, provider
+      activation, containment or Discord/member-delivery changes. Do not change
+      existing privilege/schema/read-only assertions or weaken exact ledger
+      alignment.
+    - >-
+      Tier
+
+      Mechanical path classifier minimum T3 with no matched paths; selected T2
+      for changed verification-wrapper I/O behavior (bounded tooling repair),
+      not a security-posture or warehouse-retention contract change. PM
+      authorized implementation and normal governed merge in the current
+      session; binding review artifacts remain required.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1966/repair-production-warehouse-verifier-libpq-connection-and-cli-ledger
+    title: Repair production warehouse verifier libpq connection and CLI ledger
+      parsing
+    description: |-
+      PM-approved bounded repair after production verification run 37007294364 / job 110838466433 at 5051245de0b4d92d59caffbe464fb09b419ab120 failed before any production connection or mutation. Objective: make the existing read-only warehouse verifier reliably use the validated canonical reader DSN and current Supabase CLI ledger format without weakening any assertion.
+
+      ## Scope
+
+      * scripts/ci/production-post-migration-verify.ts
+      * scripts/ci/production-post-migration-verify.test.ts
+      * Canonical lane/sync/proof metadata for this issue only. Existing dedicated test command already wires this test; no package change expected.
+
+      ## Acceptance Criteria
+
+      * Parse the identity-validated PostgreSQL URI into libpq child env PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE from the URL path, and applicable secure SSL parameters. No DSN/password in argv/logs/fixtures/proof. Preserve mandatory PGOPTIONS read-only and statement timeout. Remove SUPABASE_ACCESS_TOKEN and original UNIT_TALK_WAREHOUSE_SOURCE_DSN from child env; refuse malformed/noncanonical DSNs before psql. Do not weaken assertProductionIdentity or substitute a broader DB identity.
+      * Parse ledger version cells allowing whitespace and exactly one matching pair of Markdown backticks. Require exactly 12–14 numeric digits after normalization. Preserve exact equality of repository, CLI Local and CLI Remote sets and require 20260928131714. Arbitrary malformed text must refuse, not silently align.
+      * Regression coverage for canonical pooler decomposition, decoded username/password, preserved production host, secret-free argv, stripped broad token/source DSN, enforced read-only options, malformed/noncanonical input refusal; bare and actual-production backtick ledger formats, expected version detection, missing/mismatched Remote and malformed wrapped text refusal.
+      * Focused tests directly executable via tsx --test; full pnpm verify and applicable R-level; exact-head CI, scope, lane, proof and review/merge controls. No gate bypass. Named proof docs/06_status/proof/<issue>/verification.md.
+      * After normal merge resume [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) verification with fresh current-main production read-only verifier, independently inspect immutable receipt, then authoritative Live Schema Parity PASS and governed closeout. This repair does not itself assert production acceptance.
+
+      ## Boundaries
+
+      No migration/schema change, production DDL, retention plan/execution/recovery/canary, pruning, archive/row deletion, role or privilege change, credential rotation/reset, broader credentials, provider activation, containment or Discord/member-delivery changes. Do not change existing privilege/schema/read-only assertions or weaken exact ledger alignment.
+
+      ## Tier
+
+      Mechanical path classifier minimum T3 with no matched paths; selected T2 for changed verification-wrapper I/O behavior (bounded tooling repair), not a security-posture or warehouse-retention contract change. PM authorized implementation and normal governed merge in the current session; binding review artifacts remain required.
+    captured_at: 2026-10-02T12:57:08.789Z
+    description_sha256: 10489ba1524b8151325fc2a9c192716ffc12d51e8f71c96268891447ead76376
+  contract_hash: 09bee5a2ecc33b29d300b3f0059cefc11e89e8e7195be276bfe8bee33d638750
