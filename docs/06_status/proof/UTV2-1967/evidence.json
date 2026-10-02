@@ -33,8 +33,8 @@
     }
   },
   "live_db_verification": {
-    "result": "PENDING_STAGING_CI",
+    "authority": "Required exact-head verify context and its independently validated same-run ci-db-proof-receipt/v2 artifact",
     "local_result": "REFUSED_UNIDENTIFIED_LOCAL_TARGET",
-    "note": "Required full verify/staging proof remains pending; this bundle does not claim the refused local live check passed."
+    "note": "The editable static proof bundle is not live-DB authority. Exact-head CI receipt validation enforces that requirement; this bundle does not claim the refused local live check passed."
   }
 }
