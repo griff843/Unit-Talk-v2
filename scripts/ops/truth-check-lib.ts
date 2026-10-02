@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { hasCanonicalWorkFollowUp } from './historical-closeout.js';
+import { hasCanonicalWorkFollowUp, type WorkFollowUpPr } from './historical-closeout.js';
 
 import { parseScopeOverrideComment } from '../ci/scope-override-comment-parser.ts';
 
@@ -2852,6 +2852,7 @@ export function findPostMergeTouches(input: {
   allowSameIssueCommits?: boolean;
   gitCommand?: typeof git;
   showCommit?: typeof gitShowCommit;
+  workFollowUpPr?: (number: number) => WorkFollowUpPr | null;
 }): string[] {
   const gitCommand = input.gitCommand ?? git;
   const logArgs = ['log', '--format=%H%x09%s%x09%cI', 'main', '--max-count=200'];
@@ -2900,7 +2901,7 @@ export function findPostMergeTouches(input: {
     }
     const referencedIssues = (subject.match(/(?:UTV2|UNI|WORK)-\d+/gi) ?? []).filter(candidate =>
       !candidate.toUpperCase().startsWith('WORK-') || hasCanonicalWorkFollowUp(
-        candidate.toUpperCase(), sha, touchedFiles.filter(file => input.filesChanged.includes(file)), gitCommand,
+        candidate.toUpperCase(), sha, touchedFiles.filter(file => input.filesChanged.includes(file)), gitCommand, input.workFollowUpPr,
       ),
     );
     if (

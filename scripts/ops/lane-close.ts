@@ -800,10 +800,13 @@ export function repairMergedLaneManifest(
   // A lost ephemeral file is not permission to manufacture a token. Terminal
   // schema validation preserves the original canonical path; the executable
   // closeout path independently recovers its immutable introduction authority.
-  validatePreflightTokenPathValue(next.preflight_token);
+  const legacyTerminalToken = manifest.status === 'merged' && manifest.preflight_token === 'dispatch-auto';
+  // Preserve only already-persisted terminal compatibility. Never create this
+  // sentinel or let an active/new lane obtain it through merge repair.
+  if (!legacyTerminalToken) validatePreflightTokenPathValue(next.preflight_token);
   const repoRoot = options.repoRoot ?? process.cwd();
   let preflightRepair = { reason: 'original canonical preflight path preserved' };
-  if (options.verifyHistoricalPreflight && !fs.existsSync(path.resolve(repoRoot, next.preflight_token))) {
+  if (!legacyTerminalToken && options.verifyHistoricalPreflight && !fs.existsSync(path.resolve(repoRoot, next.preflight_token))) {
     const recovered = recoverHistoricalMergedPreflight(next, pr, repoRoot);
     preflightRepair = { reason: `immutable historical preflight verified at ${recovered.source_commit}; no token recreated` };
     recordChanged(changedFields, manifest.t1_live_db_precondition, next.t1_live_db_precondition, 't1_live_db_precondition');

@@ -95,8 +95,37 @@ test('UTV2-1967: historical recovery deepens authoritative PR history before imm
     const fetch = commands.findIndex(args => args[0] === 'fetch');
     const log = commands.findIndex(args => args[0] === 'log');
     assert.ok(fetch >= 0 && log > fetch);
-    assert.deepEqual(commands[fetch], ['fetch', '--no-tags', '--unshallow', 'origin', 'refs/pull/1001/head']);
+    assert.deepEqual(commands[fetch], ['fetch', '--no-tags', '--unshallow', 'origin', 'refs/heads/main:refs/remotes/origin/main']);
+    assert.deepEqual(commands[fetch + 1], ['fetch', '--no-tags', 'origin', 'refs/pull/1001/head']);
     assert.equal(manifest.t1_live_db_precondition, 'deferred_to_ci');
+  });
+});
+
+test('UTV2-1967: depth-one clone recovers historical merge and original PR evidence before ancestry check', () => {
+  withHistoricalPreflight({}, (manifest, pr, source) => {
+    execFileSync('git', ['update-ref', 'refs/pull/1001/head', pr.headSha!], { cwd: source, stdio: 'pipe' });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'historical-shallow-'));
+    const clone = path.join(root, 'clone');
+    try {
+      execFileSync('git', ['clone', '--depth=1', '--branch=main', `file://${source}`, clone], { stdio: 'pipe' });
+      assert.throws(() => execFileSync('git', ['cat-file', '-e', `${pr.headSha}^{commit}`], { cwd: clone, stdio: 'pipe' }));
+      const result = recoverHistoricalMergedPreflight(manifest, pr, clone);
+      assert.equal(result.token_recreated, false);
+      assert.equal(manifest.t1_live_db_precondition, 'deferred_to_ci');
+      assert.equal(execFileSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: clone, encoding: 'utf8' }).trim(), 'false');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
+test('UTV2-1967: existing legacy merged sentinel remains compatible but active sentinel cannot be admitted', () => {
+  withTempRepairState(({ repoRoot, artifactRoot }) => {
+    const options = { repoRoot, artifactRoot, fetchPr: () => ({
+      url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001', state: 'merged', merged: true, mergeSha: 'abc123',
+    }) };
+    const merged = createManifest({ preflight_token: 'dispatch-auto' });
+    assert.equal(repairMergedLaneManifest(merged, options).manifest.preflight_token, 'dispatch-auto');
+    assert.throws(() => repairMergedLaneManifest({ ...merged, status: 'in_review' }, options), /not dispatch-auto/);
+    assert.equal(merged.t1_live_db_precondition, undefined);
   });
 });
 
