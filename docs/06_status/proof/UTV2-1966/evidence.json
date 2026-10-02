@@ -7,12 +7,40 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b56870d86a69a54aad7796c9d075d3810debade5",
+    "verified_source_sha": "6e0c2257e7741749893df664853c083e08d14b71",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
-    "status": "pending",
+    "status": "pass",
+    "implementation_source_sha": "b56870d86a69a54aad7796c9d075d3810debade5",
+    "ci": {
+      "result": "PASS",
+      "repository": "griff843/Unit-Talk-v2",
+      "workflow": "CI",
+      "workflow_path": ".github/workflows/ci.yml",
+      "event": "pull_request",
+      "source_sha": "6e0c2257e7741749893df664853c083e08d14b71",
+      "run": 37013552841,
+      "run_attempt": 1,
+      "job": 110862716787,
+      "job_name": "verify",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/37013552841/job/110862716787",
+      "conclusion": "success"
+    },
+    "writable_db_staging": {
+      "result": "PASS",
+      "run": 37013552841,
+      "job": 110859100024,
+      "source_sha": "6e0c2257e7741749893df664853c083e08d14b71",
+      "project_ref": "xskgrzbteyqdufktjrjx",
+      "artifact_id": 11229955764,
+      "artifact_name": "utv2-1630-db-proof-receipt-37013552841-1",
+      "artifact_digest": "sha256:a3fe4f7bb8fae9ee8af09c7fa946caae64374462b5e9018b848fe584249c33bb",
+      "receipt_sha256": "38bdc05830e2167a2b344837c746746febe9e0602502ae1d8787059b204ea295",
+      "smoke_tests": { "tests": 7, "pass": 7, "fail": 0 },
+      "live_proof_suites": "PASS: governed producer step completed successfully"
+    },
     "commands": [
       "pnpm exec tsx --test scripts/ci/production-post-migration-verify.test.ts scripts/ci/workflow-production-credential-guard.test.ts",
       "pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts",
@@ -23,7 +51,7 @@
     "r_level": "PASS: no matching R-level rules",
     "verify_static": "PASS: all static phases completed",
     "operations_tests": { "tests": 3564, "pass": 3564, "fail": 0 },
-    "full_verify": "exit 1 only at local staging identity guard: 127.0.0.1 refused before connection; exact-head protected staging CI required before merge",
+    "full_verify": "Authoritative CI verify and staging producer PASS at recorded source SHA. Local invocation still correctly refused 127.0.0.1 before connection. Any proof-only descendant PR head must independently pass required CI before merge.",
     "production_verification": "not_run; fresh trusted-main verifier and separate Live Schema Parity required after merge"
   }
 }

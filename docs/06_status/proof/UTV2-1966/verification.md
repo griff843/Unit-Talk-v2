@@ -6,10 +6,12 @@ Measured on implementation source b56870d86a69a54aad7796c9d075d3810debade5.
 
 Issue: UTV2-1966
 Tier: T2
-result: pending
+result: pass
 
-Aggregate required verification remains pending until authoritative exact-head CI passes.
-The successful local static phases below do not override the refused final local live-DB gate.
+Aggregate PASS is bound to authoritative CI source 6e0c2257e7741749893df664853c083e08d14b71.
+Local static success does not override the local live-DB refusal. CI independently
+satisfied the required staging and static gates; any later proof-only PR head must
+still pass its own required checks before merge.
 
 ## ASSERTIONS:
 
@@ -29,7 +31,12 @@ pnpm verify: static chain passed (lint, type-check, build, all test suites,
 dedicated production-verifier suite, Smart Form verification, command verification).
 Final local live-DB phase: REFUSED before connection; host=127.0.0.1,
 expected staging=xskgrzbteyqdufktjrjx. Full command exit=1, not a live-DB PASS.
-Exact-head protected staging CI remains required before merge.
+Authoritative CI run 37013552841, attempt 1, source 6e0c2257e7741749893df664853c083e08d14b71:
+verify job 110862716787: completed / success
+staging producer job 110859100024: completed / success
+staging smoke: 7/7; all live proof suites: success
+artifact 11229955764: utv2-1630-db-proof-receipt-37013552841-1
+receipt SHA256: 38bdc05830e2167a2b344837c746746febe9e0602502ae1d8787059b204ea295
 R-level: PASS; no matching rules.
 ```
 
@@ -50,4 +57,4 @@ Fresh trusted-main production read-only verification and separate Live Schema Pa
 
 Merge SHA: pending merge
 PR: pending
-Execution SHA: b56870d86a69a54aad7796c9d075d3810debade5
+Execution SHA: 6e0c2257e7741749893df664853c083e08d14b71
