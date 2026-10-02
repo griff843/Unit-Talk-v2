@@ -19,5 +19,5 @@ Provenance: this is the PM-authorized replacement for the deployment slice of
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 41d659c36cec45c622cbcaaa16fa5ae28bdb1b27
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1707

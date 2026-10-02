@@ -13,5 +13,11 @@
   "prompt_bytes": 13528,
   "estimated_prompt_tokens": 3382,
   "wall_time_ms": 1777562,
-  "generated_at": "2026-10-02T16:01:37.524Z"
+  "generated_at": "2026-10-02T16:01:37.524Z",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "41d659c36cec45c622cbcaaa16fa5ae28bdb1b27",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1707",
+    "bound_at": "2026-10-02T16:52:43.243Z"
+  }
 }
