@@ -1,0 +1,194 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100201",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "8ee3aa8d43f82bfe459e54e2713c45612add9344",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "application_builds": "PASS",
+    "application_type_checks": "PASS",
+    "branding_browser_checks": "PASS (9 cases)",
+    "focused_operator_tests": "PASS (16 tests)",
+    "ci_verified_head": "5838fa5de72997872b57660f215c8e33a50f7667",
+    "ci_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/37022482726",
+    "ci_static_verification": "PASS",
+    "ci_authorized_staging_proof": "PASS",
+    "current_head_requirement": "CI must independently pass on the current PR HEAD before merge."
+  },
+  "schema": "branding-qa/v1",
+  "status": "PASS",
+  "work_id": "WORK-2026100201",
+  "head_sha": "8ee3aa8d43f82bfe459e54e2713c45612add9344",
+  "verification": "Actual components rendered in an isolated React SSR harness with built application CSS; no service workflows exercised. OperatorLink is stubbed because navigation is outside the branding scope.",
+  "asset_files_verified_byte_identical": 26,
+  "cases": [
+    {
+      "surface": "smart-form",
+      "width": 375,
+      "status": "PASS",
+      "screenshot": "smart-form-375.png",
+      "bounds": [
+        {
+          "x": 24,
+          "y": 24,
+          "width": 42,
+          "height": 42
+        },
+        {
+          "x": 76,
+          "y": 30,
+          "width": 140,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "surface": "command-center",
+      "width": 375,
+      "status": "PASS",
+      "screenshot": "command-center-375.png",
+      "bounds": [
+        {
+          "x": 12,
+          "y": 16.25,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "x": 64,
+          "y": 16,
+          "width": 120,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "surface": "command-center-collapsed",
+      "width": 375,
+      "status": "PASS",
+      "screenshot": "command-center-collapsed-375.png",
+      "bounds": [
+        {
+          "x": 97.5,
+          "y": 16,
+          "width": 40,
+          "height": 40
+        }
+      ]
+    },
+    {
+      "surface": "smart-form",
+      "width": 768,
+      "status": "PASS",
+      "screenshot": "smart-form-768.png",
+      "bounds": [
+        {
+          "x": 24,
+          "y": 24,
+          "width": 42,
+          "height": 42
+        },
+        {
+          "x": 76,
+          "y": 30,
+          "width": 140,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "surface": "command-center",
+      "width": 768,
+      "status": "PASS",
+      "screenshot": "command-center-768.png",
+      "bounds": [
+        {
+          "x": 12,
+          "y": 24.5,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "x": 64,
+          "y": 16,
+          "width": 111,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "surface": "command-center-collapsed",
+      "width": 768,
+      "status": "PASS",
+      "screenshot": "command-center-collapsed-768.png",
+      "bounds": [
+        {
+          "x": 12,
+          "y": 16,
+          "width": 9,
+          "height": 40
+        }
+      ]
+    },
+    {
+      "surface": "smart-form",
+      "width": 1440,
+      "status": "PASS",
+      "screenshot": "smart-form-1440.png",
+      "bounds": [
+        {
+          "x": 24,
+          "y": 24,
+          "width": 42,
+          "height": 42
+        },
+        {
+          "x": 76,
+          "y": 30,
+          "width": 140,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "surface": "command-center",
+      "width": 1440,
+      "status": "PASS",
+      "screenshot": "command-center-1440.png",
+      "bounds": [
+        {
+          "x": 12,
+          "y": 24.5,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "x": 64,
+          "y": 16,
+          "width": 111,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "surface": "command-center-collapsed",
+      "width": 1440,
+      "status": "PASS",
+      "screenshot": "command-center-collapsed-1440.png",
+      "bounds": [
+        {
+          "x": 12,
+          "y": 16,
+          "width": 9,
+          "height": 40
+        }
+      ]
+    }
+  ]
+}

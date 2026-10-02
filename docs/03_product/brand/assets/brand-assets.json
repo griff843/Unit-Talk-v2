@@ -1,0 +1,29 @@
+{
+  "brand": "Unit Talk",
+  "version": "2026-10-02-c",
+  "status": "canonical-current",
+  "monogram_direction": "06-soft-geometry",
+  "wordmark_direction": "C-custom-geometric",
+  "master_colors": {
+    "black": "#000000",
+    "white": "#FFFFFF"
+  },
+  "canonical": {
+    "mark_dark": "unit-talk-mark.svg",
+    "mark_light": "unit-talk-mark-white.svg",
+    "wordmark_dark": "unit-talk-wordmark.svg",
+    "wordmark_light": "unit-talk-wordmark-white.svg",
+    "horizontal_dark": "unit-talk-horizontal.svg",
+    "horizontal_light": "unit-talk-horizontal-white.svg",
+    "stacked_dark": "unit-talk-stacked.svg",
+    "stacked_light": "unit-talk-stacked-white.svg",
+    "icon_dark": "unit-talk-icon-dark.svg",
+    "discord": "unit-talk-discord.svg"
+  },
+  "rules": {
+    "tagline_in_master": false,
+    "geometry_may_be_reinterpreted": false,
+    "color_treatments_may_change_geometry": false,
+    "wordmark_requires_font": false
+  }
+}

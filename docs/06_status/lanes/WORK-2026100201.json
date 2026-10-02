@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100201",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100201-canonical-branding",
+  "branch": "codex/work-2026100201-canonical-branding",
+  "base_branch": "main",
+  "commit_sha": "8ee3aa8d43f82bfe459e54e2713c45612add9344",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1709",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/src/components/WorkspaceSidebar.tsx",
+    "apps/smart-form/app/submit/components/BrandLogo.tsx",
+    "docs/03_product/brand/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026100201/diff-summary.md",
+    "docs/06_status/proof/WORK-2026100201/evidence.json",
+    "docs/06_status/proof/WORK-2026100201/verification.md",
+    "docs/06_status/proof/WORK-2026100201/model-routing.json"
+  ],
+  "status": "blocked",
+  "started_at": "2026-10-02T14:16:41.810Z",
+  "heartbeat_at": "2026-10-02T14:36:02.619Z",
+  "closed_at": null,
+  "blocked_by": [
+    "staging-db-verification"
+  ],
+  "preflight_token": ".out/ops/preflight/codex/work-2026100201-canonical-branding.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-luna-low",
+    "model": "gpt-5.6-luna",
+    "reasoning_effort": "low",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100201-canonical-branding",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

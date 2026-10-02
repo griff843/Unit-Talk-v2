@@ -1,0 +1,10 @@
+{
+  "issue_id": "WORK-2026100201",
+  "execution_environment": "Codex desktop interactive session",
+  "actual_execution_model": null,
+  "codex_cli_version": null,
+  "codex_exit_code": null,
+  "admission_profile": "codex-luna-low",
+  "admission_policy_version": "2.0.0",
+  "note": "The profile is lane admission metadata. This work was performed in the existing desktop session, not launched through codex-exec; no claim is made that the admission profile was the execution model."
+}
