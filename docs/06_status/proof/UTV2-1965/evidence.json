@@ -7,13 +7,13 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f8fa8d4b49da78e8ca801390aa785c8c85410d50",
+    "verified_source_sha": "b1fc2fe2fb3bb99beca507270200f0b832dea241",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "measured_against_sha": "f8fa8d4b49da78e8ca801390aa785c8c85410d50",
+    "measured_against_sha": "b1fc2fe2fb3bb99beca507270200f0b832dea241",
     "commands": [
       {
         "command": "pnpm exec tsx --test scripts/ci/deploy-discord-commands.test.ts",
@@ -35,7 +35,7 @@
         "command": "pnpm verify:static",
         "exit_code": 0,
         "result": "pass",
-        "note": "Lane sync, system alignment, executable wiring, lint, type-check, build, 3,569-test ops suite, remaining repository suites, local T1 proofs, Smart Form verification, command-manifest verification, and migration checks passed."
+        "note": "Lane sync, system alignment, executable wiring, lint, type-check, build, full repository test suite, local T1 proofs, Smart Form verification, command-manifest verification, and migration checks passed."
       },
       {
         "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -52,17 +52,17 @@
     },
     "hosted_ci_proof": {
       "status": "pass",
-      "source_sha": "f8fa8d4b49da78e8ca801390aa785c8c85410d50",
-      "receipt_merge_sha": "7feb42fe67fe0b9ba4fdfe761d5f1210f0927087",
-      "run_id": 37019165731,
-      "db_job_id": 110878301905,
-      "verify_job_id": 110884029868,
-      "receipt_artifact_id": 11233730404,
+      "source_sha": "b1fc2fe2fb3bb99beca507270200f0b832dea241",
+      "receipt_merge_sha": "b68dd464b5c574e2f48eba56dab56168f25c04e0",
+      "run_id": 37028592696,
+      "db_job_id": 110909890025,
+      "verify_job_id": 110914062058,
+      "receipt_artifact_id": 11236897489,
       "command": "pnpm test:db",
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "note": "The sanctioned exact-head CI job asserted the approved project, completed the writable DB and T1 live proof suites, uploaded a same-run receipt, and the dependent verify job passed static and Command Center checks and validated that receipt."
+      "note": "The fresh source-head CI job asserted the approved staging project, completed writable DB proof 7/7 and all T1 live proof suites, uploaded a same-run receipt, and the dependent verify job passed static and Command Center checks and validated that receipt."
     }
   },
   "runtime_proof": {
@@ -72,7 +72,7 @@
       {
         "name": "production guild identity preflight",
         "method": "Execute the exact production verify-step shell with valid, missing, placeholder, malformed, and whitespace-wrapped guild IDs; inspect workflow dependencies and shell mutations.",
-        "result": "only the valid 17-20 digit snowflake exits 0; all invalid values exit nonzero before canary or promote and the shell contains no remote or container mutation commands"
+        "result": "the selected production ID and uint64 max exit 0; missing, zero/all-zero, leading-zero, 20-nines, max+1, malformed, and whitespace values exit nonzero before canary or promote, and the shell contains no remote or container mutation commands"
       },
       {
         "name": "promoted container registration succeeds",
