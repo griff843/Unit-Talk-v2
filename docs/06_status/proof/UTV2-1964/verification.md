@@ -48,6 +48,7 @@ Rules matched: discord-delivery
 
 - `pnpm exec tsx --test 'apps/discord-bot/scripts/deploy-commands.test.ts'` — PASS, 8/8.
 - `pnpm --filter @unit-talk/discord-bot type-check` — PASS.
+- Supplemental desktop verification after CLI return: `pnpm exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --esModuleInterop --skipLibCheck apps/discord-bot/scripts/deploy-commands.ts apps/discord-bot/scripts/deploy-commands.test.ts` — PASS. This verifies the script and focused test directly; it is not represented as CLI execution provenance.
 - `pnpm lint` — PASS.
 - `pnpm test` — PASS.
 - `pnpm verify:static` before the source commit — PASS, but not accepted as final evidence because the executable-wiring scan did not include the then-untracked test.
