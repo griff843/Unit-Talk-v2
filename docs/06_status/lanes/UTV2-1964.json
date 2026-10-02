@@ -20,13 +20,11 @@
     "docs/06_status/proof/UTV2-1964/verification.md",
     "docs/06_status/proof/UTV2-1964/model-routing.json"
   ],
-  "status": "blocked",
+  "status": "started",
   "started_at": "2026-10-02T00:20:56.223Z",
-  "heartbeat_at": "2026-10-02T04:34:18.381Z",
+  "heartbeat_at": "2026-10-02T04:38:59.270Z",
   "closed_at": null,
-  "blocked_by": [
-    "PM-test-wiring-scope-approval: apps/discord-bot/package.json remains outside file_scope_lock; pnpm verify fails WIRING_TEST_UNWIRED_NEW until explicit authorization or lane reshape"
-  ],
+  "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1964-guild-registration.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
