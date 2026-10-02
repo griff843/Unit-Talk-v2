@@ -7,20 +7,20 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "21c45451fa8df4bd18ea6bf0b34ee7859bc888c9",
+    "verified_source_sha": "f8fa8d4b49da78e8ca801390aa785c8c85410d50",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "measured_against_sha": "21c45451fa8df4bd18ea6bf0b34ee7859bc888c9",
+    "measured_against_sha": "f8fa8d4b49da78e8ca801390aa785c8c85410d50",
     "commands": [
       {
         "command": "pnpm exec tsx --test scripts/ci/deploy-discord-commands.test.ts",
         "exit_code": 0,
         "result": "pass",
-        "tests": 3,
-        "pass": 3,
+        "tests": 5,
+        "pass": 5,
         "fail": 0
       },
       {
@@ -35,7 +35,7 @@
         "command": "pnpm verify:static",
         "exit_code": 0,
         "result": "pass",
-        "note": "Lane sync, system alignment, executable wiring, lint, type-check, build, 3,567-test repository suite, local T1 proofs, Smart Form verification, command-manifest verification, and migration checks passed."
+        "note": "Lane sync, system alignment, executable wiring, lint, type-check, build, 3,569-test ops suite, remaining repository suites, local T1 proofs, Smart Form verification, command-manifest verification, and migration checks passed."
       },
       {
         "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -52,22 +52,28 @@
     },
     "hosted_ci_proof": {
       "status": "pass",
-      "source_sha": "4fcb44529046d6580abd0cbf4f6a56a8048131f9",
-      "run_id": 37012513976,
-      "db_job_id": 110855466514,
-      "verify_job_id": 110857992317,
-      "receipt_artifact_id": 11228816770,
+      "source_sha": "f8fa8d4b49da78e8ca801390aa785c8c85410d50",
+      "receipt_merge_sha": "7feb42fe67fe0b9ba4fdfe761d5f1210f0927087",
+      "run_id": 37019165731,
+      "db_job_id": 110878301905,
+      "verify_job_id": 110884029868,
+      "receipt_artifact_id": 11233730404,
       "command": "pnpm test:db",
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "note": "The sanctioned staging-ci job asserted the approved project, completed the writable DB suite and T1 live proof suites, uploaded a same-run receipt, and the dependent verify job validated that receipt."
+      "note": "The sanctioned exact-head CI job asserted the approved project, completed the writable DB and T1 live proof suites, uploaded a same-run receipt, and the dependent verify job passed static and Command Center checks and validated that receipt."
     }
   },
   "runtime_proof": {
     "status": "static_simulation_pass",
-    "detail": "The focused node:test executes the exact extracted remote shell against fake Docker. It proves the promoted-container command, success path, registry exit propagation, stale release refusal, stale image refusal, production-only placement, and downstream smoke dependency without contacting Discord or production.",
+    "detail": "The focused node:test executes the exact extracted preflight shell and remote shell. It proves guild-ID refusal before activation plus the promoted-container command, success path, registry exit propagation, stale release refusal, stale image refusal, production-only placement, and downstream smoke dependency without contacting Discord or production.",
     "queries": [
+      {
+        "name": "production guild identity preflight",
+        "method": "Execute the exact production verify-step shell with valid, missing, placeholder, malformed, and whitespace-wrapped guild IDs; inspect workflow dependencies and shell mutations.",
+        "result": "only the valid 17-20 digit snowflake exits 0; all invalid values exit nonzero before canary or promote and the shell contains no remote or container mutation commands"
+      },
       {
         "name": "promoted container registration succeeds",
         "method": "Execute the exact production SSH heredoc extracted from deploy.yml against the fake docker executable with matching release and image identities.",
@@ -92,7 +98,7 @@
     "row_counts": [
       {
         "name": "focused_remote_shell_tests_passed",
-        "value": 3
+        "value": 5
       },
       {
         "name": "production_registration_steps",

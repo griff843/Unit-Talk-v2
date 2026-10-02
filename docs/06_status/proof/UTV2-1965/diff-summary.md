@@ -1,12 +1,12 @@
 # Diff summary: UTV2-1965
 
-Execution SHA: `21c45451fa8df4bd18ea6bf0b34ee7859bc888c9`
+Execution SHA: `f8fa8d4b49da78e8ca801390aa785c8c85410d50`
 
-| File | Change |
-|---|---|
-| `.github/workflows/deploy.yml` | Adds mandatory production-only Discord guild command registration after health/containment confirmation and before image cleanup. The remote shell refuses stale release metadata or a mismatched bot image, then executes the hardened deploy script inside the promoted bot container. |
-| `scripts/ci/deploy-discord-commands.test.ts` | Extracts and executes the real remote heredoc against fake Docker, covering success, propagated registration failure, stale release/image refusal, step placement, and the absence of canary/global registration wiring. |
-| `package.json` | Appends the existing bot registration suite and the new workflow-shell regression to required package verification without removing any test. |
+| File                                         | Change                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/deploy.yml`               | Adds mandatory production-only Discord guild command registration after health/containment confirmation and before image cleanup. The remote shell refuses stale release metadata or a mismatched bot image, then executes the hardened deploy script inside the promoted bot container. A production `verify` preflight now refuses missing or invalid `DISCORD_GUILD_ID` before canary or activation. |
+| `scripts/ci/deploy-discord-commands.test.ts` | Extracts and executes the real preflight and remote heredoc shells. Coverage includes valid/missing/invalid guild identity, success, propagated registration failure, stale release/image refusal, pre-activation placement, and the absence of canary/global registration wiring.                                                                                                                      |
+| `package.json`                               | Appends the existing bot registration suite and the new workflow-shell regression to required package verification without removing any test.                                                                                                                                                                                                                                                           |
 
 No bot source, command manifest, canary registration, global registration, containment setting,
 production deployment, delivery target, role, pick, or database behavior changed.
@@ -20,4 +20,4 @@ Provenance: this is the PM-authorized replacement for the deployment slice of
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1707
