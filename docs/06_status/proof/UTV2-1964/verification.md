@@ -50,6 +50,8 @@ Rules matched: discord-delivery
 - `pnpm --filter @unit-talk/discord-bot test` — PASS, 8/8 through the added package command.
 - `pnpm --filter @unit-talk/discord-bot type-check` — PASS.
 - `pnpm exec tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --esModuleInterop --skipLibCheck apps/discord-bot/scripts/deploy-commands.ts apps/discord-bot/scripts/deploy-commands.test.ts` — PASS under the admitted Codex CLI execution.
+- `pnpm type-check` — PASS as executed by `pnpm verify:static`.
+- `pnpm test` — PASS as executed by `pnpm verify:static`.
 - `pnpm verify:static` — PASS after the PM-authorized package wiring; this includes executable wiring, lint, repository type-check, build, full test, Smart Form verification, and command verification.
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; `discord-delivery` matched, R1 required, no artifact requirement.
 - `pnpm exec tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --branch codex/utv2-1964-guild-registration --manifest-source git --head-sha 9097cfc0b1dac0598c8cc64d99f17115494255ce` — expected FAIL only for `apps/discord-bot/package.json`; the historical two-file lock is intentionally preserved until the PM posts the exact-head external override.
