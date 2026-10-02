@@ -24,11 +24,13 @@
     "docs/06_status/proof/UTV2-1963/verification.md",
     "docs/06_status/proof/UTV2-1963/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "cancelled",
   "started_at": "2026-10-01T19:43:13.082Z",
-  "heartbeat_at": "2026-10-01T20:02:16.645Z",
+  "heartbeat_at": "2026-10-02T00:10:09.715Z",
   "closed_at": null,
-  "blocked_by": [],
+  "blocked_by": [
+    "PM-directed-split-UTV2-1964-first"
+  ],
   "preflight_token": ".out/ops/preflight/codex/utv2-1963-discord-command-registration.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
