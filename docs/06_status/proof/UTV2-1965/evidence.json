@@ -49,6 +49,19 @@
       "command": "pnpm test:db",
       "exit_code": 1,
       "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. The local observed target was loopback/unidentified and was refused before tests ran."
+    },
+    "hosted_ci_proof": {
+      "status": "pass",
+      "source_sha": "4fcb44529046d6580abd0cbf4f6a56a8048131f9",
+      "run_id": 37012513976,
+      "db_job_id": 110855466514,
+      "verify_job_id": 110857992317,
+      "receipt_artifact_id": 11228816770,
+      "command": "pnpm test:db",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "note": "The sanctioned staging-ci job asserted the approved project, completed the writable DB suite and T1 live proof suites, uploaded a same-run receipt, and the dependent verify job validated that receipt."
     }
   },
   "runtime_proof": {
@@ -96,7 +109,6 @@
     ]
   },
   "known_gaps": [
-    "The required writable T1 DB proof must be produced by the sanctioned staging-ci GitHub environment and harvested into exact-head evidence.",
     "No production deployment or Discord command registration was attempted or authorized.",
     "The exact-head executor-result receipt is posted by the governed lane closeout path after the admitted Codex execution returns."
   ]

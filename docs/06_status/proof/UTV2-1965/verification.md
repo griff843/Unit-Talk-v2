@@ -16,7 +16,7 @@ result: pre_merge
 - [x] The extracted real heredoc passes against fake Docker and refuses a registry exit, stale release tag, and stale image without exposing credentials or raw REST errors.
 - [x] Both focused regression files are reachable from the existing required package test gates without removing any existing test.
 - [x] The implementation preserves the accepted deployment behavior from predecessor commit `2c56becfe8ff1be9dfbc2313c78d637962522bda` on current main.
-- [ ] Sanctioned `staging-ci` produces and binds the required writable T1 DB receipt for project `xskgrzbteyqdufktjrjx`.
+- [x] Sanctioned `staging-ci` produced and validated the required writable T1 DB receipt for project `xskgrzbteyqdufktjrjx` in run `37012513976`.
 
 ## EVIDENCE:
 
@@ -63,6 +63,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 - `pnpm verify:static` — PASS; includes lint, type-check, build, full `pnpm test`, local T1 proofs, Smart Form verification, command verification, and static governance checks.
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; no R-level rule matched and no R-level artifact is required.
 - `pnpm test:db` — BLOCKED/DEFERRED before test execution by staging-target enforcement. Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires `xskgrzbteyqdufktjrjx`. Run it through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials. The local command observed `host=127.0.0.1`, `ref=unidentified`, and made no DB write.
+- Hosted `staging-ci` run `37012513976`, job `110855466514` — PASS. The approved staging identity was asserted, `pnpm test:db` passed 7/7, the T1 live proof suites passed, and receipt artifact `11228816770` was uploaded. Follow-on job `110857992317` passed static verification and validated the same-run receipt.
 
 ## Runtime proof boundary
 
@@ -80,5 +81,5 @@ This PR supersedes only the deployment/test-wiring slice from `griff843/Unit-Tal
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1707
 Execution SHA: 21c45451fa8df4bd18ea6bf0b34ee7859bc888c9
