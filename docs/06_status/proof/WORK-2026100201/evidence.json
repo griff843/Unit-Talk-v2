@@ -1,4 +1,26 @@
 {
+  "schema_version": 2,
+  "issue_id": "WORK-2026100201",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "8ee3aa8d43f82bfe459e54e2713c45612add9344",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "application_builds": "PASS",
+    "application_type_checks": "PASS",
+    "branding_browser_checks": "PASS (9 cases)",
+    "focused_operator_tests": "PASS (16 tests)",
+    "ci_verified_head": "5838fa5de72997872b57660f215c8e33a50f7667",
+    "ci_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/37022482726",
+    "ci_static_verification": "PASS",
+    "ci_authorized_staging_proof": "PASS",
+    "current_head_requirement": "CI must independently pass on the current PR HEAD before merge."
+  },
   "schema": "branding-qa/v1",
   "status": "PASS",
   "work_id": "WORK-2026100201",
