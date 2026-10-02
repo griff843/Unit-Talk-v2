@@ -53,7 +53,47 @@
   },
   "runtime_proof": {
     "status": "static_simulation_pass",
-    "detail": "The focused node:test executes the exact extracted remote shell against fake Docker. It proves the promoted-container command, success path, registry exit propagation, stale release refusal, stale image refusal, production-only placement, and downstream smoke dependency without contacting Discord or production."
+    "detail": "The focused node:test executes the exact extracted remote shell against fake Docker. It proves the promoted-container command, success path, registry exit propagation, stale release refusal, stale image refusal, production-only placement, and downstream smoke dependency without contacting Discord or production.",
+    "queries": [
+      {
+        "name": "promoted container registration succeeds",
+        "method": "Execute the exact production SSH heredoc extracted from deploy.yml against the fake docker executable with matching release and image identities.",
+        "result": "exit 0; docker compose resolved discord-bot; image inspection matched; the in-container deploy-commands.ts invocation ran once"
+      },
+      {
+        "name": "registry failure blocks promotion",
+        "method": "Execute the same extracted heredoc with the fake in-container registrar returning exit 17.",
+        "result": "the remote shell propagated exit 17 rather than claiming successful promotion"
+      },
+      {
+        "name": "stale identities are refused before registration",
+        "method": "Execute the extracted heredoc with, separately, a stale .unit-talk-release value and a mismatched inspected image identity.",
+        "result": "both controls exited nonzero and recorded zero deploy-commands.ts invocations"
+      },
+      {
+        "name": "registration placement is production-only",
+        "method": "Parse deploy.yml and compare the registration step index with containment, cleanup, canary, and smoke dependencies.",
+        "result": "one registration step exists in promote after containment and before cleanup; none exists in deploy-canary; smoke requires promote"
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "focused_remote_shell_tests_passed",
+        "value": 3
+      },
+      {
+        "name": "production_registration_steps",
+        "value": 1
+      },
+      {
+        "name": "canary_registration_steps",
+        "value": 0
+      },
+      {
+        "name": "registrar_invocations_with_stale_identity",
+        "value": 0
+      }
+    ]
   },
   "known_gaps": [
     "The required writable T1 DB proof must be produced by the sanctioned staging-ci GitHub environment and harvested into exact-head evidence.",
