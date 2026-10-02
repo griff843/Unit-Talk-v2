@@ -1,0 +1,121 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1965",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b1fc2fe2fb3bb99beca507270200f0b832dea241",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_against_sha": "b1fc2fe2fb3bb99beca507270200f0b832dea241",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test scripts/ci/deploy-discord-commands.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 5,
+        "pass": 5,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/discord-bot/scripts/deploy-commands.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Lane sync, system alignment, executable wiring, lint, type-check, build, full repository test suite, local T1 proofs, Smart Form verification, command-manifest verification, and migration checks passed."
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "No R-level rule matched the authorized workflow, root test wiring, CI regression, or lane/proof paths."
+      }
+    ],
+    "live_db": {
+      "status": "blocked_deferred",
+      "command": "pnpm test:db",
+      "exit_code": 1,
+      "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. The local observed target was loopback/unidentified and was refused before tests ran."
+    },
+    "hosted_ci_proof": {
+      "status": "pass",
+      "source_sha": "b1fc2fe2fb3bb99beca507270200f0b832dea241",
+      "receipt_merge_sha": "b68dd464b5c574e2f48eba56dab56168f25c04e0",
+      "run_id": 37028592696,
+      "db_job_id": 110909890025,
+      "verify_job_id": 110914062058,
+      "receipt_artifact_id": 11236897489,
+      "command": "pnpm test:db",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "note": "The fresh source-head CI job asserted the approved staging project, completed writable DB proof 7/7 and all T1 live proof suites, uploaded a same-run receipt, and the dependent verify job passed static and Command Center checks and validated that receipt."
+    }
+  },
+  "runtime_proof": {
+    "status": "static_simulation_pass",
+    "detail": "The focused node:test executes the exact extracted preflight shell and remote shell. It proves guild-ID refusal before activation plus the promoted-container command, success path, registry exit propagation, stale release refusal, stale image refusal, production-only placement, and downstream smoke dependency without contacting Discord or production.",
+    "queries": [
+      {
+        "name": "production guild identity preflight",
+        "method": "Execute the exact production verify-step shell with valid, missing, placeholder, malformed, and whitespace-wrapped guild IDs; inspect workflow dependencies and shell mutations.",
+        "result": "the selected production ID and uint64 max exit 0; missing, zero/all-zero, leading-zero, 20-nines, max+1, malformed, and whitespace values exit nonzero before canary or promote, and the shell contains no remote or container mutation commands"
+      },
+      {
+        "name": "promoted container registration succeeds",
+        "method": "Execute the exact production SSH heredoc extracted from deploy.yml against the fake docker executable with matching release and image identities.",
+        "result": "exit 0; docker compose resolved discord-bot; image inspection matched; the in-container deploy-commands.ts invocation ran once"
+      },
+      {
+        "name": "registry failure blocks promotion",
+        "method": "Execute the same extracted heredoc with the fake in-container registrar returning exit 17.",
+        "result": "the remote shell propagated exit 17 rather than claiming successful promotion"
+      },
+      {
+        "name": "stale identities are refused before registration",
+        "method": "Execute the extracted heredoc with, separately, a stale .unit-talk-release value and a mismatched inspected image identity.",
+        "result": "both controls exited nonzero and recorded zero deploy-commands.ts invocations"
+      },
+      {
+        "name": "registration placement is production-only",
+        "method": "Parse deploy.yml and compare the registration step index with containment, cleanup, canary, and smoke dependencies.",
+        "result": "one registration step exists in promote after containment and before cleanup; none exists in deploy-canary; smoke requires promote"
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "focused_remote_shell_tests_passed",
+        "value": 5
+      },
+      {
+        "name": "production_registration_steps",
+        "value": 1
+      },
+      {
+        "name": "canary_registration_steps",
+        "value": 0
+      },
+      {
+        "name": "registrar_invocations_with_stale_identity",
+        "value": 0
+      }
+    ]
+  },
+  "known_gaps": [
+    "No production deployment or Discord command registration was attempted or authorized.",
+    "The exact-head executor-result receipt is posted by the governed lane closeout path after the admitted Codex execution returns."
+  ]
+}
