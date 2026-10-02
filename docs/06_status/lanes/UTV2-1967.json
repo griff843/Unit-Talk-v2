@@ -33,7 +33,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-10-02T19:48:36.493Z",
-  "heartbeat_at": "2026-10-02T20:09:50.767Z",
+  "heartbeat_at": "2026-10-02T20:09:52.290Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1967-warehouse-closeout.json",
