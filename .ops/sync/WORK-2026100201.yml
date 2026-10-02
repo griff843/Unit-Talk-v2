@@ -1,0 +1,86 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100201
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100201
+  objective: Import the user-approved Concept 06 soft-geometry UT monogram and
+    Custom Geometric C wordmark from the prepared production asset package.
+  acceptance_criteria:
+    - Preserve the production SVG masters and PNG/icon exports under
+      docs/03_product/brand/assets/.
+    - Update docs/03_product/brand/README.md to declare the current canonical
+      identity and require exact master geometry reuse.
+    - Replace only the branding in
+      apps/smart-form/app/submit/components/BrandLogo.tsx and
+      apps/command-center/src/components/WorkspaceSidebar.tsx.
+    - Run relevant application builds/type-checks, pnpm verify, and R-level
+      checks; open one PR.
+  guardrails:
+    - No unrelated cleanup, redesign, product behavior, or architecture changes.
+    - No master geometry redrawing or regeneration.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      WORK-2026100201 - Import finalized Unit Talk branding
+      Tier: T2
+      Lane type: hygiene
+      Executor: codex-cli
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100201.md
+    title: WORK-2026100201 - Import finalized Unit Talk branding
+    description: >-
+      # WORK-2026100201 - Import finalized Unit Talk branding
+
+
+      Tier: T2
+
+      Lane type: hygiene
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Import the user-approved Concept 06 soft-geometry UT monogram and Custom
+      Geometric C wordmark from the prepared production asset package.
+
+
+      ## Acceptance Criteria
+
+
+      - Preserve the production SVG masters and PNG/icon exports under
+      docs/03_product/brand/assets/.
+
+      - Update docs/03_product/brand/README.md to declare the current canonical
+      identity and require exact master geometry reuse.
+
+      - Replace only the branding in
+      apps/smart-form/app/submit/components/BrandLogo.tsx and
+      apps/command-center/src/components/WorkspaceSidebar.tsx.
+
+      - Run relevant application builds/type-checks, pnpm verify, and R-level
+      checks; open one PR.
+
+
+      ## Guardrails
+
+
+      - No unrelated cleanup, redesign, product behavior, or architecture
+      changes.
+
+      - No master geometry redrawing or regeneration.
+    captured_at: 2026-10-02T14:16:32.162Z
+    description_sha256: f51cea99136991c698cef159d426c830b2a8886ba04a95597a671b1a58e6cde6
+  contract_hash: f2c7196102d13f163a27909cb419276d974c1f239ad0f95b81e77bcd0d106ab3
