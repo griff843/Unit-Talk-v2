@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { hasCanonicalWorkFollowUp } from './historical-closeout.js';
 
 import { parseScopeOverrideComment } from '../ci/scope-override-comment-parser.ts';
 
@@ -2897,7 +2898,11 @@ export function findPostMergeTouches(input: {
     if (!overlaps) {
       continue;
     }
-    const referencedIssues = subject.match(/(?:UTV2|UNI)-\d+/gi) ?? [];
+    const referencedIssues = (subject.match(/(?:UTV2|UNI|WORK)-\d+/gi) ?? []).filter(candidate =>
+      !candidate.toUpperCase().startsWith('WORK-') || hasCanonicalWorkFollowUp(
+        candidate.toUpperCase(), sha, touchedFiles.filter(file => input.filesChanged.includes(file)), gitCommand,
+      ),
+    );
     if (
       input.allowSameIssueCommits &&
       referencedIssues.some((candidate) => candidate.toUpperCase() === input.issueId)

@@ -558,6 +558,37 @@ test('G5 ignores commits before the lane start timestamp and merge timestamp', (
   assert.deepStrictEqual(result, ['post-merge-sha']);
 });
 
+test('UTV2-1967: G5 accepts WORK follow-ups only with canonical lane ownership at the touching commit', () => {
+  const sha = 'a'.repeat(40);
+  const workId = 'WORK-2026092901';
+  const canonical = {
+    schema_version: 2, issue_id: workId, base_branch: 'main',
+    branch: 'claude/work-2026092901-warehouse-followup',
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1697', status: 'in_review', tier: 'T1',
+    file_scope_lock: ['package.json'], expected_proof_paths: [`docs/06_status/proof/${workId}/evidence.json`],
+  };
+  for (const [blob, accepted] of [
+    [canonical, true], [null, false], [{ ...canonical, issue_id: 'WORK-999' }, false],
+    [{ ...canonical, file_scope_lock: [] }, false],
+    [{ ...canonical, pr_url: 'https://github.com/attacker/Unit-Talk-v2/pull/1697' }, false],
+    [{ ...canonical, expected_proof_paths: [] }, false],
+  ] as const) {
+    const inspected: string[] = [];
+    const result = findPostMergeTouches({
+      mergeSha: 'merge-sha', filesChanged: ['package.json'], issueId: 'UTV2-1370',
+      showCommit: () => ({ timestamp: '2026-09-29T11:00:00Z', subject: 'primary merge' }),
+      gitCommand: args => {
+        if (args[0] === 'log') return { ok: true, stdout: `${sha}\tfix: ${workId} follow-up\t2026-09-29T12:00:00Z`, stderr: '' };
+        if (args[1] === '--format=') return { ok: true, stdout: 'package.json', stderr: '' };
+        inspected.push(args[1]);
+        return { ok: blob !== null, stdout: JSON.stringify(blob), stderr: '' };
+      },
+    });
+    assert.deepEqual(result, accepted ? [] : [sha]);
+    assert.deepEqual(inspected, [`${sha}:docs/06_status/lanes/${workId}.json`]);
+  }
+});
+
 test('G5 allows same-issue closeout repair commits before lane is done', () => {
   const result = findPostMergeTouches({
     mergeSha: 'merge-sha',

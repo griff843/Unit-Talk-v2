@@ -2,27 +2,42 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
+Bounded PM authority: PR #1678 comment 5958314005. No production state changes.
 
 Issue: UTV2-1967
 Tier: T1
-result: not_run
+result: focused/static checks PASS; canonical staging CI proof pending
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] Historical missing-token recovery validates canonical original merged PR, reachable merge, exact original head, pristine immutable introduction and obligation; it creates no token or PASS.
+- [x] Forged editable deferral, incomplete/missing/ambiguous/non-ancestral evidence, wrong repository/branch/head and active-lane use refuse before restoration.
+- [x] Shallow original PR history is deepened before immutable evidence lookup and exact fetched head must match the attested historical head.
+- [x] WORK text alone does not satisfy G5; canonical owned lane evidence must exist at the exact touching commit and cover every overlapping implementation path.
+- [x] Real original UTV2-1370 admission and actual WORK-2026092901 follow-up pass the repaired logic without writing a manifest.
+- [x] Original PR/merge/source remain bound; independently inspected immutable production verifier and parity artifacts genuinely PASS.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+```text
+focused lane-close/truth-check-lib/proof-schema/shared tests: exit 0
+targeted eslint: exit 0
+pnpm type-check: exit 0
+pnpm verify: static chain PASS; live stage safely REFUSED by assert-staging
+reason: local placeholder host 127.0.0.1 is not canonical staging xskgrzbteyqdufktjrjx
+canonical staging-ci proof: pending actual CI (validated admission granted deferred_to_ci)
+historical original-head Executor Result Validation: check 111001369799 PASS
+production verifier: run 37036085802 job 110934527512 PASS
+production parity: run 37036445782 job 110935763319 PASS
+production mutation by reconciliation: none
+```
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+Focused suites ran directly with `pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/proof-schema.test.ts scripts/ops/shared.test.ts`. `pnpm verify` was run, not skipped; its entire static chain passed and canonical writable target enforcement refused the local placeholder before SQL. The required live proof must be obtained from the protected staging-ci CI job before approval; no production identity substitution or guard change is permitted. R-level check will be rerun against the actual committed implementation head.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: pending
+Execution SHA: 5c41a8a248241efebcee9f51fe530a32836c85ae

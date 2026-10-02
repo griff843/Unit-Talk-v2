@@ -65,6 +65,7 @@ import {
   isCanonicalRunner,
 } from './lane-close-repair-packet.js';
 import { PR_BASE_MISMATCH_BLOCKER } from './lane-link-pr.js';
+import { recoverHistoricalMergedPreflight } from './historical-closeout.js';
 
 /**
  * Machine-readable codes emitted in the closeout JSON response.
@@ -247,7 +248,6 @@ export function remediationForCode(code: CloseoutFailureCode): string {
 
 const MISSING_COMMIT_SHA_MESSAGE =
   'ERROR: Lane close requires commit_sha — run ops:truth-check first';
-const REPAIR_PREFLIGHT_TOKEN = 'dispatch-auto';
 const TRUSTED_POST_MERGE_REPOSITORY = 'griff843/Unit-Talk-v2';
 
 /**
@@ -659,6 +659,7 @@ export function repairMergedLaneManifest(
     leaseRegistryDir?: string;
     mergeLockPath?: string;
     releaseLocksIfAlreadyDone?: boolean;
+    verifyHistoricalPreflight?: boolean;
   } = {},
 ): RepairMergedManifestResult {
   const inputManifest = structuredClone(manifest);
@@ -796,18 +797,16 @@ export function repairMergedLaneManifest(
     changedFields.push('files_changed');
   }
 
-  // repairPreflightToken() re-derives its `changed` flag from whether its own
-  // validation threw, not from whether the persisted value actually differs
-  // -- a manifest already resting at the REPAIR_PREFLIGHT_TOKEN sentinel
-  // ('dispatch-auto', which never passes requireExistingFile validation)
-  // reports `changed: true` on every single call even though
-  // next.preflight_token ends up exactly where it started. Comparing values
-  // directly is what actually determines whether this field changed
-  // (UTV2-1564).
-  const previousPreflightToken = manifest.preflight_token;
-  const preflightRepair = repairPreflightToken(next, options.repoRoot ?? process.cwd());
-  if (preflightRepair.changed && next.preflight_token !== previousPreflightToken) {
-    changedFields.push('preflight_token');
+  // A lost ephemeral file is not permission to manufacture a token. Terminal
+  // schema validation preserves the original canonical path; the executable
+  // closeout path independently recovers its immutable introduction authority.
+  validatePreflightTokenPathValue(next.preflight_token);
+  const repoRoot = options.repoRoot ?? process.cwd();
+  let preflightRepair = { reason: 'original canonical preflight path preserved' };
+  if (options.verifyHistoricalPreflight && !fs.existsSync(path.resolve(repoRoot, next.preflight_token))) {
+    const recovered = recoverHistoricalMergedPreflight(next, pr, repoRoot);
+    preflightRepair = { reason: `immutable historical preflight verified at ${recovered.source_commit}; no token recreated` };
+    recordChanged(changedFields, manifest.t1_live_db_precondition, next.t1_live_db_precondition, 't1_live_db_precondition');
   }
 
   // UTV2-1564: a genuine no-op re-run (e.g. post-merge-lane-close.yml's CI
@@ -2485,6 +2484,7 @@ async function main(): Promise<void> {
       const repair = repairMergedLaneManifest(manifest, {
         releaseLocksIfAlreadyDone: !validatedPr,
         validatedPr,
+        verifyHistoricalPreflight: true,
       });
       if (!repair.ok) {
         transaction?.rollback();
@@ -2761,26 +2761,6 @@ function repairBlocked(
     remediation,
     pr: null,
   };
-}
-
-function repairPreflightToken(
-  manifest: LaneManifest,
-  repoRoot: string,
-): { changed: boolean; reason: string } {
-  try {
-    validatePreflightTokenPathValue(manifest.preflight_token, {
-      requireExistingFile: true,
-    });
-    return { changed: false, reason: 'existing preflight token is present' };
-  } catch (error) {
-    manifest.preflight_token = REPAIR_PREFLIGHT_TOKEN;
-    return {
-      changed: true,
-      reason: `preflight token repaired with ${REPAIR_PREFLIGHT_TOKEN}: ${
-        error instanceof Error ? error.message : String(error)
-      }; repo=${repoRoot}`,
-    };
-  }
 }
 
 function writeRepairArtifact(input: {
