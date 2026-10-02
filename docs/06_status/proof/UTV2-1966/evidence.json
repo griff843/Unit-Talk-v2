@@ -12,7 +12,7 @@
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
-    "status": "pass",
+    "status": "pending",
     "commands": [
       "pnpm exec tsx --test scripts/ci/production-post-migration-verify.test.ts scripts/ci/workflow-production-credential-guard.test.ts",
       "pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts",

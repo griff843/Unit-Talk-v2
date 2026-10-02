@@ -6,7 +6,10 @@ Measured on implementation source b56870d86a69a54aad7796c9d075d3810debade5.
 
 Issue: UTV2-1966
 Tier: T2
-result: pass
+result: pending
+
+Aggregate required verification remains pending until authoritative exact-head CI passes.
+The successful local static phases below do not override the refused final local live-DB gate.
 
 ## ASSERTIONS:
 
