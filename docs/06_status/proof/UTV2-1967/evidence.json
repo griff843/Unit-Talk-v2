@@ -31,7 +31,7 @@
   },
   "live_db_verification": {
     "result": "PENDING_STAGING_CI",
-    "local_result": "REFUSED_UNIDENTIFIED_PLACEHOLDER_TARGET",
+    "local_result": "REFUSED_UNIDENTIFIED_LOCAL_TARGET",
     "note": "Required full verify/staging proof remains pending; this bundle does not claim the refused local live check passed."
   }
 }
