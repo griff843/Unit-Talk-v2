@@ -7,12 +7,31 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "5c41a8a248241efebcee9f51fe530a32836c85ae",
+    "verified_source_sha": "dfe39fdf22258818121c1145f7672205483012a1",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
-    "status": "not_run",
-    "note": "Populate with measured gate results before review; proof-generate does not execute verification."
+    "result": "PASS",
+    "commands": [
+      "pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/proof-schema.test.ts scripts/ops/shared.test.ts",
+      "pnpm exec eslint scripts/ops/historical-closeout.ts scripts/ops/lane-close.ts scripts/ops/lane-close.test.ts scripts/ops/truth-check-lib.ts scripts/ops/truth-check-lib.test.ts",
+      "pnpm type-check",
+      "pnpm verify (entire static chain passed; live DB target refused before SQL)",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD"
+    ],
+    "assertions": {
+      "immutable_historical_authority_only": true,
+      "no_token_or_pass_fabricated": true,
+      "canonical_work_followup_required": true,
+      "existing_required_check_gates_unchanged": true,
+      "actual_original_head_executor_result_validation": 111001369799,
+      "production_mutations": 0
+    }
+  },
+  "live_db_verification": {
+    "result": "PENDING_STAGING_CI",
+    "local_result": "REFUSED_UNIDENTIFIED_PLACEHOLDER_TARGET",
+    "note": "Required full verify/staging proof remains pending; this bundle does not claim the refused local live check passed."
   }
 }
