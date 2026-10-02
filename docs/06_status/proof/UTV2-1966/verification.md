@@ -32,6 +32,8 @@ R-level: PASS; no matching rules.
 
 ## Verification
 
+- `pnpm type-check`: PASS as executed by the full static verification chain.
+- `pnpm test`: PASS as executed by the full static verification chain, including operations suite 3564/3564.
 - `pnpm exec tsx --test scripts/ci/production-post-migration-verify.test.ts scripts/ci/workflow-production-credential-guard.test.ts`: PASS 51/51.
 - `pnpm exec tsx --test scripts/ci/staging-path-enforcement.test.ts`: PASS 38/38.
 - `pnpm verify`: static PASS; local live-DB fail-closed refusal as documented above. Full log: `.out/utv2-1966-verify.log` (local ignored).
