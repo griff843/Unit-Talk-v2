@@ -6,10 +6,12 @@
   "proof_profile": "app-runtime",
   "status": "blocked",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "35f9db79e85f5f67692b5ffb29ad471408c7361d",
     "verified_source_sha": "9097cfc0b1dac0598c8cc64d99f17115494255ce",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-02T12:32:15.702Z"
   },
   "static_proof": {
     "status": "pass",

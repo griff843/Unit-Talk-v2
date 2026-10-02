@@ -1,6 +1,6 @@
 # PROOF: UTV2-1964
 
-MERGE_SHA: pending merge
+MERGE_SHA: 35f9db79e85f5f67692b5ffb29ad471408c7361d
 
 Issue: UTV2-1964
 Tier: T2
@@ -66,6 +66,6 @@ opened first so that immutable binding can be supplied without weakening reposit
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 35f9db79e85f5f67692b5ffb29ad471408c7361d
 PR: pending
 Execution SHA: 9097cfc0b1dac0598c8cc64d99f17115494255ce

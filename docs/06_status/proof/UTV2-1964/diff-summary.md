@@ -13,5 +13,5 @@ receipt, or delivery-switch behavior changed.
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 35f9db79e85f5f67692b5ffb29ad471408c7361d
 PR: pending

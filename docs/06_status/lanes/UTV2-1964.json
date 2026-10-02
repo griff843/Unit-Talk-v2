@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1964-guild-registration",
   "branch": "codex/utv2-1964-guild-registration",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "35f9db79e85f5f67692b5ffb29ad471408c7361d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1706",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/UTV2-1964/verification.md",
     "docs/06_status/proof/UTV2-1964/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-02T00:20:56.223Z",
-  "heartbeat_at": "2026-10-02T04:49:30.237Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-02T12:32:21.131Z",
+  "closed_at": "2026-10-02T12:32:21.131Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1964-guild-registration.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-02T12:32:19.077Z",
+      "verdict": "pass",
+      "merge_sha": "35f9db79e85f5f67692b5ffb29ad471408c7361d",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
