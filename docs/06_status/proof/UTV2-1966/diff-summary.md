@@ -15,5 +15,5 @@ No production dispatch, DDL, data mutation, retention execution, recovery or del
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 2c4e754652830967bf006db6dff3f96f55c9f9a1
 PR: pending

@@ -4,12 +4,14 @@
   "tier": "T2",
   "lane_type": "verification",
   "proof_profile": "static",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "2c4e754652830967bf006db6dff3f96f55c9f9a1",
     "verified_source_sha": "6e0c2257e7741749893df664853c083e08d14b71",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-02T14:12:43.398Z"
   },
   "static_proof": {
     "status": "pass",
@@ -38,7 +40,11 @@
       "artifact_name": "utv2-1630-db-proof-receipt-37013552841-1",
       "artifact_digest": "sha256:a3fe4f7bb8fae9ee8af09c7fa946caae64374462b5e9018b848fe584249c33bb",
       "receipt_sha256": "38bdc05830e2167a2b344837c746746febe9e0602502ae1d8787059b204ea295",
-      "smoke_tests": { "tests": 7, "pass": 7, "fail": 0 },
+      "smoke_tests": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0
+      },
       "live_proof_suites": "PASS: governed producer step completed successfully"
     },
     "commands": [
@@ -47,10 +53,18 @@
       "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "pnpm verify"
     ],
-    "focused_tests": { "tests": 89, "pass": 89, "fail": 0 },
+    "focused_tests": {
+      "tests": 89,
+      "pass": 89,
+      "fail": 0
+    },
     "r_level": "PASS: no matching R-level rules",
     "verify_static": "PASS: all static phases completed",
-    "operations_tests": { "tests": 3564, "pass": 3564, "fail": 0 },
+    "operations_tests": {
+      "tests": 3564,
+      "pass": 3564,
+      "fail": 0
+    },
     "full_verify": "Authoritative CI verify and staging producer PASS at recorded source SHA. Local invocation still correctly refused 127.0.0.1 before connection. Any proof-only descendant PR head must independently pass required CI before merge.",
     "production_verification": "not_run; fresh trusted-main verifier and separate Live Schema Parity required after merge"
   }

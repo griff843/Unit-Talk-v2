@@ -1,6 +1,6 @@
 # PROOF: UTV2-1966
 
-MERGE_SHA: pending merge
+MERGE_SHA: 2c4e754652830967bf006db6dff3f96f55c9f9a1
 
 Measured on implementation source b56870d86a69a54aad7796c9d075d3810debade5.
 
@@ -55,6 +55,6 @@ Fresh trusted-main production read-only verification and separate Live Schema Pa
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 2c4e754652830967bf006db6dff3f96f55c9f9a1
 PR: pending
 Execution SHA: 6e0c2257e7741749893df664853c083e08d14b71

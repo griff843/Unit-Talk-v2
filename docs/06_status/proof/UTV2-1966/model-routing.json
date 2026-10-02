@@ -17,5 +17,11 @@
     "execution_context": "Codex desktop session",
     "runtime_model_attested": false,
     "note": "Routing fields record lane-start policy selection, not independently attested runtime model identity. No codex-exec subprocess was launched; null exit code makes no CLI execution claim."
+  },
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "2c4e754652830967bf006db6dff3f96f55c9f9a1",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1708",
+    "bound_at": "2026-10-02T14:12:44.491Z"
   }
 }

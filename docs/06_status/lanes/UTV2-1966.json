@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1966-warehouse-verifier-repair",
   "branch": "codex/utv2-1966-warehouse-verifier-repair",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2c4e754652830967bf006db6dff3f96f55c9f9a1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1708",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/UTV2-1966/verification.md",
     "docs/06_status/proof/UTV2-1966/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-02T12:57:17.663Z",
-  "heartbeat_at": "2026-10-02T13:19:21.081Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-02T14:12:46.879Z",
+  "closed_at": "2026-10-02T14:12:46.879Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1966-warehouse-verifier-repair.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-02T14:12:44.494Z",
+      "verdict": "pass",
+      "merge_sha": "2c4e754652830967bf006db6dff3f96f55c9f9a1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
