@@ -46,6 +46,7 @@ function runPreflight(guildId: string | undefined) {
 test('early preflight accepts a valid production guild snowflake', () => {
   assert.ok(preflight);
   assert.equal(runPreflight('1284478946171293736').status, 0);
+  assert.equal(runPreflight('18446744073709551615').status, 0);
 });
 
 test('early preflight refuses missing and malformed guild IDs before deployment mutation', () => {
@@ -53,12 +54,25 @@ test('early preflight refuses missing and malformed guild IDs before deployment 
   assert.notEqual(missing.status, 0);
   assert.match(missing.stdout, /DISCORD_GUILD_ID/);
 
-  for (const guildId of ['0', 'not-a-snowflake', ' 1284478946171293736 ']) {
+  for (const guildId of [
+    '0',
+    '00000000000000000',
+    '99999999999999999999',
+    '18446744073709551616',
+    'not-a-snowflake',
+    ' 1284478946171293736 ',
+  ]) {
     const invalid = runPreflight(guildId);
     assert.notEqual(invalid.status, 0);
-    assert.match(invalid.stdout, /valid Discord snowflake/);
+    assert.match(
+      invalid.stdout,
+      /valid nonzero unsigned 64-bit Discord snowflake/,
+    );
     if (guildId !== '0')
-      assert.equal(`${invalid.stdout}${invalid.stderr}`.includes(guildId), false);
+      assert.equal(
+        `${invalid.stdout}${invalid.stderr}`.includes(guildId),
+        false,
+      );
   }
 
   assert.doesNotMatch(preflight.run!, /ssh|docker|scp|rsync|deploy-commands/);

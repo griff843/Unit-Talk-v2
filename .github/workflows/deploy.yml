@@ -191,8 +191,11 @@ jobs:
         env:
           DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
         run: |
-          if ! [[ "${DISCORD_GUILD_ID:-}" =~ ^[0-9]{17,20}$ ]]; then
-            echo "::error::DISCORD_GUILD_ID must be a valid Discord snowflake (17-20 decimal digits)."
+          LC_ALL=C
+          guild_id="${DISCORD_GUILD_ID:-}"
+          if ! [[ "$guild_id" =~ ^[1-9][0-9]{16,19}$ ]] || \
+             { [ "${#guild_id}" -eq 20 ] && [[ "$guild_id" > "18446744073709551615" ]]; }; then
+            echo "::error::DISCORD_GUILD_ID must be a valid nonzero unsigned 64-bit Discord snowflake (17-20 decimal digits without leading zeros)."
             exit 1
           fi
 
