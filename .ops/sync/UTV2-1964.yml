@@ -1,0 +1,102 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1964
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1964
+  objective: Harden guild-only Discord command registration before governed deploy
+    integration
+  acceptance_criteria:
+    - "PM-approved split A of
+      [UTV2-1963](https://linear.app/unit-talk-v2/issue/UTV2-1963/register-auth\
+      oritative-discord-guild-commands-in-governed-production) / PR
+      [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdi\
+      scord-utv2-1963-register-guild-commands-during-production-376b01712d5e),
+      disposition
+      [https://github.com/griff843/Unit-Talk-v2/pull/1705#issuecomment-59430309\
+      48](<https://github.com/griff843/Unit-Talk-v2/pull/1705#issuecomment-5943\
+      030948>). Delivery-ui lane, mechanically correct tier T2, current main.
+      Reproduce the accepted registration hardening from commit
+      2c56becfe8ff1be9dfbc2313c78d637962522bda under the actual admitted
+      codex-cli executor/profile, preserving implementation rather than
+      fabricating desktop/CLI provenance. Exact source scope:
+      apps/discord-bot/scripts/deploy-commands.ts and
+      apps/discord-bot/scripts/deploy-commands.test.ts; own generated
+      lifecycle/proof/sync metadata. A request to PM for
+      apps/discord-bot/package.json minimal test-script wiring is pending; do
+      not edit that additional file without explicit response. Preserve existing
+      guild-only full-replace, token application identity validation, read-back
+      count/names/application/guild/all-authored-definition verification,
+      empty-manifest refusal, safe failure exit without raw REST
+      errors/credentials. No command redesign or global registry; no deployment
+      workflow/package root changes; no production registration, role mutation,
+      picks, receipts or delivery switches. Run focused tests directly using tsx
+      --test, strict script TypeScript, lint, pnpm verify and R-level/lane
+      authority checks. Writable DB proof only through sanctioned staging CI.
+      Return reviewable PR with actual CLI-generated routing evidence and
+      truthful gate results; no selfapproval or merge without independent
+      review. New test must satisfy executable-wiring guard, report precise
+      scope blocker if wiring authorization is still pending. Acceptance
+      evidence named docs/06_status/proof/<assigned issue>/verification.md plus
+      generated proof files. This PR must merge before T1 runtime/deploy
+      continuation of
+      [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdi\
+      scord-utv2-1963-register-guild-commands-during-production-376b01712d5e)."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      PM-approved split A of [UTV2-1963](https://linear.app/unit-talk-v2/issue/UTV2-1963/register-authoritative-discord-guild-commands-in-governed-production) / PR [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e), disposition [https://github.com/griff843/Unit-Talk-v2/pull/1705#issuecomment-5943030948](<https://github.com/griff843/Unit-Talk-v2/pull/1705#issuecomment-5943030948>). Delivery-ui lane, mechanically correct tier T2, current main. Reproduce the accepted registration hardening from commit 2c56becfe8ff1be9dfbc2313c78d637962522bda under the actual admitted codex-cli executor/profile, preserving implementation rather than fabricating desktop/CLI provenance. Exact source scope: apps/discord-bot/scripts/deploy-commands.ts and apps/discord-bot/scripts/deploy-commands.test.ts; own generated lifecycle/proof/sync metadata. A request to PM for apps/discord-bot/package.json minimal test-script wiring is pending; do not edit that additional file without explicit response. Preserve existing guild-only full-replace, token application identity validation, read-back count/names/application/guild/all-authored-definition verification, empty-manifest refusal, safe failure exit without raw REST errors/credentials. No command redesign or global registry; no deployment workflow/package root changes; no production registration, role mutation, picks, receipts or delivery switches. Run focused tests directly using tsx --test, strict script TypeScript, lint, pnpm verify and R-level/lane authority checks. Writable DB proof only through sanctioned staging CI. Return reviewable PR with actual CLI-generated routing evidence and truthful gate results; no selfapproval or merge without independent review. New test must satisfy executable-wiring guard, report precise scope blocker if wiring authorization is still pending. Acceptance evidence named docs/06_status/proof/<assigned issue>/verification.md plus generated proof files. This PR must merge before T1 runtime/deploy continuation of [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdiscord-utv2-1963-register-guild-commands-during-production-376b01712d5e).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1964/harden-guild-only-discord-command-registration-before-governed-deploy
+    title: Harden guild-only Discord command registration before governed deploy
+      integration
+    description: "PM-approved split A of
+      [UTV2-1963](https://linear.app/unit-talk-v2/issue/UTV2-1963/register-auth\
+      oritative-discord-guild-commands-in-governed-production) / PR
+      [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdi\
+      scord-utv2-1963-register-guild-commands-during-production-376b01712d5e),
+      disposition
+      [https://github.com/griff843/Unit-Talk-v2/pull/1705#issuecomment-59430309\
+      48](<https://github.com/griff843/Unit-Talk-v2/pull/1705#issuecomment-5943\
+      030948>). Delivery-ui lane, mechanically correct tier T2, current main.
+      Reproduce the accepted registration hardening from commit
+      2c56becfe8ff1be9dfbc2313c78d637962522bda under the actual admitted
+      codex-cli executor/profile, preserving implementation rather than
+      fabricating desktop/CLI provenance. Exact source scope:
+      apps/discord-bot/scripts/deploy-commands.ts and
+      apps/discord-bot/scripts/deploy-commands.test.ts; own generated
+      lifecycle/proof/sync metadata. A request to PM for
+      apps/discord-bot/package.json minimal test-script wiring is pending; do
+      not edit that additional file without explicit response. Preserve existing
+      guild-only full-replace, token application identity validation, read-back
+      count/names/application/guild/all-authored-definition verification,
+      empty-manifest refusal, safe failure exit without raw REST
+      errors/credentials. No command redesign or global registry; no deployment
+      workflow/package root changes; no production registration, role mutation,
+      picks, receipts or delivery switches. Run focused tests directly using tsx
+      --test, strict script TypeScript, lint, pnpm verify and R-level/lane
+      authority checks. Writable DB proof only through sanctioned staging CI.
+      Return reviewable PR with actual CLI-generated routing evidence and
+      truthful gate results; no selfapproval or merge without independent
+      review. New test must satisfy executable-wiring guard, report precise
+      scope blocker if wiring authorization is still pending. Acceptance
+      evidence named docs/06_status/proof/<assigned issue>/verification.md plus
+      generated proof files. This PR must merge before T1 runtime/deploy
+      continuation of
+      [griff843/Unit-Talk-v2#1705](https://linear.app/unit-talk-v2/review/fixdi\
+      scord-utv2-1963-register-guild-commands-during-production-376b01712d5e)."
+    captured_at: 2026-10-02T00:20:48.122Z
+    description_sha256: 8cb8cc26db59afaab1b5a72c69b0d08e930b7613e1fcd78d413f0e4f2745a501
+  contract_hash: c698a47ad9efa3f2eb6be125241339a78d41ac2e6950e3048cfb9e04dbf6aa41

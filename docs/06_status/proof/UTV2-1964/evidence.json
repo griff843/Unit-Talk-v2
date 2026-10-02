@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1964",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "blocked",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9097cfc0b1dac0598c8cc64d99f17115494255ce",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_against_sha": "9097cfc0b1dac0598c8cc64d99f17115494255ce",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test 'apps/discord-bot/scripts/deploy-commands.test.ts'",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm --filter @unit-talk/discord-bot test",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "pnpm --filter @unit-talk/discord-bot type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Executable wiring, lint, repository type-check, build, full test, Smart Form verification, and command verification all passed."
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Matched discord-delivery; R1 required with no artifact requirement."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --branch codex/utv2-1964-guild-registration --manifest-source git --head-sha 9097cfc0b1dac0598c8cc64d99f17115494255ce",
+        "exit_code": 1,
+        "result": "blocked",
+        "note": "Expected exact-scope refusal for apps/discord-bot/package.json until the human PM posts scope-override/v1 bound to the eventual PR number and exact final head SHA."
+      }
+    ],
+    "live_db": {
+      "status": "blocked_deferred",
+      "note": "Target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx through the staging-ci GitHub environment with CI_SUPABASE_* credentials. No DB behavior changed or ran in this lane."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "The focused test exercises the registration policy against an in-memory fake Discord REST client. No Discord API or production registration was contacted."
+  },
+  "known_gaps": [
+    "File Scope Lock still requires the external PM scope-override/v1 comment for apps/discord-bot/package.json, bound to the eventual PR number and exact final head SHA.",
+    "No production guild registration was attempted or authorized.",
+    "Writable live-DB proof is deferred to sanctioned staging CI and is unrelated to this DB-free source change."
+  ]
+}
