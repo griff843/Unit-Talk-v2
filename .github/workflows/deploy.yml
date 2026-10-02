@@ -183,6 +183,19 @@ jobs:
           echo "{\"service\":\"deploy\",\"event\":\"syndicate_machine_mode.validated\",\"mode\":\"$syndicate_machine_mode\"}"
           echo "All required production secrets are present."
 
+      # UTV2-1965: production promotion performs mandatory guild-scoped
+      # command registration. Refuse missing or malformed configuration in the
+      # verify job, before canary or production can mutate the host, rather
+      # than discovering it after production activation. Never echo the ID.
+      - name: Validate production Discord guild identity
+        env:
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+        run: |
+          if ! [[ "${DISCORD_GUILD_ID:-}" =~ ^[0-9]{17,20}$ ]]; then
+            echo "::error::DISCORD_GUILD_ID must be a valid Discord snowflake (17-20 decimal digits)."
+            exit 1
+          fi
+
       - name: Create CI local.env (dev defaults + Supabase — required for t1-proof tests)
         run: |
           cat .env.example > local.env

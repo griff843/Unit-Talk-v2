@@ -29,6 +29,46 @@ const workflow = parse(
 const name = 'Register and verify production Discord guild commands';
 const steps = workflow.jobs['promote']!.steps;
 const registration = steps.find((step) => step.name === name)!;
+const preflight = workflow.jobs['verify']!.steps.find(
+  (step) => step.name === 'Validate production Discord guild identity',
+)!;
+
+function runPreflight(guildId: string | undefined) {
+  const env = { ...process.env };
+  if (guildId === undefined) delete env.DISCORD_GUILD_ID;
+  else env.DISCORD_GUILD_ID = guildId;
+  return spawnSync('bash', ['-e', '-o', 'pipefail', '-c', preflight.run!], {
+    encoding: 'utf8',
+    env,
+  });
+}
+
+test('early preflight accepts a valid production guild snowflake', () => {
+  assert.ok(preflight);
+  assert.equal(runPreflight('1284478946171293736').status, 0);
+});
+
+test('early preflight refuses missing and malformed guild IDs before deployment mutation', () => {
+  const missing = runPreflight(undefined);
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stdout, /DISCORD_GUILD_ID/);
+
+  for (const guildId of ['0', 'not-a-snowflake', ' 1284478946171293736 ']) {
+    const invalid = runPreflight(guildId);
+    assert.notEqual(invalid.status, 0);
+    assert.match(invalid.stdout, /valid Discord snowflake/);
+    if (guildId !== '0')
+      assert.equal(`${invalid.stdout}${invalid.stderr}`.includes(guildId), false);
+  }
+
+  assert.doesNotMatch(preflight.run!, /ssh|docker|scp|rsync|deploy-commands/);
+  assert.deepEqual(workflow.jobs['canary']!.needs, [
+    'build',
+    'build-nextjs',
+    'verify',
+  ]);
+  assert.equal(workflow.jobs['promote']!.needs, 'canary');
+});
 
 test('only promoted production runs registration; failure blocks smoke and deployment success', () => {
   assert.ok(registration);
