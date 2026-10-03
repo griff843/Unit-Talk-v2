@@ -1,0 +1,114 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100202",
+  "pr_number": 1711,
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "bd1454d18950d98d714270c2145020ea435b7b7f",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "classifier_regressions": {
+      "status": "PASS",
+      "tests": 23
+    },
+    "isolated_components": {
+      "status": "PASS",
+      "tests": 6
+    },
+    "staging_path_guards": {
+      "status": "PASS",
+      "tests": 68
+    },
+    "production_credential_guards": {
+      "status": "PASS",
+      "tests": 37
+    },
+    "workspace_verify_static": "PASS on review-fix implementation (complete static chain reached test:live-db)",
+    "application_type_checks": "PASS (both workspace apps after extraction, plus explicit Command Center command)",
+    "application_builds": "PASS (both apps in the review-fix workspace static build)",
+    "automation_coverage": "PASS; no new unwired tests/capabilities",
+    "r_level": "PASS; operator-ui matched; existing machine-matrix QA artifact present, current extraction QA provided by component rendering and 24 HTML comparisons (no live browser QA claim)",
+    "diff_check": "PASS",
+    "operator_surface_tests": {
+      "status": "PASS",
+      "tests": 16
+    },
+    "sidebar_extraction_equivalence": {
+      "status": "PASS",
+      "identical_html_comparisons": 24,
+      "browser_runtime_claim": false
+    }
+  },
+  "synthetic_diffs": [
+    {
+      "paths": [
+        "docs/03_product/brand/assets/unit-talk-mark-white.svg",
+        "apps/smart-form/app/submit/components/BrandLogo.tsx",
+        "apps/command-center/src/components/UnitTalkLogo.tsx",
+        "ordinary lane/proof metadata"
+      ],
+      "tier": "T2",
+      "observed_brand_only": true,
+      "ci_path": "lightweight",
+      "writable_staging_db_proof": "skipped",
+      "runtime_proof": "not-required",
+      "proof": "Actual workflow classifier executed against a synthetic committed git comparison; required verify guard accepts true:skipped."
+    },
+    {
+      "paths": [
+        "same brand/metadata paths",
+        "apps/api/src/submission-service.ts"
+      ],
+      "tier": "T2",
+      "observed_brand_only": false,
+      "ci_path": "normal",
+      "writable_staging_db_proof": "required",
+      "proof": "Actual workflow classifier executed against the same synthetic comparison with an additional API-service commit; required verify guard rejects failed/skipped normal producers."
+    },
+    {
+      "paths": [
+        "apps/command-center/src/components/UnitTalkLogo.tsx"
+      ],
+      "tiers": [
+        "T2",
+        "T3"
+      ],
+      "observed_brand_only": true,
+      "proof": "Real synthetic git comparison edits the logo size class; actual workflow classifier returns true."
+    },
+    {
+      "paths": [
+        "apps/command-center/src/components/UnitTalkLogo.tsx",
+        "apps/command-center/src/components/WorkspaceSidebar.tsx"
+      ],
+      "tiers": [
+        "T2",
+        "T3"
+      ],
+      "observed_brand_only": false,
+      "proof": "Same comparison changes the actual sidebar sign-out fetch method from DELETE to POST; actual workflow classifier returns false. Sidebar-only changes also return false."
+    }
+  ],
+  "local_live_db": {
+    "pnpm_verify_exit": 1,
+    "pnpm_test_db_exit": 1,
+    "classification": "BLOCKED_BY_CONTAINMENT",
+    "write_attempted": false,
+    "reason": "Unchanged staging guard refused the documented localhost placeholder before writable suites."
+  },
+  "authorized_staging_ci": "PENDING on final PR HEAD; this T1 policy fix must use normal CI",
+  "execution_approval": "Griff approved bounded T1 execution only on 2026-10-02",
+  "merge_approval": "PENDING; explicitly not granted",
+  "merge_performed": false,
+  "pm_review_correction": {
+    "date": "2026-10-03",
+    "reviewed_head": "3391839fcd5c78c3d790d91fdf710c2d8736e945",
+    "verdict": "CHANGES_REQUIRED",
+    "correction": "Extract pure UnitTalkLogo, remove behavior-bearing sidebar from allowlist, preserve all sidebar behavior and geometry."
+  }
+}

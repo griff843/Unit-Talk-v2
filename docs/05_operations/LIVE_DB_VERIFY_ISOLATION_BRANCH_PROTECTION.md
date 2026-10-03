@@ -4,6 +4,56 @@ Implements the approved proposal `docs/05_operations/LIVE_DB_VERIFY_ISOLATION_PR
 Goal: a transient Supabase write-path degradation must not block unrelated docs-only / T3 lanes or
 amplify live-DB load, **while T1 runtime proof stays strict**.
 
+## Current CI policy: static branding exception (WORK-2026100202)
+
+The current `ci.yml` normally requires the serialized, staging-bound `staging-db-proof` producer
+and validates its same-run receipt inside the required `verify` context. The historical verdict
+table and follow-up recommendations below describe UTV2-1292, not a bypass of that current gate.
+
+A fail-closed classifier now permits one narrow, non-T1 presentation-only exception. A complete,
+nonempty diff must contain at least one brand path, and every changed path must be one of:
+
+- `docs/03_product/brand/**`
+- `apps/smart-form/app/submit/components/BrandLogo.tsx`
+- `apps/command-center/src/components/UnitTalkLogo.tsx`
+
+- `docs/06_status/lanes/{WORK|UTV2}-<digits>.json`
+- `docs/06_status/proof/{WORK|UTV2}-<digits>/**` with `.md`, `.json`, or `.png` artifacts only
+- `.ops/sync/{WORK|UTV2}-<digits>.yml` or `.ops/work/WORK-<digits>.md`
+
+The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+normal CI, even when changed alongside the logo component.
+
+The PR must have exactly one known `tier:T2` or `tier:T3` label and no `proof-required` label.
+Main pushes use the unique merged PR associated with that exact commit to resolve its tier;
+unknown/ambiguous association falls back to normal CI. PR comparisons use the full git
+merge-base diff, pushes use the full before/after diff, and rename detection is disabled so
+both old and new paths are checked. API pagination cannot truncate the changed-file set.
+Failed checkout/classification, missing or ambiguous output, missing tier, T1, and any extra
+runtime/product/data/backend/configuration file cannot silently opt out.
+
+For this class, required `verify` runs `pnpm verify:static`, Smart Form and Command Center
+build/type-check, and the `Brand component:` cases in `scripts/ci/staging-path-enforcement.test.ts`: real React SSR in an isolated
+harness checks exact canonical SVG paths, accessible identity, expanded/collapsed rendering,
+and PNG/icon signatures without routing/services/DB access. There is **no writable staging DB
+proof and no runtime proof requirement**, and no mandatory R1-R5. Operator-UI QA artifacts and
+normal review/merge requirements remain applicable.
+
+`verify` still runs with `if: always()`. Only successful positive classification together with
+a **skipped** producer is accepted on the branding path. Normal CI requires a **successful**
+producer and the unchanged same-run receipt download/verification. A failed/cancelled/missing
+producer or classifier is red, not a silently skipped required check. The producer alone holds
+staging credentials and honors workflow cancellation rather than continuing a superseded run;
+required `verify` still rejects canceled normal proof. Classification and static verification hold
+none. Branch-protection context
+names are unchanged, and no GitHub settings change is required.
+
+T1, runtime, DB, migration, API-service, and delivery verification are unchanged. This CI-policy
+implementation lane itself is T1 and follows normal staging proof; it is not brand-only.
+Focused regression proof executes the workflow's classifier over synthetic brand-only and
+brand-plus-API-service git diffs and tests failed/missing producer and classification states.
+
 ## What this lane changed (in-repo, no GitHub settings touched)
 
 1. **`package.json` script split**

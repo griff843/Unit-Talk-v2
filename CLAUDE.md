@@ -107,7 +107,7 @@ Start a lane with `ops:lane-start <UTV2-###>`. Close with `ops:lane-close <UTV2-
 Before starting: preflight token valid, tier label set, file scope declared, no overlap with active lanes.
 
 **Pre-closure checklist (7 steps — all required before `ops:lane-close`):**
-1. `pnpm verify` green on the branch
+1. `pnpm verify` green on the branch (qualified non-T1 static branding uses the exception below)
 2. R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
 3. Proof SHA binding automated — `post-merge-lane-close.yml` runs `ops:proof-generate --merge-sha` after merge; no manual append needed
 4. CI green on merge SHA (not just branch CI)
@@ -131,6 +131,22 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | T3 | type-check + test | Green CI on merge SHA | Green CI + valid executor result — no PM verdict |
 
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
+
+**Static branding/presentation:** A positively classified, complete brand-only diff may change
+`docs/03_product/brand/**`, Smart Form's `BrandLogo.tsx`, and Command Center's `UnitTalkLogo.tsx`,
+plus normal lane/proof metadata.
+
+The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+normal CI, even when changed alongside the logo component.
+
+The required CI `verify` context runs `pnpm verify:static`, both
+affected app builds/type-checks, and isolated canonical-logo component checks. No R1-R5, writable
+staging DB proof, or runtime proof is required for this presentation-only class. T1 or `proof-required`
+labels, missing/ambiguous tier, failed classification, and any mixed runtime/data/backend or other
+file fall back to normal CI. T1/runtime/DB/migration/API-service/delivery protections and merge
+authority are unchanged. Exact allowlist and fail-closed behavior:
+`docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md`.
 
 **Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, the orchestrator's own `gh pr review --approve` after diff review satisfies the "GitHub PR review approval" branch — no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, or a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) count as approval artifacts.
 

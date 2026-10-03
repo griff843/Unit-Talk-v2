@@ -44,6 +44,7 @@ Each cell is one of:
 | **Discord delivery** (embed format, channel routing, outbox) | M | — | — | O | — | Replay doesn't cover delivery; R4 covers timeout/retry |
 | **Smart Form payload shape** | M | M | — | — | — | R2 ensures downstream consumers aren't broken |
 | **Command Center read surfaces** | — | — | — | — | — | Read-only; no pipeline side effects to verify |
+| **Static branding / presentation** | — | — | — | — | — | Positive brand-only CI classification; static + affected app build/type-check + isolated logo component verification; no live DB/runtime proof |
 | **Docs / specs / housekeeping** | — | — | — | — | — | No code behavior change |
 | **Infra / CI / workflow** | — | — | — | — | — | Unless the change alters verification infrastructure itself |
 | **Verification infrastructure** (`packages/verification/`) | M | M | O | O | O | Self-referential: changes to the verifier must be verified |
@@ -53,6 +54,23 @@ Each cell is one of:
 ---
 
 ## 4. How to Apply the Matrix
+
+### Static branding boundary
+
+For a positively classified non-T1 presentation-only change, product files are limited to
+`docs/03_product/brand/**`, `apps/smart-form/app/submit/components/BrandLogo.tsx`, and
+`apps/command-center/src/components/UnitTalkLogo.tsx`, plus normal lane/proof metadata.
+
+The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+normal CI, even when changed alongside the logo component.
+
+No R1-R5 or live-DB/runtime proof is applicable; affected UI geometry/component verification
+still applies. This is not an exemption from the machine matrix's operator-UI QA requirements.
+Any additional file, T1/proof-required label, missing tier, or unknown comparison retains normal
+CI and all triggered proof requirements. The exact fail-closed CI boundary is documented in
+`LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md`; it does not exempt runtime, DB, migrations,
+API services, or delivery changes.
 
 ### Before starting a lane
 

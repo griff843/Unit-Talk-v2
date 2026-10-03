@@ -52,7 +52,8 @@ pnpm test:db
 pnpm exec tsx --test path/to/file.test.ts
 ```
 
-- `pnpm verify` is the required final gate; never skip it.
+- `pnpm verify` is the required final gate for normal lanes. The positively classified non-T1
+  static branding exception below uses `pnpm verify:static` instead; no other exemption applies.
 - Tests use `node:test`, `node:assert/strict`, and `tsx --test`. Never install or use Jest, Vitest,
   Mocha, `describe`, `it`, or `expect`.
 - New runtime behavior requires focused tests, and every new test must run directly with
@@ -65,6 +66,23 @@ Live DB verification:
 - T1 always requires `pnpm test:db`.
 - T2/T3 require it when changed files include migrations, `packages/db/**`, or
   `apps/api/src/**-service.ts`; when uncertain, run it.
+
+Static branding/presentation exception:
+
+- `.github/workflows/ci.yml` qualifies only a complete, nonempty diff containing brand changes
+  under `docs/03_product/brand/**`, `apps/smart-form/app/submit/components/BrandLogo.tsx`, or
+  `apps/command-center/src/components/UnitTalkLogo.tsx`, plus normal lane/proof metadata.
+
+- The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+  interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+  normal CI, even when changed alongside the logo component.
+- A single known T2/T3 tier is required; T1, `proof-required`, missing/ambiguous tier, unknown diff,
+  or any other file uses normal CI. Renames examine both source and destination paths.
+- Qualified presentation-only work has no mandatory R1-R5, writable staging DB, or runtime proof.
+  Its required `verify` context runs static verification, both affected apps' build/type-check,
+  and `pnpm exec tsx --test --test-name-pattern='Brand component:' scripts/ci/staging-path-enforcement.test.ts` (isolated logo geometry/rendering).
+- This does not exempt T1, runtime, DB, migration, API-service, or delivery changes, or alter their
+  proof/approval requirements. See `docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md`.
 
 ## Architecture boundaries
 
@@ -130,7 +148,7 @@ Before a PR:
 
 1. Inspect `docs/05_operations/r1-r5-rules.json` for rules matching changed paths and satisfy every
    required artifact.
-2. Run `pnpm verify`, then
+2. Run `pnpm verify` (or the qualified static branding gate above), then
    `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` until PASS.
 3. Confirm every changed file is in scope, no test count decreased, and no new `any` cast was added
    without an existing-code justification.
