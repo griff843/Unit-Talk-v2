@@ -1,0 +1,16 @@
+{
+  "issue_id": "UTV2-1968",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "execution_sha": "b6246af0bd0b0c280e9608889356d9ad91309e85",
+  "policy_version": "2.0.0",
+  "codex_cli_version": "codex-cli 0.153.3",
+  "session_id": "01a100ab-a106-7141-abb5-24625309c13f",
+  "selected_by": "three-brain",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "generated_at": "2026-10-03T07:55:00Z"
+}
