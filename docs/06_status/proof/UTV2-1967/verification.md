@@ -1,6 +1,6 @@
 # PROOF: UTV2-1967
 
-MERGE_SHA: pending merge
+MERGE_SHA: c3e49f1f7c72d2bc12d058ac0f6d826b9dda9534
 
 Bounded PM authority: PR #1678 comment 5958314005. No production state changes.
 
@@ -43,6 +43,6 @@ Focused suites ran directly with `pnpm exec tsx --test scripts/ops/lane-close.te
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: c3e49f1f7c72d2bc12d058ac0f6d826b9dda9534
 PR: #1710
 Execution SHA: c689e1c6aff4947ee95bc0de4e6cf6d9ebcf410c
