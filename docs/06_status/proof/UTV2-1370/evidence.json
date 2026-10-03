@@ -4,12 +4,14 @@
   "tier": "T1",
   "lane_type": "migration",
   "proof_profile": "migration",
-  "status": "READY_FOR_T1_REVIEW_PENDING_POST_DEPLOY_PARITY",
+  "status": "PRODUCTION_VERIFICATION_PASS_PENDING_GOVERNED_CLOSEOUT",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "400c2962c5d51d2d2f7c5d4b228f5a891bd10930",
     "verified_source_sha": "fec795f7a0997180bb61d146eac0b0755147bf52",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-02T19:59:55.211Z"
   },
   "static_proof": {
     "result": "PASS",
@@ -66,14 +68,52 @@
       ]
     },
     "live_schema_parity": {
-      "result": "PENDING_POST_DEPLOY",
-      "observed_result": "FAIL",
-      "production_ddl_applied": false,
+      "result": "PASS",
+      "observed_result": "PASS",
+      "production_ddl_applied": true,
       "required_phase": "post-deploy-before-lane-close",
-      "run": 36532308305,
-      "job": 109288572716,
-      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/36532308305/job/109288572716",
-      "reason": "The authoritative exact-head Live Schema Parity job applied all candidate migrations to scratch, completed the production comparison, and failed only at the drift authorization step because this approved candidate migration has not been applied to production. Production parity remains mandatory after sanctioned deployment and before lane close."
+      "run": 37036445782,
+      "job": 110935763319,
+      "head_sha": "41d659c36cec45c622cbcaaa16fa5ae28bdb1b27",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/37036445782/job/110935763319",
+      "artifact_id": 11241490211,
+      "artifact_name": "live-schema-parity",
+      "artifact_digest": "sha256:1af53e937c2e04c35321fef2e37b9ea7a49c6b80cf4e6b1cbbb82233bd82b60c",
+      "receipt_sha256": "8f08ed75bf9575d7c468a7f02990f9d2d46d13f8b9a0288749f94b5a362d8c93",
+      "unauthorized_drift": 0,
+      "reason": "Authoritative trusted-main post-deployment scratch apply, schema comparison and production drift gate passed. The artifact digest and gate receipt were independently verified; no new schema allowlist was introduced."
+    },
+    "production_read_only_verification": {
+      "result": "PASS",
+      "run": 37036085802,
+      "job": 110934527512,
+      "head_sha": "41d659c36cec45c622cbcaaa16fa5ae28bdb1b27",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/37036085802/job/110934527512",
+      "workflow": ".github/workflows/production-post-migration-verify.yml",
+      "artifact_id": 11240555923,
+      "artifact_name": "production-post-migration-20260928131714-37036085802-1",
+      "artifact_digest": "sha256:f00f78b0477a7e10ff673bb8e66738b81063e810d0106e03a9754362cc3498ed",
+      "receipt_sha256": "6de6d1de400dfdc86f6855cec1979244dc5b1022a80f186093bcc90091968e6e",
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "migration_version": "20260928131714",
+      "migration_versions_reconciled": 137,
+      "reader": "warehouse_reader",
+      "transaction_read_only": "on",
+      "read_only": true,
+      "mutated": false,
+      "required_facts": {
+        "objects_present": true,
+        "phase_roles_inert": true,
+        "phase_roles_have_no_memberships": true,
+        "phase_privileges_exact": true,
+        "phase_roles_have_no_direct_dml": true,
+        "data_api_execute_denied": true,
+        "public_execute_denied": true,
+        "reader_is_least_privilege": true,
+        "control_tables_rls": true,
+        "control_immutability_triggers": true,
+        "runtime_functions_security_definer": true
+      }
     },
     "writable_db_proof_staging": {
       "result": "PASS",
