@@ -1,0 +1,58 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100301",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "da000d16c15fb10b2a44e183cb6627e313677507",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "command": "pnpm verify",
+    "stages": ["db-client-boundary", "sync-check", "system-alignment", "automation-coverage", "env-check", "lint", "type-check", "build", "test", "production-post-migration static tests", "smart-form verify", "verify:commands"],
+    "note": "All static stages passed. Full verify is BLOCKED at staging DB identity guard. Optional Smart Form E2E was not enabled."
+  },
+  "full_verify": {
+    "status": "BLOCKED",
+    "command": "pnpm verify",
+    "failure": "test:db / ci:assert-staging refused unresolved local target",
+    "host": "127.0.0.1",
+    "project_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "tail": "verify-tail.log"
+  },
+  "focused_tests": {
+    "sender_suite_passed": 325,
+    "grading_suite_passed": 100,
+    "final_direct_design_test_passed": 15,
+    "note": "Earlier sender suite included side-effect test duplication; the final design test is explicitly wired in the required root command."
+  },
+  "r_level": {
+    "status": "PASS",
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "rules": ["lifecycle-fsm", "discord-delivery", "ingestor-provider"],
+    "evidence_mode": "offline deterministic fixtures, mocked old/new transport parity, presentation fault cases; no production chaos claim"
+  },
+  "rendering": {
+    "status": "PASS_LOCAL_SIMULATION",
+    "report": "render-report.json",
+    "desktop_width": 1440,
+    "mobile_width": 390,
+    "representative_embeds": 21,
+    "horizontal_overflow": false,
+    "retained_fixture_losses": 150,
+    "live_discord_proof": "UNAVAILABLE: sandbox token/guild/role-channel map absent"
+  },
+  "outstanding_gates": [
+    "staging-ci writable database proof",
+    "trusted external scope approval; WORK ID unsupported by UTV2-only comment parser",
+    "production shadow workflow safety/merge-base failure",
+    "execution model/effort attestation unavailable in current desktop session",
+    "PM merge approval"
+  ]
+}
