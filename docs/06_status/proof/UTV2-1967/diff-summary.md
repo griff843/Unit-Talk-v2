@@ -13,5 +13,5 @@ Bounded reconciliation authorized by PR #1678 comment 5958314005. No retention b
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: c3e49f1f7c72d2bc12d058ac0f6d826b9dda9534
 PR: pending
