@@ -1,6 +1,6 @@
 import { readImmutablePreflightEvidence } from './lane-link-pr.js';
 import { execFileSync } from 'node:child_process';
-import { git, validatePreflightTokenPathValue, type LaneManifest } from './shared.js';
+import { git, normalizeRepoRelativePath, pathsOverlap, validatePreflightTokenPathValue, type LaneManifest } from './shared.js';
 
 export interface HistoricalMergedPr {
   url: string;
@@ -95,12 +95,19 @@ export function hasCanonicalWorkFollowUp(
     const lane: unknown = JSON.parse(blob.stdout);
     if (!lane || typeof lane !== 'object' || Array.isArray(lane)) return false;
     const record = lane as Record<string, unknown>;
+    // Apply canonical scope syntax, without requiring historical paths to exist
+    // in today's checkout. Only directory globs may cover descendant files.
+    const scope = record['file_scope_lock'];
+    if (!Array.isArray(scope) || scope.length === 0 || !scope.every(entry =>
+      typeof entry === 'string' && normalizeRepoRelativePath(entry) === entry)) return false;
+    if (!overlappingPaths.every(file => normalizeRepoRelativePath(file) === file &&
+      !file.includes('*') && scope.some(entry => entry === file ||
+        (entry.endsWith('/**') && file.startsWith(entry.slice(0, -2)) && pathsOverlap(entry, file))))) return false;
     const validLane = (
       record['issue_id'] === workId && record['schema_version'] === 2 && record['base_branch'] === 'main' &&
       typeof record['branch'] === 'string' && new RegExp(`^(?:claude|codex)/${workId.toLowerCase()}-[a-z0-9-]+$`).test(record['branch']) &&
       typeof record['pr_url'] === 'string' && /^https:\/\/github\.com\/griff843\/Unit-Talk-v2\/pull\/\d+$/.test(record['pr_url']) &&
       ['started', 'in_progress', 'in_review', 'merged', 'done'].includes(String(record['status'])) &&
-      Array.isArray(record['file_scope_lock']) && overlappingPaths.every(path => (record['file_scope_lock'] as unknown[]).includes(path)) &&
       Array.isArray(record['expected_proof_paths']) && record['expected_proof_paths'].includes(`docs/06_status/proof/${workId}/evidence.json`) &&
       ['T1', 'T2', 'T3'].includes(String(record['tier']))
     );
@@ -108,6 +115,7 @@ export function hasCanonicalWorkFollowUp(
     const number = Number(String(record['pr_url']).split('/').at(-1));
     const pr = attest(number);
     return !!pr && pr.number === number && pr.repository === 'griff843/Unit-Talk-v2' &&
+      pr.headRepository === 'griff843/Unit-Talk-v2' &&
       pr.merged && pr.mergeSha === sha && pr.baseRefName === 'main' &&
       pr.headRefName === record['branch'] && /^[0-9a-f]{40}$/i.test(pr.headSha);
   } catch { return false; }
@@ -116,6 +124,7 @@ export function hasCanonicalWorkFollowUp(
 export interface WorkFollowUpPr {
   number: number;
   repository: string;
+  headRepository?: string | null;
   merged: boolean;
   mergeSha: string;
   headSha: string;
@@ -130,6 +139,7 @@ function fetchWorkFollowUpPr(number: number): WorkFollowUpPr | null {
     ], { encoding: 'utf8', stdio: 'pipe' }));
     return {
       number: pr.number, repository: pr.base?.repo?.full_name,
+      headRepository: pr.head?.repo?.full_name,
       merged: pr.merged === true && typeof pr.merged_at === 'string',
       mergeSha: pr.merge_commit_sha, headSha: pr.head?.sha,
       headRefName: pr.head?.ref, baseRefName: pr.base?.ref,

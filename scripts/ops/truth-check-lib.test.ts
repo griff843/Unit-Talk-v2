@@ -576,7 +576,7 @@ test('UTV2-1967: G5 accepts WORK follow-ups only with canonical lane ownership a
     const inspected: string[] = [];
     const result = findPostMergeTouches({
       mergeSha: 'merge-sha', filesChanged: ['package.json'], issueId: 'UTV2-1370',
-      workFollowUpPr: () => ({ number: 1697, repository: 'griff843/Unit-Talk-v2', merged: true,
+      workFollowUpPr: () => ({ number: 1697, repository: 'griff843/Unit-Talk-v2', headRepository: 'griff843/Unit-Talk-v2', merged: true,
         mergeSha: sha, headSha: 'b'.repeat(40), headRefName: canonical.branch, baseRefName: 'main' }),
       showCommit: () => ({ timestamp: '2026-09-29T11:00:00Z', subject: 'primary merge' }),
       gitCommand: args => {
@@ -598,11 +598,14 @@ test('UTV2-1967: G5 refuses fabricated or unrelated WORK PR attestation', () => 
   const lane = { schema_version: 2, issue_id: workId, base_branch: 'main', branch,
     pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1697', status: 'in_review', tier: 'T1',
     file_scope_lock: ['package.json'], expected_proof_paths: [`docs/06_status/proof/${workId}/evidence.json`] };
-  const valid = { number: 1697, repository: 'griff843/Unit-Talk-v2', merged: true,
+  const valid = { number: 1697, repository: 'griff843/Unit-Talk-v2', headRepository: 'griff843/Unit-Talk-v2', merged: true,
     mergeSha: sha, headSha: 'b'.repeat(40), headRefName: branch, baseRefName: 'main' };
   for (const attestation of [null, { ...valid, number: 123 }, { ...valid, merged: false },
     { ...valid, mergeSha: 'c'.repeat(40) }, { ...valid, headRefName: 'codex/unrelated' },
-    { ...valid, repository: 'attacker/Unit-Talk-v2' }, { ...valid, headSha: '' }]) {
+    { ...valid, repository: 'attacker/Unit-Talk-v2' }, { ...valid, headSha: '' },
+    { ...valid, headRepository: 'attacker/Unit-Talk-v2' }, { ...valid, headRepository: '' },
+    // A deleted/missing GitHub head repository must refuse, not inherit base authority.
+    { ...valid, headRepository: undefined }, { ...valid, headRepository: null }]) {
     const result = findPostMergeTouches({
       mergeSha: 'merge-sha', filesChanged: ['package.json'], issueId: 'UTV2-1370',
       showCommit: () => ({ timestamp: '2026-09-29T11:00:00Z', subject: 'primary merge' }),
@@ -612,6 +615,41 @@ test('UTV2-1967: G5 refuses fabricated or unrelated WORK PR attestation', () => 
         : args[1] === '--format=' ? 'package.json' : JSON.stringify(lane) }),
     });
     assert.deepEqual(result, [sha]);
+  }
+});
+
+test('UTV2-1967: G5 honors canonical WORK directory globs without widening ownership', () => {
+  const sha = 'a'.repeat(40);
+  const workId = 'WORK-2026092901';
+  const branch = 'claude/work-2026092901-warehouse-followup';
+  const files = ['docs/03_product/brand/intent.md', 'docs/03_product/brand/nested/contract.md'];
+  const lane = { schema_version: 2, issue_id: workId, base_branch: 'main', branch,
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1697', status: 'in_review', tier: 'T1',
+    expected_proof_paths: [`docs/06_status/proof/${workId}/evidence.json`] };
+  for (const [scope, touched, accepted] of [
+    [['docs/03_product/brand/**'], files, true],
+    [files, files, true],
+    [['docs/03_product/brand/**', 'package.json'], [...files, 'package.json'], true],
+    [['docs/03_product/brand/**'], [...files, 'package.json'], false],
+    [['docs/03_product/brand/**'], ['docs/03_product/branding/intent.md'], false],
+    [['docs/03_product/brand/**'], ['docs/03_product/intent.md'], false],
+    [['docs/03_product/brand'], files, false],
+    [['docs/03_product/brand/*'], files, false],
+    [['docs/**/brand/**'], files, false],
+    [['docs/03_product/brand/**', '../package.json'], files, false],
+    [['docs/03_product/brand/**', 42], files, false],
+  ] as const) {
+    const result = findPostMergeTouches({
+      mergeSha: 'merge-sha', filesChanged: [...touched], issueId: 'UTV2-1370',
+      showCommit: () => ({ timestamp: '2026-09-29T11:00:00Z', subject: 'primary merge' }),
+      workFollowUpPr: () => ({ number: 1697, repository: 'griff843/Unit-Talk-v2',
+        headRepository: 'griff843/Unit-Talk-v2', merged: true, mergeSha: sha,
+        headSha: 'b'.repeat(40), headRefName: branch, baseRefName: 'main' }),
+      gitCommand: args => ({ ok: true, stderr: '', stdout: args[0] === 'log'
+        ? `${sha}\tfix: ${workId} follow-up\t2026-09-29T12:00:00Z`
+        : args[1] === '--format=' ? touched.join('\n') : JSON.stringify({ ...lane, file_scope_lock: scope }) }),
+    });
+    assert.deepEqual(result, accepted ? [] : [sha], JSON.stringify({ scope, touched }));
   }
 });
 
