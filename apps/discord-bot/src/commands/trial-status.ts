@@ -1,23 +1,12 @@
+import { createMemberEmbed } from '../embeds/presentation.js';
 import {
-  EmbedBuilder,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
   type GuildMember,
 } from 'discord.js';
 import { loadBotConfig } from '../config.js';
 import type { CommandHandler } from '../command-registry.js';
-import {
-  resolveMemberTier,
-  type MemberTierContext,
-} from '../tier-resolver.js';
-
-const TIER_COLORS = {
-  free: 0x99aab5,
-  trial: 0x57f287,
-  vip: 0x5865f2,
-  'vip-plus': 0xffd700,
-  'black-label': 0x111111,
-} as const;
+import { resolveMemberTier, type MemberTierContext } from '../tier-resolver.js';
 
 export function createTrialStatusCommand(
   config: ReturnType<typeof loadBotConfig>,
@@ -40,16 +29,17 @@ export function createTrialStatusCommand(
 }
 
 export function buildTrialStatusEmbed(context: MemberTierContext) {
-  const embed = new EmbedBuilder()
+  const embed = createMemberEmbed()
     .setTitle(`Your Unit Talk Access - ${formatTierDisplay(context.tier)}`)
-    .setColor(TIER_COLORS[context.tier])
+
     .setDescription(resolveTierDescription(context.tier))
     .setFooter({ text: 'Unit Talk - /trial-status' });
 
   if (context.isCapper) {
     embed.addFields({
       name: 'Capper Role',
-      value: 'You also hold the Capper contributor role. Use /pick to submit picks.',
+      value:
+        'You also hold the Capper contributor role. Use /pick to submit picks.',
       inline: false,
     });
   }
@@ -85,7 +75,7 @@ function resolveTierDescription(tier: MemberTierContext['tier']) {
       return "You're on a reserved tier.";
     case 'free':
     default:
-      return 'You have free access to Unit Talk. Upgrade to VIP for full pick board and capper access.';
+      return 'Your settled results and recaps remain available. VIP adds active official picks and VIP community access.';
   }
 }
 

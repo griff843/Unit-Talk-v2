@@ -1,9 +1,17 @@
 import {
-  EmbedBuilder,
+  createMemberEmbed,
+  replyWithPrivateError,
+} from '../embeds/presentation.js';
+import { finiteMetric } from '@unit-talk/domain';
+import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
-import { ApiClientError, createApiClient, type ApiClient } from '../api-client.js';
+import {
+  ApiClientError,
+  createApiClient,
+  type ApiClient,
+} from '../api-client.js';
 import { loadBotConfig } from '../config.js';
 import type { CommandHandler } from '../command-registry.js';
 
@@ -33,9 +41,14 @@ export function createStatsCommand(apiClient: ApiClient): CommandHandler {
   return {
     data: new SlashCommandBuilder()
       .setName('stats')
-      .setDescription('Show settled pick performance for a capper or the full server')
+      .setDescription(
+        'Show settled pick performance for a capper or the full server',
+      )
       .addUserOption((option) =>
-        option.setName('capper').setDescription('Capper to evaluate').setRequired(false),
+        option
+          .setName('capper')
+          .setDescription('Capper to evaluate')
+          .setRequired(false),
       )
       .addIntegerOption((option) =>
         option
@@ -58,8 +71,14 @@ export function createStatsCommand(apiClient: ApiClient): CommandHandler {
       ),
     async execute(interaction: ChatInputCommandInteraction) {
       const capper = resolveCapperName(interaction);
-      const window = (interaction.options.getInteger('window') ?? 30) as 7 | 14 | 30 | 90;
-      const sport = normalizeOptionalString(interaction.options.getString('sport'));
+      const window = (interaction.options.getInteger('window') ?? 30) as
+        | 7
+        | 14
+        | 30
+        | 90;
+      const sport = normalizeOptionalString(
+        interaction.options.getString('sport'),
+      );
       const path = buildStatsPath({
         ...(capper ? { capper } : {}),
         ...(sport ? { sport } : {}),
@@ -76,10 +95,7 @@ export function createStatsCommand(apiClient: ApiClient): CommandHandler {
           error instanceof ApiClientError
             ? 'Stats are temporarily unavailable.'
             : 'Stats are temporarily unavailable.';
-        await interaction.editReply({
-          content,
-          embeds: [],
-        });
+        await replyWithPrivateError(interaction, content);
       }
     },
   };
@@ -88,10 +104,14 @@ export function createStatsCommand(apiClient: ApiClient): CommandHandler {
 export function buildStatsEmbed(stats: CapperStatsResponse) {
   const title =
     stats.scope === 'capper'
-      ? `${stats.capper ?? 'Unknown'} · Last ${stats.window} Days${stats.sport ? ` (${stats.sport})` : ''}`
+      ? `${stats.capper ?? 'Capper Record'} · Last ${stats.window} Days${stats.sport ? ` (${stats.sport})` : ''}`
       : `Server · Last ${stats.window} Days${stats.sport ? ` (${stats.sport})` : ''}`;
 
-  const embed = new EmbedBuilder().setTitle(title).setColor(resolveEmbedColor(stats));
+  const embed = createMemberEmbed('capper-record')
+    .setTitle(title)
+    .setFooter({
+      text: `Unit Talk · ${stats.picks} settled picks · ${stats.window} days`,
+    });
 
   if (stats.picks === 0) {
     embed.setDescription('No settled picks in this window.');
@@ -103,13 +123,14 @@ export function buildStatsEmbed(stats: CapperStatsResponse) {
     value: `${stats.wins}-${stats.losses}-${stats.pushes}`,
     inline: true,
   });
-  embed.addFields({
-    name: 'Win Rate',
-    value: formatFractionPercent(stats.winRate),
-    inline: true,
-  });
+  if (finiteMetric(stats.winRate))
+    embed.addFields({
+      name: 'Win Rate',
+      value: formatFractionPercent(stats.winRate),
+      inline: true,
+    });
 
-  if (stats.picks >= 5) {
+  if (stats.picks >= 5 && finiteMetric(stats.roiPct)) {
     embed.addFields({
       name: 'ROI',
       value: formatSignedPercent(stats.roiPct),
@@ -117,28 +138,25 @@ export function buildStatsEmbed(stats: CapperStatsResponse) {
     });
   }
 
-  if (stats.picks >= 5 && stats.picksWithClv > 0) {
+  if (
+    stats.picks >= 5 &&
+    stats.picksWithClv > 0 &&
+    finiteMetric(stats.avgClvPct)
+  ) {
     embed.addFields({
       name: 'Avg CLV%',
       value: `${formatSignedPercent(stats.avgClvPct)} (${stats.picksWithClv} picks with closing line data)`,
       inline: false,
     });
-    embed.addFields({
-      name: 'Beats Line',
-      value: formatFractionPercent(stats.beatsLine),
-      inline: true,
-    });
+    if (finiteMetric(stats.beatsLine))
+      embed.addFields({
+        name: 'Beats Line',
+        value: formatFractionPercent(stats.beatsLine),
+        inline: true,
+      });
   }
 
-  if (stats.picks >= 5 && stats.picksWithClv === 0) {
-    embed.addFields({
-      name: 'CLV',
-      value: 'unavailable (no closing-line data)',
-      inline: false,
-    });
-  }
-
-  if (stats.picks >= 5) {
+  if (stats.picks >= 5 && stats.lastFive.length > 0) {
     embed.addFields({
       name: 'Last 5',
       value: stats.lastFive.join('  '),
@@ -148,7 +166,7 @@ export function buildStatsEmbed(stats: CapperStatsResponse) {
 
   if (stats.picks < 5) {
     embed.setFooter({
-      text: 'Insufficient sample for CLV stats.',
+      text: `Unit Talk · ${stats.picks} settled picks · Small sample — interpret with caution`,
     });
   }
 
@@ -191,19 +209,6 @@ function resolveCapperName(interaction: ChatInputCommandInteraction) {
 
   const globalName = user.globalName?.trim();
   return globalName || user.username.trim();
-}
-
-function resolveEmbedColor(stats: CapperStatsResponse) {
-  if (stats.picks < 10 || stats.winRate === null) {
-    return 0x9ca3af;
-  }
-  if (stats.winRate >= 0.55) {
-    return 0x22c55e;
-  }
-  if (stats.winRate >= 0.45) {
-    return 0xeab308;
-  }
-  return 0xef4444;
 }
 
 function formatFractionPercent(value: number | null) {

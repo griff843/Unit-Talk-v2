@@ -1,3 +1,7 @@
+import {
+  buildPresentationPages,
+  type PresentationEmbed,
+} from '@unit-talk/domain';
 import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
 import {
   isHumanCapperDeliveryAuthorized,
@@ -28,6 +32,8 @@ export interface RecapTopPlay {
 }
 
 export interface RecapPickLine {
+  stakeUnits?: number | null;
+  odds?: number | null;
   selection: string;
   market: string;
   result: 'win' | 'loss' | 'push';
@@ -108,7 +114,10 @@ export type PostRecapResult =
 const UTC_DAY_MS = 24 * 60 * 60 * 1000;
 const RECENT_SETTLEMENT_LIMIT = 5_000;
 
-export function getRecapWindow(period: RecapPeriod, now: Date = new Date()): RecapWindow {
+export function getRecapWindow(
+  period: RecapPeriod,
+  now: Date = new Date(),
+): RecapWindow {
   const currentUtcMidnight = createUtcDate(
     now.getUTCFullYear(),
     now.getUTCMonth(),
@@ -137,7 +146,11 @@ export function getRecapWindow(period: RecapPeriod, now: Date = new Date()): Rec
     };
   }
 
-  const startsAt = createUtcDate(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
+  const startsAt = createUtcDate(
+    now.getUTCFullYear(),
+    now.getUTCMonth() - 1,
+    1,
+  );
   const endsAt = createUtcDate(now.getUTCFullYear(), now.getUTCMonth(), 1);
 
   return {
@@ -181,7 +194,10 @@ export async function computeRecapSummary(
   // an aggregate that is partly stopped and partly not.
   const humanDeliveryStopped = await isHumanDeliveryStopped(repositories);
   // Pass window.startsAt as the since lower bound to avoid full-table ORDER BY scan (UTV2-1355)
-  const settlements = await repositories.settlements.listRecent(RECENT_SETTLEMENT_LIMIT, window.startsAt);
+  const settlements = await repositories.settlements.listRecent(
+    RECENT_SETTLEMENT_LIMIT,
+    window.startsAt,
+  );
   const relevantSettlements = settlements.filter((settlement) => {
     if (settlement.status !== 'settled') {
       return false;
@@ -199,7 +215,10 @@ export async function computeRecapSummary(
       return false;
     }
 
-    return settlement.created_at >= window.startsAt && settlement.created_at < window.endsAt;
+    return (
+      settlement.created_at >= window.startsAt &&
+      settlement.created_at < window.endsAt
+    );
   });
 
   if (relevantSettlements.length === 0) {
@@ -221,7 +240,9 @@ export async function computeRecapSummary(
       // one of them would make removing that one a compile error in the other
       // -- which reads as a killed mutant without the behaviour ever differing.
       const pickMetadata =
-        pick.metadata && typeof pick.metadata === 'object' && !Array.isArray(pick.metadata)
+        pick.metadata &&
+        typeof pick.metadata === 'object' &&
+        !Array.isArray(pick.metadata)
           ? (pick.metadata as Record<string, unknown>)
           : null;
 
@@ -249,7 +270,10 @@ export async function computeRecapSummary(
       // delivery posture is not a reason to stop recapping everything else, so
       // non-human rows fall through untouched and Track Only stays excluded
       // above for its own, separate reason.
-      if (humanDeliveryStopped && isHumanCapperDeliveryAuthorized(pickMetadata)) {
+      if (
+        humanDeliveryStopped &&
+        isHumanCapperDeliveryAuthorized(pickMetadata)
+      ) {
         return null;
       }
       // UTV2-1923 RECAP_HUMAN_DELIVERY_STOP_GUARD_END
@@ -260,11 +284,7 @@ export async function computeRecapSummary(
         pick,
         result,
         stakeUnits,
-        profitLossUnits: computeProfitLossUnits(
-          result,
-          stakeUnits,
-          pick.odds,
-        ),
+        profitLossUnits: computeProfitLossUnits(result, stakeUnits, pick.odds),
       };
     })
     .filter(
@@ -286,7 +306,9 @@ export async function computeRecapSummary(
   const losses = joinedRows.filter((row) => row.result === 'loss').length;
   const pushes = joinedRows.filter((row) => row.result === 'push').length;
   const knownStakeRows = joinedRows.filter(
-    (row): row is typeof row & { stakeUnits: number; profitLossUnits: number } =>
+    (
+      row,
+    ): row is typeof row & { stakeUnits: number; profitLossUnits: number } =>
       row.stakeUnits !== null && row.profitLossUnits !== null,
   );
   const unknownStakeCount = joinedRows.length - knownStakeRows.length;
@@ -352,11 +374,15 @@ export async function computeRecapSummary(
       sport: readSport(topPlayRow.pick),
     },
     picks: joinedRows.map((row) => ({
+      stakeUnits: readStakeUnits(row.pick),
+      odds: row.pick.odds,
       selection: row.pick.selection,
       market: row.pick.market,
       result: row.result,
       profitLossUnits:
-        row.profitLossUnits === null ? null : roundToTwoDecimals(row.profitLossUnits),
+        row.profitLossUnits === null
+          ? null
+          : roundToTwoDecimals(row.profitLossUnits),
       confidence: readConfidence(row.pick),
       sport: readSport(row.pick),
       submittedBy: readSubmittedBy(row.pick),
@@ -375,13 +401,45 @@ export async function postRecapSummary(
   }
 
   const dryRun = options.dryRun ?? readRecapDryRun();
+  let postsCount = 0;
+  for (const [pageIndex, embed] of buildRecapEmbeds(summary).entries()) {
+    const result = await postRecapPage(
+      summary,
+      repositories,
+      options,
+      embed,
+      pageIndex,
+    );
+    if (!result.ok) return result;
+    postsCount += result.postsCount;
+  }
+  return {
+    ok: true,
+    postsCount,
+    channel: options.channel?.trim() || 'discord:recaps',
+    summary,
+    dryRun,
+  };
+}
+
+async function postRecapPage(
+  summary: RecapSummary,
+  repositories: RecapDeliveryRepositories,
+  options: PostRecapOptions,
+  embed: PresentationEmbed,
+  pageIndex: number,
+): Promise<PostRecapResult> {
+  const period = summary.period;
+  const dryRun = options.dryRun ?? readRecapDryRun();
   const channel = options.channel?.trim() || 'discord:recaps';
   const channelId = resolveDiscordChannelId(channel);
   if (!channelId) {
     return { ok: false, reason: 'channel target could not be resolved' };
   }
 
-  const idempotencyKey = buildRecapIdempotencyKey(period, channel, summary.window.endsAt);
+  const idempotencyKey =
+    buildRecapIdempotencyKey(period, channel, summary.window.endsAt) +
+    (pageIndex ? `:page:${pageIndex + 1}` : '');
   const existingOutbox = await findRecapOutboxByIdempotencyKey(
     repositories.outbox,
     idempotencyKey,
@@ -413,13 +471,15 @@ export async function postRecapSummary(
   }
 
   const outbox =
-    existingOutbox && (existingOutbox.status === 'pending' || existingOutbox.status === 'processing')
+    existingOutbox &&
+    (existingOutbox.status === 'pending' ||
+      existingOutbox.status === 'processing')
       ? existingOutbox
       : await repositories.outbox.enqueue({
           pickId: summary.topPlay.pickId,
           target: channel,
           idempotencyKey,
-          payload: buildRecapOutboxPayload(summary, channel, channelId),
+          payload: buildRecapOutboxPayload(summary, channel, channelId, embed),
         });
 
   let response: Response;
@@ -433,14 +493,16 @@ export async function postRecapSummary(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          embeds: [buildRecapEmbed(summary)],
+          embeds: [embed],
         }),
       },
     );
 
     if (!response.ok) {
       const terminalFailure =
-        response.status >= 400 && response.status < 500 && response.status !== 429;
+        response.status >= 400 &&
+        response.status < 500 &&
+        response.status !== 429;
       await recordRecapDeliveryFailure({
         repositories,
         outbox,
@@ -453,7 +515,8 @@ export async function postRecapSummary(
       return { ok: false, reason: 'discord post failed' };
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'unknown delivery error';
+    const errorMessage =
+      error instanceof Error ? error.message : 'unknown delivery error';
     await recordRecapDeliveryFailure({
       repositories,
       outbox,
@@ -466,7 +529,9 @@ export async function postRecapSummary(
     return { ok: false, reason: 'discord post failed' };
   }
 
-  const body = (await response.json().catch(() => null)) as { id?: string } | null;
+  const body = (await response.json().catch(() => null)) as {
+    id?: string;
+  } | null;
   const receipt = await recordDistributionReceipt(repositories.receipts, {
     outboxId: outbox.id,
     receiptType: 'discord.message',
@@ -507,104 +572,78 @@ export async function postRecapSummary(
   };
 }
 
+/** Compatibility accessor for a single page. Runtime always delivers buildRecapEmbeds. */
 export function buildRecapEmbed(summary: RecapSummary) {
-  const sampleValue = summary.totalPicks < 20
-    ? `${summary.sampleContext}\n_Small sample \u2014 interpret with caution_`
-    : summary.sampleContext;
-
-  const fields: Array<{ name: string; value: string; inline: boolean }> = [
-    {
-      name: 'Record',
-      value: summary.record,
-      inline: true,
-    },
-    {
-      name: 'Net Units',
-      value: formatUnits(summary.netUnits),
-      inline: true,
-    },
-    {
-      name: 'ROI',
-      value: formatPercent(summary.roiPercent),
-      inline: true,
-    },
-    {
-      name: 'Sample',
-      value: sampleValue,
-      inline: true,
-    },
-  ];
-
-  if (summary.unknownStakeCount > 0) {
-    fields.push({
-      name: 'Stake Integrity',
-      value: `${summary.unknownStakeCount} historical pick(s) excluded from ROI because stake_units was missing.`,
-      inline: false,
-    });
-  }
-
-  // Per-pick breakdown (compact, max 10 picks to stay within Discord limits)
-  if (summary.picks.length > 0) {
-    const displayPicks = summary.picks.slice(0, 10);
-    const pickLines = displayPicks.map((p) => {
-      const icon = recapSportIcon(p.sport);
-      const resultEmoji = p.result === 'win' ? '\u2705' : p.result === 'loss' ? '\u274c' : '\u2796';
-      const confStr = p.confidence != null ? ` \u2022 ${Math.round(p.confidence * 100)}%` : '';
-      const profitLossLabel =
-        p.profitLossUnits === null ? 'P/L unavailable (missing stake)' : formatUnits(p.profitLossUnits);
-      return `${resultEmoji} ${icon}**${p.selection}** (${p.market}) ${profitLossLabel}${confStr}`;
-    });
-    if (summary.picks.length > 10) {
-      pickLines.push(`_...and ${summary.picks.length - 10} more_`);
-    }
-    fields.push({
-      name: 'Picks',
-      value: pickLines.join('\n'),
-      inline: false,
-    });
-  }
-
-  // Top play with enriched detail
-  const topPlayLines = [
-    `${recapSportIcon(summary.topPlay.sport)}**${summary.topPlay.selection}** (${summary.topPlay.market})`,
-    `Result: ${capitalize(summary.topPlay.result)} \u2022 P/L: ${formatUnits(summary.topPlay.profitLossUnits)}`,
-    `Capper: ${summary.topPlay.submittedBy}`,
-  ];
-  if (summary.topPlay.confidence != null) {
-    const confPct = Math.round(summary.topPlay.confidence * 100);
-    const descriptor = confPct >= 75 ? 'High' : confPct >= 50 ? 'Medium' : 'Low';
-    topPlayLines.push(`Confidence: ${confPct}% (${descriptor})`);
-  }
-  fields.push({
-    name: '\u2b50 Top Play',
-    value: topPlayLines.join('\n'),
-    inline: false,
-  });
-
-  return {
+  return buildRecapEmbeds(summary)[0]!;
+}
+export function buildRecapEmbeds(summary: RecapSummary): PresentationEmbed[] {
+  const sample =
+    summary.totalPicks < 20
+      ? `${summary.sampleContext}\n_Small sample — interpret with caution_`
+      : summary.sampleContext;
+  const pickLines = summary.picks.map((pick) =>
+    [
+      `${capitalize(pick.result)} · **${pick.selection}** (${pick.market})`,
+      pick.odds != null ? `Odds: ${pick.odds > 0 ? '+' : ''}${pick.odds}` : '',
+      pick.stakeUnits != null ? `Stake: ${pick.stakeUnits}u` : '',
+      pick.profitLossUnits != null
+        ? `P/L: ${formatUnits(pick.profitLossUnits)}`
+        : '',
+      pick.submittedBy ? `Capper: ${pick.submittedBy}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | '),
+  );
+  return buildPresentationPages(`${summary.period}-recap`, {
     title: summary.window.label,
-    color: summary.netUnits >= 0 ? 0x2f855a : 0xc53030,
-    fields,
-  };
+    fields: [
+      { name: 'Record', value: summary.record, inline: true },
+      {
+        name: 'Net Units',
+        value:
+          summary.knownStakeCount > 0
+            ? formatUnits(summary.netUnits)
+            : undefined,
+        inline: true,
+      },
+      {
+        name: 'ROI',
+        value:
+          summary.totalRiskedUnits > 0
+            ? formatPercent(summary.roiPercent)
+            : undefined,
+        inline: true,
+      },
+      { name: 'Sample', value: sample, inline: false },
+      {
+        name: 'Stake Integrity',
+        value:
+          summary.unknownStakeCount > 0
+            ? `${summary.unknownStakeCount} historical pick(s) excluded from ROI because stake_units was missing.`
+            : undefined,
+      },
+      {
+        name: 'Top Play',
+        value: [
+          `**${summary.topPlay.selection}** (${summary.topPlay.market})`,
+          `Result: ${capitalize(summary.topPlay.result)} · P/L: ${formatUnits(summary.topPlay.profitLossUnits)}`,
+          summary.topPlay.submittedBy
+            ? `Capper: ${summary.topPlay.submittedBy}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      },
+      { name: 'Settled Picks', value: pickLines.join('\n') },
+    ],
+  });
 }
-
-const RECAP_SPORT_ICONS: Record<string, string> = {
-  MLB: '\u26be ',
-  NBA: '\ud83c\udfc0 ',
-  NFL: '\ud83c\udfc8 ',
-  NHL: '\ud83c\udfd2 ',
-  Soccer: '\u26bd ',
-  soccer: '\u26bd ',
-  MLS: '\u26bd ',
-  EPL: '\u26bd ',
-};
-
-function recapSportIcon(sport: string | null): string {
-  if (!sport) return '';
-  return RECAP_SPORT_ICONS[sport] ?? '';
-}
-
-function buildRecapOutboxPayload(summary: RecapSummary, channel: string, channelId: string) {
+function buildRecapOutboxPayload(
+  summary: RecapSummary,
+  channel: string,
+  channelId: string,
+  embed: PresentationEmbed,
+) {
   return {
     type: 'recap.post',
     channel,
@@ -612,11 +651,14 @@ function buildRecapOutboxPayload(summary: RecapSummary, channel: string, channel
     period: summary.period,
     window: summary.window,
     summary,
-    embeds: [buildRecapEmbed(summary)],
+    embeds: [embed],
   };
 }
 
-function buildWindowDescription(period: RecapPeriod, window: RecapWindow): string {
+function buildWindowDescription(
+  period: RecapPeriod,
+  window: RecapWindow,
+): string {
   const startsAt = new Date(window.startsAt);
   const endsAt = new Date(window.endsAt);
 
@@ -633,10 +675,16 @@ function buildWindowDescription(period: RecapPeriod, window: RecapWindow): strin
   return `Monthly (${formatMonthYear(startsAt)})`;
 }
 
-function buildSampleContext(totalPicks: number, period: RecapPeriod, window: RecapWindow): string {
+function buildSampleContext(
+  totalPicks: number,
+  period: RecapPeriod,
+  window: RecapWindow,
+): string {
   const startsAt = new Date(window.startsAt);
   const endsAt = new Date(window.endsAt);
-  const daysSpan = Math.round((endsAt.getTime() - startsAt.getTime()) / UTC_DAY_MS);
+  const daysSpan = Math.round(
+    (endsAt.getTime() - startsAt.getTime()) / UTC_DAY_MS,
+  );
   const pickLabel = totalPicks === 1 ? 'pick' : 'picks';
   const dayLabel = daysSpan === 1 ? 'day' : 'days';
   return `${totalPicks} ${pickLabel} over ${daysSpan} ${dayLabel}`;
@@ -666,7 +714,9 @@ function formatMonthDay(date: Date) {
 
 function formatWeekRange(startsAt: Date, endsAt: Date) {
   const sameMonth = startsAt.getUTCMonth() === endsAt.getUTCMonth();
-  const start = sameMonth ? formatMonthDay(startsAt) : formatMonthDayWithYear(startsAt);
+  const start = sameMonth
+    ? formatMonthDay(startsAt)
+    : formatMonthDayWithYear(startsAt);
   const end = formatMonthDayWithYear(endsAt, sameMonth);
   return `${start}-${end}`;
 }
@@ -713,7 +763,8 @@ export function readRecapDryRun() {
 }
 
 function readStakeUnits(pick: PickRecord) {
-  return typeof pick.stake_units === 'number' && Number.isFinite(pick.stake_units)
+  return typeof pick.stake_units === 'number' &&
+    Number.isFinite(pick.stake_units)
     ? pick.stake_units
     : null;
 }
@@ -725,12 +776,12 @@ function readSubmittedBy(pick: PickRecord) {
     typeof pickRecord.submitted_by === 'string'
       ? pickRecord.submitted_by
       : typeof metadata?.submittedBy === 'string'
-      ? metadata.submittedBy
-      : typeof metadata?.capper === 'string'
-        ? metadata.capper
-        : null;
+        ? metadata.submittedBy
+        : typeof metadata?.capper === 'string'
+          ? metadata.capper
+          : null;
 
-  return rawSubmittedBy?.trim() || 'Unit Talk';
+  return rawSubmittedBy?.trim() || '';
 }
 
 function computeProfitLossUnits(
@@ -760,13 +811,17 @@ function computeProfitLossUnits(
 
 function formatUnits(value: number) {
   const rounded = roundToTwoDecimals(value);
-  const normalized = Number.isInteger(rounded) ? rounded.toFixed(1) : rounded.toString();
+  const normalized = Number.isInteger(rounded)
+    ? rounded.toFixed(1)
+    : rounded.toString();
   return `${rounded >= 0 ? '+' : ''}${normalized}u`;
 }
 
 function formatPercent(value: number) {
   const rounded = roundToTwoDecimals(value);
-  const normalized = Number.isInteger(rounded) ? rounded.toFixed(1) : rounded.toString();
+  const normalized = Number.isInteger(rounded)
+    ? rounded.toFixed(1)
+    : rounded.toString();
   return `${rounded >= 0 ? '+' : ''}${normalized}%`;
 }
 
@@ -774,7 +829,11 @@ function roundToTwoDecimals(value: number) {
   return Math.round(value * 100) / 100;
 }
 
-function buildRecapIdempotencyKey(period: RecapPeriod, channel: string, windowEndsAt: string) {
+function buildRecapIdempotencyKey(
+  period: RecapPeriod,
+  channel: string,
+  windowEndsAt: string,
+) {
   return `recap:${period}:${channel}:${windowEndsAt}`;
 }
 
@@ -789,19 +848,20 @@ async function findRecapOutboxByIdempotencyKey(
   return outboxRepository.findByIdempotencyKey(idempotencyKey);
 }
 
-async function recordRecapDeliveryFailure(
-  input: {
-    repositories: RecapDeliveryRepositories;
-    outbox: { id: string; attempt_count: number };
-    summary: RecapSummary;
-    channel: string;
-    channelId: string;
-    errorMessage: string;
-    terminalFailure: boolean;
-  },
-) {
+async function recordRecapDeliveryFailure(input: {
+  repositories: RecapDeliveryRepositories;
+  outbox: { id: string; attempt_count: number };
+  summary: RecapSummary;
+  channel: string;
+  channelId: string;
+  errorMessage: string;
+  terminalFailure: boolean;
+}) {
   if (input.terminalFailure) {
-    await input.repositories.outbox.markDeadLetter(input.outbox.id, input.errorMessage);
+    await input.repositories.outbox.markDeadLetter(
+      input.outbox.id,
+      input.errorMessage,
+    );
     await input.repositories.audit.record({
       entityType: 'distribution_outbox',
       entityId: input.outbox.id,
@@ -821,9 +881,15 @@ async function recordRecapDeliveryFailure(
   }
 
   const attemptCount = (input.outbox.attempt_count ?? 0) + 1;
-  const nextAttemptAt = new Date(Date.now() + 5_000 * Math.pow(2, attemptCount)).toISOString();
+  const nextAttemptAt = new Date(
+    Date.now() + 5_000 * Math.pow(2, attemptCount),
+  ).toISOString();
 
-  await input.repositories.outbox.markFailed(input.outbox.id, input.errorMessage, nextAttemptAt);
+  await input.repositories.outbox.markFailed(
+    input.outbox.id,
+    input.errorMessage,
+    nextAttemptAt,
+  );
   await input.repositories.audit.record({
     entityType: 'distribution_outbox',
     entityId: input.outbox.id,
@@ -842,7 +908,9 @@ async function recordRecapDeliveryFailure(
 }
 
 function capitalize(value: string) {
-  return value.length > 0 ? `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}` : value;
+  return value.length > 0
+    ? `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}`
+    : value;
 }
 
 function readConfidence(pick: PickRecord): number | null {

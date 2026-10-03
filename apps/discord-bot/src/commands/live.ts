@@ -1,10 +1,14 @@
 import {
-  EmbedBuilder,
+  memberTextPages,
+  createMemberEmbed,
+  replyWithPrivateError,
+  replyWithPages,
+} from '../embeds/presentation.js';
+import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import {
-  ApiClientError,
   createApiClient,
   type ApiClient,
   type PicksQueryResponse,
@@ -33,24 +37,22 @@ export function createLiveCommand(
 
         if (response.count === 0) {
           await interaction.editReply({
-            content: 'No active picks are live right now.',
-            embeds: [],
+            content: '',
+            embeds: [
+              createMemberEmbed().setDescription(
+                'No active picks are live right now.',
+              ),
+            ],
           });
           return;
         }
 
-        await interaction.editReply({
-          content: '',
-          embeds: buildLiveEmbeds(response.picks),
-        });
-      } catch (error) {
-        await interaction.editReply({
-          content:
-            error instanceof ApiClientError
-              ? 'Live board is temporarily unavailable.'
-              : 'Live board is temporarily unavailable.',
-          embeds: [],
-        });
+        await replyWithPages(interaction, buildLiveEmbeds(response.picks));
+      } catch {
+        await replyWithPrivateError(
+          interaction,
+          'Live board is temporarily unavailable.',
+        );
       }
     },
   };
@@ -59,15 +61,13 @@ export function createLiveCommand(
 export function buildLiveEmbeds(picks: QueriedPick[]) {
   const pages = paginate(picks, PAGE_SIZE);
 
-  return pages.map((page, index) =>
-    new EmbedBuilder()
-      .setTitle(
-        pages.length > 1
-          ? `Live Board - Page ${index + 1}/${pages.length}`
-          : 'Live Board',
-      )
-      .setColor(0x22c55e)
-      .setDescription(page.map(formatBoardLine).join('\n')),
+  return pages.flatMap((page, index) =>
+    memberTextPages(
+      pages.length > 1
+        ? `Live Board - Page ${index + 1}/${pages.length}`
+        : 'Live Board',
+      page.map(formatBoardLine).join('\n'),
+    ),
   );
 }
 
@@ -78,9 +78,11 @@ function formatBoardLine(pick: QueriedPick) {
     `(${pick.market})`,
     formatOdds(pick.odds),
     formatStake(pick.stake_units),
-    `- ${readSubmittedBy(pick)}`,
-    `- ${formatShortTimestamp(pick.created_at)}`,
-  ].join(' ');
+    readSubmittedBy(pick),
+    formatShortTimestamp(pick.created_at),
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function readSubmittedBy(pick: QueriedPick) {
@@ -92,12 +94,12 @@ function readSubmittedBy(pick: QueriedPick) {
         ? metadata['capper']
         : null;
 
-  return submittedBy?.trim() || 'Unit Talk';
+  return submittedBy?.trim() || '';
 }
 
 function formatOdds(odds: number | null) {
   if (typeof odds !== 'number' || !Number.isFinite(odds)) {
-    return '(odds n/a)';
+    return '';
   }
 
   return odds > 0 ? `(+${odds})` : `(${odds})`;
@@ -105,7 +107,7 @@ function formatOdds(odds: number | null) {
 
 function formatStake(stakeUnits: number | null) {
   if (typeof stakeUnits !== 'number' || !Number.isFinite(stakeUnits)) {
-    return 'stake n/a';
+    return '';
   }
 
   return `${stakeUnits.toFixed(1)}u`;
@@ -114,7 +116,7 @@ function formatStake(stakeUnits: number | null) {
 function formatShortTimestamp(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return value;
+    return '';
   }
 
   return parsed.toISOString().slice(0, 16).replace('T', ' ');

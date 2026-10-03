@@ -33,6 +33,7 @@ export * from './cohorts/index.js';
 export * from './edge-decay/index.js';
 export * from './hedge-detection.js';
 export * from './recap-embed.js';
+export * from './discord-presentation.js';
 export * from './multi-book-consensus.js';
 export * from './clv-weight-tuner.js';
 export * from './member-lifecycle.js';

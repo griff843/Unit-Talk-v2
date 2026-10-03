@@ -1,3 +1,4 @@
+import './official-picks-embed.test.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -108,12 +109,20 @@ class FakeOutboxRepository implements OutboxRepository {
   ): Promise<OutboxRecord | null> {
     return (
       [...this.entries]
-        .filter((entry) => entry.pick_id === pickId && statuses.includes(entry.status))
-        .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null
+        .filter(
+          (entry) =>
+            entry.pick_id === pickId && statuses.includes(entry.status),
+        )
+        .sort((left, right) =>
+          right.created_at.localeCompare(left.created_at),
+        )[0] ?? null
     );
   }
 
-  async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
+  async claimNext(
+    target: string,
+    workerId: string,
+  ): Promise<OutboxRecord | null> {
     const entry = this.entries.find(
       (candidate) =>
         candidate.target === target &&
@@ -132,10 +141,17 @@ class FakeOutboxRepository implements OutboxRepository {
     return entry;
   }
 
-  async touchClaim(outboxId: string, workerId: string): Promise<OutboxRecord | null> {
+  async touchClaim(
+    outboxId: string,
+    workerId: string,
+  ): Promise<OutboxRecord | null> {
     const entry = this.entries.find((candidate) => candidate.id === outboxId);
 
-    if (!entry || entry.status !== 'processing' || entry.claimed_by !== workerId) {
+    if (
+      !entry ||
+      entry.status !== 'processing' ||
+      entry.claimed_by !== workerId
+    ) {
       return null;
     }
 
@@ -221,7 +237,10 @@ class FakeOutboxRepository implements OutboxRepository {
     return entry;
   }
 
-  async listForAutoRecovery(maxAttemptCount: number, limit: number): Promise<OutboxRecord[]> {
+  async listForAutoRecovery(
+    maxAttemptCount: number,
+    limit: number,
+  ): Promise<OutboxRecord[]> {
     return this.entries
       .filter(
         (e) =>
@@ -232,8 +251,13 @@ class FakeOutboxRepository implements OutboxRepository {
       .slice(0, limit);
   }
 
-  async resetForAutoRecovery(outboxId: string, expectedStatus: string): Promise<OutboxRecord | null> {
-    const entry = this.entries.find((e) => e.id === outboxId && e.status === expectedStatus);
+  async resetForAutoRecovery(
+    outboxId: string,
+    expectedStatus: string,
+  ): Promise<OutboxRecord | null> {
+    const entry = this.entries.find(
+      (e) => e.id === outboxId && e.status === expectedStatus,
+    );
     if (!entry) return null;
     entry.status = 'pending';
     entry.last_error = null;
@@ -290,7 +314,9 @@ class FakeReceiptRepository implements ReceiptRepository {
             record.outbox_id === outboxId &&
             (receiptType === undefined || record.receipt_type === receiptType),
         )
-        .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))[0] ?? null
+        .sort((left, right) =>
+          right.recorded_at.localeCompare(left.recorded_at),
+        )[0] ?? null
     );
   }
 }
@@ -318,18 +344,22 @@ class FakePickRepository implements PickRepository {
         confidence: 0.74,
         source: 'smart-form',
         approval_status: 'approved',
-        promotion_status: isGovernedTarget(entry.target) ? 'qualified' : 'not_eligible',
+        promotion_status: isGovernedTarget(entry.target)
+          ? 'qualified'
+          : 'not_eligible',
         promotion_target: isGovernedTarget(entry.target)
           ? entry.target.replace('discord:', '')
           : null,
         promotion_score: isGovernedTarget(entry.target) ? 88 : null,
-        promotion_reason:
-          isGovernedTarget(entry.target) ? 'test qualification' : null,
-        promotion_version: entry.target === 'discord:trader-insights'
-          ? 'trader-insights-v2'
-          : entry.target === 'discord:best-bets'
-            ? 'best-bets-v2'
-            : null,
+        promotion_reason: isGovernedTarget(entry.target)
+          ? 'test qualification'
+          : null,
+        promotion_version:
+          entry.target === 'discord:trader-insights'
+            ? 'trader-insights-v2'
+            : entry.target === 'discord:best-bets'
+              ? 'best-bets-v2'
+              : null,
         promotion_decided_at: isGovernedTarget(entry.target) ? now : null,
         promotion_decided_by: isGovernedTarget(entry.target) ? 'test' : null,
         status: 'queued',
@@ -381,7 +411,9 @@ class FakePickRepository implements PickRepository {
     return record;
   }
 
-  async saveLifecycleEvent(event: LifecycleEvent): Promise<PickLifecycleRecord> {
+  async saveLifecycleEvent(
+    event: LifecycleEvent,
+  ): Promise<PickLifecycleRecord> {
     const record: PickLifecycleRecord = {
       id: randomUUID(),
       pick_id: event.pickId,
@@ -419,10 +451,17 @@ class FakePickRepository implements PickRepository {
     return updated;
   }
 
-  async updateApprovalStatus(pickId: string, approvalStatus: string): Promise<PickRecord> {
+  async updateApprovalStatus(
+    pickId: string,
+    approvalStatus: string,
+  ): Promise<PickRecord> {
     const existing = this.picks.get(pickId);
     if (!existing) throw new Error(`Pick not found: ${pickId}`);
-    const updated: PickRecord = { ...existing, approval_status: approvalStatus, updated_at: new Date().toISOString() };
+    const updated: PickRecord = {
+      ...existing,
+      approval_status: approvalStatus,
+      updated_at: new Date().toISOString(),
+    };
     this.picks.set(pickId, updated);
     return updated;
   }
@@ -460,7 +499,9 @@ class FakePickRepository implements PickRepository {
     source: string,
     limit?: number | undefined,
   ): Promise<PickRecord[]> {
-    const records = [...this.picks.values()].filter((pick) => pick.source === source);
+    const records = [...this.picks.values()].filter(
+      (pick) => pick.source === source,
+    );
     return limit !== undefined ? records.slice(0, limit) : records;
   }
 
@@ -541,8 +582,12 @@ class FakePickRepository implements PickRepository {
     };
   }
 
-  async transitionPickLifecycleAtomic(_input: TransitionPickLifecycleAtomicInput): Promise<TransitionPickLifecycleAtomicResult> {
-    throw new Error('transitionPickLifecycleAtomic is not supported in InMemory mode. Use the sequential path.');
+  async transitionPickLifecycleAtomic(
+    _input: TransitionPickLifecycleAtomicInput,
+  ): Promise<TransitionPickLifecycleAtomicResult> {
+    throw new Error(
+      'transitionPickLifecycleAtomic is not supported in InMemory mode. Use the sequential path.',
+    );
   }
 }
 
@@ -576,7 +621,9 @@ class FakeSystemRunRepository implements SystemRunRepository {
     status: 'succeeded' | 'failed' | 'cancelled';
     details?: Record<string, unknown> | undefined;
   }): Promise<SystemRunRecord> {
-    const record = this.records.find((candidate) => candidate.id === input.runId);
+    const record = this.records.find(
+      (candidate) => candidate.id === input.runId,
+    );
     if (!record) {
       throw new Error(`Run not found: ${input.runId}`);
     }
@@ -587,12 +634,18 @@ class FakeSystemRunRepository implements SystemRunRepository {
     return record;
   }
 
-  async listByType(runType: string, limit?: number): Promise<SystemRunRecord[]> {
+  async listByType(
+    runType: string,
+    limit?: number,
+  ): Promise<SystemRunRecord[]> {
     const filtered = this.records.filter((r) => r.run_type === runType);
     return limit !== undefined ? filtered.slice(0, limit) : filtered;
   }
 
-  async reapStaleRuns(input: { runType: string; staleAfterMs: number }): Promise<number> {
+  async reapStaleRuns(input: {
+    runType: string;
+    staleAfterMs: number;
+  }): Promise<number> {
     const cutoff = Date.now() - input.staleAfterMs;
     let reaped = 0;
     for (const record of this.records) {
@@ -651,8 +704,14 @@ class FakeAuditLogRepository implements AuditLogRepository {
 }
 
 class FakeLogger implements Logger {
-  readonly infoEntries: Array<{ message: string; fields?: Record<string, unknown> }> = [];
-  readonly warnEntries: Array<{ message: string; fields?: Record<string, unknown> }> = [];
+  readonly infoEntries: Array<{
+    message: string;
+    fields?: Record<string, unknown>;
+  }> = [];
+  readonly warnEntries: Array<{
+    message: string;
+    fields?: Record<string, unknown>;
+  }> = [];
 
   child(): Logger {
     return this;
@@ -661,11 +720,15 @@ class FakeLogger implements Logger {
   debug(): void {}
 
   info(message: string, fields?: Record<string, unknown>): void {
-    this.infoEntries.push(fields === undefined ? { message } : { message, fields });
+    this.infoEntries.push(
+      fields === undefined ? { message } : { message, fields },
+    );
   }
 
   warn(message: string, fields?: Record<string, unknown>): void {
-    this.warnEntries.push(fields === undefined ? { message } : { message, fields });
+    this.warnEntries.push(
+      fields === undefined ? { message } : { message, fields },
+    );
   }
 
   error(): void {}
@@ -717,7 +780,12 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
 
 function createOutboxRecord(
   target: string,
-  overrides: Partial<Pick<OutboxRecord, 'status' | 'attempt_count' | 'last_error' | 'next_attempt_at'>> = {},
+  overrides: Partial<
+    Pick<
+      OutboxRecord,
+      'status' | 'attempt_count' | 'last_error' | 'next_attempt_at'
+    >
+  > = {},
 ): OutboxRecord {
   const now = new Date().toISOString();
   return {
@@ -791,9 +859,8 @@ test('processNextDistributionWork returns idle when no work is available', async
 });
 
 test('processNextDistributionWork marks work sent, records receipt, and posts the pick', async () => {
-  const { repositories, picks, receipts, runs, audit } = createWorkerTestRepositories([
-    createOutboxRecord('discord:send'),
-  ]);
+  const { repositories, picks, receipts, runs, audit } =
+    createWorkerTestRepositories([createOutboxRecord('discord:send')]);
 
   const result = await processNextDistributionWork(
     repositories,
@@ -816,16 +883,22 @@ test('processNextDistributionWork marks work sent, records receipt, and posts th
     assert.equal(result.outbox.status, 'sent');
     assert.equal(result.receipt.receipt_type, 'discord.message');
   }
-  const pick = await picks.findPickById(result.status === 'sent' ? result.outbox.pick_id : '');
+  const pick = await picks.findPickById(
+    result.status === 'sent' ? result.outbox.pick_id : '',
+  );
   assert.equal(pick?.status, 'posted');
   assert.equal(picks.lifecycleEvents.at(-1)?.to_state, 'posted');
   assert.equal(picks.lifecycleEvents.at(-1)?.from_state, 'queued');
   assert.equal(picks.lifecycleEvents.at(-1)?.writer_role, 'poster');
   assert.equal(receipts.records.length, 1);
   assert.equal(runs.records[0]?.status, 'succeeded');
-  assert.ok(runs.records[0]?.finished_at != null, 'finished_at must be set on succeeded run');
   assert.ok(
-    new Date(runs.records[0]!.finished_at!) >= new Date(runs.records[0]!.started_at),
+    runs.records[0]?.finished_at != null,
+    'finished_at must be set on succeeded run',
+  );
+  assert.ok(
+    new Date(runs.records[0]!.finished_at!) >=
+      new Date(runs.records[0]!.started_at),
     `finished_at must not be earlier than started_at (clock skew regression)`,
   );
   assert.equal(audit.records[0]?.action, 'distribution.sent');
@@ -852,20 +925,31 @@ test('processNextDistributionWork marks work failed and records audit', async ()
     assert.equal(result.outbox.attempt_count, 1);
     assert.equal(result.outbox.claimed_by, null);
     assert.equal(result.outbox.claimed_at, null);
-    assert.ok(result.outbox.next_attempt_at, 'next_attempt_at must be set for retry backoff');
+    assert.ok(
+      result.outbox.next_attempt_at,
+      'next_attempt_at must be set for retry backoff',
+    );
   }
   assert.equal(runs.records[0]?.status, 'failed');
-  assert.ok(runs.records[0]?.finished_at != null, 'finished_at must be set on failed run');
   assert.ok(
-    new Date(runs.records[0]!.finished_at!) >= new Date(runs.records[0]!.started_at),
+    runs.records[0]?.finished_at != null,
+    'finished_at must be set on failed run',
+  );
+  assert.ok(
+    new Date(runs.records[0]!.finished_at!) >=
+      new Date(runs.records[0]!.started_at),
     `finished_at must not be earlier than started_at (clock skew regression)`,
   );
   assert.equal(audit.records[0]?.action, 'distribution.retry_scheduled');
 });
 
 test('processNextDistributionWork immediately dead-letters terminal delivery failures', async () => {
-  const outboxRecord = createOutboxRecord('discord:terminal', { attempt_count: 1 });
-  const { repositories, picks, runs, audit } = createWorkerTestRepositories([outboxRecord]);
+  const outboxRecord = createOutboxRecord('discord:terminal', {
+    attempt_count: 1,
+  });
+  const { repositories, picks, runs, audit } = createWorkerTestRepositories([
+    outboxRecord,
+  ]);
 
   const result = await processNextDistributionWork(
     repositories,
@@ -890,18 +974,27 @@ test('processNextDistributionWork immediately dead-letters terminal delivery fai
     assert.equal(result.outbox.last_error, 'HTTP 403: Missing Access');
   }
   const pick = await picks.findPickById(outboxRecord.pick_id);
-  assert.equal(pick?.status, 'queued', 'pick must remain queued on terminal failure');
+  assert.equal(
+    pick?.status,
+    'queued',
+    'pick must remain queued on terminal failure',
+  );
   assert.equal(runs.records[0]?.status, 'failed');
   assert.equal(
-    (runs.records[0]?.details as Record<string, unknown> | undefined)?.terminalFailure,
+    (runs.records[0]?.details as Record<string, unknown> | undefined)
+      ?.terminalFailure,
     true,
   );
   assert.equal(audit.records[0]?.action, 'distribution.dead_lettered');
 });
 
 test('processNextDistributionWork retries normally on retryable delivery failures', async () => {
-  const outboxRecord = createOutboxRecord('discord:retryable', { attempt_count: 1 });
-  const { repositories, picks, runs, audit } = createWorkerTestRepositories([outboxRecord]);
+  const outboxRecord = createOutboxRecord('discord:retryable', {
+    attempt_count: 1,
+  });
+  const { repositories, picks, runs, audit } = createWorkerTestRepositories([
+    outboxRecord,
+  ]);
 
   const result = await processNextDistributionWork(
     repositories,
@@ -926,10 +1019,17 @@ test('processNextDistributionWork retries normally on retryable delivery failure
     assert.equal(result.outbox.last_error, 'HTTP 429: rate limited');
     assert.equal(result.outbox.claimed_by, null);
     assert.equal(result.outbox.claimed_at, null);
-    assert.ok(result.outbox.next_attempt_at, 'next_attempt_at must be set for retry backoff');
+    assert.ok(
+      result.outbox.next_attempt_at,
+      'next_attempt_at must be set for retry backoff',
+    );
   }
   const pick = await picks.findPickById(outboxRecord.pick_id);
-  assert.equal(pick?.status, 'queued', 'pick must remain queued on retryable failure');
+  assert.equal(
+    pick?.status,
+    'queued',
+    'pick must remain queued on retryable failure',
+  );
   assert.equal(runs.records[0]?.status, 'failed');
   assert.equal(audit.records[0]?.action, 'distribution.retry_scheduled');
 });
@@ -957,7 +1057,8 @@ test('processNextDistributionWork promotes the outbox row to dead_letter after t
   }
   assert.equal(audit.records[0]?.action, 'distribution.dead_lettered');
   assert.equal(
-    (audit.records[0]?.payload as Record<string, unknown> | undefined)?.deadLettered,
+    (audit.records[0]?.payload as Record<string, unknown> | undefined)
+      ?.deadLettered,
     true,
   );
 });
@@ -984,7 +1085,10 @@ test('processNextDistributionWork resets row to pending with backoff before the 
     assert.equal(result.outbox.last_error, 'retryable failure');
     assert.equal(result.outbox.claimed_by, null);
     assert.equal(result.outbox.claimed_at, null);
-    assert.ok(result.outbox.next_attempt_at, 'next_attempt_at must be set for retry backoff');
+    assert.ok(
+      result.outbox.next_attempt_at,
+      'next_attempt_at must be set for retry backoff',
+    );
   }
   assert.equal(audit.records[0]?.action, 'distribution.retry_scheduled');
 });
@@ -1036,8 +1140,14 @@ test('runWorkerCycles processes configured targets across cycles', async () => {
   );
   assert.equal(receipts.records.length, 2);
   // 2 distribution.process runs + 1 worker.heartbeat run per cycle
-  assert.equal(runs.records.filter((r) => r.run_type !== 'worker.heartbeat').length, 2);
-  assert.equal(runs.records.filter((r) => r.run_type === 'worker.heartbeat').length, 1);
+  assert.equal(
+    runs.records.filter((r) => r.run_type !== 'worker.heartbeat').length,
+    2,
+  );
+  assert.equal(
+    runs.records.filter((r) => r.run_type === 'worker.heartbeat').length,
+    1,
+  );
 });
 
 test('createStubDeliveryAdapter returns deterministic dry-run receipt metadata', async () => {
@@ -1063,7 +1173,10 @@ test('createDiscordDeliveryAdapter returns dry-run Discord-shaped receipt metada
   assert.equal(receipt.status, 'sent');
   assert.equal(receipt.channel, outbox.target);
   assert.equal(receipt.externalId, `discord-dry:${outbox.id}`);
-  assert.equal(receipt.idempotencyKey, `${outbox.id}:${outbox.target}:dry-receipt`);
+  assert.equal(
+    receipt.idempotencyKey,
+    `${outbox.id}:${outbox.target}:dry-receipt`,
+  );
 });
 
 test('createDiscordDeliveryAdapter sends a live Discord embed when configured', async () => {
@@ -1105,10 +1218,11 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
   assert.equal(body.content, undefined);
   // Title is now the pick selection (embed redesign)
   assert.ok(embed?.title?.includes('Over'), 'title must be the pick selection');
-  assert.equal(embed?.description, '\ud83c\udfc0 NBA | Lakers vs Celtics');
-  assert.equal(embed?.footer?.text, 'Unit Talk | Canary');
+  assert.equal(embed?.description, 'NBA | Lakers vs Celtics');
+  assert.equal(embed?.footer?.text, 'Unit Talk');
   // Spec-compliant fields: no pick_id, no State, no Source
-  const fieldNames = embed?.fields?.map((f: Record<string, unknown>) => f.name) ?? [];
+  const fieldNames =
+    embed?.fields?.map((f: Record<string, unknown>) => f.name) ?? [];
   assert.ok(fieldNames.includes('Odds'), 'must have Odds field');
   assert.ok(fieldNames.includes('Capper'), 'must have Capper field');
   assert.ok(!fieldNames.includes('Pick ID'), 'must NOT show Pick ID');
@@ -1118,10 +1232,7 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
   // UTV2-1929: the receipt records the resolved destination, not the target.
   assert.equal(receipt.channel, '1234567890');
   assert.equal(receipt.externalId, 'discord-message-1');
-  assert.equal(
-    receipt.idempotencyKey,
-    `${outbox.id}:${outbox.target}:receipt`,
-  );
+  assert.equal(receipt.idempotencyKey, `${outbox.id}:${outbox.target}:receipt`);
 });
 
 test('createDiscordDeliveryAdapter rejects live mode without target mapping', async () => {
@@ -1184,7 +1295,10 @@ test('createWorkerRuntimeDependencies reads worker config from loaded environmen
   });
 
   assert.equal(runtime.workerId, 'worker-live');
-  assert.deepEqual(runtime.distributionTargets, ['discord:canary', 'discord:best-bets']);
+  assert.deepEqual(runtime.distributionTargets, [
+    'discord:canary',
+    'discord:best-bets',
+  ]);
   assert.equal(runtime.adapterKind, 'discord');
   assert.equal(runtime.pollIntervalMs, 2500);
   assert.equal(runtime.maxCyclesPerRun, 9);
@@ -1195,12 +1309,18 @@ test('createWorkerRuntimeDependencies reads worker config from loaded environmen
   assert.equal(runtime.watchdogMs, 9000);
   assert.equal(runtime.workerHeartbeatIntervalMs, 45000);
   assert.equal(runtime.simulationMode, true);
-  assert.deepEqual(runtime.targetCoverage.configuredWorkerTargets, ['discord:canary', 'discord:best-bets']);
+  assert.deepEqual(runtime.targetCoverage.configuredWorkerTargets, [
+    'discord:canary',
+    'discord:best-bets',
+  ]);
   assert.equal(runtime.runtimeTruth.service, 'worker');
   assert.equal(runtime.runtimeTruth.persistenceMode, 'in_memory');
   assert.equal(runtime.runtimeTruth.work.doingRealWork, false);
   assert.equal(runtime.runtimeTruth.work.dryRun, false);
-  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, ['discord:canary', 'discord:best-bets']);
+  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, [
+    'discord:canary',
+    'discord:best-bets',
+  ]);
   assert.equal(
     runtime.runtimeTruth.work.reason,
     'in-memory persistence cannot deliver durable production work',
@@ -1235,7 +1355,9 @@ test('createWorkerRuntimeDependencies starts a human delivery target with no sha
     }),
   });
 
-  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, ['discord:official-picks']);
+  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, [
+    'discord:official-picks',
+  ]);
 });
 
 test('createWorkerRuntimeDependencies still refuses a non-human target with no channel mapping', () => {
@@ -1270,7 +1392,9 @@ test('createWorkerRuntimeDependencies exposes target coverage when production ta
   });
 
   assert.equal(runtime.targetCoverage.ok, true);
-  assert.deepEqual(runtime.targetCoverage.enabledPromotionTargets, ['best-bets']);
+  assert.deepEqual(runtime.targetCoverage.enabledPromotionTargets, [
+    'best-bets',
+  ]);
   assert.equal(runtime.targetCoverage.rejectedTargetMismatchCount, 0);
 });
 
@@ -1288,13 +1412,21 @@ test('createWorkerRuntimeDependencies reports live worker runtime truth without 
   assert.equal(runtime.runtimeTruth.auth.mode, 'not_applicable');
   assert.equal(runtime.runtimeTruth.work.doingRealWork, true);
   assert.equal(runtime.runtimeTruth.work.dryRun, false);
-  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, ['discord:best-bets']);
+  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, [
+    'discord:best-bets',
+  ]);
   assert.equal(
     runtime.runtimeTruth.work.reason,
     'autorun worker is using database persistence and the Discord adapter',
   );
-  assert.equal(JSON.stringify(runtime.runtimeTruth).includes('test-bot-token'), false);
-  assert.equal(JSON.stringify(runtime.runtimeTruth).includes('service-role-key'), false);
+  assert.equal(
+    JSON.stringify(runtime.runtimeTruth).includes('test-bot-token'),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(runtime.runtimeTruth).includes('service-role-key'),
+    false,
+  );
 });
 
 test('createWorkerRuntimeDependencies defaults workerHeartbeatIntervalMs to 30000', () => {
@@ -1387,13 +1519,23 @@ test('processNextDistributionWork does not advance pick lifecycle on delivery fa
   );
 
   const pick = await picks.findPickById(outboxRecord.pick_id);
-  assert.equal(pick?.status, 'queued', 'pick must remain queued on delivery failure');
-  assert.equal(picks.lifecycleEvents.length, 0, 'no lifecycle events must be recorded on failure');
+  assert.equal(
+    pick?.status,
+    'queued',
+    'pick must remain queued on delivery failure',
+  );
+  assert.equal(
+    picks.lifecycleEvents.length,
+    0,
+    'no lifecycle events must be recorded on failure',
+  );
 });
 
 test('processNextDistributionWork receipt is linked to outbox and carries idempotency key', async () => {
   const outboxRecord = createOutboxRecord('discord:receipt-link');
-  const { repositories, receipts } = createWorkerTestRepositories([outboxRecord]);
+  const { repositories, receipts } = createWorkerTestRepositories([
+    outboxRecord,
+  ]);
 
   const result = await processNextDistributionWork(
     repositories,
@@ -1427,9 +1569,8 @@ test('processNextDistributionWork receipt is linked to outbox and carries idempo
 
 test('processNextDistributionWork skips terminal picks and completes outbox without delivery', async () => {
   const outboxRecord = createOutboxRecord('discord:skip-terminal');
-  const { repositories, picks, receipts, runs, audit } = createWorkerTestRepositories([
-    outboxRecord,
-  ]);
+  const { repositories, picks, receipts, runs, audit } =
+    createWorkerTestRepositories([outboxRecord]);
   await picks.updatePickLifecycleState(outboxRecord.pick_id, 'settled');
 
   let deliverCalled = false;
@@ -1449,7 +1590,11 @@ test('processNextDistributionWork skips terminal picks and completes outbox with
     assert.equal(result.outbox.status, 'sent');
   }
   assert.equal(deliverCalled, false);
-  assert.equal(receipts.records.length, 0, 'no receipt should be recorded for skipped work');
+  assert.equal(
+    receipts.records.length,
+    0,
+    'no receipt should be recorded for skipped work',
+  );
   assert.equal(runs.records[0]?.status, 'succeeded');
   assert.equal(audit.records[0]?.action, 'distribution.skipped');
 });
@@ -1473,7 +1618,10 @@ test('runWorkerCycles returns idle results when targets have no pending work', a
 
 test('runWorkerCycles reaps stale processing claims before claiming fresh work', async () => {
   const staleClaimedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-  const stale = createOutboxRecord('discord:stale', { status: 'processing', attempt_count: 1 });
+  const stale = createOutboxRecord('discord:stale', {
+    status: 'processing',
+    attempt_count: 1,
+  });
   stale.claimed_at = staleClaimedAt;
   stale.claimed_by = 'worker-old';
 
@@ -1491,12 +1639,19 @@ test('runWorkerCycles reaps stale processing claims before claiming fresh work',
 
   assert.equal(cycles[0]?.reapedOutboxIds.includes(stale.id), true);
   assert.equal(cycles[0]?.results[0]?.status, 'sent');
-  assert.equal(audit.records.some((record) => record.action === 'distribution.reaped_stale_claim'), true);
+  assert.equal(
+    audit.records.some(
+      (record) => record.action === 'distribution.reaped_stale_claim',
+    ),
+    true,
+  );
 });
 
 test('runWorkerCycles crash simulation leaves work recoverable and health degraded until sent recovery completes', async () => {
   const outbox = createOutboxRecord('discord:best-bets');
-  const { repositories, audit, receipts } = createWorkerTestRepositories([outbox]);
+  const { repositories, audit, receipts } = createWorkerTestRepositories([
+    outbox,
+  ]);
   const crashError = new Error('simulated worker crash after claim');
   const originalStartRun = repositories.runs.startRun.bind(repositories.runs);
   let crashInjected = false;
@@ -1526,8 +1681,16 @@ test('runWorkerCycles crash simulation leaves work recoverable and health degrad
 
   assert.equal(outbox.status, 'processing');
   assert.equal(outbox.claimed_by, 'worker-crash');
-  assert.equal(receipts.records.length, 0, 'crash before delivery must not record a receipt');
-  assert.equal(audit.records.length, 0, 'crash before recovery must not write audit evidence');
+  assert.equal(
+    receipts.records.length,
+    0,
+    'crash before delivery must not record a receipt',
+  );
+  assert.equal(
+    audit.records.length,
+    0,
+    'crash before recovery must not write audit evidence',
+  );
 
   outbox.claimed_at = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const degradedLogger = new FakeLogger();
@@ -1549,8 +1712,15 @@ test('runWorkerCycles crash simulation leaves work recoverable and health degrad
     ),
   });
 
-  assert.equal(degradedLogger.warnEntries.length > 0, true, 'health probe must log degraded health');
-  assert.equal(degradedLogger.warnEntries[0]?.message, 'worker queue health unhealthy');
+  assert.equal(
+    degradedLogger.warnEntries.length > 0,
+    true,
+    'health probe must log degraded health',
+  );
+  assert.equal(
+    degradedLogger.warnEntries[0]?.message,
+    'worker queue health unhealthy',
+  );
   assert.equal(
     degradedLogger.warnEntries[0]?.fields?.status === 'degraded' ||
       degradedLogger.warnEntries[0]?.fields?.status === 'down',
@@ -1570,19 +1740,30 @@ test('runWorkerCycles crash simulation leaves work recoverable and health degrad
     persistenceMode: 'in_memory',
     workerHeartbeatIntervalMs: 0,
     logger: recoveryLogger,
-    queueHealthProvider: createQueueHealthProvider([outbox], ['discord:best-bets'], () => new Date().toISOString()),
+    queueHealthProvider: createQueueHealthProvider(
+      [outbox],
+      ['discord:best-bets'],
+      () => new Date().toISOString(),
+    ),
   });
 
   assert.equal(recoveryCycles[0]?.reapedOutboxIds.includes(outbox.id), true);
   assert.equal(recoveryCycles[0]?.results[0]?.status, 'sent');
   assert.equal(outbox.status, 'sent');
   assert.equal(
-    audit.records.some((record) => record.action === 'distribution.reaped_stale_claim'),
+    audit.records.some(
+      (record) => record.action === 'distribution.reaped_stale_claim',
+    ),
     true,
   );
-  assert.equal(audit.records.some((record) => record.action === 'distribution.sent'), true);
+  assert.equal(
+    audit.records.some((record) => record.action === 'distribution.sent'),
+    true,
+  );
 
-  const recoveryLog = recoveryLogger.warnEntries.find((entry) => entry.message === 'worker recovery result');
+  const recoveryLog = recoveryLogger.warnEntries.find(
+    (entry) => entry.message === 'worker recovery result',
+  );
   assert.ok(recoveryLog, 'recovery completion must be logged');
   assert.equal(recoveryLog.fields?.outboxId, outbox.id);
   assert.equal(recoveryLog.fields?.recoveredFromStaleClaim, true);
@@ -1591,7 +1772,9 @@ test('runWorkerCycles crash simulation leaves work recoverable and health degrad
 });
 
 test('runWorkerCycles crash recovery deterministically dead-letters exhausted work with audit evidence', async () => {
-  const outbox = createOutboxRecord('discord:trader-insights', { attempt_count: 2 });
+  const outbox = createOutboxRecord('discord:trader-insights', {
+    attempt_count: 2,
+  });
   const { repositories, audit } = createWorkerTestRepositories([outbox]);
   const originalStartRun = repositories.runs.startRun.bind(repositories.runs);
   let crashInjected = false;
@@ -1639,15 +1822,21 @@ test('runWorkerCycles crash recovery deterministically dead-letters exhausted wo
   assert.equal(recoveryCycles[0]?.results[0]?.status, 'failed');
   assert.equal(outbox.status, 'dead_letter');
   assert.equal(
-    audit.records.some((record) => record.action === 'distribution.reaped_stale_claim'),
+    audit.records.some(
+      (record) => record.action === 'distribution.reaped_stale_claim',
+    ),
     true,
   );
   assert.equal(
-    audit.records.some((record) => record.action === 'distribution.dead_lettered'),
+    audit.records.some(
+      (record) => record.action === 'distribution.dead_lettered',
+    ),
     true,
   );
 
-  const recoveryLog = recoveryLogger.warnEntries.find((entry) => entry.message === 'worker recovery result');
+  const recoveryLog = recoveryLogger.warnEntries.find(
+    (entry) => entry.message === 'worker recovery result',
+  );
   assert.ok(recoveryLog, 'dead-letter completion must be logged');
   assert.equal(recoveryLog.fields?.outboxId, outbox.id);
   assert.equal(recoveryLog.fields?.recoveryAction, 'reaped-and-dead-lettered');
@@ -1659,7 +1848,9 @@ test('processNextDistributionWork heartbeats active claims during long delivery'
   const { repositories } = createWorkerTestRepositories([outbox]);
 
   let touched = 0;
-  const originalTouchClaim = repositories.outbox.touchClaim.bind(repositories.outbox);
+  const originalTouchClaim = repositories.outbox.touchClaim.bind(
+    repositories.outbox,
+  );
   repositories.outbox.touchClaim = async (outboxId, workerId) => {
     const row = await originalTouchClaim(outboxId, workerId);
     if (row) {
@@ -1854,7 +2045,10 @@ test('createDiscordDeliveryAdapter dry-run with mapped target preserves canonica
 
   assert.equal(receipt.channel, outbox.target);
   assert.equal(receipt.receiptType, 'discord.message');
-  assert.equal(receipt.idempotencyKey, `${outbox.id}:${outbox.target}:dry-receipt`);
+  assert.equal(
+    receipt.idempotencyKey,
+    `${outbox.id}:${outbox.target}:dry-receipt`,
+  );
 });
 
 test('createDiscordDeliveryAdapter resolves discord:<numericId> target directly without target map', async () => {
@@ -1950,11 +2144,18 @@ test('buildDiscordMessagePayload omits content field for non-canary targets', as
   await adapter(outbox);
 
   const body = parseDiscordRequestBody(rawBody);
-  assert.equal(body.content, undefined, 'content field must be absent for non-canary targets');
+  assert.equal(
+    body.content,
+    undefined,
+    'content field must be absent for non-canary targets',
+  );
   assert.ok(body.embeds?.[0] != null, 'embed must still be present');
   // Title is now the pick selection, not channel name
-  assert.ok(body.embeds?.[0]?.title?.includes('Over'), 'title must be the pick selection');
-  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk | Best Bets');
+  assert.ok(
+    body.embeds?.[0]?.title?.includes('Over'),
+    'title must be the pick selection',
+  );
+  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk');
   // Lead field removed post burn-in
   assert.notEqual(body.embeds?.[0]?.fields?.[0]?.name, 'Best Bets Purpose');
 });
@@ -1980,9 +2181,15 @@ test('createDiscordDeliveryAdapter renders trader-insights target-specific embed
 
   const body = parseDiscordRequestBody(rawBody);
   assert.equal(body.content, undefined);
-  assert.ok(body.embeds?.[0]?.title?.includes('Over'), 'title must be the pick selection');
-  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk | Trader Insights');
-  assert.notEqual(body.embeds?.[0]?.fields?.[0]?.name, 'Trader Insights Purpose');
+  assert.ok(
+    body.embeds?.[0]?.title?.includes('Over'),
+    'title must be the pick selection',
+  );
+  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk');
+  assert.notEqual(
+    body.embeds?.[0]?.fields?.[0]?.name,
+    'Trader Insights Purpose',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1996,7 +2203,11 @@ test('DeliveryCircuitBreaker opens after N consecutive failures', () => {
   assert.equal(cb.isOpen(target), false, 'circuit must start closed');
   cb.recordFailure(target);
   cb.recordFailure(target);
-  assert.equal(cb.isOpen(target), false, 'circuit must remain closed before threshold');
+  assert.equal(
+    cb.isOpen(target),
+    false,
+    'circuit must remain closed before threshold',
+  );
   cb.recordFailure(target);
   assert.equal(cb.isOpen(target), true, 'circuit must open at threshold');
   assert.ok(cb.resumeAt(target) !== null, 'resumeAt must be set when open');
@@ -2011,12 +2222,24 @@ test('DeliveryCircuitBreaker blocks delivery when open, allows after cooldown', 
   const target = 'discord:cooldown-test';
 
   cb.recordFailure(target);
-  assert.equal(cb.isOpen(target), true, 'circuit must be open immediately after threshold');
+  assert.equal(
+    cb.isOpen(target),
+    true,
+    'circuit must be open immediately after threshold',
+  );
 
   return new Promise<void>((resolve) => {
     setTimeout(() => {
-      assert.equal(cb.isOpen(target), false, 'circuit must auto-reset after cooldown window');
-      assert.deepEqual(cb.openTargets(), [], 'openTargets must be empty after reset');
+      assert.equal(
+        cb.isOpen(target),
+        false,
+        'circuit must auto-reset after cooldown window',
+      );
+      assert.deepEqual(
+        cb.openTargets(),
+        [],
+        'openTargets must be empty after reset',
+      );
       resolve();
     }, 60);
   });
@@ -2040,8 +2263,15 @@ test('DeliveryCircuitBreaker restores open state from persisted runtime metadata
 
   cb.restoreOpen(target, Date.now() - 1000);
 
-  assert.equal(cb.isOpen(target), true, 'restored target must be open during cooldown');
-  assert.ok(cb.openTargets().includes(target), 'restored target must be listed as open');
+  assert.equal(
+    cb.isOpen(target),
+    true,
+    'restored target must be open during cooldown',
+  );
+  assert.ok(
+    cb.openTargets().includes(target),
+    'restored target must be listed as open',
+  );
 });
 
 test('runWorkerCycles skips target with open circuit and returns circuit-open result', async () => {
@@ -2077,11 +2307,20 @@ test('runWorkerCycles skips target with open circuit and returns circuit-open re
   // Cycle 3 should have circuit-open because circuit opens at threshold=2
   const cycle3 = cycles[2];
   assert.ok(cycle3 !== undefined, 'must have 3 cycles');
-  const circuitOpenResult = cycle3.results.find((r) => r.status === 'circuit-open');
-  assert.ok(circuitOpenResult !== undefined, 'cycle 3 must include a circuit-open result');
+  const circuitOpenResult = cycle3.results.find(
+    (r) => r.status === 'circuit-open',
+  );
+  assert.ok(
+    circuitOpenResult !== undefined,
+    'cycle 3 must include a circuit-open result',
+  );
   assert.equal(circuitOpenResult.target, 'discord:best-bets');
   // Deliver must only have been called twice (cycles 1 and 2 — cycle 3 was skipped)
-  assert.equal(deliverCallCount, 2, 'deliver must not be called when circuit is open');
+  assert.equal(
+    deliverCallCount,
+    2,
+    'deliver must not be called when circuit is open',
+  );
 });
 
 test('runWorkerCycles writes system_runs row when circuit opens', async () => {
@@ -2103,12 +2342,25 @@ test('runWorkerCycles writes system_runs row when circuit opens', async () => {
     persistenceMode: 'in_memory',
   });
 
-  const circuitRun = runs.records.find((r) => r.run_type === 'worker.circuit-open');
-  assert.ok(circuitRun !== undefined, 'a worker.circuit-open system_run must be written');
-  assert.equal(circuitRun.status, 'running', 'run must remain running (open) until circuit closes');
+  const circuitRun = runs.records.find(
+    (r) => r.run_type === 'worker.circuit-open',
+  );
+  assert.ok(
+    circuitRun !== undefined,
+    'a worker.circuit-open system_run must be written',
+  );
+  assert.equal(
+    circuitRun.status,
+    'running',
+    'run must remain running (open) until circuit closes',
+  );
   const details = circuitRun.details as Record<string, unknown> | null;
   assert.equal(typeof details?.target, 'string', 'details.target must be set');
-  assert.equal(typeof details?.resumeAt, 'string', 'details.resumeAt must be set');
+  assert.equal(
+    typeof details?.resumeAt,
+    'string',
+    'details.resumeAt must be set',
+  );
 });
 
 test('runWorkerCycles restores persisted open circuit after restart', async () => {
@@ -2140,13 +2392,23 @@ test('runWorkerCycles restores persisted open circuit after restart', async () =
       };
     },
     maxCycles: 1,
-    circuitBreaker: new DeliveryCircuitBreaker({ threshold: 2, cooldownMs: 60_000 }),
+    circuitBreaker: new DeliveryCircuitBreaker({
+      threshold: 2,
+      cooldownMs: 60_000,
+    }),
     persistenceMode: 'in_memory',
   });
 
   assert.equal(cycles[0]?.results[0]?.status, 'circuit-open');
-  assert.equal(deliverCallCount, 0, 'restored open circuit must block delivery');
-  assert.equal(runs.records.find((row) => row.run_type === 'worker.circuit-open')?.status, 'running');
+  assert.equal(
+    deliverCallCount,
+    0,
+    'restored open circuit must block delivery',
+  );
+  assert.equal(
+    runs.records.find((row) => row.run_type === 'worker.circuit-open')?.status,
+    'running',
+  );
 });
 
 test('runWorkerCycles closes expired persisted circuit before probing target', async () => {
@@ -2177,12 +2439,19 @@ test('runWorkerCycles closes expired persisted circuit before probing target', a
       };
     },
     maxCycles: 1,
-    circuitBreaker: new DeliveryCircuitBreaker({ threshold: 2, cooldownMs: 10 }),
+    circuitBreaker: new DeliveryCircuitBreaker({
+      threshold: 2,
+      cooldownMs: 10,
+    }),
     persistenceMode: 'in_memory',
   });
 
   assert.equal(cycles[0]?.results[0]?.status, 'sent');
-  assert.equal(deliverCallCount, 1, 'expired persisted circuit should allow a delivery probe');
+  assert.equal(
+    deliverCallCount,
+    1,
+    'expired persisted circuit should allow a delivery probe',
+  );
   assert.equal(circuitRun.status, 'succeeded');
   assert.equal(
     (circuitRun.details as Record<string, unknown>).closeReason,
@@ -2207,7 +2476,12 @@ test('runWorkerCycles skips disabled target — outbox row stays pending', async
     targetRegistry: [
       { target: 'best-bets', enabled: true, rolloutPct: 100 },
       { target: 'trader-insights', enabled: true, rolloutPct: 100 },
-      { target: 'exclusive-insights', enabled: false, disabledReason: 'Activation contract required', rolloutPct: 100 },
+      {
+        target: 'exclusive-insights',
+        enabled: false,
+        disabledReason: 'Activation contract required',
+        rolloutPct: 100,
+      },
     ],
   });
   assert.equal(cycles[0]?.results[0]?.status, 'target-disabled');
@@ -2222,7 +2496,11 @@ test('runWorkerCycles skips a killed governed target — outbox row stays pendin
   const outbox = createOutboxRecord('discord:best-bets');
   const { repositories } = createWorkerTestRepositories([outbox]);
   const killSwitch = new InMemoryDeliveryKillSwitchRepository();
-  await killSwitch.setKilled({ target: 'best-bets', killed: true, actor: 'test-operator' });
+  await killSwitch.setKilled({
+    target: 'best-bets',
+    killed: true,
+    actor: 'test-operator',
+  });
 
   const cycles = await runWorkerCycles({
     repositories: { ...repositories, killSwitch },
@@ -2242,7 +2520,11 @@ test('runWorkerCycles processes normally once the kill switch is released', asyn
   const outbox = createOutboxRecord('discord:best-bets');
   const { repositories } = createWorkerTestRepositories([outbox]);
   const killSwitch = new InMemoryDeliveryKillSwitchRepository();
-  await killSwitch.setKilled({ target: 'best-bets', killed: false, actor: 'test-operator' });
+  await killSwitch.setKilled({
+    target: 'best-bets',
+    killed: false,
+    actor: 'test-operator',
+  });
 
   const cycles = await runWorkerCycles({
     repositories: { ...repositories, killSwitch },
@@ -2335,7 +2617,9 @@ test('UTV2-1923: the governed human capper target is killed until explicitly rel
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
     persistenceMode: 'in_memory',
-    targetRegistry: [{ target: 'official-picks', enabled: true, rolloutPct: 100 }],
+    targetRegistry: [
+      { target: 'official-picks', enabled: true, rolloutPct: 100 },
+    ],
   });
 
   assert.equal(
@@ -2350,7 +2634,11 @@ test('UTV2-1923: the human capper target is refused by the registry when disable
   const outbox = createOutboxRecord('discord:official-picks');
   const { repositories } = createWorkerTestRepositories([outbox]);
   const killSwitch = new InMemoryDeliveryKillSwitchRepository();
-  await killSwitch.setKilled({ target: 'official-picks', killed: false, actor: 'test-operator' });
+  await killSwitch.setKilled({
+    target: 'official-picks',
+    killed: false,
+    actor: 'test-operator',
+  });
 
   const cycles = await runWorkerCycles({
     repositories: { ...repositories, killSwitch },
@@ -2360,7 +2648,12 @@ test('UTV2-1923: the human capper target is refused by the registry when disable
     maxCycles: 1,
     persistenceMode: 'in_memory',
     targetRegistry: [
-      { target: 'official-picks', enabled: false, disabledReason: 'not activated', rolloutPct: 100 },
+      {
+        target: 'official-picks',
+        enabled: false,
+        disabledReason: 'not activated',
+        rolloutPct: 100,
+      },
     ],
   });
 
@@ -2374,16 +2667,32 @@ test('UTV2-1923: the human capper target is refused by the registry when disable
 test('an unknown target with no kill-switch row is treated as killed (fail closed)', async () => {
   const killSwitch = new InMemoryDeliveryKillSwitchRepository();
   const killed = await killSwitch.isKilled('best-bets');
-  assert.equal(killed, true, 'a target with no explicit release/engage row must default to killed');
+  assert.equal(
+    killed,
+    true,
+    'a target with no explicit release/engage row must default to killed',
+  );
 });
 
 test('resolveTargetRegistry with UNIT_TALK_ENABLED_TARGETS=best-bets disables all other targets', async () => {
   const { resolveTargetRegistry } = await import('@unit-talk/contracts');
-  const registry = resolveTargetRegistry({ UNIT_TALK_ENABLED_TARGETS: 'best-bets' });
-  assert.equal(registry.find(e => e.target === 'best-bets')?.enabled, true);
-  assert.equal(registry.find(e => e.target === 'trader-insights')?.enabled, false);
-  assert.equal(registry.find(e => e.target === 'exclusive-insights')?.enabled, false);
-  assert.ok(registry.find(e => e.target === 'trader-insights')?.disabledReason?.includes('UNIT_TALK_ENABLED_TARGETS'));
+  const registry = resolveTargetRegistry({
+    UNIT_TALK_ENABLED_TARGETS: 'best-bets',
+  });
+  assert.equal(registry.find((e) => e.target === 'best-bets')?.enabled, true);
+  assert.equal(
+    registry.find((e) => e.target === 'trader-insights')?.enabled,
+    false,
+  );
+  assert.equal(
+    registry.find((e) => e.target === 'exclusive-insights')?.enabled,
+    false,
+  );
+  assert.ok(
+    registry
+      .find((e) => e.target === 'trader-insights')
+      ?.disabledReason?.includes('UNIT_TALK_ENABLED_TARGETS'),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -2405,10 +2714,23 @@ test('runWorkerCycles writes a worker.heartbeat system_run per cycle', async () 
     workerHeartbeatIntervalMs: 30000,
   });
 
-  const heartbeatRuns = runs.records.filter((r) => r.run_type === 'worker.heartbeat');
-  assert.equal(heartbeatRuns.length, 1, 'exactly one worker.heartbeat run must be written per cycle');
-  assert.equal(heartbeatRuns[0]?.status, 'succeeded', 'heartbeat run must be completed as succeeded');
-  assert.ok(heartbeatRuns[0]?.finished_at != null, 'heartbeat run must have a finished_at timestamp');
+  const heartbeatRuns = runs.records.filter(
+    (r) => r.run_type === 'worker.heartbeat',
+  );
+  assert.equal(
+    heartbeatRuns.length,
+    1,
+    'exactly one worker.heartbeat run must be written per cycle',
+  );
+  assert.equal(
+    heartbeatRuns[0]?.status,
+    'succeeded',
+    'heartbeat run must be completed as succeeded',
+  );
+  assert.ok(
+    heartbeatRuns[0]?.finished_at != null,
+    'heartbeat run must have a finished_at timestamp',
+  );
 });
 
 test('runWorkerCycles logs a worker.heartbeat event to stdout alongside the system_run write (UTV2-1479)', async () => {
@@ -2444,9 +2766,16 @@ test('runWorkerCycles logs a worker.heartbeat event to stdout alongside the syst
         return null;
       }
     })
-    .filter((parsed): parsed is { event?: string } => parsed !== null && parsed.event === 'worker.heartbeat');
+    .filter(
+      (parsed): parsed is { event?: string } =>
+        parsed !== null && parsed.event === 'worker.heartbeat',
+    );
 
-  assert.equal(heartbeatLogs.length, 1, 'exactly one worker.heartbeat log line must be emitted per cycle');
+  assert.equal(
+    heartbeatLogs.length,
+    1,
+    'exactly one worker.heartbeat log line must be emitted per cycle',
+  );
 });
 
 test('createWorkerRuntimeDependencies reads worker settings from local.env', () => {
@@ -2469,7 +2798,9 @@ test('createWorkerRuntimeDependencies reads worker settings from local.env', () 
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   };
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-worker-runtime-'));
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'utv2-worker-runtime-'),
+  );
 
   fs.writeFileSync(
     path.join(tempDir, '.env.example'),
@@ -2516,7 +2847,10 @@ test('createWorkerRuntimeDependencies reads worker settings from local.env', () 
 
     assert.equal(runtime.persistenceMode, 'in_memory');
     assert.equal(runtime.workerId, 'worker-from-local-env');
-    assert.deepEqual(runtime.distributionTargets, ['discord:best-bets', 'discord:canary']);
+    assert.deepEqual(runtime.distributionTargets, [
+      'discord:best-bets',
+      'discord:canary',
+    ]);
     assert.equal(runtime.adapterKind, 'discord');
     assert.equal(runtime.pollIntervalMs, 9000);
     assert.equal(runtime.maxCyclesPerRun, 7);
@@ -2524,14 +2858,17 @@ test('createWorkerRuntimeDependencies reads worker settings from local.env', () 
     assert.equal(runtime.autorun, true);
   } finally {
     process.env.UNIT_TALK_WORKER_ID = originalEnv.UNIT_TALK_WORKER_ID;
-    process.env.UNIT_TALK_DISTRIBUTION_TARGETS = originalEnv.UNIT_TALK_DISTRIBUTION_TARGETS;
+    process.env.UNIT_TALK_DISTRIBUTION_TARGETS =
+      originalEnv.UNIT_TALK_DISTRIBUTION_TARGETS;
     process.env.UNIT_TALK_WORKER_ADAPTER = originalEnv.UNIT_TALK_WORKER_ADAPTER;
     process.env.UNIT_TALK_WORKER_POLL_MS = originalEnv.UNIT_TALK_WORKER_POLL_MS;
-    process.env.UNIT_TALK_WORKER_MAX_CYCLES = originalEnv.UNIT_TALK_WORKER_MAX_CYCLES;
+    process.env.UNIT_TALK_WORKER_MAX_CYCLES =
+      originalEnv.UNIT_TALK_WORKER_MAX_CYCLES;
     process.env.UNIT_TALK_WORKER_DRY_RUN = originalEnv.UNIT_TALK_WORKER_DRY_RUN;
     process.env.UNIT_TALK_WORKER_AUTORUN = originalEnv.UNIT_TALK_WORKER_AUTORUN;
     process.env.SUPABASE_URL = originalEnv.SUPABASE_URL;
-    process.env.SUPABASE_SERVICE_ROLE_KEY = originalEnv.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY =
+      originalEnv.SUPABASE_SERVICE_ROLE_KEY;
     process.chdir(originalCwd);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -2551,9 +2888,18 @@ test('runWorkerCycles writes one heartbeat per cycle for multiple cycles', async
     workerHeartbeatIntervalMs: 30000,
   });
 
-  const heartbeatRuns = runs.records.filter((r) => r.run_type === 'worker.heartbeat');
-  assert.equal(heartbeatRuns.length, 3, 'one worker.heartbeat run must be written per cycle');
-  assert.ok(heartbeatRuns.every((r) => r.status === 'succeeded'), 'all heartbeat runs must be succeeded');
+  const heartbeatRuns = runs.records.filter(
+    (r) => r.run_type === 'worker.heartbeat',
+  );
+  assert.equal(
+    heartbeatRuns.length,
+    3,
+    'one worker.heartbeat run must be written per cycle',
+  );
+  assert.ok(
+    heartbeatRuns.every((r) => r.status === 'succeeded'),
+    'all heartbeat runs must be succeeded',
+  );
 });
 
 test('runWorkerCycles skips heartbeat write when workerHeartbeatIntervalMs is 0', async () => {
@@ -2571,15 +2917,23 @@ test('runWorkerCycles skips heartbeat write when workerHeartbeatIntervalMs is 0'
     workerHeartbeatIntervalMs: 0,
   });
 
-  const heartbeatRuns = runs.records.filter((r) => r.run_type === 'worker.heartbeat');
-  assert.equal(heartbeatRuns.length, 0, 'no worker.heartbeat runs must be written when interval is 0');
+  const heartbeatRuns = runs.records.filter(
+    (r) => r.run_type === 'worker.heartbeat',
+  );
+  assert.equal(
+    heartbeatRuns.length,
+    0,
+    'no worker.heartbeat runs must be written when interval is 0',
+  );
 });
 
 function isGovernedTarget(target: string) {
   return target === 'discord:best-bets' || target === 'discord:trader-insights';
 }
 
-function requireCapturedRequest(value: CapturedRequest | null): CapturedRequest {
+function requireCapturedRequest(
+  value: CapturedRequest | null,
+): CapturedRequest {
   if (!value) {
     throw new Error('Expected Discord request to be captured');
   }
@@ -2587,7 +2941,9 @@ function requireCapturedRequest(value: CapturedRequest | null): CapturedRequest 
   return value;
 }
 
-function parseDiscordRequestBody(value: string | undefined): DiscordRequestBody {
+function parseDiscordRequestBody(
+  value: string | undefined,
+): DiscordRequestBody {
   if (!value) {
     throw new Error('Expected Discord request body to be present');
   }
@@ -2677,13 +3033,15 @@ test('runWorkerCycles survives Supabase 521 transient error during stale claim r
 
   // Inject a 521 failure on the first reapStaleClaims call only
   let reapCallCount = 0;
-  const originalReap = repositories.outbox.reapStaleClaims.bind(repositories.outbox);
+  const originalReap = repositories.outbox.reapStaleClaims.bind(
+    repositories.outbox,
+  );
   repositories.outbox.reapStaleClaims = async (...args) => {
     reapCallCount += 1;
     if (reapCallCount === 1) {
       throw new Error(
         'Failed to query stale outbox claims: <!DOCTYPE html>\n' +
-        '<title>feownrheeefbcsehtsiw.supabase.co | 521: Web server is down</title>',
+          '<title>feownrheeefbcsehtsiw.supabase.co | 521: Web server is down</title>',
       );
     }
     return originalReap(...args);
@@ -2699,26 +3057,38 @@ test('runWorkerCycles survives Supabase 521 transient error during stale claim r
     persistenceMode: 'in_memory',
   });
 
-  assert.equal(cycles.length, 1, 'worker should complete the cycle without crashing');
-  assert.equal(cycles[0]?.results[0]?.status, 'idle', 'no outbox rows — result is idle');
+  assert.equal(
+    cycles.length,
+    1,
+    'worker should complete the cycle without crashing',
+  );
+  assert.equal(
+    cycles[0]?.results[0]?.status,
+    'idle',
+    'no outbox rows — result is idle',
+  );
 });
-
-
 
 // ── UTV2-995: outbox claim atomicity proof tests ──────────────────────────────────────────
 
-test("processNextDistributionWork defaults to database persistence mode (fail-closed)", async () => {
+test('processNextDistributionWork defaults to database persistence mode (fail-closed)', async () => {
   let atomicClaimCalled = false;
   let sequentialClaimCalled = false;
 
   const { repositories } = createWorkerTestRepositories([]);
   repositories.outbox = {
     ...repositories.outbox,
-    async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+    async claimNextAtomic(
+      _target: string,
+      _workerId: string,
+    ): Promise<OutboxRecord | null> {
       atomicClaimCalled = true;
       return null;
     },
-    async claimNext(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+    async claimNext(
+      _target: string,
+      _workerId: string,
+    ): Promise<OutboxRecord | null> {
       sequentialClaimCalled = true;
       return null;
     },
@@ -2726,27 +3096,41 @@ test("processNextDistributionWork defaults to database persistence mode (fail-cl
 
   await processNextDistributionWork(
     repositories,
-    "discord:canary",
-    "test-worker",
+    'discord:canary',
+    'test-worker',
     createStubDeliveryAdapter(),
   );
 
-  assert.equal(atomicClaimCalled, true, "default mode must use claimNextAtomic (atomic path)");
-  assert.equal(sequentialClaimCalled, false, "sequential claimNext must NOT be called in default database mode");
+  assert.equal(
+    atomicClaimCalled,
+    true,
+    'default mode must use claimNextAtomic (atomic path)',
+  );
+  assert.equal(
+    sequentialClaimCalled,
+    false,
+    'sequential claimNext must NOT be called in default database mode',
+  );
 });
 
-test("processNextDistributionWork with persistenceMode=database calls claimNextAtomic", async () => {
+test('processNextDistributionWork with persistenceMode=database calls claimNextAtomic', async () => {
   let atomicClaimCalled = false;
   let sequentialClaimCalled = false;
 
   const { repositories } = createWorkerTestRepositories([]);
   repositories.outbox = {
     ...repositories.outbox,
-    async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+    async claimNextAtomic(
+      _target: string,
+      _workerId: string,
+    ): Promise<OutboxRecord | null> {
       atomicClaimCalled = true;
       return null;
     },
-    async claimNext(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+    async claimNext(
+      _target: string,
+      _workerId: string,
+    ): Promise<OutboxRecord | null> {
       sequentialClaimCalled = true;
       return null;
     },
@@ -2754,28 +3138,42 @@ test("processNextDistributionWork with persistenceMode=database calls claimNextA
 
   await processNextDistributionWork(
     repositories,
-    "discord:canary",
-    "test-worker",
+    'discord:canary',
+    'test-worker',
     createStubDeliveryAdapter(),
-    { persistenceMode: "database" },
+    { persistenceMode: 'database' },
   );
 
-  assert.equal(atomicClaimCalled, true, "database mode must call claimNextAtomic");
-  assert.equal(sequentialClaimCalled, false, "database mode must NOT call sequential claimNext");
+  assert.equal(
+    atomicClaimCalled,
+    true,
+    'database mode must call claimNextAtomic',
+  );
+  assert.equal(
+    sequentialClaimCalled,
+    false,
+    'database mode must NOT call sequential claimNext',
+  );
 });
 
-test("processNextDistributionWork with persistenceMode=in_memory calls claimNext (sequential)", async () => {
+test('processNextDistributionWork with persistenceMode=in_memory calls claimNext (sequential)', async () => {
   let atomicClaimCalled = false;
   let sequentialClaimCalled = false;
 
   const { repositories } = createWorkerTestRepositories([]);
   repositories.outbox = {
     ...repositories.outbox,
-    async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+    async claimNextAtomic(
+      _target: string,
+      _workerId: string,
+    ): Promise<OutboxRecord | null> {
       atomicClaimCalled = true;
       return null;
     },
-    async claimNext(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+    async claimNext(
+      _target: string,
+      _workerId: string,
+    ): Promise<OutboxRecord | null> {
       sequentialClaimCalled = true;
       return null;
     },
@@ -2783,14 +3181,22 @@ test("processNextDistributionWork with persistenceMode=in_memory calls claimNext
 
   await processNextDistributionWork(
     repositories,
-    "discord:canary",
-    "test-worker",
+    'discord:canary',
+    'test-worker',
     createStubDeliveryAdapter(),
-    { persistenceMode: "in_memory" },
+    { persistenceMode: 'in_memory' },
   );
 
-  assert.equal(sequentialClaimCalled, true, "in_memory mode must use sequential claimNext");
-  assert.equal(atomicClaimCalled, false, "in_memory mode must NOT call claimNextAtomic");
+  assert.equal(
+    sequentialClaimCalled,
+    true,
+    'in_memory mode must use sequential claimNext',
+  );
+  assert.equal(
+    atomicClaimCalled,
+    false,
+    'in_memory mode must NOT call claimNextAtomic',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -2802,7 +3208,9 @@ function spyOnClaims(repositories: RepositoryBundle): { count: () => number } {
   let calls = 0;
   const outbox = repositories.outbox as unknown as Record<string, unknown>;
   for (const method of ['claimNext', 'claimNextAtomic'] as const) {
-    const original = outbox[method] as ((...args: unknown[]) => unknown) | undefined;
+    const original = outbox[method] as
+      | ((...args: unknown[]) => unknown)
+      | undefined;
     if (typeof original !== 'function') continue;
     outbox[method] = (...args: unknown[]) => {
       calls += 1;
@@ -2818,7 +3226,8 @@ async function captureWorkerLogs(run: () => Promise<unknown>) {
   console.log = (message: unknown) => {
     try {
       const parsed = JSON.parse(String(message)) as unknown;
-      if (parsed && typeof parsed === 'object') logged.push(parsed as Record<string, unknown>);
+      if (parsed && typeof parsed === 'object')
+        logged.push(parsed as Record<string, unknown>);
     } catch {
       // not a structured line
     }
@@ -2835,7 +3244,11 @@ test('UTV2-1952: a kill-switch skip logs a structured line and leaves the row pe
   const outbox = createOutboxRecord('discord:official-picks');
   const { repositories } = createWorkerTestRepositories([outbox]);
   const killSwitch = new InMemoryDeliveryKillSwitchRepository();
-  await killSwitch.setKilled({ target: 'official-picks', killed: true, actor: 'test-operator' });
+  await killSwitch.setKilled({
+    target: 'official-picks',
+    killed: true,
+    actor: 'test-operator',
+  });
   const claims = spyOnClaims(repositories);
 
   const logged = await captureWorkerLogs(() =>
@@ -2846,11 +3259,15 @@ test('UTV2-1952: a kill-switch skip logs a structured line and leaves the row pe
       deliver: createStubDeliveryAdapter(),
       maxCycles: 2,
       persistenceMode: 'in_memory',
-      targetRegistry: [{ target: 'official-picks', enabled: true, rolloutPct: 100 }],
+      targetRegistry: [
+        { target: 'official-picks', enabled: true, rolloutPct: 100 },
+      ],
     }),
   );
 
-  const skips = logged.filter((line) => line['event'] === 'worker.delivery-skipped-kill-switch');
+  const skips = logged.filter(
+    (line) => line['event'] === 'worker.delivery-skipped-kill-switch',
+  );
   assert.equal(skips.length, 2, 'one skip line per cycle the control holds');
   assert.deepEqual(skips[0], {
     event: 'worker.delivery-skipped-kill-switch',
@@ -2867,7 +3284,12 @@ test('UTV2-1952: a kill-switch skip logs a structured line and leaves the row pe
   assert.equal(outbox.attempt_count, 0);
   assert.equal(outbox.claimed_at ?? null, null);
   assert.equal(outbox.claimed_by ?? null, null);
-  assert.equal(logged.some((line) => line['event'] === 'worker.delivery-skipped-target-disabled'), false);
+  assert.equal(
+    logged.some(
+      (line) => line['event'] === 'worker.delivery-skipped-target-disabled',
+    ),
+    false,
+  );
 });
 
 test('UTV2-1952: a registry-disabled skip logs its own structured line and leaves the row unattempted', async () => {
@@ -2883,14 +3305,27 @@ test('UTV2-1952: a registry-disabled skip logs its own structured line and leave
       deliver: createStubDeliveryAdapter(),
       maxCycles: 1,
       persistenceMode: 'in_memory',
-      targetRegistry: [{ target: 'best-bets', enabled: false, disabledReason: 'test', rolloutPct: 100 }],
+      targetRegistry: [
+        {
+          target: 'best-bets',
+          enabled: false,
+          disabledReason: 'test',
+          rolloutPct: 100,
+        },
+      ],
     }),
   );
 
-  const skip = logged.find((line) => line['event'] === 'worker.delivery-skipped-target-disabled');
+  const skip = logged.find(
+    (line) => line['event'] === 'worker.delivery-skipped-target-disabled',
+  );
   assert.equal(skip?.['reason'], 'target-disabled');
   assert.equal(skip?.['target'], 'discord:best-bets');
-  assert.equal(claims.count(), 0, 'a disabled-target skip must not claim the row');
+  assert.equal(
+    claims.count(),
+    0,
+    'a disabled-target skip must not claim the row',
+  );
   assert.equal(outbox.status, 'pending');
   assert.equal(outbox.attempt_count, 0);
   assert.equal(outbox.claimed_at ?? null, null);
@@ -2900,7 +3335,11 @@ test('UTV2-1952: an attempted delivery emits no skip line', async () => {
   const outbox = createOutboxRecord('discord:best-bets');
   const { repositories } = createWorkerTestRepositories([outbox]);
   const killSwitch = new InMemoryDeliveryKillSwitchRepository();
-  await killSwitch.setKilled({ target: 'best-bets', killed: false, actor: 'test-operator' });
+  await killSwitch.setKilled({
+    target: 'best-bets',
+    killed: false,
+    actor: 'test-operator',
+  });
   const claims = spyOnClaims(repositories);
 
   const logged = await captureWorkerLogs(() =>
@@ -2916,10 +3355,16 @@ test('UTV2-1952: an attempted delivery emits no skip line', async () => {
   );
 
   assert.equal(
-    logged.some((line) => String(line['event']).startsWith('worker.delivery-skipped-')),
+    logged.some((line) =>
+      String(line['event']).startsWith('worker.delivery-skipped-'),
+    ),
     false,
     'a delivery that was attempted must not be reported as a skip',
   );
   assert.ok(claims.count() > 0, 'control: an attempted delivery does claim');
-  assert.notEqual(outbox.status, 'pending', 'the row was claimed and processed');
+  assert.notEqual(
+    outbox.status,
+    'pending',
+    'the row was claimed and processed',
+  );
 });

@@ -1,3 +1,4 @@
+import { buildServicePresentation } from '@unit-talk/domain';
 /**
  * Worker health alert check.
  *
@@ -92,7 +93,7 @@ async function postDiscordAlert(message: string) {
         Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ content: message }),
+      body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message: message })] }),
     });
   } catch (error) {
     console.error('[worker-alert] Failed to post Discord alert:', error instanceof Error ? error.message : String(error));

@@ -1,10 +1,18 @@
 import {
-  EmbedBuilder,
+  createMemberEmbed,
+  memberPages,
+  replyWithPages,
+  replyWithPrivateError,
+} from '../embeds/presentation.js';
+import {
   SlashCommandBuilder,
-  type APIEmbedField,
   type ChatInputCommandInteraction,
 } from 'discord.js';
-import { ApiClientError, createApiClient, type ApiClient } from '../api-client.js';
+import {
+  ApiClientError,
+  createApiClient,
+  type ApiClient,
+} from '../api-client.js';
 import { loadBotConfig } from '../config.js';
 import type { CommandHandler } from '../command-registry.js';
 import { buildRecapEmbedData } from '../embeds/recap-embed.js';
@@ -54,35 +62,55 @@ export function createRecapCommand(apiClient: ApiClient): CommandHandler {
 
         if (response.data.picks.length === 0) {
           await interaction.editReply({
-            content: 'No settled picks found.',
-            embeds: [],
+            content: '',
+            embeds: [
+              createMemberEmbed('service-alert').setDescription(
+                'No settled picks found.',
+              ),
+            ],
           });
           return;
         }
 
-        await interaction.editReply({
-          content: '',
-          embeds: [buildCapperRecapEmbed(response.data)],
-        });
+        await replyWithPages(
+          interaction,
+          buildCapperRecapEmbeds(response.data),
+        );
       } catch (error) {
         const content =
           error instanceof ApiClientError
             ? 'Recap is temporarily unavailable.'
             : 'Recap is temporarily unavailable.';
-        await interaction.editReply({
-          content,
-          embeds: [],
-        });
+        await replyWithPrivateError(interaction, content);
       }
     },
   };
 }
 
 export function buildCapperRecapEmbed(recap: CapperRecapResponse) {
-  return new EmbedBuilder()
-    .setTitle(`${recap.submittedBy} · Last ${recap.picks.length} Settled Picks`)
-    .setColor(resolveSummaryColor(recap.picks))
-    .addFields(recap.picks.map(buildRecapField));
+  return buildCapperRecapEmbeds(recap)[0]!;
+}
+export function buildCapperRecapEmbeds(recap: CapperRecapResponse) {
+  return memberPages('capper-record', {
+    title: `${recap.submittedBy} · Last ${recap.picks.length} Settled Picks`,
+    fields: recap.picks.map((pick) => {
+      const data = buildRecapEmbedData({
+        ...pick,
+        submittedBy: recap.submittedBy,
+        settledAt: pick.settledAt,
+      });
+      const values = data.fields
+        .filter((field) => field.name !== 'Capper')
+        .map(
+          (field) =>
+            `${field.name === 'CLV% (vs SGO close)' ? 'CLV' : field.name}: ${field.value}`,
+        );
+      return {
+        name: `${mapResultToToken(pick.result)} · ${formatSettledAt(pick.settledAt)}`,
+        value: values.join('\n'),
+      };
+    }),
+  });
 }
 
 function buildCapperRecapPath(input: { submittedBy: string; limit: number }) {
@@ -107,45 +135,6 @@ function resolveSubmittedBy(interaction: ChatInputCommandInteraction) {
   }
 
   return interaction.user.username.trim();
-}
-
-function buildRecapField(pick: CapperRecapPick): APIEmbedField {
-  const embedData = buildRecapEmbedData({
-    market: pick.market,
-    selection: pick.selection,
-    result: pick.result,
-    stakeUnits: pick.stakeUnits,
-    profitLossUnits: pick.profitLossUnits,
-    clvPercent: pick.clvPercent,
-    submittedBy: '',
-  });
-
-  const fields = new Map(
-    (embedData.fields ?? []).map((field) => [field.name, String(field.value)] as const),
-  );
-
-  return {
-    name: `${mapResultToToken(pick.result)} · ${fields.get('P/L') ?? '0.0u'} · ${formatSettledAt(pick.settledAt)}`,
-    value: [
-      `**${fields.get('Market') ?? pick.market}**`,
-      fields.get('Selection') ?? pick.selection,
-      `P/L: ${fields.get('P/L') ?? '0.0u'}`,
-      `CLV: ${pick.clvPercent === null || pick.clvPercent === undefined ? 'unavailable' : fields.get('CLV% (vs SGO close)') ?? fields.get('CLV%') ?? 'unavailable'}`,
-      `Stake: ${fields.get('Stake') ?? '—'}`,
-    ].join('\n'),
-    inline: false,
-  };
-}
-
-function resolveSummaryColor(picks: CapperRecapPick[]) {
-  const firstResult = picks[0]?.result;
-  if (firstResult === 'win') {
-    return 0x22c55e;
-  }
-  if (firstResult === 'loss') {
-    return 0xef4444;
-  }
-  return 0x9ca3af;
 }
 
 function mapResultToToken(result: CapperRecapPick['result']) {

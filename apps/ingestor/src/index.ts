@@ -1,3 +1,4 @@
+import { buildServicePresentation } from '@unit-talk/domain';
 import {
   assertProductionRuntimeConfig,
   createRuntimeConfigFailureLogFields,
@@ -316,7 +317,7 @@ async function postOpsAlert(webhookUrl: string, message: string): Promise<void> 
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: message }),
+      body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message })] }),
     });
   } catch {
     // intentionally swallowed — best-effort ops notification

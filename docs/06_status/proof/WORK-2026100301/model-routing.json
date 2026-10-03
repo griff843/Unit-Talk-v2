@@ -1,0 +1,17 @@
+{
+  "issue_id": "WORK-2026100301",
+  "model": null,
+  "reasoning_effort": null,
+  "admission_routing": {
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "model_profile": "codex-sol-medium",
+    "policy_version": "2.0.0"
+  },
+  "override_used": false,
+  "execution_environment": "Codex desktop interactive session",
+  "actual_execution_model": null,
+  "actual_execution_reasoning_effort": null,
+  "execution_sha": "da000d16c15fb10b2a44e183cb6627e313677507",
+  "note": "Work used the existing desktop session, not codex-exec. Actual execution model and effort are unverified. Admission metadata cannot satisfy the execution attestation required by the proof schema; this remains a proof gate gap."
+}

@@ -1,10 +1,14 @@
 import {
-  EmbedBuilder,
+  memberTextPages,
+  createMemberEmbed,
+  replyWithPrivateError,
+  replyWithPages,
+} from '../embeds/presentation.js';
+import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import {
-  ApiClientError,
   createApiClient,
   type ApiClient,
   type PicksQueryResponse,
@@ -34,24 +38,22 @@ export function createTodayCommand(
         const todayPicks = filterTodayPicks(response.picks);
         if (todayPicks.length === 0) {
           await interaction.editReply({
-            content: "No picks have been posted in today's board window yet.",
-            embeds: [],
+            content: '',
+            embeds: [
+              createMemberEmbed().setDescription(
+                "No picks have been posted in today's board window yet.",
+              ),
+            ],
           });
           return;
         }
 
-        await interaction.editReply({
-          content: '',
-          embeds: buildTodayEmbeds(todayPicks),
-        });
-      } catch (error) {
-        await interaction.editReply({
-          content:
-            error instanceof ApiClientError
-              ? 'Today board is temporarily unavailable.'
-              : 'Today board is temporarily unavailable.',
-          embeds: [],
-        });
+        await replyWithPages(interaction, buildTodayEmbeds(todayPicks));
+      } catch {
+        await replyWithPrivateError(
+          interaction,
+          'Today board is temporarily unavailable.',
+        );
       }
     },
   };
@@ -64,26 +66,24 @@ export function filterTodayPicks(picks: QueriedPick[], now: Date = new Date()) {
 export function buildTodayEmbeds(picks: QueriedPick[]) {
   const pages = paginate(picks, PAGE_SIZE);
 
-  return pages.map((page, index) =>
-    new EmbedBuilder()
-      .setTitle(
-        pages.length > 1
-          ? `Today's Picks - Page ${index + 1}/${pages.length}`
-          : "Today's Picks",
-      )
-      .setColor(0x3b82f6)
-      .setDescription(
-        page
-          .map((pick) =>
-            [
-              `[${pick.status.toUpperCase()}]`,
-              `**${pick.selection}**`,
-              `(${pick.market})`,
-              `- ${formatShortTimestamp(pick.created_at)}`,
-            ].join(' '),
-          )
-          .join('\n'),
-      ),
+  return pages.flatMap((page, index) =>
+    memberTextPages(
+      pages.length > 1
+        ? `Today's Picks - Page ${index + 1}/${pages.length}`
+        : "Today's Picks",
+      page
+        .map((pick) =>
+          [
+            `[${pick.status.toUpperCase()}]`,
+            `**${pick.selection}**`,
+            pick.market ? `(${pick.market})` : '',
+            formatShortTimestamp(pick.created_at),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        )
+        .join('\n'),
+    ),
   );
 }
 
@@ -103,7 +103,7 @@ function isSameUtcDay(value: string, now: Date) {
 function formatShortTimestamp(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return value;
+    return '';
   }
 
   return parsed.toISOString().slice(11, 16) + ' UTC';

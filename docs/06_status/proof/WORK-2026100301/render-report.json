@@ -1,0 +1,17 @@
+{
+  "mode": "local simulated Discord; QA sandbox unavailable",
+  "checks": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "horizontalOverflow": false,
+      "embeds": 21
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "horizontalOverflow": false,
+      "embeds": 21
+    }
+  ]
+}

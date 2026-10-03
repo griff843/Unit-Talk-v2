@@ -1,3 +1,4 @@
+import { buildServicePresentation } from '@unit-talk/domain';
 /**
  * UTV2-669: Daily ops health digest
  *
@@ -869,7 +870,7 @@ async function postOpsAlert(message: string): Promise<void> {
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: message }),
+      body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message: message })] }),
       signal: AbortSignal.timeout(10_000),
     });
   } catch {

@@ -1,10 +1,14 @@
+import { createMemberEmbed } from '../embeds/presentation.js';
 import {
-  EmbedBuilder,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import type { SubmissionPayload } from '@unit-talk/contracts';
-import { createApiClient, ApiClientError, type ApiClient } from '../api-client.js';
+import {
+  createApiClient,
+  ApiClientError,
+  type ApiClient,
+} from '../api-client.js';
 import { loadBotConfig } from '../config.js';
 import { UNAVAILABLE_REPLY } from '../router.js';
 import type { CommandHandler } from '../command-registry.js';
@@ -26,9 +30,15 @@ interface ApiErrorShape {
   };
 }
 
-type PickInteractionOptions = Pick<ChatInputCommandInteraction, 'options' | 'user'>;
+type PickInteractionOptions = Pick<
+  ChatInputCommandInteraction,
+  'options' | 'user'
+>;
 
-export function createPickCommand(apiClient: ApiClient, capperRoleId: string): CommandHandler {
+export function createPickCommand(
+  apiClient: ApiClient,
+  capperRoleId: string,
+): CommandHandler {
   return {
     requiredRoles: [capperRoleId],
     data: new SlashCommandBuilder()
@@ -120,8 +130,12 @@ export function createPickCommand(apiClient: ApiClient, capperRoleId: string): C
         });
       } catch (error) {
         await interaction.editReply({
-          content: formatFailureReply(error),
-          embeds: [],
+          content: '',
+          embeds: [
+            createMemberEmbed('bot-error').setDescription(
+              formatFailureReply(error),
+            ),
+          ],
         });
       }
     },
@@ -133,7 +147,10 @@ export function parsePickSubmission(
 ): SubmissionPayload {
   const eventName = readOptionalString(interaction, 'event_name');
   const confidence = readOptionalConfidence(interaction);
-  const eventStartTime = readOptionalIsoTimestamp(interaction, 'event_start_time');
+  const eventStartTime = readOptionalIsoTimestamp(
+    interaction,
+    'event_start_time',
+  );
   const edgePercent = readOptionalNumber(interaction, 'edge_percent');
   const clvTrend = readOptionalString(interaction, 'clv_trend');
   const metadata: Record<string, unknown> = {};
@@ -165,9 +182,9 @@ function buildSuccessEmbed(
   data: SubmitPickApiResponse['data'],
   payload: SubmissionPayload,
 ) {
-  const embed = new EmbedBuilder()
+  const embed = createMemberEmbed()
     .setTitle('Pick Submitted')
-    .setColor(0x22c55e)
+
     .addFields(
       { name: 'Submission ID', value: data.submissionId, inline: false },
       { name: 'Pick ID', value: data.pickId, inline: false },
@@ -244,7 +261,9 @@ function readOptionalNumber(
 function readOdds(interaction: PickInteractionOptions): number {
   const odds = interaction.options.getInteger('odds', true);
   if (odds === 0 || Math.abs(odds) < 100 || Math.abs(odds) > 50000) {
-    throw new Error('odds must be an American odds integer between -50000 and 50000, excluding 0.');
+    throw new Error(
+      'odds must be an American odds integer between -50000 and 50000, excluding 0.',
+    );
   }
 
   return odds;
@@ -259,7 +278,9 @@ function readStakeUnits(interaction: PickInteractionOptions): number {
   return stakeUnits;
 }
 
-function readOptionalConfidence(interaction: PickInteractionOptions): number | undefined {
+function readOptionalConfidence(
+  interaction: PickInteractionOptions,
+): number | undefined {
   const confidence = interaction.options.getNumber('confidence');
   if (confidence == null) {
     return undefined;
@@ -292,7 +313,9 @@ function readOptionalIsoTimestamp(
 function readUrgencyFromPayload(payload: SubmissionPayload) {
   const metadata = asRecord(payload.metadata);
   const eventStartTime =
-    typeof metadata?.['eventStartTime'] === 'string' ? metadata['eventStartTime'] : null;
+    typeof metadata?.['eventStartTime'] === 'string'
+      ? metadata['eventStartTime']
+      : null;
 
   return eventStartTime ? buildPickUrgencyDisplay(eventStartTime) : null;
 }
@@ -339,5 +362,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createPickCommand(createApiClient(config.apiUrl, config.apiKey), config.capperRoleId);
+  return createPickCommand(
+    createApiClient(config.apiUrl, config.apiKey),
+    config.capperRoleId,
+  );
 }

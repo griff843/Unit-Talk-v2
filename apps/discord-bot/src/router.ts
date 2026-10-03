@@ -1,11 +1,14 @@
 ﻿import type { Interaction, ChatInputCommandInteraction } from 'discord.js';
 import type { CommandRegistry } from './command-registry.js';
 import { checkRoles } from './role-guard.js';
+import { buildPrivatePresentation } from '@unit-talk/domain';
+import { replyWithPrivateError } from './embeds/presentation.js';
 
 const UNKNOWN_COMMAND_REPLY = 'Unknown command.';
 const ACCESS_DENIED_REPLY = "You don't have access to this command.";
 const ERROR_REPLY = 'An unexpected error occurred. Please try again later.';
-const UNAVAILABLE_REPLY = 'Service temporarily unavailable - try again shortly.';
+const UNAVAILABLE_REPLY =
+  'Service temporarily unavailable - try again shortly.';
 
 export { UNAVAILABLE_REPLY };
 
@@ -34,15 +37,22 @@ export function createInteractionHandler(
     const command = registry.get(interaction.commandName);
 
     if (!command) {
-      await interaction.reply({ content: UNKNOWN_COMMAND_REPLY, ephemeral: true });
+      await interaction.reply(
+        buildPrivatePresentation('bot-error', UNKNOWN_COMMAND_REPLY),
+      );
       return;
     }
 
     if (
       command.requiredRoles !== undefined &&
-      !checkRoles(interaction as ChatInputCommandInteraction, command.requiredRoles)
+      !checkRoles(
+        interaction as ChatInputCommandInteraction,
+        command.requiredRoles,
+      )
     ) {
-      await interaction.reply({ content: ACCESS_DENIED_REPLY, ephemeral: true });
+      await interaction.reply(
+        buildPrivatePresentation('access-denied', ACCESS_DENIED_REPLY),
+      );
       return;
     }
 
@@ -55,7 +65,11 @@ export function createInteractionHandler(
       await command.execute(interaction as ChatInputCommandInteraction);
     } catch (err) {
       logger.error('[router] Command execute error', err);
-      await interaction.editReply({ content: ERROR_REPLY });
+      await replyWithPrivateError(
+        interaction as ChatInputCommandInteraction,
+        ERROR_REPLY,
+        !isEphemeral,
+      );
     }
   };
 }

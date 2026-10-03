@@ -1,0 +1,584 @@
+{
+  "mode": "offline fixture; no live metrics",
+  "specimens": [
+    {
+      "title": "Official Pick · Fixture player Over 24.5",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Market",
+          "value": "Points",
+          "inline": true
+        },
+        {
+          "name": "Odds",
+          "value": "-110",
+          "inline": true
+        },
+        {
+          "name": "Units",
+          "value": "1u",
+          "inline": true
+        },
+        {
+          "name": "Capper",
+          "value": "Fixture capper",
+          "inline": true
+        },
+        {
+          "name": "Game Time",
+          "value": "<t:1791068400:f>",
+          "inline": true
+        },
+        {
+          "name": "Thesis",
+          "value": "Source-supplied fixture thesis.",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "NBA | Fixture A vs Fixture B"
+    },
+    {
+      "title": "Win · Fixture player Over 24.5",
+      "color": 2278750,
+      "fields": [
+        {
+          "name": "Market",
+          "value": "Points",
+          "inline": false
+        },
+        {
+          "name": "Selection",
+          "value": "Fixture player Over 24.5",
+          "inline": false
+        },
+        {
+          "name": "Result",
+          "value": "Win",
+          "inline": true
+        },
+        {
+          "name": "P/L",
+          "value": "+0.9u",
+          "inline": true
+        },
+        {
+          "name": "Odds",
+          "value": "-110",
+          "inline": true
+        },
+        {
+          "name": "CLV% (vs SGO close)",
+          "value": "0.0%",
+          "inline": true
+        },
+        {
+          "name": "Capper",
+          "value": "Fixture capper",
+          "inline": true
+        },
+        {
+          "name": "Stake",
+          "value": "1.0u",
+          "inline": true
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "timestamp": "2026-10-03T23:50:00.000Z"
+    },
+    {
+      "title": "Loss · Fixture player Over 24.5",
+      "color": 15680580,
+      "fields": [
+        {
+          "name": "Market",
+          "value": "Points",
+          "inline": false
+        },
+        {
+          "name": "Selection",
+          "value": "Fixture player Over 24.5",
+          "inline": false
+        },
+        {
+          "name": "Result",
+          "value": "Loss",
+          "inline": true
+        },
+        {
+          "name": "P/L",
+          "value": "-1.0u",
+          "inline": true
+        },
+        {
+          "name": "Odds",
+          "value": "-110",
+          "inline": true
+        },
+        {
+          "name": "Capper",
+          "value": "Fixture capper",
+          "inline": true
+        },
+        {
+          "name": "Stake",
+          "value": "1.0u",
+          "inline": true
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "timestamp": "2026-10-03T23:50:00.000Z"
+    },
+    {
+      "title": "Push · Fixture player Over 24.5",
+      "color": 10265519,
+      "fields": [
+        {
+          "name": "Market",
+          "value": "Points",
+          "inline": false
+        },
+        {
+          "name": "Selection",
+          "value": "Fixture player Over 24.5",
+          "inline": false
+        },
+        {
+          "name": "Result",
+          "value": "Push",
+          "inline": true
+        },
+        {
+          "name": "P/L",
+          "value": "0.0u",
+          "inline": true
+        },
+        {
+          "name": "Odds",
+          "value": "-110",
+          "inline": true
+        },
+        {
+          "name": "CLV% (vs SGO close)",
+          "value": "0.0%",
+          "inline": true
+        },
+        {
+          "name": "Capper",
+          "value": "Fixture capper",
+          "inline": true
+        },
+        {
+          "name": "Stake",
+          "value": "1.0u",
+          "inline": true
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "timestamp": "2026-10-03T23:50:00.000Z"
+    },
+    {
+      "title": "Void · Fixture player Over 24.5",
+      "color": 6583435,
+      "fields": [
+        {
+          "name": "Market",
+          "value": "Points",
+          "inline": false
+        },
+        {
+          "name": "Selection",
+          "value": "Fixture player Over 24.5",
+          "inline": false
+        },
+        {
+          "name": "Result",
+          "value": "Void",
+          "inline": true
+        },
+        {
+          "name": "P/L",
+          "value": "0.0u",
+          "inline": true
+        },
+        {
+          "name": "Odds",
+          "value": "-110",
+          "inline": true
+        },
+        {
+          "name": "CLV% (vs SGO close)",
+          "value": "0.0%",
+          "inline": true
+        },
+        {
+          "name": "Capper",
+          "value": "Fixture capper",
+          "inline": true
+        },
+        {
+          "name": "Stake",
+          "value": "1.0u",
+          "inline": true
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "timestamp": "2026-10-03T23:50:00.000Z"
+    },
+    {
+      "title": "Correction · Fixture player Over 24.5",
+      "color": 9133302,
+      "fields": [
+        {
+          "name": "Market",
+          "value": "Points",
+          "inline": false
+        },
+        {
+          "name": "Selection",
+          "value": "Fixture player Over 24.5",
+          "inline": false
+        },
+        {
+          "name": "Result",
+          "value": "Correction",
+          "inline": true
+        },
+        {
+          "name": "P/L",
+          "value": "0.0u",
+          "inline": true
+        },
+        {
+          "name": "Odds",
+          "value": "-110",
+          "inline": true
+        },
+        {
+          "name": "CLV% (vs SGO close)",
+          "value": "0.0%",
+          "inline": true
+        },
+        {
+          "name": "Capper",
+          "value": "Fixture capper",
+          "inline": true
+        },
+        {
+          "name": "Stake",
+          "value": "1.0u",
+          "inline": true
+        },
+        {
+          "name": "Previous result",
+          "value": "win",
+          "inline": false
+        },
+        {
+          "name": "Corrected result",
+          "value": "Loss",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "timestamp": "2026-10-03T23:50:00.000Z"
+    },
+    {
+      "title": "Daily Recap · Fixture window · 1/4",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Record",
+          "value": "0-150-0",
+          "inline": true
+        },
+        {
+          "name": "Sample",
+          "value": "150 settled fixture picks",
+          "inline": false
+        },
+        {
+          "name": "Settled picks",
+          "value": "LOSS-0 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-1 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-2 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-3 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-4 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-5 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-6 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-7 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-8 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-9 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-10 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-11 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-12 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-13 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-14 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-15 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-16 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-17 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-18 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-19 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-20 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-21 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-22 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-23 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-24 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-25 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-26 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-27 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-28 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-29 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-30 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-31 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-32 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-33 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-34 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-35 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      }
+    },
+    {
+      "title": "Daily Recap · Fixture window · 2/4",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-36 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-37 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-38 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-39 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-40 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-41 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-42 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-43 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-44 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-45 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-46 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-47 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-48 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-49 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-50 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-51 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-52 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-53 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-54 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-55 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-56 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-57 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-58 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-59 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-60 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-61 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-62 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-63 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-64 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-65 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-66 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-67 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-68 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-69 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-70 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-71 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-72 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-73 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-74 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-75 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-76 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-77 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-78 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-79 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-80 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      }
+    },
+    {
+      "title": "Daily Recap · Fixture window · 3/4",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-81 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-82 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-83 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-84 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-85 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-86 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-87 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-88 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-89 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-90 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-91 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-92 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-93 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-94 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-95 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-96 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-97 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-98 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-99 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-100 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-101 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-102 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-103 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-104 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-105 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-106 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-107 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-108 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-109 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-110 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-111 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-112 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-113 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-114 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-115 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-116 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-117 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-118 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-119 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-120 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-121 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-122 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-123 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-124 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-125 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      }
+    },
+    {
+      "title": "Daily Recap · Fixture window · 4/4",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-126 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-127 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-128 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-129 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-130 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-131 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-132 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-133 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-134 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-135 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-136 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-137 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-138 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-139 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-140 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-141 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-142 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-143 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n",
+          "inline": false
+        },
+        {
+          "name": "Settled picks (continued)",
+          "value": "LOSS-144 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-145 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-146 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-147 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-148 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nLOSS-149 — Fixture selection xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      }
+    },
+    {
+      "title": "Capper Record · Fixture capper",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Record",
+          "value": "2-1-1",
+          "inline": true
+        },
+        {
+          "name": "Sample",
+          "value": "4 settled fixture picks",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      }
+    },
+    {
+      "title": "Leaderboard",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Rankings",
+          "value": "1. Fixture capper · 2-1-1 · 4 settled picks",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      }
+    },
+    {
+      "title": "Welcome to Unit Talk",
+      "color": 13083467,
+      "fields": [],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "Welcome to Unit Talk."
+    },
+    {
+      "title": "Trial Started",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Expires",
+          "value": "<t:1791633600:F>",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "Your trial provides VIP access while active."
+    },
+    {
+      "title": "Trial Expiring",
+      "color": 13083467,
+      "fields": [],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "Keep VIP access through the approved membership path. Your settled history remains available."
+    },
+    {
+      "title": "Upgrade",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Next step",
+          "value": "Contact an operator in #support for approved membership terms.",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "VIP+ includes VIP. Its market-intelligence features are not live yet. Contact support for approved availability and terms."
+    },
+    {
+      "title": "Capper Onboarding · Fixture capper",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Submit a pick",
+          "value": "Use /pick to submit picks through the canonical submission path.",
+          "inline": false
+        },
+        {
+          "name": "Your stats",
+          "value": "Use /stats to view your settled pick performance.",
+          "inline": false
+        },
+        {
+          "name": "Your recap",
+          "value": "Use /recap to review your last settled picks.",
+          "inline": false
+        },
+        {
+          "name": "Questions",
+          "value": "Reach out to an operator in this channel.",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "You've been added as a Unit Talk Capper. Here's how to get started."
+    },
+    {
+      "title": "Service Alert",
+      "color": 13083467,
+      "fields": [
+        {
+          "name": "Impact",
+          "value": "Delivery may be delayed.",
+          "inline": false
+        }
+      ],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "Fixture service delay."
+    },
+    {
+      "title": "System Maintenance",
+      "color": 13083467,
+      "fields": [],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "Fixture scheduled maintenance."
+    },
+    {
+      "title": "Access Denied",
+      "color": 13083467,
+      "fields": [],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "This command requires approved access."
+    },
+    {
+      "title": "Bot Error",
+      "color": 13083467,
+      "fields": [],
+      "footer": {
+        "text": "Unit Talk"
+      },
+      "description": "This service is temporarily unavailable."
+    }
+  ]
+}
