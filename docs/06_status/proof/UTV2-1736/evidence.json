@@ -1,0 +1,274 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1736",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "title": "Continuous daily partition coverage for provider_offer_history with a read-only forward-coverage monitor",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-27T02:55:00Z",
+  "merge_sha": "b700091eb5b12605141b838297e3f04c1dcb121a",
+  "sha_binding": {
+    "verified_source_sha": "b700091eb5b12605141b838297e3f04c1dcb121a",
+    "verified_source_note": "Exact substantive branch head: the last commit carrying non-proof changes. Re-anchored from 33e76bad8ce78c4927d076f52683326461e52d86 after the mid-lane security correction (b700091e revokes EXECUTE from PUBLIC, anon, and authenticated on the SECURITY DEFINER helper function; the earlier 942b15de revoked only from PUBLIC and was insufficient on Supabase). Every commit after this anchor changes only proof artifacts. All four migration receipts below were produced by CI at this exact head.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-27T15:15:00Z"
+  },
+  "production_ddl_applied": false,
+  "runtime_proof": {
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_select",
+      "writes_performed": 0
+    },
+    "ddl_target": {
+      "project_ref": "xskgrzbteyqdufktjrjx",
+      "environment": "staging",
+      "note": "Every DDL scenario was executed here. No production DDL was applied."
+    },
+    "production_row_counts": [
+      {
+        "table": "provider_offer_history",
+        "metric": "existing_partitions",
+        "value": 60
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "earliest_partition_day",
+        "value": "2026-05-02"
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "latest_partition_day",
+        "value": "2026-06-30"
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "target_range_days",
+        "value": 147
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "missing_in_range",
+        "value": 147
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "missing_up_to_today",
+        "value": 58
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "default_partitions",
+        "value": 0
+      },
+      {
+        "table": "cron.job_run_details",
+        "metric": "job_5_runs",
+        "value": 109
+      },
+      {
+        "table": "cron.job_run_details",
+        "metric": "job_5_succeeded",
+        "value": 0
+      },
+      {
+        "table": "cron.job_run_details",
+        "metric": "job_5_failed",
+        "value": 109
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "clean migration apply",
+        "status": "PASS",
+        "observed": "147 partitions, 2026-07-01..2026-11-24"
+      },
+      {
+        "name": "second apply mutates nothing",
+        "status": "PASS",
+        "observed": "created=0, before=147, after=147, oids_replaced=0"
+      },
+      {
+        "name": "row routes to the correct partition",
+        "status": "PASS",
+        "observed": "snapshot_at 2026-07-01 landed in provider_offer_history_p20260701"
+      },
+      {
+        "name": "rollback removes only empty lane-created partitions",
+        "status": "PASS",
+        "observed": "dropped=146"
+      },
+      {
+        "name": "rollback refuses a nonempty partition",
+        "status": "PASS",
+        "observed": "refused=1, partition survived attached with its row"
+      },
+      {
+        "name": "reapply after rollback succeeds",
+        "status": "PASS",
+        "observed": "created=146, total=147, preserved_rows=1, default_partitions=0"
+      },
+      {
+        "name": "induced pre-expiry reaches the real operations sink",
+        "status": "PASS",
+        "observed": "system_runs run_type=ops.partition_coverage status=failed AND audit_log action=partition_coverage.critical"
+      },
+      {
+        "name": "SECURITY DEFINER function locked to service_role only",
+        "status": "PASS",
+        "observed": "staging proacl before: postgres=X, anon=X, authenticated=X, service_role=X -> after: postgres=X, service_role=X; public/anon/authenticated EXECUTE all false"
+      },
+      {
+        "name": "privilege assertion mutation test — guard fails on the condition it names",
+        "status": "PASS",
+        "observed": "re-granting EXECUTE to anon made the assertion raise: 'UTV2-1736: role anon still holds EXECUTE ... Refusing to leave a SECURITY DEFINER function callable by an untrusted role.'; DO block aborted so the grant rolled back"
+      }
+    ],
+    "head": "b700091eb5b12605141b838297e3f04c1dcb121a",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 33085979223,
+      "job": 98565597551,
+      "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
+      "cases": [
+        "refuses when public.provider_offer_history_p20260701 pre-exists — raised SQLSTATE 42P07",
+        "no DDL ran when public.provider_offer_history_p20260701 pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.provider_offer_history_p20260701 case — back to baseline",
+        "refuses when public.provider_offer_history_p20261124 pre-exists — raised SQLSTATE 42P07",
+        "no DDL ran when public.provider_offer_history_p20261124 pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.provider_offer_history_p20261124 case — back to baseline",
+        "applies on an empty scratch schema — created all declared relations: public.provider_offer_history_p20260701, public.provider_offer_history_p20261124"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 33085979223,
+      "job": 98565597479,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
+      "detail": "apply -> rollback -> reapply convergence: post-down hash equals pre-up baseline and post-reup hash equals post-up."
+    },
+    "live_schema_parity": {
+      "result": "PASS",
+      "run": 33085978601,
+      "job": 98565631037,
+      "workflow": "Live Schema Parity"
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 33085978369,
+      "job": 98565908113,
+      "workflow": "CI / Writable DB proof (staging only)",
+      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx. No production credential is reachable from this job."
+    }
+  },
+  "static_proof": {
+    "test": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "tests": 5138,
+      "fail": 0,
+      "skipped": 0,
+      "detail": "Full unit suite, executed inside verify:static at b700091e (re-run after the security correction). 5138 pass / 0 fail / 0 skipped, exit 0."
+    },
+    "lane_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/partition-provisioner.test.ts",
+      "status": "PASS",
+      "tests": 10,
+      "fail": 0,
+      "detail": "Run directly for per-test verbatim output. Also executed by CI: the file is wired into test:ops and executable-wiring confirms it is reachable from the required verify root."
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "status": "FAIL",
+      "exit_code": 1,
+      "detail": "pnpm verify is verify:static && test:live-db. verify:static is green (exit 0). test:live-db refuses locally because production containment sets SUPABASE_URL=http://127.0.0.1:1 and assert-staging-target requires xskgrzbteyqdufktjrjx. That is a correct safety refusal, not lane debt. The executable-wiring failure recorded here before the PM scope extension is resolved — the guard now reports verdict=PASS with new=0 on both baselines. The live-DB receipt is the CI writable_db_proof_staging receipt above, bound to this exact head."
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "ci:db-client-boundary, ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test (5138 pass / 0 fail / 0 skipped), smart-form verify, verify:commands. Re-executed at b700091e after the security correction; exit 0."
+    },
+    "executable_wiring": {
+      "verdict": "PASS",
+      "required_reachable": 314,
+      "capability_orphan": 18,
+      "new_unwired": 0,
+      "new_orphan": 0,
+      "baseline_entries_added": 0
+    }
+  },
+  "known_gaps": {
+    "main_sync_resolved": {
+      "severity": "RESOLVED",
+      "detail": "The branch was 23 commits behind origin/main, which reddened proof-binding by a merge-ref artifact unrelated to this lane. Synced via the sanctioned ops:merge-wrapper git-rebase-main onto origin/main e0bc1480; the branch is now 9 ahead / 0 behind. Zero conflicts — main touched none of this lane's 12 files, and the lane delta is byte-identical across the rebase. Pre- and post-rebase heads are preserved at refs/heads/preserve/utv2-1736-pre-rebase-36ba76f2 and refs/heads/preserve/utv2-1736-post-rebase-a59bd20c. Every artifact pinned to the pre-rebase head 36ba76f2 is void and was regenerated, not reused.",
+      "resolved_here": true
+    },
+    "real_sink_test_not_automated": {
+      "severity": "LOW",
+      "detail": "The real-sink proof was executed by driving the real function's output into staging's real system_runs and audit_log, because staging service-role credentials are unavailable locally under production containment. Automating it in CI would require editing package.json and adding a live T1 proof file, both outside file_scope_lock."
+    },
+    "test_db_receipt": {
+      "severity": "EXPECTED",
+      "detail": "pnpm verify is verify:static && test:live-db. verify:static is fully green on this branch. test:live-db refuses locally because production containment sets SUPABASE_URL=http://127.0.0.1:1 and assert-staging-target requires xskgrzbteyqdufktjrjx. The T1 live-DB receipt is produced by CI's staging-ci environment inside the required verify job. This is a correct safety refusal, not lane debt.",
+      "resolved_here": false
+    },
+    "ci_test_wiring_resolved": {
+      "severity": "RESOLVED",
+      "detail": "Under a PM-authorized scope extension covering package.json, scripts/ops/partition-provisioner.test.ts is wired into test:ops. executable-wiring reports verdict=PASS, required-reachable 313->314, capability orphan 19->18, new=0 on both. No baseline suppression entry was added.",
+      "resolved_here": true
+    },
+    "privilege_regression_guard_absent": "No merge-time gate can catch removal of the privilege block. CI scratch Postgres has no anon or authenticated roles, so the per-role branch never executes there and the drills stay green; Live Schema Parity compares schema shape, not function ACLs. The in-migration assertion is the real control and fires at apply time against a real Supabase. Closing this needs a test asserting the migration still revokes from PUBLIC, anon, and authenticated — the target file is already in file_scope_lock, but adding it moves the anchor again. Flagged for PM decision, not decided unilaterally. See verification.md known gap 4."
+  },
+  "scope_refusals": [
+    "No production DDL applied.",
+    "pg_cron job 5 not modified — Successor A, requires its own production decision.",
+    "No partition drop, detach, pruning, retention activation, or audit-log mutation.",
+    "No SGO, ingestion restart, worker start, queue replay, delivery activation, system picks, or member-facing output.",
+    "The six legacy additional indexes were deliberately not restored in this lane.",
+    "No DEFAULT partition created."
+  ],
+  "rebase_record": {
+    "pre_rebase_head": "36ba76f2912eb7c200c987bb64951e78885d8768",
+    "post_rebase_substantive_head": "33e76bad8ce78c4927d076f52683326461e52d86",
+    "rebased_onto": "e0bc1480e44212eb494549784bf712465e0dabd0",
+    "method": "pnpm ops:merge-wrapper git-rebase-main (merge lock acquired and released)",
+    "conflicts": 0,
+    "lane_delta_content_changed": false,
+    "preserved_refs": [
+      "refs/heads/preserve/utv2-1736-pre-rebase-36ba76f2",
+      "refs/heads/preserve/utv2-1736-post-rebase-a59bd20c"
+    ],
+    "stale_artifacts_discarded": [
+      "EXECUTOR_RESULT comment pinned to 36ba76f2",
+      "all four CI receipts produced at 58755c37",
+      "scope-override body pinned to 36ba76f2"
+    ]
+  },
+  "anchor_history": [
+    {
+      "sha": "33e76bad8ce78c4927d076f52683326461e52d86",
+      "role": "post-rebase substantive head",
+      "status": "superseded",
+      "reason": "Security review found the SECURITY DEFINER helper function carried an implicit PUBLIC EXECUTE grant."
+    },
+    {
+      "sha": "942b15de69ea017f5c235ad96cb3f289061c94e0",
+      "role": "first security correction",
+      "status": "superseded — void for approval",
+      "reason": "REVOKE ... FROM PUBLIC only. Insufficient on Supabase: ALTER DEFAULT PRIVILEGES grant EXECUTE to anon and authenticated as explicit ACL entries, so anon retained EXECUTE. All four CI receipts passed at this head and were still wrong; the gap was found by reading pg_proc.proacl on staging."
+    },
+    {
+      "sha": "b700091eb5b12605141b838297e3f04c1dcb121a",
+      "role": "current substantive head",
+      "status": "active",
+      "reason": "Per-role REVOKE (PUBLIC, anon, authenticated) guarded on role existence, with a fail-closed assertion across all three. Proven and mutation-tested on staging."
+    }
+  ]
+}
