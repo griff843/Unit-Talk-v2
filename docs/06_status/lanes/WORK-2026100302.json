@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100302",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100302-scope-override",
+  "branch": "codex/work-2026100302-scope-override",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/file-scope-lock-check.yml",
+    ".ops/work/WORK-2026100302.md",
+    "docs/05_operations/schemas/scope-override-v1.md",
+    "docs/06_status/lanes/WORK-2026100201.json",
+    "scripts/ci/file-scope-guard.test.ts",
+    "scripts/ci/scope-override-comment-parser.test.ts",
+    "scripts/ci/scope-override-comment-parser.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026100302/diff-summary.md",
+    "docs/06_status/proof/WORK-2026100302/evidence.json",
+    "docs/06_status/proof/WORK-2026100302/verification.md",
+    "docs/06_status/proof/WORK-2026100302/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-10-03T07:21:35.764Z",
+  "heartbeat_at": "2026-10-03T07:21:35.764Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026100302-scope-override.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100302-scope-override",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
