@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100302",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "bec1635229dab7a7cf6a28c8a30a3e674d272ae9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "parser_workflow_guard_regressions": { "tests": 63, "pass": 63, "fail": 0, "skipped": 0 },
+    "workspace_static_chain": "PASS during pnpm verify; reached test:live-db",
+    "r_level": "PASS; no matching rules",
+    "file_scope_guard": "PASS with declared PR branch and trusted git manifests",
+    "diff_check": "PASS",
+    "automation_coverage": "PASS; no newly unwired tests"
+  },
+  "local_live_db": {
+    "pnpm_verify_exit": 1,
+    "pnpm_test_db_exit": 1,
+    "classification": "BLOCKED_BY_CONTAINMENT",
+    "write_attempted": false
+  },
+  "stale_lane_repair": {
+    "issue_id": "WORK-2026100201",
+    "pr_number": 1709,
+    "merge_sha": "771b761b74cef6d44eb9a0cd1f8649061e4735b5",
+    "status": "merged",
+    "packet_applied": true,
+    "truth_check_pass_claimed": false
+  },
+  "authorized_staging_ci": "PENDING on final PR HEAD",
+  "control_activation": "PENDING normal repository review and merge controls",
+  "external_override_registered": false,
+  "product_implementation_changed": false,
+  "merge_performed": false
+}
