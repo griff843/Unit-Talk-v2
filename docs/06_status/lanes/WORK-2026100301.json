@@ -8,7 +8,7 @@
   "branch": "codex/work-2026100301-discord-design",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1714",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026100301.md",
@@ -44,7 +44,8 @@
     "scripts/ingestor-alert-check.ts",
     "scripts/ops/daily-digest.ts",
     "scripts/ops/stale-lane-alerter.ts",
-    "scripts/worker-alert-check.ts"
+    "scripts/worker-alert-check.ts",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026100301/diff-summary.md",
@@ -52,9 +53,9 @@
     "docs/06_status/proof/WORK-2026100301/verification.md",
     "docs/06_status/proof/WORK-2026100301/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-03T07:07:22.942Z",
-  "heartbeat_at": "2026-10-03T07:07:22.942Z",
+  "heartbeat_at": "2026-10-03T08:16:48.628Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100301-discord-design.json",

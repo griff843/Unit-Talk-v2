@@ -1,4 +1,3 @@
-import './discord-design-system.test.js';
 /**
  * Discord Bot Foundation tests
  *
