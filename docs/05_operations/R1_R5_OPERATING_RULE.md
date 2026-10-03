@@ -59,7 +59,12 @@ Each cell is one of:
 
 For a positively classified non-T1 presentation-only change, product files are limited to
 `docs/03_product/brand/**`, `apps/smart-form/app/submit/components/BrandLogo.tsx`, and
-`apps/command-center/src/components/WorkspaceSidebar.tsx`, plus normal lane/proof metadata.
+`apps/command-center/src/components/UnitTalkLogo.tsx`, plus normal lane/proof metadata.
+
+The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+normal CI, even when changed alongside the logo component.
+
 No R1-R5 or live-DB/runtime proof is applicable; affected UI geometry/component verification
 still applies. This is not an exemption from the machine matrix's operator-UI QA requirements.
 Any additional file, T1/proof-required label, missing tier, or unknown comparison retains normal

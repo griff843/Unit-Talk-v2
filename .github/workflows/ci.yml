@@ -41,7 +41,7 @@ jobs:
             const { execFileSync } = require('node:child_process');
             const logos = new Set([
               'apps/smart-form/app/submit/components/BrandLogo.tsx',
-              'apps/command-center/src/components/WorkspaceSidebar.tsx',
+              'apps/command-center/src/components/UnitTalkLogo.tsx',
             ]);
             const isBrand = file => file.startsWith('docs/03_product/brand/') || logos.has(file);
             const isMetadata = file => /^(?:docs\/06_status\/lanes\/(?:WORK|UTV2)-\d+\.json|docs\/06_status\/proof\/(?:WORK|UTV2)-\d+\/(?:[^/]+\/)*[^/]+\.(?:md|json|png)|\.ops\/sync\/(?:WORK|UTV2)-\d+\.yml|\.ops\/work\/WORK-\d+\.md)$/.test(file);

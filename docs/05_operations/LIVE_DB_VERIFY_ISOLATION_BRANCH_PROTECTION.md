@@ -15,10 +15,15 @@ nonempty diff must contain at least one brand path, and every changed path must 
 
 - `docs/03_product/brand/**`
 - `apps/smart-form/app/submit/components/BrandLogo.tsx`
-- `apps/command-center/src/components/WorkspaceSidebar.tsx`
+- `apps/command-center/src/components/UnitTalkLogo.tsx`
+
 - `docs/06_status/lanes/{WORK|UTV2}-<digits>.json`
 - `docs/06_status/proof/{WORK|UTV2}-<digits>/**` with `.md`, `.json`, or `.png` artifacts only
 - `.ops/sync/{WORK|UTV2}-<digits>.yml` or `.ops/work/WORK-<digits>.md`
+
+The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+normal CI, even when changed alongside the logo component.
 
 The PR must have exactly one known `tier:T2` or `tier:T3` label and no `proof-required` label.
 Main pushes use the unique merged PR associated with that exact commit to resolve its tier;

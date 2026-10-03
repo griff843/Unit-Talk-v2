@@ -644,7 +644,7 @@ const head = 'b'.repeat(40);
 const brand = [
   'docs/03_product/brand/assets/unit-talk-mark-white.svg',
   'apps/smart-form/app/submit/components/BrandLogo.tsx',
-  'apps/command-center/src/components/WorkspaceSidebar.tsx',
+  'apps/command-center/src/components/UnitTalkLogo.tsx',
 ];
 const metadata = [
   '.ops/work/WORK-2026100201.md', '.ops/sync/WORK-2026100201.yml',
@@ -703,6 +703,41 @@ test('Brand CI: synthetic git diff: brand-only is lightweight; brand + runtime i
   } finally { releaseTempWorkspace(cwd); }
 });
 
+test('Brand CI: synthetic pure-logo edit is lightweight; sidebar sign-out edit is normal', async () => {
+  const cwd = createTempWorkspace('brand-sidebar-diff-');
+  const logo = 'apps/command-center/src/components/UnitTalkLogo.tsx';
+  const sidebar = 'apps/command-center/src/components/WorkspaceSidebar.tsx';
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  const put = (file: string, source: string) => {
+    mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
+    writeFileSync(path.join(cwd, file), source);
+  };
+  const commit = () => {
+    git('add', '.');
+    git('-c', 'user.name=CI Test', '-c', 'user.email=ci@example.invalid', 'commit', '-qm', 'synthetic sidebar diff');
+    return git('rev-parse', 'HEAD');
+  };
+  try {
+    git('init', '-q');
+    put(logo, readFileSync(path.join(root, logo), 'utf8'));
+    const originalSidebar = readFileSync(path.join(root, sidebar), 'utf8');
+    assert.ok(originalSidebar.includes("fetch('/api/session', { method: 'DELETE' })"));
+    put(sidebar, originalSidebar);
+    const baseSha = commit();
+    put(logo, readFileSync(path.join(root, logo), 'utf8').replace('h-10 w-10', 'h-9 w-9'));
+    const logoHead = commit();
+    for (const tier of ['tier:T2', 'tier:T3']) {
+      assert.equal(await classify([], { cwd, base: baseSha, head: logoHead, labels: [tier] }), 'true');
+    }
+    put(sidebar, originalSidebar.replace("method: 'DELETE'", "method: 'POST'"));
+    const mixedHead = commit();
+    for (const tier of ['tier:T2', 'tier:T3']) {
+      assert.equal(await classify([], { cwd, base: baseSha, head: mixedHead, labels: [tier] }), 'false');
+      assert.equal(await classify([sidebar], { labels: [tier] }), 'false');
+    }
+  } finally { releaseTempWorkspace(cwd); }
+});
+
 test('Brand CI: all three brand surfaces qualify individually with ordinary proof metadata', async () => {
   for (const file of brand) assert.equal(await classify([file, ...metadata]), 'true');
 });
@@ -712,6 +747,7 @@ for (const file of [
   'packages/db/src/repositories.ts', 'packages/domain/src/lifecycle/fsm.ts',
   'supabase/migrations/20261002000000_change.sql', 'apps/discord-bot/src/delivery.ts',
   'apps/smart-form/app/submit/page.tsx', 'apps/command-center/src/lib/data/picks.ts',
+  'apps/command-center/src/components/WorkspaceSidebar.tsx',
   'pnpm-lock.yaml', '.github/workflows/ci.yml', 'AGENTS.md',
   'docs/03_product/brandish/README.md', '.ops/config.json',
   'docs/06_status/proof/WORK-1/runtime.ts',
@@ -806,6 +842,9 @@ function loadComponent(file: string, name: string): unknown {
     exports,
     require(id: string) {
       if (id === '@/components/OperatorLink') return { default: () => null };
+      if (id === '@/components/UnitTalkLogo') return {
+        UnitTalkLogo: loadComponent('apps/command-center/src/components/UnitTalkLogo.tsx', 'UnitTalkLogo'),
+      };
       assert.ok(['react', 'react/jsx-runtime'].includes(id), `unexpected branding dependency: ${id}`);
       return appRequire(id);
     },
@@ -838,16 +877,82 @@ test('Brand component: Smart Form logo renders canonical monogram and outlined w
 
 for (const collapsed of [false, true]) {
   test(`Brand component: Command Center logo renders canonical geometry (${collapsed ? 'collapsed' : 'expanded'})`, () => {
-    const component = loadComponent('apps/command-center/src/components/WorkspaceSidebar.tsx', 'WorkspaceSidebar');
-    const markup = renderToStaticMarkup(React.createElement(component, {
-      navGroups: [], activeRoute: '/', healthStatus: 'healthy', collapsed, mobileOpen: true,
-      onToggle() {}, onCloseMobile() {},
-    }));
+    const component = loadComponent('apps/command-center/src/components/UnitTalkLogo.tsx', 'UnitTalkLogo');
+    const markup = renderToStaticMarkup(React.createElement(component, { collapsed }));
     assertLogo(markup, !collapsed);
     assert.match(markup, /class="h-10 w-10" viewBox="0 0 1000 800"/);
-    assert.ok(markup.includes(collapsed ? 'Expand navigation' : 'Collapse navigation'));
+    assert.equal(markup.includes('Command Center'), !collapsed);
   });
 }
+
+function assertPureBranding(source: string): void {
+  const ast = ts.createSourceFile('logo.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  assert.equal(ast.statements.length, 1, 'one rendering function; no imports or module-level behavior');
+  const statement = ast.statements[0];
+  assert.ok(ts.isFunctionDeclaration(statement) && statement.body);
+  assert.equal(statement.body.statements.length, 1, 'no hooks, state, handlers, or setup');
+  assert.ok(ts.isReturnStatement(statement.body.statements[0]));
+  const tags = new Set(['div', 'svg', 'g', 'path']);
+  function visit(node: ts.Node): void {
+    assert.ok(!ts.isCallExpression(node) && !ts.isNewExpression(node) && !ts.isAwaitExpression(node), 'no calls or effects');
+    assert.ok(!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node), 'no external state access');
+    assert.ok(!ts.isDeleteExpression(node) && !ts.isPostfixUnaryExpression(node), 'no mutation');
+    if (ts.isPrefixUnaryExpression(node)) {
+      assert.equal(node.operator, ts.SyntaxKind.ExclamationToken, 'only presentation boolean negation');
+    }
+    if (ts.isBinaryExpression(node)) {
+      assert.equal(node.operatorToken.kind, ts.SyntaxKind.AmpersandAmpersandToken, 'only presentation conditional rendering');
+    }
+    assert.ok(!ts.isArrowFunction(node) && !ts.isFunctionExpression(node), 'no handlers');
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      assert.ok(tags.has(node.tagName.getText(ast)), 'presentational intrinsic elements only');
+    }
+    if (ts.isJsxAttribute(node)) {
+      assert.ok(!node.name.getText(ast).startsWith('on'), 'no event handlers');
+    }
+    assert.ok(!ts.isJsxSpreadAttribute(node), 'no implicit behavior props');
+    ts.forEachChild(node, visit);
+  }
+  visit(statement);
+}
+
+test('Brand component: both allowlisted logo files remain pure presentation', () => {
+  for (const file of [
+    'apps/smart-form/app/submit/components/BrandLogo.tsx',
+    'apps/command-center/src/components/UnitTalkLogo.tsx',
+  ]) assertPureBranding(read(file));
+});
+
+test('Brand component: purity guard rejects imports, hooks, effects, and interactive markup', () => {
+  for (const source of [
+    "import { useState } from 'react'; export function Logo() { return <svg />; }",
+    'export function Logo() { const state = useState(false); return <svg />; }',
+    "export function Logo() { return <div>{fetch('/api/session')}</div>; }",
+    'export function Logo() { return <button />; }',
+    'export function Logo() { return <svg onClick={() => {}} />; }',
+    'export function Logo(props) { return <svg {...props} />; }',
+    "export function Logo() { return <div>{window.location.href = '/logout'}</div>; }",
+    'export function Logo() { return <div>{counter++}</div>; }',
+  ]) assert.throws(() => assertPureBranding(source));
+});
+
+test('Brand integration: extracted lockup preserves sidebar navigation, identity, and health markup', () => {
+  const component = loadComponent('apps/command-center/src/components/WorkspaceSidebar.tsx', 'WorkspaceSidebar');
+  for (const collapsed of [false, true]) {
+    const markup = renderToStaticMarkup(React.createElement(component, {
+      actor: 'operator:test', canSignOut: true,
+      navGroups: [{ label: 'Workspace', items: [{ href: '/picks', label: 'Picks', icon: 'P', active: true }] }],
+      activeRoute: '/picks', healthStatus: 'warning', healthLabel: 'Degraded',
+      collapsed, mobileOpen: true, onToggle() {}, onCloseMobile() {},
+    }));
+    assertLogo(markup, !collapsed);
+    assert.ok(markup.includes(collapsed ? 'Expand navigation' : 'Collapse navigation'));
+    assert.ok(markup.includes('aria-label="Primary"'));
+    assert.equal(markup.includes('Sign out'), !collapsed);
+    assert.equal(markup.includes('operator:test'), !collapsed);
+    assert.equal(markup.includes('Degraded'), !collapsed);
+  }
+});
 
 test('Brand component: black/white masters share geometry and PNG/icon exports remain valid', () => {
   for (const kind of ['mark', 'wordmark']) {

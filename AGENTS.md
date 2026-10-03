@@ -71,7 +71,11 @@ Static branding/presentation exception:
 
 - `.github/workflows/ci.yml` qualifies only a complete, nonempty diff containing brand changes
   under `docs/03_product/brand/**`, `apps/smart-form/app/submit/components/BrandLogo.tsx`, or
-  `apps/command-center/src/components/WorkspaceSidebar.tsx`, plus normal lane/proof metadata.
+  `apps/command-center/src/components/UnitTalkLogo.tsx`, plus normal lane/proof metadata.
+
+- The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+  interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+  normal CI, even when changed alongside the logo component.
 - A single known T2/T3 tier is required; T1, `proof-required`, missing/ambiguous tier, unknown diff,
   or any other file uses normal CI. Renames examine both source and destination paths.
 - Qualified presentation-only work has no mandatory R1-R5, writable staging DB, or runtime proof.

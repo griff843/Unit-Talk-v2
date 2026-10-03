@@ -17,9 +17,9 @@
     "CLAUDE.md",
     "docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md",
     "docs/05_operations/R1_R5_OPERATING_RULE.md",
-    "scripts/ci/branding-ci.test.ts",
-    "scripts/ci/branding-components.test.ts",
-    "scripts/ci/staging-path-enforcement.test.ts"
+    "scripts/ci/staging-path-enforcement.test.ts",
+    "apps/command-center/src/components/UnitTalkLogo.tsx",
+    "apps/command-center/src/components/WorkspaceSidebar.tsx"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026100202/diff-summary.md",
@@ -29,7 +29,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-10-02T21:08:31.504Z",
-  "heartbeat_at": "2026-10-02T21:33:29.181Z",
+  "heartbeat_at": "2026-10-03T06:47:52.108Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100202-branding-ci.json",

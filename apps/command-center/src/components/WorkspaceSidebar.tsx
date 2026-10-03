@@ -2,6 +2,7 @@
 
 import Link from '@/components/OperatorLink';
 import { useState } from 'react';
+import { UnitTalkLogo } from '@/components/UnitTalkLogo';
 
 export type SidebarNavItem = {
   href: string;
@@ -36,15 +37,6 @@ type WorkspaceSidebarProps = {
 
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
-}
-
-function LogoMark() {
-  return (
-    <svg className="h-10 w-10" viewBox="0 0 1000 800" role="img" aria-label="Unit Talk">
-      <path fill="#ffffff" d="M110 80h175v385c0 71 44 115 115 115h105V335h175v385H395c-176 0-285-109-285-285V80z"/>
-        <path fill="#ffffff" d="M355 80h535v175H710v465H535V255H355V80z"/>
-    </svg>
-  );
 }
 
 function CollapseIcon({ collapsed }: { collapsed: boolean }) {
@@ -144,19 +136,7 @@ export function WorkspaceSidebar({
         )}
       >
       <div className={cx('flex items-center gap-3 px-3 py-4', collapsed && 'justify-center px-2')}>
-        <LogoMark />
-        {!collapsed && (
-          <div className="min-w-0 flex-1">
-            <svg className="h-6 w-full max-w-[120px]" viewBox="0 0 1500 320" aria-hidden="true">
-              <g fill="#ffffff" transform="translate(0,-20)">
-<path d="m 131.37207,252.87109 c 45.33936,0 75.00732,-26.19873 75.00732,-65.55664 V 71.75293 h -41.98974 v 112.09228 c 0,18.90137 -13.15918,32.41944 -33.01758,32.41944 -19.73877,0 -33.137207,-13.6377 -33.137207,-32.41944 V 71.75293 H 56.245117 v 115.56152 c 0,39.35791 29.54834,65.55664 75.126953,65.55664 z M 239.10889,250 h 43.0664 v -74.28955 c 0,-7.41699 -0.11963,-22.13135 -0.71777,-39.47754 9.21143,16.74805 17.70508,31.34277 22.84912,39.59717 L 350.72266,250 h 44.62158 V 71.75293 h -43.06641 v 77.28027 c 0,8.01514 0.23926,22.49024 0.59815,36.60645 -6.93848,-12.80029 -14.4751,-26.19873 -18.66211,-32.89795 L 283.61084,71.75293 H 239.10889 Z M 471.37939,71.75293 h -43.0664 V 250 h 43.0664 z m 26.50879,36.60645 h 52.51709 V 250 h 43.06641 V 108.35938 h 52.39746 V 71.75293 H 497.88818 Z m 226.95801,0 h 52.51709 V 250 h 43.06641 V 108.35938 h 52.39746 V 71.75293 H 724.84619 Z"/>
-<path d="M920 250 L990 70 H1048 L1118 250 H1065 L1019 118 L973 250 Z"/>
-<path d="m 1151.4844,250 h 122.0215 v -36.60645 h -78.9551 V 71.75293 h -43.0664 z m 148.5302,0 h 43.0665 V 204.66064 L 1365.6909,177.62451 1411.5088,250 h 49.2871 l -66.9922,-101.44531 64.48,-76.80176 h -50.603 l -39.8365,48.80859 c -8.2544,10.28809 -16.5088,20.45655 -24.7631,30.74463 V 71.75293 h -43.0665 z"/>
-</g>
-            </svg>
-            <div className="text-[11px] uppercase tracking-[0.3em] text-[var(--cc-text-muted)]">Command Center</div>
-          </div>
-        )}
+        <UnitTalkLogo collapsed={collapsed} />
         <button
           type="button"
           onClick={onToggle}

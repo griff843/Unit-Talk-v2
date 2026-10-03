@@ -133,8 +133,14 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
 
 **Static branding/presentation:** A positively classified, complete brand-only diff may change
-`docs/03_product/brand/**`, Smart Form's `BrandLogo.tsx`, and Command Center's `WorkspaceSidebar.tsx`,
-plus normal lane/proof metadata. The required CI `verify` context runs `pnpm verify:static`, both
+`docs/03_product/brand/**`, Smart Form's `BrandLogo.tsx`, and Command Center's `UnitTalkLogo.tsx`,
+plus normal lane/proof metadata.
+
+The allowlisted components are pure branding renderers: no imports, hooks, side effects, or
+interactive elements/handlers. `WorkspaceSidebar.tsx` is behavior-bearing and always takes
+normal CI, even when changed alongside the logo component.
+
+The required CI `verify` context runs `pnpm verify:static`, both
 affected app builds/type-checks, and isolated canonical-logo component checks. No R1-R5, writable
 staging DB proof, or runtime proof is required for this presentation-only class. T1 or `proof-required`
 labels, missing/ambiguous tier, failed classification, and any mixed runtime/data/backend or other
