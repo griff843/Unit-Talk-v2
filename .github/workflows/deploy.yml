@@ -2313,9 +2313,12 @@ jobs:
           printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s","releaseTag":"%s","killSwitchEngaged":true}\n' \
             "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" "$RELEASE_TAG"
 
-      # UTV2-1965: canary must not mutate the shared production guild registry.
-      # Register only the promoted container's authoritative manifest, after
-      # production health/containment checks. Failure blocks deployment success.
+      # UTV2-1965/UTV2-1968: canary must not mutate the shared production guild
+      # registry. Register only the promoted image's authoritative manifest,
+      # after production health/containment checks. The live bot is capped at
+      # 128 MiB, so registration runs in a disposable 256 MiB container which
+      # inherits the production service's env/network without restarting it.
+      # Failure blocks deployment success.
       - name: Register and verify production Discord guild commands
         shell: bash
         env:
@@ -2330,8 +2333,31 @@ jobs:
           BOT_CONTAINER="$(UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose ps -q discord-bot)"
           test -n "$BOT_CONTAINER"
           test "$(docker inspect --format '{{.Config.Image}}' "$BOT_CONTAINER")" = "$3/discord-bot:$IMAGE_TAG"
-          UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose exec -T discord-bot \
-            /repo/node_modules/.bin/tsx /repo/apps/discord-bot/scripts/deploy-commands.ts
+
+          REGISTRATION_OVERRIDE="$(mktemp "$PWD/.discord-registration.XXXXXX.yml")"
+          cleanup_registration_override() {
+            rm -f -- "$REGISTRATION_OVERRIDE"
+          }
+          trap cleanup_registration_override EXIT
+          cat > "$REGISTRATION_OVERRIDE" <<'REGISTRATION_OVERRIDE_YAML'
+          services:
+            discord-bot:
+              # Keep this identical to deploy.resources.limits.memory. Compose
+              # validates consistency and applies the bound to one-off `run`.
+              mem_limit: 256m
+              deploy:
+                resources:
+                  limits:
+                    memory: 256m
+              entrypoint:
+                - /repo/node_modules/.bin/tsx
+                - /repo/apps/discord-bot/scripts/deploy-commands.ts
+              command: []
+          REGISTRATION_OVERRIDE_YAML
+
+          UNIT_TALK_IMAGE_TAG="$IMAGE_TAG" docker compose \
+            -f docker-compose.yml -f "$REGISTRATION_OVERRIDE" \
+            run --rm --no-deps -T discord-bot
           DISCORD_COMMANDS_REMOTE
 
       # WORK-2026092403: nothing ever removed a superseded release image. On
