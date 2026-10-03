@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1967",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "c689e1c6aff4947ee95bc0de4e6cf6d9ebcf410c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "result": "PASS",
+    "commands": [
+      "pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/proof-schema.test.ts scripts/ops/shared.test.ts",
+      "pnpm exec eslint scripts/ops/historical-closeout.ts scripts/ops/lane-close.ts scripts/ops/lane-close.test.ts scripts/ops/truth-check-lib.ts scripts/ops/truth-check-lib.test.ts",
+      "pnpm type-check",
+      "pnpm verify (running; final result must be recorded in the exact-head executor packet)",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD"
+    ],
+    "assertions": {
+      "immutable_historical_authority_only": true,
+      "no_token_or_pass_fabricated": true,
+      "canonical_work_followup_required": true,
+      "work_pr_independently_attested_to_actual_merge": true,
+      "work_pr_base_and_head_repository_bound": true,
+      "canonical_directory_glob_ownership_with_boundaries": true,
+      "focused_tests_passed": 596,
+      "existing_legacy_terminal_token_compatibility_preserved": true,
+      "actual_depth_one_history_recovery": true,
+      "existing_required_check_gates_unchanged": true,
+      "actual_original_head_executor_result_validation": 111001369799,
+      "production_mutations": 0
+    }
+  },
+  "live_db_verification": {
+    "authority": "Required exact-head verify context and its independently validated same-run ci-db-proof-receipt/v2 artifact",
+    "local_result": "PENDING_EXECUTOR_RESULT",
+    "note": "The editable static proof bundle is not live-DB authority. The exact-head executor packet must record completed local verification and independently validated staging CI receipts. No local live PASS is asserted here."
+  }
+}
