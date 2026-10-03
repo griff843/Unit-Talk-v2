@@ -1,0 +1,7 @@
+{
+  "mode": "offline deterministic presentation",
+  "base": "45480f882982543f84b11d0eebe3dae0633d0461",
+  "samples": 100,
+  "identical": true,
+  "sha256": "3dfb1cdef2f3cb8ae69ef2251e258856a63c32554edddaaf448c2b9f2e91aaa4"
+}

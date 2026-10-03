@@ -1,3 +1,8 @@
+import {
+  buildPickPresentation,
+  finiteMetric,
+  knownText,
+} from '@unit-talk/domain';
 import { loadEnvironment } from '@unit-talk/config';
 import type { OutboxRecord } from '@unit-talk/db';
 import {
@@ -81,11 +86,15 @@ export function createDiscordDeliveryAdapter(options?: {
 }): DeliveryAdapter {
   const dryRun = options?.dryRun ?? true;
   const environment = loadDeliveryEnvironment();
-  const botToken = options?.botToken ?? environment?.DISCORD_BOT_TOKEN ?? process.env.DISCORD_BOT_TOKEN;
+  const botToken =
+    options?.botToken ??
+    environment?.DISCORD_BOT_TOKEN ??
+    process.env.DISCORD_BOT_TOKEN;
   const targetMap =
     options?.targetMap ??
     readDiscordTargetMap(
-      environment?.UNIT_TALK_DISCORD_TARGET_MAP ?? process.env.UNIT_TALK_DISCORD_TARGET_MAP,
+      environment?.UNIT_TALK_DISCORD_TARGET_MAP ??
+        process.env.UNIT_TALK_DISCORD_TARGET_MAP,
     );
   const gameThreadMap =
     options?.gameThreadMap ??
@@ -96,8 +105,10 @@ export function createDiscordDeliveryAdapter(options?: {
   const strategyRoomRecipientMap =
     options?.strategyRoomRecipientMap ??
     readDiscordTargetMap(
-      readEnvironmentValue(environment, 'UNIT_TALK_DISCORD_STRATEGY_ROOM_RECIPIENT_MAP') ??
-        process.env.UNIT_TALK_DISCORD_STRATEGY_ROOM_RECIPIENT_MAP,
+      readEnvironmentValue(
+        environment,
+        'UNIT_TALK_DISCORD_STRATEGY_ROOM_RECIPIENT_MAP',
+      ) ?? process.env.UNIT_TALK_DISCORD_STRATEGY_ROOM_RECIPIENT_MAP,
     );
   const apiBaseUrl = options?.apiBaseUrl ?? 'https://discord.com/api/v10';
   const fetchImpl = options?.fetchImpl ?? fetch;
@@ -106,7 +117,9 @@ export function createDiscordDeliveryAdapter(options?: {
   return async (outbox: OutboxRecord) => {
     if (!dryRun) {
       if (!botToken) {
-        throw new Error('DISCORD_BOT_TOKEN is required for live Discord delivery.');
+        throw new Error(
+          'DISCORD_BOT_TOKEN is required for live Discord delivery.',
+        );
       }
 
       if (
@@ -138,15 +151,18 @@ export function createDiscordDeliveryAdapter(options?: {
         let response: Response;
         try {
           requestIssued = true;
-          response = await fetchImpl(`${apiBaseUrl}/channels/${route.channelId}/messages`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bot ${botToken}`,
-              'Content-Type': 'application/json',
+          response = await fetchImpl(
+            `${apiBaseUrl}/channels/${route.channelId}/messages`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bot ${botToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(buildDiscordMessagePayload(outbox)),
+              ...(controller ? { signal: controller.signal } : {}),
             },
-            body: JSON.stringify(buildDiscordMessagePayload(outbox)),
-            ...(controller ? { signal: controller.signal } : {}),
-          });
+          );
         } finally {
           if (fetchTimer) clearTimeout(fetchTimer);
         }
@@ -154,14 +170,19 @@ export function createDiscordDeliveryAdapter(options?: {
         if (!response.ok) {
           const errorText = await response.text();
           const isTerminal =
-            response.status >= 400 && response.status < 500 && response.status !== 429;
+            response.status >= 400 &&
+            response.status < 500 &&
+            response.status !== 429;
 
           return {
             receiptType: 'discord.message',
             status: isTerminal ? 'terminal-failure' : 'retryable-failure',
             // A 4xx (including 429) is Discord refusing the request: no message
             // was created. A 5xx says nothing about whether one was.
-            dispatch: response.status >= 400 && response.status < 500 ? 'rejected' : 'ambiguous',
+            dispatch:
+              response.status >= 400 && response.status < 500
+                ? 'rejected'
+                : 'ambiguous',
             // UTV2-1929: the channel a receipt records is where the message
             // actually went, not the logical target that was asked for. See
             // the success receipt below for why that distinction is
@@ -335,17 +356,23 @@ function resolveDiscordGameThreadRoute(
   outbox: OutboxRecord,
   options: DiscordRouteResolutionOptions,
 ): DiscordDeliveryRoute {
-  const fallbackChannelId = resolveDiscordChannelId(outbox.target, options.targetMap);
+  const fallbackChannelId = resolveDiscordChannelId(
+    outbox.target,
+    options.targetMap,
+  );
   const eventKey = readOutboxEventKey(outbox);
   const threadId = eventKey ? options.gameThreadMap[eventKey] : undefined;
 
   if (!threadId) {
-    logger.warn('Discord game-thread route missing; falling back to channel delivery', {
-      outboxId: outbox.id,
-      target: outbox.target,
-      eventKey,
-      fallbackChannelId,
-    });
+    logger.warn(
+      'Discord game-thread route missing; falling back to channel delivery',
+      {
+        outboxId: outbox.id,
+        target: outbox.target,
+        eventKey,
+        fallbackChannelId,
+      },
+    );
 
     return {
       channelId: fallbackChannelId,
@@ -374,26 +401,36 @@ async function resolveDiscordStrategyRoomRoute(
   outbox: OutboxRecord,
   options: DiscordRouteResolutionOptions,
 ): Promise<DiscordDeliveryRoute> {
-  const recipientId = resolveStrategyRoomRecipientId(outbox, options.strategyRoomRecipientMap);
-  const response = await options.fetchImpl(`${options.apiBaseUrl}/users/@me/channels`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bot ${options.botToken}`,
-      'Content-Type': 'application/json',
+  const recipientId = resolveStrategyRoomRecipientId(
+    outbox,
+    options.strategyRoomRecipientMap,
+  );
+  const response = await options.fetchImpl(
+    `${options.apiBaseUrl}/users/@me/channels`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${options.botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        recipient_id: recipientId,
+      }),
     },
-    body: JSON.stringify({
-      recipient_id: recipientId,
-    }),
-  });
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to create Discord DM channel: HTTP ${response.status}: ${errorText}`);
+    throw new Error(
+      `Failed to create Discord DM channel: HTTP ${response.status}: ${errorText}`,
+    );
   }
 
   const body = (await response.json()) as { id?: unknown };
   if (typeof body.id !== 'string' || body.id.length === 0) {
-    throw new Error('Discord DM channel response did not include a channel id.');
+    throw new Error(
+      'Discord DM channel response did not include a channel id.',
+    );
   }
 
   return {
@@ -416,7 +453,8 @@ function resolveStrategyRoomRecipientId(
     typeof metadata.strategyRoomRecipientId === 'string'
       ? metadata.strategyRoomRecipientId.trim()
       : '';
-  const mappedRecipientId = strategyRoomRecipientMap[outbox.target]?.trim() ?? '';
+  const mappedRecipientId =
+    strategyRoomRecipientMap[outbox.target]?.trim() ?? '';
   const recipientId = metadataRecipientId || mappedRecipientId;
 
   if (!recipientId) {
@@ -431,8 +469,10 @@ function resolveStrategyRoomRecipientId(
 function readOutboxEventKey(outbox: OutboxRecord) {
   const payload = isRecord(outbox.payload) ? outbox.payload : {};
   const metadata = isRecord(payload.metadata) ? payload.metadata : {};
-  const eventId = typeof metadata.eventId === 'string' ? metadata.eventId.trim() : '';
-  const eventName = typeof metadata.eventName === 'string' ? metadata.eventName.trim() : '';
+  const eventId =
+    typeof metadata.eventId === 'string' ? metadata.eventId.trim() : '';
+  const eventName =
+    typeof metadata.eventName === 'string' ? metadata.eventName.trim() : '';
 
   return eventId || eventName || null;
 }
@@ -441,9 +481,12 @@ function loadDeliveryEnvironment() {
   try {
     return loadEnvironment();
   } catch (err) {
-    logger.warn('Failed to load delivery environment — delivery will be skipped', {
-      err: serializeError(err),
-    });
+    logger.warn(
+      'Failed to load delivery environment — delivery will be skipped',
+      {
+        err: serializeError(err),
+      },
+    );
     return undefined;
   }
 }
@@ -462,7 +505,10 @@ function readDiscordTargetMap(rawValue?: string) {
   }
 }
 
-function readEnvironmentValue(environment: ReturnType<typeof loadDeliveryEnvironment>, key: string) {
+function readEnvironmentValue(
+  environment: ReturnType<typeof loadDeliveryEnvironment>,
+  key: string,
+) {
   if (!environment) {
     return undefined;
   }
@@ -470,7 +516,10 @@ function readEnvironmentValue(environment: ReturnType<typeof loadDeliveryEnviron
   return (environment as unknown as Record<string, string | undefined>)[key];
 }
 
-function resolveDiscordChannelId(target: string, targetMap: Record<string, string>) {
+function resolveDiscordChannelId(
+  target: string,
+  targetMap: Record<string, string>,
+) {
   const mapped = targetMap[target];
   if (mapped) {
     return mapped;
@@ -488,326 +537,41 @@ function resolveDiscordChannelId(target: string, targetMap: Record<string, strin
 
 export function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const payload = isRecord(outbox.payload) ? outbox.payload : {};
-  const market = typeof payload.market === 'string' && payload.market.trim() ? payload.market : null;
-  const governedTarget = parseGovernedTargetFromDeliveryTarget(outbox.target);
-  const officialPick = governedTarget !== null && isHumanDeliveryTarget(governedTarget);
-  const selection =
-    typeof payload.selection === 'string' ? payload.selection : 'Unknown selection';
-  const line = formatLine(payload.line);
-  const odds = formatOdds(payload.odds);
-  const source = typeof payload.source === 'string' ? payload.source : 'Unit Talk';
-  const lifecycleState =
-    typeof payload.lifecycleState === 'string' ? payload.lifecycleState : 'queued';
   const metadata = isRecord(payload.metadata) ? payload.metadata : {};
-  const thumbnailUrl = typeof metadata.thumbnailUrl === 'string' ? metadata.thumbnailUrl : null;
-  const sport = typeof metadata.sport === 'string' ? metadata.sport : null;
-  const eventName = typeof metadata.eventName === 'string' ? metadata.eventName : null;
-  const capper = typeof metadata.capper === 'string' ? metadata.capper : null;
-  const stakeUnits = readStakeUnits(payload.stakeUnits);
-
-  // Sport icon prefix (UTV2-559)
-  const sportIcon = sport ? getSportIcon(sport) : null;
-  const descriptionParts = [
-    sportIcon ? `${sportIcon} ${sport}` : sport,
-    eventName,
-  ].filter((value): value is string => Boolean(value));
-  const description = descriptionParts.join(' | ');
-
-  // Pick selection is the title; channel context moves to footer (per embed redesign)
-  const pickTitle = `${selection}${line}`;
-  const presentation = buildTargetPresentation(outbox.target, {
-    pickTitle,
-    description,
-    eventName,
-    source,
-    lifecycleState,
+  const target = parseGovernedTargetFromDeliveryTarget(outbox.target);
+  const family =
+    target !== null && isHumanDeliveryTarget(target)
+      ? 'official-pick'
+      : 'pick-posted';
+  const embed = buildPickPresentation(family, {
+    selection: knownText(payload.selection),
+    market: knownText(payload.market),
+    line: finiteMetric(payload.line) ? payload.line : undefined,
+    odds: finiteMetric(payload.odds) ? payload.odds : undefined,
+    stakeUnits: readStakeUnits(payload.stakeUnits),
+    capper: knownText(metadata.capper),
+    sport: knownText(metadata.sport),
+    eventName: knownText(metadata.eventName),
+    eventTime: knownText(metadata.eventTime) ?? knownText(metadata.gameTime),
+    notes: knownText(metadata.thesis),
+    thumbnailUrl: knownText(metadata.thumbnailUrl),
   });
-
-  // Enhanced embed (UTV2-194): Pick + context fields for member decision support.
-  // Shows: pick, odds, units, confidence, implied probability, capper, timing.
-  // Does NOT show fake edge — confidence delta is not market edge (Sprint D).
-  const confidence = typeof payload.confidence === 'number' ? payload.confidence : null;
-  const domainAnalysis = isRecord(metadata.domainAnalysis) ? metadata.domainAnalysis : null;
-  const impliedProb = typeof domainAnalysis?.impliedProbability === 'number'
-    ? domainAnalysis.impliedProbability
-    : null;
-  const capperRecord = typeof metadata.capperRecord === 'string' ? metadata.capperRecord : null;
-  const capperClv = typeof metadata.capperClvPct === 'number' ? metadata.capperClvPct : null;
-
-  // UTV2-559: Real edge — submission service writes to metadata root, not inside domainAnalysis.
-  // Check metadata root first (where real data lives), fall back to domainAnalysis for compat.
-  const hasRealEdge =
-    metadata.hasRealEdge === true || domainAnalysis?.hasRealEdge === true;
-  const realEdge =
-    typeof metadata.realEdge === 'number' ? metadata.realEdge
-    : typeof domainAnalysis?.realEdge === 'number' ? domainAnalysis.realEdge
-    : null;
-  const realEdgeSource =
-    typeof metadata.realEdgeSource === 'string' ? metadata.realEdgeSource
-    : typeof domainAnalysis?.realEdgeSource === 'string' ? domainAnalysis.realEdgeSource
-    : null;
-
-  // UTV2-561: Thesis from metadata
-  const thesis = typeof metadata.thesis === 'string' ? metadata.thesis : null;
-
-  // UTV2-559: Game time from metadata
-  const eventTime = typeof metadata.eventTime === 'string'
-    ? metadata.eventTime
-    : typeof metadata.gameTime === 'string'
-      ? metadata.gameTime
-      : null;
-
-  const fields: Array<{ name: string; value: string; inline: boolean }> = [];
-
-  // WORK-2026092901 OFFICIAL_PICK_PRESENTATION: a paying member's official
-  // pick carries the membership contract's pick fields (§3.3: capper, sport,
-  // event, market, selection, odds, stake units) and nothing the product
-  // cannot yet stand behind -- no confidence score, no edge, no implied
-  // probability, no capper CLV. Those remain on the internal lanes only.
-  if (officialPick) {
-    if (market) {
-      fields.push({ name: 'Market', value: market, inline: true });
-    }
-    // American odds as a bare value (-143, +120), not the title's parenthesised form.
-    fields.push({ name: 'Odds', value: odds.trim().replace(/^\((.*)\)$/u, '$1') || '—', inline: true });
-    fields.push({
-      name: 'Units',
-      value: stakeUnits != null ? formatUnits(stakeUnits) : '—',
-      inline: true,
-    });
-    fields.push({ name: 'Capper', value: capper ?? 'Unit Talk', inline: true });
-    // Game Time is always present on an official pick. Eventless and manual
-    // picks are valid, so a pick with no event time -- or one that does not
-    // parse -- says `TBD` rather than dropping the field or inventing a time.
-    fields.push({
-      name: 'Game Time',
-      value: (eventTime ? formatGameTime(eventTime) : null) ?? OFFICIAL_GAME_TIME_UNKNOWN,
-      inline: true,
-    });
-    if (thesis) {
-      fields.push({ name: 'Thesis', value: thesis, inline: false });
-    }
-
-    return {
-      content: presentation.content,
-      nonce: discordMessageNonce(outbox.id),
-      enforce_nonce: true,
-      embeds: [
-        {
-          title: presentation.title,
-          description: presentation.description,
-          color: presentation.color,
-          fields,
-          footer: {
-            text: presentation.footer,
-          },
-          timestamp: new Date().toISOString(),
-          ...(thumbnailUrl ? { thumbnail: { url: thumbnailUrl } } : {}),
-        },
-      ],
-    };
-  }
-
-  // Pick is now the embed title — no longer duplicated as a field.
-  fields.push({ name: 'Odds', value: odds || '—', inline: true });
-
-  if (stakeUnits != null) {
-    fields.push({ name: 'Units', value: String(stakeUnits), inline: true });
-  }
-
-  // UTV2-559: Prominent confidence with descriptor
-  if (confidence != null) {
-    const confPct = Math.round(confidence * 100);
-    const descriptor = confPct >= 75 ? 'High' : confPct >= 50 ? 'Medium' : 'Low';
-    fields.push({ name: 'Confidence', value: `${confPct}% (${descriptor})`, inline: true });
-  }
-
-  // UTV2-559: Real edge (only when hasRealEdge is true)
-  if (hasRealEdge && realEdge != null) {
-    const edgePct = `+${(realEdge * 100).toFixed(1)}%`;
-    const edgeLabel = realEdgeSource ? `Edge (${realEdgeSource})` : 'Edge';
-    fields.push({ name: edgeLabel, value: edgePct, inline: true });
-  }
-
-  if (impliedProb != null) {
-    const implPct = (impliedProb * 100).toFixed(1);
-    fields.push({ name: 'Implied Prob', value: `${implPct}%`, inline: true });
-  }
-
-  // Capper context: name + recent record + CLV if available
-  let capperValue = capper ?? 'Unit Talk';
-  if (capperRecord) {
-    capperValue += ` (${capperRecord})`;
-  }
-  if (capperClv != null) {
-    const clvSign = capperClv >= 0 ? '+' : '';
-    capperValue += ` | CLV: ${clvSign}${capperClv.toFixed(1)}%`;
-  }
-  fields.push({ name: 'Capper', value: capperValue, inline: true });
-
-  // UTV2-559: Game time when available
-  if (eventTime) {
-    const formatted = formatGameTime(eventTime);
-    if (formatted) {
-      fields.push({ name: 'Game Time', value: formatted, inline: true });
-    }
-  }
-
-  // Timestamp for urgency context
-  fields.push({
-    name: 'Posted',
-    value: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
-    inline: true,
-  });
-
-  // UTV2-561: Thesis as standalone field (not inline) — only when present
-  if (thesis) {
-    fields.push({ name: 'Thesis', value: thesis, inline: false });
-  }
-
-  return {
-    content: presentation.content,
-    // WORK-2026092901: Discord de-duplicates a re-sent nonce within its window.
-    nonce: discordMessageNonce(outbox.id),
-    enforce_nonce: true,
-    embeds: [
-      {
-        title: presentation.title,
-        description: presentation.description,
-        color: presentation.color,
-        fields,
-        footer: {
-          text: presentation.footer,
-        },
-        timestamp: new Date().toISOString(),
-        // Thumbnail: player headshot or team logo (per asset spec fallback chain)
-        // Never block delivery — absent = no thumbnail, not an error
-        ...(thumbnailUrl ? { thumbnail: { url: thumbnailUrl } } : {}),
-      },
-    ],
-  };
-}
-
-function buildTargetPresentation(
-  target: string,
-  input: {
-    pickTitle: string;
-    description: string;
-    eventName: string | null;
-    source: string;
-    lifecycleState: string;
-  },
-) {
-  // Pick selection is always the embed title — channel context goes to footer.
-  // Lead fields removed post burn-in: the channel purpose text was scaffolding.
-  if (target === 'discord:best-bets') {
-    return {
-      content: undefined,
-      title: input.pickTitle,
-      description: input.description || 'Curated premium pick preview',
-      color: 0xffd700,
-      leadField: null,
-      footer: 'Unit Talk | Best Bets',
-    };
-  }
-
-  if (target === 'discord:trader-insights') {
-    return {
-      content: undefined,
-      title: input.pickTitle,
-      description: input.description || 'VIP market-alerts lane preview',
-      color: 0x4f8cff,
-      leadField: null,
-      footer: 'Unit Talk | Trader Insights',
-    };
-  }
-
-  const governed = parseGovernedTargetFromDeliveryTarget(target);
-  if (governed !== null && isHumanDeliveryTarget(governed)) {
-    return {
-      content: undefined,
-      title: input.pickTitle,
-      description: input.description || 'Official pick',
-      color: 0x16a34a,
-      leadField: null,
-      footer: 'Unit Talk | Official Picks',
-    };
-  }
-
   return {
     content: undefined,
-    title: input.pickTitle,
-    description: input.description || 'Initial live delivery validation',
-    color: 0xf5b041,
-    leadField: null,
-    footer: 'Unit Talk | Canary',
+    nonce: discordMessageNonce(outbox.id),
+    enforce_nonce: true,
+    embeds: [embed],
   };
 }
 
 function readStakeUnits(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (finiteMetric(value)) return value;
   if (typeof value === 'string' && value.trim() !== '') {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
 }
-
-function formatUnits(value: number) {
-  const rounded = Math.round(value * 100) / 100;
-  return `${rounded}u`;
-}
-
-function formatLine(value: unknown) {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return '';
-  }
-
-  return ` @ ${value > 0 ? `+${value}` : value}`;
-}
-
-function formatOdds(value: unknown) {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return '';
-  }
-
-  return ` (${value > 0 ? `+${value}` : value})`;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-const SPORT_ICONS: Record<string, string> = {
-  MLB: '\u26be',
-  NBA: '\ud83c\udfc0',
-  NFL: '\ud83c\udfc8',
-  NHL: '\ud83c\udfd2',
-  Soccer: '\u26bd',
-  soccer: '\u26bd',
-  MLS: '\u26bd',
-  EPL: '\u26bd',
-};
-
-function getSportIcon(sport: string): string | null {
-  return SPORT_ICONS[sport] ?? null;
-}
-
-/** The official pick's Game Time when no event time is known. */
-export const OFFICIAL_GAME_TIME_UNKNOWN = 'TBD';
-
-function formatGameTime(isoString: string): string | null {
-  try {
-    const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return null;
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    });
-  } catch {
-    return null;
-  }
 }

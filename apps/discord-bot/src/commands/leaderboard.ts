@@ -1,9 +1,17 @@
 import {
-  EmbedBuilder,
+  memberPages,
+  replyWithPages,
+  replyWithPrivateError,
+} from '../embeds/presentation.js';
+import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
-import { ApiClientError, createApiClient, type ApiClient } from '../api-client.js';
+import {
+  ApiClientError,
+  createApiClient,
+  type ApiClient,
+} from '../api-client.js';
 import { loadBotConfig } from '../config.js';
 import type { CommandHandler } from '../command-registry.js';
 
@@ -37,7 +45,9 @@ export function createLeaderboardCommand(apiClient: ApiClient): CommandHandler {
   return {
     data: new SlashCommandBuilder()
       .setName('leaderboard')
-      .setDescription('Show the top cappers in the selected settled-pick window')
+      .setDescription(
+        'Show the top cappers in the selected settled-pick window',
+      )
       .addIntegerOption((option) =>
         option
           .setName('window')
@@ -67,8 +77,14 @@ export function createLeaderboardCommand(apiClient: ApiClient): CommandHandler {
       ),
     responseVisibility: 'public',
     async execute(interaction: ChatInputCommandInteraction) {
-      const window = (interaction.options.getInteger('window') ?? 30) as 7 | 14 | 30 | 90;
-      const sport = normalizeOptionalString(interaction.options.getString('sport'));
+      const window = (interaction.options.getInteger('window') ?? 30) as
+        | 7
+        | 14
+        | 30
+        | 90;
+      const sport = normalizeOptionalString(
+        interaction.options.getString('sport'),
+      );
       const limit = interaction.options.getInteger('limit') ?? 10;
 
       try {
@@ -79,48 +95,42 @@ export function createLeaderboardCommand(apiClient: ApiClient): CommandHandler {
             ...(sport ? { sport } : {}),
           }),
         );
-        await interaction.editReply({
-          embeds: [buildLeaderboardEmbed(response.data)],
-        });
+        await replyWithPages(
+          interaction,
+          buildLeaderboardEmbeds(response.data),
+        );
       } catch (error) {
         const content =
           error instanceof ApiClientError
             ? 'Leaderboard is temporarily unavailable.'
             : 'Leaderboard is temporarily unavailable.';
-        await interaction.editReply({
-          content,
-          embeds: [],
-        });
+        await replyWithPrivateError(interaction, content, true);
       }
     },
   };
 }
 
 export function buildLeaderboardEmbed(leaderboard: LeaderboardResponse) {
-  const title = `\u{1F3C6} Leaderboard \u2014 Last ${leaderboard.window} Days${
-    leaderboard.sport ? ` (${leaderboard.sport})` : ''
-  }`;
-
-  const embed = new EmbedBuilder().setTitle(title).setColor(0xffd700).setFooter({
-    text: `Min ${leaderboard.minPicks} settled picks · ${leaderboard.window}-day window · /stats @capper for details`,
+  return buildLeaderboardEmbeds(leaderboard)[0]!;
+}
+export function buildLeaderboardEmbeds(leaderboard: LeaderboardResponse) {
+  return memberPages('leaderboard', {
+    title: `Leaderboard · Last ${leaderboard.window} Days${leaderboard.sport ? ` (${leaderboard.sport})` : ''}`,
+    description: leaderboard.entries.length
+      ? undefined
+      : `No cappers with ≥${leaderboard.minPicks} settled picks in this window.`,
+    timestamp: leaderboard.observedAt,
+    fields: [
+      ...leaderboard.entries.map((entry) => ({
+        name: `#${entry.rank} ${entry.capper}`,
+        value: formatLeaderboardLine(entry) + ` · ${entry.picks} settled picks`,
+      })),
+      {
+        name: 'Sample',
+        value: `Min ${leaderboard.minPicks} settled picks · ${leaderboard.window}-day window · /stats for details`,
+      },
+    ],
   });
-
-  if (leaderboard.entries.length === 0) {
-    embed.setDescription(
-      `No cappers with \u2265${leaderboard.minPicks} settled picks in this window.`,
-    );
-    return embed;
-  }
-
-  for (const entry of leaderboard.entries.slice(0, 10)) {
-    embed.addFields({
-      name: `#${entry.rank} ${entry.capper}`,
-      value: formatLeaderboardLine(entry),
-      inline: false,
-    });
-  }
-
-  return embed;
 }
 
 function buildLeaderboardPath(input: {
@@ -142,8 +152,12 @@ function buildLeaderboardPath(input: {
 function formatLeaderboardLine(entry: LeaderboardEntry) {
   const parts = [
     `${entry.wins}\u2013${entry.losses}\u2013${entry.pushes}`,
-    formatPercent(entry.winRate),
-    `${formatSignedPercent(entry.roiPct)} ROI`,
+    entry.winRate != null && Number.isFinite(entry.winRate)
+      ? formatPercent(entry.winRate)
+      : '',
+    entry.roiPct != null && Number.isFinite(entry.roiPct)
+      ? `${formatSignedPercent(entry.roiPct)} ROI`
+      : '',
   ];
 
   const streak = formatStreak(entry.streak);
@@ -151,7 +165,7 @@ function formatLeaderboardLine(entry: LeaderboardEntry) {
     parts.push(streak);
   }
 
-  return parts.join('  ');
+  return parts.filter(Boolean).join('  ');
 }
 
 function formatPercent(value: number | null) {
@@ -192,5 +206,7 @@ function normalizeOptionalString(value: string | null) {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createLeaderboardCommand(createApiClient(config.apiUrl, config.apiKey));
+  return createLeaderboardCommand(
+    createApiClient(config.apiUrl, config.apiKey),
+  );
 }

@@ -7,7 +7,9 @@ import test from 'node:test';
 import type { OutboxRecord } from '@unit-talk/db';
 import { buildDiscordMessagePayload } from './delivery-adapters.js';
 
-function officialOutbox(payloadOverrides: Record<string, unknown> = {}): OutboxRecord {
+function officialOutbox(
+  payloadOverrides: Record<string, unknown> = {},
+): OutboxRecord {
   const now = new Date().toISOString();
   return {
     id: randomUUID(),
@@ -54,6 +56,26 @@ type Embed = {
   footer?: { text?: string };
 };
 
+test('all worker target presentations ignore confidence and unproven metadata without media', () => {
+  for (const target of [
+    'discord:official-picks',
+    'discord:canary',
+    'discord:best-bets',
+  ]) {
+    const outbox = { ...officialOutbox(), target };
+    const first = buildDiscordMessagePayload(outbox);
+    assert.deepEqual(first, buildDiscordMessagePayload(outbox));
+    const rendered = JSON.stringify(first);
+    assert.doesNotMatch(
+      rendered,
+      /confidence|implied|capperRecord|capperClv|12-4|2\.4%/iu,
+    );
+    const { embed } = embedOf(outbox);
+    assert.equal(embed.footer?.text, 'Unit Talk');
+    assert.equal(field(embed, 'Capper'), 'griff843');
+  }
+});
+
 function embedOf(outbox: OutboxRecord) {
   const payload = buildDiscordMessagePayload(outbox) as { embeds?: Embed[] };
   const embed = payload.embeds?.[0];
@@ -65,15 +87,15 @@ function field(embed: Embed, name: string) {
   return embed.fields?.find((f) => f.name === name)?.value;
 }
 
-test('official picks carry the Official Picks footer and never the Canary footer', () => {
+test('official picks carry the shared Unit Talk footer', () => {
   const { payload, embed } = embedOf(officialOutbox());
-  assert.equal(embed.footer?.text, 'Unit Talk | Official Picks');
+  assert.equal(embed.footer?.text, 'Unit Talk');
   assert.doesNotMatch(JSON.stringify(payload), /canary/iu);
 });
 
 test('official picks show Market, Odds, Units and Capper', () => {
   const { embed } = embedOf(officialOutbox());
-  assert.equal(embed.title, 'Yankees ML');
+  assert.equal(embed.title, 'Official Pick · Yankees ML');
   assert.equal(field(embed, 'Market'), 'Moneyline');
   assert.equal(field(embed, 'Odds'), '-143');
   assert.equal(field(embed, 'Units'), '3u');
@@ -81,66 +103,111 @@ test('official picks show Market, Odds, Units and Capper', () => {
   assert.equal(field(embed, 'Thesis'), 'Bullpen edge.');
 });
 
-test('units read a numeric string, and show a dash when absent', () => {
-  assert.equal(field(embedOf(officialOutbox({ stakeUnits: '3' })).embed, 'Units'), '3u');
-  assert.equal(field(embedOf(officialOutbox({ stakeUnits: 1.5 })).embed, 'Units'), '1.5u');
-  assert.equal(field(embedOf(officialOutbox({ stakeUnits: undefined })).embed, 'Units'), '—');
-  assert.equal(field(embedOf(officialOutbox({ stakeUnits: 'lots' })).embed, 'Units'), '—');
+test('units read a numeric string, and disappear when absent', () => {
+  assert.equal(
+    field(embedOf(officialOutbox({ stakeUnits: '3' })).embed, 'Units'),
+    '3u',
+  );
+  assert.equal(
+    field(embedOf(officialOutbox({ stakeUnits: 1.5 })).embed, 'Units'),
+    '1.5u',
+  );
+  assert.equal(
+    field(embedOf(officialOutbox({ stakeUnits: undefined })).embed, 'Units'),
+    undefined,
+  );
+  assert.equal(
+    field(embedOf(officialOutbox({ stakeUnits: 'lots' })).embed, 'Units'),
+    undefined,
+  );
 });
 
 test('odds render as a bare American price', () => {
-  assert.equal(field(embedOf(officialOutbox({ odds: 120 })).embed, 'Odds'), '+120');
-  assert.equal(field(embedOf(officialOutbox({ odds: undefined })).embed, 'Odds'), '—');
+  assert.equal(
+    field(embedOf(officialOutbox({ odds: 120 })).embed, 'Odds'),
+    '+120',
+  );
+  assert.equal(
+    field(embedOf(officialOutbox({ odds: undefined })).embed, 'Odds'),
+    undefined,
+  );
 });
 
 test('official picks show no confidence, edge, implied probability, record or CLV', () => {
   const { payload, embed } = embedOf(officialOutbox());
   const names = (embed.fields ?? []).map((f) => f.name.toLowerCase());
   for (const banned of ['confidence', 'edge', 'implied', 'clv', 'record']) {
-    assert.ok(!names.some((n) => n.includes(banned)), `field containing "${banned}" must not render`);
+    assert.ok(
+      !names.some((n) => n.includes(banned)),
+      `field containing "${banned}" must not render`,
+    );
   }
   assert.doesNotMatch(JSON.stringify(payload), /12-4|sgo/u);
 });
 
 test('the official pick message carries its outbox nonce', () => {
   const outbox = officialOutbox();
-  const payload = buildDiscordMessagePayload(outbox) as { nonce?: string; enforce_nonce?: boolean };
+  const payload = buildDiscordMessagePayload(outbox) as {
+    nonce?: string;
+    enforce_nonce?: boolean;
+  };
   assert.equal(payload.enforce_nonce, true);
   assert.equal(typeof payload.nonce, 'string');
   assert.ok((payload.nonce ?? '').length <= 25);
 });
 
-test('the canary lane keeps its own footer (the change is scoped to official picks)', () => {
+test('the canary lane uses the same brand footer without changing its target', () => {
   const outbox = { ...officialOutbox(), target: 'discord:canary' };
   const { embed } = embedOf(outbox);
-  assert.equal(embed.footer?.text, 'Unit Talk | Canary');
+  assert.equal(embed.footer?.text, 'Unit Talk');
 });
 
 function withMetadata(extra: Record<string, unknown>): OutboxRecord {
   const base = officialOutbox();
-  const metadata = (base.payload as { metadata: Record<string, unknown> }).metadata;
+  const metadata = (base.payload as { metadata: Record<string, unknown> })
+    .metadata;
   return officialOutbox({ metadata: { ...metadata, ...extra } });
 }
 
-test('an eventless or manual official pick always shows Game Time as TBD', () => {
+test('an eventless or manual official pick omits unknown Game Time', () => {
   // The default fixture carries no eventTime and no gameTime: an eventless pick.
-  assert.equal(field(embedOf(officialOutbox()).embed, 'Game Time'), 'TBD');
-  assert.equal(field(embedOf(withMetadata({ eventTime: null })).embed, 'Game Time'), 'TBD');
-  assert.equal(field(embedOf(withMetadata({ eventTime: '' })).embed, 'Game Time'), 'TBD');
-  assert.equal(field(embedOf(withMetadata({ eventTime: 'not-a-time' })).embed, 'Game Time'), 'TBD');
+  assert.equal(field(embedOf(officialOutbox()).embed, 'Game Time'), undefined);
+  assert.equal(
+    field(embedOf(withMetadata({ eventTime: null })).embed, 'Game Time'),
+    undefined,
+  );
+  assert.equal(
+    field(embedOf(withMetadata({ eventTime: '' })).embed, 'Game Time'),
+    undefined,
+  );
+  assert.equal(
+    field(
+      embedOf(withMetadata({ eventTime: 'not-a-time' })).embed,
+      'Game Time',
+    ),
+    undefined,
+  );
 });
 
 test('an official pick with an event time shows that time, never TBD', () => {
-  const fromEventTime = field(embedOf(withMetadata({ eventTime: '2026-09-29T23:05:00.000Z' })).embed, 'Game Time');
+  const fromEventTime = field(
+    embedOf(withMetadata({ eventTime: '2026-09-29T23:05:00.000Z' })).embed,
+    'Game Time',
+  );
   assert.ok(fromEventTime);
-  assert.notEqual(fromEventTime, 'TBD');
-  assert.match(fromEventTime, /Sep 29|Sep 30/u);
+  assert.notEqual(fromEventTime, undefined);
+  assert.equal(fromEventTime, '<t:1790723100:f>');
 
-  const fromGameTime = field(embedOf(withMetadata({ gameTime: '2026-09-29T23:05:00.000Z' })).embed, 'Game Time');
+  const fromGameTime = field(
+    embedOf(withMetadata({ gameTime: '2026-09-29T23:05:00.000Z' })).embed,
+    'Game Time',
+  );
   assert.equal(fromGameTime, fromEventTime);
 });
 
-test('the official pick field set always includes Game Time, in contract order', () => {
-  const names = (embedOf(officialOutbox()).embed.fields ?? []).map((f) => f.name);
-  assert.deepEqual(names, ['Market', 'Odds', 'Units', 'Capper', 'Game Time', 'Thesis']);
+test('the official pick fields keep contract order while omitting unknown Game Time', () => {
+  const names = (embedOf(officialOutbox()).embed.fields ?? []).map(
+    (f) => f.name,
+  );
+  assert.deepEqual(names, ['Market', 'Odds', 'Units', 'Capper', 'Thesis']);
 });

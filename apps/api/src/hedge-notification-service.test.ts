@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import './alert-notification-service.test.js';
+import { buildInjuryEmbed } from '@unit-talk/alert-runtime';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { InMemoryHedgeOpportunityRepository } from '@unit-talk/db';
@@ -21,10 +23,47 @@ test('buildHedgeEmbed uses contract colors and title conventions', async () => {
   });
 
   const embed = buildHedgeEmbed(opportunity, 'discord:canary');
-  assert.equal(embed.color, 0x00cc44);
-  assert.ok((embed.title as string).includes('ARBITRAGE'));
+  assert.equal(embed.color, 0xc7a34b);
+  assert.ok((embed.title as string).includes('Arbitrage'));
   const fields = embed.fields as Array<{ name: string; value: string }>;
   assert.ok(fields.some((field) => field.name === 'Guaranteed Profit'));
+});
+
+test('hedge presentation omits unknown probability/profit and retains measured zero', async () => {
+  const repo = new InMemoryHedgeOpportunityRepository();
+  const opportunity = await saveOpportunity(repo, { type: 'middle' });
+  const fieldsOf = (probability: number | null) =>
+    buildHedgeEmbed(
+      { ...opportunity, win_probability: probability },
+      'discord:canary',
+    ).fields as Array<{ name: string; value: string }>;
+  assert.ok(!fieldsOf(null).some((field) => field.name === 'Win Prob'));
+  assert.ok(
+    fieldsOf(0).some(
+      (field) => field.name === 'Win Prob' && field.value === '0%',
+    ),
+  );
+  const arbitrage = buildHedgeEmbed(
+    { ...opportunity, type: 'arbitrage', guaranteed_profit: null },
+    'discord:canary',
+  );
+  assert.ok(
+    !(arbitrage.fields as Array<{ name: string }>).some(
+      (field) => field.name === 'Guaranteed Profit',
+    ),
+  );
+});
+
+test('injury presentation uses gold and remains deliverable without media', () => {
+  const embed = buildInjuryEmbed({
+    participantId: 'fixture-player', playerName: 'Fixture Player', sport: 'nba',
+    currentStatus: 'out', previousStatus: 'questionable', sourceTier: 'official',
+    source: 'Fixture source', reportedAt: '2026-10-03T12:00:00.000Z',
+    fetchedAt: '2026-10-03T12:00:00.000Z', affectedPickIds: [],
+  }, 'Monitor status', 'invalid-media-url');
+  assert.equal(embed.color, 0xc7a34b);
+  assert.equal(embed.thumbnail, undefined);
+  assert.equal((embed.footer as {text:string}).text, 'Unit Talk');
 });
 
 test('runHedgeNotificationPass dry-run skips Discord and leaves rows untouched', async () => {
@@ -51,7 +90,9 @@ test('runHedgeNotificationPass dry-run skips Discord and leaves rows untouched',
 
   assert.equal(discordCalled, false);
   assert.equal(result.notified, 1);
-  const updated = (await repo.listRecent(10)).find((row) => row.id === opportunity.id);
+  const updated = (await repo.listRecent(10)).find(
+    (row) => row.id === opportunity.id,
+  );
   assert.equal(updated?.notified, false);
 });
 
@@ -87,8 +128,12 @@ test('runHedgeNotificationPass critical routes to canary and trader-insights', a
 
     assert.equal(result.notified, 1);
     assert.equal(calledChannels.length, 2);
-    assert.ok(calledChannels.some((url) => url.includes('1296531122234327100')));
-    assert.ok(calledChannels.some((url) => url.includes('1356613995175481405')));
+    assert.ok(
+      calledChannels.some((url) => url.includes('1296531122234327100')),
+    );
+    assert.ok(
+      calledChannels.some((url) => url.includes('1356613995175481405')),
+    );
   } finally {
     restoreEnv('DISCORD_BOT_TOKEN', originalToken);
     restoreEnv('UNIT_TALK_DISCORD_TARGET_MAP', originalMap);
@@ -226,14 +271,19 @@ async function saveOpportunity(
     lineB: overrides.lineB ?? 7.5,
     overOddsA: overrides.overOddsA ?? -110,
     underOddsB: overrides.underOddsB ?? -110,
-    lineDiscrepancy: Math.abs((overrides.lineA ?? 4.5) - (overrides.lineB ?? 7.5)),
+    lineDiscrepancy: Math.abs(
+      (overrides.lineA ?? 4.5) - (overrides.lineB ?? 7.5),
+    ),
     impliedProbA: 0.5238,
     impliedProbB: 0.5238,
     totalImpliedProb: 1.0476,
     arbitragePercentage: -4.76,
     profitPotential: -4.76,
     guaranteedProfit: overrides.type === 'arbitrage' ? 4.76 : null,
-    middleGap: overrides.type === 'middle' ? Math.abs((overrides.lineA ?? 4.5) - (overrides.lineB ?? 7.5)) : null,
+    middleGap:
+      overrides.type === 'middle'
+        ? Math.abs((overrides.lineA ?? 4.5) - (overrides.lineB ?? 7.5))
+        : null,
     winProbability: overrides.type === 'middle' ? 0.42 : null,
     notified: overrides.notified ?? false,
     notifiedAt: overrides.notifiedAt ?? null,

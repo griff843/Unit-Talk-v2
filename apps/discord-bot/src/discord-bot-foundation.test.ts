@@ -1,3 +1,4 @@
+import './discord-design-system.test.js';
 /**
  * Discord Bot Foundation tests
  *
@@ -16,7 +17,11 @@ import assert from 'node:assert/strict';
 
 import type { AppEnv } from '@unit-talk/config';
 import { parseBotConfig, parseQaBotConfig } from './config.js';
-import { checkRoles, requireActivePickRoles, requireVipPlusRoles } from './role-guard.js';
+import {
+  checkRoles,
+  requireActivePickRoles,
+  requireVipPlusRoles,
+} from './role-guard.js';
 import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
 import {
@@ -26,11 +31,19 @@ import {
   type QueriedPick,
   type RecentSettlement,
 } from './api-client.js';
-import type { ChatInputCommandInteraction, GuildMember, Interaction } from 'discord.js';
+import type {
+  ChatInputCommandInteraction,
+  GuildMember,
+  Interaction,
+} from 'discord.js';
 import type { CommandHandler, CommandRegistry } from './command-registry.js';
 import { createPickCommand, parsePickSubmission } from './commands/pick.js';
 import { buildCapperRecapEmbed, createRecapCommand } from './commands/recap.js';
-import { buildStatsEmbed, createStatsCommand, type CapperStatsResponse } from './commands/stats.js';
+import {
+  buildStatsEmbed,
+  createStatsCommand,
+  type CapperStatsResponse,
+} from './commands/stats.js';
 import {
   buildLeaderboardEmbed,
   createLeaderboardCommand,
@@ -45,18 +58,12 @@ import {
   buildTrialStatusEmbed,
   createTrialStatusCommand,
 } from './commands/trial-status.js';
-import {
-  buildUpgradeEmbed,
-  createUpgradeCommand,
-} from './commands/upgrade.js';
+import { buildUpgradeEmbed, createUpgradeCommand } from './commands/upgrade.js';
 import {
   buildHeatSignalEmbed,
   createHeatSignalCommand,
 } from './commands/heat-signal.js';
-import {
-  buildLiveEmbeds,
-  createLiveCommand,
-} from './commands/live.js';
+import { buildLiveEmbeds, createLiveCommand } from './commands/live.js';
 import {
   buildTodayEmbeds,
   createTodayCommand,
@@ -108,7 +115,9 @@ function makeMinimalEnv(overrides?: Partial<AppEnv>): AppEnv {
   } as AppEnv;
 }
 
-function makeRegistryEnv(overrides: Record<string, string> = {}): Record<string, string> {
+function makeRegistryEnv(
+  overrides: Record<string, string> = {},
+): Record<string, string> {
   return {
     NODE_ENV: 'test',
     UNIT_TALK_APP_ENV: 'local',
@@ -132,7 +141,10 @@ function makeRegistryEnv(overrides: Record<string, string> = {}): Record<string,
   };
 }
 
-function withEnvVars<T>(values: Record<string, string>, callback: () => Promise<T>): Promise<T> {
+function withEnvVars<T>(
+  values: Record<string, string>,
+  callback: () => Promise<T>,
+): Promise<T> {
   const previous = new Map<string, string | undefined>();
   for (const [key, value] of Object.entries(values)) {
     previous.set(key, process.env[key]);
@@ -150,7 +162,9 @@ function withEnvVars<T>(values: Record<string, string>, callback: () => Promise<
   });
 }
 
-function makeCommandOptions(values: Record<string, string | number | undefined>) {
+function makeCommandOptions(
+  values: Record<string, string | number | undefined>,
+) {
   return {
     getString(name: string, required?: boolean) {
       const value = values[name];
@@ -182,7 +196,9 @@ function makeCommandOptions(values: Record<string, string | number | undefined>)
   };
 }
 
-function makePickInteraction(values: Record<string, string | number | undefined>) {
+function makePickInteraction(
+  values: Record<string, string | number | undefined>,
+) {
   const edited: string[] = [];
   const editedPayloads: Array<{ content?: string; embeds?: unknown[] }> = [];
   const interaction = {
@@ -211,12 +227,14 @@ interface MockRoles {
   heldRoles: string[];
 }
 
-function makeMockInteraction(opts: {
-  commandName?: string;
-  roles?: MockRoles | null;
-  isChatInputCommand?: boolean;
-  guildId?: string | null;
-} = {}): {
+function makeMockInteraction(
+  opts: {
+    commandName?: string;
+    roles?: MockRoles | null;
+    isChatInputCommand?: boolean;
+    guildId?: string | null;
+  } = {},
+): {
   interaction: Interaction;
   replies: string[];
   deferred: boolean;
@@ -240,15 +258,21 @@ function makeMockInteraction(opts: {
     commandName: opts.commandName ?? 'test-cmd',
     isChatInputCommand: () => opts.isChatInputCommand ?? true,
     guildId: opts.guildId === undefined ? 'guild-1' : opts.guildId,
-    member: opts.roles === null ? null : {
-      roles: {
-        cache: {
-          has: (id: string) => (opts.roles?.heldRoles ?? []).includes(id),
-        },
-      },
-    },
-    reply: async (options: { content: string }) => {
-      replies.push(options.content);
+    member:
+      opts.roles === null
+        ? null
+        : {
+            roles: {
+              cache: {
+                has: (id: string) => (opts.roles?.heldRoles ?? []).includes(id),
+              },
+            },
+          },
+    reply: async (options: {
+      content?: string;
+      embeds?: Array<{ description?: string }>;
+    }) => {
+      replies.push(options.content ?? options.embeds?.[0]?.description ?? '');
     },
     deferReply: async (opts: unknown) => {
       deferred = true;
@@ -256,8 +280,13 @@ function makeMockInteraction(opts: {
       deferOrder = step++;
       callOrder.push(deferOrder);
     },
-    editReply: async (options: { content: string }) => {
-      edited.push(options.content);
+    editReply: async (options: {
+      content?: string;
+      embeds?: Array<{ toJSON(): { description?: string } }>;
+    }) => {
+      edited.push(
+        options.content || options.embeds?.[0]?.toJSON().description || '',
+      );
     },
   };
 
@@ -266,11 +295,20 @@ function makeMockInteraction(opts: {
     replies,
     edited,
     deferredOptions,
-    get deferred() { return deferred; },
-    get deferOrder() { return deferOrder; },
-    get executeOrder() { return executeOrder; },
+    get deferred() {
+      return deferred;
+    },
+    get deferOrder() {
+      return deferOrder;
+    },
+    get executeOrder() {
+      return executeOrder;
+    },
     callOrder,
-    _setExecuteOrder: (o: number) => { executeOrder = o; step = o; },
+    _setExecuteOrder: (o: number) => {
+      executeOrder = o;
+      step = o;
+    },
   } as unknown as {
     interaction: Interaction;
     replies: string[];
@@ -291,7 +329,10 @@ function makeRegistry(commands: CommandHandler[]): CommandRegistry {
   return registry;
 }
 
-function makeMember(heldRoles: string[] = [], id = 'user-123'): Pick<GuildMember, 'id' | 'roles'> {
+function makeMember(
+  heldRoles: string[] = [],
+  id = 'user-123',
+): Pick<GuildMember, 'id' | 'roles'> {
   return {
     id,
     roles: {
@@ -398,7 +439,9 @@ function makeQueriedPick(overrides: Partial<QueriedPick> = {}): QueriedPick {
   };
 }
 
-function makeRecentSettlement(overrides: Partial<RecentSettlement> = {}): RecentSettlement {
+function makeRecentSettlement(
+  overrides: Partial<RecentSettlement> = {},
+): RecentSettlement {
   return {
     id: overrides.id ?? 'settlement-1',
     pick_id: overrides.pick_id ?? 'pick-1',
@@ -475,7 +518,10 @@ test('loadCommandRegistry also loads live, today, my-picks, and results commands
     async () => {
       const registry = await loadCommandRegistry();
       for (const commandName of ['live', 'today', 'my-picks', 'results']) {
-        assert.ok(registry.get(commandName), `${commandName} command not found in registry`);
+        assert.ok(
+          registry.get(commandName),
+          `${commandName} command not found in registry`,
+        );
       }
     },
   );
@@ -522,18 +568,28 @@ test('createApiClient.getRecentSettlements calls GET /api/settlements/recent wit
 });
 
 test('/live command reads only posted picks from the member-safe route', async () => {
-  type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+  type Payload = {
+    content?: string;
+    embeds?: Array<{ toJSON(): Record<string, unknown> }>;
+  };
   let requestedPath = '';
   const apiClient: ApiClient = {
     get: async <T>(path: string) => {
       requestedPath = path;
-      return ({
+      return {
         count: 1,
-        picks: [makeQueriedPick({ id: 'pick-1', status: 'posted', selection: 'Knicks ML' })],
-      } as T);
+        picks: [
+          makeQueriedPick({
+            id: 'pick-1',
+            status: 'posted',
+            selection: 'Knicks ML',
+          }),
+        ],
+      } as T;
     },
-    post: async <T>() => ({} as T),
-    getPicksByStatus: async () => assert.fail('raw picks route must not be called'),
+    post: async <T>() => ({}) as T,
+    getPicksByStatus: async () =>
+      assert.fail('raw picks route must not be called'),
   };
   const command = createLiveCommand(apiClient, ['role-vip']);
   let payload: Payload | null = null;
@@ -546,7 +602,10 @@ test('/live command reads only posted picks from the member-safe route', async (
 
   assert.ok(payload);
   const settledPayload = payload as Payload;
-  const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
+  const embed = settledPayload.embeds?.[0]?.toJSON() as {
+    title?: string;
+    description?: string;
+  };
   assert.equal(embed.title, 'Live Board');
   assert.match(embed.description ?? '', /\[POSTED\].*Knicks ML/);
   assert.equal(requestedPath, '/api/member/picks?status=posted&limit=50');
@@ -557,14 +616,18 @@ test('/today reads posted and settled picks from the member-safe route', async (
   const apiClient: ApiClient = {
     get: async <T>(path: string) => {
       requestedPath = path;
-      return ({ picks: [], count: 0 } as T);
+      return { picks: [], count: 0 } as T;
     },
-    post: async <T>() => ({} as T),
-    getPicksByStatus: async () => assert.fail('raw picks route must not be called'),
+    post: async <T>() => ({}) as T,
+    getPicksByStatus: async () =>
+      assert.fail('raw picks route must not be called'),
   };
   const command = createTodayCommand(apiClient, ['role-vip']);
   await command.execute({ editReply: async () => {} } as never);
-  assert.equal(requestedPath, '/api/member/picks?status=posted,settled&limit=200');
+  assert.equal(
+    requestedPath,
+    '/api/member/picks?status=posted,settled&limit=200',
+  );
 });
 
 test('buildLiveEmbeds paginates after 10 picks', () => {
@@ -581,13 +644,25 @@ test('buildLiveEmbeds paginates after 10 picks', () => {
 
 test('filterTodayPicks keeps only picks created on the same UTC date', () => {
   const picks = [
-    makeQueriedPick({ id: 'pick-today', created_at: '2026-03-28T01:00:00.000Z' }),
-    makeQueriedPick({ id: 'pick-yesterday', created_at: '2026-03-27T23:59:00.000Z' }),
+    makeQueriedPick({
+      id: 'pick-today',
+      created_at: '2026-03-28T01:00:00.000Z',
+    }),
+    makeQueriedPick({
+      id: 'pick-yesterday',
+      created_at: '2026-03-27T23:59:00.000Z',
+    }),
   ];
 
-  const filtered = filterTodayPicks(picks, new Date('2026-03-28T13:00:00.000Z'));
+  const filtered = filterTodayPicks(
+    picks,
+    new Date('2026-03-28T13:00:00.000Z'),
+  );
 
-  assert.deepEqual(filtered.map((pick) => pick.id), ['pick-today']);
+  assert.deepEqual(
+    filtered.map((pick) => pick.id),
+    ['pick-today'],
+  );
 });
 
 test('buildTodayEmbeds paginates after 10 picks', () => {
@@ -604,9 +679,15 @@ test('/my-picks ignores mutable Discord names and makes zero protected reads', a
   type Payload = { content?: string; embeds?: unknown[] };
   let apiCalls = 0;
   const apiClient: ApiClient = {
-    get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
-    post: async <T>() => ({} as T),
-    getPicksByStatus: async () => { apiCalls += 1; return { picks: [], count: 0 }; },
+    get: async <T>() => {
+      apiCalls += 1;
+      return { picks: [], count: 0 } as T;
+    },
+    post: async <T>() => ({}) as T,
+    getPicksByStatus: async () => {
+      apiCalls += 1;
+      return { picks: [], count: 0 };
+    },
   };
   const command = createMyPicksCommand(apiClient, ['role-vip']);
   let payload: Payload | null = null;
@@ -620,8 +701,8 @@ test('/my-picks ignores mutable Discord names and makes zero protected reads', a
   } as never);
 
   assert.ok(payload);
-  assert.match((payload as Payload).content ?? '', /canonical member identity/);
-  assert.deepEqual((payload as Payload).embeds, []);
+  assert.match(JSON.stringify(payload), /canonical member identity/);
+  assert.equal((payload as Payload).embeds?.length, 1);
   assert.equal(apiCalls, 0);
 });
 
@@ -636,10 +717,13 @@ test('buildMyPicksEmbeds paginates after 10 picks', () => {
 });
 
 test('/results command joins recent settlements to settled picks and shows P/L', async () => {
-  type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+  type Payload = {
+    content?: string;
+    embeds?: Array<{ toJSON(): Record<string, unknown> }>;
+  };
   const apiClient: ApiClient = {
-    get: async <T>() => ({ settlements: [], count: 0 } as T),
-    post: async <T>() => ({} as T),
+    get: async <T>() => ({ settlements: [], count: 0 }) as T,
+    post: async <T>() => ({}) as T,
     getRecentSettlements: async () => ({
       count: 1,
       settlements: [
@@ -671,7 +755,10 @@ test('/results command joins recent settlements to settled picks and shows P/L',
 
   assert.ok(payload);
   const settledPayload = payload as Payload;
-  const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
+  const embed = settledPayload.embeds?.[0]?.toJSON() as {
+    title?: string;
+    description?: string;
+  };
   assert.equal(embed.title, 'Recent Results');
   assert.match(embed.description ?? '', /\[WIN\].*Knicks ML.*\+1\.5u/);
 });
@@ -681,7 +768,10 @@ test('buildResultsEmbeds paginates after 10 settlements', () => {
     makeQueriedPick({ id: `pick-${index}`, selection: `Selection ${index}` }),
   );
   const settlements = Array.from({ length: 11 }, (_, index) =>
-    makeRecentSettlement({ id: `settlement-${index}`, pick_id: `pick-${index}` }),
+    makeRecentSettlement({
+      id: `settlement-${index}`,
+      pick_id: `pick-${index}`,
+    }),
   );
 
   const embeds = buildResultsEmbeds(settlements, picks);
@@ -823,7 +913,10 @@ test('parseQaBotConfig error message lists missing QA env and sandbox map requir
       assert.ok(err.message.includes('DISCORD_QA_GUILD_ID'), err.message);
       assert.ok(err.message.includes('qaMap.roles.capper'), err.message);
       assert.ok(err.message.includes('qaMap.roles.vip'), err.message);
-      assert.ok(err.message.includes('qaMap.channels.qaAccessCheck|qaBotLog'), err.message);
+      assert.ok(
+        err.message.includes('qaMap.channels.qaAccessCheck|qaBotLog'),
+        err.message,
+      );
       assert.ok(err.message.includes('UNIT_TALK_QA_API_URL'), err.message);
       return true;
     },
@@ -835,7 +928,10 @@ test('parseQaBotConfig error message lists missing QA env and sandbox map requir
 // ---------------------------------------------------------------------------
 
 test('resolveMemberTier returns free when member has no paid roles', () => {
-  const context = resolveMemberTier(makeMember(), parseBotConfig(makeMinimalEnv()));
+  const context = resolveMemberTier(
+    makeMember(),
+    parseBotConfig(makeMinimalEnv()),
+  );
 
   assert.equal(context.tier, 'free');
   assert.equal(context.isTrial, false);
@@ -845,7 +941,10 @@ test('resolveMemberTier returns free when member has no paid roles', () => {
 });
 
 test('resolveMemberTier returns trial when member holds the trial role', () => {
-  const context = resolveMemberTier(makeMember(['role-trial']), parseBotConfig(makeMinimalEnv()));
+  const context = resolveMemberTier(
+    makeMember(['role-trial']),
+    parseBotConfig(makeMinimalEnv()),
+  );
 
   assert.equal(context.tier, 'trial');
   assert.equal(context.isTrial, true);
@@ -874,24 +973,33 @@ test('buildTrialStatusEmbed includes capper guidance when the member is also a c
   }).toJSON();
 
   assert.equal(embed.title, 'Your Unit Talk Access - VIP');
-  assert.equal(embed.color, 0x5865f2);
+  assert.equal(embed.color, 0xc7a34b);
   assert.equal(embed.fields?.[0]?.name, 'Capper Role');
 });
 
 test('/trial-status command replies privately with the resolved tier embed', async () => {
   const command = createTrialStatusCommand(parseBotConfig(makeMinimalEnv()));
-  const payloads: Array<{ content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> }> = [];
+  const payloads: Array<{
+    content?: string;
+    embeds?: Array<{ toJSON(): Record<string, unknown> }>;
+  }> = [];
 
   await command.execute({
     member: makeMember(['role-trial']) as unknown as GuildMember,
-    editReply: async (payload: { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> }) => {
+    editReply: async (payload: {
+      content?: string;
+      embeds?: Array<{ toJSON(): Record<string, unknown> }>;
+    }) => {
       payloads.push(payload);
     },
   } as never);
 
   assert.equal(command.responseVisibility, 'private');
   assert.equal(payloads.length, 1);
-  const embed = payloads[0]?.embeds?.[0]?.toJSON() as { title?: string; description?: string };
+  const embed = payloads[0]?.embeds?.[0]?.toJSON() as {
+    title?: string;
+    description?: string;
+  };
   assert.equal(embed.title, 'Your Unit Talk Access - Trial');
   assert.match(embed.description ?? '', /trial/i);
 });
@@ -907,9 +1015,9 @@ test('buildUpgradeEmbed shows the free-to-paid path', () => {
     resolvedAt: '2026-03-28T12:00:00.000Z',
   }).toJSON();
 
-  assert.equal(embed.title, 'Upgrade Your Access');
-  assert.match(String(embed.description ?? ''), /\*\*VIP\*\*/);
-  assert.match(String(embed.description ?? ''), /\*\*VIP\+\*\*/);
+  assert.equal(embed.title, 'Upgrade');
+  assert.match(String(embed.description ?? ''), /VIP provides active official/);
+  assert.match(String(embed.description ?? ''), /available to all members/);
 });
 
 test('/upgrade command short-circuits when the member is already vip-plus', async () => {
@@ -925,8 +1033,8 @@ test('/upgrade command short-circuits when the member is already vip-plus', asyn
 
   assert.equal(command.responseVisibility, 'private');
   assert.equal(payloads.length, 1);
-  assert.equal(payloads[0]?.content, "You're already on our highest active tier.");
-  assert.deepEqual(payloads[0]?.embeds, []);
+  assert.match(JSON.stringify(payloads[0]), /highest active tier/);
+  assert.equal(payloads[0]?.embeds?.length, 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -981,10 +1089,19 @@ test('checkRoles returns false when member lacks roles.cache', () => {
 
 test('checkRoles fails closed in a DM or malformed guild context', () => {
   const roles = { cache: { has: () => true } };
-  assert.equal(checkRoles({ guildId: null, member: { roles } } as never, ['role-vip']), false);
+  assert.equal(
+    checkRoles({ guildId: null, member: { roles } } as never, ['role-vip']),
+    false,
+  );
   assert.equal(checkRoles({ member: { roles } } as never, ['role-vip']), false);
   assert.equal(
-    checkRoles({ guildId: 'guild-1', member: { roles: { cache: { has: true } } } } as never, ['role-vip']),
+    checkRoles(
+      {
+        guildId: 'guild-1',
+        member: { roles: { cache: { has: true } } },
+      } as never,
+      ['role-vip'],
+    ),
     false,
   );
 });
@@ -1013,7 +1130,11 @@ test('requireActivePickRoles returns Trial, VIP, VIP+, Capper and Operator', () 
 
 test('requireActivePickRoles omits an unconfigured Trial or Operator role', () => {
   assert.deepEqual(
-    requireActivePickRoles({ ...ACTIVE_PICK_ROLE_CONFIG, trialRoleId: null, operatorRoleId: undefined }),
+    requireActivePickRoles({
+      ...ACTIVE_PICK_ROLE_CONFIG,
+      trialRoleId: null,
+      operatorRoleId: undefined,
+    }),
     ['role-vip', 'role-vip-plus', 'role-capper'],
   );
 });
@@ -1026,7 +1147,10 @@ test('requireActivePickRoles never returns an empty (unrestricted) role list', (
     capperRoleId: '',
     operatorRoleId: undefined,
   });
-  assert.ok(roles.length > 0, 'an empty list would disable the router role guard');
+  assert.ok(
+    roles.length > 0,
+    'an empty list would disable the router role guard',
+  );
   assert.deepEqual(roles, ['__member_access_role_config_invalid__']);
 });
 
@@ -1036,7 +1160,10 @@ test('member access role helpers fail closed on blank or overlapping role config
     ['__member_access_role_config_invalid__'],
   );
   assert.deepEqual(
-    requireVipPlusRoles({ ...ACTIVE_PICK_ROLE_CONFIG, vipPlusRoleId: 'role-vip' }),
+    requireVipPlusRoles({
+      ...ACTIVE_PICK_ROLE_CONFIG,
+      vipPlusRoleId: 'role-vip',
+    }),
     ['__member_access_role_config_invalid__'],
   );
 });
@@ -1056,13 +1183,25 @@ for (const [name, create] of [
   test(`/${name} refuses a member without a paid, trial, capper or operator role and never reads picks`, async () => {
     let apiCalls = 0;
     const apiClient: ApiClient = {
-      get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
-      post: async <T>() => ({} as T),
-      getPicksByStatus: async () => { apiCalls += 1; return { picks: [], count: 0 }; },
+      get: async <T>() => {
+        apiCalls += 1;
+        return { picks: [], count: 0 } as T;
+      },
+      post: async <T>() => ({}) as T,
+      getPicksByStatus: async () => {
+        apiCalls += 1;
+        return { picks: [], count: 0 };
+      },
     };
-    const command = create(apiClient, requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG));
+    const command = create(
+      apiClient,
+      requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG),
+    );
     const handler = createInteractionHandler(makeRegistry([command]));
-    const mock = makeMockInteraction({ commandName: name, roles: { heldRoles: ['role-free'] } });
+    const mock = makeMockInteraction({
+      commandName: name,
+      roles: { heldRoles: ['role-free'] },
+    });
 
     await handler(mock.interaction);
 
@@ -1074,13 +1213,25 @@ for (const [name, create] of [
   test(`/${name} admits a VIP member`, async () => {
     let apiCalls = 0;
     const apiClient: ApiClient = {
-      get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
-      post: async <T>() => ({} as T),
-      getPicksByStatus: async () => { apiCalls += 1; return { picks: [], count: 0 }; },
+      get: async <T>() => {
+        apiCalls += 1;
+        return { picks: [], count: 0 } as T;
+      },
+      post: async <T>() => ({}) as T,
+      getPicksByStatus: async () => {
+        apiCalls += 1;
+        return { picks: [], count: 0 };
+      },
     };
-    const command = create(apiClient, requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG));
+    const command = create(
+      apiClient,
+      requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG),
+    );
     const handler = createInteractionHandler(makeRegistry([command]));
-    const mock = makeMockInteraction({ commandName: name, roles: { heldRoles: ['role-vip'] } });
+    const mock = makeMockInteraction({
+      commandName: name,
+      roles: { heldRoles: ['role-vip'] },
+    });
 
     await handler(mock.interaction);
 
@@ -1090,25 +1241,47 @@ for (const [name, create] of [
 }
 
 test('Trial, VIP, VIP+, Capper and Operator personas can read the member-safe pick commands', async () => {
-  for (const role of ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator']) {
+  for (const role of [
+    'role-trial',
+    'role-vip',
+    'role-vip-plus',
+    'role-capper',
+    'role-operator',
+  ]) {
     for (const [name, create] of [
       ['live', createLiveCommand],
       ['today', createTodayCommand],
     ] as const) {
       let apiCalls = 0;
       const apiClient: ApiClient = {
-        get: async <T>() => { apiCalls += 1; return ({ picks: [], count: 0 } as T); },
-        post: async <T>() => ({} as T),
+        get: async <T>() => {
+          apiCalls += 1;
+          return { picks: [], count: 0 } as T;
+        },
+        post: async <T>() => ({}) as T,
       };
       const handler = createInteractionHandler(
-        makeRegistry([create(apiClient, requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG))]),
+        makeRegistry([
+          create(apiClient, requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG)),
+        ]),
       );
-      const mock = makeMockInteraction({ commandName: name, roles: { heldRoles: [role] } });
+      const mock = makeMockInteraction({
+        commandName: name,
+        roles: { heldRoles: [role] },
+      });
 
       await handler(mock.interaction);
 
-      assert.equal(mock.deferred, true, `${role} should pass /${name} authorization`);
-      assert.equal(apiCalls, 1, `${role} should make one member-safe /${name} read`);
+      assert.equal(
+        mock.deferred,
+        true,
+        `${role} should pass /${name} authorization`,
+      );
+      assert.equal(
+        apiCalls,
+        1,
+        `${role} should make one member-safe /${name} read`,
+      );
     }
   }
 });
@@ -1118,13 +1291,19 @@ test('/heat-signal enforces VIP+ authorization while inactive capability makes z
   for (const role of ['role-free', 'role-trial', 'role-vip']) {
     let apiCalls = 0;
     const apiClient: ApiClient = {
-      get: async <T>() => { apiCalls += 1; return ({} as T); },
-      post: async <T>() => ({} as T),
+      get: async <T>() => {
+        apiCalls += 1;
+        return {} as T;
+      },
+      post: async <T>() => ({}) as T,
     };
     const handler = createInteractionHandler(
       makeRegistry([createHeatSignalCommand(apiClient, requiredRoles)]),
     );
-    const mock = makeMockInteraction({ commandName: 'heat-signal', roles: { heldRoles: [role] } });
+    const mock = makeMockInteraction({
+      commandName: 'heat-signal',
+      roles: { heldRoles: [role] },
+    });
     await handler(mock.interaction);
     assert.equal(mock.deferred, false, `${role} must be denied`);
     assert.equal(apiCalls, 0);
@@ -1133,16 +1312,30 @@ test('/heat-signal enforces VIP+ authorization while inactive capability makes z
   for (const role of ['role-vip-plus', 'role-capper', 'role-operator']) {
     let apiCalls = 0;
     const apiClient: ApiClient = {
-      get: async <T>() => { apiCalls += 1; return ({} as T); },
-      post: async <T>() => ({} as T),
+      get: async <T>() => {
+        apiCalls += 1;
+        return {} as T;
+      },
+      post: async <T>() => ({}) as T,
     };
     const handler = createInteractionHandler(
       makeRegistry([createHeatSignalCommand(apiClient, requiredRoles)]),
     );
-    const mock = makeMockInteraction({ commandName: 'heat-signal', roles: { heldRoles: [role] } });
+    const mock = makeMockInteraction({
+      commandName: 'heat-signal',
+      roles: { heldRoles: [role] },
+    });
     await handler(mock.interaction);
-    assert.equal(mock.deferred, true, `${role} should pass staff/VIP+ authorization`);
-    assert.equal(apiCalls, 0, 'authorization must not activate dormant intelligence');
+    assert.equal(
+      mock.deferred,
+      true,
+      `${role} should pass staff/VIP+ authorization`,
+    );
+    assert.equal(
+      apiCalls,
+      0,
+      'authorization must not activate dormant intelligence',
+    );
     assert.match(mock.edited[0] ?? '', /not live yet/);
   }
 });
@@ -1151,41 +1344,69 @@ test('/my-picks gates paid readers but remains unavailable without canonical ide
   const requiredRoles = requireActivePickRoles(ACTIVE_PICK_ROLE_CONFIG);
   let apiCalls = 0;
   const apiClient: ApiClient = {
-    get: async <T>() => { apiCalls += 1; return ({} as T); },
-    post: async <T>() => ({} as T),
+    get: async <T>() => {
+      apiCalls += 1;
+      return {} as T;
+    },
+    post: async <T>() => ({}) as T,
   };
   const command = createMyPicksCommand(apiClient, requiredRoles);
 
-  const free = makeMockInteraction({ commandName: 'my-picks', roles: { heldRoles: ['role-free'] } });
+  const free = makeMockInteraction({
+    commandName: 'my-picks',
+    roles: { heldRoles: ['role-free'] },
+  });
   await createInteractionHandler(makeRegistry([command]))(free.interaction);
   assert.equal(free.deferred, false);
 
-  for (const role of ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator']) {
-    const admitted = makeMockInteraction({ commandName: 'my-picks', roles: { heldRoles: [role] } });
-    await createInteractionHandler(makeRegistry([command]))(admitted.interaction);
-    assert.equal(admitted.deferred, true, `${role} should pass the paid-read gate`);
+  for (const role of [
+    'role-trial',
+    'role-vip',
+    'role-vip-plus',
+    'role-capper',
+    'role-operator',
+  ]) {
+    const admitted = makeMockInteraction({
+      commandName: 'my-picks',
+      roles: { heldRoles: [role] },
+    });
+    await createInteractionHandler(makeRegistry([command]))(
+      admitted.interaction,
+    );
+    assert.equal(
+      admitted.deferred,
+      true,
+      `${role} should pass the paid-read gate`,
+    );
     assert.match(admitted.edited[0] ?? '', /canonical member identity/);
   }
   assert.equal(apiCalls, 0);
 });
 
 test('loadCommandRegistry gates /live and /today to the active-pick roles from config', async () => {
-  await withEnvVars(
-    makeRegistryEnv(),
-    async () => {
-      const registry = await loadCommandRegistry();
-      const expected = ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator'];
-      assert.deepEqual(registry.get('live')?.requiredRoles, expected);
-      assert.deepEqual(registry.get('today')?.requiredRoles, expected);
-      assert.deepEqual(registry.get('my-picks')?.requiredRoles, expected);
-      assert.deepEqual(registry.get('heat-signal')?.requiredRoles, [
-        'role-vip-plus',
-        'role-capper',
-        'role-operator',
-      ]);
-      assert.equal(registry.get('results')?.requiredRoles, undefined, '/results stays open to every member');
-    },
-  );
+  await withEnvVars(makeRegistryEnv(), async () => {
+    const registry = await loadCommandRegistry();
+    const expected = [
+      'role-trial',
+      'role-vip',
+      'role-vip-plus',
+      'role-capper',
+      'role-operator',
+    ];
+    assert.deepEqual(registry.get('live')?.requiredRoles, expected);
+    assert.deepEqual(registry.get('today')?.requiredRoles, expected);
+    assert.deepEqual(registry.get('my-picks')?.requiredRoles, expected);
+    assert.deepEqual(registry.get('heat-signal')?.requiredRoles, [
+      'role-vip-plus',
+      'role-capper',
+      'role-operator',
+    ]);
+    assert.equal(
+      registry.get('results')?.requiredRoles,
+      undefined,
+      '/results stays open to every member',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1193,56 +1414,44 @@ test('loadCommandRegistry gates /live and /today to the active-pick roles from c
 // ---------------------------------------------------------------------------
 
 test('loadCommandRegistry loads the pick command from the commands directory', async () => {
-  await withEnvVars(
-    makeRegistryEnv(),
-    async () => {
-      const registry = await loadCommandRegistry();
-      assert.equal(registry.has('pick'), true);
-      assert.ok(registry.get('pick'));
-    },
-  );
+  await withEnvVars(makeRegistryEnv(), async () => {
+    const registry = await loadCommandRegistry();
+    assert.equal(registry.has('pick'), true);
+    assert.ok(registry.get('pick'));
+  });
 });
 
 test('loadCommandRegistry also loads the stats command from the commands directory', async () => {
-  await withEnvVars(
-    makeRegistryEnv(),
-    async () => {
-      const registry = await loadCommandRegistry();
-      const command = registry.get('stats');
-      assert.ok(command);
-      assert.equal(command?.data.name, 'stats');
-      assert.equal(command?.data.toJSON().options?.length, 3);
-    },
-  );
+  await withEnvVars(makeRegistryEnv(), async () => {
+    const registry = await loadCommandRegistry();
+    const command = registry.get('stats');
+    assert.ok(command);
+    assert.equal(command?.data.name, 'stats');
+    assert.equal(command?.data.toJSON().options?.length, 3);
+  });
 });
 
 test('loadCommandRegistry also loads the leaderboard command from the commands directory', async () => {
-  await withEnvVars(
-    makeRegistryEnv(),
-    async () => {
-      const registry = await loadCommandRegistry();
-      const command = registry.get('leaderboard');
-      assert.ok(command);
-      assert.equal(command?.data.name, 'leaderboard');
-      assert.equal(command?.requiredRoles, undefined);
-      assert.equal(command?.responseVisibility, 'public');
-      assert.equal(command?.data.toJSON().options?.length, 3);
-    },
-  );
+  await withEnvVars(makeRegistryEnv(), async () => {
+    const registry = await loadCommandRegistry();
+    const command = registry.get('leaderboard');
+    assert.ok(command);
+    assert.equal(command?.data.name, 'leaderboard');
+    assert.equal(command?.requiredRoles, undefined);
+    assert.equal(command?.responseVisibility, 'public');
+    assert.equal(command?.data.toJSON().options?.length, 3);
+  });
 });
 
 test('loadCommandRegistry also loads the recap command from the commands directory', async () => {
-  await withEnvVars(
-    makeRegistryEnv(),
-    async () => {
-      const registry = await loadCommandRegistry();
-      const command = registry.get('recap');
-      assert.ok(command);
-      assert.equal(command?.data.name, 'recap');
-      assert.equal(command?.responseVisibility, 'private');
-      assert.equal(command?.data.toJSON().options?.length, 1);
-    },
-  );
+  await withEnvVars(makeRegistryEnv(), async () => {
+    const registry = await loadCommandRegistry();
+    const command = registry.get('recap');
+    assert.ok(command);
+    assert.equal(command?.data.name, 'recap');
+    assert.equal(command?.responseVisibility, 'private');
+    assert.equal(command?.data.toJSON().options?.length, 1);
+  });
 });
 
 test('/stats embed omits CLV fields when picksWithClv is zero', () => {
@@ -1253,8 +1462,14 @@ test('/stats embed omits CLV fields when picksWithClv is zero', () => {
     beatsLine: null,
   }).toJSON();
 
-  assert.equal(embed.fields?.some((field) => field.name === 'Avg CLV%'), false);
-  assert.equal(embed.fields?.some((field) => field.name === 'Beats Line'), false);
+  assert.equal(
+    embed.fields?.some((field) => field.name === 'Avg CLV%'),
+    false,
+  );
+  assert.equal(
+    embed.fields?.some((field) => field.name === 'Beats Line'),
+    false,
+  );
 });
 
 test('/stats command calls the operator endpoint with the requested filters', async () => {
@@ -1294,7 +1509,10 @@ test('/stats command calls the operator endpoint with the requested filters', as
     },
   } as never);
 
-  assert.equal(requestedPath, '/api/operator/stats?last=30&capper=Griff&sport=NBA');
+  assert.equal(
+    requestedPath,
+    '/api/operator/stats?last=30&capper=Griff&sport=NBA',
+  );
   assert.equal(edited.length, 1);
   assert.ok(Array.isArray(edited[0]?.embeds));
 });
@@ -1312,8 +1530,10 @@ test('/recap command calls the operator recap endpoint and renders settled picks
   };
 
   const command = createRecapCommand(apiClient);
-  const edited: Array<{ embeds?: Array<{ toJSON(): Record<string, unknown> }>; content?: string }> =
-    [];
+  const edited: Array<{
+    embeds?: Array<{ toJSON(): Record<string, unknown> }>;
+    content?: string;
+  }> = [];
 
   await command.execute({
     options: {
@@ -1388,8 +1608,8 @@ test('/recap command returns an empty-state message when no settled picks exist'
   } as never);
 
   assert.equal(edited.length, 1);
-  assert.equal(edited[0]?.content, 'No settled picks found.');
-  assert.deepEqual(edited[0]?.embeds, []);
+  assert.match(JSON.stringify(edited[0]), /No settled picks found/);
+  assert.equal(edited[0]?.embeds?.length, 1);
 });
 
 test('buildCapperRecapEmbed renders CLV and stake details in the recap fields', () => {
@@ -1406,8 +1626,8 @@ test('buildCapperRecapEmbed renders CLV and stake details in the recap fields', 
 
 test('/leaderboard command registers the expected public options', () => {
   const apiClient: ApiClient = {
-    get: async <T>() => ({ ok: true, data: makeLeaderboardResponse() } as T),
-    post: async <T>() => ({} as T),
+    get: async <T>() => ({ ok: true, data: makeLeaderboardResponse() }) as T,
+    post: async <T>() => ({}) as T,
   };
 
   const command = createLeaderboardCommand(apiClient);
@@ -1425,13 +1645,19 @@ test('/leaderboard command registers the expected public options', () => {
 test('/leaderboard embed renders rank, record, roi, and streak format', () => {
   const embed = buildLeaderboardEmbed(makeLeaderboardResponse()).toJSON();
 
-  assert.equal(embed.color, 0xffd700);
+  assert.equal(embed.color, 0xc7a34b);
   assert.match(embed.title ?? '', /Leaderboard/);
   assert.equal(embed.fields?.[0]?.name, '#1 Griff');
-  assert.equal(embed.fields?.[0]?.value, '4–1–0  80.0%  +60.0% ROI  🔥5');
+  assert.equal(
+    embed.fields?.[0]?.value,
+    '4–1–0  80.0%  +60.0% ROI  🔥5 · 5 settled picks',
+  );
   assert.equal(embed.fields?.[1]?.name, '#2 Casey');
-  assert.equal(embed.fields?.[1]?.value, '2–2–0  50.0%  0.0% ROI  🧊2');
-  assert.match(embed.footer?.text ?? '', /Min 3 settled picks/);
+  assert.equal(
+    embed.fields?.[1]?.value,
+    '2–2–0  50.0%  0.0% ROI  🧊2 · 4 settled picks',
+  );
+  assert.match(JSON.stringify(embed), /Min 3 settled picks/);
 });
 
 test('recap embed renders win result, units, and CLV fields', () => {
@@ -1445,7 +1671,7 @@ test('recap embed renders win result, units, and CLV fields', () => {
     submittedBy: 'griff843',
   });
 
-  assert.equal(embed.title, 'Pick Recap');
+  assert.equal(embed.title, 'Win · Over 24.5');
   assert.equal(embed.color, 0x22c55e);
   assert.deepEqual(
     embed.fields?.map((field) => [field.name, field.value]),
@@ -1489,8 +1715,13 @@ test('router replies with unknown-command when command not in registry', async (
 
 test('router replies access-denied when role guard fails', async () => {
   const fakeCommand: CommandHandler = {
-    data: { name: 'restricted', toJSON: () => ({}) } as unknown as import('discord.js').SlashCommandBuilder,
-    execute: async () => { throw new Error('must not be called'); },
+    data: {
+      name: 'restricted',
+      toJSON: () => ({}),
+    } as unknown as import('discord.js').SlashCommandBuilder,
+    execute: async () => {
+      throw new Error('must not be called');
+    },
     requiredRoles: ['role-operator'],
   };
   const registry = makeRegistry([fakeCommand]);
@@ -1515,28 +1746,44 @@ test('router calls deferReply before execute (ack-within-3s discipline)', async 
     isChatInputCommand: () => true,
     member: { roles: { cache: { has: () => true } } },
     reply: async () => {},
-    deferReply: async () => { deferCalledFirst = !executeCalled; },
+    deferReply: async () => {
+      deferCalledFirst = !executeCalled;
+    },
     editReply: async () => {},
   } as unknown as Interaction;
 
   const fakeCommand: CommandHandler = {
-    data: { name: 'probe', toJSON: () => ({}) } as unknown as import('discord.js').SlashCommandBuilder,
-    execute: async () => { executeCalled = true; },
+    data: {
+      name: 'probe',
+      toJSON: () => ({}),
+    } as unknown as import('discord.js').SlashCommandBuilder,
+    execute: async () => {
+      executeCalled = true;
+    },
   };
   const registry = makeRegistry([fakeCommand]);
   const handler = createInteractionHandler(registry);
 
   await handler(mock);
 
-  assert.equal(deferCalledFirst, true, 'deferReply must be called before execute');
+  assert.equal(
+    deferCalledFirst,
+    true,
+    'deferReply must be called before execute',
+  );
   assert.equal(executeCalled, true, 'execute must be called');
 });
 
 test('router calls deferReply and passes interaction to execute when command found and roles pass', async () => {
   let receivedInteraction: unknown = null;
   const fakeCommand: CommandHandler = {
-    data: { name: 'hello', toJSON: () => ({}) } as unknown as import('discord.js').SlashCommandBuilder,
-    execute: async (interaction) => { receivedInteraction = interaction; },
+    data: {
+      name: 'hello',
+      toJSON: () => ({}),
+    } as unknown as import('discord.js').SlashCommandBuilder,
+    execute: async (interaction) => {
+      receivedInteraction = interaction;
+    },
     requiredRoles: ['role-user'],
   };
   const registry = makeRegistry([fakeCommand]);
@@ -1550,12 +1797,18 @@ test('router calls deferReply and passes interaction to execute when command fou
 
   assert.equal(mock.deferred, true, 'deferReply must be called');
   assert.deepEqual(mock.deferredOptions[0], { ephemeral: true });
-  assert.ok(receivedInteraction !== null, 'execute must receive the interaction');
+  assert.ok(
+    receivedInteraction !== null,
+    'execute must receive the interaction',
+  );
 });
 
 test('router makes leaderboard replies public when command visibility is public', async () => {
   const fakeCommand: CommandHandler = {
-    data: { name: 'leaderboard', toJSON: () => ({}) } as unknown as import('discord.js').SlashCommandBuilder,
+    data: {
+      name: 'leaderboard',
+      toJSON: () => ({}),
+    } as unknown as import('discord.js').SlashCommandBuilder,
     responseVisibility: 'public',
     execute: async () => {},
   };
@@ -1571,11 +1824,20 @@ test('router makes leaderboard replies public when command visibility is public'
 
 test('router catches execute errors and edits reply with generic message', async () => {
   const errors: unknown[] = [];
-  const logger = { error: (_msg: string, err?: unknown) => { errors.push(err); } };
+  const logger = {
+    error: (_msg: string, err?: unknown) => {
+      errors.push(err);
+    },
+  };
 
   const fakeCommand: CommandHandler = {
-    data: { name: 'boom', toJSON: () => ({}) } as unknown as import('discord.js').SlashCommandBuilder,
-    execute: async () => { throw new Error('kaboom'); },
+    data: {
+      name: 'boom',
+      toJSON: () => ({}),
+    } as unknown as import('discord.js').SlashCommandBuilder,
+    execute: async () => {
+      throw new Error('kaboom');
+    },
   };
   const registry = makeRegistry([fakeCommand]);
   const handler = createInteractionHandler(registry, logger);
@@ -1587,7 +1849,12 @@ test('router catches execute errors and edits reply with generic message', async
     member: null,
     reply: async () => {},
     deferReply: async () => {},
-    editReply: async (opts: { content: string }) => { edited.push(opts.content); },
+    editReply: async (opts: {
+      content?: string;
+      embeds?: Array<{ description?: string }>;
+    }) => {
+      edited.push(opts.embeds?.[0]?.description ?? opts.content ?? '');
+    },
   } as unknown as Interaction;
 
   await handler(mock);
@@ -1604,10 +1871,19 @@ test('router catches execute errors and edits reply with generic message', async
 test('router dispatches to correct handler when multiple commands registered', async () => {
   const called: string[] = [];
   const makeCmd = (name: string): CommandHandler => ({
-    data: { name, toJSON: () => ({}) } as unknown as import('discord.js').SlashCommandBuilder,
-    execute: async () => { called.push(name); },
+    data: {
+      name,
+      toJSON: () => ({}),
+    } as unknown as import('discord.js').SlashCommandBuilder,
+    execute: async () => {
+      called.push(name);
+    },
   });
-  const registry = makeRegistry([makeCmd('alpha'), makeCmd('beta'), makeCmd('gamma')]);
+  const registry = makeRegistry([
+    makeCmd('alpha'),
+    makeCmd('beta'),
+    makeCmd('gamma'),
+  ]);
   const handler = createInteractionHandler(registry);
 
   for (const name of ['beta', 'gamma', 'alpha']) {
@@ -1631,18 +1907,19 @@ test('router dispatches to correct handler when multiple commands registered', a
 
 test('/pick command registers the required option contract and private visibility', () => {
   const apiClient: ApiClient = {
-    get: async <T>() => ({} as T),
-    post: async <T>() => ({
-      ok: true as const,
-      data: {
-        submissionId: 'sub-1',
-        pickId: 'pick-1',
-        lifecycleState: 'validated',
-        promotionStatus: 'suppressed',
-        promotionTarget: null,
-        outboxEnqueued: false,
-      },
-    } as T),
+    get: async <T>() => ({}) as T,
+    post: async <T>() =>
+      ({
+        ok: true as const,
+        data: {
+          submissionId: 'sub-1',
+          pickId: 'pick-1',
+          lifecycleState: 'validated',
+          promotionStatus: 'suppressed',
+          promotionTarget: null,
+          outboxEnqueued: false,
+        },
+      }) as T,
   };
 
   const command = createPickCommand(apiClient, 'role-capper');
@@ -1747,7 +2024,7 @@ test('/pick command posts to /api/submissions and replies with a success embed',
   let capturedPath = '';
   let capturedBody: unknown;
   const apiClient: ApiClient = {
-    get: async <T>() => ({} as T),
+    get: async <T>() => ({}) as T,
     post: async <T>(path: string, body: unknown) => {
       capturedPath = path;
       capturedBody = body;
@@ -1783,22 +2060,21 @@ test('/pick command posts to /api/submissions and replies with a success embed',
   });
   assert.equal(mock.editedPayloads.length, 1);
   assert.equal(mock.editedPayloads[0]?.content, '');
-  const embed = (mock.editedPayloads[0]?.embeds?.[0] as { toJSON(): Record<string, unknown> }).toJSON();
+  const embed = (
+    mock.editedPayloads[0]?.embeds?.[0] as { toJSON(): Record<string, unknown> }
+  ).toJSON();
   assert.equal(embed.title, 'Pick Submitted');
-  assert.deepEqual(
-    embed.fields,
-    [
-      { name: 'Submission ID', value: 'sub-123', inline: false },
-      { name: 'Pick ID', value: 'pick-456', inline: false },
-      { name: 'Market', value: 'NFL - Moneyline', inline: false },
-      { name: 'Selection', value: 'Bills', inline: false },
-    ],
-  );
+  assert.deepEqual(embed.fields, [
+    { name: 'Submission ID', value: 'sub-123', inline: false },
+    { name: 'Pick ID', value: 'pick-456', inline: false },
+    { name: 'Market', value: 'NFL - Moneyline', inline: false },
+    { name: 'Selection', value: 'Bills', inline: false },
+  ]);
 });
 
 test('/pick command surfaces API validation failures back to the user', async () => {
   const apiClient: ApiClient = {
-    get: async <T>() => ({} as T),
+    get: async <T>() => ({}) as T,
     post: async <T>() => {
       throw new ApiClientError(
         'bad request',
@@ -1823,12 +2099,15 @@ test('/pick command surfaces API validation failures back to the user', async ()
 
   await command.execute(mock.interaction);
 
-  assert.equal(mock.edited[0], 'Pick submission failed: selection is required');
+  assert.match(
+    JSON.stringify(mock.editedPayloads[0]),
+    /Pick submission failed: selection is required/,
+  );
 });
 
 test('/pick command returns service unavailable when the API cannot be reached', async () => {
   const apiClient: ApiClient = {
-    get: async <T>() => ({} as T),
+    get: async <T>() => ({}) as T,
     post: async <T>() => {
       throw new ApiClientError('network failed');
       return {} as T;
@@ -1844,7 +2123,10 @@ test('/pick command returns service unavailable when the API cannot be reached',
 
   await command.execute(mock.interaction);
 
-  assert.equal(mock.edited[0], 'Service temporarily unavailable - try again shortly.');
+  assert.match(
+    JSON.stringify(mock.editedPayloads[0]),
+    /Service temporarily unavailable - try again shortly/,
+  );
 });
 
 test('buildPickUrgencyDisplay formats countdown, closing soon, and locked states', () => {
@@ -1878,15 +2160,14 @@ test('buildBettorIntelligenceFields uses bettor-safe labels and avoids internal 
 
   assert.deepEqual(
     fields.map((field) => field.name),
-    ['Market Edge', 'Confidence', 'Track Record'],
+    [],
   );
-  assert.match(fields[0]?.value ?? '', /2\.3% edge vs market/);
-  assert.ok(fields.every((field) => !field.value.includes('promotionScores')));
+  assert.deepEqual(fields, []);
 });
 
 test('/pick command includes urgency and bettor-safe intelligence context when optional metadata is supplied', async () => {
   const apiClient: ApiClient = {
-    get: async <T>() => ({} as T),
+    get: async <T>() => ({}) as T,
     post: async <T>() =>
       ({
         ok: true as const,
@@ -1894,7 +2175,7 @@ test('/pick command includes urgency and bettor-safe intelligence context when o
           submissionId: 'sub-1',
           pickId: 'pick-1',
         },
-      } as T),
+      }) as T,
   };
   const command = createPickCommand(apiClient, 'role-capper');
   const mock = makePickInteraction({
@@ -1910,15 +2191,21 @@ test('/pick command includes urgency and bettor-safe intelligence context when o
 
   await command.execute(mock.interaction);
 
-  const embed = mock.editedPayloads[0]?.embeds?.[0] as { toJSON(): Record<string, unknown> };
-  const json = embed.toJSON() as { fields?: Array<{ name?: string; value?: string }> };
-  const fields = new Map((json.fields ?? []).map((field) => [field.name, field.value] as const));
+  const embed = mock.editedPayloads[0]?.embeds?.[0] as {
+    toJSON(): Record<string, unknown>;
+  };
+  const json = embed.toJSON() as {
+    fields?: Array<{ name?: string; value?: string }>;
+  };
+  const fields = new Map(
+    (json.fields ?? []).map((field) => [field.name, field.value] as const),
+  );
 
   assert.match(String(fields.get('Game Time') ?? ''), /2099-03-28 18:15 UTC/);
   assert.match(String(fields.get('Timing') ?? ''), /Starts in/);
-  assert.equal(fields.get('Market Edge'), '+2.3% edge vs market');
-  assert.equal(fields.get('Confidence'), 'High conviction');
-  assert.equal(fields.get('Track Record'), 'Beating the close lately');
+  assert.equal(fields.has('Market Edge'), false);
+  assert.equal(fields.has('Confidence'), false);
+  assert.equal(fields.has('Track Record'), false);
 });
 
 // ---------------------------------------------------------------------------
@@ -1935,7 +2222,11 @@ test('createApiClient.get constructs correct URL and returns JSON', async () => 
     });
   };
 
-  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
+  const client = createApiClient(
+    'http://localhost:4000',
+    undefined,
+    mockFetch as typeof fetch,
+  );
   const result = await client.get<{ ok: boolean }>('/health');
 
   assert.equal(capturedUrl, 'http://localhost:4000/health');
@@ -1952,7 +2243,11 @@ test('createApiClient.get strips trailing slash from base URL', async () => {
     });
   };
 
-  const client = createApiClient('http://localhost:4000/', undefined, mockFetch as typeof fetch);
+  const client = createApiClient(
+    'http://localhost:4000/',
+    undefined,
+    mockFetch as typeof fetch,
+  );
   await client.get('/api/health');
 
   assert.equal(capturedUrl, 'http://localhost:4000/api/health');
@@ -1970,8 +2265,14 @@ test('createApiClient.post sends POST with JSON body', async () => {
     });
   };
 
-  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
-  const result = await client.post<{ id: string }>('/api/submissions', { market: 'NBA points' });
+  const client = createApiClient(
+    'http://localhost:4000',
+    undefined,
+    mockFetch as typeof fetch,
+  );
+  const result = await client.post<{ id: string }>('/api/submissions', {
+    market: 'NBA points',
+  });
 
   assert.equal(capturedMethod, 'POST');
   assert.deepEqual(JSON.parse(capturedBody), { market: 'NBA points' });
@@ -1988,7 +2289,11 @@ test('createApiClient sends Authorization header when apiKey provided', async ()
     });
   };
 
-  const client = createApiClient('http://localhost:4000', 'bot-api-key', mockFetch as typeof fetch);
+  const client = createApiClient(
+    'http://localhost:4000',
+    'bot-api-key',
+    mockFetch as typeof fetch,
+  );
   await client.get('/api/picks');
 
   assert.equal(capturedHeaders['Authorization'], 'Bearer bot-api-key');
@@ -2004,7 +2309,11 @@ test('createApiClient omits Authorization header when no apiKey', async () => {
     });
   };
 
-  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
+  const client = createApiClient(
+    'http://localhost:4000',
+    undefined,
+    mockFetch as typeof fetch,
+  );
   await client.get('/api/picks');
 
   assert.equal(capturedHeaders['Authorization'], undefined);
@@ -2015,7 +2324,11 @@ test('createApiClient.get throws on non-200 response', async () => {
     return new Response('Not found', { status: 404 });
   };
 
-  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
+  const client = createApiClient(
+    'http://localhost:4000',
+    undefined,
+    mockFetch as typeof fetch,
+  );
 
   await assert.rejects(
     () => client.get('/api/missing'),
@@ -2032,7 +2345,11 @@ test('createApiClient.post throws on non-200 response', async () => {
     return new Response('Bad request', { status: 400 });
   };
 
-  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
+  const client = createApiClient(
+    'http://localhost:4000',
+    undefined,
+    mockFetch as typeof fetch,
+  );
 
   await assert.rejects(
     () => client.post('/api/submissions', {}),
@@ -2065,42 +2382,88 @@ test('/help command execute calls editReply with a single embed containing all c
     isChatInputCommand: () => true,
     commandName: 'help',
     deferReply: async () => {},
-    editReply: async (payload: unknown) => { repliedWith = payload; },
+    editReply: async (payload: unknown) => {
+      repliedWith = payload;
+    },
   } as unknown as ChatInputCommandInteraction;
 
   await command.execute(mockInteraction);
 
   assert.ok(repliedWith !== null, 'editReply was not called');
-  const payload = repliedWith as { embeds: Array<{ toJSON(): { description?: string } }> };
+  const payload = repliedWith as {
+    embeds: Array<{ toJSON(): { description?: string } }>;
+  };
   assert.ok(Array.isArray(payload.embeds), 'embeds must be an array');
   assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
 
   const description = payload.embeds[0]?.toJSON().description ?? '';
-  for (const name of ['alerts-setup', 'heat-signal', 'live', 'today', 'my-picks', 'results', 'pick', 'stats', 'leaderboard', 'trial-status', 'upgrade', 'help', 'recap']) {
-    assert.ok(description.includes(`/${name}`), `embed description missing /${name}`);
+  for (const name of [
+    'alerts-setup',
+    'heat-signal',
+    'live',
+    'today',
+    'my-picks',
+    'results',
+    'pick',
+    'stats',
+    'leaderboard',
+    'trial-status',
+    'upgrade',
+    'help',
+    'recap',
+  ]) {
+    assert.ok(
+      description.includes(`/${name}`),
+      `embed description missing /${name}`,
+    );
   }
 });
 
 test('buildHeatSignalEmbed preserves the dormant capability renderer', () => {
-  const embed = buildHeatSignalEmbed({
-    total: 2,
-    detections: [
-      {
-        id: 'd1', eventId: 'e1', marketKey: 'spreads/nfl', bookmakerKey: 'fanduel',
-        marketType: 'spread', direction: 'down', tier: 'alert-worthy', oldLine: -3,
-        newLine: -5.5, lineChange: -2.5, lineChangeAbs: 2.5, velocity: 0.25,
-        timeElapsedMinutes: 10, currentSnapshotAt: '2026-03-28T12:10:00.000Z',
-        notified: true, cooldownExpiresAt: null,
-      },
-      {
-        id: 'd2', eventId: 'e2', marketKey: 'totals/nba', bookmakerKey: 'draftkings',
-        marketType: 'total', direction: 'up', tier: 'notable', oldLine: 224.5,
-        newLine: 226, lineChange: 1.5, lineChangeAbs: 1.5, velocity: 0.05,
-        timeElapsedMinutes: 30, currentSnapshotAt: '2026-03-28T12:05:00.000Z',
-        notified: false, cooldownExpiresAt: null,
-      },
-    ],
-  }, 2).toJSON() as { title?: string; description?: string };
+  const embed = buildHeatSignalEmbed(
+    {
+      total: 2,
+      detections: [
+        {
+          id: 'd1',
+          eventId: 'e1',
+          marketKey: 'spreads/nfl',
+          bookmakerKey: 'fanduel',
+          marketType: 'spread',
+          direction: 'down',
+          tier: 'alert-worthy',
+          oldLine: -3,
+          newLine: -5.5,
+          lineChange: -2.5,
+          lineChangeAbs: 2.5,
+          velocity: 0.25,
+          timeElapsedMinutes: 10,
+          currentSnapshotAt: '2026-03-28T12:10:00.000Z',
+          notified: true,
+          cooldownExpiresAt: null,
+        },
+        {
+          id: 'd2',
+          eventId: 'e2',
+          marketKey: 'totals/nba',
+          bookmakerKey: 'draftkings',
+          marketType: 'total',
+          direction: 'up',
+          tier: 'notable',
+          oldLine: 224.5,
+          newLine: 226,
+          lineChange: 1.5,
+          lineChangeAbs: 1.5,
+          velocity: 0.05,
+          timeElapsedMinutes: 30,
+          currentSnapshotAt: '2026-03-28T12:05:00.000Z',
+          notified: false,
+          cooldownExpiresAt: null,
+        },
+      ],
+    },
+    2,
+  ).toJSON() as { title?: string; description?: string };
   assert.equal(embed.title, 'Heat Signal - Top 2 Line Movements');
   assert.match(embed.description ?? '', /\[ALERT\].*spreads\/nfl/);
   assert.match(embed.description ?? '', /\[NOTE\].*totals\/nba/);
@@ -2113,9 +2476,15 @@ test('/heat-signal returns truthful unavailability with zero protected requests'
   };
   let apiCalls = 0;
   const apiClient: ApiClient = {
-    get: async <T>() => { apiCalls += 1; return ({} as T); },
-    post: async <T>() => ({} as T),
-    getRecentAlerts: async () => { apiCalls += 1; return { detections: [], total: 0 }; },
+    get: async <T>() => {
+      apiCalls += 1;
+      return {} as T;
+    },
+    post: async <T>() => ({}) as T,
+    getRecentAlerts: async () => {
+      apiCalls += 1;
+      return { detections: [], total: 0 };
+    },
   };
   const command = createHeatSignalCommand(apiClient, ['role-vip-plus']);
   let payload: EmptyHeatSignalPayload | null = null;
@@ -2133,14 +2502,18 @@ test('/heat-signal returns truthful unavailability with zero protected requests'
 
   assert.ok(payload);
   const emptyPayload = payload as EmptyHeatSignalPayload;
-  assert.equal(emptyPayload.content, 'Line-movement alerts are not live yet. There are no detections to show.');
+  assert.match(
+    JSON.stringify(emptyPayload),
+    /Line-movement alerts are not live yet/,
+  );
+  assert.equal(emptyPayload.embeds?.length, 1);
   assert.equal(apiCalls, 0);
 });
 
 test('/alerts-setup command requires operator role and registers private visibility', () => {
   const apiClient: ApiClient = {
-    get: async <T>() => ({} as T),
-    post: async <T>() => ({} as T),
+    get: async <T>() => ({}) as T,
+    post: async <T>() => ({}) as T,
     getAlertStatus: async () => ({
       enabled: true,
       dryRun: true,
@@ -2221,22 +2594,26 @@ test('buildCapperWelcomeEmbed renders correct title, color, and all four fields'
     footer?: { text: string };
   };
 
-  assert.equal(embed.title, '👋 Welcome to Unit Talk Cappers — Griff');
-  assert.equal(embed.color, 0x5865f2);
-  assert.ok(embed.description?.includes("You've been added as a Unit Talk Capper"));
+  assert.equal(embed.title, 'Capper Onboarding · Griff');
+  assert.equal(embed.color, 0xc7a34b);
+  assert.ok(
+    embed.description?.includes("You've been added as a Unit Talk Capper"),
+  );
   assert.equal(embed.fields?.length, 4);
   assert.equal(embed.fields?.[0]?.name, 'Submit a pick');
   assert.equal(embed.fields?.[1]?.name, 'Your stats');
   assert.equal(embed.fields?.[2]?.name, 'Your recap');
   assert.equal(embed.fields?.[3]?.name, 'Questions');
-  assert.ok(embed.footer?.text.startsWith('Unit Talk · Capper Onboarding'));
+  assert.ok(embed.footer?.text === 'Unit Talk');
 });
 
 test('createCapperOnboardingHandler: capper role added → posts welcome embed to channel', async () => {
   const sent: Array<{ embeds: unknown[] }> = [];
   const mockChannel = {
     isTextBased: () => true,
-    send: async (payload: { embeds: unknown[] }) => { sent.push(payload); },
+    send: async (payload: { embeds: unknown[] }) => {
+      sent.push(payload);
+    },
   };
   const mockClient = {
     channels: {
@@ -2245,13 +2622,16 @@ test('createCapperOnboardingHandler: capper role added → posts welcome embed t
     },
   };
 
-  const config = { capperRoleId: 'role-capper', capperChannelId: 'channel-capper' };
-  const handler = createCapperOnboardingHandler(
-    config,
-    mockClient as never,
-  );
+  const config = {
+    capperRoleId: 'role-capper',
+    capperChannelId: 'channel-capper',
+  };
+  const handler = createCapperOnboardingHandler(config, mockClient as never);
 
-  const oldMember = { roles: { cache: { keys: () => [].values() } }, displayName: 'Griff' };
+  const oldMember = {
+    roles: { cache: { keys: () => [].values() } },
+    displayName: 'Griff',
+  };
   const newMember = {
     roles: { cache: { keys: () => ['role-capper'].values() } },
     displayName: 'Griff',
@@ -2268,12 +2648,23 @@ test('createCapperOnboardingHandler: non-capper role change → no-op, no channe
   let channelFetched = false;
   const mockClient = {
     channels: {
-      cache: { get: () => { channelFetched = true; return undefined; } },
-      fetch: async () => { channelFetched = true; return null; },
+      cache: {
+        get: () => {
+          channelFetched = true;
+          return undefined;
+        },
+      },
+      fetch: async () => {
+        channelFetched = true;
+        return null;
+      },
     },
   };
 
-  const config = { capperRoleId: 'role-capper', capperChannelId: 'channel-capper' };
+  const config = {
+    capperRoleId: 'role-capper',
+    capperChannelId: 'channel-capper',
+  };
   const handler = createCapperOnboardingHandler(config, mockClient as never);
 
   const oldMember = { roles: { cache: { keys: () => [].values() } } };
@@ -2285,18 +2676,27 @@ test('createCapperOnboardingHandler: non-capper role change → no-op, no channe
 
   await handler(oldMember as never, newMember as never);
 
-  assert.equal(channelFetched, false, 'channel should not be fetched for non-capper role change');
+  assert.equal(
+    channelFetched,
+    false,
+    'channel should not be fetched for non-capper role change',
+  );
 });
 
 test('createCapperOnboardingHandler: channel fetch throws → swallowed, does not propagate', async () => {
   const mockClient = {
     channels: {
       cache: { get: () => undefined },
-      fetch: async () => { throw new Error('channel not found'); },
+      fetch: async () => {
+        throw new Error('channel not found');
+      },
     },
   };
 
-  const config = { capperRoleId: 'role-capper', capperChannelId: 'channel-capper' };
+  const config = {
+    capperRoleId: 'role-capper',
+    capperChannelId: 'channel-capper',
+  };
   const handler = createCapperOnboardingHandler(config, mockClient as never);
 
   const oldMember = { roles: { cache: { keys: () => [].values() } } };
@@ -2307,7 +2707,9 @@ test('createCapperOnboardingHandler: channel fetch throws → swallowed, does no
   };
 
   // Must not throw — handler swallows all errors
-  await assert.doesNotReject(async () => handler(oldMember as never, newMember as never));
+  await assert.doesNotReject(async () =>
+    handler(oldMember as never, newMember as never),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -2321,10 +2723,13 @@ test('createApiClient.syncMemberTier calls POST /api/member-tiers with correct b
   const mockFetch: typeof fetch = async (input, init) => {
     capturedUrl = typeof input === 'string' ? input : (input as URL).toString();
     capturedBody = init?.body ? JSON.parse(init.body as string) : undefined;
-    return new Response(JSON.stringify({ ok: true, tier: 'vip', action: 'activate' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ ok: true, tier: 'vip', action: 'activate' }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   };
 
   const client = createApiClient('http://localhost:4000', undefined, mockFetch);
@@ -2368,19 +2773,27 @@ test('createApiClient.syncMemberTier swallows errors and does not throw', async 
 // ---------------------------------------------------------------------------
 
 test('createMemberTierSyncHandler activates tier when a tier-relevant role is added', async () => {
-  const synced: Array<{ discord_id: string; tier: string; action: string }> = [];
+  const synced: Array<{ discord_id: string; tier: string; action: string }> =
+    [];
   const mockApiClient: ApiClient = {
     get: async () => ({}) as never,
     post: async () => ({}) as never,
     syncMemberTier: async (params) => {
-      synced.push({ discord_id: params.discord_id, tier: params.tier, action: params.action });
+      synced.push({
+        discord_id: params.discord_id,
+        tier: params.tier,
+        action: params.action,
+      });
     },
   };
 
   const config = parseBotConfig(makeMinimalEnv());
   const handler = createMemberTierSyncHandler(config, mockApiClient);
 
-  const oldMember = { id: 'user-999', roles: { cache: { keys: () => [].values() } } };
+  const oldMember = {
+    id: 'user-999',
+    roles: { cache: { keys: () => [].values() } },
+  };
   const newMember = {
     id: 'user-999',
     roles: { cache: { keys: () => ['role-vip'].values() } },
@@ -2395,19 +2808,27 @@ test('createMemberTierSyncHandler activates tier when a tier-relevant role is ad
 });
 
 test('createMemberTierSyncHandler deactivates tier when a tier-relevant role is removed', async () => {
-  const synced: Array<{ discord_id: string; tier: string; action: string }> = [];
+  const synced: Array<{ discord_id: string; tier: string; action: string }> =
+    [];
   const mockApiClient: ApiClient = {
     get: async () => ({}) as never,
     post: async () => ({}) as never,
     syncMemberTier: async (params) => {
-      synced.push({ discord_id: params.discord_id, tier: params.tier, action: params.action });
+      synced.push({
+        discord_id: params.discord_id,
+        tier: params.tier,
+        action: params.action,
+      });
     },
   };
 
   const config = parseBotConfig(makeMinimalEnv());
   const handler = createMemberTierSyncHandler(config, mockApiClient);
 
-  const oldMember = { id: 'user-888', roles: { cache: { keys: () => ['role-vip-plus'].values() } } };
+  const oldMember = {
+    id: 'user-888',
+    roles: { cache: { keys: () => ['role-vip-plus'].values() } },
+  };
   const newMember = {
     id: 'user-888',
     roles: { cache: { keys: () => [].values() } },
@@ -2434,10 +2855,15 @@ test('createMemberTierSyncHandler ignores roles not in the tier map', async () =
   const config = parseBotConfig(makeMinimalEnv());
   const handler = createMemberTierSyncHandler(config, mockApiClient);
 
-  const oldMember = { id: 'user-777', roles: { cache: { keys: () => [].values() } } };
+  const oldMember = {
+    id: 'user-777',
+    roles: { cache: { keys: () => [].values() } },
+  };
   const newMember = {
     id: 'user-777',
-    roles: { cache: { keys: () => ['role-unknown-xyz', 'role-other'].values() } },
+    roles: {
+      cache: { keys: () => ['role-unknown-xyz', 'role-other'].values() },
+    },
   };
 
   await handler(oldMember as never, newMember as never);
@@ -2457,14 +2883,19 @@ test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier'
   const config = parseBotConfig(makeMinimalEnv());
   const handler = createMemberTierSyncHandler(config, mockApiClient);
 
-  const oldMember = { id: 'user-555', roles: { cache: { keys: () => [].values() } } };
+  const oldMember = {
+    id: 'user-555',
+    roles: { cache: { keys: () => [].values() } },
+  };
   const newMember = {
     id: 'user-555',
     roles: { cache: { keys: () => ['role-vip'].values() } },
   };
 
   // Must not throw — handler swallows all errors
-  await assert.doesNotReject(async () => handler(oldMember as never, newMember as never));
+  await assert.doesNotReject(async () =>
+    handler(oldMember as never, newMember as never),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -2489,7 +2920,9 @@ function tierContext(tier: 'free' | 'trial' | 'vip' | 'vip-plus') {
 test('UTV2-1960: /trial-status and /upgrade name no surface that is not live', () => {
   for (const tier of ['free', 'trial', 'vip', 'vip-plus'] as const) {
     const texts = [
-      String(buildTrialStatusEmbed(tierContext(tier)).toJSON().description ?? ''),
+      String(
+        buildTrialStatusEmbed(tierContext(tier)).toJSON().description ?? '',
+      ),
       String(buildUpgradeEmbed(tierContext(tier)).toJSON().description ?? ''),
     ];
     for (const text of texts) {
@@ -2499,35 +2932,37 @@ test('UTV2-1960: /trial-status and /upgrade name no surface that is not live', (
     }
   }
   assert.match(
-    String(buildTrialStatusEmbed(tierContext('vip-plus')).toJSON().description ?? ''),
+    String(
+      buildTrialStatusEmbed(tierContext('vip-plus')).toJSON().description ?? '',
+    ),
     /not live yet/,
   );
   assert.match(
     String(buildUpgradeEmbed(tierContext('free')).toJSON().description ?? ''),
-    /\*\*VIP\+\*\* - Everything in VIP\. Its market-intelligence features are not live yet\./,
+    /Settled results and recaps are available to all members/,
   );
 });
 
 test('UTV2-1960: /heat-signal describes line-movement alerts as not live', () => {
   const apiClient: ApiClient = {
-    get: async <T>() => ({ detections: [] } as T),
-    post: async <T>() => ({} as T),
+    get: async <T>() => ({ detections: [] }) as T,
+    post: async <T>() => ({}) as T,
   };
   const command = createHeatSignalCommand(apiClient);
   assert.match(command.data.toJSON().description, /not live yet/);
   assert.doesNotMatch(command.data.toJSON().description, /Show recent notable/);
 });
 
-test('UTV2-1960: a recap pick with no CLV renders "unavailable", not a dash', () => {
+test('UTV2-1960: a recap pick with no CLV omits the metric', () => {
   const embed = buildCapperRecapEmbed(makeRecapResponse()).toJSON() as {
     fields?: Array<{ value?: unknown }>;
   };
   assert.match(String(embed.fields?.[0]?.value ?? ''), /CLV: \+3\.8%/);
-  assert.match(String(embed.fields?.[1]?.value ?? ''), /CLV: unavailable/);
+  assert.doesNotMatch(String(embed.fields?.[1]?.value ?? ''), /CLV:/);
   assert.doesNotMatch(String(embed.fields?.[1]?.value ?? ''), /CLV: —/);
 });
 
-test('UTV2-1960: /stats says CLV is unavailable instead of dropping it silently', () => {
+test('UTV2-1960: /stats omits unknown CLV and retains measured CLV', () => {
   const withoutClv = buildStatsEmbed({
     ...makeStatsResponse(),
     picksWithClv: 0,
@@ -2535,11 +2970,23 @@ test('UTV2-1960: /stats says CLV is unavailable instead of dropping it silently'
     beatsLine: null,
   }).toJSON();
   const clvField = withoutClv.fields?.find((field) => field.name === 'CLV');
-  assert.equal(clvField?.value, 'unavailable (no closing-line data)');
-  assert.equal(withoutClv.fields?.some((field) => field.name === 'Avg CLV%'), false);
+  assert.equal(clvField, undefined);
+  assert.equal(
+    withoutClv.fields?.some((field) => field.name === 'Avg CLV%'),
+    false,
+  );
 
   const withClv = buildStatsEmbed(makeStatsResponse()).toJSON();
-  assert.equal(withClv.fields?.some((field) => field.name === 'CLV'), false);
-  assert.equal(withClv.fields?.some((field) => field.name === 'Avg CLV%'), true);
-  assert.equal(withClv.fields?.some((field) => field.name.includes('SGO close')), false);
+  assert.equal(
+    withClv.fields?.some((field) => field.name === 'CLV'),
+    false,
+  );
+  assert.equal(
+    withClv.fields?.some((field) => field.name === 'Avg CLV%'),
+    true,
+  );
+  assert.equal(
+    withClv.fields?.some((field) => field.name.includes('SGO close')),
+    false,
+  );
 });

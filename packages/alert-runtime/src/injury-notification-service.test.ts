@@ -22,24 +22,28 @@ function makeChange(overrides: Partial<InjuryChange> = {}): InjuryChange {
   };
 }
 
-test("buildInjuryEmbed for 'out' status uses red color and 🔴 emoji", () => {
+test("buildInjuryEmbed for 'out' status uses shared gold and a truthful status label", () => {
   const embed = buildInjuryEmbed(makeChange(), 'Downgrade exposure') as {
     title: string;
     color: number;
     fields: Array<{ name: string; value: string }>;
   };
 
-  assert.equal(embed.color, 0xff0000);
+  assert.equal(embed.color, 0xc7a34b);
   assert.match(embed.title, /Test Player/);
   assert.match(
     embed.fields.find((f) => f.name === 'Status')?.value ?? '',
-    /🔴/,
+    /Out/,
   );
 });
 
 test('buildInjuryEmbed includes thumbnail when provided', () => {
   const thumbnailUrl = 'https://example.com/thumb.png';
-  const embed = buildInjuryEmbed(makeChange(), 'Monitor status', thumbnailUrl) as {
+  const embed = buildInjuryEmbed(
+    makeChange(),
+    'Monitor status',
+    thumbnailUrl,
+  ) as {
     thumbnail?: { url: string };
   };
 
@@ -60,10 +64,7 @@ test('buildInjuryEmbed truncates long injury notes to 200 chars', () => {
     'Monitor status',
   ) as { fields: Array<{ name: string; value: string }> };
 
-  assert.equal(
-    embed.fields.find((f) => f.name === 'Note')?.value.length,
-    200,
-  );
+  assert.equal(embed.fields.find((f) => f.name === 'Note')?.value.length, 200);
 });
 
 test('buildInjuryEmbed shows status change from previous to current', () => {
@@ -72,7 +73,8 @@ test('buildInjuryEmbed shows status change from previous to current', () => {
     'Reduce stake',
   ) as { fields: Array<{ name: string; value: string }> };
 
-  const changeField = embed.fields.find((f) => f.name === 'Change')?.value ?? '';
+  const changeField =
+    embed.fields.find((f) => f.name === 'Change')?.value ?? '';
   assert.match(changeField, /Probable/);
   assert.match(changeField, /Doubtful/);
 });

@@ -1527,7 +1527,7 @@ function readSubmittedBy(pick: PickRecord) {
         ? metadata['submittedBy']
         : null;
 
-  return capper?.trim() || 'Unit Talk';
+  return capper?.trim() || '';
 }
 
 /**

@@ -1,4 +1,83 @@
 import assert from 'node:assert/strict';
+test('recap pages retain every loss and retry only unsent pages after a delivery failure', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  for (let index = 0; index < 30; index++)
+    await createSettledPick(repositories, {
+      selection: `LOSS-${index}-${'x'.repeat(120)}`,
+      market: 'points-all-game-ou',
+      odds: -110,
+      stakeUnits: 1,
+      submittedBy: 'canonical-capper',
+      result: 'loss',
+      settledAt: '2026-03-27T04:00:00.000Z',
+    });
+  const previous = {
+    DISCORD_BOT_TOKEN: process.env.DISCORD_BOT_TOKEN,
+    RECAP_DRY_RUN: process.env.RECAP_DRY_RUN,
+    UNIT_TALK_DISCORD_TARGET_MAP: process.env.UNIT_TALK_DISCORD_TARGET_MAP,
+  };
+  Object.assign(process.env, {
+    DISCORD_BOT_TOKEN: 'fixture-token',
+    RECAP_DRY_RUN: 'false',
+    UNIT_TALK_DISCORD_TARGET_MAP: JSON.stringify({
+      'discord:recaps': '1300411261854547968',
+    }),
+  });
+  const successfulBodies: string[] = [];
+  let attempts = 0;
+  const options = {
+    now: new Date('2026-03-28T16:00:00.000Z'),
+    fetchImpl: async (_input: string | URL | Request, init?: RequestInit) => {
+      attempts++;
+      if (attempts === 2)
+        return new Response('fixture failure', { status: 503 });
+      successfulBodies.push(String(init?.body));
+      return new Response(JSON.stringify({ id: `message-${attempts}` }), {
+        status: 200,
+      });
+    },
+  };
+  try {
+    const interrupted = await postRecapSummary('daily', repositories, options);
+    assert.equal(interrupted.ok, false);
+    const recovered = await postRecapSummary('daily', repositories, options);
+    assert.equal(recovered.ok, true);
+    assert.ok(successfulBodies.length > 1);
+    const rendered = successfulBodies.join('');
+    for (let index = 0; index < 30; index++)
+      assert.ok(rendered.includes(`LOSS-${index}-`));
+    for (const body of successfulBodies) {
+      const payload = JSON.parse(body) as {
+        embeds: Array<{
+          title: string;
+          fields: Array<{ name: string; value: string }>;
+          footer: { text: string };
+        }>;
+      };
+      const embed = payload.embeds[0]!;
+      assert.ok(embed.fields.length <= 6);
+      assert.ok(embed.fields.every((field) => field.value.length <= 1024));
+      assert.ok(
+        embed.title.length +
+          embed.footer.text.length +
+          embed.fields.reduce(
+            (sum, field) => sum + field.name.length + field.value.length,
+            0,
+          ) <=
+          6000,
+      );
+    }
+    const sent = successfulBodies.length;
+    const duplicate = await postRecapSummary('daily', repositories, options);
+    assert.equal(duplicate.ok ? duplicate.postsCount : null, 0);
+    assert.equal(successfulBodies.length, sent);
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
 import test from 'node:test';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -155,10 +234,12 @@ test('computeRecapSummary excludes evidence-plane settlements from public recap 
   );
 
   assert.equal(summary, null);
-  const internalSettlements = await repositories.settlements.listByPick(evidencePickId);
+  const internalSettlements =
+    await repositories.settlements.listByPick(evidencePickId);
   assert.equal(internalSettlements.length, 1);
   assert.equal(
-    (internalSettlements[0]?.payload as Record<string, unknown> | null)?.evidencePlane,
+    (internalSettlements[0]?.payload as Record<string, unknown> | null)
+      ?.evidencePlane,
     true,
   );
 });
@@ -270,9 +351,14 @@ test('computeRecapSummary excludes historical unknown stake rows from ROI and cl
   assert.equal(summary.topPlay.pickId, knownPickId);
 
   const embed = buildRecapEmbed(summary);
-  const integrityField = embed.fields.find((field) => field.name === 'Stake Integrity');
+  const integrityField = embed.fields.find(
+    (field) => field.name === 'Stake Integrity',
+  );
   assert.ok(integrityField);
-  assert.match(integrityField!.value, /1 historical pick\(s\) excluded from ROI/);
+  assert.match(
+    integrityField!.value,
+    /1 historical pick\(s\) excluded from ROI/,
+  );
   assert.notEqual(summary.topPlay.pickId, unknownPickId);
 });
 
@@ -338,10 +424,15 @@ test('buildRecapEmbed includes Sample field with small-sample caution for fewer 
 
   assert.ok(summary);
   const embed = buildRecapEmbed(summary);
-  const sampleField = embed.fields.find((f: { name: string }) => f.name === 'Sample');
+  const sampleField = embed.fields.find(
+    (f: { name: string }) => f.name === 'Sample',
+  );
   assert.ok(sampleField, 'embed must include a Sample field');
   assert.ok(sampleField.value.includes('1 pick over 1 day'));
-  assert.ok(sampleField.value.includes('Small sample'), 'small sample caution must appear for < 20 picks');
+  assert.ok(
+    sampleField.value.includes('Small sample'),
+    'small sample caution must appear for < 20 picks',
+  );
 });
 
 test('computeRecapSummary weekly window produces correct windowDescription and sampleContext', async () => {
@@ -417,7 +508,9 @@ test('postRecapSummary defaults recap posts to discord:recaps', async () => {
       'https://discord.com/api/v10/channels/1300411261854547968/messages',
     );
     assert.ok(result.ok);
-    const recapOutboxRows = await repositories.outbox.listByPickId(result.summary.topPlay.pickId);
+    const recapOutboxRows = await repositories.outbox.listByPickId(
+      result.summary.topPlay.pickId,
+    );
     assert.equal(recapOutboxRows.length, 1);
     assert.equal(recapOutboxRows[0]?.target, 'discord:recaps');
     assert.equal(recapOutboxRows[0]?.status, 'sent');
@@ -435,17 +528,33 @@ test('postRecapSummary defaults recap posts to discord:recaps', async () => {
     assert.equal(receipt?.external_id, 'message-1');
 
     const payload = JSON.parse(capturedBody) as {
-      embeds?: Array<{ title?: string; fields?: Array<{ name: string; value: string }> }>;
+      embeds?: Array<{
+        title?: string;
+        fields?: Array<{ name: string; value: string }>;
+      }>;
     };
-    assert.equal(payload.embeds?.[0]?.title?.startsWith('Daily Recap - '), true);
+    assert.equal(
+      payload.embeds?.[0]?.title?.startsWith('Daily Recap - '),
+      true,
+    );
     assert.ok(
-      payload.embeds?.[0]?.fields?.some((field) => field.name === 'Record' && field.value === '1-0-0'),
+      payload.embeds?.[0]?.fields?.some(
+        (field) => field.name === 'Record' && field.value === '1-0-0',
+      ),
     );
 
-    const auditRecords = (repositories.audit as unknown as {
-      records: Array<{ entity_ref: string | null; action: string; payload: Record<string, unknown> }>;
-    }).records;
-    const recapAudit = auditRecords.find((record) => record.action === 'distribution.sent');
+    const auditRecords = (
+      repositories.audit as unknown as {
+        records: Array<{
+          entity_ref: string | null;
+          action: string;
+          payload: Record<string, unknown>;
+        }>;
+      }
+    ).records;
+    const recapAudit = auditRecords.find(
+      (record) => record.action === 'distribution.sent',
+    );
     assert.ok(recapAudit);
     assert.equal(recapAudit?.entity_ref, result.summary.topPlay.pickId);
   } finally {
@@ -565,11 +674,13 @@ test('postRecapSummary does not enqueue a recap whose topPlay comes from an evid
     assert.equal(result.summary.topPlay.pickId, publicPickId);
     assert.equal(result.summary.topPlay.selection, 'Public Over 7.5');
 
-    const publicOutboxRows = await repositories.outbox.listByPickId(publicPickId);
+    const publicOutboxRows =
+      await repositories.outbox.listByPickId(publicPickId);
     assert.equal(publicOutboxRows.length, 1);
     assert.equal(publicOutboxRows[0]?.target, 'discord:recaps');
 
-    const evidenceOutboxRows = await repositories.outbox.listByPickId(evidencePickId);
+    const evidenceOutboxRows =
+      await repositories.outbox.listByPickId(evidencePickId);
     assert.equal(evidenceOutboxRows.length, 0);
   } finally {
     if (previousToken === undefined) {
@@ -606,7 +717,11 @@ test('checkAndPostRecaps logs structured error when postRecapSummary throws, doe
   resetRecapSchedulerStateForTests();
 
   const errorLogs: string[] = [];
-  const logger = { error: (msg: string) => { errorLogs.push(msg); } };
+  const logger = {
+    error: (msg: string) => {
+      errorLogs.push(msg);
+    },
+  };
 
   const brokenRepositories = {
     settlements: {
@@ -620,12 +735,13 @@ test('checkAndPostRecaps logs structured error when postRecapSummary throws, doe
   const postingTime = new Date('2026-06-09T16:00:00.000Z');
 
   // Must not throw
-  await checkAndPostRecapsForTests(brokenRepositories, logger, () => postingTime);
-
-  assert.ok(
-    errorLogs.length > 0,
-    'expected at least one error log entry',
+  await checkAndPostRecapsForTests(
+    brokenRepositories,
+    logger,
+    () => postingTime,
   );
+
+  assert.ok(errorLogs.length > 0, 'expected at least one error log entry');
   const parsed = JSON.parse(errorLogs[0] as string) as Record<string, unknown>;
   assert.equal(parsed['service'], 'recap-scheduler');
   assert.ok(
@@ -693,7 +809,9 @@ test('startRecapScheduler registers a 60 second polling interval and cleanup cle
   const originalClearInterval = globalThis.clearInterval;
   let capturedDelay = 0;
   let clearedHandle: ReturnType<typeof setInterval> | null = null;
-  const fakeHandle = { id: 'recap-interval' } as unknown as ReturnType<typeof setInterval>;
+  const fakeHandle = { id: 'recap-interval' } as unknown as ReturnType<
+    typeof setInterval
+  >;
 
   globalThis.setInterval = ((callback: () => void, delay?: number) => {
     void callback;
@@ -726,7 +844,9 @@ test('DB-backed idempotency prevents duplicate post after in-memory state is res
   const infoLogs: string[] = [];
   const logger = {
     error: (_msg: string) => {},
-    info: (msg: string) => { infoLogs.push(msg); },
+    info: (msg: string) => {
+      infoLogs.push(msg);
+    },
   };
   const postingTime = new Date('2026-06-09T16:00:00.000Z');
 
@@ -735,7 +855,11 @@ test('DB-backed idempotency prevents duplicate post after in-memory state is res
 
   // Verify the system_runs record was written
   const runs = await repositories.runs.listByType('recap.post', 10);
-  assert.equal(runs.length, 1, 'expected exactly one recap.post system_runs record');
+  assert.equal(
+    runs.length,
+    1,
+    'expected exactly one recap.post system_runs record',
+  );
   assert.equal(runs[0]!.status, 'succeeded');
   const details = runs[0]!.details as Record<string, unknown>;
   assert.equal(details['period'], 'daily');
@@ -752,11 +876,18 @@ test('DB-backed idempotency prevents duplicate post after in-memory state is res
     const parsed = JSON.parse(log) as Record<string, unknown>;
     return parsed['event'] === 'tick.db_dedup_skip';
   });
-  assert.ok(dbDedupLog, 'expected a tick.db_dedup_skip log entry after simulated restart');
+  assert.ok(
+    dbDedupLog,
+    'expected a tick.db_dedup_skip log entry after simulated restart',
+  );
 
   // Verify no additional system_runs records were written
   const runsAfter = await repositories.runs.listByType('recap.post', 10);
-  assert.equal(runsAfter.length, 1, 'DB guard should prevent writing a second recap.post record');
+  assert.equal(
+    runsAfter.length,
+    1,
+    'DB guard should prevent writing a second recap.post record',
+  );
 });
 
 test('checkForMissedRecaps posts catch-up recap for a missed daily trigger after restart', async () => {
@@ -871,7 +1002,10 @@ test('checkForMissedRecaps skips duplicate catch-up when the matching system run
 
   const dedupLog = infoLogs.find((entry) => {
     const parsed = JSON.parse(entry) as Record<string, unknown>;
-    return parsed['event'] === 'catchup.db_dedup_skip' && parsed['period'] === 'daily';
+    return (
+      parsed['event'] === 'catchup.db_dedup_skip' &&
+      parsed['period'] === 'daily'
+    );
   });
   assert.ok(dedupLog, 'expected catchup.db_dedup_skip log entry');
 
@@ -948,8 +1082,12 @@ test('computeRecapSummary uses batched pick lookup instead of N+1 queries', asyn
   // Wrap the picks repository to count calls
   let findByIdCalls = 0;
   let findByIdsCalls = 0;
-  const originalFindPickById = repositories.picks.findPickById.bind(repositories.picks);
-  const originalFindPicksByIds = repositories.picks.findPicksByIds.bind(repositories.picks);
+  const originalFindPickById = repositories.picks.findPickById.bind(
+    repositories.picks,
+  );
+  const originalFindPicksByIds = repositories.picks.findPicksByIds.bind(
+    repositories.picks,
+  );
 
   repositories.picks.findPickById = async (pickId: string) => {
     findByIdCalls++;
@@ -972,8 +1110,16 @@ test('computeRecapSummary uses batched pick lookup instead of N+1 queries', asyn
 
   // The optimization: findPicksByIds should be called exactly once (batch),
   // and findPickById should NOT be called at all
-  assert.equal(findByIdsCalls, 1, 'findPicksByIds should be called exactly once');
-  assert.equal(findByIdCalls, 0, 'findPickById should not be called (N+1 eliminated)');
+  assert.equal(
+    findByIdsCalls,
+    1,
+    'findPicksByIds should be called exactly once',
+  );
+  assert.equal(
+    findByIdCalls,
+    0,
+    'findPickById should not be called (N+1 eliminated)',
+  );
 });
 
 async function createSettledPick(
@@ -1063,13 +1209,19 @@ test('computeRecapSummary excludes Track Only picks from recap stats and from to
   );
 
   assert.ok(summary);
-  assert.equal(summary?.settledCount, 1, 'the Track Only pick must not be counted');
+  assert.equal(
+    summary?.settledCount,
+    1,
+    'the Track Only pick must not be counted',
+  );
   assert.equal(summary?.topPlay.selection, 'Ordinary Play');
   assert.equal(summary?.netUnits, 1);
 });
 
 test('mutation control: removing RECAP_TRACK_ONLY_EXCLUSION_GUARD makes a Track Only pick the recap top play', async () => {
-  const seed = async (repositories: ReturnType<typeof createInMemoryRepositoryBundle>) => {
+  const seed = async (
+    repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  ) => {
     await createSettledPick(repositories, {
       selection: 'Track Only Monster',
       market: 'points-all-game-ou',
@@ -1091,7 +1243,9 @@ test('mutation control: removing RECAP_TRACK_ONLY_EXCLUSION_GUARD makes a Track 
     });
   };
 
-  const sourcePath = fileURLToPath(new URL('./recap-service.ts', import.meta.url));
+  const sourcePath = fileURLToPath(
+    new URL('./recap-service.ts', import.meta.url),
+  );
   const suffix = `__mutant_recap_track_only_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
   const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
   const source = await readFile(sourcePath, 'utf8');
@@ -1099,13 +1253,19 @@ test('mutation control: removing RECAP_TRACK_ONLY_EXCLUSION_GUARD makes a Track 
     /[ ]*\/\/ UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_START[\s\S]*?\/\/ UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_END\n/u,
     '',
   );
-  assert.notEqual(mutantSource, source, 'mutation control could not remove the guard');
+  assert.notEqual(
+    mutantSource,
+    source,
+    'mutation control could not remove the guard',
+  );
   await writeFile(mutantPath, mutantSource, 'utf8');
   try {
     const mutant = (await import(
       `${pathToFileURL(mutantPath).href}?mutation=recap-track-only`
     )) as Record<string, unknown>;
-    const mutantCompute = mutant['computeRecapSummary'] as typeof computeRecapSummary;
+    const mutantCompute = mutant[
+      'computeRecapSummary'
+    ] as typeof computeRecapSummary;
     const repositories = createInMemoryRepositoryBundle();
     await seed(repositories);
     const summary = await mutantCompute(
@@ -1118,7 +1278,11 @@ test('mutation control: removing RECAP_TRACK_ONLY_EXCLUSION_GUARD makes a Track 
       'Track Only Monster',
       'mutant must promote the Track Only pick to top play',
     );
-    assert.equal(summary?.settledCount, 2, 'mutant must count the Track Only pick');
+    assert.equal(
+      summary?.settledCount,
+      2,
+      'mutant must count the Track Only pick',
+    );
   } finally {
     await unlink(mutantPath).catch(() => undefined);
   }
