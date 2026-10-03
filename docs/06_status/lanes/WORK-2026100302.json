@@ -8,7 +8,7 @@
   "branch": "codex/work-2026100302-scope-override",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1712",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/file-scope-lock-check.yml",
@@ -25,9 +25,9 @@
     "docs/06_status/proof/WORK-2026100302/verification.md",
     "docs/06_status/proof/WORK-2026100302/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-03T07:21:35.764Z",
-  "heartbeat_at": "2026-10-03T07:21:35.764Z",
+  "heartbeat_at": "2026-10-03T07:32:30.586Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100302-scope-override.json",

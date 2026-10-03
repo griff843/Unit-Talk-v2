@@ -63,5 +63,5 @@ remain pending normal review/merge controls. PR #1711 is paused.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1712
 Execution SHA: bec1635229dab7a7cf6a28c8a30a3e674d272ae9

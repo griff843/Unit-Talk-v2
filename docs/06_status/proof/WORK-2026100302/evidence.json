@@ -1,6 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "WORK-2026100302",
+  "pr_number": 1712,
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
