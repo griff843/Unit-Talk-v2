@@ -9,14 +9,14 @@
   "generated_at": "2026-10-03T07:55:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b6246af0bd0b0c280e9608889356d9ad91309e85",
+    "verified_source_sha": "8a19379944cddb0a36824a9ddad5cd928e37b4ff",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "verify": "required on the exact PR head",
       "writable_db_proof": "required in the staging-ci environment"
     },
-    "note": "The verified source is the implementation commit. This evidence commit changes only the lane proof bundle; authoritative PR-head and merge identities come from CI and post-merge closeout."
+    "note": "The verified source is the current-main refresh commit containing the implementation unchanged. The original implementation and executor SHA remains b6246af0bd0b0c280e9608889356d9ad91309e85 in verification.md and model-routing.json. This evidence commit changes only the lane proof bundle; authoritative PR-head and merge identities come from CI and post-merge closeout."
   },
   "scope": {
     "implementation_files": [
