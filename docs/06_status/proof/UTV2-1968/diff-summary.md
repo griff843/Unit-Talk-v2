@@ -1,5 +1,7 @@
 # Diff summary: UTV2-1968
 
+MERGE_SHA: pending merge
+
 | File                                         | Change                                                                                                                                                                                                                                                                                                                  |
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.github/workflows/deploy.yml`               | Replaces registration inside the live 128 MiB bot with a disposable `docker compose run --rm --no-deps -T` container. A trapped temporary override preserves the promoted production service image/env/network, selects the hardened registrar as its entrypoint, and gives only the one-off container a 256 MiB limit. |
