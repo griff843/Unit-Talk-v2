@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-Execution source: a8f9a03866ac854d90c5e1d816b305dcfb586d31
+Execution source: bd1454d18950d98d714270c2145020ea435b7b7f
 Execution approval: explicit Griff T1 approval in chat, 2026-10-02.
 Merge approval: NOT GRANTED. This packet is for review, not authority to merge.
 
@@ -17,6 +17,9 @@ result: static_pass_live_ci_pending
 - [x] T1/proof-required/missing tier and unknown comparisons cannot opt out.
 - [x] Normal producer failure/cancellation/skipping and failed classification keep required verify red.
 - [x] Same-run receipt enforcement and credential isolation remain unchanged on normal CI.
+- [x] Pure-logo edits under T2/T3 take lightweight CI; actual sidebar sign-out edits take normal CI.
+- [x] Both allowlisted components enforce pure rendering without imports/hooks/effects/interactive markup.
+- [x] Sidebar before/after extraction: identical SSR HTML for all 24 collapsed/mobile/health/sign-out combinations.
 - [x] Real isolated logo components render exact master paths; expanded/collapsed states and PNG exports pass.
 - [ ] Authorized staging proof on the final PR HEAD (required for this T1 CI-policy lane).
 - [ ] PM merge approval (not part of execution approval).
@@ -25,18 +28,18 @@ result: static_pass_live_ci_pending
 
 ```text
 pnpm exec tsx --test --test-name-pattern='Brand CI:' scripts/ci/staging-path-enforcement.test.ts
-# tests 21
-# pass 21
+# tests 23
+# pass 23
 # fail 0
 synthetic git diff: brand-only is lightweight; brand + runtime is normal: PASS
 
 pnpm exec tsx --test --test-name-pattern='Brand component:' scripts/ci/staging-path-enforcement.test.ts
-# tests 4
-# pass 4
+# tests 6
+# pass 6
 # fail 0
 
 pnpm exec tsx --test --test-reporter=spec scripts/ci/staging-path-enforcement.test.ts
-tests 63; pass 63; fail 0
+tests 68; pass 68; fail 0
 
 pnpm exec tsx --test --test-reporter=spec scripts/ci/workflow-production-credential-guard.test.ts
 tests 37; pass 37; fail 0
@@ -44,12 +47,12 @@ tests 37; pass 37; fail 0
 pnpm ops:automation-coverage-check
 [automation-coverage] verdict=PASS fail=0 warn=1 classified=15
 [executable-wiring] verdict=PASS required_roots=verify
-tests total=596; unwired=119 (baselined=119 new=0)
+tests total=594; unwired=119 (baselined=119 new=0)
 
 pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 13
-Rules matched: (none) - no R-level artifacts required for this diff
+Changed files: 16 (two-dot R-level comparison; 15 scoped PR files via merge-base)
+Rules matched: operator-ui; existing machine-matrix artifact present, no new R1-R5 required
 ```
 
 The existing shadowed glob warning is baseline, not changed here. No test removal or new
@@ -93,3 +96,14 @@ changing code or manufacturing a merge SHA. No merge performed.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1711
+
+## PM Correction: 2026-10-03
+
+PM CHANGES_REQUIRED was bound to 3391839fcd5c78c3d790d91fdf710c2d8736e945.
+Only the logo/lockup was extracted; WorkspaceSidebar.tsx retains all navigation, sign-out,
+health, and interaction code, and its path is excluded from the fast path. Smart Form's
+existing BrandLogo.tsx is pure and unchanged. Dedicated component and purity checks pass.
+Classifier 23/23; component/purity 6/6; combined staging guards 68/68; operator surface 16/16.
+Current static QA is scoped React rendering, not a new live-browser or end-to-end product proof.
+R-level matching retains the operator-UI QA requirement; no matrix or broader guard was changed.
+Exact-head staging/CI is pending on the revised proof HEAD. Old-head success is not reused.
