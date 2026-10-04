@@ -1,0 +1,158 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100302
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100302
+  objective: "Implement the PM-authorized control-plane correction for PR #1711
+    without changing product implementation."
+  acceptance_criteria:
+    - Accept repository-owned WORK-\d+ IDs alongside UTV2-\d+ in
+      scope-override/v1 documentation and both comment parsers.
+    - Preserve authorized CODEOWNER-human, exact issue/PR/HEAD/path matching and
+      fail-closed behavior.
+    - Add focused parser/workflow/guard regression tests.
+    - "Repair the stale merged WORK-2026100201 lane using authoritative PR #1709
+      merge truth and governed closeout; do not fabricate proof."
+    - "Once this fix is active, register the PM-authorized external override for
+      WORK-2026100202 / PR #1711 at its then-current exact HEAD for only
+      UnitTalkLogo.tsx and extraction-only WorkspaceSidebar.tsx."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100302 - Trusted WORK scope overrides and stale branding lane
+      repair
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## File Scope
+
+
+      - .github/workflows/file-scope-lock-check.yml
+
+      - docs/05_operations/schemas/scope-override-v1.md
+
+      - scripts/ci/scope-override-comment-parser.ts
+
+      - scripts/ci/scope-override-comment-parser.test.ts
+
+      - scripts/ci/file-scope-guard.test.ts
+
+      - docs/06_status/lanes/WORK-2026100201.json
+
+      - docs/06_status/proof/WORK-2026100201/**
+
+      - .ops/sync/WORK-2026100201.yml
+
+      - .ops/work/WORK-2026100302.md
+
+      - Normal lane/proof metadata for WORK-2026100302
+
+
+      ## Approval and Guardrails
+
+
+      Griff explicitly authorized this bounded control-plane correction on
+      2026-10-03.
+
+      No product implementation, scope-guard weakening, broader governance
+      redesign, unrelated cleanup, or self-certified merge approval.
+
+      PR #1711 remains paused until the corrected control state and exact
+      external override are returned.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100302.md
+    title: WORK-2026100302 - Trusted WORK scope overrides and stale branding lane
+      repair
+    description: >-
+      # WORK-2026100302 - Trusted WORK scope overrides and stale branding lane
+      repair
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Implement the PM-authorized control-plane correction for PR #1711 without
+      changing product implementation.
+
+
+      ## Acceptance Criteria
+
+
+      - Accept repository-owned WORK-\d+ IDs alongside UTV2-\d+ in
+      scope-override/v1 documentation and both comment parsers.
+
+      - Preserve authorized CODEOWNER-human, exact issue/PR/HEAD/path matching
+      and fail-closed behavior.
+
+      - Add focused parser/workflow/guard regression tests.
+
+      - Repair the stale merged WORK-2026100201 lane using authoritative PR
+      #1709 merge truth and governed closeout; do not fabricate proof.
+
+      - Once this fix is active, register the PM-authorized external override
+      for WORK-2026100202 / PR #1711 at its then-current exact HEAD for only
+      UnitTalkLogo.tsx and extraction-only WorkspaceSidebar.tsx.
+
+
+      ## File Scope
+
+
+      - .github/workflows/file-scope-lock-check.yml
+
+      - docs/05_operations/schemas/scope-override-v1.md
+
+      - scripts/ci/scope-override-comment-parser.ts
+
+      - scripts/ci/scope-override-comment-parser.test.ts
+
+      - scripts/ci/file-scope-guard.test.ts
+
+      - docs/06_status/lanes/WORK-2026100201.json
+
+      - docs/06_status/proof/WORK-2026100201/**
+
+      - .ops/sync/WORK-2026100201.yml
+
+      - .ops/work/WORK-2026100302.md
+
+      - Normal lane/proof metadata for WORK-2026100302
+
+
+      ## Approval and Guardrails
+
+
+      Griff explicitly authorized this bounded control-plane correction on
+      2026-10-03.
+
+      No product implementation, scope-guard weakening, broader governance
+      redesign, unrelated cleanup, or self-certified merge approval.
+
+      PR #1711 remains paused until the corrected control state and exact
+      external override are returned.
+    captured_at: 2026-10-03T07:21:23.937Z
+    description_sha256: 15102718588f4b414f3b28722ff3cee7bdd0a1230e6da70ead62e17d4ea482c7
+  contract_hash: 030a6237f92dc95a95129457969a637597b805e8dbdaf52588188c8e87a200dd
