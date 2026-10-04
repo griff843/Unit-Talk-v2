@@ -2,12 +2,14 @@
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
 
-Executable-source SHA: da000d16c15fb10b2a44e183cb6627e313677507. Merge SHA: pending merge.
+PM-reviewed product SHA: ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7. Product-path diff (`apps/**`, `packages/**`) during control closure: empty. Exact closure HEAD is returned in the PM handoff and bound by CI. Merge SHA: pending merge.
 
 This inventory includes implementation, contract reconciliation, admission metadata and measured evidence. See review-packet.md for behavior changes and verification.md for gates.
 
 | File | Purpose |
 |---|---|
+| [.github/workflows/shadow-parity-required.yml](../../../../.github/workflows/shadow-parity-required.yml) | Exact-base shadow runtime/install and candidate/base identity evidence |
+| [scripts/ci/assert-unmodified-vs-base.test.ts](../../../../scripts/ci/assert-unmodified-vs-base.test.ts) | General shadow execution-control regression coverage |
 | [docs/06_status/proof/WORK-2026100301/verify-tail.log](../../../../docs/06_status/proof/WORK-2026100301/verify-tail.log) | Final verification output and staging refusal |
 | [.ops/sync/WORK-2026100301.yml](../../../../.ops/sync/WORK-2026100301.yml) | Work order and lane admission metadata |
 | [.ops/work/WORK-2026100301.md](../../../../.ops/work/WORK-2026100301.md) | Work order and lane admission metadata |

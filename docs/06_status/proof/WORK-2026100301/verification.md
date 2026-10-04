@@ -3,9 +3,20 @@
 Issue: WORK-2026100301
 Tier: T1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
-EXECUTION_SHA: da000d16c15fb10b2a44e183cb6627e313677507
+EXECUTION_SHA: set-by-exact-HEAD CI
 MERGE_SHA: pending merge
-result: BLOCKED — implementation reviewable; staging DB, trusted CI approval and execution-attestation gates remain outstanding.
+result: BLOCKED — local static/focused proof passes; exact-HEAD staging DB, shadow parity, trusted scope approval and T1 approval remain CI/operator gates.
+
+## Verification
+
+Control-closure verification on 2026-10-04:
+
+- `pnpm exec tsx --test ... scripts/ci/assert-unmodified-vs-base.test.ts`: PASS, 217/217 focused issue tests. The control file itself passes 15/15: all original `assertUnmodified`/CLI fail-closed cases plus four base-pinned workflow regressions.
+- `pnpm verify:static`: PASS, including lint, `pnpm type-check`, build, `pnpm test`, production post-migration static tests, Smart Form verification, and command checks.
+- Product-path diff from PM-reviewed `ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7` through the closure candidate: empty for `apps/**` and `packages/**`.
+- Shadow runtime control: dependency cache, install, dry-run runner, and report parser execute from `trusted-base`, checked out at `${{ github.event.pull_request.base.sha }}` with persisted checkout credentials disabled. `${{ github.event.pull_request.head.sha }}` is evidence only and is never checked out.
+- Shadow identity artifact records `trusted_base_sha`, `candidate_sha`, and `runtime_source=trusted-base` before credentials are checked. Missing mechanically read-only credentials and nonzero/empty guardrail observations remain blocking.
+- `pnpm verify` is required after the final commit. Local writable DB execution remains intentionally unavailable; exact-HEAD staging receipts must come from `staging-ci` for project `xskgrzbteyqdufktjrjx`.
 
 ## Assertions and measured evidence
 
@@ -18,7 +29,7 @@ result: BLOCKED — implementation reviewable; staging DB, trusted CI approval a
 - Existing grading tests pass with the display-only unknown capper fallback removal.
 - Offline adapter shadow: same destination, nonce and receipt in two old/new fixtures. This is not production shadow certification.
 
-## Commands
+## Historical implementation commands
 
 - Focused sender suite: 325 passing cases (includes earlier side-effect test duplication); grading suite: 100 passing cases.
 - Final direct design test: 15/15 passing; required automation/executable wiring PASS, 421 reachable tests, zero newly unwired tests.
@@ -34,7 +45,7 @@ QA sandbox token, guild and role/channel map are unavailable. PNGs are explicitl
 
 CI requires an authorized human scope-override/v1 PR comment. Its parser accepts only UTV2 IDs; this approved WORK lane cannot satisfy that format without governance action. Expanded locks and the active lease record the user's approval, but do not replace trusted GitHub authorization. No self-authored human approval has been posted.
 
-Shadow workflow's baseline safety check failed with no merge base in its shallow checkout. It also guards modified package manifests/lockfiles from use with production credentials. No workflow guard was weakened.
+The prior shallow merge-base/package-diff shadow blocker is resolved structurally: the workflow no longer installs or executes candidate dependencies or runtime. The reusable `assertUnmodified` implementation and its original fail-closed tests remain unchanged. Live shadow proof is still blocked until the operator provisions the approved mechanically read-only secrets.
 
 Initial tier synchronization detected label drift before tier:T1 was applied, then its comment action hit a GitHub integration permission error. tier:T1 is now applied; the new push must re-evaluate it. PM merge review and staging-ci writable DB proof remain necessary.
 

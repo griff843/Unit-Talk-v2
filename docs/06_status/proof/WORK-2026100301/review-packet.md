@@ -2,8 +2,8 @@
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
 Issue: WORK-2026100301. Draft, not merge-ready.
-Executable-source SHA: da000d16c15fb10b2a44e183cb6627e313677507.
-Final HEAD is returned in the PM handoff; later evidence-only commits do not change executable sources.
+PM-reviewed product source SHA: ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7.
+The control-closure exact HEAD is returned in the PM handoff and bound by CI receipts. Product paths under `apps/**` and `packages/**` are unchanged from the reviewed SHA.
 
 ## Families
 
@@ -40,6 +40,6 @@ No prices, entitlements, permissions, channel topology, routing/promotion rules,
 
 ## PM/operations decisions required
 
-Trusted expanded-scope approval currently cannot use this WORK ID in the UTV2-only scope-comment parser. Stage DB proof must run with staging-ci credentials. Production shadow safety needs CI resolution; this lane does not bypass it. Initial tier synchronization ran before the T1 label was applied and requires re-evaluation. Execution-model attestation is unavailable in this desktop session. PM merge approval remains outstanding.
+Trusted expanded-scope approval remains owned by the separate WORK-ID parser lane; no identity was invented here. Stage DB proof must run with staging-ci credentials. Shadow execution is now pinned entirely to the attested base checkout, but its live proof remains blocked until approved read-only secrets exist. Initial tier synchronization ran before the T1 label was applied and requires re-evaluation. The sanctioned parent finalizes the closure execution sidecar after this child returns. PM merge approval remains outstanding.
 
 The exact changed-file inventory is diff-summary.md. R2/R3/R4 artifacts are offline presentation evidence, not live production certification.
