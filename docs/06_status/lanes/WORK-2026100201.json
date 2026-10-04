@@ -30,7 +30,17 @@
   ],
   "preflight_token": ".out/ops/preflight/codex/work-2026100201-canonical-branding.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-03T10:55:11.559Z",
+      "verdict": "fail",
+      "merge_sha": "771b761b74cef6d44eb9a0cd1f8649061e4735b5",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1709 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-luna-low",
