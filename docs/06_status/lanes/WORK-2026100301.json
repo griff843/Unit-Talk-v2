@@ -45,7 +45,10 @@
     "scripts/ops/daily-digest.ts",
     "scripts/ops/stale-lane-alerter.ts",
     "scripts/worker-alert-check.ts",
-    "package.json"
+    "package.json",
+    ".github/workflows/shadow-parity-required.yml",
+    "scripts/ci/assert-unmodified-vs-base.test.ts",
+    ".ops/sync/WORK-2026100301.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/WORK-2026100301/diff-summary.md",
