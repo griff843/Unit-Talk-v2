@@ -31,7 +31,10 @@ Reason: <why this lane needs to exceed its declared file_scope_lock>
 
 1. Line 1 must be exactly `SCOPE_OVERRIDE: APPROVED`
 2. Line 2 must be exactly `schema: scope-override/v1`
-3. `Issue:` must match `UTV2-\d+` and must equal the target manifest's `issue_id`
+3. `Issue:` must match `(?:UTV2|WORK)-\d+` and must equal the target manifest's
+   `issue_id`. Use `UTV2-###` for tracker issues or `WORK-###` for repository-owned
+   work orders; neither namespace grants authority by itself. All other namespaces
+   and malformed identifiers are rejected.
 4. `PR:` must match `#\d+` and must equal the PR number being evaluated
 5. `Head-SHA:` must exactly match the PR's current head SHA at evaluation time --
    a stale override (posted against an earlier commit) does not carry forward to
