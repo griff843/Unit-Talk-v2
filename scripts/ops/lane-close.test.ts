@@ -3,6 +3,149 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { recoverHistoricalMergedPreflight } from './historical-closeout.js';
+
+function withHistoricalPreflight(
+  originalOverrides: Partial<LaneManifest>,
+  run: (manifest: LaneManifest, pr: RepairMergedPrInfo, root: string) => void,
+): void {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'historical-preflight-'));
+  const command = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim();
+  try {
+    command('init', '-b', 'main');
+    command('config', 'user.name', 'proof-test');
+    command('config', 'user.email', 'proof-test@example.invalid');
+    command('commit', '--allow-empty', '-m', 'base');
+    const original = createManifest({
+      status: 'started', pr_url: null, commit_sha: null, files_changed: [],
+      tier: 'T1', t1_live_db_precondition: 'deferred_to_ci', ...originalOverrides,
+    });
+    const file = path.join(root, 'docs/06_status/lanes/UTV2-1001.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(original));
+    command('add', '.');
+    command('commit', '-m', 'admit lane');
+    const head = command('rev-parse', 'HEAD');
+    command('commit', '--allow-empty', '-m', 'merged implementation');
+    const merge = command('rev-parse', 'HEAD');
+    command('update-ref', 'refs/remotes/origin/main', merge);
+    const manifest = createManifest({ ...original, status: 'merged', commit_sha: merge,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001' });
+    delete manifest.t1_live_db_precondition;
+    const pr: RepairMergedPrInfo = { url: manifest.pr_url!, state: 'merged', merged: true,
+      mergeSha: merge, headSha: head, headRefName: manifest.branch, baseRefName: 'main' };
+    run(manifest, pr, root);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+}
+
+test('UTV2-1967: lost historical token recovers only immutable admission obligation, never a fresh token', () => {
+  withHistoricalPreflight({}, (manifest, pr, root) => {
+    const result = recoverHistoricalMergedPreflight(manifest, pr, root);
+    assert.equal(result.token_recreated, false);
+    assert.equal(manifest.t1_live_db_precondition, 'deferred_to_ci');
+    assert.equal(fs.existsSync(path.resolve(root, manifest.preflight_token)), false);
+    assert.equal(manifest.commit_sha, pr.mergeSha);
+  });
+});
+
+test('UTV2-1967: forged editable deferral absent from immutable evidence refuses before mutation', () => {
+  withHistoricalPreflight({ t1_live_db_precondition: undefined }, (manifest, pr, root) => {
+    manifest.t1_live_db_precondition = 'deferred_to_ci';
+    const before = structuredClone(manifest);
+    assert.throws(() => recoverHistoricalMergedPreflight(manifest, pr, root), /cannot assert a deferral/);
+    assert.deepEqual(manifest, before);
+  });
+});
+
+test('UTV2-1967: incomplete immutable introduction cannot restore historical authority', () => {
+  withHistoricalPreflight({ files_changed: ['runtime.ts'] }, (manifest, pr, root) => {
+    assert.throws(() => recoverHistoricalMergedPreflight(manifest, pr, root), /incomplete/);
+    assert.equal(manifest.t1_live_db_precondition, undefined);
+  });
+});
+
+test('UTV2-1967: active lane, wrong repository, wrong branch and unavailable head fail closed', () => {
+  withHistoricalPreflight({}, (manifest, pr, root) => {
+    for (const invalid of [
+      { ...pr, url: 'https://github.com/attacker/Unit-Talk-v2/pull/1001' },
+      { ...pr, headRefName: 'codex/unrelated' },
+      { ...pr, headSha: 'f'.repeat(40) },
+    ]) assert.throws(() => recoverHistoricalMergedPreflight(manifest, invalid, root));
+    assert.throws(() => recoverHistoricalMergedPreflight({ ...manifest, status: 'in_review' }, pr, root));
+    assert.equal(manifest.t1_live_db_precondition, undefined);
+  });
+});
+
+test('UTV2-1967: historical recovery deepens authoritative PR history before immutable lookup', () => {
+  withHistoricalPreflight({}, (manifest, pr, root) => {
+    let shallow = true;
+    const commands: string[][] = [];
+    const runner = (args: string[]) => {
+      commands.push(args);
+      if (args[0] === 'rev-parse' && args[1] === '--is-shallow-repository')
+        return { ok: true, stdout: String(shallow), stderr: '' };
+      if (args[0] === 'fetch') { shallow = false; return { ok: true, stdout: '', stderr: '' }; }
+      if (args[0] === 'rev-parse' && args[1] === 'FETCH_HEAD')
+        return { ok: true, stdout: pr.headSha!, stderr: '' };
+      try { return { ok: true, stdout: execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(), stderr: '' }; }
+      catch { return { ok: false, stdout: '', stderr: 'git refused' }; }
+    };
+    recoverHistoricalMergedPreflight(manifest, pr, root, runner);
+    const fetch = commands.findIndex(args => args[0] === 'fetch');
+    const log = commands.findIndex(args => args[0] === 'log');
+    assert.ok(fetch >= 0 && log > fetch);
+    assert.deepEqual(commands[fetch], ['fetch', '--no-tags', '--unshallow', 'origin', 'refs/heads/main:refs/remotes/origin/main']);
+    assert.deepEqual(commands[fetch + 1], ['fetch', '--no-tags', 'origin', 'refs/pull/1001/head']);
+    assert.equal(manifest.t1_live_db_precondition, 'deferred_to_ci');
+  });
+});
+
+test('UTV2-1967: depth-one clone recovers historical merge and original PR evidence before ancestry check', () => {
+  withHistoricalPreflight({}, (manifest, pr, source) => {
+    execFileSync('git', ['update-ref', 'refs/pull/1001/head', pr.headSha!], { cwd: source, stdio: 'pipe' });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'historical-shallow-'));
+    const clone = path.join(root, 'clone');
+    try {
+      execFileSync('git', ['clone', '--depth=1', '--branch=main', `file://${source}`, clone], { stdio: 'pipe' });
+      assert.throws(() => execFileSync('git', ['cat-file', '-e', `${pr.headSha}^{commit}`], { cwd: clone, stdio: 'pipe' }));
+      const result = recoverHistoricalMergedPreflight(manifest, pr, clone);
+      assert.equal(result.token_recreated, false);
+      assert.equal(manifest.t1_live_db_precondition, 'deferred_to_ci');
+      assert.equal(execFileSync('git', ['rev-parse', '--is-shallow-repository'], { cwd: clone, encoding: 'utf8' }).trim(), 'false');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
+test('UTV2-1967: existing legacy merged sentinel remains compatible but active sentinel cannot be admitted', () => {
+  withTempRepairState(({ repoRoot, artifactRoot }) => {
+    const options = { repoRoot, artifactRoot, fetchPr: () => ({
+      url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001', state: 'merged', merged: true, mergeSha: 'abc123',
+    }) };
+    const merged = createManifest({ preflight_token: 'dispatch-auto' });
+    assert.equal(repairMergedLaneManifest(merged, options).manifest.preflight_token, 'dispatch-auto');
+    assert.throws(() => repairMergedLaneManifest({ ...merged, status: 'in_review' }, options), /not dispatch-auto/);
+    assert.equal(merged.t1_live_db_precondition, undefined);
+  });
+});
+
+test('UTV2-1967: missing, ambiguous and non-ancestral introduction evidence refuses without restoring deferral', () => {
+  withHistoricalPreflight({}, (manifest, pr, root) => {
+    for (const mutation of ['missing', 'ambiguous', 'non-ancestral']) {
+      const candidate = structuredClone(manifest);
+      const runner = (args: string[]) => {
+        if (args[0] === 'log' && mutation !== 'non-ancestral')
+          return { ok: true, stdout: mutation === 'missing' ? '' : `${'a'.repeat(40)}\n${'b'.repeat(40)}`, stderr: '' };
+        if (args[0] === 'merge-base' && args[3] === pr.headSha)
+          return { ok: false, stdout: '', stderr: 'not ancestral' };
+        try { return { ok: true, stdout: execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(), stderr: '' }; }
+        catch { return { ok: false, stdout: '', stderr: 'git refused' }; }
+      };
+      assert.throws(() => recoverHistoricalMergedPreflight(candidate, pr, root, runner));
+      assert.deepEqual(candidate, manifest);
+    }
+  });
+});
 import {
   buildRepairRequiredViaPrPacket,
   completeAlreadyClosedLaneCleanup,
@@ -115,7 +258,7 @@ function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
     heartbeat_at: '2026-05-17T09:00:00.000Z',
     closed_at: null,
     blocked_by: [],
-    preflight_token: 'dispatch-auto',
+    preflight_token: '.out/ops/preflight/codex/utv2-1001.json',
     created_by: 'codex-cli',
     truth_check_history: [],
     reopen_history: [],
@@ -558,7 +701,7 @@ test('repair merged lane replaces stale SHA with authoritative PR merge SHA', ()
   });
 });
 
-test('repair merged lane emits repair artifact and safe token when preflight token is missing', () => {
+test('repair merged lane preserves original canonical path without manufacturing a missing token', () => {
   withTempRepairState(({ repoRoot, artifactRoot }) => {
     const result = repairMergedLaneManifest(
       createManifest({
@@ -586,10 +729,10 @@ test('repair merged lane emits repair artifact and safe token when preflight tok
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.manifest.status, 'merged');
     assert.strictEqual(result.manifest.commit_sha, 'merged-sha');
-    assert.strictEqual(result.manifest.preflight_token, 'dispatch-auto');
-    assert.ok(result.changed_fields.includes('preflight_token'));
-    assert.match(artifact.preflight_repair ?? '', /preflight token repaired/);
-    assert.strictEqual(artifact.next?.preflight_token, 'dispatch-auto');
+    assert.strictEqual(result.manifest.preflight_token, '.out/ops/preflight/codex/missing-token.json');
+    assert.ok(!result.changed_fields.includes('preflight_token'));
+    assert.match(artifact.preflight_repair ?? '', /original canonical preflight path preserved/);
+    assert.strictEqual(artifact.next?.preflight_token, '.out/ops/preflight/codex/missing-token.json');
   });
 });
 
@@ -733,7 +876,7 @@ test('UTV2-1564: repair merged lane is a true no-op when the manifest already re
       status: 'merged',
       commit_sha: 'authoritative-sha',
       pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
-      preflight_token: 'dispatch-auto',
+      preflight_token: '.out/ops/preflight/codex/utv2-1001.json',
       truth_check_history: [],
     });
 
@@ -2320,7 +2463,7 @@ test('UTV2-1586 #5 matching existing PR binding is an idempotent no-op', () => {
     status: 'merged',
     commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
     pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
-    preflight_token: 'dispatch-auto',
+    preflight_token: '.out/ops/preflight/codex/utv2-1001.json',
   });
   const pr = createTrustedRepairPr(base);
   const manifest = {

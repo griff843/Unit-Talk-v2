@@ -1,0 +1,18 @@
+{
+  "issue_id": "UTV2-1967",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "provenance": "Declared canonical lane-start routing. Implementation is continuing in the authorized Codex desktop session; this sidecar does not claim a separate CLI execution or fabricate its exit code.",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "c3e49f1f7c72d2bc12d058ac0f6d826b9dda9534",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1710",
+    "bound_at": "2026-10-03T07:57:51.059Z"
+  }
+}
