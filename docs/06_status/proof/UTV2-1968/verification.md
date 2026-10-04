@@ -65,3 +65,24 @@ authoritative merge SHA and PR URL.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1713
+
+## October 4 governed current-main synchronization
+
+GitHub refused the approved-head merge because the branch was behind current main.
+The sanctioned merge wrapper synchronized origin/main at 7fef27230 into source
+head 03f618806d000e25e6c0f015bde94f51f47630bb without conflicts.
+The two registration implementation files are byte-for-byte unchanged from the
+PM-reviewed head e812b8c90c5cb01b52f1db64541e49b518eebf34.
+
+- Focused registration regression: PASS, 7/7.
+- R-level: PASS; no matched rules.
+- Full pnpm verify: all static stages PASS, including lint, type-check, build,
+  full tests, Smart Form checks, 14-command manifest, and migration checks.
+  The live-DB tail REFUSED before any write at host=127.0.0.1 ref=unidentified;
+  protected staging CI must provide new-head writable proof.
+- Original admitted CLI/model provenance remains unchanged. This synchronization
+  and revalidation were performed by the desktop orchestrator, not represented as
+  a new CLI execution.
+- Prior PM approval was bound to the old head and cannot authorize this new head.
+  Fresh exact-head CI, executor receipt, and independent PM T1 approval are required.
+- No production deployment, registration, role mutation, or delivery occurred.
