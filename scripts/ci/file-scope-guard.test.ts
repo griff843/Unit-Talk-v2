@@ -844,6 +844,84 @@ test('external override: a valid override for a DIFFERENT lane does not leak int
   ]);
 });
 
+const WORK_LOGO_PATHS = [
+  'apps/command-center/src/components/UnitTalkLogo.tsx',
+  'apps/command-center/src/components/WorkspaceSidebar.tsx',
+];
+const WORK_OVERRIDE = {
+  issue_id: 'WORK-2026100202',
+  pr_number: 1711,
+  head_sha: '2deb7a5868badb6267fb5dd27ad39e255f66d2df',
+  paths: WORK_LOGO_PATHS,
+  authorized_by: 'griff843',
+  reason: 'PM-required extraction only',
+};
+const WORK_MANIFEST = {
+  issue_id: WORK_OVERRIDE.issue_id,
+  branch: 'codex/work-2026100202-branding-ci',
+  status: 'in_review',
+  file_scope_lock: ['.github/workflows/ci.yml'],
+};
+
+test('WORK override authorizes only the exact two paths at the exact issue/PR/HEAD', () => {
+  const input = {
+    prBranch: WORK_MANIFEST.branch,
+    changedFiles: WORK_LOGO_PATHS,
+    manifests: [WORK_MANIFEST],
+    externalOverrides: [WORK_OVERRIDE],
+    prNumber: WORK_OVERRIDE.pr_number,
+    headSha: WORK_OVERRIDE.head_sha,
+  };
+  assert.equal(evaluateFileScopeGuard(input).verdict, 'PASS');
+  for (const override of [
+    { ...WORK_OVERRIDE, issue_id: 'WORK-2026100201' },
+    { ...WORK_OVERRIDE, pr_number: 1709 },
+    { ...WORK_OVERRIDE, head_sha: '3391839fcd5c78c3d790d91fdf710c2d8736e945' },
+  ]) {
+    assert.equal(
+      evaluateFileScopeGuard({ ...input, externalOverrides: [override] })
+        .verdict,
+      'FAIL',
+    );
+  }
+  const unlisted = 'apps/command-center/src/components/HealthIndicator.tsx';
+  const result = evaluateFileScopeGuard({
+    ...input,
+    changedFiles: [...WORK_LOGO_PATHS, unlisted],
+  });
+  assert.equal(result.verdict, 'FAIL');
+  assert.deepEqual(
+    result.outside_scope.map((entry) => entry.file),
+    [unlisted],
+  );
+});
+
+test('WORK override cannot bypass an active lane; authoritative merged repair releases its stale lock', () => {
+  const staleLane = {
+    issue_id: 'WORK-2026100201',
+    branch: 'codex/work-2026100201-canonical-branding',
+    status: 'blocked',
+    file_scope_lock: [WORK_LOGO_PATHS[1]],
+  };
+  for (const [status, verdict] of [
+    ['blocked', 'FAIL'],
+    ['merged', 'PASS'],
+    ['done', 'PASS'],
+  ] as const) {
+    assert.equal(
+      evaluateFileScopeGuard({
+        prBranch: WORK_MANIFEST.branch,
+        changedFiles: WORK_LOGO_PATHS,
+        manifests: [WORK_MANIFEST, { ...staleLane, status }],
+        externalOverrides: [WORK_OVERRIDE],
+        prNumber: WORK_OVERRIDE.pr_number,
+        headSha: WORK_OVERRIDE.head_sha,
+      }).verdict,
+      verdict,
+    );
+  }
+});
+
 // ── Own-manifest continuation binding (UTV2-1524 P1 correction) ────────────
 //
 // findOwnManifest's issue-ID fallback exists for a real case (a continuation
