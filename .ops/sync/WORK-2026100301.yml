@@ -36,9 +36,12 @@ task_contract:
       scripts/ci/assert-unmodified-vs-base.test.ts for base-pinned shadow
       checkout/install/runtime/artifact ordering and candidate/base identity. Do
       not weaken the original assertUnmodified behavior.
-    - Obtain actual execution provenance through ops:codex-exec for this
-      control/proof task. Preserve the historical desktop implementation's
-      unattested provenance; new verification cannot retroactively attest it.
+    - You are ALREADY the child launched by the sanctioned ops:codex-exec
+      parent. Do not launch ops:codex-exec again, directly or recursively. The
+      parent writes the actual model-routing sidecar when you return. Perform
+      the bounded shadow-control repair and focused proof in this process.
+      Preserve the historical desktop implementation's unattested provenance;
+      new verification cannot retroactively attest it.
     - Run focused tests and pnpm verify. Stage-only writable DB and T1 proof
       must bind exact final HEAD through CI. Do not supply production
       credentials locally.
@@ -160,9 +163,12 @@ task_contract:
       checkout/install/runtime/artifact ordering and candidate/base identity. Do
       not weaken the original assertUnmodified behavior.
 
-      - Obtain actual execution provenance through ops:codex-exec for this
-      control/proof task. Preserve the historical desktop implementation's
-      unattested provenance; new verification cannot retroactively attest it.
+      - You are ALREADY the child launched by the sanctioned ops:codex-exec
+      parent. Do not launch ops:codex-exec again, directly or recursively. The
+      parent writes the actual model-routing sidecar when you return. Perform
+      the bounded shadow-control repair and focused proof in this process.
+      Preserve the historical desktop implementation's unattested provenance;
+      new verification cannot retroactively attest it.
 
       - Run focused tests and pnpm verify. Stage-only writable DB and T1 proof
       must bind exact final HEAD through CI. Do not supply production
@@ -244,6 +250,6 @@ task_contract:
       original-task-contract.yml. This replaces the implementation assignment
       with the explicitly authorized control-only follow-up; it does not change
       historical approval or waive scope controls.
-    captured_at: 2026-10-04T22:10:53.555Z
-    description_sha256: b4892fef0bc5a3e00eab44bcaa234a36411976a62c4ff229859d28d8206a4b0b
-  contract_hash: 1209d49a39f818c6343e7f56c2d17306ba4f29ce6d5cb2e98a7d3a2f74c4f66a
+    captured_at: 2026-10-04T22:15:10.151Z
+    description_sha256: e962900f725a473002f9845a4a5b755debea2f92e84c93e0f23a630f5d4590b8
+  contract_hash: e4250bfc4beec96b453c8e472657939161a0bc8f4da809d8eb77c0bff1ad987d
