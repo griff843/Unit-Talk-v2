@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "set-by-ci",
+    "verified_source_sha": "4debf792778dc76de237ceacb8c91edaa805683f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -15,7 +15,7 @@
     "status": "PASS",
     "command": "pnpm verify:static",
     "stages": ["db-client-boundary", "sync-check", "system-alignment", "automation-coverage", "env-check", "lint", "type-check", "build", "test", "production-post-migration static tests", "smart-form verify", "verify:commands"],
-    "note": "All static stages passed on the closure candidate. Exact final HEAD is bound by CI. Optional Smart Form E2E was not enabled."
+    "note": "All static stages passed at control source 4debf792778dc76de237ceacb8c91edaa805683f, including exact-source pnpm verify and same-run CI verify. Final current HEAD requires fresh CI binding. Optional Smart Form E2E was not enabled."
   },
   "full_verify": {
     "status": "BLOCKED",
@@ -63,9 +63,28 @@
   },
   "outstanding_gates": [
     "staging-ci writable database proof",
-    "trusted external scope approval; WORK ID unsupported by UTV2-only comment parser",
+    "current-head trusted external scope record; WORK-ID parser repair has landed via PR 1712",
     "production shadow live proof pending approved SHADOW_PARITY read-only secrets",
-    "sanctioned executor sidecar finalized by the parent after this child returns",
     "PM merge approval"
-  ]
+  ],
+  "closure_executor": {
+    "status": "SUCCESS",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "cli_version": "0.153.3",
+    "exit_code": 0,
+    "sidecar": "model-routing.json",
+    "scope": "2026-10-04 control implementation and verification; does not retroactively attest the original desktop implementation"
+  },
+  "historical_source_ci": {
+    "source_sha": "4debf792778dc76de237ceacb8c91edaa805683f",
+    "run_id": 37240331566,
+    "verify": "PASS",
+    "staging_db": "PASS",
+    "smoke_tests_passed": 7,
+    "t1_live_suites": "PASS",
+    "artifact_id": 11316928623,
+    "receipt_sha256": "a90927de694a6a8cb49c635ab2f24f28b378168b249c5fbdcabefbe981810b7d",
+    "note": "Historical source proof only; subsequent HEADs require fresh exact-HEAD CI/staging proof."
+  }
 }

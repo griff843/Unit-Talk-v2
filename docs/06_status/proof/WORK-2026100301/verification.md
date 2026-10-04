@@ -3,7 +3,7 @@
 Issue: WORK-2026100301
 Tier: T1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
-EXECUTION_SHA: set-by-exact-HEAD CI
+EXECUTION_SHA: 4debf792778dc76de237ceacb8c91edaa805683f
 MERGE_SHA: pending merge
 result: BLOCKED — local static/focused proof passes; exact-HEAD staging DB, shadow parity, trusted scope approval and T1 approval remain CI/operator gates.
 
@@ -16,7 +16,8 @@ Control-closure verification on 2026-10-04:
 - Product-path diff from PM-reviewed `ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7` through the closure candidate: empty for `apps/**` and `packages/**`.
 - Shadow runtime control: dependency cache, install, dry-run runner, and report parser execute from `trusted-base`, checked out at `${{ github.event.pull_request.base.sha }}` with persisted checkout credentials disabled. `${{ github.event.pull_request.head.sha }}` is evidence only and is never checked out.
 - Shadow identity artifact records `trusted_base_sha`, `candidate_sha`, and `runtime_source=trusted-base` before credentials are checked. Missing mechanically read-only credentials and nonzero/empty guardrail observations remain blocking.
-- `pnpm verify` is required after the final commit. Local writable DB execution remains intentionally unavailable; exact-HEAD staging receipts must come from `staging-ci` for project `xskgrzbteyqdufktjrjx`.
+- `pnpm verify` at 4debf792778dc76de237ceacb8c91edaa805683f passed every static stage, then refused the unidentified localhost target. Source-head CI run 37240331566 passed required verify and writable staging DB proof; the smoke receipt records 7/7 passing tests against xskgrzbteyqdufktjrjx. T1 suites and the T1 Proof Gate also passed. Subsequent heads require fresh CI receipts.
+- The sanctioned parent completed successfully: model gpt-5.6-sol, medium reasoning effort, CLI 0.153.3, exit 0; actual closure implementation and verification only. Its immutable model-routing.json is executor-generated. The earlier desktop implementation remains historically unattested.
 
 ## Assertions and measured evidence
 
@@ -43,13 +44,13 @@ QA sandbox token, guild and role/channel map are unavailable. PNGs are explicitl
 
 ## Remaining gates and policy gaps
 
-CI requires an authorized human scope-override/v1 PR comment. Its parser accepts only UTV2 IDs; this approved WORK lane cannot satisfy that format without governance action. Expanded locks and the active lease record the user's approval, but do not replace trusted GitHub authorization. No self-authored human approval has been posted.
+CI requires a trusted exact issue/PR/HEAD/path scope-override/v1 record. The WORK-ID parser repair landed in PR 1712 and was incorporated through the merge-mutex wrapper. It preserves CODEOWNER-human authorization, exact identity/path matching and fail-closed behavior. The explicitly approved sender/control scope still needs a current-head external authorization record; no UTV2 identity is invented.
 
 The prior shallow merge-base/package-diff shadow blocker is resolved structurally: the workflow no longer installs or executes candidate dependencies or runtime. The reusable `assertUnmodified` implementation and its original fail-closed tests remain unchanged. Live shadow proof is still blocked until the operator provisions the approved mechanically read-only secrets.
 
-Initial tier synchronization detected label drift before tier:T1 was applied, then its comment action hit a GitHub integration permission error. tier:T1 is now applied; the new push must re-evaluate it. PM merge review and staging-ci writable DB proof remain necessary.
+Tier synchronization passed on the control source head. tier:T1 remains applied. Final exact-HEAD CI and staging receipts, live shadow proof and PM merge approval remain necessary.
 
-Actual desktop execution model/effort are not attested. The sidecar preserves admission metadata separately and leaves execution values null; it cannot satisfy the required execution-attestation schema. No admission label is passed off as execution proof.
+Historical desktop implementation model/effort remain unattested. Closure provenance is now genuine sanctioned executor evidence, recorded after a completed run. Admission metadata is not substituted for actual execution. Interrupted nested attempts are retained in checkpoint history and are not claimed as successful closure.
 
 Separate product/routing gaps: receipt-derived result destinations do not ensure all-tier transparency; current result aggregation does not fully include void/correction history; existing unknown-stake guards suppress some posts; older delete/replace correction guidance conflicts with append-only history. Routing, lifecycle and policy remain unchanged.
 
