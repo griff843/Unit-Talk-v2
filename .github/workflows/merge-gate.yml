@@ -549,8 +549,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
+        # This supporting read-only validator intentionally preserves the
+        # pre-repair PR checkout. tier-sync and proof-check consume candidate
+        # lane metadata that does not exist on the trusted base yet. The
+        # required gate above and the actions:write refresh job remain pinned
+        # to trusted executable code.
 
       - name: Setup Node
         uses: actions/setup-node@v4

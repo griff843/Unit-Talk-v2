@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { parse as parseYaml } from 'yaml';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
 import {
@@ -51,6 +52,13 @@ function stringField(input: WorkflowDocument, key: string): string {
 
 function workflowEvent(name: string, eventName: string): WorkflowDocument {
   return objectField(objectField(readWorkflowYaml(name), 'on'), eventName);
+}
+
+function evaluateWorkflowExpression(expression: string, eventName: string): unknown {
+  const source = expression.startsWith('${{') && expression.endsWith('}}')
+    ? expression.slice(3, -2).trim()
+    : expression;
+  return runInNewContext(source, { github: { event_name: eventName } });
 }
 
 test('migration linter flags destructive audit_log statements with file and statement context', async () => {
@@ -323,6 +331,35 @@ test('WORK-2026100501: refresh jobs cannot impersonate required contexts', () =>
   assert.strictEqual(objectField(mergeJobs, 'refresh').name, 'Refresh Merge Gate');
 });
 
+test('WORK-2026100501: parsed native job expressions reserve required identities for evaluated PR jobs', () => {
+  for (const [workflowName, jobId, requiredName] of [
+    ['executor-result-validator.yml', 'validate', 'Executor Result Validation'],
+    ['merge-gate.yml', 'gate', 'Merge Gate'],
+  ] as const) {
+    const job = objectField(objectField(readWorkflowYaml(workflowName), 'jobs'), jobId);
+    const nameExpression = stringField(job, 'name');
+    const ifExpression = stringField(job, 'if');
+
+    for (const eventName of ['pull_request', 'pull_request_review', 'issue_comment', 'workflow_dispatch']) {
+      const evaluatedName = evaluateWorkflowExpression(nameExpression, eventName);
+      const evaluatedIf = evaluateWorkflowExpression(ifExpression, eventName);
+      const eligible = eventName === 'pull_request';
+
+      assert.strictEqual(evaluatedIf, eligible, `${workflowName} ${eventName} eligibility must fail closed`);
+      assert.strictEqual(
+        evaluatedName,
+        eligible ? requiredName : `${requiredName} (ineligible event)`,
+        `${workflowName} ${eventName} must expose the correct native identity`,
+      );
+      assert.strictEqual(
+        evaluatedName === requiredName,
+        evaluatedIf,
+        `${workflowName} must expose its required identity exactly when the native job is evaluated`,
+      );
+    }
+  }
+});
+
 test('WORK-2026100501: actions-write is isolated from PR-native policy jobs', () => {
   for (const [workflowName, nativeId, refreshId] of [
     ['executor-result-validator.yml', 'validate', 'refresh'],
@@ -505,7 +542,7 @@ test('WORK-2026100501: executor result publishes natively and comment/manual eve
   assert.match(raw, /Executor Result Validation \(ineligible event\)/, 'skipped non-PR jobs must not carry the protected name');
 });
 
-test('WORK-2026100501: privileged workflow jobs execute trusted-base code only', () => {
+test('WORK-2026100501: required evaluators and write-capable refresh jobs execute trusted-base code only', () => {
   const workflow = readWorkflowYaml('executor-result-validator.yml');
   const jobs = objectField(workflow, 'jobs');
   const job = objectField(jobs, 'validate');
@@ -525,13 +562,26 @@ test('WORK-2026100501: privileged workflow jobs execute trusted-base code only',
   );
 
   const mergeJobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
-  for (const jobId of ['gate', 'refresh', 'wfr-validators']) {
+  for (const jobId of ['gate', 'refresh']) {
     const candidate = objectField(mergeJobs, jobId);
     const candidateSteps = candidate.steps as Array<Record<string, unknown>>;
     const checkout = candidateSteps.find((step) => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'));
     assert.ok(checkout, `${jobId} must checkout trusted code`);
     assert.ok(objectField(checkout, 'with').ref, `${jobId} checkout must carry an explicit trusted ref`);
   }
+
+  const wfr = objectField(mergeJobs, 'wfr-validators');
+  const wfrPermissions = objectField(wfr, 'permissions');
+  assert.notStrictEqual(wfrPermissions.actions, 'write', 'supporting WFR validator must remain read-only');
+  assert.notStrictEqual(wfrPermissions.checks, 'write', 'supporting WFR validator must not fabricate checks');
+  const wfrSteps = wfr.steps as Array<Record<string, unknown>>;
+  const wfrCheckout = wfrSteps.find((step) => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'));
+  assert.ok(wfrCheckout, 'wfr-validators must checkout candidate metadata');
+  assert.strictEqual(
+    wfrCheckout.with,
+    undefined,
+    'WFR must preserve the read-only PR checkout so tier-sync can inspect the candidate lane manifest',
+  );
 });
 
 test('UTV2-1573: executor-result-validator.yml paginates check-runs instead of a single unpaginated call', () => {
