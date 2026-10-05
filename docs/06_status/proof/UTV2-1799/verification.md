@@ -1,10 +1,10 @@
 # PROOF: UTV2-1799
 
-MERGE_SHA: pending merge
+MERGE_SHA: 4070a3994614978112fc5fc02584bd23e12b27bf
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1716
 Tier: T2
-Merge SHA: pending merge
+Merge SHA: 4070a3994614978112fc5fc02584bd23e12b27bf
 
 ## Verification
 
@@ -50,6 +50,6 @@ No production health claim is made from mocked tests or an empty staging table.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 4070a3994614978112fc5fc02584bd23e12b27bf
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1716
 Execution SHA: bd57a2e2ca8ca9a4cad470d771720be5f0deec3d

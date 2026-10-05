@@ -14,4 +14,4 @@ Base: 16d5f5d2264b92f65ead886261d3b12b671c46ad
 No migration, workflow, thresholds, provider activation, runtime restart, or delivery-policy changes.
 The scheduled monitor already queries schema-valid system_runs, provider_cycle_status, and game_results columns; it is unchanged.
 
-Merge SHA: pending merge
+Merge SHA: 4070a3994614978112fc5fc02584bd23e12b27bf

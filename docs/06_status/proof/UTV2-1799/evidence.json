@@ -4,12 +4,14 @@
   "tier": "T2",
   "lane_type": "hygiene",
   "proof_profile": "static",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "4070a3994614978112fc5fc02584bd23e12b27bf",
     "verified_source_sha": "20d9f18d54ba19a72cf97fac6c5dbc1045e89096",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-05T22:09:27.037Z"
   },
   "static_proof": {
     "status": "pass",
