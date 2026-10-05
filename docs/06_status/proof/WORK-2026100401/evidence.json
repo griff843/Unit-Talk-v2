@@ -1,11 +1,26 @@
 {
   "schema_version": 2,
   "issue_id": "WORK-2026100401",
+  "pr_number": 1715,
+  "source_sha": "e8e915dfb0a3c45e6142f0135a208a8c978f4838",
+  "reviewed_head_sha": "e8e915dfb0a3c45e6142f0135a208a8c978f4838",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
   "tier": "T1",
   "lane_type": "governance",
+  "proof_profile": "static",
   "status": "AWAITING_CI_AND_PM",
   "implementation_sha": "7240093fc6c610cb16355aeb313fb1b4d102142a",
   "generated_at": "2026-10-05T02:26:24Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "e8e915dfb0a3c45e6142f0135a208a8c978f4838",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "The verified source is the pushed proof commit at PR creation. The implementation commit is 7240093fc6c610cb16355aeb313fb1b4d102142a; later proof/control-plane-only commits do not alter the runner or its tests."
+  },
   "canonical_query": {
     "candidate_path": "paginated public.pick_candidates id,pick_id links; no embedded pick join because pick_id has no FK",
     "settlement_path": "paginated public.settlement_records joined through settlement_records_pick_id_fkey to public.picks, in bounded pick-id batches",
@@ -89,6 +104,44 @@
   },
   "production_writes": 0,
   "workflow_changes": 0,
-  "pr_url": null,
-  "merge_sha": null
+  "gate_results": [
+    {
+      "gate": "focused_regressions",
+      "verdict": "PASS",
+      "detail": "25 focused shadow-scoring-runner tests passed; 0 failed."
+    },
+    {
+      "gate": "verify_static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static completed with exit 0."
+    },
+    {
+      "gate": "r_level",
+      "verdict": "PASS",
+      "detail": "R-level checker passed; no R1-R5 rules matched this bounded script/proof diff."
+    },
+    {
+      "gate": "writable_staging",
+      "verdict": "SKIP",
+      "detail": "Local fail-closed identity refusal occurred before writes; current-head staging-ci proof is required."
+    },
+    {
+      "gate": "trusted_base_shadow",
+      "verdict": "SKIP",
+      "detail": "Required after this runner repair merges; the unchanged trusted-base guard cannot execute the candidate runner."
+    },
+    {
+      "gate": "model_routing",
+      "verdict": "SKIP",
+      "detail": "The outer ops:codex-exec process must persist immutable model-routing.json after the sanctioned child exits."
+    },
+    {
+      "gate": "independent_pm_review",
+      "verdict": "SKIP",
+      "detail": "Pending exact-head PM verdict and t1-approved label."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1715"
 }

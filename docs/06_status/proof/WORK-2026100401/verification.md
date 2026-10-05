@@ -88,6 +88,6 @@ executor owns the immutable CLI provenance and must persist it after this child 
 
 Merge SHA: pending merge
 
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1715
 
 Implementation SHA: `7240093fc6c610cb16355aeb313fb1b4d102142a`
