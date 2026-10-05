@@ -1,11 +1,11 @@
 # UTV2-1969 diff summary
 
-STATUS: PR_OPEN
-HEAD_AT_PROOF_AUTHORING: 32ce7a9ae158a49e333509a8099496a3f1401c7b
+MERGE_SHA: pending
+Execution SHA: d539144260cb03acccedd1ff48026a309023fe95
+Base SHA: 588766ef9ff8c8f010fdaa578753366d88f50ee2
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1717
 
-- Added an accessible Smart Form Delivery choice fieldset with Track Only selected by default.
-- Wired Request Official Pick Delivery directly to the existing `trackOnly=false` form state.
-- Preserved the existing payload builder, server response receipt logic, and Track Only reset.
-- Extended the fixture-backed MLB E2E path to inspect actual request bodies for both modes and verify reset behavior.
-- Added explicit delivery-to-Track-Only switch-back coverage and server-refused receipt assertions.
-- No API, authorization, routing, worker, kill-switch, persistence, or production target changes.
+- BetForm.tsx: accessible explicit delivery-choice fieldset bound to existing trackOnly state; default, reset, builder, authorization and receipt code unchanged.
+- phase-one.spec.ts: actual rendered choice/request-body regression, deliberate switch-back, default/reset, and server-refused receipt; original canonical event assertions retained.
+- Only issue-specific canonical lane/sync/proof lifecycle artifacts accompany those two substantive files.
+- UTV2-1924 historical merged Command Center scope was not rewritten; UTV2-1969 is its bounded canonical child.
