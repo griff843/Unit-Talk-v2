@@ -6,11 +6,11 @@
   "generated_at": "2026-10-05T12:56:00.000Z",
   "status": "pr_open",
   "sha_binding": {
-    "verified_source_sha": "aa9096831c84e29bf7f43209c48963114e15e592",
+    "verified_source_sha": "db6c876f35d953825cb011045c593568a486d9bc",
     "merge_sha": null,
     "base_sha": "588766ef9",
     "sha_type": "pending_merge",
-    "verified_source_note": "Implementation and focused fixture E2E were verified before proof authoring; final executor head must be bound after commit.",
+    "verified_source_note": "Implementation and focused fixture E2E were verified before the implementation commit; this is the exact review head for the lane.",
     "bound_at": "2026-10-05T12:56:00.000Z"
   },
   "verifier": {

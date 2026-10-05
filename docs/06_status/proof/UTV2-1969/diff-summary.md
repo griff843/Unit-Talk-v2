@@ -1,7 +1,7 @@
 # UTV2-1969 diff summary
 
 STATUS: PR_OPEN
-HEAD_AT_PROOF_AUTHORING: aa9096831c84e29bf7f43209c48963114e15e592
+HEAD_AT_PROOF_AUTHORING: db6c876f35d953825cb011045c593568a486d9bc
 
 - Added an accessible Smart Form Delivery choice fieldset with Track Only selected by default.
 - Wired Request Official Pick Delivery directly to the existing `trackOnly=false` form state.

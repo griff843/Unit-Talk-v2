@@ -4,6 +4,7 @@ Generated: 2026-10-05
 Issue: UTV2-1969
 Tier: T2
 Branch: `codex/utv2-1969-smart-form-delivery-choice`
+Implementation head: `db6c876f35d953825cb011045c593568a486d9bc`
 Merge SHA: pending PR merge
 
 ## Verification
@@ -19,7 +20,7 @@ Merge SHA: pending PR merge
 
 - Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires `xskgrzbteyqdufktjrjx` through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
 - The Smart Form E2E gate inside `pnpm verify:static` is opt-in and was not enabled; the focused fixture E2E was run directly with isolated local services and no production submission.
-- No PR was opened, merged, or deployed in this lane. Exact review head is the implementation commit produced by the executor after proof authoring.
+- No PR was opened, merged, or deployed in this lane. Exact review head is the implementation commit above.
 
 ## Scope and safety
 
