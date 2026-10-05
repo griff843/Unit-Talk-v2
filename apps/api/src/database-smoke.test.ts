@@ -1,17 +1,47 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
   createDatabaseClientFromConnection,
   createServiceRoleDatabaseConnectionConfig,
+  isApprovedStagingTarget,
 } from '@unit-talk/db';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { recordPickSettlement } from './settlement-service.js';
 
 type DatabaseRepositoryBundle = ReturnType<typeof createDatabaseRepositoryBundle>;
+
+for (const reader of [
+  { name: 'health check', module: './scripts/ops/ingestor-health-check.ts', method: 'readLatestProviderOfferUpdatedAt', result: 'value' },
+  {
+    name: 'supervisor',
+    module: './scripts/ingestor-supervisor.ts',
+    method: 'readDatabaseStatus',
+    result: 'value.latestOfferUpdatedAt',
+  },
+]) {
+  test(`ingestor ${reader.name} canonical freshness SELECT executes against staging`, {
+    skip: smokeSkip(),
+  }, async (t) => {
+    const environment = loadEnvironment();
+    assert.ok(isApprovedStagingTarget(environment.SUPABASE_URL), 'freshness proof requires authorized staging');
+    // Invoke the real root script without crossing the API TypeScript project boundary.
+    const output = execFileSync('pnpm', ['exec', 'tsx', '-e', `
+      const { loadEnvironment } = require('@unit-talk/config');
+      const { ${reader.method} } = require('${reader.module}');
+      ${reader.method}(loadEnvironment()).then(value => console.log(JSON.stringify(${reader.result})));
+    `], { encoding: 'utf8' });
+    const timestamp: unknown = JSON.parse(output.trim());
+    assert.ok(timestamp === null || (typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp))));
+    t.diagnostic(timestamp === null
+      ? 'SELECT succeeded; no offer timestamp present (not healthy)'
+      : `SELECT succeeded; latestOfferUpdatedAt=${timestamp}`);
+  });
+}
 
 function smokeSkip() {
   try {

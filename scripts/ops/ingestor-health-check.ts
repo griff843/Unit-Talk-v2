@@ -115,13 +115,13 @@ export async function readLatestProviderOfferUpdatedAt(environment: Pick<
   });
 
   const { data, error } = await db
-    .from('provider_offers')
+    .from('provider_offer_current')
     .select('updated_at')
     .order('updated_at', { ascending: false })
     .limit(1);
 
   if (error) {
-    throw new Error(`provider_offers freshness query failed: ${error.message}`);
+    throw new Error(`provider_offer_current freshness query failed: ${error.message}`);
   }
 
   return typeof data?.[0]?.updated_at === 'string' ? data[0].updated_at : null;
