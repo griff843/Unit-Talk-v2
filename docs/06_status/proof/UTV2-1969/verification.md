@@ -1,6 +1,6 @@
 # PROOF: UTV2-1969
 
-MERGE_SHA: pending merge
+MERGE_SHA: b316cd138607b7ef5b0f95ddbd769be1269a6ff3
 Issue: UTV2-1969 (bounded child of UTV2-1924)
 Tier: T2
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1717
@@ -64,6 +64,6 @@ Final exact head and required CI results are reported in the fresh PR executor r
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: b316cd138607b7ef5b0f95ddbd769be1269a6ff3
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1717
 Execution identity remains sha_binding.verified_source_sha in evidence.json. No merge authority is claimed before PM-approved merge.

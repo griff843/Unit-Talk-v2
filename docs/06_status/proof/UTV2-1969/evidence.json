@@ -7,11 +7,11 @@
   "status": "proof_correction_exact_head_receipt_required",
   "sha_binding": {
     "verified_source_sha": "d539144260cb03acccedd1ff48026a309023fe95",
-    "merge_sha": null,
+    "merge_sha": "b316cd138607b7ef5b0f95ddbd769be1269a6ff3",
     "base_sha": "588766ef9ff8c8f010fdaa578753366d88f50ee2",
-    "sha_type": "pending_merge",
+    "sha_type": "merge_sha",
     "verified_source_note": "CLI fixture and static verification cover this source. Reviewed head2c3de07422eaf7a6506bec9c068e9ecd8457706f has verify/Writable DB proof PASS; proof-only correction head is independently bound in the fresh executor receipt after exact-head CI.",
-    "bound_at": "2026-10-05T12:56:00.000Z"
+    "bound_at": "2026-10-05T22:55:14.878Z"
   },
   "verifier": {
     "identity": "Admitted Codex CLI implementation; Codex desktop proof transcription and final verification",
@@ -74,8 +74,8 @@
     "deliberate_delivery_request_changes_track_only_false": "PASS",
     "actual_request_body_modes": "PASS",
     "successful_reset_returns_track_only": "PASS",
-    "receipt_uses_server_response": "PASS \u2014 unchanged SuccessReceipt path",
-    "server_refusal_and_track_only_regressions": "PASS \u2014 canonical verification suite"
+    "receipt_uses_server_response": "PASS — unchanged SuccessReceipt path",
+    "server_refusal_and_track_only_regressions": "PASS — canonical verification suite"
   },
   "verdict": "REVIEWED_IMPLEMENTATION_VERIFIED_CORRECTION_HEAD_RECEIPT_REQUIRED",
   "qa_experience": {

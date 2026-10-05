@@ -1,6 +1,6 @@
 # UTV2-1969 diff summary
 
-MERGE_SHA: pending
+MERGE_SHA: b316cd138607b7ef5b0f95ddbd769be1269a6ff3
 Execution SHA: d539144260cb03acccedd1ff48026a309023fe95
 Base SHA: 588766ef9ff8c8f010fdaa578753366d88f50ee2
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1717
