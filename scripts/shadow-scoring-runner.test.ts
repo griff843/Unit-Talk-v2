@@ -487,6 +487,30 @@ test('settledResultBacked excludes incomplete evidence, voids, shadow picks, fix
   assert.equal(count, 1);
 });
 
+test('settledResultBacked preserves canonical JSONB fixture marker and text extraction semantics', async () => {
+  const { countSettledResultBacked } = await import('./shadow-scoring-runner.js');
+  // Independent read-only observations from reporting.pick_fixture_reason.
+  const metadataValues: unknown[] = [
+    { proof_issue: null },
+    ['proof_issue'],
+    'proofRunId',
+    { eventName: { label: 'Command Center QA' } },
+    null,
+    ['production'],
+  ];
+  const { client } = createReadClient({
+    candidates: metadataValues.map((_, index) => candidate(`jsonb-c-${index}`, `jsonb-p-${index}`)),
+    settlements: metadataValues.map((metadata, index) =>
+      settlement(`jsonb-s-${index}`, `jsonb-p-${index}`, 'win', {}, { metadata }),
+    ),
+  });
+  assert.equal(
+    await countSettledResultBacked(client as Parameters<typeof countSettledResultBacked>[0]),
+    2,
+    'canonical SQL excludes four marker cases and retains null and the unmarked array',
+  );
+});
+
 test('settledResultBacked uses the real schema path and paginates both link and settlement reads', async () => {
   const { countSettledResultBacked } =
     await import('./shadow-scoring-runner.js');
