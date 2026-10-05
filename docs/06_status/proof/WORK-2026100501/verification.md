@@ -50,7 +50,16 @@ Writable DB verification requires xskgrzbteyqdufktjrjx.
 Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 ```
 
-Required pre-merge receipts still pending external GitHub execution: final exact-HEAD `verify`, writable staging/T1 CI, native protected-context eligibility, immutable PM approval, and governed merge.
+GitHub execution receipts observed on candidate HEAD `89ec79ae401a7e1b15671c6a4a8fa6eaa1961882`:
+
+- Native `verify` job 111987185793 — PASS.
+- Protected `Writable DB proof (staging only)` job 111983133093 — PASS.
+- Native `P0 Protocol` job 111976400133 — PASS.
+- Original eligible `pull_request` workflow run 37373560766, attempt 2, native `Executor Result Validation` job 111991020248 — PASS on the exact candidate HEAD after sanctioned manual recovery.
+- Legacy custom check 111990723608, emitted by the pre-repair default-branch comment workflow, is explicitly excluded and is not used as eligibility evidence.
+- Strict branch protection remained unchanged: `verify`, `Executor Result Validation`, `Merge Gate`, and `P0 Protocol`, all bound to GitHub Actions app 15368.
+
+Because this proof update advances the PR HEAD, final exact-HEAD CI/staging and executor validation must run again on the resulting proof commit. Immutable human PM approval, `t1-approved`, governed merge, and merge receipt remain pending; the executor did not self-sign.
 
 ## Merge SHA Binding
 

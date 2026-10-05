@@ -10,7 +10,7 @@
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
-  "status": "READY_FOR_REVIEW",
+  "status": "READY_FOR_PM_REVIEW",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "0b87cd9b1288351ad90954dd0c2cc5c0ced642f5",
@@ -59,8 +59,8 @@
     },
     {
       "gate": "writable DB proof",
-      "verdict": "SKIP",
-      "detail": "Local containment correctly refused host 127.0.0.1 before access; protected exact-head staging-ci proof remains required"
+      "verdict": "PASS",
+      "detail": "Local containment correctly refused host 127.0.0.1 before access; protected staging-ci job 111983133093 passed on candidate HEAD 89ec79ae401a7e1b15671c6a4a8fa6eaa1961882"
     },
     {
       "gate": "PM merge approval",
@@ -72,7 +72,14 @@
     "root_cause_artifact": "publication-root-cause.md",
     "pre_repair_candidate_pr": 1715,
     "pre_repair_candidate_head": "4c2ca0047c7686ee4d95f6ee1bfa9f3bf6e21623",
-    "native_exact_head_eligibility": "PENDING final PR GitHub execution"
+    "observed_candidate_head": "89ec79ae401a7e1b15671c6a4a8fa6eaa1961882",
+    "verify_job_id": 111987185793,
+    "writable_staging_job_id": 111983133093,
+    "native_executor_workflow_run_id": 37373560766,
+    "native_executor_run_attempt": 2,
+    "native_executor_job_id": 111991020248,
+    "excluded_legacy_custom_check_id": 111990723608,
+    "native_exact_head_eligibility": "PASS on observed candidate HEAD; final proof commit requires a fresh exact-head cycle"
   },
   "settlement_observation": {
     "artifact": "superseded-settlement-observation.json",
@@ -80,5 +87,5 @@
     "canonical_metric_changed": false,
     "concern_pick_count": 0
   },
-  "verdict": "STATIC_PASS_STAGING_CI_REQUIRED"
+  "verdict": "READY_FOR_FINAL_EXACT_HEAD_CI_AND_PM_REVIEW"
 }
