@@ -59,6 +59,13 @@
     "verify_static": {
       "command": "pnpm verify:static",
       "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "static_phase": "PASS",
+      "live_db_phase": "REFUSED_LOCAL_IDENTITY_BEFORE_WRITES",
+      "note": "The full static phase passed. The staging target guard then refused host=127.0.0.1 ref=unidentified; exact-head staging CI must provide writable proof."
     }
   },
   "live_read_only_proof": {

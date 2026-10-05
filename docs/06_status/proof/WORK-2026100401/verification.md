@@ -63,10 +63,12 @@ has no callable definer functions, and has zero writable relations.
       `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` and `REFUSED: target identity
     could not be resolved from its URL`. The packet predicted `host=unparseable`; this proof
       records the actual result. Writable proof is deferred to `staging-ci`.
-- [ ] `pnpm verify`: pending final invocation; locally its writable live-DB half is expected to
-      refuse for the same staging identity reason. The exact-HEAD CI `verify` check must pass.
-- [ ] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: pending after proof
-      commit.
+- [ ] `pnpm verify`: the full static half completed successfully, then the writable live-DB half
+      safely refused before writes with `host=127.0.0.1 ref=unidentified
+      expected=xskgrzbteyqdufktjrjx` (overall exit 1). This is the required truthful local result; the
+      exact-HEAD staging CI check must supply the writable proof.
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 12 changed files
+      and no matching R1-R5 rules.
 - [ ] Production Shadow dry-run: local `SUPABASE_URL` and `SHADOW_PARITY_READ_ONLY_KEY` are absent.
       The candidate runner cannot be executed by the current trusted-base workflow, whose
       unmodified-runner guard must remain intact. Run after merge from repaired trusted base.
