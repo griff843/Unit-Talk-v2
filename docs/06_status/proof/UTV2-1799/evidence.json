@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1799",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "20d9f18d54ba19a72cf97fac6c5dbc1045e89096",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "note": "Measured source-head CI run 37302741388: static verification PASS, staging DB producer/live suites PASS, same-run receipt validation PASS. Metadata-only final HEAD requires a separate exact-head CI result.",
+    "ci_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/37302741388",
+    "focused_freshness_guard_stop_tests_passed": 25,
+    "monitor_tests_passed": 23
+  }
+}
