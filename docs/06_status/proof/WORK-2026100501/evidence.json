@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100501",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fceee677ba1c817c964fdf93ca17e5a96c95e434",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "pending_merge",
+    "bound_at": "2026-10-05T20:24:45Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts scripts/ops/merge-gate-verdict.test.ts scripts/ops/workflow-hardening.test.ts",
+      "tests": 147,
+      "pass": 147,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": "PASS",
+    "aggregate_test": "PASS",
+    "verify_static": "PASS",
+    "r_level": "PASS; 13 changed files; no matching rules",
+    "file_scope": "PASS; no conflicts or violations"
+  },
+  "runtime_proof": {
+    "status": "DEFERRED_TO_STAGING_CI",
+    "write_attempted": false,
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "local_guard_result": "REFUSED: host 127.0.0.1 resolved as unidentified before DB access",
+    "required_environment": "staging-ci with CI_SUPABASE_* credentials"
+  },
+  "publication_proof": {
+    "root_cause_artifact": "publication-root-cause.md",
+    "pre_repair_candidate_pr": 1715,
+    "pre_repair_candidate_head": "4c2ca0047c7686ee4d95f6ee1bfa9f3bf6e21623",
+    "native_exact_head_eligibility": "PENDING final PR GitHub execution"
+  },
+  "settlement_observation": {
+    "artifact": "superseded-settlement-observation.json",
+    "access": "dedicated shadow reader; REST GET only",
+    "canonical_metric_changed": false,
+    "concern_pick_count": 0
+  },
+  "verdict": "STATIC_PASS_STAGING_CI_REQUIRED"
+}
