@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "UTV2-1969",
   "tier": "T2",
   "title": "Smart Form explicit fail-closed official delivery request interaction",

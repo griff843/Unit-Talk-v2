@@ -1,6 +1,6 @@
 # PROOF: UTV2-1969
 
-MERGE_SHA: pending
+MERGE_SHA: pending merge
 Issue: UTV2-1969 (bounded child of UTV2-1924)
 Tier: T2
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1717
@@ -24,6 +24,26 @@ result: reviewed implementation verified; correction-head results bind in the fr
 
 EVIDENCE:
 
+Historical exact-head CI read-back (run 37333141723, successful rerun before this proof-format correction; not a substitute for the next head):
+
+```json
+{
+  "headSha": "2ec03fb3d05b9e20e4a70003c87d2ec934311123",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "name": "Writable DB proof (staging only)",
+      "conclusion": "success"
+    },
+    {
+      "name": "verify",
+      "conclusion": "success"
+    }
+  ]
+}
+```
+
 - CLI implementation executor: codex-cli 0.153.3, admitted gpt-5.6-luna / medium; retain actual model-routing sidecar, including interrupted proof attempts. Desktop Codex transcribed this proof bundle after the CLI return; no claim of CLI-authored final documentation.
 - Focused rendered fixture: 1/1 PASS (19.1s), after the strict-assertion correction at Execution SHA. Isolated API/form ports4623/4723 and .next-utv2-1969-4. Real POST bodies, switch-back, reset and server-refused receipt are asserted; this is a local fixture, not production-persona evidence.
 - Existing submission guard: pnpm exec tsx --test apps/smart-form/test/submission-guard.test.ts — 7/7 PASS.
@@ -41,3 +61,9 @@ EVIDENCE:
 No merge, deployment, production registration, delivery release, production pick submission, role mutation, replay or retry. No backend/routing/kill-switch/idempotency edits. Existing negative-control pick2d462c4f-286a-4f2a-8bdc-c3677f525b4b was not mutated. Production containment is unchanged by this work. After independent PM review and a separately approved deployment, watched acceptance must use a NEW real pick.
 
 Final exact head and required CI results are reported in the fresh PR executor receipt after the proof-only correction and exact-head runs complete. Source-file equivalence is checked against Execution SHA; no implementation changes follow it. Lane ownership remains held for review; this is not lane closeout.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1717
+Execution identity remains sha_binding.verified_source_sha in evidence.json. No merge authority is claimed before PM-approved merge.
