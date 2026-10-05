@@ -1,0 +1,165 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1969
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1969
+  objective: "Smart Form: explicit fail-closed official delivery request interaction"
+  acceptance_criteria:
+    - |-
+      ## Authorized bounded follow-up to [UTV2-1924](https://linear.app/unit-talk-v2/issue/UTV2-1924/human-capper-e2e-surface-truth-canonical-capper-id-attribution-real)
+
+      Existing [UTV2-1924](https://linear.app/unit-talk-v2/issue/UTV2-1924/human-capper-e2e-surface-truth-canonical-capper-id-attribution-real) lane merged PR [griff843/Unit-Talk-v2#1593](https://linear.app/unit-talk-v2/review/utv2-1924-capper-attributed-units-weighted-track-only-excluded-command-9bb262fc8349) with Command Center-only scope; do not rewrite historical manifest or repair its closeout. This child owns only the missing Smart Form delivery-request interaction.
+
+      ## Scope
+
+      Substantive files:
+
+      * apps/smart-form/app/submit/components/BetForm.tsx
+      * apps/smart-form/e2e/phase-one.spec.ts
+      * apps/smart-form/test/submission-guard.test.ts (only if necessary for directly runnable focused regression)
+
+      Plus canonical lane/proof/sync lifecycle artifacts. No unrelated changes. An accessible fieldset/radio choice wired directly to existing form trackOnly state is sufficient; preserve existing payload builder and receipt logic.
+
+      ## Acceptance
+
+      1. Fresh session defaults Track Only and visibly identifies current choice.
+      2. Explicit Request Official Pick Delivery interaction changes form trackOnly=false and visible Delivery eligible requested copy.
+      3. Inspect actual submitted request: distributionMode=delivery-eligible only after deliberate choice.
+      4. Switching back submits distributionMode=track-only.
+      5. Successful submission/reset returns the next form to Track Only.
+      6. Receipt remains determined by server response, never requested client state.
+      7. Existing unauthorized-capper server refusal and Track Only regressions pass (verification only; no API edits).
+      8. Focused regression must exercise the rendered interaction and actual request body, not just source text or status copy. Use existing isolated local fixture E2E path, no production submission. Any added node:test test must run directly via tsx --test and be on existing package verification surface.
+      9. pnpm verify, type-check/lint/static, R-level, required QA experience evidence and exact-head normal PR proof. Truthful executor/model provenance via sanctioned codex-exec wrapper. Return exact head for independent PM review; DO NOT MERGE OR DEPLOY.
+
+      ## Safety
+
+      Production official-picks remains killed and human-capper-recaps fail-closed. No API authorization, routing, worker, kill-switch, idempotency, stored-pick, commerce or Discord-role changes. Existing Track Only negative-control pick 2d462c4f-286a-4f2a-8bdc-c3677f525b4b must remain untouched. After later approved deployment, first watched acceptance uses a NEW real Griff pick.
+
+      ## Execution evidence and guardrails
+
+      Main 588766ef9 baseline type-check/test passed, but main preflight PG2 refused another active lane's untracked packet. Admission is rerun in isolated control worktree at same origin/main; never clean other owners' files. Use unique local E2E ports/dist directory; never interfere with production or active preview servers. No broad governance repair.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Authorized bounded follow-up to [UTV2-1924](https://linear.app/unit-talk-v2/issue/UTV2-1924/human-capper-e2e-surface-truth-canonical-capper-id-attribution-real)
+      Existing [UTV2-1924](https://linear.app/unit-talk-v2/issue/UTV2-1924/human-capper-e2e-surface-truth-canonical-capper-id-attribution-real) lane merged PR [griff843/Unit-Talk-v2#1593](https://linear.app/unit-talk-v2/review/utv2-1924-capper-attributed-units-weighted-track-only-excluded-command-9bb262fc8349) with Command Center-only scope; do not rewrite historical manifest or repair its closeout. This child owns only the missing Smart Form delivery-request interaction.
+    - >-
+      Scope
+
+      Substantive files:
+
+
+      * apps/smart-form/app/submit/components/BetForm.tsx
+
+      * apps/smart-form/e2e/phase-one.spec.ts
+
+      * apps/smart-form/test/submission-guard.test.ts (only if necessary for
+      directly runnable focused regression)
+
+
+      Plus canonical lane/proof/sync lifecycle artifacts. No unrelated changes.
+      An accessible fieldset/radio choice wired directly to existing form
+      trackOnly state is sufficient; preserve existing payload builder and
+      receipt logic.
+    - >-
+      Acceptance
+
+      1. Fresh session defaults Track Only and visibly identifies current
+      choice.
+
+      2. Explicit Request Official Pick Delivery interaction changes form
+      trackOnly=false and visible Delivery eligible requested copy.
+
+      3. Inspect actual submitted request: distributionMode=delivery-eligible
+      only after deliberate choice.
+
+      4. Switching back submits distributionMode=track-only.
+
+      5. Successful submission/reset returns the next form to Track Only.
+
+      6. Receipt remains determined by server response, never requested client
+      state.
+
+      7. Existing unauthorized-capper server refusal and Track Only regressions
+      pass (verification only; no API edits).
+
+      8. Focused regression must exercise the rendered interaction and actual
+      request body, not just source text or status copy. Use existing isolated
+      local fixture E2E path, no production submission. Any added node:test test
+      must run directly via tsx --test and be on existing package verification
+      surface.
+
+      9. pnpm verify, type-check/lint/static, R-level, required QA experience
+      evidence and exact-head normal PR proof. Truthful executor/model
+      provenance via sanctioned codex-exec wrapper. Return exact head for
+      independent PM review; DO NOT MERGE OR DEPLOY.
+    - >-
+      Safety
+
+      Production official-picks remains killed and human-capper-recaps
+      fail-closed. No API authorization, routing, worker, kill-switch,
+      idempotency, stored-pick, commerce or Discord-role changes. Existing Track
+      Only negative-control pick 2d462c4f-286a-4f2a-8bdc-c3677f525b4b must
+      remain untouched. After later approved deployment, first watched
+      acceptance uses a NEW real Griff pick.
+    - >-
+      Execution evidence and guardrails
+
+      Main 588766ef9 baseline type-check/test passed, but main preflight PG2
+      refused another active lane's untracked packet. Admission is rerun in
+      isolated control worktree at same origin/main; never clean other owners'
+      files. Use unique local E2E ports/dist directory; never interfere with
+      production or active preview servers. No broad governance repair.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1969/smart-form-explicit-fail-closed-official-delivery-request-interaction
+    title: "Smart Form: explicit fail-closed official delivery request interaction"
+    description: |-
+      ## Authorized bounded follow-up to [UTV2-1924](https://linear.app/unit-talk-v2/issue/UTV2-1924/human-capper-e2e-surface-truth-canonical-capper-id-attribution-real)
+
+      Existing [UTV2-1924](https://linear.app/unit-talk-v2/issue/UTV2-1924/human-capper-e2e-surface-truth-canonical-capper-id-attribution-real) lane merged PR [griff843/Unit-Talk-v2#1593](https://linear.app/unit-talk-v2/review/utv2-1924-capper-attributed-units-weighted-track-only-excluded-command-9bb262fc8349) with Command Center-only scope; do not rewrite historical manifest or repair its closeout. This child owns only the missing Smart Form delivery-request interaction.
+
+      ## Scope
+
+      Substantive files:
+
+      * apps/smart-form/app/submit/components/BetForm.tsx
+      * apps/smart-form/e2e/phase-one.spec.ts
+      * apps/smart-form/test/submission-guard.test.ts (only if necessary for directly runnable focused regression)
+
+      Plus canonical lane/proof/sync lifecycle artifacts. No unrelated changes. An accessible fieldset/radio choice wired directly to existing form trackOnly state is sufficient; preserve existing payload builder and receipt logic.
+
+      ## Acceptance
+
+      1. Fresh session defaults Track Only and visibly identifies current choice.
+      2. Explicit Request Official Pick Delivery interaction changes form trackOnly=false and visible Delivery eligible requested copy.
+      3. Inspect actual submitted request: distributionMode=delivery-eligible only after deliberate choice.
+      4. Switching back submits distributionMode=track-only.
+      5. Successful submission/reset returns the next form to Track Only.
+      6. Receipt remains determined by server response, never requested client state.
+      7. Existing unauthorized-capper server refusal and Track Only regressions pass (verification only; no API edits).
+      8. Focused regression must exercise the rendered interaction and actual request body, not just source text or status copy. Use existing isolated local fixture E2E path, no production submission. Any added node:test test must run directly via tsx --test and be on existing package verification surface.
+      9. pnpm verify, type-check/lint/static, R-level, required QA experience evidence and exact-head normal PR proof. Truthful executor/model provenance via sanctioned codex-exec wrapper. Return exact head for independent PM review; DO NOT MERGE OR DEPLOY.
+
+      ## Safety
+
+      Production official-picks remains killed and human-capper-recaps fail-closed. No API authorization, routing, worker, kill-switch, idempotency, stored-pick, commerce or Discord-role changes. Existing Track Only negative-control pick 2d462c4f-286a-4f2a-8bdc-c3677f525b4b must remain untouched. After later approved deployment, first watched acceptance uses a NEW real Griff pick.
+
+      ## Execution evidence and guardrails
+
+      Main 588766ef9 baseline type-check/test passed, but main preflight PG2 refused another active lane's untracked packet. Admission is rerun in isolated control worktree at same origin/main; never clean other owners' files. Use unique local E2E ports/dist directory; never interfere with production or active preview servers. No broad governance repair.
+    captured_at: 2026-10-05T12:45:43.393Z
+    description_sha256: eb709a850beadb59df603a1cd6cfa8bb3c8f406d437a31455336f732e5a9d442
+  contract_hash: 30acf1bc8bc320bc5a01c4f215b6859243b1ab8fe49fc10c6bf16ce1cb9249ac
