@@ -14,4 +14,11 @@ Required correction under the existing canonical fixture acceptance criterion:
 - Add deterministic regression coverage comparing these observed outcomes. Preserve all current settlement, read-only, pagination and fail-closed guards.
 - Preserve this review and measured observation in the own-work proof bundle; update its disposition truthfully after the tests pass.
 
+## Disposition
+
+Accepted and repaired. The runner now mirrors PostgreSQL JSONB `?` semantics for top-level object
+keys, array string elements, and scalar strings, and mirrors `->>` text extraction for structured
+`eventName` values. The focused runner suite passes 26/26, including the measured six-case JSONB
+regression.
+
 The parent stopped only a local read-only CI watcher so the sanctioned CLI can finish and the outer wrapper can persist its attestation. GitHub jobs remain running. Do not wait indefinitely for model-routing.json inside this child: the wrapper creates that file only AFTER the child returns. Parent will finish exact-HEAD CI and control closure after the wrapper's final commit. Do not fabricate model provenance or PM approval.

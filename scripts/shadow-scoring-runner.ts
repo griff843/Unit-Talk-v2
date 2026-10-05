@@ -169,21 +169,32 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function metadataObject(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value))
-    return {};
-  return value as Record<string, unknown>;
+function jsonbHasTopLevelKey(value: unknown, key: string): boolean {
+  if (typeof value === 'string') return value === key;
+  if (Array.isArray(value)) return value.some((item) => item === key);
+  return value !== null && typeof value === 'object'
+    ? Object.hasOwn(value, key)
+    : false;
+}
+
+function jsonbObjectFieldText(value: unknown, key: string): string {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return '';
+  }
+
+  const field = (value as Record<string, unknown>)[key];
+  if (field === null || field === undefined) return '';
+  if (typeof field === 'string') return field;
+  return JSON.stringify(field) ?? '';
 }
 
 /** Mirrors reporting.pick_fixture_reason from the canonical reporting migration. */
 function isFixturePick(pick: CanonicalPick): boolean {
-  const metadata = metadataObject(pick.metadata);
-  const eventName =
-    typeof metadata['eventName'] === 'string' ? metadata['eventName'] : '';
+  const eventName = jsonbObjectFieldText(pick.metadata, 'eventName');
 
   return (
-    Object.hasOwn(metadata, 'proof_issue') ||
-    Object.hasOwn(metadata, 'proofRunId') ||
+    jsonbHasTopLevelKey(pick.metadata, 'proof_issue') ||
+    jsonbHasTopLevelKey(pick.metadata, 'proofRunId') ||
     eventName.startsWith('db-smoke-') ||
     /^utv2[ _-]/iu.test(eventName) ||
     /^utv2[ _-]/iu.test(pick.selection) ||

@@ -51,7 +51,8 @@ has no callable definer functions, and has zero writable relations.
 
 ## Verification
 
-- [x] `pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'`: 25 passed, 0 failed.
+- [x] `pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'`: 26 passed, 0 failed,
+      including the parent-review JSONB fixture-semantics regression.
 - [x] `pnpm type-check`: exit 0.
 - [x] `pnpm exec eslint scripts/shadow-scoring-runner.ts scripts/shadow-scoring-runner.test.ts`:
       exit 0.

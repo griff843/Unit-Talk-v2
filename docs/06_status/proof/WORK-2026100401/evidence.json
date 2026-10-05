@@ -48,8 +48,8 @@
     "focused_test": {
       "command": "pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'",
       "exit_code": 0,
-      "tests": 25,
-      "pass": 25,
+      "tests": 26,
+      "pass": 26,
       "fail": 0
     },
     "type_check": {
@@ -115,7 +115,7 @@
     {
       "gate": "focused_regressions",
       "verdict": "PASS",
-      "detail": "25 focused shadow-scoring-runner tests passed; 0 failed."
+      "detail": "26 focused shadow-scoring-runner tests passed; 0 failed, including the measured canonical JSONB fixture-semantics regression."
     },
     {
       "gate": "verify_static",
