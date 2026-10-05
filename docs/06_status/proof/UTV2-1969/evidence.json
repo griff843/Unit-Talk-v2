@@ -3,14 +3,14 @@
   "issue_id": "UTV2-1969",
   "tier": "T2",
   "title": "Smart Form explicit fail-closed official delivery request interaction",
-  "generated_at": "2026-10-05T13:55:22.738586+00:00",
-  "status": "blocked_pending_review_evidence",
+  "generated_at": "2026-10-05T15:21:45.056086+00:00",
+  "status": "proof_correction_exact_head_receipt_required",
   "sha_binding": {
     "verified_source_sha": "d539144260cb03acccedd1ff48026a309023fe95",
     "merge_sha": null,
     "base_sha": "588766ef9ff8c8f010fdaa578753366d88f50ee2",
     "sha_type": "pending_merge",
-    "verified_source_note": "CLI fixture and static verification cover this source; subsequent commits are issue metadata only. Final-head CI still required.",
+    "verified_source_note": "CLI fixture and static verification cover this source. Reviewed head2c3de07422eaf7a6506bec9c068e9ecd8457706f has verify/Writable DB proof PASS; proof-only correction head is independently bound in the fresh executor receipt after exact-head CI.",
     "bound_at": "2026-10-05T12:56:00.000Z"
   },
   "verifier": {
@@ -62,8 +62,12 @@
     }
   },
   "runtime_proof": {
-    "status": "blocked_deferred",
-    "note": "Final-head staging-ci proof required. No production mutation or acceptance claimed."
+    "status": "reviewed_head_pass",
+    "reviewed_head_sha": "2c3de07422eaf7a6506bec9c068e9ecd8457706f",
+    "ci_run_id": 37320734563,
+    "verify": "PASS",
+    "writable_db_proof": "PASS",
+    "note": "Approved staging CI only; no production acceptance claimed. Correction-head required results bind in the fresh exact-head executor receipt."
   },
   "acceptance_criteria": {
     "fresh_session_track_only_default": "PASS",
@@ -73,10 +77,11 @@
     "receipt_uses_server_response": "PASS \u2014 unchanged SuccessReceipt path",
     "server_refusal_and_track_only_regressions": "PASS \u2014 canonical verification suite"
   },
-  "verdict": "BLOCKED_PENDING_FINAL_HEAD_CI_AND_QA_DISPOSITION",
+  "verdict": "REVIEWED_IMPLEMENTATION_VERIFIED_CORRECTION_HEAD_RECEIPT_REQUIRED",
   "qa_experience": {
     "status": "SKIP",
     "run_id": "2026-10-05T13-23-10-a43ve2",
-    "reason": "localhost4100 preflight unavailable; local operator storage state missing. Advisory CI comment HTTP403 is outside scope."
+    "reason": "localhost4100 preflight unavailable; local operator storage state missing. Advisory CI comment HTTP403 is outside scope.",
+    "pm_disposition": "Not a pre-merge blocker for the bounded Smart Form control. Authenticated deployed acceptance is required after deployment before watched delivery resumes."
   }
 }
