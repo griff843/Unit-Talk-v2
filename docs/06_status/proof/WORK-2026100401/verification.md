@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-Implementation SHA: `7240093fc6c610cb16355aeb313fb1b4d102142a`
+Implementation SHA: `ef5b808e69e0f6cf8ec3335bb82baeba6632b07e`
 
 Tier: T1 · Lane type: governance
 
@@ -19,7 +19,8 @@ Result: awaiting exact-HEAD CI, PM verdict, and post-merge trusted-base Shadow o
 - [x] Voided picks, `source=shadow` picks, null-submission picks, and every canonical
       `reporting.pick_fixture_reason` class are excluded.
 - [x] A qualifying pick is deduplicated across original, duplicate, and correction settlement rows;
-      each linked candidate is counted once.
+      each distinct linked candidate ID is counted once, even if offset pagination observes that
+      candidate ID on more than one page.
 - [x] Query errors and null data fail closed; zero-scan and side-effect guardrails remain covered.
 - [x] The dedicated production reader retains zero accessible application-data mutation authority.
 - [ ] Writable staging DB proof must run in current-HEAD CI with `CI_SUPABASE_*` credentials.
@@ -51,8 +52,9 @@ has no callable definer functions, and has zero writable relations.
 
 ## Verification
 
-- [x] `pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'`: 26 passed, 0 failed,
-      including the parent-review JSONB fixture-semantics regression.
+- [x] `pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'`: 27 passed, 0 failed,
+      including the parent-review JSONB fixture-semantics and repeated-offset candidate-identity
+      regressions.
 - [x] `pnpm type-check`: exit 0.
 - [x] `pnpm exec eslint scripts/shadow-scoring-runner.ts scripts/shadow-scoring-runner.test.ts`:
       exit 0.
@@ -68,7 +70,7 @@ has no callable definer functions, and has zero writable relations.
       safely refused before writes with `host=127.0.0.1 ref=unidentified
       expected=xskgrzbteyqdufktjrjx` (overall exit 1). This is the required truthful local result; the
       exact-HEAD staging CI check must supply the writable proof.
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 12 changed files
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 16 changed files
       and no matching R1-R5 rules.
 - [ ] Production Shadow dry-run: local `SUPABASE_URL` and `SHADOW_PARITY_READ_ONLY_KEY` are absent.
       The candidate runner cannot be executed by the current trusted-base workflow, whose
@@ -92,5 +94,6 @@ executor owns the immutable CLI provenance and must persist it after this child 
 Merge SHA: pending merge
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1715
+Execution SHA: ef5b808e69e0f6cf8ec3335bb82baeba6632b07e
 
-Implementation SHA: `7240093fc6c610cb16355aeb313fb1b4d102142a`
+Implementation SHA: `ef5b808e69e0f6cf8ec3335bb82baeba6632b07e`

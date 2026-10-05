@@ -2,24 +2,23 @@
   "schema_version": 2,
   "issue_id": "WORK-2026100401",
   "pr_number": 1715,
-  "source_sha": "e8e915dfb0a3c45e6142f0135a208a8c978f4838",
-  "reviewed_head_sha": "e8e915dfb0a3c45e6142f0135a208a8c978f4838",
+  "source_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
+  "reviewed_head_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
   "evidence_commit_sha": null,
   "current_head_sha": null,
-  "merge_sha": null,
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
   "status": "AWAITING_CI_AND_PM",
-  "implementation_sha": "7240093fc6c610cb16355aeb313fb1b4d102142a",
+  "implementation_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
   "generated_at": "2026-10-05T02:26:24Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "e8e915dfb0a3c45e6142f0135a208a8c978f4838",
+    "verified_source_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "merge_sha",
-    "note": "The verified source is the pushed proof commit at PR creation. The implementation commit is 7240093fc6c610cb16355aeb313fb1b4d102142a; later proof/control-plane-only commits do not alter the runner or its tests."
+    "note": "The verified source is the rework implementation commit that deduplicates qualifying candidate IDs across offset pages; later proof/control-plane-only commits do not alter the runner or its tests."
   },
   "canonical_query": {
     "candidate_path": "paginated public.pick_candidates id,pick_id links; no embedded pick join because pick_id has no FK",
@@ -48,8 +47,8 @@
     "focused_test": {
       "command": "pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'",
       "exit_code": 0,
-      "tests": 26,
-      "pass": 26,
+      "tests": 27,
+      "pass": 27,
       "fail": 0
     },
     "type_check": {
@@ -115,7 +114,7 @@
     {
       "gate": "focused_regressions",
       "verdict": "PASS",
-      "detail": "26 focused shadow-scoring-runner tests passed; 0 failed, including the measured canonical JSONB fixture-semantics regression."
+      "detail": "27 focused shadow-scoring-runner tests passed; 0 failed, including canonical JSONB fixture semantics and distinct candidate identity across repeated offset-page observations."
     },
     {
       "gate": "verify_static",

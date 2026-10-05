@@ -15,3 +15,11 @@ Additional proof closeout observation: the sanctioned proof-generation dry run c
 ## Sanctioned rework handoff
 
 The preceding closeout attempt was rejected by the wrapper for missing the actual `closeout` phase. This new rework must perform and record its bounded phase work, including the implementation/proof handoff, using the documented `--summary` flag. `--message` is not the CLI's finding/phase summary flag. Do not inherit passed phase validity from the rejected epoch and do not manufacture phase evidence. After correcting the count, running its tests/required verification, and preparing the honest draft proof packet, record the completed CLI handoff as closeout while explicitly leaving parent-owned exact-HEAD CI/PM/merge work pending. A completed bounded executor handoff is not a claim that the overall task is merged or complete.
+
+## Disposition
+
+Accepted and repaired in implementation commit
+`ef5b808e69e0f6cf8ec3335bb82baeba6632b07e`. The final count now takes the set of qualifying
+candidate primary keys, matching `COUNT(DISTINCT pc.id)` even when separate offset reads repeat a
+previously observed candidate. The focused runner suite passes 27/27; two different candidate IDs
+linked to the same qualifying pick still count as two.

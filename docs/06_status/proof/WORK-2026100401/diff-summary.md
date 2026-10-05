@@ -6,7 +6,7 @@ schema, application services, workflows, credentials, RLS, or runtime routing.
 
 | File                                     | Change                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/shadow-scoring-runner.ts`       | Replaces the nonexistent `pick_candidates.outcome` count with paginated candidate links followed by a paginated `settlement_records -> picks` FK read. Applies canonical result, evidence, settlement status, submission, void, shadow-source, and fixture exclusions and counts each qualifying candidate once. |
+| `scripts/shadow-scoring-runner.ts`       | Replaces the nonexistent `pick_candidates.outcome` count with paginated candidate links followed by a paginated `settlement_records -> picks` FK read. Applies canonical result, evidence, settlement status, submission, void, shadow-source, and fixture exclusions and counts each distinct qualifying candidate ID once, including across repeated offset-page observations. |
 | `scripts/shadow-scoring-runner.test.ts`  | Adds deterministic real-shape coverage for win/loss/push, incomplete evidence, missing settlements, void/shadow/fixture/non-production picks, duplicate and correction rows, pagination, query shape, query errors, and absent data. Existing zero-scan and guardrail tests remain.                              |
 | `docs/06_status/proof/WORK-2026100401/*` | Records canonical schema/query, read-only grant, static verification, local staging refusal, and post-merge trusted-base dependencies.                                                                                                                                                                           |
 
@@ -21,7 +21,7 @@ schema, application services, workflows, credentials, RLS, or runtime routing.
 
 ## SHA Binding
 
-Implementation SHA: `7240093fc6c610cb16355aeb313fb1b4d102142a`
+Implementation SHA: `ef5b808e69e0f6cf8ec3335bb82baeba6632b07e`
 
 Merge SHA: pending merge
 
