@@ -1,12 +1,16 @@
-# Diff summary: UTV2-1799
+# UTV2-1799 Diff Summary
 
-> Scaffolded by `ops:lane-start`. Replace this note with the files this lane changed
-> and why. Until then this file records nothing.
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1716
+Base: 16d5f5d2264b92f65ead886261d3b12b671c46ad
 
-| File | Change |
-|---|---|
+- scripts/ops/ingestor-health-check.ts: read provider_offer_current.updated_at, not the legacy provider_offers view.
+- scripts/ingestor-supervisor.ts: correct its independent freshness query; preserve query errors; permit import without running the supervisor.
+- scripts/ops/provider-offer-column-guard.test.ts: repo-wide AST guard, both original-call-site inversions, and actual reader request/health regressions.
+- scripts/ingestor-alert-check.test.ts: replace the ineffective single-file regex with required-suite wiring for the repo-wide guard.
+- apps/api/src/database-smoke.test.ts: SELECT-only checks of both real readers, positively restricted to staging.
+- Normal per-issue lane, sync, and proof metadata only.
 
-## SHA Binding
+No migration, workflow, thresholds, provider activation, runtime restart, or delivery-policy changes.
+The scheduled monitor already queries schema-valid system_runs, provider_cycle_status, and game_results columns; it is unchanged.
 
 Merge SHA: pending merge
-PR: pending

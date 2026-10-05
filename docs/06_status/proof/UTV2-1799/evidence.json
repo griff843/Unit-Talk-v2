@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1799",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "bd57a2e2ca8ca9a4cad470d771720be5f0deec3d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "not_run",
+    "note": "Populate with measured gate results before review; proof-generate does not execute verification."
+  }
+}
