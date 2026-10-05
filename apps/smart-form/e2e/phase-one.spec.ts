@@ -293,16 +293,16 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   await page.getByLabel('Date').fill('2026-09-01');
   await page.getByRole('button', { name: /Yankees @ Red Sox/i }).click();
   await expect(page.getByText('Yankees @ Red Sox', { exact: true })).toBeVisible();
-  await expect(page.locator('header').getByText('Track Only requested', { exact: true })).toBeVisible();
+  assert.equal(await page.locator('header').getByText('Track Only requested', { exact: true }).isVisible(), true);
   await page.screenshot({ path: '../../.out/smart-form-preview/regression/06-mlb-structured-desktop.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await page.getByRole('button', { name: /Yankees.*fanatics.*Manual odds/i }).click();
-  await expect(page.getByRole('radio', { name: /Track Only/ })).toBeChecked();
-  await expect(page.getByRole('radio', { name: /Request Official Pick Delivery/ })).not.toBeChecked();
+  assert.equal(await page.getByRole('radio', { name: /Track Only/ }).isChecked(), true);
+  assert.equal(await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).isChecked(), false);
   await page.locator('input[name="odds"]').fill('-110');
   await page.getByRole('button', { name: '8', exact: true }).click();
   await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).check();
-  await expect(page.locator('header').getByText('Delivery eligible requested', { exact: true })).toBeVisible();
+  assert.equal(await page.locator('header').getByText('Delivery eligible requested', { exact: true }).isVisible(), true);
   await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
   await page.waitForFunction(() => Boolean(document.querySelector('[data-testid="delivery-disposition"]')));
   const deliveryDisposition = page.getByTestId('delivery-disposition');
@@ -312,10 +312,10 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   assert.match((await deliveryDisposition.textContent()) ?? '', /target-killed/);
 
   const firstMetadata = submittedPayloads[0]?.['metadata'] as Record<string, unknown>;
-  expect(firstMetadata?.['distributionMode']).toBe('delivery-eligible');
+  assert.equal(firstMetadata?.['distributionMode'], 'delivery-eligible');
 
   await page.getByRole('button', { name: 'Submit Another Pick' }).click();
-  await expect(page.locator('header').getByText('Track Only requested', { exact: true })).toBeVisible();
+  assert.equal(await page.locator('header').getByText('Track Only requested', { exact: true }).isVisible(), true);
 
   await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
   await page.getByRole('button', { name: 'MLB' }).click();
