@@ -4350,6 +4350,63 @@ export function BetForm({
                     )}
                   />
 
+                  <FormField
+                    control={form.control}
+                    name="trackOnly"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <fieldset className="space-y-3 rounded-xl border border-border bg-background/60 p-4">
+                          <legend className="px-1 text-sm font-semibold text-foreground">
+                            Delivery choice
+                          </legend>
+                          <p className="text-xs leading-relaxed text-muted-foreground">
+                            Track Only is the default. Request official pick delivery only when you deliberately choose it.
+                          </p>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <label className={cn(
+                              'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                              field.value ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50',
+                            )}>
+                              <input
+                                type="radio"
+                                name={field.name}
+                                value="track-only"
+                                checked={field.value === true}
+                                onChange={() => field.onChange(true)}
+                                onBlur={field.onBlur}
+                                ref={field.ref}
+                                className="mt-1"
+                              />
+                              <span>
+                                <span className="block text-sm font-semibold text-foreground">Track Only</span>
+                                <span className="block text-xs text-muted-foreground">Internal tracking; no delivery requested.</span>
+                              </span>
+                            </label>
+                            <label className={cn(
+                              'flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors',
+                              field.value === false ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50',
+                            )}>
+                              <input
+                                type="radio"
+                                name={field.name}
+                                value="delivery-eligible"
+                                checked={field.value === false}
+                                onChange={() => field.onChange(false)}
+                                onBlur={field.onBlur}
+                                className="mt-1"
+                              />
+                              <span>
+                                <span className="block text-sm font-semibold text-foreground">Request Official Pick Delivery</span>
+                                <span className="block text-xs text-muted-foreground">Delivery eligible requested; the server decides the receipt.</span>
+                              </span>
+                            </label>
+                          </div>
+                        </fieldset>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   {effectiveCapper && (
                     <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
                       <div>

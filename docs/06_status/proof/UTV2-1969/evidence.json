@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1969",
+  "tier": "T2",
+  "title": "Smart Form explicit fail-closed official delivery request interaction",
+  "generated_at": "2026-10-05T12:56:00.000Z",
+  "status": "pr_open",
+  "sha_binding": {
+    "verified_source_sha": "aa9096831c84e29bf7f43209c48963114e15e592",
+    "merge_sha": null,
+    "base_sha": "588766ef9",
+    "sha_type": "pending_merge",
+    "verified_source_note": "Implementation and focused fixture E2E were verified before proof authoring; final executor head must be bound after commit.",
+    "bound_at": "2026-10-05T12:56:00.000Z"
+  },
+  "verifier": {
+    "identity": "codex executor",
+    "method": "Canonical static verification plus isolated fixture-backed Playwright request-body assertions.",
+    "verifier_scope": "Smart Form UI state, payload mode selection, reset behavior, and repository static checks; no production or writable live-DB execution."
+  },
+  "static_proof": {
+    "pnpm_verify_static": {"status": "PASS", "command": "pnpm verify:static", "exit_code": 0},
+    "type_check": {"status": "PASS", "command": "pnpm type-check"},
+    "focused_submission_guard": {"status": "PASS", "command": "pnpm exec tsx --test apps/smart-form/test/submission-guard.test.ts", "tests": 7, "pass": 7, "fail": 0},
+    "focused_fixture_e2e": {"status": "PASS", "tests": 1, "pass": 1, "fail": 0, "command": "SMART_FORM_E2E_API_PORT=4623 SMART_FORM_E2E_PORT=4723 SMART_FORM_DIST_DIR=.next-utv2-1969-3 pnpm --dir apps/smart-form exec playwright test -c playwright.config.ts e2e/phase-one.spec.ts -g desktop MLB structured canonical event entry remains available", "assertions": ["actual POST distributionMode=delivery-eligible", "actual POST distributionMode=track-only", "successful reset returns Track Only"]},
+    "r_level": {"status": "PENDING", "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD"}
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx through staging-ci with CI_SUPABASE_* credentials."
+  },
+  "acceptance_criteria": {
+    "fresh_session_track_only_default": "PASS",
+    "deliberate_delivery_request_changes_track_only_false": "PASS",
+    "actual_request_body_modes": "PASS",
+    "successful_reset_returns_track_only": "PASS",
+    "receipt_uses_server_response": "PASS — unchanged SuccessReceipt path",
+    "server_refusal_and_track_only_regressions": "PASS — canonical verification suite"
+  },
+  "verdict": "PASS_PENDING_R_LEVEL_AND_FINAL_HEAD"
+}

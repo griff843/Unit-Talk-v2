@@ -1,0 +1,15 @@
+{
+  "issue_id": "UTV2-1969",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-terra-medium",
+  "model": "gpt-5",
+  "reasoning_effort": "medium",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "sanctioned codex-exec wrapper provenance unavailable in this session",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "generated_at": "2026-10-05T12:56:00.000Z",
+  "merge_sha": null
+}
