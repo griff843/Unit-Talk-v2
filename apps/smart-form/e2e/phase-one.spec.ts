@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 // Reference-data behavior remains fixture-backed. Connected submission cases below
@@ -270,7 +271,21 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   ], offers: [] } }) }));
   await page.route('**/api/submissions', async (route) => {
     submittedPayloads.push(route.request().postDataJSON() as Record<string, unknown>);
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { submissionId: `sub-mlb-${submittedPayloads.length}`, pickId: `pick-mlb-${submittedPayloads.length}`, lifecycleState: 'validated' } }) });
+    const isDeliveryRequest = submittedPayloads.length === 1;
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        data: {
+          submissionId: `sub-mlb-${submittedPayloads.length}`,
+          pickId: `pick-mlb-${submittedPayloads.length}`,
+          lifecycleState: 'validated',
+          outboxEnqueued: false,
+          deliveryPosture: isDeliveryRequest ? 'delivery-refused' : 'track-only',
+          ...(isDeliveryRequest ? { deliveryRefusedReason: 'target-killed' } : {}),
+        },
+      },
+    });
   });
   await page.goto('/submit');
   await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
@@ -289,7 +304,12 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).check();
   await expect(page.locator('header').getByText('Delivery eligible requested', { exact: true })).toBeVisible();
   await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await page.waitForFunction(() => Boolean(document.querySelector('[data-testid="delivery-disposition"]')));
+  const deliveryDisposition = page.getByTestId('delivery-disposition');
+  assert.equal(await deliveryDisposition.isVisible(), true);
+  assert.equal(await deliveryDisposition.getAttribute('data-disposition'), 'delivery-refused');
+  assert.equal(await page.getByRole('heading', { name: 'Saved, delivery refused' }).isVisible(), true);
+  assert.match((await deliveryDisposition.textContent()) ?? '', /target-killed/);
 
   const firstMetadata = submittedPayloads[0]?.['metadata'] as Record<string, unknown>;
   expect(firstMetadata?.['distributionMode']).toBe('delivery-eligible');
@@ -303,12 +323,18 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   await page.getByRole('button', { name: /Yankees @ Red Sox/i }).click();
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await page.getByRole('button', { name: /Yankees.*fanatics.*Manual odds/i }).click();
-  await expect(page.getByRole('radio', { name: /Track Only/ })).toBeChecked();
-  await expect(page.getByRole('radio', { name: /Request Official Pick Delivery/ })).not.toBeChecked();
+  assert.equal(await page.getByRole('radio', { name: /Track Only/ }).isChecked(), true);
+  assert.equal(await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).isChecked(), false);
   await page.locator('input[name="odds"]').fill('-110');
   await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).check();
+  assert.equal(await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).isChecked(), true);
+  await page.getByRole('radio', { name: /Track Only/ }).check();
+  assert.equal(await page.getByRole('radio', { name: /Track Only/ }).isChecked(), true);
+  assert.equal(await page.locator('header').getByText('Track Only requested', { exact: true }).isVisible(), true);
   await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await page.waitForFunction(() => Boolean(document.querySelector('[data-testid="delivery-disposition"]')));
+  assert.equal(await page.getByRole('heading', { name: 'Saved as Track Only' }).isVisible(), true);
 
   const metadata = submittedPayloads[1]?.['metadata'] as Record<string, unknown>;
   expect(metadata).toMatchObject({
