@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
 // Reference-data behavior remains fixture-backed. Connected submission cases below
@@ -253,7 +254,7 @@ test('switching sports clears the selected canonical matchup', async ({ page }) 
 });
 
 test('desktop MLB structured canonical event entry remains available', async ({ page }) => {
-  let submittedPayload: Record<string, unknown> | null = null;
+  const submittedPayloads: Record<string, unknown>[] = [];
   const mlbMatchup = {
     eventId: 'event-mlb', externalId: 'mlb-1', eventName: 'Yankees @ Red Sox', eventDate: '2026-09-01',
     startTime: '2026-09-01T23:10:00.000Z', status: 'scheduled', sportId: 'MLB', leagueId: 'mlb',
@@ -269,8 +270,22 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
     { participantId: 'team-red-sox', canonicalId: 'team-red-sox', participantType: 'team', displayName: 'Red Sox', role: 'home', teamId: 'team-red-sox', teamName: 'Red Sox' },
   ], offers: [] } }) }));
   await page.route('**/api/submissions', async (route) => {
-    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { submissionId: 'sub-mlb', pickId: 'pick-mlb', lifecycleState: 'validated' } }) });
+    submittedPayloads.push(route.request().postDataJSON() as Record<string, unknown>);
+    const isDeliveryRequest = submittedPayloads.length === 1;
+    await route.fulfill({
+      status: 200,
+      json: {
+        ok: true,
+        data: {
+          submissionId: `sub-mlb-${submittedPayloads.length}`,
+          pickId: `pick-mlb-${submittedPayloads.length}`,
+          lifecycleState: 'validated',
+          outboxEnqueued: false,
+          deliveryPosture: isDeliveryRequest ? 'delivery-refused' : 'track-only',
+          ...(isDeliveryRequest ? { deliveryRefusedReason: 'target-killed' } : {}),
+        },
+      },
+    });
   });
   await page.goto('/submit');
   await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
@@ -278,16 +293,50 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   await page.getByLabel('Date').fill('2026-09-01');
   await page.getByRole('button', { name: /Yankees @ Red Sox/i }).click();
   await expect(page.getByText('Yankees @ Red Sox', { exact: true })).toBeVisible();
-  await expect(page.getByText('Track Only · Internal', { exact: true })).toBeVisible();
+  assert.equal(await page.locator('header').getByText('Track Only requested', { exact: true }).isVisible(), true);
   await page.screenshot({ path: '../../.out/smart-form-preview/regression/06-mlb-structured-desktop.png', fullPage: true });
   await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
   await page.getByRole('button', { name: /Yankees.*fanatics.*Manual odds/i }).click();
+  assert.equal(await page.getByRole('radio', { name: /Track Only/ }).isChecked(), true);
+  assert.equal(await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).isChecked(), false);
   await page.locator('input[name="odds"]').fill('-110');
   await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).check();
+  assert.equal(await page.locator('header').getByText('Delivery eligible requested', { exact: true }).isVisible(), true);
   await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
-  await expect(page.getByText('Pick Saved')).toBeVisible();
+  await page.waitForFunction(() => Boolean(document.querySelector('[data-testid="delivery-disposition"]')));
+  const deliveryDisposition = page.getByTestId('delivery-disposition');
+  assert.equal(await deliveryDisposition.isVisible(), true);
+  assert.equal(await deliveryDisposition.getAttribute('data-disposition'), 'delivery-refused');
+  assert.equal(await page.getByRole('heading', { name: 'Saved, delivery refused' }).isVisible(), true);
+  assert.match((await deliveryDisposition.textContent()) ?? '', /target-killed/);
 
-  const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
+  const firstMetadata = submittedPayloads[0]?.['metadata'] as Record<string, unknown>;
+  assert.equal(firstMetadata?.['distributionMode'], 'delivery-eligible');
+
+  await page.getByRole('button', { name: 'Submit Another Pick' }).click();
+  assert.equal(await page.locator('header').getByText('Track Only requested', { exact: true }).isVisible(), true);
+
+  await page.getByRole('button', { name: 'Browse offers', exact: true }).click();
+  await page.getByRole('button', { name: 'MLB' }).click();
+  await page.getByLabel('Date').fill('2026-09-01');
+  await page.getByRole('button', { name: /Yankees @ Red Sox/i }).click();
+  await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
+  await page.getByRole('button', { name: /Yankees.*fanatics.*Manual odds/i }).click();
+  assert.equal(await page.getByRole('radio', { name: /Track Only/ }).isChecked(), true);
+  assert.equal(await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).isChecked(), false);
+  await page.locator('input[name="odds"]').fill('-110');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).check();
+  assert.equal(await page.getByRole('radio', { name: /Request Official Pick Delivery/ }).isChecked(), true);
+  await page.getByRole('radio', { name: /Track Only/ }).check();
+  assert.equal(await page.getByRole('radio', { name: /Track Only/ }).isChecked(), true);
+  assert.equal(await page.locator('header').getByText('Track Only requested', { exact: true }).isVisible(), true);
+  await page.locator('[data-testid="smart-form-submit-button"]:visible').first().click();
+  await page.waitForFunction(() => Boolean(document.querySelector('[data-testid="delivery-disposition"]')));
+  assert.equal(await page.getByRole('heading', { name: 'Saved as Track Only' }).isVisible(), true);
+
+  const metadata = submittedPayloads[1]?.['metadata'] as Record<string, unknown>;
   expect(metadata).toMatchObject({
     distributionMode: 'track-only',
     eventId: 'event-mlb',
