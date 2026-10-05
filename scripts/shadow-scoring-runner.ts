@@ -337,9 +337,14 @@ export async function countSettledResultBacked(
     }
   }
 
-  return candidateLinks.filter(
-    (link) => link.pick_id !== null && qualifyingPickIds.has(link.pick_id),
-  ).length;
+  return new Set(
+    candidateLinks
+      .filter(
+        (link) =>
+          link.pick_id !== null && qualifyingPickIds.has(link.pick_id),
+      )
+      .map((link) => link.id),
+  ).size;
 }
 
 async function queryDailyCounts(client: Client): Promise<DailyCounts> {
