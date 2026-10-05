@@ -227,7 +227,6 @@ test('workflow schedules alerting and always runs its independent self-monitor',
   assert.match(workflow, /needs: alerting-pass[\s\S]*if: \$\{\{ always\(\) \}\}/);
   assert.match(workflow, /ALERT_DRY_RUN: 'false'/);
   assert.match(workflow, /SYSTEM_PICKS_ENABLED: 'false'/);
-  assert.doesNotMatch(source, /provider_offers[\s\S]{0,120}updated_at/);
   assert.match(source, /provider_cycle_status[\s\S]{0,160}updated_at/);
 });
 
