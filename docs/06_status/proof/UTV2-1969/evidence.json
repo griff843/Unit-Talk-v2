@@ -3,14 +3,14 @@
   "issue_id": "UTV2-1969",
   "tier": "T2",
   "title": "Smart Form explicit fail-closed official delivery request interaction",
-  "generated_at": "2026-10-05T12:56:00.000Z",
+  "generated_at": "2026-10-05T13:15:00.000Z",
   "status": "pr_open",
   "sha_binding": {
-    "verified_source_sha": "db6c876f35d953825cb011045c593568a486d9bc",
+    "verified_source_sha": "32ce7a9ae158a49e333509a8099496a3f1401c7b",
     "merge_sha": null,
     "base_sha": "588766ef9",
     "sha_type": "pending_merge",
-    "verified_source_note": "Implementation and focused fixture E2E were verified before the implementation commit; this is the exact review head for the lane.",
+    "verified_source_note": "Implementation and focused fixture E2E were verified at this exact review head.",
     "bound_at": "2026-10-05T12:56:00.000Z"
   },
   "verifier": {

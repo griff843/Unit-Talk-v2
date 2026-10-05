@@ -4,7 +4,7 @@ Generated: 2026-10-05
 Issue: UTV2-1969
 Tier: T2
 Branch: `codex/utv2-1969-smart-form-delivery-choice`
-Implementation head: `db6c876f35d953825cb011045c593568a486d9bc`
+Implementation head: `32ce7a9ae158a49e333509a8099496a3f1401c7b`
 Merge SHA: pending PR merge
 
 ## Verification
@@ -12,7 +12,7 @@ Merge SHA: pending PR merge
 - `pnpm verify:static`: PASS. Boundary, sync, alignment, automation coverage, env validation, lint, type-check, build, composite tests, Smart Form tests, and command checks completed successfully.
 - `pnpm exec tsx --test apps/smart-form/test/submission-guard.test.ts`: PASS, 7/7.
 - `pnpm --filter @unit-talk/smart-form type-check`: PASS.
-- Focused isolated fixture E2E: PASS, 1/1, unique API/form ports. The rendered interaction captured actual POST bodies asserting `delivery-eligible` after deliberate selection and `track-only` after reset/default selection.
+- Focused isolated fixture E2E: PASS, 1/1, unique API/form ports. The rendered interaction captured actual POST bodies asserting `delivery-eligible` after deliberate selection, `track-only` after deliberate switch-back, server-refused delivery receipt, and reset/default selection.
 - `pnpm type-check`: PASS within `pnpm verify:static`.
 - Static lint: PASS within `pnpm verify:static`. Direct package `next lint` is incompatible with the repository's Next 16 toolchain, so the canonical root ESLint gate is the authoritative lint result.
 
