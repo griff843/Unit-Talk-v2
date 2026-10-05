@@ -5,7 +5,7 @@ MERGE_SHA: pending merge
 Issue: WORK-2026100501
 Tier: T1
 Lane type: governance
-Implementation SHA: fceee677ba1c817c964fdf93ca17e5a96c95e434
+Implementation SHA: 0b87cd9b1288351ad90954dd0c2cc5c0ced642f5
 result: static_pass_live_db_deferred_to_staging_ci
 
 ## ASSERTIONS:
@@ -26,8 +26,8 @@ Focused deterministic coverage on the final implementation:
 
 ```text
 $ pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts scripts/ops/merge-gate-verdict.test.ts scripts/ops/workflow-hardening.test.ts
-# tests 147
-# pass 147
+# tests 148
+# pass 148
 # fail 0
 # skipped 0
 ```
@@ -39,7 +39,7 @@ $ pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts scripts/ops/
 - `pnpm verify:static` — PASS; DB-client boundary, sync/alignment, automation coverage, environment, lint, type-check, build, aggregate tests, production-post-migration tests, Smart Form verification, command manifest, and migration checks passed.
 - `pnpm verify` — the complete static chain passed, then the writable DB phase correctly REFUSED before DB access because local host `127.0.0.1` is not staging project `xskgrzbteyqdufktjrjx`.
 - `pnpm test:db` — correctly REFUSED at the same pre-write containment guard. Exact-HEAD writable proof is deferred to the protected `staging-ci` GitHub environment using `CI_SUPABASE_*` credentials.
-- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS on implementation SHA; 13 changed files, no R-level rules matched.
+- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS on implementation SHA; 15 changed files, no R-level rules matched.
 - `FILE_SCOPE_PR_BRANCH=codex/work-2026100501-required-check-publication pnpm exec tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --manifest-source git` — PASS; no scope conflicts or violations.
 - `git diff --check` — PASS.
 
@@ -55,4 +55,4 @@ Required pre-merge receipts still pending external GitHub execution: final exact
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1718
