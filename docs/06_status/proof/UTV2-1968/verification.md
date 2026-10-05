@@ -1,6 +1,6 @@
 # PROOF: UTV2-1968
 
-MERGE_SHA: pending merge
+MERGE_SHA: 32634964f36ca65a8db5878e5dabe2e8e2573c21
 
 Issue: UTV2-1968
 Tier: T1
@@ -63,7 +63,7 @@ they are not predeclared here.
 No merge authority is claimed pre-merge. Post-merge lane finalization appends the
 authoritative merge SHA and PR URL.
 
-Merge SHA: pending merge
+Merge SHA: 32634964f36ca65a8db5878e5dabe2e8e2573c21
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1713
 
 ## October 4 governed current-main synchronization
