@@ -29,6 +29,24 @@ Result: awaiting exact-HEAD CI, PM verdict, and post-merge trusted-base Shadow o
 
 ## EVIDENCE:
 
+Captured exact-head CI observation (prior candidate; subsequent metadata commit requires fresh checks):
+
+```text
+gh run view 37261093334 --json headSha,conclusion
+headSha: 3cab7dd75b4c28d368325df72fb125eae7350fdb
+conclusion: success
+Writable DB proof (staging only): success
+Run the T1 live proof suites against staging: success
+verify: success
+ci-db-proof-receipt/v2:
+  observed_project_ref: xskgrzbteyqdufktjrjx
+  tests: 7
+  pass: 7
+  fail: 0
+  exit_code: 0
+  receipt_sha256: a1089976f654f89cb5c1ee6380286d510b3ac30f5605db7dac75c2ba867ae6bd
+```
+
 Canonical relationship evidence:
 
 - `pick_candidates.pick_id` has no FK; `settlement_records.pick_id` has
