@@ -1,0 +1,94 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100401",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "AWAITING_CI_AND_PM",
+  "implementation_sha": "7240093fc6c610cb16355aeb313fb1b4d102142a",
+  "generated_at": "2026-10-05T02:26:24Z",
+  "canonical_query": {
+    "candidate_path": "paginated public.pick_candidates id,pick_id links; no embedded pick join because pick_id has no FK",
+    "settlement_path": "paginated public.settlement_records joined through settlement_records_pick_id_fkey to public.picks, in bounded pick-id batches",
+    "required_settlement": {
+      "results": ["win", "loss", "push"],
+      "status": "settled",
+      "evidence_ref": "not null"
+    },
+    "required_pick": {
+      "submission_id": "not null",
+      "status": "not voided",
+      "source": "not shadow",
+      "fixture_reason": "null under canonical reporting.pick_fixture_reason"
+    },
+    "cardinality": "qualifying settlement rows dedupe to pick ids; every distinct candidate row linked to a qualifying pick counts once",
+    "non_equivalences": [
+      "pick_candidates.pick_id presence is not settlement evidence",
+      "picks.status=settled is not settlement evidence",
+      "settlement row count is not candidate-backed count",
+      "pick_candidates.shadow_mode is not picks.is_shadow",
+      "evidence-settled is not CLV-path settled"
+    ]
+  },
+  "static_proof": {
+    "focused_test": {
+      "command": "pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'",
+      "exit_code": 0,
+      "tests": 25,
+      "pass": 25,
+      "fail": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0
+    }
+  },
+  "live_read_only_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "role": "shadow_parity_reader",
+    "added_select_relations": ["public.picks", "public.settlement_records"],
+    "writable_relations": 0,
+    "creatable_schemas": 0,
+    "owned_relations": 0,
+    "inherited_roles": 0,
+    "callable_definer_functions": 0,
+    "app_data_mutation_authority": false,
+    "historical_observation": {
+      "candidate_links": 1412,
+      "qualifying_picks": 1182,
+      "hard_coded_expectation": false
+    },
+    "artifacts": [
+      "docs/06_status/proof/WORK-2026100401/live-schema-columns.json",
+      "docs/06_status/proof/WORK-2026100401/canonical-reference-observation.json",
+      "docs/06_status/proof/WORK-2026100401/rest-relationship-probe.json",
+      "docs/06_status/proof/WORK-2026100401/read-only-grants.json"
+    ]
+  },
+  "writable_staging_proof": {
+    "command": "pnpm test:db",
+    "status": "REFUSED_LOCAL_IDENTITY",
+    "exit_code": 1,
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_ref": "xskgrzbteyqdufktjrjx",
+    "writes_attempted": false,
+    "deferred_to": "staging-ci GitHub environment with CI_SUPABASE_* credentials"
+  },
+  "trusted_base_shadow": {
+    "status": "PENDING_REPAIR_MERGE",
+    "reason": "The unchanged workflow guard rejects a candidate-modified runner. That is expected containment, not a parity result or bypass authorization.",
+    "required_after_merge": true
+  },
+  "model_routing": {
+    "status": "PENDING_OUTER_EXECUTOR",
+    "note": "Already-running sanctioned child did not recursively invoke ops:codex-exec; outer executor must persist immutable model-routing.json after child exit."
+  },
+  "production_writes": 0,
+  "workflow_changes": 0,
+  "pr_url": null,
+  "merge_sha": null
+}
