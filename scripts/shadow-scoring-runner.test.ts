@@ -426,6 +426,21 @@ test('settledResultBacked counts each candidate once across duplicate and correc
   );
 });
 
+test('settledResultBacked counts a candidate once when offset pages repeat its primary key', async () => {
+  const { countSettledResultBacked } = await import('./shadow-scoring-runner.js');
+  const { client } = createReadClient({
+    // Each page has a unique PK. A concurrent link insertion before an offset
+    // can cause the next page to repeat the previously observed candidate.
+    candidates: [candidate('c-repeat', 'p-shared'), candidate('c-repeat', 'p-shared'), candidate('c-second', 'p-shared')],
+    settlements: [settlement('s-shared', 'p-shared', 'loss')],
+  });
+  assert.equal(
+    await countSettledResultBacked(client as Parameters<typeof countSettledResultBacked>[0], 1),
+    2,
+    'match COUNT(DISTINCT pc.id), retaining both distinct candidates linked to the same pick',
+  );
+});
+
 test('settledResultBacked excludes incomplete evidence, voids, shadow picks, fixtures, and non-production links', async () => {
   const { countSettledResultBacked } =
     await import('./shadow-scoring-runner.js');
