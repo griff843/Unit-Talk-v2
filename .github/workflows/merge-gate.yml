@@ -47,27 +47,22 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
-  issues: write
 
 jobs:
   gate:
-    # The required branch-protection identity is the custom check run managed
-    # below. The native Actions job check must never share that name.
-    name: Merge Gate Evaluator
+    # This native pull_request job is the required branch-protection result.
+    # Non-PR triggers still materialize skipped jobs. Give those jobs a
+    # distinct identity so review/comment/manual events cannot satisfy the
+    # required context without rerunning the eligible pull_request run.
+    name: ${{ github.event_name == 'pull_request' && 'Merge Gate' || 'Merge Gate (ineligible event)' }}
     concurrency:
-      group: merge-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_number }}
-      # Every event updates the same exact-head check. Queue evaluations so an
-      # older run cannot be cancelled while that canonical check is in_progress.
+      group: merge-gate-${{ github.event.pull_request.number }}
       cancel-in-progress: false
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
-      github.event_name == 'pull_request_review' ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, 'PM_VERDICT:'))
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     runs-on: ubuntu-latest
     steps:
       # UTV2-1543 (Codex P1): materialize the repo before requiring the T1
@@ -77,18 +72,14 @@ jobs:
       # evaluation, not just enforcing the new freshness rule.
       #
       # Same privilege-boundary reasoning as UTV2-1550's Executor Result
-      # Validator fix: this job holds checks/pull-requests/issues: write, and
-      # actions/checkout defaults to the PR's own head/merge ref on
-      # pull_request(_review) events -- attacker-controlled. Pin the ref to
-      # the PR's base SHA (immutable, reachable from main, never PR-supplied)
-      # for those event types so a PR can never modify merge-gate-verdict.cjs
-      # to defeat its own T1 freshness check. issue_comment/workflow_dispatch
-      # keep the default github.sha, which already resolves to the base
-      # repo's default-branch HEAD for those trigger types.
+      # Validator fix: actions/checkout defaults to the PR's own head/merge
+      # ref. Pin the read-only policy job to the PR's immutable base SHA so a
+      # PR can never modify merge-gate-verdict.cjs to defeat its own T1
+      # freshness check.
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') && github.event.pull_request.base.sha || github.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
 
       # UTV2-1554 landed the final scripts/ops/merge-gate-verdict.cjs on main
       # ahead of this lane specifically so this job never needs to fetch or
@@ -113,114 +104,12 @@ jobs:
 
             // ── 1. Resolve PR ──────────────────────────────────────────
             let prNumber, headSha, headRef, baseSha, prTitle;
-            if (context.eventName === 'pull_request' ||
-                context.eventName === 'pull_request_review') {
-              const pr = context.payload.pull_request;
-              prNumber = pr.number;
-              headSha = pr.head.sha;
-              headRef = pr.head.ref;
-              baseSha = pr.base.sha;
-              prTitle = pr.title || '';
-            } else if (context.eventName === 'workflow_dispatch') {
-              prNumber = parseInt(context.payload.inputs.pull_number, 10);
-              const { data: pr } = await github.rest.pulls.get({
-                owner, repo, pull_number: prNumber
-              });
-              headSha = pr.head.sha;
-              headRef = pr.head.ref;
-              baseSha = pr.base.sha;
-              prTitle = pr.title || '';
-            } else {
-              prNumber = context.payload.issue.number;
-              const { data: pr } = await github.rest.pulls.get({
-                owner, repo, pull_number: prNumber
-              });
-              headSha = pr.head.sha;
-              headRef = pr.head.ref;
-              baseSha = pr.base.sha;
-              prTitle = pr.title || '';
-            }
-
-            // ── 2. Upsert the canonical exact-head check run ───────────
-            // Identity is repository + PR + exact head SHA. PR serialization
-            // above makes this read/create sequence race-free across events.
-            const existingChecks = await github.paginate(
-              github.rest.checks.listForRef,
-              {
-                owner, repo,
-                ref: headSha,
-                check_name: 'Merge Gate',
-                filter: 'all',
-                per_page: 100,
-              }
-            );
-            const canonicalExternalId = `merge-gate:${prNumber}:${headSha}`;
-            // Match on name + exact head SHA + app only -- NOT external_id.
-            // Check-runs created by the former create-on-every-event behavior
-            // never had an external_id set, so requiring one here would let
-            // those legacy duplicates survive untouched and keep blocking
-            // branch protection forever. Any same-name check already docked
-            // to this exact head is adoptable as the canonical one; prefer a
-            // check that already carries the canonical external_id (stable
-            // across repeated runs once adopted), otherwise fall back to the
-            // most recently created same-head check.
-            const matchingChecks = existingChecks
-              .filter(run =>
-                run.name === 'Merge Gate' &&
-                run.head_sha === headSha &&
-                run.app?.slug === 'github-actions'
-              )
-              .sort((a, b) => {
-                const aCanonical = a.external_id === canonicalExternalId ? 1 : 0;
-                const bCanonical = b.external_id === canonicalExternalId ? 1 : 0;
-                if (aCanonical !== bCanonical) return bCanonical - aCanonical;
-                return b.id - a.id;
-              });
-
-            let check = matchingChecks[0];
-            if (!check) {
-              const created = await github.rest.checks.create({
-                owner, repo,
-                name: 'Merge Gate',
-                head_sha: headSha,
-                external_id: canonicalExternalId,
-                status: 'in_progress',
-                started_at: new Date().toISOString()
-              });
-              check = created.data;
-            } else {
-              // Adopt (or re-affirm) the canonical external_id on update so a
-              // legacy check without one is bound to this identity going
-              // forward, and so subsequent runs pick it deterministically.
-              await github.rest.checks.update({
-                owner, repo,
-                check_run_id: check.id,
-                external_id: canonicalExternalId,
-                status: 'in_progress',
-                started_at: new Date().toISOString(),
-                output: {
-                  title: 'Merge Gate: EVALUATING',
-                  summary: `Re-evaluating merge policy for PR #${prNumber} at ${headSha}.`
-                }
-              });
-            }
-
-            // One-time repair for heads polluted by the former create-on-every-
-            // event behavior. Superseded failures become neutral so only the
-            // newest exact-head check can govern branch protection.
-            for (const duplicate of matchingChecks.slice(1)) {
-              await github.rest.checks.update({
-                owner, repo,
-                check_run_id: duplicate.id,
-                status: 'completed',
-                conclusion: 'neutral',
-                completed_at: new Date().toISOString(),
-                output: {
-                  title: 'Merge Gate: SUPERSEDED',
-                  summary: `Superseded by canonical Merge Gate check run ${check.id} for PR #${prNumber} at ${headSha}.`
-                }
-              });
-            }
+            const pr = context.payload.pull_request;
+            prNumber = pr.number;
+            headSha = pr.head.sha;
+            headRef = pr.head.ref;
+            baseSha = pr.base.sha;
+            prTitle = pr.title || '';
 
             const errors = [];
             // UTV2-1619 capability 19: non-blocking facts the verdict depends on
@@ -228,7 +117,6 @@ jobs:
             // governance identity would otherwise pass with the same "all
             // requirements satisfied" summary as an ordinary lane.
             const notes = [];
-            let evaluatorError = null;
 
             try {
               // ── 3. Get PR labels ───────────────────────────────────
@@ -467,11 +355,9 @@ jobs:
               const expectedTierLabel = authoritativeTier ? `tier:${authoritativeTier}` : null;
 
               if (expectedTierLabel && uniqueTierLabels.length === 0) {
-                await github.rest.issues.addLabels({
-                  owner, repo, issue_number: prNumber, labels: [expectedTierLabel]
-                });
-                labels.push(expectedTierLabel);
-                uniqueTierLabels.push(expectedTierLabel);
+                errors.push(
+                  `Missing ${expectedTierLabel}. GitHub tier evidence must mirror the authoritative manifest.`
+                );
               }
 
               if (expectedTierLabel && uniqueTierLabels.length > 0 && !uniqueTierLabels.includes(expectedTierLabel)) {
@@ -577,55 +463,74 @@ jobs:
               }
 
             } catch (e) {
-              evaluatorError = e;
               errors.push(`Internal error: ${e.message}`);
             }
 
             // ── 10. Complete check run ─────────────────────────────────
             const passed = errors.length === 0;
+            if (passed) {
+              core.info(notes.length > 0
+                ? `Merge Gate approved with governance notes: ${notes.join('; ')}`
+                : 'All tier-appropriate merge requirements satisfied.');
+            } else {
+              core.setFailed(`Merge Gate blocked:\n${errors.map(e => '- ' + e).join('\n')}`);
+            }
 
-            await github.rest.checks.update({
+  refresh:
+    name: Refresh Merge Gate
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) ||
+      github.event_name == 'pull_request_review' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, 'PM_VERDICT:'))
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout trusted base code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ (github.event_name == 'pull_request_review' && github.event.pull_request.base.sha) || github.event.repository.default_branch }}
+
+      - name: Retry exact-head eligible merge-gate run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { selectEligibleRefreshRun } = require('./scripts/ops/executor-result-check-selection.cjs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = context.eventName === 'workflow_dispatch'
+              ? Number(context.payload.inputs.pull_number)
+              : context.eventName === 'pull_request_review'
+                ? context.payload.pull_request.number
+                : context.payload.issue.number;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const headSha = pr.head.sha;
+            const workflowPath = '.github/workflows/merge-gate.yml';
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               owner, repo,
-              check_run_id: check.id,
-              status: 'completed',
-              conclusion: passed ? 'success' : 'failure',
-              completed_at: new Date().toISOString(),
-              output: {
-                title: passed
-                  ? (notes.length > 0 ? 'Merge Gate: APPROVED (bootstrap identity)' : 'Merge Gate: APPROVED')
-                  : 'Merge Gate: BLOCKED',
-                summary: [
-                  passed
-                    ? 'All tier-appropriate merge requirements satisfied.'
-                    : `**Merge blocked:**\n\n${errors.map(e => '- ' + e).join('\n')}`,
-                  notes.length > 0
-                    ? `\n\n**Governance notes:**\n\n${notes.map(n => '- ' + n).join('\n')}`
-                    : ''
-                ].join('')
-              }
+              workflow_id: 'merge-gate.yml',
+              event: 'pull_request',
+              head_sha: headSha,
+              per_page: 100,
             });
-
-            if (!passed) {
-              // Post visible comment on failure (fail loud)
-              await github.rest.issues.createComment({
-                owner, repo,
-                issue_number: prNumber,
-                body: [
-                  '**MERGE GATE: BLOCKED**',
-                  '',
-                  ...errors.map(e => '- ' + e),
-                  '',
-                  'Address the above before merge is authorized.'
-                ].join('\n')
-              });
+            const target = selectEligibleRefreshRun(runs, { workflowPath, prNumber, headSha });
+            if (!target) {
+              throw new Error(`No eligible pull_request Merge Gate run exists for PR #${prNumber} at ${headSha}.`);
             }
-
-            // Policy denial is the expected fail-closed outcome and is fully
-            // represented by the custom check. Only evaluator malfunction
-            // fails this non-required Actions job.
-            if (evaluatorError) {
-              throw evaluatorError;
+            if (target.status !== 'completed') {
+              throw new Error(`Eligible Merge Gate run ${target.id} is ${target.status}; refusing an older retry target.`);
             }
+            const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (current.head.sha !== headSha) {
+              throw new Error(`PR HEAD changed from ${headSha} to ${current.head.sha}; refusing stale refresh.`);
+            }
+            await github.rest.actions.reRunWorkflow({ owner, repo, run_id: target.id });
+            core.info(`Requested native retry of Merge Gate run ${target.id} for PR #${prNumber} at ${headSha}.`);
 
   # ── WFR-v2 Validators ──────────────────────────────────────────────────────
   # Workflow Runtime v2 Phase D: consume proof-check, tier-sync, review state.
@@ -637,9 +542,15 @@ jobs:
       github.event_name == 'pull_request' ||
       github.event_name == 'pull_request_review'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -668,8 +579,8 @@ jobs:
         run: |
           ISSUE_ID="${{ steps.branch.outputs.issue_id }}"
           PR="${{ steps.branch.outputs.pr_number }}"
-          echo "Running ops:tier-sync $ISSUE_ID --pr $PR --sync"
-          pnpm ops:tier-sync "$ISSUE_ID" --pr "$PR" --sync
+          echo "Running read-only ops:tier-sync $ISSUE_ID --pr $PR"
+          pnpm ops:tier-sync "$ISSUE_ID" --pr "$PR"
 
       - name: Run proof-check validator
         if: steps.branch.outputs.issue_id != ''

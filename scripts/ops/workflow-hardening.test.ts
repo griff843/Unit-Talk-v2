@@ -53,166 +53,6 @@ function workflowEvent(name: string, eventName: string): WorkflowDocument {
   return objectField(objectField(readWorkflowYaml(name), 'on'), eventName);
 }
 
-interface MockCheckRun {
-  id: number;
-  name: string;
-  head_sha: string;
-  external_id: string;
-  app: { slug: string };
-  status: string;
-  conclusion: string | null;
-  output?: { title?: string; summary?: string };
-}
-
-interface MockComment {
-  body: string;
-  created_at: string;
-  user: { login: string; type: string };
-}
-
-async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: MockCheckRun[] = []) {
-  const workflow = readWorkflowYaml('merge-gate.yml');
-  const gate = objectField(objectField(workflow, 'jobs'), 'gate');
-  const steps = gate.steps as Array<Record<string, unknown>>;
-  const evalStep = steps.find(
-    (step) => typeof step.with === 'object' && step.with && typeof (step.with as Record<string, unknown>).script === 'string',
-  );
-  assert.ok(evalStep, 'merge-gate.yml must have an executable github-script step');
-
-  const script = stringField(objectField(evalStep, 'with'), 'script');
-
-  type AsyncScript = (...args: unknown[]) => Promise<void>;
-  type AsyncFunctionConstructor = new (...args: string[]) => AsyncScript;
-  const AsyncFunction = Object.getPrototypeOf(async () => undefined).constructor as AsyncFunctionConstructor;
-  const evaluate = new AsyncFunction('github', 'context', 'core', 'require', script);
-  const verdictModule = await import('./merge-gate-verdict.cjs');
-
-  const prNumber = 1585;
-  const headSha = '1585158515851585158515851585158515851585';
-  const baseSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-  const pr = {
-    number: prNumber,
-    head: { sha: headSha, ref: 'codex/utv2-1585-canonical-check' },
-    base: { sha: baseSha },
-    title: 'feat(ops): UTV2-1585 canonical check identity',
-  };
-  const labels = [`tier:${tier}`];
-  const comments: MockComment[] = [];
-  const reviews: Array<{ state: string }> = [];
-  const postedGateComments: string[] = [];
-  const checks = initialChecks.map((check) => ({ ...check, app: { ...check.app } }));
-  let createCount = 0;
-  let nextCheckId = Math.max(0, ...checks.map((check) => check.id)) + 1;
-
-  const listForRef = async (params: Record<string, unknown>) => {
-    assert.strictEqual(params.ref, headSha);
-    assert.strictEqual(params.check_name, 'Merge Gate');
-    assert.strictEqual(params.filter, 'all');
-    assert.strictEqual(params.per_page, 100);
-    return { data: { check_runs: checks } };
-  };
-
-  const github = {
-    paginate: async (
-      endpoint: (params: Record<string, unknown>) => Promise<{ data: { check_runs: MockCheckRun[] } }>,
-      params: Record<string, unknown>,
-    ) => (await endpoint(params)).data.check_runs,
-    rest: {
-      checks: {
-        listForRef,
-        create: async (params: Record<string, unknown>) => {
-          createCount += 1;
-          const check: MockCheckRun = {
-            id: nextCheckId++,
-            name: String(params.name),
-            head_sha: String(params.head_sha),
-            external_id: String(params.external_id),
-            app: { slug: 'github-actions' },
-            status: String(params.status),
-            conclusion: null,
-          };
-          checks.push(check);
-          return { data: check };
-        },
-        update: async (params: Record<string, unknown>) => {
-          const check = checks.find((candidate) => candidate.id === params.check_run_id);
-          assert.ok(check, `check ${String(params.check_run_id)} must exist before update`);
-          if (typeof params.status === 'string') check.status = params.status;
-          if (typeof params.conclusion === 'string') check.conclusion = params.conclusion;
-          if (typeof params.external_id === 'string') check.external_id = params.external_id;
-          if (params.status === 'in_progress') check.conclusion = null;
-          if (params.output && typeof params.output === 'object') {
-            check.output = params.output as MockCheckRun['output'];
-          }
-          return { data: check };
-        },
-      },
-      issues: {
-        get: async () => ({ data: { labels: labels.map((name) => ({ name })) } }),
-        addLabels: async (params: Record<string, unknown>) => {
-          for (const label of params.labels as string[]) {
-            if (!labels.includes(label)) labels.push(label);
-          }
-          return { data: labels.map((name) => ({ name })) };
-        },
-        listComments: async () => ({ data: comments }),
-        createComment: async (params: Record<string, unknown>) => {
-          postedGateComments.push(String(params.body));
-          return { data: { id: postedGateComments.length } };
-        },
-      },
-      pulls: {
-        get: async () => ({ data: pr }),
-        listReviews: async () => ({ data: reviews }),
-      },
-      repos: {
-        getContent: async () => ({
-          data: {
-            content: Buffer.from(JSON.stringify({ issue_id: 'UTV2-1585', tier })).toString('base64'),
-            encoding: 'base64',
-          },
-        }),
-      },
-    },
-  };
-
-  async function run(eventName: 'pull_request' | 'pull_request_review' | 'issue_comment') {
-    const payload =
-      eventName === 'issue_comment'
-        ? { issue: { number: prNumber }, comment: { body: 'PM_VERDICT:' } }
-        : { pull_request: pr };
-    let evaluatorFailure: string | null = null;
-    const core = {
-      setFailed: (message: string) => {
-        evaluatorFailure = message;
-      },
-    };
-    const requireModule = (specifier: unknown) => {
-      assert.strictEqual(specifier, './scripts/ops/merge-gate-verdict.cjs');
-      return verdictModule;
-    };
-
-    await evaluate(github, { eventName, payload, repo: { owner: 'unit-talk', repo: 'v2' } }, core, requireModule);
-    assert.strictEqual(
-      evaluatorFailure,
-      null,
-      'policy denial must fail the canonical check without failing the Merge Gate Evaluator job',
-    );
-  }
-
-  return {
-    checks,
-    comments,
-    reviews,
-    labels,
-    postedGateComments,
-    prNumber,
-    headSha,
-    run,
-    createCount: () => createCount,
-  };
-}
-
 test('migration linter flags destructive audit_log statements with file and statement context', async () => {
   const { lintMigrationContent } = await import('../lint-migrations.mjs');
 
@@ -443,23 +283,22 @@ test('tier label sync runs on opened so PM does not manually apply GitHub tier l
   );
 });
 
-test('UTV2-1551: merge gate is structurally wired for PM verdict comments and evaluates fresh (opened) PRs', () => {
-  // Prior to UTV2-1551 this list deliberately omitted `opened` -- a fresh PR
-  // got zero Merge Gate evaluation from PR creation itself, only from a
-  // later push/label/review/comment event, which could leave a brand-new
-  // T1/T2 PR sitting `mergeStateStatus: BLOCKED` with the required check
-  // never having run at all. `opened` is included now: the gate job's own
-  // per-tier logic already fails closed (reports BLOCKED, does not approve)
-  // when no tier label / lane manifest / PM verdict exists yet, which is
-  // exactly the correct status for a truly fresh PR -- so evaluating on
-  // `opened` cannot cause a premature approval, only an earlier, visible
-  // BLOCKED status instead of silence.
-  const pullRequest = workflowEvent('merge-gate.yml', 'pull_request');
-  const issueComment = workflowEvent('merge-gate.yml', 'issue_comment');
-  const jobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
-  const gateIf = stringField(objectField(jobs, 'gate'), 'if');
 
-  assert.deepStrictEqual(stringArrayField(pullRequest, 'types'), [
+test('WORK-2026100501: Merge Gate publishes natively and non-PR events only refresh it', () => {
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const jobs = objectField(workflow, 'jobs');
+  const gate = objectField(jobs, 'gate');
+  const refresh = objectField(jobs, 'refresh');
+
+  assert.strictEqual(
+    gate.name,
+    "${{ github.event_name == 'pull_request' && 'Merge Gate' || 'Merge Gate (ineligible event)' }}",
+  );
+  assert.strictEqual(stringField(gate, 'if'), "github.event_name == 'pull_request'");
+  assert.match(stringField(refresh, 'if'), /PM_VERDICT:/);
+  assert.match(stringField(refresh, 'if'), /pull_request_review/);
+  assert.match(stringField(refresh, 'if'), /repository\.default_branch/, 'manual refresh must refuse a non-default ref');
+  assert.deepStrictEqual(stringArrayField(workflowEvent('merge-gate.yml', 'pull_request'), 'types'), [
     'opened',
     'synchronize',
     'reopened',
@@ -467,165 +306,46 @@ test('UTV2-1551: merge gate is structurally wired for PM verdict comments and ev
     'unlabeled',
     'ready_for_review',
   ]);
-  assert.deepStrictEqual(stringArrayField(issueComment, 'types'), ['created', 'edited']);
-  assert.match(gateIf, /PM_VERDICT:/, 'merge gate must respond to PM verdict comments');
-  // The gate job's own `if:` already runs unconditionally for every
-  // pull_request event type (no per-type restriction beyond the trigger
-  // list above), so adding `opened` to the trigger is sufficient by itself
-  // -- no separate `if:` change is needed for the gate to evaluate on it.
-  assert.match(
-    gateIf,
-    /github\.event_name == 'pull_request'/,
-    'merge gate job condition must run unconditionally for pull_request events (including opened) without a narrower per-type restriction',
-  );
+
+  const raw = readWorkflow('merge-gate.yml');
+  assert.doesNotMatch(raw, /github\.rest\.checks\.(create|update)/, 'Merge Gate must not fabricate required check runs');
+  assert.match(raw, /github\.rest\.actions\.reRunWorkflow/, 'approval events must retry the eligible native run');
+  assert.match(raw, /core\.setFailed\(`Merge Gate blocked:/, 'policy denial must fail the native required job');
+  assert.match(raw, /Merge Gate \(ineligible event\)/, 'skipped non-PR jobs must not carry the protected name');
 });
 
-test('UTV2-1585: only the custom exact-head check owns the required Merge Gate identity', () => {
-  const workflow = readWorkflowYaml('merge-gate.yml');
-  const pullRequestReview = workflowEvent('merge-gate.yml', 'pull_request_review');
-  const gate = objectField(objectField(workflow, 'jobs'), 'gate');
-  const concurrency = objectField(gate, 'concurrency');
-
-  assert.strictEqual(
-    gate.name,
-    'Merge Gate Evaluator',
-    'the native Actions job check must not collide with the required custom Merge Gate check',
-  );
-  assert.deepStrictEqual(stringArrayField(pullRequestReview, 'types'), ['submitted', 'edited', 'dismissed']);
-  assert.match(
-    stringField(concurrency, 'group'),
-    /inputs\.pull_number/,
-    'workflow_dispatch must serialize on the same per-PR concurrency identity as webhook events',
-  );
-  assert.strictEqual(
-    concurrency['cancel-in-progress'],
-    false,
-    'canonical check evaluations must queue instead of cancelling a run that already marked the check in_progress',
-  );
+test('WORK-2026100501: refresh jobs cannot impersonate required contexts', () => {
+  const executorJobs = objectField(readWorkflowYaml('executor-result-validator.yml'), 'jobs');
+  const mergeJobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
+  assert.match(String(objectField(executorJobs, 'validate').name), /Executor Result Validation \(ineligible event\)/);
+  assert.strictEqual(objectField(executorJobs, 'refresh').name, 'Refresh Executor Result Validation');
+  assert.match(String(objectField(mergeJobs, 'gate').name), /Merge Gate \(ineligible event\)/);
+  assert.strictEqual(objectField(mergeJobs, 'refresh').name, 'Refresh Merge Gate');
 });
 
-test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update one canonical check in place', async () => {
-  const harness = await createMergeGateHarness('T1');
-
-  await harness.run('pull_request');
-  assert.strictEqual(harness.createCount(), 1);
-  assert.strictEqual(harness.checks.length, 1);
-  const canonicalId = harness.checks[0].id;
-  assert.strictEqual(harness.checks[0].external_id, `merge-gate:${harness.prNumber}:${harness.headSha}`);
-  assert.strictEqual(harness.checks[0].conclusion, 'failure');
-
-  await harness.run('pull_request_review');
-  assert.strictEqual(harness.createCount(), 1, 'a pre-verdict review event must not create a second check');
-  assert.strictEqual(harness.checks.length, 1);
-  assert.strictEqual(harness.checks[0].id, canonicalId);
-  assert.strictEqual(harness.checks[0].conclusion, 'failure');
-
-  harness.labels.push('t1-approved');
-  harness.comments.push({
-    body: [
-      'PM_VERDICT: APPROVED',
-      'schema: pm-verdict/v1',
-      'Issue: UTV2-1585',
-      `PR: ${harness.prNumber}`,
-      `Head SHA: ${harness.headSha}`,
-    ].join('\n'),
-    created_at: '2026-07-24T15:30:00Z',
-    user: { login: 'griff843', type: 'User' },
-  });
-
-  await harness.run('issue_comment');
-  assert.strictEqual(harness.createCount(), 1, 'the exact-head verdict event must reuse the existing check');
-  assert.strictEqual(harness.checks.length, 1);
-  assert.strictEqual(harness.checks[0].id, canonicalId);
-  assert.strictEqual(harness.checks[0].conclusion, 'success');
-});
-
-test('UTV2-1585: T2 review approval and dismissal re-evaluate the same canonical check', async () => {
-  const harness = await createMergeGateHarness('T2');
-
-  await harness.run('pull_request');
-  assert.strictEqual(harness.checks[0].conclusion, 'failure');
-
-  harness.reviews.push({ state: 'APPROVED' });
-  await harness.run('pull_request_review');
-  assert.strictEqual(harness.checks[0].conclusion, 'success');
-
-  harness.reviews.splice(0, harness.reviews.length, { state: 'DISMISSED' });
-  await harness.run('pull_request_review');
-  assert.strictEqual(harness.checks[0].conclusion, 'failure');
-  assert.strictEqual(harness.createCount(), 1);
-  assert.strictEqual(harness.checks.length, 1);
-});
-
-test('UTV2-1585: same-identity duplicate exact-head failures are neutralized and cannot override the canonical result', async () => {
-  const headSha = '1585158515851585158515851585158515851585';
-  const harnessPrNumber = 1585;
-  const harness = await createMergeGateHarness('T3', [
-    {
-      id: 4,
-      name: 'Merge Gate',
-      head_sha: headSha,
-      external_id: `merge-gate:${harnessPrNumber}:${headSha}`,
-      app: { slug: 'github-actions' },
-      status: 'completed',
-      conclusion: 'failure',
-    },
-    {
-      id: 9,
-      name: 'Merge Gate',
-      head_sha: headSha,
-      external_id: `merge-gate:${harnessPrNumber}:${headSha}`,
-      app: { slug: 'github-actions' },
-      status: 'completed',
-      conclusion: 'failure',
-    },
-  ]);
-
-  await harness.run('pull_request');
-
-  assert.strictEqual(harness.createCount(), 0, 'an existing exact-head check must be reused');
-  assert.strictEqual(harness.checks.find((check) => check.id === 9)?.conclusion, 'success');
-  assert.strictEqual(harness.checks.find((check) => check.id === 4)?.conclusion, 'neutral');
-  assert.ok(
-    harness.checks.every((check) => check.conclusion !== 'failure'),
-    'no older same-name failure may remain capable of blocking the unchanged head',
-  );
-});
-
-// UTV2-1585 (adversarial review finding): true pre-fix duplicates -- the ones
-// actually left on already-polluted heads like PR #1304's, created by the
-// former create-on-every-event behavior -- never had a canonical (or any
-// matching) external_id set. Matching on external_id alone would let those
-// survive untouched forever. Adoption must work by name + exact head SHA +
-// app alone, regardless of external_id.
-test('UTV2-1585: pre-fix legacy duplicates without a canonical external_id are adopted and neutralized, not left blocking', async () => {
-  const headSha = '1585158515851585158515851585158515851585';
-  const harnessPrNumber = 1585;
-  // Mirrors the real state observed on PR #1304's head after the former
-  // create-on-every-event behavior: six same-head "Merge Gate" checks, none
-  // carrying the canonical external_id format, four of them failure.
-  const harness = await createMergeGateHarness('T3', [
-    { id: 100, name: 'Merge Gate', head_sha: headSha, external_id: '3dd4c479-23c0-58a9-94de-3da9c130d6a9', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
-    { id: 101, name: 'Merge Gate', head_sha: headSha, external_id: 'ea2023ef-0e17-54d1-a5ec-18c7a0431972', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
-    { id: 102, name: 'Merge Gate', head_sha: headSha, external_id: '066178b1-5a03-5e40-a62d-aae8aa550458', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
-    { id: 103, name: 'Merge Gate', head_sha: headSha, external_id: 'ee820f51-4b9a-58ba-b049-ba1e6ee02988', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
-    { id: 104, name: 'Merge Gate', head_sha: headSha, external_id: 'af7bb44a-f42d-58a9-b23f-66a41ffb4dd8', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
-    { id: 105, name: 'Merge Gate', head_sha: headSha, external_id: '', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
-  ]);
-
-  await harness.run('pull_request');
-
-  assert.strictEqual(harness.createCount(), 0, 'a same-head legacy check must be adopted, not duplicated with a 7th check');
-  assert.strictEqual(harness.checks.length, 6, 'no new check-run is created when six legacy same-head checks already exist');
-  const canonical = harness.checks.find((check) => check.id === 105);
-  assert.strictEqual(canonical?.external_id, `merge-gate:${harnessPrNumber}:${headSha}`, 'the adopted legacy check (highest id among non-canonical matches) must be bound to the canonical external_id going forward');
-  for (const legacyId of [100, 101, 102, 103, 104]) {
-    assert.strictEqual(harness.checks.find((check) => check.id === legacyId)?.conclusion, 'neutral', `legacy check ${legacyId} must be neutralized, not left as failure`);
+test('WORK-2026100501: actions-write is isolated from PR-native policy jobs', () => {
+  for (const [workflowName, nativeId, refreshId] of [
+    ['executor-result-validator.yml', 'validate', 'refresh'],
+    ['merge-gate.yml', 'gate', 'refresh'],
+  ] as const) {
+    const jobs = objectField(readWorkflowYaml(workflowName), 'jobs');
+    const nativePermissions = objectField(objectField(jobs, nativeId), 'permissions');
+    const refreshPermissions = objectField(objectField(jobs, refreshId), 'permissions');
+    assert.notStrictEqual(nativePermissions.actions, 'write', `${workflowName} native job must not write Actions`);
+    assert.notStrictEqual(nativePermissions.checks, 'write', `${workflowName} native job must not write checks`);
+    assert.strictEqual(refreshPermissions.actions, 'write', `${workflowName} refresh requires only Actions retry authority`);
+    assert.notStrictEqual(refreshPermissions.checks, 'write', `${workflowName} refresh must not write checks`);
   }
-  assert.ok(
-    harness.checks.every((check) => check.conclusion !== 'failure'),
-    'no pre-fix legacy failure may remain capable of blocking an already-polluted head once this evaluator runs',
-  );
+});
+
+test('WORK-2026100501: refresh wiring rechecks PR HEAD immediately before retry', () => {
+  for (const workflowName of ['executor-result-validator.yml', 'merge-gate.yml']) {
+    const raw = readWorkflow(workflowName);
+    const pullReads = raw.match(/github\.rest\.pulls\.get/g) ?? [];
+    assert.ok(pullReads.length >= 2, `${workflowName} must resolve and then recheck the current PR HEAD`);
+    assert.match(raw, /current\.head\.sha !== headSha/);
+    assert.match(raw, /refusing stale refresh/);
+  }
 });
 
 test('P1 fix (UTV2-1551 follow-up): tier-label-check.yml never references SYNC_BOT_TOKEN anywhere', () => {
@@ -736,12 +456,7 @@ test('P1 fix (UTV2-1551 follow-up): tier-label-apply.yml applies the label mutat
 
 test('required pull-request gates are wired to executable blocking jobs', () => {
   const requiredGateJobs = [
-    // executor-result-validator.yml is intentionally excluded here and checked
-    // separately below: UTV2-1550 makes its check name dynamic (resolved from
-    // the triggering event, not a static job.name), specifically so that
-    // pull_request-triggered runs never expose the required "Executor Result
-    // Validation" name in the first place. See the dedicated test after this
-    // one for what it asserts instead.
+    ['executor-result-validator.yml', 'validate', "${{ github.event_name == 'pull_request' && 'Executor Result Validation' || 'Executor Result Validation (ineligible event)' }}"],
     ['file-scope-lock-check.yml', 'check', 'File scope lock'],
     ['r-level-compliance-check.yml', 'r-level-compliance-check', 'R-Level Compliance Check'],
     ['return-review-packet.yml', 'return-review-packet', 'Return review packet'],
@@ -765,66 +480,32 @@ test('required pull-request gates are wired to executable blocking jobs', () => 
   }
 });
 
-test('UTV2-1550: executor-result-validator.yml never exposes the required check name on pull_request', async () => {
-  const { resolveCheckName, isRequiredCheckName, REQUIRED_CHECK_NAME, PREFLIGHT_CHECK_NAME } = await import(
-    './executor-result-validate.ts'
-  );
-
+test('WORK-2026100501: executor result publishes natively and comment/manual events only refresh it', () => {
   const workflow = readWorkflowYaml('executor-result-validator.yml');
   const pullRequest = objectField(objectField(workflow, 'on'), 'pull_request');
   const jobs = objectField(workflow, 'jobs');
-  const job = objectField(jobs, 'validate');
+  const validate = objectField(jobs, 'validate');
+  const refresh = objectField(jobs, 'refresh');
 
   assert.ok(
     stringArrayField(pullRequest, 'types').includes('synchronize'),
     'executor-result-validator.yml must rerun on synchronize',
   );
-  assert.ok(Array.isArray(job.steps), 'executor-result-validator.yml job validate must have executable steps');
-
-  // The job's own static name must NOT be the required context — otherwise
-  // GitHub's own native per-job check run would recreate the exact bug this
-  // lane fixes, regardless of the dynamic custom check name logic below.
-  assert.notStrictEqual(
-    job.name,
-    REQUIRED_CHECK_NAME,
-    'the job-level name must not equal the required check name, or every pull_request-triggered run would still create a native check under that identity',
+  assert.strictEqual(
+    validate.name,
+    "${{ github.event_name == 'pull_request' && 'Executor Result Validation' || 'Executor Result Validation (ineligible event)' }}",
   );
-
-  // The dynamic check-name resolution itself, which the workflow looks up
-  // via `tsx scripts/ops/executor-result-validate.ts resolve-check-name`
-  // rather than hand-duplicating.
-  assert.strictEqual(resolveCheckName('pull_request'), PREFLIGHT_CHECK_NAME);
-  assert.strictEqual(resolveCheckName('issue_comment'), REQUIRED_CHECK_NAME);
-  assert.strictEqual(resolveCheckName('workflow_dispatch'), REQUIRED_CHECK_NAME);
-  assert.strictEqual(isRequiredCheckName('pull_request'), false);
-  assert.strictEqual(isRequiredCheckName('issue_comment'), true);
-
-  // The workflow step that performs this resolution must exist and must
-  // call the same script the assertions above imported from, so the
-  // workflow can never hand-duplicate a diverging literal.
-  const steps = job.steps as Array<Record<string, unknown>>;
-  const resolveStep = steps.find(
-    (s) => typeof s.run === 'string' && (s.run as string).includes('executor-result-validate.ts resolve-check-name'),
-  );
-  assert.ok(resolveStep, 'executor-result-validator.yml must resolve its check name via the tested script, not a duplicated literal');
-
-  const raw = fs.readFileSync(path.join(ROOT, '.github/workflows/executor-result-validator.yml'), 'utf8');
-  assert.match(
-    raw,
-    /conclusion: passed \? 'success' : isRequired \? 'failure' : 'neutral'/,
-    'non-required executor preflight failures must be neutral while required validation stays fail-closed',
-  );
+  assert.strictEqual(stringField(validate, 'if'), "github.event_name == 'pull_request'");
+  assert.match(stringField(refresh, 'if'), /EXECUTOR_RESULT:/);
+  assert.match(stringField(refresh, 'if'), /repository\.default_branch/, 'manual refresh must refuse a non-default ref');
+  const raw = readWorkflow('executor-result-validator.yml');
+  assert.doesNotMatch(raw, /github\.rest\.checks\.(create|update)/, 'validator must not fabricate required check runs');
+  assert.match(raw, /github\.rest\.actions\.reRunWorkflow/, 'result comments must retry the eligible native run');
+  assert.match(raw, /core\.setFailed\(`Executor result validation failed:/, 'policy denial must fail the native job');
+  assert.match(raw, /Executor Result Validation \(ineligible event\)/, 'skipped non-PR jobs must not carry the protected name');
 });
 
-test('UTV2-1550 follow-up: executor-result-validator.yml never executes PR-controlled code to resolve the check name', () => {
-  // Codex P1: the "Resolve check name" step runs the checked-out copy of
-  // scripts/ops/executor-result-validate.ts in a job holding checks: write.
-  // actions/checkout defaults to the PR's own head/merge ref on pull_request
-  // events -- a PR could alter that script to defeat the identity fix above.
-  // The checkout must instead pin to the PR's base SHA (immutable, reachable
-  // from main, never PR-supplied) on pull_request; other event types keep
-  // the default github.sha, which already resolves to the base repo's
-  // default-branch HEAD for those triggers.
+test('WORK-2026100501: privileged workflow jobs execute trusted-base code only', () => {
   const workflow = readWorkflowYaml('executor-result-validator.yml');
   const jobs = objectField(workflow, 'jobs');
   const job = objectField(jobs, 'validate');
@@ -839,9 +520,18 @@ test('UTV2-1550 follow-up: executor-result-validator.yml never executes PR-contr
   const ref = withBlock.ref;
   assert.strictEqual(
     ref,
-    "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}",
-    'Checkout must pin ref to the PR base SHA on pull_request so a PR can never make the privileged job execute its own modified check-name-resolution script',
+    '${{ github.event.pull_request.base.sha }}',
+    'validation must execute the trusted PR base copy',
   );
+
+  const mergeJobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
+  for (const jobId of ['gate', 'refresh', 'wfr-validators']) {
+    const candidate = objectField(mergeJobs, jobId);
+    const candidateSteps = candidate.steps as Array<Record<string, unknown>>;
+    const checkout = candidateSteps.find((step) => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'));
+    assert.ok(checkout, `${jobId} must checkout trusted code`);
+    assert.ok(objectField(checkout, 'with').ref, `${jobId} checkout must carry an explicit trusted ref`);
+  }
 });
 
 test('UTV2-1573: executor-result-validator.yml paginates check-runs instead of a single unpaginated call', () => {
@@ -927,6 +617,55 @@ test('UTV2-1573: selectLatestVerifyCheckRun fails closed -- missing, incomplete,
   // the failure), not fall back to an older success.
   const newerFailed = { id: 3, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' };
   assert.deepStrictEqual(selectLatestVerifyCheckRun([olderSuccess, newerFailed]), newerFailed);
+});
+
+test('WORK-2026100501: refresh selection binds event, workflow, PR, and exact HEAD', async () => {
+  const { selectEligibleRefreshRun } = await import('./executor-result-check-selection.cjs');
+  const headSha = 'a'.repeat(40);
+  const options = {
+    workflowPath: '.github/workflows/merge-gate.yml',
+    prNumber: 1715,
+    headSha,
+  };
+  const eligible = {
+    id: 20,
+    event: 'pull_request',
+    path: options.workflowPath,
+    head_sha: headSha,
+    status: 'completed',
+    run_attempt: 1,
+    pull_requests: [{ number: 1715, head: { sha: headSha } }],
+  };
+  const noise = [
+    { ...eligible, id: 99, event: 'workflow_dispatch' },
+    { ...eligible, id: 98, path: '.github/workflows/other.yml' },
+    { ...eligible, id: 97, head_sha: 'b'.repeat(40) },
+    { ...eligible, id: 96, pull_requests: [{ number: 1714, head: { sha: headSha } }] },
+  ];
+  assert.deepStrictEqual(selectEligibleRefreshRun([...noise, eligible], options), eligible);
+});
+
+test('WORK-2026100501: newest exact-head retry target wins and unavailable newest is not bypassed', async () => {
+  const { selectEligibleRefreshRun } = await import('./executor-result-check-selection.cjs');
+  const headSha = 'c'.repeat(40);
+  const options = {
+    workflowPath: '.github/workflows/executor-result-validator.yml',
+    prNumber: 1720,
+    headSha,
+  };
+  const run = (id: number, status: string, runAttempt: number) => ({
+    id,
+    event: 'pull_request',
+    path: options.workflowPath,
+    head_sha: headSha,
+    status,
+    run_attempt: runAttempt,
+    pull_requests: [{ number: 1720, head: { sha: headSha } }],
+  });
+  const older = run(10, 'completed', 1);
+  const newest = run(11, 'in_progress', 2);
+  assert.deepStrictEqual(selectEligibleRefreshRun([older, newest], options), newest);
+  assert.strictEqual(selectEligibleRefreshRun([{ ...older, head_sha: 'd'.repeat(40) }], options), null);
 });
 
 test('codex return review extracts issue IDs without sed delimiter traps', () => {
@@ -1135,17 +874,14 @@ test('UTV2-1543 (Codex P1): merge-gate.yml checks out the repo, pinned to a trus
     'Checkout must run before the Evaluate merge gate step, or require(\'./scripts/ops/merge-gate-verdict.cjs\') throws before the check run is even created',
   );
 
-  // Same privilege-boundary requirement as the Executor Result Validator fix
-  // (UTV2-1550): this job holds checks/pull-requests/issues: write, so the
-  // checkout must never resolve to PR-controlled content for pull_request(_
-  // review) events, or a PR could modify merge-gate-verdict.cjs to defeat
-  // its own T1 freshness check.
+  // The native required job is pull_request-only and read-only. Its executable
+  // policy code must still come from the immutable base SHA.
   const checkoutStep = steps[checkoutIndex] as Record<string, unknown>;
   const withBlock = objectField(checkoutStep, 'with');
   assert.strictEqual(
     withBlock.ref,
-    "${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') && github.event.pull_request.base.sha || github.sha }}",
-    'Checkout must pin ref to the PR base SHA on pull_request(_review) so a PR can never make this privileged job execute its own modified verdict-validation module',
+    '${{ github.event.pull_request.base.sha }}',
+    'Checkout must pin ref to the PR base SHA so a PR cannot execute its own verdict-validation module',
   );
 });
 

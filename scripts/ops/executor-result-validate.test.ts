@@ -6,11 +6,10 @@ import {
   parseExecutorResultComment,
   selectLatestExecutorResult,
   validateExecutorResultFields,
-  resolveCheckName,
-  isRequiredCheckName,
+  resolvePublicationAction,
   proofArtifactRequired,
   REQUIRED_CHECK_NAME,
-  PREFLIGHT_CHECK_NAME,
+  REFRESH_CHECK_NAME,
   EXECUTOR_RESULT_ISSUE_ID_RE,
   EXECUTOR_RESULT_BRANCH_RE,
 } from './executor-result-validate.ts';
@@ -35,22 +34,21 @@ const CTX = {
 
 // ── check-name resolution (the core UTV2-1550 fix) ──────────────────────────
 
-test('resolveCheckName: pull_request always resolves to the non-required preflight name', () => {
-  assert.equal(resolveCheckName('pull_request'), PREFLIGHT_CHECK_NAME);
+test('pull_request publishes the native required result', () => {
+  assert.equal(resolvePublicationAction('pull_request'), 'publish-native');
+  assert.equal(REQUIRED_CHECK_NAME, 'Executor Result Validation');
 });
 
-test('resolveCheckName: issue_comment resolves to the required validation name', () => {
-  assert.equal(resolveCheckName('issue_comment'), REQUIRED_CHECK_NAME);
+test('executor-result comments and manual recovery request a native retry', () => {
+  assert.equal(resolvePublicationAction('issue_comment', 'EXECUTOR_RESULT: READY_FOR_REVIEW'), 'request-refresh');
+  assert.equal(resolvePublicationAction('workflow_dispatch'), 'request-refresh');
+  assert.equal(REFRESH_CHECK_NAME, 'Refresh Executor Result Validation');
 });
 
-test('resolveCheckName: workflow_dispatch resolves to the required validation name', () => {
-  assert.equal(resolveCheckName('workflow_dispatch'), REQUIRED_CHECK_NAME);
-});
-
-test('isRequiredCheckName: false for pull_request, true for issue_comment and workflow_dispatch', () => {
-  assert.equal(isRequiredCheckName('pull_request'), false);
-  assert.equal(isRequiredCheckName('issue_comment'), true);
-  assert.equal(isRequiredCheckName('workflow_dispatch'), true);
+test('unsupported events and unrelated comments cannot publish or refresh', () => {
+  assert.equal(resolvePublicationAction('issue_comment', 'looks good'), 'ignore');
+  assert.equal(resolvePublicationAction('push'), 'ignore');
+  assert.equal(resolvePublicationAction('schedule'), 'ignore');
 });
 
 // ── parsing ──────────────────────────────────────────────────────────────
@@ -130,13 +128,12 @@ test('validateExecutorResultFields: stale Head SHA after a push produces a head-
   assert.ok(errors.some((e) => e.includes('HEAD SHA mismatch')));
 });
 
-test('validateExecutorResultFields: this head-mismatch error must never surface under the required check name for a pull_request-triggered re-evaluation', () => {
-  // This is the actual UTV2-1550 regression: a push (pull_request: synchronize)
-  // re-evaluating a now-stale comment must report under PREFLIGHT_CHECK_NAME,
-  // never REQUIRED_CHECK_NAME, regardless of how many field errors it finds.
-  const checkNameForThisPush = resolveCheckName('pull_request');
-  assert.equal(checkNameForThisPush, PREFLIGHT_CHECK_NAME);
-  assert.notEqual(checkNameForThisPush, REQUIRED_CHECK_NAME);
+test('validateExecutorResultFields: native pull_request publication fails closed on a stale comment', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields(r, { ...CTX, headSha: 'f'.repeat(40) });
+  assert.equal(resolvePublicationAction('pull_request'), 'publish-native');
+  assert.ok(errors.some((error) => error.includes('HEAD SHA mismatch')));
 });
 
 // ── proof artifact requirement ───────────────────────────────────────────
