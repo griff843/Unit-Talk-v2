@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import fs, { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
-import { readDatabaseStatus } from '../ingestor-supervisor.js';
+import { readDatabaseStatus, stopSupervisor } from '../ingestor-supervisor.js';
+import { createTempWorkspace, releaseTempWorkspace } from './temp-workspace.js';
 import { evaluateAgeFinding, unknownMonitorFinding } from '../ingestor-alert-check.js';
 import { evaluateIngestorHealth } from '../../apps/ingestor/src/supervisor.js';
 import {
@@ -11,8 +12,9 @@ import {
   readLatestProviderOfferUpdatedAt,
 } from './ingestor-health-check.js';
 
-function brokenOfferQueries(source: string): number[] {
-  const file = ts.createSourceFile('reader.ts', source, ts.ScriptTarget.Latest, true);
+function brokenOfferQueries(source: string, filename = 'reader.ts'): number[] {
+  const file = ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true,
+    filename.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.JS);
   const hits = new Set<number>();
   function visit(node: ts.Node) {
     if (ts.isCallExpression(node)) {
@@ -51,16 +53,35 @@ function scriptFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const filename = path.join(directory, entry.name);
     if (entry.isDirectory()) return scriptFiles(filename);
-    return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [filename] : [];
+    return /\.(?:ts|js|mjs|cjs)$/u.test(entry.name) &&
+      !/\.test\.(?:ts|js|mjs|cjs)$/u.test(entry.name) &&
+      !entry.name.endsWith('.d.ts') ? [filename] : [];
   });
 }
 
 test('all scripts reject provider_offers.updated_at queries', () => {
   const hits = scriptFiles('scripts').flatMap((filename) =>
-    brokenOfferQueries(readFileSync(filename, 'utf8')).map((line) => `${filename}:${line}`),
+    brokenOfferQueries(readFileSync(filename, 'utf8'), filename).map((line) => `${filename}:${line}`),
   );
   assert.deepEqual(hits, []);
 });
+
+for (const extension of ['ts', 'js', 'mjs', 'cjs']) {
+  test(`repo-wide guard discovers and rejects executable .${extension} regressions`, () => {
+    const directory = createTempWorkspace('utv2-1799-guard-');
+    try {
+      const filename = path.join(directory, `reader.${extension}`);
+      fs.writeFileSync(filename, "db.from('provider_offers').select('updated_at')");
+      assert.deepEqual(scriptFiles(directory), [filename]);
+      assert.throws(() => assert.deepEqual(
+        scriptFiles(directory).flatMap((file) => brokenOfferQueries(readFileSync(file, 'utf8'), file)),
+        [],
+      ), assert.AssertionError);
+    } finally {
+      releaseTempWorkspace(directory);
+    }
+  });
+}
 
 for (const filename of ['scripts/ops/ingestor-health-check.ts', 'scripts/ingestor-supervisor.ts']) {
   test(`column guard inversion catches the original defect in ${filename}`, () => {
@@ -175,3 +196,39 @@ test('supervisor preserves system_runs observer failures', async (t) => {
   });
   await assert.rejects(readDatabaseStatus(environment), /system_runs freshness query failed: observer permission denied/u);
 });
+
+for (const silentIfMissing of [false, true]) {
+  for (const failure of ['query', 'transport']) {
+    test(`${silentIfMissing ? 'restart stop phase' : 'stop'} signals supervisor despite ${failure} observer failure`, async (t) => {
+      const pid = 123456;
+      t.mock.method(globalThis, 'fetch', async () => {
+        if (failure === 'transport') throw new Error('observer unreachable');
+        return new Response(JSON.stringify({ message: 'observer permission denied' }), {
+          status: 403, headers: { 'Content-Type': 'application/json' },
+        });
+      });
+      await assert.rejects(readDatabaseStatus(environment), /freshness query failed/u);
+      const fetchCalls = t.mock.method(globalThis, 'fetch', () => {
+        throw new Error('stop must not wait for DB observation');
+      });
+      t.mock.method(fs, 'existsSync', () => true);
+      t.mock.method(fs, 'readFileSync', () => JSON.stringify({ supervisorPid: pid }));
+      const signals: Array<string | number | undefined> = [];
+      let running = true;
+      t.mock.method(process, 'kill', (target: number, signal?: string | number) => {
+        assert.equal(target, pid);
+        signals.push(signal);
+        if (signal === 0) {
+          if (!running) throw Object.assign(new Error('missing'), { code: 'ESRCH' });
+        } else {
+          assert.equal(signal, 'SIGTERM');
+          running = false;
+        }
+        return true;
+      });
+      await stopSupervisor({ silentIfMissing });
+      assert.deepEqual(signals, [0, 'SIGTERM', 0]);
+      assert.equal(fetchCalls.mock.callCount(), 0);
+    });
+  }
+}

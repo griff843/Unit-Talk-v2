@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { loadEnvironment } from '@unit-talk/config';
 import {
@@ -14,6 +16,8 @@ import { transitionPickLifecycle } from './lifecycle-service.js';
 import { recordPickSettlement } from './settlement-service.js';
 
 type DatabaseRepositoryBundle = ReturnType<typeof createDatabaseRepositoryBundle>;
+
+const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 
 for (const reader of [
   { name: 'health check', module: './scripts/ops/ingestor-health-check.ts', method: 'readLatestProviderOfferUpdatedAt', result: 'value' },
@@ -29,12 +33,19 @@ for (const reader of [
   }, async (t) => {
     const environment = loadEnvironment();
     assert.ok(isApprovedStagingTarget(environment.SUPABASE_URL), 'freshness proof requires authorized staging');
-    // Invoke the real root script without crossing the API TypeScript project boundary.
-    const output = execFileSync('pnpm', ['exec', 'tsx', '-e', `
-      const { loadEnvironment } = require('@unit-talk/config');
-      const { ${reader.method} } = require('${reader.module}');
-      ${reader.method}(loadEnvironment()).then(value => console.log(JSON.stringify(${reader.result})));
-    `], { encoding: 'utf8' });
+    const originalCwd = process.cwd();
+    let output: string;
+    try {
+      // Exercise the smoke reader from a non-root caller without crossing TS project boundaries.
+      process.chdir(path.join(repositoryRoot, 'apps/api'));
+      output = execFileSync('pnpm', ['exec', 'tsx', '-e', `
+        const { loadEnvironment } = require('@unit-talk/config');
+        const { ${reader.method} } = require(${JSON.stringify(path.resolve(repositoryRoot, reader.module))});
+        ${reader.method}(loadEnvironment()).then(value => console.log(JSON.stringify(${reader.result})));
+      `], { encoding: 'utf8', cwd: repositoryRoot });
+    } finally {
+      process.chdir(originalCwd);
+    }
     const timestamp: unknown = JSON.parse(output.trim());
     assert.ok(timestamp === null || (typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp))));
     t.diagnostic(timestamp === null

@@ -1,4 +1,4 @@
-# UTV2-1799 Verification
+# PROOF: UTV2-1799
 
 MERGE_SHA: pending merge
 
@@ -11,12 +11,13 @@ Merge SHA: pending merge
 - pnpm type-check: PASS after keeping root-script execution outside the API project boundary.
 - pnpm verify:static: PASS (lint, type-check, build, full pnpm test, production-post-migration checks, Smart Form static verification, and command verification).
 - pnpm verify: static portion PASS; live portion REFUSED localhost (unidentified target), before DB proof execution.
-- pnpm exec tsx --test scripts/ops/provider-offer-column-guard.test.ts: 17 PASS.
-- pnpm exec tsx --test scripts/ingestor-alert-check.test.ts with required guard import: 40 PASS.
+- pnpm exec tsx --test scripts/ops/provider-offer-column-guard.test.ts: 25 PASS after review corrections.
+- pnpm exec tsx --test scripts/ingestor-alert-check.test.ts: 23 PASS; guard now runs directly through test:ops.
+- pnpm ops:automation-coverage-check: PASS; new guard is required-reachable, with no new unwired test.
 - pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: PASS; no matching R-level rules.
 - git diff --check: PASS.
 
-## Assertions
+## ASSERTIONS:
 
 - Both readers issue SELECT updated_at FROM provider_offer_current ORDER BY updated_at DESC LIMIT 1.
 - Fresh fixtures preserve the timestamp and healthy/OK result.
@@ -24,8 +25,13 @@ Merge SHA: pending merge
 - Empty rows, missing timestamps, and missing credentials cannot report healthy.
 - Returned query errors throw explicit observer failures; they remain distinct from stale/empty truth.
 - Existing monitor alerting/canary/member-containment tests remain green.
+- Stop and restart's stop phase use only local supervisor state and process checks, never DB observation. Mocked query and transport failures do not prevent SIGTERM.
+- Executable .ts, .js, .mjs, and .cjs files participate in the guard; each extension has a filesystem-discovery inversion regression.
+- Staging smoke execution resolves reader modules absolutely from import.meta.url and fixes child cwd to the repository root. Both smoke cases exercise a non-root caller and restore its cwd.
 
-## Guard Inversion
+## EVIDENCE:
+
+### Guard Inversion
 
 Each original query was separately changed back to provider_offers, then the executable repo-wide guard was run:
 

@@ -279,17 +279,17 @@ function printHumanStatus(status: RuntimeStatus) {
   }
 }
 
-async function stopSupervisor(options: { silentIfMissing?: boolean } = {}) {
-  const status = await collectRuntimeStatus();
+export async function stopSupervisor(options: { silentIfMissing?: boolean } = {}) {
+  const state = readSupervisorState();
 
-  if (!status.supervisorRunning) {
+  if (!isProcessRunning(state.supervisorPid)) {
     if (!options.silentIfMissing) {
       console.log('Ingestor supervisor is not running.');
     }
     return;
   }
 
-  const supervisorPid = status.supervisorState.supervisorPid;
+  const supervisorPid = state.supervisorPid;
   if (!supervisorPid) {
     throw new Error('Supervisor pid missing from runtime state.');
   }

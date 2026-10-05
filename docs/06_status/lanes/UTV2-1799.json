@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/database-smoke.test.ts",
+    "package.json",
     "scripts/ingestor-alert-check.test.ts",
     "scripts/ingestor-supervisor.ts",
     "scripts/ops/ingestor-health-check.ts",
