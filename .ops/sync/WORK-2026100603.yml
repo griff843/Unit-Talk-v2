@@ -1,0 +1,265 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100603
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100603
+  objective: "Griff explicitly authorized a separate governed T1 executor-control
+    repair on 2026-10-06. Repair the measured executor blocker on draft PR #1720
+    / WORK-2026100602 without changing admission code, product implementation,
+    or merge authority. The original evidence correction is already implemented;
+    this lane changes only the sanctioned executor control and its focused
+    regressions. After normal governed merge, resume #1720 through the repaired
+    sanctioned executor and genuinely complete all phases before requesting
+    #1720 PM merge approval."
+  acceptance_criteria:
+    - Preserve mandatory immutable epoch/baseline binding, ancestry, genuine
+      completed phase records, resume/rework isolation, real model provenance,
+      fail-closed corroboration, zero-diff rejection, and all existing
+      T1/PM/CI/merge controls. No automatic phase completion and no fake
+      attestation.
+    - Narrowly admit real implementation changes to an existing external
+      evidence artifact when its exact path was explicitly assigned in the
+      frozen admitted scope and acceptance criteria. Read authorization from
+      committed original admission/epoch state, not caller flags or mutable
+      current metadata. Exclude this lane's own
+      proof/model/checkpoint/manifest/sync/work artifacts and arbitrary
+      documentation. Require a real structural artifact change, not formatting,
+      a new artifact, symlink, or replayed old change. Normal source work and
+      rejected-epoch behavior must remain protected.
+    - "Clarify the actual executor pre-merge closeout duties in its
+      packet/prompt: prepare and verify the review artifacts and draft PR,
+      record genuinely completed executor phases with the correct CLI flags, and
+      preserve PM approval, merge, lane-finalization and truth-check as pending
+      post-executor actions. A completed executor phase is never a claim that
+      the PR merged or lane closed. Do not publish executor-result/v1
+      READY_FOR_REVIEW before the outer mandatory execution-truth verdict and
+      provenance persistence; a failure must remain visibly failed."
+    - Add deterministic node:test/assert regressions in the existing codex-exec
+      and execution-packet suites. Cover a legitimate external proof correction,
+      own bookkeeping-only and zero-diff rejection, out-of-scope/unassigned
+      artifacts, mutable scope/contract injection, corrupt/missing frozen
+      authority, cosmetic/invalid/new/deleted/symlink evidence, incomplete
+      phases, same-epoch resume, rework requiring a new artifact change, and
+      truthful pre-merge versus post-merge closeout/publication instructions.
+      Preserve existing test counts.
+    - "Where to look: scripts/ops/codex-exec.ts, scripts/ops/codex-exec.test.ts,
+      scripts/ops/execution-packet.ts and scripts/ops/execution-packet.test.ts.
+      Inspect the failed machine result in PR #1720 and the existing immutable
+      checkpoint/source guard before changing code. Do not edit #1720
+      concurrently."
+    - Execute through ops:codex-exec using the enabled codex-sol-high
+      rescue/verification profile because two real medium executor attempts left
+      phases incomplete. A sanctioned child must not recursively invoke
+      ops:codex-exec. Run focused tests, pnpm verify and R-level, then
+      exact-HEAD protected writable staging/T1 CI. Retain actual negative runs,
+      CLI exit and wrapper verdict separately. Open a separate draft tier:T1 PR
+      through the normal template and metadata path. No false claim that local
+      writable verification passed when containment deferred it to CI.
+    - "Definition of done: normal governed T1 merge after genuine binding PM
+      approval, followed by sanctioned #1720 re-execution and fresh exact-HEAD
+      proof. Do not self-sign pm-verdict/v1, apply t1-approved, use admin
+      merge/direct-main, or treat this work order as an exact-HEAD PM merge
+      signature. Return a concrete verified review candidate if that reserved
+      approval is still needed; continue authorized technical sequencing
+      automatically otherwise."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100603 — executor truth for governed proof-only repairs
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Invariants
+
+
+      No admission-code or #1719 changes,
+      Discord/product/settlement/grading/scoring/routing/provider/activation
+      changes, new secrets or production writes, workflow privilege repair
+      bundled here, branch protection/check weakening, work-ID special case,
+      runtime/evidence fabrication, broad governance redesign, original
+      WORK-2026100501 evidence changes, or mission policy edits. Keep the
+      downstream hold: executor repair, then #1720, truthful WORK-2026100501
+      closeout, separate P1 workflow safety repair, production Shadow, #1714,
+      deployment/live Discord verification.
+
+
+      ## File Scope
+
+
+      - scripts/ops/codex-exec.ts
+
+      - scripts/ops/codex-exec.test.ts
+
+      - scripts/ops/execution-packet.ts
+
+      - scripts/ops/execution-packet.test.ts
+
+      - .ops/work/WORK-2026100603.md
+
+      - .ops/sync/WORK-2026100603.yml
+
+      - docs/06_status/lanes/WORK-2026100603.json
+
+      - docs/06_status/proof/WORK-2026100603/**
+
+
+      ## Proof
+
+
+      Named lane proof only: measured root cause, narrow
+      authorization/corroboration design, focused positive and adversarial
+      regression results, genuine executor phase/provenance/negative history,
+      exact-HEAD CI/staging and normal PM/governed merge evidence. No unrelated
+      status/documentation changes. Machine success must come from the
+      sanctioned wrapper, not a manually authored claim.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100603.md
+    title: WORK-2026100603 — executor truth for governed proof-only repairs
+    description: >-
+      # WORK-2026100603 — executor truth for governed proof-only repairs
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Griff explicitly authorized a separate governed T1 executor-control repair
+      on 2026-10-06. Repair the measured executor blocker on draft PR #1720 /
+      WORK-2026100602 without changing admission code, product implementation,
+      or merge authority. The original evidence correction is already
+      implemented; this lane changes only the sanctioned executor control and
+      its focused regressions. After normal governed merge, resume #1720 through
+      the repaired sanctioned executor and genuinely complete all phases before
+      requesting #1720 PM merge approval.
+
+
+      ## Acceptance Criteria
+
+
+      - Preserve mandatory immutable epoch/baseline binding, ancestry, genuine
+      completed phase records, resume/rework isolation, real model provenance,
+      fail-closed corroboration, zero-diff rejection, and all existing
+      T1/PM/CI/merge controls. No automatic phase completion and no fake
+      attestation.
+
+      - Narrowly admit real implementation changes to an existing external
+      evidence artifact when its exact path was explicitly assigned in the
+      frozen admitted scope and acceptance criteria. Read authorization from
+      committed original admission/epoch state, not caller flags or mutable
+      current metadata. Exclude this lane's own
+      proof/model/checkpoint/manifest/sync/work artifacts and arbitrary
+      documentation. Require a real structural artifact change, not formatting,
+      a new artifact, symlink, or replayed old change. Normal source work and
+      rejected-epoch behavior must remain protected.
+
+      - Clarify the actual executor pre-merge closeout duties in its
+      packet/prompt: prepare and verify the review artifacts and draft PR,
+      record genuinely completed executor phases with the correct CLI flags, and
+      preserve PM approval, merge, lane-finalization and truth-check as pending
+      post-executor actions. A completed executor phase is never a claim that
+      the PR merged or lane closed. Do not publish executor-result/v1
+      READY_FOR_REVIEW before the outer mandatory execution-truth verdict and
+      provenance persistence; a failure must remain visibly failed.
+
+      - Add deterministic node:test/assert regressions in the existing
+      codex-exec and execution-packet suites. Cover a legitimate external proof
+      correction, own bookkeeping-only and zero-diff rejection,
+      out-of-scope/unassigned artifacts, mutable scope/contract injection,
+      corrupt/missing frozen authority, cosmetic/invalid/new/deleted/symlink
+      evidence, incomplete phases, same-epoch resume, rework requiring a new
+      artifact change, and truthful pre-merge versus post-merge
+      closeout/publication instructions. Preserve existing test counts.
+
+      - Where to look: scripts/ops/codex-exec.ts,
+      scripts/ops/codex-exec.test.ts, scripts/ops/execution-packet.ts and
+      scripts/ops/execution-packet.test.ts. Inspect the failed machine result in
+      PR #1720 and the existing immutable checkpoint/source guard before
+      changing code. Do not edit #1720 concurrently.
+
+      - Execute through ops:codex-exec using the enabled codex-sol-high
+      rescue/verification profile because two real medium executor attempts left
+      phases incomplete. A sanctioned child must not recursively invoke
+      ops:codex-exec. Run focused tests, pnpm verify and R-level, then
+      exact-HEAD protected writable staging/T1 CI. Retain actual negative runs,
+      CLI exit and wrapper verdict separately. Open a separate draft tier:T1 PR
+      through the normal template and metadata path. No false claim that local
+      writable verification passed when containment deferred it to CI.
+
+      - Definition of done: normal governed T1 merge after genuine binding PM
+      approval, followed by sanctioned #1720 re-execution and fresh exact-HEAD
+      proof. Do not self-sign pm-verdict/v1, apply t1-approved, use admin
+      merge/direct-main, or treat this work order as an exact-HEAD PM merge
+      signature. Return a concrete verified review candidate if that reserved
+      approval is still needed; continue authorized technical sequencing
+      automatically otherwise.
+
+
+      ## Invariants
+
+
+      No admission-code or #1719 changes,
+      Discord/product/settlement/grading/scoring/routing/provider/activation
+      changes, new secrets or production writes, workflow privilege repair
+      bundled here, branch protection/check weakening, work-ID special case,
+      runtime/evidence fabrication, broad governance redesign, original
+      WORK-2026100501 evidence changes, or mission policy edits. Keep the
+      downstream hold: executor repair, then #1720, truthful WORK-2026100501
+      closeout, separate P1 workflow safety repair, production Shadow, #1714,
+      deployment/live Discord verification.
+
+
+      ## File Scope
+
+
+      - scripts/ops/codex-exec.ts
+
+      - scripts/ops/codex-exec.test.ts
+
+      - scripts/ops/execution-packet.ts
+
+      - scripts/ops/execution-packet.test.ts
+
+      - .ops/work/WORK-2026100603.md
+
+      - .ops/sync/WORK-2026100603.yml
+
+      - docs/06_status/lanes/WORK-2026100603.json
+
+      - docs/06_status/proof/WORK-2026100603/**
+
+
+      ## Proof
+
+
+      Named lane proof only: measured root cause, narrow
+      authorization/corroboration design, focused positive and adversarial
+      regression results, genuine executor phase/provenance/negative history,
+      exact-HEAD CI/staging and normal PM/governed merge evidence. No unrelated
+      status/documentation changes. Machine success must come from the
+      sanctioned wrapper, not a manually authored claim.
+    captured_at: 2026-10-06T21:15:32.180Z
+    description_sha256: 2aebafdf0cd30828c905c49fa4e8ddf4d54194aabaa8187a735555ffcfa3bd49
+  contract_hash: 6790095a72c02043c005a6878f6bc073a6b2ba2de8a2e045f8f2de24c2616a07
