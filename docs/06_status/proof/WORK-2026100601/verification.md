@@ -5,7 +5,7 @@ MERGE_SHA: pending merge
 Issue: WORK-2026100601
 Tier: T1
 Lane type: governance
-Implementation SHA: 6cf66a1af0494321e9a2e740d4cc17760147390f
+Implementation SHA: 6cf66a1af24f32bd68a10e310e0b2705a0f19f14
 result: static_pass_live_db_deferred_to_staging_ci
 
 ## Technical review rework resolved

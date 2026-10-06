@@ -16,7 +16,7 @@ was neither regenerated nor represented as new evidence.
 
 ## SHA Binding
 
-Implementation SHA: `6cf66a1af0494321e9a2e740d4cc17760147390f`
+Implementation SHA: `6cf66a1af24f32bd68a10e310e0b2705a0f19f14`
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1719
