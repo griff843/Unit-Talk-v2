@@ -1,0 +1,16 @@
+{
+  "test": "assigned lane-owned proof alone",
+  "expected": "FAIL_CLOSED",
+  "actual": {
+    "ok": false,
+    "code": "IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE",
+    "exit_code": 1,
+    "message": "fresh epoch afb47168-8125-4085-99ca-fa6844a9adf3 claimed implementation but changed zero source files from d42ae60c10031e0e6e01499c2541f30a2e2cf61d",
+    "source_files_changed": 0,
+    "evidence_artifacts_changed": 0,
+    "changed_files": [
+      "artifacts/r2-determinism-WORK-9990001.json"
+    ],
+    "checkpoint_provenance": "primary"
+  }
+}

@@ -38,14 +38,66 @@ import {
 
 const REAL_POLICY_VERSION = loadModelRoutingPolicy().policy_version;
 
-function initTruthRepo(): { dir: string; checkpointDir: string; baseline: string } {
+interface TruthRepoOptions {
+  issueId?: string;
+  scope?: string[];
+  expectedProofPaths?: string[];
+  acceptanceCriteria?: string[];
+  initialFiles?: Record<string, string>;
+  authority?: 'valid' | 'missing' | 'corrupt-sync';
+}
+
+function initTruthRepo(options: TruthRepoOptions = {}): { dir: string; checkpointDir: string; baseline: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1711-truth-'));
   const checkpointDir = path.join(dir, 'checkpoints');
+  const issueId = options.issueId ?? 'UTV2-1711';
   spawnSync('git', ['init', '--initial-branch=main'], { cwd: dir, stdio: 'pipe' });
   spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir, stdio: 'pipe' });
   spawnSync('git', ['config', 'user.name', 'Test'], { cwd: dir, stdio: 'pipe' });
   fs.writeFileSync(path.join(dir, 'README.md'), 'seed\n');
-  spawnSync('git', ['add', 'README.md'], { cwd: dir, stdio: 'pipe' });
+  for (const [relativePath, content] of Object.entries(options.initialFiles ?? {})) {
+    fs.mkdirSync(path.dirname(path.join(dir, relativePath)), { recursive: true });
+    fs.writeFileSync(path.join(dir, relativePath), content);
+  }
+
+  if ((options.authority ?? 'valid') !== 'missing') {
+    const manifestPath = path.join(dir, 'docs', '06_status', 'lanes', `${issueId}.json`);
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    fs.writeFileSync(
+      manifestPath,
+      `${JSON.stringify({
+        issue_id: issueId,
+        file_scope_lock: options.scope ?? ['scripts/**'],
+        expected_proof_paths: options.expectedProofPaths ?? [],
+      }, null, 2)}\n`,
+    );
+    const syncPath = path.join(dir, '.ops', 'sync', `${issueId}.yml`);
+    fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+    if (options.authority === 'corrupt-sync') {
+      fs.writeFileSync(syncPath, 'task_contract: [not-valid\n');
+    } else {
+      const acceptanceCriteria = options.acceptanceCriteria ?? ['Change implementation under scripts/.'];
+      const contract = buildTaskContract(
+        {
+          identifier: issueId,
+          title: 'Execution truth fixture',
+          url: `file:.ops/work/${issueId}.md`,
+          description: [
+            '## Objective',
+            'Exercise execution truth.',
+            '',
+            '## Acceptance criteria',
+            ...acceptanceCriteria.map((criterion) => `- ${criterion}`),
+          ].join('\n'),
+        },
+        '2026-10-06T00:00:00.000Z',
+        'local-description',
+      );
+      fs.writeFileSync(syncPath, buildSyncYmlWithTaskContract(issueId, contract));
+    }
+  }
+
+  spawnSync('git', ['add', '-A'], { cwd: dir, stdio: 'pipe' });
   spawnSync('git', ['commit', '-m', 'seed'], { cwd: dir, stdio: 'pipe' });
   const baseline = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
   return { dir, checkpointDir, baseline };
@@ -60,6 +112,12 @@ function commitTruthFile(repo: string, relativePath: string, content: string): s
   return spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
 }
 
+function commitTruthWorktree(repo: string, message: string): string {
+  spawnSync('git', ['add', '-A'], { cwd: repo, stdio: 'pipe' });
+  spawnSync('git', ['commit', '-m', message], { cwd: repo, stdio: 'pipe' });
+  return spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
+}
+
 function completeSuccessPhases(issueId: string, checkpointDir: string, identity: ExecutionStateIdentity): void {
   recordPhaseComplete(issueId, 'implement', 'implementation complete', { dir: checkpointDir, identity });
   recordPhaseComplete(issueId, 'verify', 'verification complete', { dir: checkpointDir, identity });
@@ -71,7 +129,7 @@ test('codex-exec module imports without error', async () => {
 });
 
 test('production truth path fails a zero-diff fresh claim and succeeds after real current-epoch source work', () => {
-  const repo = initTruthRepo();
+  const repo = initTruthRepo({ scope: ['./scripts\\**/'] });
   try {
     const issueId = 'UTV2-1711';
     const started = beginAttempt({
@@ -103,6 +161,442 @@ test('production truth path fails a zero-diff fresh claim and succeeds after rea
     });
     assert.equal(changed.code, 'SUCCESS');
     assert.equal(changed.source_files_changed, 1);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('frozen scope keeps canonical exact, directory, and double-star semantics without general single-star globs', () => {
+  const issueId = 'UTV2-1711';
+  const repo = initTruthRepo({ scope: ['scripts/*'] });
+  try {
+    const started = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+    commitTruthFile(repo.dir, 'scripts/source-change.ts', 'export const changed = true;\n');
+    const verdict = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+    });
+    assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE');
+    assert.equal(verdict.source_files_changed, 0);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('authorized external proof correction succeeds on a same-epoch resume with source and artifact counters kept distinct', () => {
+  const issueId = 'UTV2-1711';
+  const target = 'docs/06_status/proof/WORK-2026100501/evidence.json';
+  const repo = initTruthRepo({
+    issueId,
+    scope: [target, `docs/06_status/proof/${issueId}/**`],
+    acceptanceCriteria: [`Remove only merge_sha from ${target}. Then verify the bundle.`],
+    initialFiles: { [target]: '{"result":"pass","merge_sha":null}\n' },
+  });
+  try {
+    const timeoutPolicy = resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'implement' });
+    const first = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec', timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    recordPhaseComplete(issueId, 'implement', 'removed malformed field', {
+      dir: repo.checkpointDir, identity: first.identity,
+    });
+    const implementedHead = commitTruthFile(repo.dir, target, '{"result":"pass"}\n');
+    finishAttempt({
+      issueId, outcome: 'timed_out', reason: 'interrupted in verify',
+      dir: repo.checkpointDir, identity: first.identity,
+    });
+
+    const resumed = beginAttempt({
+      kind: 'resume', issueId, attemptStartSha: implementedHead, timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    recordPhaseComplete(issueId, 'verify', 'schema regression passed', {
+      dir: repo.checkpointDir, identity: resumed.identity,
+    });
+    recordPhaseComplete(issueId, 'closeout', 'draft review artifacts prepared', {
+      dir: repo.checkpointDir, identity: resumed.identity,
+    });
+    const verdict = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: resumed.identity,
+    });
+    assert.equal(verdict.code, 'SUCCESS');
+    assert.equal(verdict.source_files_changed, 0);
+    assert.equal(verdict.evidence_artifacts_changed, 1);
+    assert.equal(resumed.checkpoint.epoch.implementation_baseline_sha, repo.baseline);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('own bookkeeping and inherited out-of-scope source changes cannot corroborate execution', () => {
+  const issueId = 'UTV2-1711';
+  for (const [relativePath, content] of [
+    [`docs/06_status/proof/${issueId}/evidence.json`, '{"claim":"complete"}\n'],
+    ['packages/unassigned/source.ts', 'export const inherited = true;\n'],
+    ['.out/ops/execution-checkpoints/fake.json', '{"phase":"closeout"}\n'],
+  ] as const) {
+    const repo = initTruthRepo();
+    try {
+      const started = beginAttempt({
+        kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+        objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+        timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+        dir: repo.checkpointDir,
+      });
+      completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+      commitTruthFile(repo.dir, relativePath, content);
+      const verdict = evaluateExecutionTruth({
+        issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+      });
+      assert.equal(verdict.ok, false, relativePath);
+      assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE', relativePath);
+      assert.equal(verdict.source_files_changed, 0);
+      assert.equal(verdict.evidence_artifacts_changed, 0);
+    } finally {
+      fs.rmSync(repo.dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('assigned generated reports, checkpoints, and lane receipts cannot corroborate execution', () => {
+  const issueId = 'UTV2-1711';
+  const fixtures = [
+    { relativePath: `docs/06_status/proof/${issueId}/evidence.json`, content: '{"claim":"complete"}\n' },
+    { relativePath: `docs/06_status/proof/${issueId}/model-routing.json`, content: '{"model":"claimed"}\n' },
+    { relativePath: `docs/06_status/proof/${issueId}/executor-result.json`, content: '{"status":"ready"}\n' },
+    { relativePath: `docs/06_status/lanes/${issueId}.json`, content: '{"status":"done"}\n' },
+    { relativePath: `.ops/sync/${issueId}.yml`, content: 'status: done\n' },
+    { relativePath: `.out/ops/execution-checkpoints/${issueId}.json`, content: '{"phase":"closeout"}\n' },
+    { relativePath: `artifacts/r2-determinism-${issueId}.json`, content: '{"result":"pass"}\n' },
+    {
+      relativePath: `reports/${issueId}-verification-receipt.json`,
+      content: '{"result":"pass"}\n',
+      expectedProofPath: true,
+    },
+  ];
+
+  for (const fixture of fixtures) {
+    const repo = initTruthRepo({
+      scope: [fixture.relativePath],
+      expectedProofPaths: fixture.expectedProofPath ? [fixture.relativePath] : [],
+      acceptanceCriteria: [`Produce ${fixture.relativePath}.`],
+    });
+    try {
+      const started = beginAttempt({
+        kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+        objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+        timeoutPolicy: resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'implement' }),
+        dir: repo.checkpointDir,
+      });
+      completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+      commitTruthFile(repo.dir, fixture.relativePath, fixture.content);
+      const verdict = evaluateExecutionTruth({
+        issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+      });
+      assert.equal(verdict.ok, false, fixture.relativePath);
+      assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE', fixture.relativePath);
+      assert.equal(verdict.source_files_changed, 0, fixture.relativePath);
+      assert.equal(verdict.evidence_artifacts_changed, 0, fixture.relativePath);
+    } finally {
+      fs.rmSync(repo.dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('external evidence must be assigned in both frozen scope and frozen acceptance criteria', () => {
+  const issueId = 'UTV2-1711';
+  const target = 'docs/06_status/proof/WORK-2026100501/evidence.json';
+  const cases = [
+    { scope: ['scripts/**'], criteria: [`Correct ${target}.`], label: 'out of scope' },
+    { scope: [target], criteria: ['Correct the assigned proof artifact.'], label: 'unnamed' },
+    { scope: [target], criteria: [`Correct ${target}.backup.`], label: 'path prefix only' },
+  ];
+  for (const fixture of cases) {
+    const repo = initTruthRepo({
+      scope: fixture.scope,
+      acceptanceCriteria: fixture.criteria,
+      initialFiles: { [target]: '{"value":1}\n' },
+    });
+    try {
+      const started = beginAttempt({
+        kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+        objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+        timeoutPolicy: resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'implement' }),
+        dir: repo.checkpointDir,
+      });
+      completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+      commitTruthFile(repo.dir, target, '{"value":2}\n');
+      const verdict = evaluateExecutionTruth({
+        issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+      });
+      assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE', fixture.label);
+    } finally {
+      fs.rmSync(repo.dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('original admission authority survives rework and rejects mutable scope and contract injection', () => {
+  const issueId = 'UTV2-1711';
+  const target = 'docs/06_status/proof/WORK-2026100501/evidence.json';
+  const repo = initTruthRepo({ initialFiles: { [target]: '{"value":1}\n' } });
+  try {
+    const timeoutPolicy = resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'implement' });
+    const started = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+      timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+    fs.writeFileSync(
+      path.join(repo.dir, 'docs', '06_status', 'lanes', `${issueId}.json`),
+      `${JSON.stringify({ issue_id: issueId, file_scope_lock: [target] }, null, 2)}\n`,
+    );
+    const injected = buildTaskContract(
+      {
+        identifier: issueId, title: 'Injected contract', url: `file:.ops/work/${issueId}.md`,
+        description: `## Objective\nInject authority.\n\n## Acceptance criteria\n- Correct ${target}.`,
+      },
+      '2026-10-06T00:00:01.000Z',
+      'local-description',
+    );
+    fs.writeFileSync(
+      path.join(repo.dir, '.ops', 'sync', `${issueId}.yml`),
+      buildSyncYmlWithTaskContract(issueId, injected),
+    );
+    fs.writeFileSync(path.join(repo.dir, target), '{"value":2}\n');
+    commitTruthWorktree(repo.dir, 'inject mutable authority and artifact');
+    const verdict = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+    });
+    assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE');
+    assert.equal(verdict.evidence_artifacts_changed, 0);
+
+    finishAttempt({
+      issueId, outcome: 'failed', reason: 'injected authority rejected',
+      dir: repo.checkpointDir, identity: started.identity,
+    });
+    const injectedHead = spawnSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo.dir, encoding: 'utf8', stdio: 'pipe',
+    }).stdout.trim();
+    const rework = beginAttempt({
+      kind: 'rework', issueId, rejectedHeadSha: injectedHead,
+      objectiveIdentity: `issue:${issueId}`, findingsIdentity: 'review-round-1',
+      authority: 'codex-exec', timeoutPolicy, dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, rework.identity);
+    commitTruthFile(repo.dir, target, '{"value":3}\n');
+    const reworkVerdict = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: rework.identity,
+    });
+    assert.equal(reworkVerdict.code, 'REWORK_NO_SOURCE_CHANGE');
+    assert.equal(reworkVerdict.evidence_artifacts_changed, 0);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('missing or corrupt frozen admission authority fails closed', () => {
+  const issueId = 'UTV2-1711';
+  for (const authority of ['missing', 'corrupt-sync'] as const) {
+    const repo = initTruthRepo({ authority });
+    try {
+      const started = beginAttempt({
+        kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+        objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+        timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+        dir: repo.checkpointDir,
+      });
+      completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+      commitTruthFile(repo.dir, 'scripts/change.ts', 'export const changed = true;\n');
+      const verdict = evaluateExecutionTruth({
+        issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+      });
+      assert.equal(verdict.code, 'EXECUTION_AUTHORITY_UNAVAILABLE', authority);
+      assert.match(verdict.message, /frozen execution authority is unavailable/);
+    } finally {
+      fs.rmSync(repo.dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('cosmetic, invalid, non-object, new, deleted, and symlink evidence cannot corroborate execution', () => {
+  const issueId = 'UTV2-1711';
+  const target = 'docs/06_status/proof/WORK-2026100501/evidence.json';
+  const cases: Array<{ label: string; initial?: string; mutate: (repo: string) => void }> = [
+    {
+      label: 'cosmetic', initial: '{"a":1,"b":2}\n',
+      mutate: repo => { fs.writeFileSync(path.join(repo, target), '{\n  "b": 2,\n  "a": 1\n}\n'); },
+    },
+    {
+      label: 'invalid', initial: '{"a":1}\n',
+      mutate: repo => { fs.writeFileSync(path.join(repo, target), '{invalid\n'); },
+    },
+    {
+      label: 'scalar', initial: '1\n',
+      mutate: repo => { fs.writeFileSync(path.join(repo, target), '2\n'); },
+    },
+    {
+      label: 'array', initial: '[{"a":1}]\n',
+      mutate: repo => { fs.writeFileSync(path.join(repo, target), '[{"a":2}]\n'); },
+    },
+    {
+      label: 'object replaced by array', initial: '{"a":1}\n',
+      mutate: repo => { fs.writeFileSync(path.join(repo, target), '[{"a":2}]\n'); },
+    },
+    {
+      label: 'new',
+      mutate: repo => {
+        fs.mkdirSync(path.dirname(path.join(repo, target)), { recursive: true });
+        fs.writeFileSync(path.join(repo, target), '{"a":2}\n');
+      },
+    },
+    {
+      label: 'deleted', initial: '{"a":1}\n',
+      mutate: repo => { fs.rmSync(path.join(repo, target)); },
+    },
+    {
+      label: 'symlink', initial: '{"a":1}\n',
+      mutate: repo => {
+        fs.rmSync(path.join(repo, target));
+        fs.symlinkSync('../../../../README.md', path.join(repo, target));
+      },
+    },
+  ];
+  for (const fixture of cases) {
+    const repo = initTruthRepo({
+      scope: [target],
+      acceptanceCriteria: [`Correct ${target}.`],
+      initialFiles: fixture.initial === undefined ? {} : { [target]: fixture.initial },
+    });
+    try {
+      const started = beginAttempt({
+        kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+        objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+        timeoutPolicy: resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'implement' }),
+        dir: repo.checkpointDir,
+      });
+      completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+      fixture.mutate(repo.dir);
+      commitTruthWorktree(repo.dir, `${fixture.label} evidence`);
+      const verdict = evaluateExecutionTruth({
+        issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+      });
+      assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE', fixture.label);
+      assert.equal(verdict.evidence_artifacts_changed, 0, fixture.label);
+    } finally {
+      fs.rmSync(repo.dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('external proof rework requires a new structural artifact change from the rejected head', () => {
+  const issueId = 'UTV2-1711';
+  const target = 'docs/06_status/proof/WORK-2026100501/evidence.json';
+  const repo = initTruthRepo({
+    scope: [target],
+    acceptanceCriteria: [`Correct ${target}.`],
+    initialFiles: { [target]: '{"value":1}\n' },
+  });
+  try {
+    const timeoutPolicy = resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'implement' });
+    const initial = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec', timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    commitTruthFile(repo.dir, target, '{"value":2}\n');
+    completeSuccessPhases(issueId, repo.checkpointDir, initial.identity);
+    finishAttempt({
+      issueId, outcome: 'failed', reason: 'review rejected',
+      dir: repo.checkpointDir, identity: initial.identity,
+    });
+    const rejectedHead = spawnSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo.dir, encoding: 'utf8', stdio: 'pipe',
+    }).stdout.trim();
+    const rework = beginAttempt({
+      kind: 'rework', issueId, rejectedHeadSha: rejectedHead,
+      objectiveIdentity: `issue:${issueId}`, findingsIdentity: 'review-round-1',
+      authority: 'codex-exec', timeoutPolicy, dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, rework.identity);
+    const replayed = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: rework.identity,
+    });
+    assert.equal(replayed.code, 'REWORK_NO_SOURCE_CHANGE');
+
+    commitTruthFile(repo.dir, target, '{"value":3}\n');
+    const corrected = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: rework.identity,
+    });
+    assert.equal(corrected.code, 'SUCCESS');
+    assert.equal(corrected.source_files_changed, 0);
+    assert.equal(corrected.evidence_artifacts_changed, 1);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('execution truth still refuses an implementation with incomplete phases', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const started = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    recordPhaseComplete(issueId, 'implement', 'source complete', {
+      dir: repo.checkpointDir, identity: started.identity,
+    });
+    commitTruthFile(repo.dir, 'scripts/change.ts', 'export const changed = true;\n');
+    const verdict = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+    });
+    assert.equal(verdict.code, 'INCOMPLETE_PHASE_PROGRESSION');
+    assert.match(verdict.message, /verify, closeout/);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('external-proof-only execution with no completed closeout phase fails closed', () => {
+  const issueId = 'UTV2-1711';
+  const target = 'docs/06_status/proof/WORK-2026100501/evidence.json';
+  const repo = initTruthRepo({
+    scope: [target],
+    acceptanceCriteria: [`Correct ${target}.`],
+    initialFiles: { [target]: '{"value":1}\n' },
+  });
+  try {
+    const started = beginAttempt({
+      kind: 'fresh', issueId, currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`, authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    recordPhaseComplete(issueId, 'implement', 'artifact corrected', {
+      dir: repo.checkpointDir, identity: started.identity,
+    });
+    recordPhaseComplete(issueId, 'verify', 'artifact verified', {
+      dir: repo.checkpointDir, identity: started.identity,
+    });
+    commitTruthFile(repo.dir, target, '{"value":2}\n');
+    const verdict = evaluateExecutionTruth({
+      issueId, cwd: repo.dir, checkpointDir: repo.checkpointDir, stateIdentity: started.identity,
+    });
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.code, 'INCOMPLETE_PHASE_PROGRESSION');
+    assert.match(verdict.message, /closeout/);
   } finally {
     fs.rmSync(repo.dir, { recursive: true, force: true });
   }
@@ -573,6 +1067,23 @@ test('codex-exec.ts persists evidence before emitting either a SUCCESS or EXECUT
     evidencePersistenceFailedIndex < successIndex,
     'a persistence failure must be checked and reported BEFORE a SUCCESS result could ever be emitted -- ' +
       'this is what prevents a successful Codex run with a dangling, uncommitted evidence file from being reported READY_FOR_REVIEW',
+  );
+});
+
+test('outer truth verdict follows provenance persistence and keeps the child exit separate', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  const persistenceIndex = source.indexOf('const persistence = commitAndPushEvidence(');
+  const truthIndex = source.indexOf('const truth = evaluateExecutionTruth(', persistenceIndex);
+  const successIndex = source.indexOf("code: 'SUCCESS'", truthIndex);
+  assert.ok(persistenceIndex >= 0 && truthIndex > persistenceIndex);
+  assert.ok(successIndex > truthIndex, 'SUCCESS/READY_FOR_REVIEW eligibility must follow mandatory truth');
+  const truthFailure = source.slice(truthIndex, successIndex);
+  assert.match(truthFailure, /codex_exit_code: exitCode/);
+  assert.match(truthFailure, /wrapper_exit_code: truth\.exit_code/);
+  assert.doesNotMatch(
+    source.slice(persistenceIndex, successIndex),
+    /EXECUTOR_RESULT: READY_FOR_REVIEW/,
+    'the child wrapper must not publish review readiness before its verdict',
   );
 });
 

@@ -1967,10 +1967,13 @@ function buildCloseoutInstructions(
 
   instructions.push(
     'Run npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD',
-    `Open PR with title matching feat(ops): ${issueId} description`,
+    `Prepare and verify the review artifacts, then open or update a draft PR with title matching feat(ops): ${issueId} description`,
     `Apply tier label: gh pr edit <PR-number> --add-label tier:${tier}`,
-    `After merge, run pnpm ops:lane-finalize -- --issue ${issueId} --pr <PR-number-or-url> --json`,
-    'Run pnpm ops:orchestration-reconcile --current --json after closeout',
+    `Record each genuinely completed executor phase with pnpm ops:exec-checkpoint phase-complete --issue ${issueId} --phase <phase> --summary <measured-summary>`,
+    'Executor closeout ends with a verified draft review candidate. It does not claim PM approval, merge, lane finalization, truth-check success, or completed post-merge closeout.',
+    'Do not publish an executor-result/v1 READY_FOR_REVIEW attestation from the child executor. Publication may occur only after the outer executor wrapper passes mandatory execution truth and persists provenance.',
+    `Leave this pending for the authorized post-executor path: obtain required PM approval and governed merge, then run pnpm ops:lane-finalize -- --issue ${issueId} --pr <PR-number-or-url> --json`,
+    'Leave this pending until canonical post-merge closeout: run pnpm ops:orchestration-reconcile --current --json after lane finalization',
   );
 
   return instructions;
