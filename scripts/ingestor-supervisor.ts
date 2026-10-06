@@ -2,9 +2,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
-import { loadEnvironment } from '@unit-talk/config';
+import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 import {
   calculateRestartDelayMs,
   createInitialSupervisorState,
@@ -279,17 +279,17 @@ function printHumanStatus(status: RuntimeStatus) {
   }
 }
 
-async function stopSupervisor(options: { silentIfMissing?: boolean } = {}) {
-  const status = await collectRuntimeStatus();
+export async function stopSupervisor(options: { silentIfMissing?: boolean } = {}) {
+  const state = readSupervisorState();
 
-  if (!status.supervisorRunning) {
+  if (!isProcessRunning(state.supervisorPid)) {
     if (!options.silentIfMissing) {
       console.log('Ingestor supervisor is not running.');
     }
     return;
   }
 
-  const supervisorPid = status.supervisorState.supervisorPid;
+  const supervisorPid = state.supervisorPid;
   if (!supervisorPid) {
     throw new Error('Supervisor pid missing from runtime state.');
   }
@@ -358,8 +358,9 @@ async function collectRuntimeStatus(): Promise<RuntimeStatus> {
   };
 }
 
-async function readDatabaseStatus() {
-  const env = loadEnvironment();
+export async function readDatabaseStatus(
+  env: Pick<AppEnv, 'SUPABASE_URL' | 'SUPABASE_SERVICE_ROLE_KEY'> = loadEnvironment(),
+) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return {
       latestRunStatus: null,
@@ -372,7 +373,7 @@ async function readDatabaseStatus() {
     auth: { persistSession: false },
   });
 
-  const [{ data: runRows }, { data: offerRows }] = await Promise.all([
+  const [{ data: runRows, error: runError }, { data: offerRows, error: offerError }] = await Promise.all([
     db
       .from('system_runs')
       .select('status, started_at')
@@ -380,11 +381,18 @@ async function readDatabaseStatus() {
       .order('started_at', { ascending: false })
       .limit(1),
     db
-      .from('provider_offers')
+      .from('provider_offer_current')
       .select('updated_at')
       .order('updated_at', { ascending: false })
       .limit(1),
   ]);
+
+  if (runError) {
+    throw new Error(`system_runs freshness query failed: ${runError.message}`);
+  }
+  if (offerError) {
+    throw new Error(`provider_offer_current freshness query failed: ${offerError.message}`);
+  }
 
   return {
     latestRunStatus:
@@ -557,7 +565,9 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });
+}

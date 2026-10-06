@@ -1,0 +1,87 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1969",
+  "tier": "T2",
+  "title": "Smart Form explicit fail-closed official delivery request interaction",
+  "generated_at": "2026-10-05T15:21:45.056086+00:00",
+  "status": "proof_correction_exact_head_receipt_required",
+  "sha_binding": {
+    "verified_source_sha": "d539144260cb03acccedd1ff48026a309023fe95",
+    "merge_sha": "b316cd138607b7ef5b0f95ddbd769be1269a6ff3",
+    "base_sha": "588766ef9ff8c8f010fdaa578753366d88f50ee2",
+    "sha_type": "merge_sha",
+    "verified_source_note": "CLI fixture and static verification cover this source. Reviewed head2c3de07422eaf7a6506bec9c068e9ecd8457706f has verify/Writable DB proof PASS; proof-only correction head is independently bound in the fresh executor receipt after exact-head CI.",
+    "bound_at": "2026-10-05T22:55:14.878Z"
+  },
+  "verifier": {
+    "identity": "Admitted Codex CLI implementation; Codex desktop proof transcription and final verification",
+    "method": "Canonical static verification plus isolated fixture-backed Playwright request-body assertions.",
+    "verifier_scope": "Smart Form UI state, payload mode selection, reset behavior, and repository static checks; no production or writable live-DB execution."
+  },
+  "static_proof": {
+    "pnpm_verify_static": {
+      "status": "PASS",
+      "command": "pnpm verify:static",
+      "exit_code": 0
+    },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "focused_submission_guard": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test apps/smart-form/test/submission-guard.test.ts",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0
+    },
+    "focused_fixture_e2e": {
+      "status": "PASS",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "command": "SMART_FORM_E2E_API_PORT=4623 SMART_FORM_E2E_PORT=4723 SMART_FORM_DIST_DIR=.next-utv2-1969-4 pnpm --dir apps/smart-form exec playwright test -c playwright.config.ts e2e/phase-one.spec.ts -g \"desktop MLB structured canonical event entry remains available\"",
+      "assertions": [
+        "default Track Only",
+        "delivery choice produces actual delivery-eligible POST",
+        "explicit switch-back produces track-only POST",
+        "reset Track Only",
+        "server-refused receipt remains authoritative"
+      ]
+    },
+    "r_level": {
+      "status": "PASS",
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "rules_matched": "operator-ui"
+    },
+    "pnpm_verify": {
+      "status": "BLOCKED",
+      "static_status": "PASS",
+      "command": "pnpm verify",
+      "reason": "staging target guard refused unidentified localhost before writable DB tests"
+    }
+  },
+  "runtime_proof": {
+    "status": "reviewed_head_pass",
+    "reviewed_head_sha": "2c3de07422eaf7a6506bec9c068e9ecd8457706f",
+    "ci_run_id": 37320734563,
+    "verify": "PASS",
+    "writable_db_proof": "PASS",
+    "note": "Approved staging CI only; no production acceptance claimed. Correction-head required results bind in the fresh exact-head executor receipt."
+  },
+  "acceptance_criteria": {
+    "fresh_session_track_only_default": "PASS",
+    "deliberate_delivery_request_changes_track_only_false": "PASS",
+    "actual_request_body_modes": "PASS",
+    "successful_reset_returns_track_only": "PASS",
+    "receipt_uses_server_response": "PASS — unchanged SuccessReceipt path",
+    "server_refusal_and_track_only_regressions": "PASS — canonical verification suite"
+  },
+  "verdict": "REVIEWED_IMPLEMENTATION_VERIFIED_CORRECTION_HEAD_RECEIPT_REQUIRED",
+  "qa_experience": {
+    "status": "SKIP",
+    "run_id": "2026-10-05T13-23-10-a43ve2",
+    "reason": "localhost4100 preflight unavailable; local operator storage state missing. Advisory CI comment HTTP403 is outside scope.",
+    "pm_disposition": "Not a pre-merge blocker for the bounded Smart Form control. Authenticated deployed acceptance is required after deployment before watched delivery resumes."
+  }
+}
