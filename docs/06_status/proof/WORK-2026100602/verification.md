@@ -89,3 +89,24 @@ hand-authored here.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1720
 Execution SHA: d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d
+
+
+## Post-wrapper attestation — BLOCKED
+
+The resumed sanctioned executor completed its real CLI run, but the outer execution-truth
+check returned `INCOMPLETE_PHASE_PROGRESSION` (missing `closeout`). See the unmodified
+machine-result capture in `executor-attempt-2-result.json`. This is not a successful
+executor attestation and does not authorize merge or original-lane closure.
+
+Protected CI run 37527263600 passed at preceding HEAD
+`4f6d0e6c6029a6dfc3cc11d59d7fd84946578c1a`: writable staging 9/9, T1 staging 152/152,
+and required verify. Those results are not claimed as exact-HEAD evidence for later
+model-routing or negative-attestation commits. The original WORK-2026100501 runtime
+proof and all its non-legacy fields remain unchanged.
+
+An additional applicability concern is demonstrated by the existing execution-truth
+regressions: `NON_SOURCE_PREFIXES` excludes all `docs/` and `.ops/` changes, which exhaust
+this admitted proof-only scope. The current epoch therefore has no qualifying source
+change. The live attempt returned at the earlier missing-phase guard; the source-count
+failure is not represented as its actual return code. No source change or phase completion
+was fabricated to work around either control. Admission code is unchanged.
