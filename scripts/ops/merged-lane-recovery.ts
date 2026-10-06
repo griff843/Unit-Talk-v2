@@ -156,6 +156,50 @@ function prNumberFromUrl(value: string | null): number | null {
   return match ? Number(match[1]) : null;
 }
 
+const REQUIRED_CLOSEOUT_PASS_GATES = ['G1', 'G2', 'G3', 'G4', 'G6', 'C6'] as const;
+const ADMITTED_PROOF_FAILURE_GATES = new Set(['P6', 'P9', 'R1', 'R2']);
+
+function evaluateCloseoutGateEvidence(log: string): string[] {
+  const errors: string[] = [];
+  const gateResults = [...log.matchAll(/\[(PASS|FAIL)\]\s+([A-Z][A-Z0-9]*)\b/gu)].map((match) => ({
+    verdict: match[1],
+    gate: match[2],
+  }));
+
+  for (const gate of REQUIRED_CLOSEOUT_PASS_GATES) {
+    if (!gateResults.some((result) => result.verdict === 'PASS' && result.gate === gate)) {
+      errors.push(`closeout log does not prove required ${gate} passed`);
+    }
+  }
+
+  const disallowedFailures = [
+    ...new Set(
+      gateResults
+        .filter((result) => result.verdict === 'FAIL' && !ADMITTED_PROOF_FAILURE_GATES.has(result.gate))
+        .map((result) => result.gate),
+    ),
+  ];
+  if (disallowedFailures.length > 0) {
+    errors.push(`closeout log contains non-admitted gate failures: ${disallowedFailures.join(', ')}`);
+  }
+  return errors;
+}
+
+function hasAffirmativeAdmissionAuthority(body: string): boolean {
+  const admissionScope = '(?:admission|readmission)(?:\\s+(?:recovery|bridge))?';
+  const denial = '(?:not\\s+authorized|unauthorized|authorization\\s+revoked|revoked)';
+  const scopedDenial = new RegExp(
+    `(?:${admissionScope}[\\s\\S]{0,120}\\b${denial}\\b|\\b${denial}\\b[\\s\\S]{0,120}${admissionScope})`,
+    'iu',
+  );
+  if (scopedDenial.test(body)) return false;
+
+  return new RegExp(
+    `(?:${admissionScope}[\\s\\S]{0,120}\\bauthorized\\b|\\bauthorized\\b[\\s\\S]{0,120}${admissionScope})`,
+    'iu',
+  ).test(body);
+}
+
 export function evaluateMergedLaneRecoveryEvidence(
   request: MergedLaneRecoveryRequest,
   evidence: MergedLaneRecoveryEvidence,
@@ -242,6 +286,7 @@ export function evaluateMergedLaneRecoveryEvidence(
     if (!log.includes('"code": "truth_check_failed"') || !/\[FAIL\] P\d+\b/u.test(log)) {
       errors.push('closeout log does not prove a fail-closed proof rejection');
     }
+    errors.push(...evaluateCloseoutGateEvidence(log));
     if (log.includes(`Lane closeout PASSED for ${request.source_issue_id}`)) {
       errors.push('closeout log records a successful closeout');
     }
@@ -260,7 +305,7 @@ export function evaluateMergedLaneRecoveryEvidence(
     if (!exactIdentity(comment.body, request.source_issue_id)) errors.push('PM authority omits the source WORK identity');
     if (!comment.body.includes(`#${request.original_pr_number}`)) errors.push('PM authority omits the original PR');
     if (!comment.body.includes(request.merge_sha)) errors.push('PM authority omits the actual merge SHA');
-    if (!/(?:admission|readmission)[\s\S]{0,120}authorized|authorized[\s\S]{0,120}(?:admission|readmission)/iu.test(comment.body)) {
+    if (!hasAffirmativeAdmissionAuthority(comment.body)) {
       errors.push('PM authority does not explicitly authorize admission recovery');
     }
     if (run && Date.parse(comment.created_at) < Date.parse(run.updated_at)) {

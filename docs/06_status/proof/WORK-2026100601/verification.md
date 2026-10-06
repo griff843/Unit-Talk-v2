@@ -8,13 +8,13 @@ Lane type: governance
 Implementation SHA: d8b3bb85877d5ea823a17d76c7c4c917aec93eda
 result: static_pass_live_db_deferred_to_staging_ci
 
-## Blocking technical review — rework required
+## Technical review rework resolved
 
-The two previous actual executor epochs failed; their provenance remains recorded. This candidate is NOT ready for PM approval. Parent-authored deterministic regressions in `scripts/ops/preflight.test.ts` currently fail for three real defects:
+The two previous actual executor epochs failed; their provenance remains recorded. The current rework epoch resolves the three parent-authored deterministic regressions in `scripts/ops/preflight.test.ts`:
 
-1. Negated/revoked admission authority is incorrectly accepted. Require an explicit affirmative recovery grant and reject scoped denial/revocation, including a positive grant followed by revocation. The actual owner comment includes `Ownership/readmission bridge: AUTHORIZED, narrowly`; do not reject unrelated product restrictions in that valid comment.
-2. A proof rejection plus G6/C6/another substantive failure is incorrectly accepted. Require actual G1/G2/G3/G4/G6/C6 PASS evidence and reject all non-proof failures and unavailable/unknown gate evidence. The original run has P6/P9/R1/R2 proof-schema failures with C6 PASS. Preserve that existing runtime proof.
-3. This lane's own schema-v2 evidence incorrectly retains root `merge_sha: null`. Remove that forbidden root field only; preserve metrics and provenance, and validate using the unchanged shared contract.
+1. Admission authority now requires an explicit affirmative recovery grant and rejects scoped denial/revocation, including a positive grant followed by revocation. The actual owner comment's `Ownership/readmission bridge: AUTHORIZED, narrowly` remains accepted without treating unrelated product restrictions as a denial.
+2. Admission now requires actual G1/G2/G3/G4/G6/C6 PASS evidence and rejects every non-admitted or unknown failure. The original run's P6/P9/R1/R2 proof-schema failures remain the only admitted failures, and its existing C6 runtime proof is preserved.
+3. This lane's schema-v2 evidence no longer carries the forbidden root `merge_sha`; the unchanged shared evidence contract passes without changing metrics or provenance.
 
 Run `pnpm exec tsx --test scripts/ops/preflight.test.ts scripts/ops/lane-start.test.ts` FIRST to reproduce the review before another aggregate verification. Implement meaningful helper corrections within admitted scope. `.out/parent-recovery-review.ts` independently reproduces actual positive and negative live fixtures; do not call the negative fixtures production evidence.
 
@@ -49,8 +49,8 @@ The deterministic regression suite measured:
 
 ```text
 $ pnpm exec tsx --test 'scripts/ops/lane-start.test.ts' 'scripts/ops/preflight.test.ts'
-# tests 139
-# pass 139
+# tests 142
+# pass 142
 # fail 0
 # skipped 0
 ```
@@ -58,11 +58,11 @@ $ pnpm exec tsx --test 'scripts/ops/lane-start.test.ts' 'scripts/ops/preflight.t
 ## Verification
 
 - `pnpm type-check` — PASS as part of the final static chain.
-- `pnpm test` — PASS as part of the final static chain, including all 139 focused recovery tests in `test:ops`.
+- `pnpm test` — PASS as part of the final static chain, including all 142 focused recovery tests in `test:ops`.
 - `pnpm verify:static` — PASS; DB-client boundary, sync/alignment, automation coverage, environment, lint, type-check, build, aggregate tests, production post-migration tests, Smart Form verification, command manifest, and migration checks completed successfully.
 - `pnpm verify` — the complete static chain passed, then the writable DB phase correctly REFUSED before DB access because local host `127.0.0.1` is not staging project `xskgrzbteyqdufktjrjx`.
 - `pnpm test:db` — correctly REFUSED at the same pre-write staging identity guard. Writable DB and protected T1 verification are deferred to the `staging-ci` GitHub environment using `CI_SUPABASE_*` credentials.
-- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS on implementation SHA; 10 changed files and no R-level rules matched.
+- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS on implementation SHA; 12 changed files and no R-level rules matched.
 - `FILE_SCOPE_PR_BRANCH=codex/work-2026100601-merged-lane-recovery pnpm exec tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --manifest-source git` — PASS; no scope conflicts or violations.
 - `git diff --check` — PASS.
 

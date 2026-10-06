@@ -5,7 +5,6 @@
   "source_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
   "reviewed_head_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
   "evidence_commit_sha": null,
-  "merge_sha": null,
   "generated_at": "2026-10-06T02:41:24Z",
   "tier": "T1",
   "lane_type": "governance",
@@ -38,15 +37,15 @@
     "status": "PASS",
     "focused_tests": {
       "command": "pnpm exec tsx --test 'scripts/ops/lane-start.test.ts' 'scripts/ops/preflight.test.ts'",
-      "tests": 139,
-      "pass": 139,
+      "tests": 142,
+      "pass": 142,
       "fail": 0,
       "skipped": 0
     },
     "type_check": "PASS",
     "aggregate_test": "PASS",
     "verify_static": "PASS",
-    "r_level": "PASS; 10 changed files; no matching rules",
+    "r_level": "PASS; 12 changed files; no matching rules",
     "file_scope": "PASS; no conflicts or violations"
   },
   "runtime_proof": {
@@ -61,7 +60,7 @@
     {
       "gate": "focused tests",
       "verdict": "PASS",
-      "detail": "139 tests passed; 0 failed and 0 skipped"
+      "detail": "142 tests passed; 0 failed and 0 skipped"
     },
     {
       "gate": "pnpm verify:static",
@@ -71,7 +70,7 @@
     {
       "gate": "r-level-check",
       "verdict": "PASS",
-      "detail": "10 changed files; no R-level rules matched"
+      "detail": "12 changed files; no R-level rules matched"
     },
     {
       "gate": "writable DB and protected T1 proof",
