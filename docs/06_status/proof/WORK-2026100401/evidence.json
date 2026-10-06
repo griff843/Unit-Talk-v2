@@ -1,0 +1,153 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100401",
+  "pr_number": 1715,
+  "source_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
+  "reviewed_head_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "AWAITING_CI_AND_PM",
+  "implementation_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
+  "generated_at": "2026-10-05T02:26:24Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ef5b808e69e0f6cf8ec3335bb82baeba6632b07e",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "note": "The verified source is the rework implementation commit that deduplicates qualifying candidate IDs across offset pages; later proof/control-plane-only commits do not alter the runner or its tests."
+  },
+  "canonical_query": {
+    "candidate_path": "paginated public.pick_candidates id,pick_id links; no embedded pick join because pick_id has no FK",
+    "settlement_path": "paginated public.settlement_records joined through settlement_records_pick_id_fkey to public.picks, in bounded pick-id batches",
+    "required_settlement": {
+      "results": ["win", "loss", "push"],
+      "status": "settled",
+      "evidence_ref": "not null"
+    },
+    "required_pick": {
+      "submission_id": "not null",
+      "status": "not voided",
+      "source": "not shadow",
+      "fixture_reason": "null under canonical reporting.pick_fixture_reason"
+    },
+    "cardinality": "qualifying settlement rows dedupe to pick ids; every distinct candidate row linked to a qualifying pick counts once",
+    "non_equivalences": [
+      "pick_candidates.pick_id presence is not settlement evidence",
+      "picks.status=settled is not settlement evidence",
+      "settlement row count is not candidate-backed count",
+      "pick_candidates.shadow_mode is not picks.is_shadow",
+      "evidence-settled is not CLV-path settled"
+    ]
+  },
+  "static_proof": {
+    "focused_test": {
+      "command": "pnpm exec tsx --test 'scripts/shadow-scoring-runner.test.ts'",
+      "exit_code": 0,
+      "tests": 27,
+      "pass": 27,
+      "fail": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "static_phase": "PASS",
+      "live_db_phase": "REFUSED_LOCAL_IDENTITY_BEFORE_WRITES",
+      "note": "The full static phase passed. The staging target guard then refused host=127.0.0.1 ref=unidentified; exact-head staging CI must provide writable proof."
+    }
+  },
+  "live_read_only_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "role": "shadow_parity_reader",
+    "added_select_relations": ["public.picks", "public.settlement_records"],
+    "writable_relations": 0,
+    "creatable_schemas": 0,
+    "owned_relations": 0,
+    "inherited_roles": 0,
+    "callable_definer_functions": 0,
+    "app_data_mutation_authority": false,
+    "historical_observation": {
+      "candidate_links": 1412,
+      "qualifying_picks": 1182,
+      "hard_coded_expectation": false
+    },
+    "artifacts": [
+      "docs/06_status/proof/WORK-2026100401/live-schema-columns.json",
+      "docs/06_status/proof/WORK-2026100401/canonical-reference-observation.json",
+      "docs/06_status/proof/WORK-2026100401/rest-relationship-probe.json",
+      "docs/06_status/proof/WORK-2026100401/read-only-grants.json"
+    ]
+  },
+  "writable_staging_proof": {
+    "command": "pnpm test:db",
+    "status": "REFUSED_LOCAL_IDENTITY",
+    "exit_code": 1,
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_ref": "xskgrzbteyqdufktjrjx",
+    "writes_attempted": false,
+    "deferred_to": "staging-ci GitHub environment with CI_SUPABASE_* credentials"
+  },
+  "trusted_base_shadow": {
+    "status": "PENDING_REPAIR_MERGE",
+    "reason": "The unchanged workflow guard rejects a candidate-modified runner. That is expected containment, not a parity result or bypass authorization.",
+    "required_after_merge": true
+  },
+  "model_routing": {
+    "status": "PENDING_OUTER_EXECUTOR",
+    "note": "Already-running sanctioned child did not recursively invoke ops:codex-exec; outer executor must persist immutable model-routing.json after child exit."
+  },
+  "production_writes": 0,
+  "workflow_changes": 0,
+  "gate_results": [
+    {
+      "gate": "focused_regressions",
+      "verdict": "PASS",
+      "detail": "27 focused shadow-scoring-runner tests passed; 0 failed, including canonical JSONB fixture semantics and distinct candidate identity across repeated offset-page observations."
+    },
+    {
+      "gate": "verify_static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static completed with exit 0."
+    },
+    {
+      "gate": "r_level",
+      "verdict": "PASS",
+      "detail": "R-level checker passed; no R1-R5 rules matched this bounded script/proof diff."
+    },
+    {
+      "gate": "writable_staging",
+      "verdict": "SKIP",
+      "detail": "Local fail-closed identity refusal occurred before writes; current-head staging-ci proof is required."
+    },
+    {
+      "gate": "trusted_base_shadow",
+      "verdict": "SKIP",
+      "detail": "Required after this runner repair merges; the unchanged trusted-base guard cannot execute the candidate runner."
+    },
+    {
+      "gate": "model_routing",
+      "verdict": "SKIP",
+      "detail": "The outer ops:codex-exec process must persist immutable model-routing.json after the sanctioned child exits."
+    },
+    {
+      "gate": "independent_pm_review",
+      "verdict": "SKIP",
+      "detail": "Pending exact-head PM verdict and t1-approved label."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1715"
+}

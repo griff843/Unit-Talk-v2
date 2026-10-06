@@ -1,0 +1,66 @@
+{
+  "schema": "shadow-read-only-grant-proof/v1",
+  "work_id": "WORK-2026100401",
+  "operator_authorization": "Explicit current-session user authorization to extend SELECT only to canonical query tables",
+  "project_ref": "zfzdnfwdarxucxtaojxm",
+  "role": "shadow_parity_reader",
+  "before": [
+    {
+      "schema": "public",
+      "relation": "market_universe"
+    },
+    {
+      "schema": "public",
+      "relation": "pick_candidates"
+    },
+    {
+      "schema": "public",
+      "relation": "provider_offers"
+    }
+  ],
+  "after": [
+    {
+      "schema": "public",
+      "relation": "market_universe"
+    },
+    {
+      "schema": "public",
+      "relation": "pick_candidates"
+    },
+    {
+      "schema": "public",
+      "relation": "picks"
+    },
+    {
+      "schema": "public",
+      "relation": "provider_offers"
+    },
+    {
+      "schema": "public",
+      "relation": "settlement_records"
+    }
+  ],
+  "executed_sql": "GRANT SELECT ON TABLE public.picks, public.settlement_records TO shadow_parity_reader",
+  "validation": {
+    "rolname": "shadow_parity_reader",
+    "rolsuper": false,
+    "rolcreatedb": false,
+    "rolcreaterole": false,
+    "rolcanlogin": false,
+    "rolreplication": false,
+    "rolinherit": false,
+    "rolbypassrls": true,
+    "rolconfig": [
+      "default_transaction_read_only=on",
+      "statement_timeout=30s"
+    ],
+    "writable_relations": 0,
+    "creatable_schemas": 0,
+    "owned_relations": 0,
+    "inherited_roles": 0,
+    "callable_definer_functions": 0
+  },
+  "observed_at": "2026-10-05T02:06:09.848103+00:00",
+  "app_data_mutation_authority": false,
+  "baseline_public_privilege_notes": "PUBLIC pg_settings system-setting UPDATE and cron.job_run_details DELETE without cron schema USAGE remain unchanged; neither provides accessible application-data mutation or exposed REST table access."
+}
