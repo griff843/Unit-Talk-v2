@@ -46,7 +46,34 @@
     "aggregate_test": "PASS",
     "verify_static": "PASS",
     "r_level": "PASS; 12 changed files; no matching rules",
-    "file_scope": "PASS; no conflicts or violations"
+    "file_scope": "PASS; no conflicts or violations",
+    "measured_ci_run": {
+      "verified_pr_head_sha": "02e95b90c3295ad4ce89bd2757a1da8a41cac9b6",
+      "verified_source_sha": "6cf66a1af24f32bd68a10e310e0b2705a0f19f14",
+      "workflow": "CI",
+      "run_id": 37412171958,
+      "run_attempt": 1,
+      "conclusion": "success",
+      "verify_job_id": 112105654375,
+      "staging_job_id": 112102907384,
+      "writable_db_tests": {
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "skipped": 0
+      },
+      "t1_live_tests": {
+        "tests": 152,
+        "pass": 152,
+        "fail": 0,
+        "skipped": 0
+      },
+      "receipt_merge_ref_sha": "b23f32fddee7cb07730fde523f730b4295f6faef",
+      "receipt_intrinsic_sha256": "72f49437f9c117d3a1cb4603d9107b305f8dafa4b0661ce7decbf42adc637c5b",
+      "receipt_file_sha256": "11551858d6e81747fd56df916580307835494f6a2a19726db48c99388cc8334a",
+      "receipt_verdict": "PASS",
+      "scope": "Measured earlier proof HEAD of this unchanged implementation; final candidate still requires its own exact-HEAD checks."
+    }
   },
   "runtime_proof": {
     "status": "DEFERRED_TO_STAGING_CI",

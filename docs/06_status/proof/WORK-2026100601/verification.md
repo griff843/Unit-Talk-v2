@@ -82,3 +82,12 @@ proof was preserved and not regenerated.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1719
+
+## Measured protected CI and staging
+
+CI run [37412171958, attempt 1](https://github.com/griff843/Unit-Talk-v2/actions/runs/37412171958) succeeded at PR HEAD `02e95b90c3295ad4ce89bd2757a1da8a41cac9b6`, verifying the unchanged source `6cf66a1af24f32bd68a10e310e0b2705a0f19f14`. Writable staging tests passed 9/9; T1 live suites passed 152/152, with zero failures and zero skipped. CI verify job 112105654375 accepted the same-run staging receipt produced by job 112102907384. GitHub merge ref `b23f32fddee7cb07730fde523f730b4295f6faef` has main `9aef8ee772ea5a569f34619ad3089c1a51490c7d` and that exact PR HEAD as its parents.
+
+Receipt intrinsic SHA-256: `72f49437f9c117d3a1cb4603d9107b305f8dafa4b0661ce7decbf42adc637c5b`.
+Receipt file SHA-256: `11551858d6e81747fd56df916580307835494f6a2a19726db48c99388cc8334a`.
+
+Native Executor Result Validation subsequently passed at that HEAD. The earlier PR-description issue-reference failure was corrected by referencing the source through merged PR #1718; its old immutable event remains historical evidence. This proof capture creates a new candidate HEAD, whose own exact-HEAD CI/staging and native executor result must pass before PM review. No earlier check is claimed to satisfy the new HEAD. This updates only measured proof; source, original-lane metrics/provenance, policy, and Discord product behavior remain unchanged.
