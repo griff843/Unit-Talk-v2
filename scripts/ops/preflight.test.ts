@@ -224,11 +224,22 @@ test('merged recovery deterministically refuses ordinary, mismatched, stale, suc
 });
 
 test('merged recovery refuses negated or revoked admission authority', () => {
-  for (const decision of ['ADMISSION RECOVERY NEVER AUTHORIZED', 'ADMISSION RECOVERY DENIED. Other work is authorized', 'Do not authorize admission recovery. Another repair is authorized', 'ADMISSION RECOVERY is awaiting a decision. Another repair is AUTHORIZED', 'Proof-closeout recovery: AUTHORIZED\nOwnership/readmission bridge: PENDING', 'ADMISSION RECOVERY NOT AUTHORIZED', 'ADMISSION RECOVERY UNAUTHORIZED', 'ADMISSION RECOVERY AUTHORIZATION REVOKED', 'ADMISSION RECOVERY AUTHORIZED\nADMISSION RECOVERY AUTHORIZATION REVOKED']) {
+  for (const decision of ['NOT AUTHORIZED ADMISSION RECOVERY', 'No admission recovery authorized', 'ADMISSION RECOVERY AUTHORIZED\nADMISSION RECOVERY NOT AUTHORIZED', 'ADMISSION RECOVERY AUTHORIZED\nADMISSION RECOVERY DENIED', 'ADMISSION RECOVERY NEVER AUTHORIZED', 'ADMISSION RECOVERY DENIED. Other work is authorized', 'Do not authorize admission recovery. Another repair is authorized', 'ADMISSION RECOVERY is awaiting a decision. Another repair is AUTHORIZED', 'Proof-closeout recovery: AUTHORIZED\nOwnership/readmission bridge: PENDING', 'ADMISSION RECOVERY NOT AUTHORIZED', 'ADMISSION RECOVERY UNAUTHORIZED', 'ADMISSION RECOVERY AUTHORIZATION REVOKED', 'ADMISSION RECOVERY AUTHORIZED\nADMISSION RECOVERY AUTHORIZATION REVOKED']) {
     const evidence = mergedRecoveryEvidence();
     evidence.authority_comment!.body = `PM DECISION — ${decision} for #1718 / WORK-2026100501 at ${MERGED_RECOVERY_REQUEST.merge_sha}`;
     assert.equal(evaluateMergedLaneRecoveryEvidence(MERGED_RECOVERY_REQUEST, evidence).ok, false, decision);
   }
+});
+
+test('merged recovery requires an affirmative scoped decision, not a quoted or negated phrase in prose', () => {
+  for (const text of ['Neither admission recovery authorized nor readmission bridge authorized', 'Example text: admission recovery authorized', 'The words admission recovery authorized are quoted here; no decision is being made', 'PM DECISION — Neither admission recovery authorized nor readmission bridge authorized', 'PM DECISION — Example text: admission recovery authorized', '## Example text: admission recovery authorized']) {
+    const evidence = mergedRecoveryEvidence();
+    evidence.authority_comment!.body = `${text} for #1718 / WORK-2026100501 at ${MERGED_RECOVERY_REQUEST.merge_sha}`;
+    assert.equal(evaluateMergedLaneRecoveryEvidence(MERGED_RECOVERY_REQUEST, evidence).ok, false, text);
+  }
+  const evidence = mergedRecoveryEvidence();
+  evidence.authority_comment!.body = `PM DECISION\n\n#1718 / WORK-2026100501 at ${MERGED_RECOVERY_REQUEST.merge_sha}\n\n## 2. Ownership/readmission bridge: AUTHORIZED, narrowly`;
+  assert.equal(evaluateMergedLaneRecoveryEvidence(MERGED_RECOVERY_REQUEST, evidence).ok, true);
 });
 
 test('merged recovery refuses substantive failures and missing substantive PASS evidence', () => {

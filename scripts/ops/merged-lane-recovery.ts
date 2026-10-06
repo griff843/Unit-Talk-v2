@@ -186,18 +186,31 @@ function evaluateCloseoutGateEvidence(log: string): string[] {
 }
 
 function hasAffirmativeAdmissionAuthority(body: string): boolean {
-  const admissionScope = '(?:admission|readmission)(?:\\s+(?:recovery|bridge))?';
-  const denial = '(?:not\\s+authorized|unauthorized|authorization\\s+revoked|revoked)';
-  const scopedDenial = new RegExp(
-    `(?:${admissionScope}[\\s\\S]{0,120}\\b${denial}\\b|\\b${denial}\\b[\\s\\S]{0,120}${admissionScope})`,
+  const admissionScope = '(?:admission|readmission)(?:[ \\t]+(?:recovery|bridge))?';
+  const separator = '(?:[ \\t]*(?::|[-—])[ \\t]*|[ \\t]+)';
+  const rejection = '(?:not[ \\t]+authorized|never[ \\t]+authorized|unauthorized|(?:authorization[ \\t]+)?(?:denied|revoked)|pending)';
+  const bindingSuffix = '(?:[ \\t]+for[ \\t]+#\\d+[ \\t]+/[ \\t]+WORK-\\d+[ \\t]+at[ \\t]+[0-9a-f]{40})?';
+  const decisionEnd = `(?:,[ \\t]*narrowly)?${bindingSuffix}[ \\t]*$`;
+  const authoritativeDecision = new RegExp(
+    `(?:^\\s*PM[ \\t]+DECISION[ \\t]*(?:[-—]|:)[ \\t]*` +
+      `(?:BOUNDED[ \\t]+T1[ \\t]+CLOSEOUT[ \\t]*/[ \\t]*)?${admissionScope}${separator}authorized${decisionEnd}|` +
+      `^\\s*#{1,6}[ \\t]+(?:\\d+\\.[ \\t]+)?(?:ownership/)?${admissionScope}${separator}authorized${decisionEnd})`,
     'iu',
   );
-  if (scopedDenial.test(body)) return false;
-
-  return new RegExp(
-    `(?:${admissionScope}[\\s\\S]{0,120}\\bauthorized\\b|\\bauthorized\\b[\\s\\S]{0,120}${admissionScope})`,
+  const explicitRejection = new RegExp(
+    `(?:\\b${admissionScope}\\b${separator}(?:is[ \\t]+)?${rejection}\\b|` +
+      `\\b(?:${rejection}|do[ \\t]+not[ \\t]+authorize)${separator}${admissionScope}\\b|` +
+      `\\bno[ \\t]+${admissionScope}\\b[ \\t]+authorized\\b)`,
     'iu',
-  ).test(body);
+  );
+
+  // An earlier affirmative sentence cannot outlive a later revocation in the
+  // same attested comment. Keep this deliberately conservative: the comment
+  // is the authority artifact, so an explicit scoped rejection or any
+  // revocation language makes it unusable.
+  if (explicitRejection.test(body) || /\b(?:authorization[ \t]+)?revoked\b/iu.test(body)) return false;
+
+  return body.split(/\r?\n/u).some((line) => authoritativeDecision.test(line));
 }
 
 export function evaluateMergedLaneRecoveryEvidence(
