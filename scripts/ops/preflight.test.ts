@@ -32,6 +32,194 @@ import {
   runT1Checks,
 } from './preflight.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
+import {
+  evaluateMergedLaneRecoveryEvidence,
+  parseMergedLaneRecoveryRequest,
+  type MergedLaneRecoveryEvidence,
+  type MergedLaneRecoveryRequest,
+} from './merged-lane-recovery.js';
+
+const MERGED_RECOVERY_REQUEST: MergedLaneRecoveryRequest = {
+  source_issue_id: 'WORK-2026100501',
+  original_pr_number: 1718,
+  merge_sha: '9aef8ee772ea5a569f34619ad3089c1a51490c7d',
+  failed_closeout_run_id: 37395130508,
+  authority_comment_id: 6007640817,
+};
+
+function mergedRecoveryEvidence(): MergedLaneRecoveryEvidence {
+  const mergeSha = MERGED_RECOVERY_REQUEST.merge_sha;
+  return {
+    repository: 'griff843/Unit-Talk-v2',
+    repository_owner: 'griff843',
+    source_manifest: {
+      issue_id: 'WORK-2026100501',
+      branch: 'codex/work-2026100501-required-check-publication',
+      status: 'in_review',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1718',
+      commit_sha: null,
+    },
+    pull_request: {
+      number: 1718,
+      state: 'closed',
+      merged: true,
+      merged_at: '2026-10-06T00:38:28Z',
+      merge_commit_sha: mergeSha,
+      html_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1718',
+      body: '## Issue\n\nWORK-2026100501',
+      head: {
+        ref: 'codex/work-2026100501-required-check-publication',
+        repo: { full_name: 'griff843/Unit-Talk-v2' },
+      },
+      base: { ref: 'main', repo: { full_name: 'griff843/Unit-Talk-v2' } },
+    },
+    closeout_run: {
+      id: 37395130508,
+      event: 'workflow_dispatch',
+      status: 'completed',
+      conclusion: 'failure',
+      head_sha: mergeSha,
+      head_branch: 'main',
+      path: '.github/workflows/post-merge-lane-close.yml',
+      created_at: '2026-10-06T00:39:19Z',
+      updated_at: '2026-10-06T00:58:01Z',
+      html_url: 'https://github.com/griff843/Unit-Talk-v2/actions/runs/37395130508',
+      actor: { login: 'griff843' },
+      triggering_actor: { login: 'griff843' },
+    },
+    closeout_log: [
+      'DISPATCH_ISSUE_ID: WORK-2026100501',
+      'DISPATCH_PR: 1718',
+      `PUSH_SHA: ${mergeSha}`,
+      `MERGE_SHA: ${mergeSha}`,
+      'tsx scripts/ops/lane-close.ts WORK-2026100501 --repair-merged --post-merge-trusted --pr 1718',
+      '[FAIL] P6 shared evidence contract failed',
+      '"code": "truth_check_failed"',
+    ].join('\n'),
+    authority_comment: {
+      id: 6007640817,
+      issue_url: 'https://api.github.com/repos/griff843/Unit-Talk-v2/issues/1718',
+      html_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1718#issuecomment-6007640817',
+      body: `PM DECISION — ADMISSION RECOVERY AUTHORIZED for #1718 / WORK-2026100501 at ${mergeSha}`,
+      created_at: '2026-10-06T01:46:57Z',
+      updated_at: '2026-10-06T01:46:57Z',
+      author_association: 'OWNER',
+      user: { login: 'griff843' },
+    },
+    merge_is_on_main: true,
+  };
+}
+
+test('merged recovery request is all-or-nothing and normalizes its explicit binding', () => {
+  const absent = parseMergedLaneRecoveryRequest(new Map());
+  assert.equal(absent.requested, false);
+
+  const partial = parseMergedLaneRecoveryRequest(new Map([
+    ['merged-recovery-source', ['WORK-2026100501']],
+  ]));
+  assert.equal(partial.requested, true);
+  assert.ok(partial.errors.some((error) => error.includes('--merged-recovery-pr')));
+
+  const complete = parseMergedLaneRecoveryRequest(new Map([
+    ['merged-recovery-source', ['work-2026100501']],
+    ['merged-recovery-pr', ['1718']],
+    ['merged-recovery-merge-sha', [MERGED_RECOVERY_REQUEST.merge_sha.toUpperCase()]],
+    ['merged-recovery-run', ['37395130508']],
+    ['merged-recovery-authority-comment', ['6007640817']],
+  ]));
+  assert.deepEqual(complete, { requested: true, request: MERGED_RECOVERY_REQUEST, errors: [] });
+});
+
+test('merged recovery admits only a fresh, owner-authorized failed closeout bound to the merged source', () => {
+  const result = evaluateMergedLaneRecoveryEvidence(
+    MERGED_RECOVERY_REQUEST,
+    mergedRecoveryEvidence(),
+    '2026-10-06T02:00:00Z',
+  );
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.attestation.source_issue_id, 'WORK-2026100501');
+    assert.equal(result.attestation.original_pr_number, 1718);
+    assert.equal(result.attestation.failed_closeout_run_id, 37395130508);
+    assert.equal(result.attestation.authority_comment_id, 6007640817);
+  }
+});
+
+test('merged recovery live attestation refreshes and reads source metadata from origin/main', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, 'scripts', 'ops', 'merged-lane-recovery.ts'),
+    'utf8',
+  );
+  assert.match(source, /run\('git', \['fetch', 'origin', 'main'\]\)/u);
+  assert.match(
+    source,
+    /`origin\/main:docs\/06_status\/lanes\/\$\{input\.request\.source_issue_id\}\.json`/u,
+  );
+  assert.doesNotMatch(source, /source_manifest: input\.sourceManifest/u);
+});
+
+test('merged recovery deterministically refuses ordinary, mismatched, stale, successful, unrelated, and unavailable evidence', () => {
+  const cases: Array<{ name: string; mutate: (evidence: MergedLaneRecoveryEvidence) => void; expected: RegExp }> = [
+    {
+      name: 'ordinary active lane',
+      mutate: (evidence) => { evidence.source_manifest!.status = 'in_progress'; },
+      expected: /not a stranded post-merge state/u,
+    },
+    {
+      name: 'unmerged PR',
+      mutate: (evidence) => { evidence.pull_request!.merged = false; },
+      expected: /not merged/u,
+    },
+    {
+      name: 'mismatched branch',
+      mutate: (evidence) => { evidence.pull_request!.head.ref = 'codex/unrelated'; },
+      expected: /branch does not match/u,
+    },
+    {
+      name: 'merge missing from main',
+      mutate: (evidence) => { evidence.merge_is_on_main = false; },
+      expected: /not reachable/u,
+    },
+    {
+      name: 'successful closeout',
+      mutate: (evidence) => { evidence.closeout_run!.conclusion = 'success'; },
+      expected: /did not complete with failure/u,
+    },
+    {
+      name: 'unrelated run',
+      mutate: (evidence) => { evidence.closeout_run!.path = '.github/workflows/verify.yml'; },
+      expected: /not the canonical/u,
+    },
+    {
+      name: 'stale authority',
+      mutate: (evidence) => { evidence.authority_comment!.created_at = '2026-10-06T00:40:00Z'; },
+      expected: /predates the failed closeout/u,
+    },
+    {
+      name: 'mismatched authority',
+      mutate: (evidence) => { evidence.authority_comment!.body = 'admission recovery authorized'; },
+      expected: /omits the source WORK identity/u,
+    },
+    {
+      name: 'unrelated authority PR',
+      mutate: (evidence) => { evidence.authority_comment!.issue_url = 'https://api.github.com/repos/griff843/Unit-Talk-v2/issues/1717'; },
+      expected: /unrelated PR/u,
+    },
+    {
+      name: 'unavailable run log',
+      mutate: (evidence) => { evidence.closeout_log = null; },
+      expected: /log evidence is unavailable/u,
+    },
+  ];
+
+  for (const entry of cases) {
+    const evidence = mergedRecoveryEvidence();
+    entry.mutate(evidence);
+    const result = evaluateMergedLaneRecoveryEvidence(MERGED_RECOVERY_REQUEST, evidence);
+    assert.equal(result.ok, false, entry.name);
+    if (!result.ok) assert.match(result.errors.join('; '), entry.expected, entry.name);
+  }
+});
 
 test('preflight schema dependencies exist', () => {
   assert.doesNotThrow(() => validatePreflightSchemaDependencies());

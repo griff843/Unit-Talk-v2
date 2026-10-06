@@ -49,6 +49,11 @@ import {
   DEFAULT_VERIFY_SEMAPHORE_DIR,
   acquireVerifySlot,
 } from './verify-semaphore.js';
+import {
+  attestMergedLaneRecovery,
+  parseMergedLaneRecoveryRequest,
+  type MergedLaneRecoveryAttestation,
+} from './merged-lane-recovery.js';
 
 type PreflightVerdict = PreflightResult['verdict'];
 type LinearIssueRecord = {
@@ -226,6 +231,7 @@ async function main(): Promise<number> {
   const normalizedCandidateFiles = candidateFiles.map((filePath) => normalizeRepoRelativePath(filePath));
   const requestedLaneType = getFlag(flags, 'lane-type');
   const requestedExecutor = getFlag(flags, 'executor');
+  const mergedRecovery = parseMergedLaneRecoveryRequest(flags);
   const tokenPath = preflightTokenPathForBranch(branch);
   const resultPath = preflightResultPathForBranch(branch);
   const runAt = new Date().toISOString();
@@ -315,6 +321,20 @@ async function main(): Promise<number> {
     }
   }
 
+  if (mergedRecovery.requested && readmitExistingBranch) {
+    const result = minimalFailureResult(issueId, branch, tier, 'FAIL', [
+      {
+        id: 'PMR0',
+        status: 'fail',
+        detail: 'merged-lane recovery cannot be combined with existing-branch readmission',
+      },
+    ]);
+    writeSidecar(resultPath, result);
+    removeFileIfExists(tokenPath);
+    writeOutput(result, json);
+    return 1;
+  }
+
   if (requestedSkips.length > 0 && !waiverReason) {
     const result = minimalFailureResult(issueId, branch, tier, 'FAIL', [
       {
@@ -375,6 +395,38 @@ async function main(): Promise<number> {
     ? path.join(ROOT, 'local.env')
     : path.join(ROOT, '.env');
   const env = runEnvCheck(envFilePath, tier, addCheck);
+  let mergedRecoveryAttestation: MergedLaneRecoveryAttestation | null = null;
+  if (!mergedRecovery.requested) {
+    addCheck('PMR1', 'skip', 'merged-lane recovery not requested');
+  } else if (mergedRecovery.errors.length > 0 || !mergedRecovery.request) {
+    addCheck('PMR1', 'fail', mergedRecovery.errors.join('; ') || 'merged-lane recovery request is incomplete');
+  } else if (tier !== 'T1' || requestedLaneType !== 'governance') {
+    addCheck('PMR1', 'fail', 'merged-lane recovery requires an explicit T1 governance lane');
+  } else if (mergedRecovery.request.source_issue_id === issueId) {
+    addCheck('PMR1', 'fail', 'recovery must use a separately identified lane; it cannot overwrite the source WORK lane');
+  } else {
+    const sourceManifest = readAllManifests().find(
+      (manifest) => manifest.issue_id === mergedRecovery.request!.source_issue_id,
+    ) ?? null;
+    if (sourceManifest?.branch === branch) {
+      addCheck('PMR1', 'fail', 'recovery branch must not overwrite the original lane branch');
+    } else {
+      const attestation = attestMergedLaneRecovery({
+        request: mergedRecovery.request,
+        verifiedAt: runAt,
+      });
+      if (attestation.ok) {
+        mergedRecoveryAttestation = attestation.attestation;
+        addCheck(
+          'PMR1',
+          'pass',
+          `fresh GitHub attestation binds ${attestation.attestation.source_issue_id}, PR #${attestation.attestation.original_pr_number}, merge ${attestation.attestation.merge_sha}, failed closeout run ${attestation.attestation.failed_closeout_run_id}, and PM authority comment ${attestation.attestation.authority_comment_id}`,
+        );
+      } else {
+        addCheck('PMR1', 'fail', `merged-lane recovery refused: ${attestation.errors.join('; ')}`);
+      }
+    }
+  }
   const readmissionContext = readmitExistingBranch
     ? runExistingBranchReadmissionChecks({
         issueId,
@@ -398,6 +450,8 @@ async function main(): Promise<number> {
     addCheck,
     readmitExistingBranch,
     branch,
+    readCommittedWorkOrder,
+    mergedRecoveryAttestation?.source_issue_id ?? null,
   );
   runRequiredDocChecks(tier, linearState.labels, requireDocs, addCheck);
   runGateEquivalentChecks(issueId, tier, branch, headSha, addCheck);
@@ -451,6 +505,7 @@ async function main(): Promise<number> {
           checks.some(
             (check) => check.id === 'PT1' && check.status === 'blocked_by_containment',
           ),
+          mergedRecoveryAttestation,
         ),
       );
       if (baseline.updatedCache) {
@@ -1200,6 +1255,7 @@ export function runRepoOwnedWorkChecks(
   readmitExistingBranch = false,
   branch = '',
   readWorkOrder: WorkOrderReader = readCommittedWorkOrder,
+  permittedOverlapIssueId: string | null = null,
 ): void {
   const workPath = `.ops/work/${issueId}.md`;
   const floor = checkMechanicalFloor(tier, candidateFiles, addCheck, `repo-owned identity ${issueId} has no tracker issue`);
@@ -1242,7 +1298,14 @@ export function runRepoOwnedWorkChecks(
     addCheck('PL4', 'fail', `${workPath} has no non-empty ## Acceptance Criteria section`);
   }
 
-  runManifestOwnershipChecks(issueId, candidateFiles, addCheck, readmitExistingBranch, branch);
+  runManifestOwnershipChecks(
+    issueId,
+    candidateFiles,
+    addCheck,
+    readmitExistingBranch,
+    branch,
+    permittedOverlapIssueId,
+  );
 }
 
 /** PL5 (active manifest owns the issue) and PL6 (file-scope overlap). */
@@ -1252,6 +1315,7 @@ function runManifestOwnershipChecks(
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
   readmitExistingBranch: boolean,
   branch: string,
+  permittedOverlapIssueId: string | null = null,
 ): void {
   const conflictingManifest = readAllManifests().find(
     (manifest) => manifest.issue_id === issueId && manifest.status !== 'done',
@@ -1279,6 +1343,7 @@ function runManifestOwnershipChecks(
     const overlap = readAllManifests()
       .filter((manifest) => ['started', 'in_progress', 'in_review', 'blocked', 'reopened'].includes(manifest.status))
       .filter((manifest) => !readmitExistingBranch || manifest.issue_id !== issueId)
+      .filter((manifest) => manifest.issue_id !== permittedOverlapIssueId)
       .find((manifest) => normalizedFiles.some((filePath) => (manifest.file_scope_lock ?? []).includes(filePath)));
     if (overlap) {
       addCheck('PL6', 'fail', `candidate file scope overlaps with active manifest ${overlap.issue_id}`);
@@ -1298,6 +1363,7 @@ export async function runLinearChecks(
   readmitExistingBranch = false,
   branch = '',
   readWorkOrder: WorkOrderReader = readCommittedWorkOrder,
+  permittedOverlapIssueId: string | null = null,
 ): Promise<{ labels: string[]; stateName: string }> {
   // WORK-2026092622: a repo-minted `WORK-###` names no tracker issue, so asking
   // the tracker about it can only answer "not found". That made PL1 fail for any
@@ -1305,7 +1371,16 @@ export async function runLinearChecks(
   // the only way in. The identity is validated against its repo-owned contract
   // instead, and the decision does not depend on which credentials are present.
   if (isRepoOwnedWorkId(issueId)) {
-    runRepoOwnedWorkChecks(issueId, tier, candidateFiles, addCheck, readmitExistingBranch, branch, readWorkOrder);
+    runRepoOwnedWorkChecks(
+      issueId,
+      tier,
+      candidateFiles,
+      addCheck,
+      readmitExistingBranch,
+      branch,
+      readWorkOrder,
+      permittedOverlapIssueId,
+    );
     return { labels: [], stateName: '' };
   }
 
@@ -1397,7 +1472,14 @@ export async function runLinearChecks(
     addCheck('PL4', 'fail', 'issue description is empty');
   }
 
-  runManifestOwnershipChecks(issueId, candidateFiles, addCheck, readmitExistingBranch, branch);
+  runManifestOwnershipChecks(
+    issueId,
+    candidateFiles,
+    addCheck,
+    readmitExistingBranch,
+    branch,
+    permittedOverlapIssueId,
+  );
 
   return { labels, stateName };
 }
@@ -1641,7 +1723,8 @@ export function createToken(
   requiredDocsChecked: string[],
   readmissionContext: ExistingBranchReadmissionContext | null = null,
   t1LiveDbPreconditionDeferred = false,
-): PreflightToken | ExistingBranchReadmissionToken {
+  mergedRecoveryAttestation: MergedLaneRecoveryAttestation | null = null,
+): PreflightToken | ExistingBranchReadmissionToken | (PreflightToken & { merged_lane_recovery: MergedLaneRecoveryAttestation }) {
   const ttlMinutes = tier === 'T1' ? 15 : 30;
   const token: PreflightToken = {
     schema_version: 1,
@@ -1667,6 +1750,7 @@ export function createToken(
     ...(t1LiveDbPreconditionDeferred
       ? { t1_live_db_precondition: T1_LIVE_DB_PRECONDITION_DEFERRED }
       : {}),
+    ...(mergedRecoveryAttestation ? { merged_lane_recovery: mergedRecoveryAttestation } : {}),
   };
   return readmissionContext ? { ...token, ...readmissionContext } : token;
 }

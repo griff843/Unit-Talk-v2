@@ -37,6 +37,70 @@ import {
 import { createTempWorkspace } from './temp-workspace.js';
 import { normalizePreMergeVerificationMarkdown, rebindMergeShaAnchorsInMarkdown } from './proof-generate.js';
 import { evaluateT2ProofEvidence } from './truth-check-lib.js';
+import {
+  buildMergedLaneRecoveryReceipt,
+  mergedRecoveryOverlapCandidates,
+  sameMergedLaneRecoveryBinding,
+  type MergedLaneRecoveryAttestation,
+} from './merged-lane-recovery.js';
+
+function recoveryAttestation(verifiedAt: string): MergedLaneRecoveryAttestation {
+  return {
+    schema_version: 1,
+    source_issue_id: 'WORK-2026100501',
+    source_branch: 'codex/work-2026100501-required-check-publication',
+    source_manifest_status: 'in_review',
+    original_pr_number: 1718,
+    original_pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1718',
+    merge_sha: '9aef8ee772ea5a569f34619ad3089c1a51490c7d',
+    failed_closeout_run_id: 37395130508,
+    failed_closeout_run_url: 'https://github.com/griff843/Unit-Talk-v2/actions/runs/37395130508',
+    authority_comment_id: 6007640817,
+    authority_comment_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1718#issuecomment-6007640817',
+    repository: 'griff843/Unit-Talk-v2',
+    workflow_path: '.github/workflows/post-merge-lane-close.yml',
+    verified_at: verifiedAt,
+  };
+}
+
+test('merged recovery token comparison ignores only re-attestation time', () => {
+  const preflight = recoveryAttestation('2026-10-06T02:00:00Z');
+  const laneStart = recoveryAttestation('2026-10-06T02:05:00Z');
+  assert.equal(sameMergedLaneRecoveryBinding(preflight, laneStart), true);
+
+  const mismatched = { ...laneStart, failed_closeout_run_id: 37395130509 };
+  assert.equal(sameMergedLaneRecoveryBinding(preflight, mismatched), false);
+});
+
+test('merged recovery receipt preserves original provenance and states that source capacity remains counted', () => {
+  const receipt = buildMergedLaneRecoveryReceipt({
+    recoveryIssueId: 'WORK-2026100601',
+    recoveryBranch: 'codex/work-2026100601-merged-lane-recovery',
+    preflight: recoveryAttestation('2026-10-06T02:00:00Z'),
+    laneStart: recoveryAttestation('2026-10-06T02:05:00Z'),
+  });
+  assert.equal(receipt.admission, 'merged-lane-recovery');
+  assert.equal(receipt.source_lane_remains_counted, true);
+  assert.deepEqual(receipt.original, {
+    issue_id: 'WORK-2026100501',
+    branch: 'codex/work-2026100501-required-check-publication',
+    pr_number: 1718,
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1718',
+    merge_sha: '9aef8ee772ea5a569f34619ad3089c1a51490c7d',
+  });
+});
+
+test('merged recovery overlap exception removes only the attested source lane', () => {
+  const lanes = [
+    { issue_id: 'WORK-2026100501', marker: 'source' },
+    { issue_id: 'UTV2-9999', marker: 'unrelated' },
+  ];
+  assert.deepEqual(
+    mergedRecoveryOverlapCandidates(lanes, recoveryAttestation('2026-10-06T02:05:00Z')),
+    [{ issue_id: 'UTV2-9999', marker: 'unrelated' }],
+  );
+  assert.strictEqual(mergedRecoveryOverlapCandidates(lanes, null), lanes);
+});
 
 test('lane-start captures Linear truth without exposing its token in process arguments', () => {
   const token = 'token-fixture';
@@ -370,8 +434,13 @@ test('UTV2-1634: lane-start resolves the active-lane set from authoritative remo
   );
   assert.match(
     source,
-    /activeManifestOverlap\(issueId, normalizedFiles, activeManifests\)/,
-    'the file-scope overlap check must use the authoritative set too, not fall back to local-only',
+    /overlapCandidates = mergedRecoveryOverlapCandidates\(\s*activeManifests,\s*mergedRecoveryAttestation,/,
+    'the recovery overlap candidates must derive only from the authoritative set',
+  );
+  assert.match(
+    source,
+    /activeManifestOverlap\(issueId, normalizedFiles, overlapCandidates\)/,
+    'the normal file-scope overlap check must use the recovery-filtered authoritative set',
   );
   assert.match(
     source,
@@ -803,16 +872,17 @@ test('UTV2-1634: authoritative discovery runs BEFORE the docs-only fast path, an
     'there must be exactly one authoritative discovery call site in lane-start',
   );
 
-  // Both overlap checks (fast path and normal) must take the authoritative set.
+  // Both overlap checks derive from the authoritative set. The normal path may
+  // remove only the freshly attested merged source; the fast path has no such mode.
   const overlapCalls = source.match(/activeManifestOverlap\([^)]*\)/g) ?? [];
   assert.strictEqual(overlapCalls.length, 2, 'expected exactly two overlap call sites');
-  for (const call of overlapCalls) {
-    assert.match(
-      call,
-      /activeManifests/,
-      `every activeManifestOverlap call must receive the authoritative set, got: ${call}`,
-    );
-  }
+  assert.ok(overlapCalls.some((call) => call.includes('activeManifests')));
+  assert.ok(overlapCalls.some((call) => call.includes('overlapCandidates')));
+  assert.match(
+    source,
+    /const concurrencyViolations = checkConcurrencyLimits\(\s*activeManifests,/,
+    'the attested source must remain in concurrency accounting',
+  );
 });
 
 test('UTV2-1634: discovery failure blocks the docs-only fast path as well as normal admission', () => {
@@ -2519,11 +2589,8 @@ test('WORK-2026092608: every lane-start path attempts the tracker transition aft
   for (let i = 0; i < 3; i += 1) {
     assert.ok(calls[i]! > writes[i]!, `transition ${i} runs after its manifest write`);
   }
-  assert.ok(
-    main.indexOf('validatePreflightToken(issueId, branch, currentHead);\n    // WORK-2026092608') !== -1 &&
-      main.indexOf('validatePreflightToken(issueId, branch, currentHead);\n    // WORK-2026092608') < calls[0]!,
-    'preflight has passed before any transition',
-  );
+  const preflight = main.indexOf('validatePreflightToken(issueId, branch, currentHead);');
+  assert.ok(preflight !== -1 && preflight < calls[0]!, 'preflight has passed before any transition');
 });
 
 test('WORK-2026092608: lane-start sweeps terminal leases before its first lease check', () => {

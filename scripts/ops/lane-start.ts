@@ -90,6 +90,15 @@ import {
   resolveAuthorizationSourceSha,
   type BootstrapAuthorization,
 } from './bootstrap-authorization.js';
+import {
+  attestMergedLaneRecovery,
+  buildMergedLaneRecoveryReceipt,
+  MERGED_RECOVERY_RECEIPT_FILE,
+  mergedRecoveryOverlapCandidates,
+  parseMergedLaneRecoveryRequest,
+  sameMergedLaneRecoveryBinding,
+  type MergedLaneRecoveryAttestation,
+} from './merged-lane-recovery.js';
 
 const CANONICAL_LANE_TYPES: CanonicalLaneType[] = [
   'runtime',
@@ -988,6 +997,7 @@ function main(): void {
   const docsOnlyFastPath = bools.has('docs-only-fast-path') || flags.has('docs-only-fast-path');
   const readmitExistingBranch =
     bools.has('readmit-existing-branch') || flags.has('readmit-existing-branch');
+  const mergedRecovery = parseMergedLaneRecoveryRequest(flags);
 
   try {
     // UTV2-1546: delegation kill switch. Independent of, and prior to, every
@@ -1035,6 +1045,12 @@ function main(): void {
     }
     if (readmitExistingBranch && docsOnlyFastPath) {
       throw new Error('--readmit-existing-branch cannot be combined with --docs-only-fast-path');
+    }
+    if (mergedRecovery.requested && (readmitExistingBranch || docsOnlyFastPath)) {
+      throw new Error('merged-lane recovery cannot be combined with readmission or the docs-only fast path');
+    }
+    if (mergedRecovery.requested && (mergedRecovery.errors.length > 0 || !mergedRecovery.request)) {
+      throw new Error(mergedRecovery.errors.join('; ') || 'merged-lane recovery request is incomplete');
     }
 
     // Fail closed on an unsafe lane substrate before reserving a lease or
@@ -1192,6 +1208,29 @@ function main(): void {
       process.exit(1);
     }
 
+    let mergedRecoveryAttestation: MergedLaneRecoveryAttestation | null = null;
+    if (mergedRecovery.requested && mergedRecovery.request) {
+      if (tier !== 'T1' || canonicalLaneType !== 'governance') {
+        throw new Error('merged-lane recovery requires an explicit T1 governance lane');
+      }
+      if (mergedRecovery.request.source_issue_id === issueId) {
+        throw new Error('recovery must use a separately identified lane; it cannot overwrite the source WORK lane');
+      }
+      const sourceManifest = activeManifests.find(
+        (manifest) => manifest.issue_id === mergedRecovery.request!.source_issue_id,
+      ) ?? null;
+      if (sourceManifest?.branch === branch) {
+        throw new Error('recovery branch must not overwrite the original lane branch');
+      }
+      const attestation = attestMergedLaneRecovery({
+        request: mergedRecovery.request,
+      });
+      if (!attestation.ok) {
+        throw new Error(`merged-lane recovery refused: ${attestation.errors.join('; ')}`);
+      }
+      mergedRecoveryAttestation = attestation.attestation;
+    }
+
     // Same resume-vs-new-lane reasoning as model-profile above: only required/consumed
     // on the path that calls createManifest for a brand-new verification lane.
     const isVerificationLaneType = canonicalLaneType === 'verification';
@@ -1308,7 +1347,14 @@ function main(): void {
       process.exit(1);
     }
 
-    const overlap = activeManifestOverlap(issueId, normalizedFiles, activeManifests);
+    // The source lane remains in activeManifests above, so it still consumes
+    // normal concurrency capacity. Only its exact overlap is removed here,
+    // after fresh GitHub attestation; every other lane remains a blocker.
+    const overlapCandidates = mergedRecoveryOverlapCandidates(
+      activeManifests,
+      mergedRecoveryAttestation,
+    );
+    const overlap = activeManifestOverlap(issueId, normalizedFiles, overlapCandidates);
     if (overlap) {
       emitJson({
         ok: false,
@@ -1322,6 +1368,19 @@ function main(): void {
 
     const currentHead = currentHeadSha();
     const preflight = validatePreflightToken(issueId, branch, currentHead);
+    const tokenRecovery = (preflight.token as PreflightToken & {
+      merged_lane_recovery?: MergedLaneRecoveryAttestation;
+    }).merged_lane_recovery ?? null;
+    if (Boolean(tokenRecovery) !== Boolean(mergedRecoveryAttestation)) {
+      throw new Error('preflight token merged-lane recovery mode does not match the lane-start request');
+    }
+    if (
+      tokenRecovery &&
+      mergedRecoveryAttestation &&
+      !sameMergedLaneRecoveryBinding(tokenRecovery, mergedRecoveryAttestation)
+    ) {
+      throw new Error('fresh lane-start recovery attestation does not match the preflight binding');
+    }
     // WORK-2026092608: release leases whose lane already closed BEFORE any lease
     // check below. CI closeout cannot see this checkout's gitignored registry,
     // so without this a finished lane's lease refuses the next start. Only a
@@ -1779,6 +1838,11 @@ function main(): void {
     if (isCodexExecutor) {
       expectedProofPaths.push(`docs/06_status/proof/${issueId}/model-routing.json`);
     }
+    const mergedRecoveryReceiptRelPath =
+      `docs/06_status/proof/${issueId}/${MERGED_RECOVERY_RECEIPT_FILE}`;
+    if (mergedRecoveryAttestation) {
+      expectedProofPaths.push(mergedRecoveryReceiptRelPath);
+    }
 
     const manifest = createManifest({
       issue_id: issueId,
@@ -1812,6 +1876,13 @@ function main(): void {
     }
 
     manifest.execution_location = setup.execution_location;
+    if (mergedRecoveryAttestation) {
+      manifest.notes =
+        `merged-lane recovery admission; source_issue=${mergedRecoveryAttestation.source_issue_id}; ` +
+        `source_branch=${mergedRecoveryAttestation.source_branch}; original_pr=${mergedRecoveryAttestation.original_pr_number}; ` +
+        `merge_sha=${mergedRecoveryAttestation.merge_sha}; failed_closeout_run=${mergedRecoveryAttestation.failed_closeout_run_id}; ` +
+        `authority_comment=${mergedRecoveryAttestation.authority_comment_id}; source_lane_remains_counted=true`;
+    }
     writeManifest(manifest);
     // Unreachable on the readmission path, which returns above; the early
     // capture is therefore always present here.
@@ -1892,6 +1963,17 @@ function main(): void {
       fs.mkdirSync(path.dirname(receiptPath), { recursive: true });
       fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
     }
+    if (mergedRecoveryAttestation && tokenRecovery) {
+      const receipt = buildMergedLaneRecoveryReceipt({
+        recoveryIssueId: issueId,
+        recoveryBranch: branch,
+        preflight: tokenRecovery,
+        laneStart: mergedRecoveryAttestation,
+      });
+      const receiptPath = path.join(worktreePath, mergedRecoveryReceiptRelPath);
+      fs.mkdirSync(path.dirname(receiptPath), { recursive: true });
+      fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+    }
 
     spawnSync(
       'git',
@@ -1901,6 +1983,7 @@ function main(): void {
         `.ops/sync/${issueId}.yml`,
         ...scaffoldedProofPaths,
         ...(bootstrapAuthorization === null ? [] : [bootstrapReceiptRelPath]),
+        ...(mergedRecoveryAttestation === null ? [] : [mergedRecoveryReceiptRelPath]),
       ],
       { cwd: worktreePath, stdio: 'inherit' }
     );
@@ -1932,6 +2015,15 @@ function main(): void {
       scaffolded_proof_paths: scaffoldedProofPaths,
       lease_sweep: leaseSweep,
       tracker_transition: trackerTransition,
+      ...(mergedRecoveryAttestation === null
+        ? {}
+        : {
+            merged_lane_recovery: {
+              ...mergedRecoveryAttestation,
+              receipt_path: mergedRecoveryReceiptRelPath,
+              source_lane_remains_counted: true,
+            },
+          }),
       // UTV2-1619 capability 18: an authorized admission must never look like an
       // ordinary one. Absent when the lane was admitted under the caps.
       ...(bootstrapAuthorization === null
