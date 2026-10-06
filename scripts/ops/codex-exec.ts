@@ -25,6 +25,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 import {
   ROOT,
   currentHeadSha,
@@ -39,8 +40,10 @@ import {
   generateDispatchExecutionPacketResult,
   generateExecutionPacket,
   renderTaskContract,
+  assertTaskContract,
   type ExecutionPacket,
   type ExecutionPacketResult,
+  type TaskContract,
 } from './execution-packet.js';
 import { requireDelegationActive } from './delegation-state.js';
 import {
@@ -80,6 +83,7 @@ interface CodexExecResult {
     | 'EXECUTION_CANCELLED'
     | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'EXECUTION_STATE_UNAVAILABLE'
+    | 'EXECUTION_AUTHORITY_UNAVAILABLE'
     | 'EXECUTION_CORROBORATION_UNAVAILABLE'
     | 'EXECUTION_BASELINE_NOT_ANCESTOR'
     | 'INCOMPLETE_PHASE_PROGRESSION'
@@ -100,7 +104,9 @@ interface CodexExecResult {
   codex_cli_version?: string | null;
   execution?: ExecutionSummary;
   source_files_changed?: number;
+  evidence_artifacts_changed?: number;
   checkpoint_provenance?: string;
+  wrapper_exit_code?: 0 | 1 | 2;
 }
 
 type PacketResultLoader = (manifest: LaneManifest) => ExecutionPacketResult;
@@ -150,6 +156,7 @@ export interface ExecutionTruthVerdict {
   code:
     | 'SUCCESS'
     | 'EXECUTION_STATE_UNAVAILABLE'
+    | 'EXECUTION_AUTHORITY_UNAVAILABLE'
     | 'EXECUTION_CORROBORATION_UNAVAILABLE'
     | 'EXECUTION_BASELINE_NOT_ANCESTOR'
     | 'INCOMPLETE_PHASE_PROGRESSION'
@@ -158,12 +165,184 @@ export interface ExecutionTruthVerdict {
   exit_code: 0 | 1;
   message: string;
   source_files_changed: number;
+  evidence_artifacts_changed: number;
   changed_files: string[];
   checkpoint_provenance: 'primary' | 'sidecar' | 'none';
 }
 
 const REQUIRED_SUCCESS_PHASES = ['implement', 'verify', 'closeout'] as const;
-const NON_SOURCE_PREFIXES = ['docs/', '.ops/'];
+const NON_SOURCE_PREFIXES = ['docs/', '.ops/', '.out/', 'artifacts/'];
+
+interface FrozenExecutionAuthority {
+  file_scope_lock: string[];
+  expected_proof_paths: string[];
+  acceptance_criteria: string[];
+}
+
+function gitTextAt(cwd: string, revision: string, relativePath: string): string {
+  const result = spawnSync('git', ['show', `${revision}:${relativePath}`], {
+    cwd,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `cannot read ${relativePath} at frozen epoch baseline ${revision}: ` +
+        (result.stderr || result.stdout || `git show exited ${result.status}`),
+    );
+  }
+  return result.stdout;
+}
+
+/**
+ * Load authority from the commit that opened the epoch. Current manifest/sync
+ * files are deliberately irrelevant: the child cannot edit them to grant
+ * itself corroboration authority.
+ */
+function readFrozenExecutionAuthority(
+  cwd: string,
+  issueId: string,
+  baselineSha: string,
+): FrozenExecutionAuthority {
+  const manifestPath = `docs/06_status/lanes/${issueId}.json`;
+  const syncPath = `.ops/sync/${issueId}.yml`;
+  const manifest = JSON.parse(gitTextAt(cwd, baselineSha, manifestPath)) as Partial<LaneManifest>;
+  if (
+    manifest.issue_id !== issueId ||
+    !Array.isArray(manifest.file_scope_lock) ||
+    !manifest.file_scope_lock.every((entry) => typeof entry === 'string' && entry.length > 0) ||
+    (manifest.expected_proof_paths !== undefined &&
+      (!Array.isArray(manifest.expected_proof_paths) ||
+        !manifest.expected_proof_paths.every(
+          (entry) => typeof entry === 'string' && entry.length > 0,
+        )))
+  ) {
+    throw new Error(`frozen lane manifest authority is invalid for ${issueId}`);
+  }
+
+  const sync = parseYaml(gitTextAt(cwd, baselineSha, syncPath)) as { task_contract?: unknown } | null;
+  const contract = sync?.task_contract;
+  assertTaskContract(contract, issueId);
+  return {
+    file_scope_lock: [...manifest.file_scope_lock],
+    expected_proof_paths: [...(manifest.expected_proof_paths ?? [])],
+    acceptance_criteria: [...(contract as TaskContract).acceptance_criteria],
+  };
+}
+
+function pathIsInFrozenScope(relativePath: string, scope: string[]): boolean {
+  const normalize = (value: string): string =>
+    value.replace(/\\/gu, '/').replace(/^\.\/+/, '').replace(/\/+$/u, '');
+  const file = normalize(relativePath);
+  return scope.some((rawEntry) => {
+    const entry = normalize(rawEntry);
+    if (!entry || entry.startsWith('/') || entry.split('/').includes('..')) return false;
+    if (entry.endsWith('/**')) {
+      const prefix = entry.slice(0, -3);
+      return file === prefix || file.startsWith(`${prefix}/`);
+    }
+    return file === entry || file.startsWith(`${entry}/`);
+  });
+}
+
+function criterionNamesExactPath(criteria: string[], relativePath: string): boolean {
+  const openingBoundary = /[\s`"'(\x5b]/u;
+  const trailingPunctuation = /^[`"',.;:)\]]*$/u;
+  return criteria.some((criterion) => {
+    let from = 0;
+    while (from <= criterion.length - relativePath.length) {
+      const index = criterion.indexOf(relativePath, from);
+      if (index < 0) return false;
+      const before = index === 0 ? '' : criterion[index - 1]!;
+      const after = index + relativePath.length;
+      const nextWhitespace = criterion.slice(after).search(/\s/u);
+      const suffixEnd = nextWhitespace < 0 ? criterion.length : after + nextWhitespace;
+      const suffix = criterion.slice(after, suffixEnd);
+      if ((index === 0 || openingBoundary.test(before)) && trailingPunctuation.test(suffix)) {
+        return true;
+      }
+      from = index + 1;
+    }
+    return false;
+  });
+}
+
+function gitTreeEntry(
+  cwd: string,
+  revision: string,
+  relativePath: string,
+): { mode: string; type: string } | null {
+  const result = spawnSync('git', ['ls-tree', revision, '--', relativePath], {
+    cwd,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  if (result.status !== 0 || !result.stdout.trim()) return null;
+  const match = /^(\d+)\s+(\w+)\s+[0-9a-f]+\t/u.exec(result.stdout.trim());
+  return match ? { mode: match[1]!, type: match[2]! } : null;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isSubstantiveExternalEvidenceChange(input: {
+  cwd: string;
+  issueId: string;
+  baselineSha: string;
+  relativePath: string;
+  authority: FrozenExecutionAuthority;
+}): boolean {
+  const externalProofPrefix = 'docs/06_status/proof/';
+  const ownProofPrefix = `${externalProofPrefix}${input.issueId}/`;
+  if (
+    !input.relativePath.startsWith(externalProofPrefix) ||
+    input.relativePath.startsWith(ownProofPrefix) ||
+    !input.relativePath.endsWith('.json') ||
+    !pathIsInFrozenScope(input.relativePath, input.authority.file_scope_lock) ||
+    !criterionNamesExactPath(input.authority.acceptance_criteria, input.relativePath)
+  ) {
+    return false;
+  }
+
+  const beforeEntry = gitTreeEntry(input.cwd, input.baselineSha, input.relativePath);
+  const afterEntry = gitTreeEntry(input.cwd, 'HEAD', input.relativePath);
+  if (
+    beforeEntry?.type !== 'blob' ||
+    afterEntry?.type !== 'blob' ||
+    !/^100(?:644|755)$/u.test(beforeEntry.mode) ||
+    !/^100(?:644|755)$/u.test(afterEntry.mode)
+  ) {
+    return false;
+  }
+
+  try {
+    const before = JSON.parse(gitTextAt(input.cwd, input.baselineSha, input.relativePath)) as unknown;
+    const after = JSON.parse(gitTextAt(input.cwd, 'HEAD', input.relativePath)) as unknown;
+    return isJsonObject(before) && isJsonObject(after) && canonicalJson(before) !== canonicalJson(after);
+  } catch {
+    return false;
+  }
+}
+
+function originalAdmissionBaseline(checkpoint: ExecutionCheckpoint): string {
+  const firstEpoch = checkpoint.prior_epochs[0]?.epoch ?? checkpoint.epoch;
+  if (firstEpoch.mode !== 'fresh') {
+    throw new Error('checkpoint does not retain a valid original admission epoch');
+  }
+  return firstEpoch.implementation_baseline_sha;
+}
 
 function changedFilesSince(
   cwd: string,
@@ -235,6 +414,7 @@ export function evaluateExecutionTruth(input: {
       exit_code: 1,
       message: `mandatory post-spawn execution state is unavailable: ${state.reason}`,
       source_files_changed: 0,
+      evidence_artifacts_changed: 0,
       changed_files: [],
       checkpoint_provenance: 'none',
     };
@@ -250,6 +430,7 @@ export function evaluateExecutionTruth(input: {
       exit_code: 1,
       message: `current epoch ${checkpoint.epoch.epoch_id} is missing required phase(s): ${missing.join(', ')}`,
       source_files_changed: 0,
+      evidence_artifacts_changed: 0,
       changed_files: [],
       checkpoint_provenance: state.provenance.source,
     };
@@ -263,14 +444,47 @@ export function evaluateExecutionTruth(input: {
       exit_code: 1,
       message: `unable to corroborate the current epoch against Git: ${diff.error}`,
       source_files_changed: 0,
+      evidence_artifacts_changed: 0,
       changed_files: [],
       checkpoint_provenance: state.provenance.source,
     };
   }
+  let authority: FrozenExecutionAuthority;
+  try {
+    authority = readFrozenExecutionAuthority(
+      input.cwd,
+      input.issueId,
+      originalAdmissionBaseline(checkpoint),
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'EXECUTION_AUTHORITY_UNAVAILABLE',
+      exit_code: 1,
+      message: `frozen execution authority is unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      source_files_changed: 0,
+      evidence_artifacts_changed: 0,
+      changed_files: diff.files,
+      checkpoint_provenance: state.provenance.source,
+    };
+  }
+
   const sourceFiles = diff.files.filter(
-    (file) => !NON_SOURCE_PREFIXES.some((prefix) => file.startsWith(prefix)),
+    (file) =>
+      !NON_SOURCE_PREFIXES.some((prefix) => file.startsWith(prefix)) &&
+      !pathIsInFrozenScope(file, authority.expected_proof_paths) &&
+      pathIsInFrozenScope(file, authority.file_scope_lock),
   );
-  if (sourceFiles.length === 0) {
+  const evidenceArtifacts = diff.files.filter((relativePath) =>
+    isSubstantiveExternalEvidenceChange({
+      cwd: input.cwd,
+      issueId: input.issueId,
+      baselineSha: checkpoint.epoch.implementation_baseline_sha,
+      relativePath,
+      authority,
+    }),
+  );
+  if (sourceFiles.length === 0 && evidenceArtifacts.length === 0) {
     const rework = checkpoint.epoch.mode === 'rework';
     return {
       ok: false,
@@ -280,6 +494,7 @@ export function evaluateExecutionTruth(input: {
         ? `rework epoch ${checkpoint.epoch.epoch_id} changed zero source files from rejected head ${checkpoint.epoch.implementation_baseline_sha}`
         : `fresh epoch ${checkpoint.epoch.epoch_id} claimed implementation but changed zero source files from ${checkpoint.epoch.implementation_baseline_sha}`,
       source_files_changed: 0,
+      evidence_artifacts_changed: 0,
       changed_files: diff.files,
       checkpoint_provenance: state.provenance.source,
     };
@@ -289,8 +504,11 @@ export function evaluateExecutionTruth(input: {
     ok: true,
     code: 'SUCCESS',
     exit_code: 0,
-    message: `current epoch has valid phase state and ${sourceFiles.length} corroborating source file change(s)`,
+    message:
+      `current epoch has valid phase state, ${sourceFiles.length} corroborating source file change(s), ` +
+      `and ${evidenceArtifacts.length} authorized external evidence artifact change(s)`,
     source_files_changed: sourceFiles.length,
+    evidence_artifacts_changed: evidenceArtifacts.length,
     changed_files: diff.files,
     checkpoint_provenance: state.provenance.source,
   };
@@ -955,6 +1173,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         `Codex returned, but mandatory post-spawn execution state is unavailable: ${postSpawnState.reason}. ` +
         'Execution cannot fall through to success.',
       codex_exit_code: child.status ?? 1,
+      wrapper_exit_code: 1,
       checkpoint_provenance: 'none',
       model_profile: modelRouting.profile,
       model: modelRouting.model,
@@ -1029,6 +1248,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       branch: manifest.branch,
       message: `Codex completed successfully, but model-routing evidence failed to persist at ${persistence.step}: ${persistence.detail}. Evidence file: ${evidencePath}`,
       codex_exit_code: 0,
+      wrapper_exit_code: 1,
       model_profile: modelRouting.profile,
       model: modelRouting.model,
       reasoning_effort: modelRouting.reasoning_effort,
@@ -1059,8 +1279,13 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       issue_id: issueId,
       branch: manifest.branch,
       message: truth.message,
-      codex_exit_code: truth.exit_code,
+      // Keep the subprocess outcome separate from the wrapper's mandatory
+      // truth verdict. A child that exits 0 but fails corroboration did not
+      // itself exit 1; collapsing those facts made failed runs misleading.
+      codex_exit_code: exitCode,
+      wrapper_exit_code: truth.exit_code,
       source_files_changed: truth.source_files_changed,
+      evidence_artifacts_changed: truth.evidence_artifacts_changed,
       checkpoint_provenance: truth.checkpoint_provenance,
       model_profile: modelRouting.profile,
       model: modelRouting.model,
@@ -1093,6 +1318,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     branch: manifest.branch,
     message: `Codex execution completed for ${issueId}. Model routing evidence: ${evidencePath} (${persistence.detail})`,
     codex_exit_code: 0,
+    wrapper_exit_code: 0,
     model_profile: modelRouting.profile,
     model: modelRouting.model,
     reasoning_effort: modelRouting.reasoning_effort,
@@ -1100,6 +1326,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     legacy_compatibility_used: routing.legacy_compatibility_used,
     codex_cli_version: health.version,
     source_files_changed: truth.source_files_changed,
+    evidence_artifacts_changed: truth.evidence_artifacts_changed,
     checkpoint_provenance: truth.checkpoint_provenance,
     execution: {
       ...executionSummary,

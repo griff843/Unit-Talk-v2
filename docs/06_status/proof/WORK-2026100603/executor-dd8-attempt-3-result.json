@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "code": "SUCCESS",
+  "issue_id": "WORK-2026100603",
+  "branch": "codex/work-2026100603-executor-proof-truth",
+  "message": "Codex execution completed for WORK-2026100603. Model routing evidence: /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100603-order/.out/worktrees/codex__work-2026100603-executor-proof-truth/docs/06_status/proof/WORK-2026100603/model-routing.json (committed and pushed)",
+  "codex_exit_code": 0,
+  "wrapper_exit_code": 0,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "codex_cli_version": "codex-cli 0.153.3",
+  "source_files_changed": 4,
+  "evidence_artifacts_changed": 0,
+  "checkpoint_provenance": "primary",
+  "execution": {
+    "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+    "epoch_mode": "fresh",
+    "implementation_baseline_sha": "43bd11515cb6ed375b6d9a09092e2eb3c3efe0ee",
+    "attempt": 3,
+    "attempt_start_sha": "11fca2a838694dc9ef6c83ad7e8fac2a45a5da29",
+    "resumed": true,
+    "phase": "closeout",
+    "resumed_from_phase": "verify",
+    "skipped_phases": [
+      "orient",
+      "plan",
+      "implement"
+    ],
+    "carried_findings": 3,
+    "timeout_ms": 6480000,
+    "timeout_policy_id": "utv2-1594-exec-timeout-v1",
+    "timeout_clamped": "none",
+    "checkpoint_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100603-order/.out/worktrees/codex__work-2026100603-executor-proof-truth/.out/ops/execution-checkpoints/WORK-2026100603.json",
+    "outcome": "completed",
+    "heartbeat_state": "active"
+  }
+}
