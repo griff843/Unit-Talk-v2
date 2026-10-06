@@ -1,0 +1,17 @@
+{
+  "project_ref": "zfzdnfwdarxucxtaojxm",
+  "role": "shadow_parity_reader",
+  "query_table": "settlement_records",
+  "selection": "id,pick_id,picks!inner(id,status,submission_id,source,metadata,selection,market)",
+  "filters": [
+    "status=eq.settled",
+    "result=in.(win,loss,push)",
+    "evidence_ref=not.is.null",
+    "picks.status=neq.voided",
+    "picks.submission_id=not.is.null",
+    "limit=0"
+  ],
+  "status": 206,
+  "content_range": "*/24600",
+  "fixture_exclusion": "Separate canonical reporting classifier applied before candidate-backed count; this HEAD probe proves FK/API reachability only."
+}

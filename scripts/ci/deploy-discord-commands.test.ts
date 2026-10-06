@@ -4,6 +4,7 @@ import {
   readFileSync,
   mkdtempSync,
   mkdirSync,
+  readdirSync,
   writeFileSync,
   chmodSync,
   rmSync,
@@ -32,6 +33,73 @@ const registration = steps.find((step) => step.name === name)!;
 const preflight = workflow.jobs['verify']!.steps.find(
   (step) => step.name === 'Validate production Discord guild identity',
 )!;
+const remoteBody = registration.run!.match(
+  /<<'DISCORD_COMMANDS_REMOTE'\n([\s\S]*?)\nDISCORD_COMMANDS_REMOTE/,
+)?.[1];
+
+function createRemoteHarness() {
+  assert.ok(remoteBody);
+  const dir = mkdtempSync(join(tmpdir(), 'ut-discord-registration-'));
+  mkdirSync(join(dir, 'bin'));
+  const log = join(dir, 'docker.log');
+  const overrideCapture = join(dir, 'registration-override.yml');
+  const docker = join(dir, 'bin', 'docker');
+  writeFileSync(
+    docker,
+    `#!/bin/bash
+printf '%s\n' "$*" >> "$DOCKER_LOG"
+if [ "$1" = inspect ]; then
+  echo "$DOCKER_IMAGE"
+  exit 0
+fi
+if [[ " $* " = *" ps -q discord-bot "* ]]; then
+  echo bot-container
+  exit 0
+fi
+if [[ " $* " = *" run --rm --no-deps -T discord-bot "* ]]; then
+  args=("$@")
+  for ((i=0; i < \${#args[@]}; i++)); do
+    if [ "\${args[$i]}" = -f ] && [[ "\${args[$((i + 1))]}" = *'.discord-registration.'* ]]; then
+      cp "\${args[$((i + 1))]}" "$DOCKER_OVERRIDE_CAPTURE"
+    fi
+  done
+  printf '%s\n' "$UNIT_TALK_IMAGE_TAG" > "$DOCKER_TAG_LOG"
+  exit "$DOCKER_STATUS"
+fi
+exit 99
+`,
+  );
+  chmodSync(docker, 0o755);
+  writeFileSync(join(dir, '.unit-talk-release'), 'reviewed-sha\n');
+
+  return {
+    dir,
+    log,
+    overrideCapture,
+    run: (
+      tag: string,
+      status: string,
+      image = 'test/discord-bot:reviewed-sha',
+    ) =>
+      spawnSync('bash', ['-s', '--', dir, tag, 'test'], {
+        input: remoteBody,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
+          DOCKER_LOG: log,
+          DOCKER_OVERRIDE_CAPTURE: overrideCapture,
+          DOCKER_STATUS: status,
+          DOCKER_IMAGE: image,
+          DOCKER_TAG_LOG: join(dir, 'image-tag.log'),
+        },
+      }),
+    registrationTemps: () =>
+      readdirSync(dir).filter((file) =>
+        file.startsWith('.discord-registration.'),
+      ),
+  };
+}
 
 function runPreflight(guildId: string | undefined) {
   const env = { ...process.env };
@@ -117,66 +185,82 @@ test('only promoted production runs registration; failure blocks smoke and deplo
   );
 });
 
-test('remote step uses promoted release script, refuses a mismatched release and propagates registration failures', () => {
-  const body = registration.run!.match(
-    /<<'DISCORD_COMMANDS_REMOTE'\n([\s\S]*?)\nDISCORD_COMMANDS_REMOTE/,
-  )?.[1];
-  assert.ok(body);
-  const dir = mkdtempSync(join(tmpdir(), 'ut-discord-registration-'));
+test('remote step isolates registration in a bounded disposable production-config container', () => {
+  const harness = createRemoteHarness();
   try {
-    mkdirSync(join(dir, 'bin'));
-    const log = join(dir, 'docker.log');
-    const docker = join(dir, 'bin', 'docker');
-    writeFileSync(
-      docker,
-      '#!/bin/bash\nif [ "$1" = inspect ]; then echo "$DOCKER_IMAGE"; exit 0; fi\n' +
-        'if [ "$2" = ps ]; then echo bot-container; exit 0; fi\n' +
-        'printf "%s\\n" "$*" > "$DOCKER_LOG"\nexit "$DOCKER_STATUS"\n',
+    assert.equal(harness.run('reviewed-sha', '0').status, 0);
+    const dockerLog = readFileSync(harness.log, 'utf8');
+    assert.match(
+      dockerLog,
+      /compose -f docker-compose\.yml -f .*\.discord-registration\..*\.yml run --rm --no-deps -T discord-bot/,
     );
-    chmodSync(docker, 0o755);
-    writeFileSync(join(dir, '.unit-talk-release'), 'reviewed-sha\n');
-    const run = (
-      tag: string,
-      status: string,
-      image = 'test/discord-bot:reviewed-sha',
-    ) =>
-      spawnSync('bash', ['-s', '--', dir, tag, 'test'], {
-        input: body,
-        encoding: 'utf8',
-        env: {
-          ...process.env,
-          PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
-          DOCKER_LOG: log,
-          DOCKER_STATUS: status,
-          DOCKER_IMAGE: image,
-        },
-      });
-    assert.equal(run('reviewed-sha', '0').status, 0);
+    assert.doesNotMatch(
+      dockerLog,
+      /compose exec|compose up|compose restart|--service-ports|--publish/,
+    );
     assert.equal(
-      readFileSync(log, 'utf8').trim(),
-      'compose exec -T discord-bot /repo/node_modules/.bin/tsx /repo/apps/discord-bot/scripts/deploy-commands.ts',
+      readFileSync(join(harness.dir, 'image-tag.log'), 'utf8').trim(),
+      'reviewed-sha',
     );
-    assert.equal(run('reviewed-sha', '17').status, 17);
-    rmSync(log);
-    assert.notEqual(run('other-sha', '0').status, 0);
+    const override = parse(readFileSync(harness.overrideCapture, 'utf8')) as {
+      services: {
+        'discord-bot': {
+          mem_limit: string;
+          deploy: { resources: { limits: { memory: string } } };
+          entrypoint: string[];
+          command: string[];
+        };
+      };
+    };
+    assert.equal(override.services['discord-bot'].mem_limit, '256m');
+    assert.equal(
+      override.services['discord-bot'].deploy.resources.limits.memory,
+      '256m',
+    );
+    assert.deepEqual(override.services['discord-bot'].entrypoint, [
+      '/repo/node_modules/.bin/tsx',
+      '/repo/apps/discord-bot/scripts/deploy-commands.ts',
+    ]);
+    assert.deepEqual(override.services['discord-bot'].command, []);
+    assert.deepEqual(harness.registrationTemps(), []);
+  } finally {
+    rmSync(harness.dir, { recursive: true, force: true });
+  }
+});
+
+test('registration failures propagate exactly and clean up the temporary override', () => {
+  const harness = createRemoteHarness();
+  try {
+    assert.equal(harness.run('reviewed-sha', '17').status, 17);
+    assert.deepEqual(harness.registrationTemps(), []);
+  } finally {
+    rmSync(harness.dir, { recursive: true, force: true });
+  }
+});
+
+test('stale release or live bot image refuses registration before a one-off container starts', () => {
+  const harness = createRemoteHarness();
+  try {
+    assert.notEqual(harness.run('other-sha', '0').status, 0);
     assert.throws(
-      () => readFileSync(log),
+      () => readFileSync(harness.overrideCapture),
       'mismatched release must not execute registration',
     );
     assert.notEqual(
-      run('reviewed-sha', '0', 'test/discord-bot:old-sha').status,
+      harness.run('reviewed-sha', '0', 'test/discord-bot:old-sha').status,
       0,
     );
     assert.throws(
-      () => readFileSync(log),
+      () => readFileSync(harness.overrideCapture),
       'stale bot image must not register commands',
     );
     assert.doesNotMatch(
-      body,
+      remoteBody!,
       /kill.switch|receipt|submit|restart|up -d|applicationCommands/,
     );
+    assert.deepEqual(harness.registrationTemps(), []);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(harness.dir, { recursive: true, force: true });
   }
 });
 

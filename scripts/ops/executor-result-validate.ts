@@ -1,40 +1,22 @@
 /**
  * Pure, testable core of executor-result validation.
  *
- * UTV2-1550: the pull_request-triggered preflight and the issue_comment /
- * workflow_dispatch-triggered validation must never share the required
- * "Executor Result Validation" check-run identity. GitHub's merge-eligibility
- * computation for a required status-check context is anchored to the
- * check-suite/run associated with the *original* triggering event for that
- * SHA — a later run with the same context name from a different trigger
- * (e.g. issue_comment superseding a stale pull_request-triggered failure)
- * does not reliably supersede it for merge-blocking purposes. Concretely:
- * pushing a new commit (pull_request: synchronize) re-evaluates any existing
- * (now-stale) executor-result comment and can create a *failing* run under
- * the required name before a corrected comment is ever posted; a later
- * successful issue_comment-triggered run under the same name does not
- * reliably clear that original failure for merge purposes.
- *
- * Fix: pull_request-triggered evaluation always uses a distinct,
- * non-required check name ("Executor Result Preflight"). Only
- * issue_comment/workflow_dispatch ever create the required
- * "Executor Result Validation" context, so there is exactly one
- * authoritative required identity per PR head.
+ * WORK-2026100501: required results are native Actions job results from an
+ * eligible pull_request run. Comment and manual events only request a retry
+ * of that original exact-head run; they never manufacture a check run.
  */
 
 export const REQUIRED_CHECK_NAME = 'Executor Result Validation';
-export const PREFLIGHT_CHECK_NAME = 'Executor Result Preflight';
+export const REFRESH_CHECK_NAME = 'Refresh Executor Result Validation';
 
-export type TriggerEvent = 'pull_request' | 'issue_comment' | 'workflow_dispatch';
+export type PublicationAction = 'publish-native' | 'request-refresh' | 'ignore';
 
-/** Resolves the check-run name for a given triggering event. */
-export function resolveCheckName(eventName: string): string {
-  return eventName === 'pull_request' ? PREFLIGHT_CHECK_NAME : REQUIRED_CHECK_NAME;
-}
-
-/** True only for the event types that may create the required context. */
-export function isRequiredCheckName(eventName: string): boolean {
-  return resolveCheckName(eventName) === REQUIRED_CHECK_NAME;
+/** Resolves what an event may do to the required result. */
+export function resolvePublicationAction(eventName: string, commentBody = ''): PublicationAction {
+  if (eventName === 'pull_request') return 'publish-native';
+  if (eventName === 'workflow_dispatch') return 'request-refresh';
+  if (eventName === 'issue_comment' && commentBody.includes('EXECUTOR_RESULT:')) return 'request-refresh';
+  return 'ignore';
 }
 
 export interface ParsedExecutorResult {
@@ -173,24 +155,21 @@ export function proofArtifactRequired(r: ParsedExecutorResult, prLabels: string[
 }
 
 // ── CLI entrypoint ───────────────────────────────────────────────────────
-// Usage: tsx scripts/ops/executor-result-validate.ts resolve-check-name <event-name>
-// Invoked by executor-result-validator.yml so the check name the workflow
-// uses is always the same tested definition as resolveCheckName() above —
-// never a duplicated/hand-copied literal that could drift from it.
+// Usage: tsx scripts/ops/executor-result-validate.ts resolve-publication-action <event-name> [comment-body]
 
 import { fileURLToPath } from 'node:url';
 
 function main(): void {
   const [command, arg] = process.argv.slice(2);
-  if (command === 'resolve-check-name') {
+  if (command === 'resolve-publication-action') {
     if (!arg) {
-      console.error('Usage: executor-result-validate.ts resolve-check-name <event-name>');
+      console.error('Usage: executor-result-validate.ts resolve-publication-action <event-name> [comment-body]');
       process.exit(1);
     }
-    process.stdout.write(resolveCheckName(arg));
+    process.stdout.write(resolvePublicationAction(arg, process.argv.slice(4).join(' ')));
     return;
   }
-  console.error(`Unknown command: "${command}". Expected: resolve-check-name <event-name>`);
+  console.error(`Unknown command: "${command}". Expected: resolve-publication-action <event-name> [comment-body]`);
   process.exit(1);
 }
 

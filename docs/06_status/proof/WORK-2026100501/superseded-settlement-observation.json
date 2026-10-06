@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-10-05T19:37:17.857254+00:00",
+  "project_ref": "zfzdnfwdarxucxtaojxm",
+  "role": "shadow_parity_reader",
+  "access": "REST GET only; custom role key hash verified; no DML/RPC/grant changes",
+  "definition": "Approved existence-based metric is unchanged. Concern counts qualifying picks that also have an evidence-settled terminal correction record with void/cancelled result; branching chains may have multiple terminals, so this is not a replacement canonical metric.",
+  "candidate_links_read": 8313,
+  "canonical_candidate_count": 1412,
+  "canonical_pick_count": 1182,
+  "concern_pick_count": 0,
+  "concern_candidate_count": 0,
+  "fixture_exclusions": "Mirrors reporting.pick_fixture_reason; source shadow excluded",
+  "query_tables": [
+    "pick_candidates",
+    "settlement_records",
+    "picks"
+  ],
+  "recorded_scope": "Separate observation only; no settlement/product change authorized",
+  "unlinked_qualifying_pick_count": 389
+}

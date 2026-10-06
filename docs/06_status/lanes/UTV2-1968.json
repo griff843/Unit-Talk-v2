@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1968",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1968-registration-isolation",
+  "branch": "codex/utv2-1968-registration-isolation",
+  "base_branch": "main",
+  "commit_sha": "32634964f36ca65a8db5878e5dabe2e8e2573c21",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1713",
+  "files_changed": [
+    ".github/workflows/deploy.yml",
+    "docs/06_status/proof/UTV2-1968/diff-summary.md",
+    "docs/06_status/proof/UTV2-1968/evidence.json",
+    "docs/06_status/proof/UTV2-1968/model-routing.json",
+    "docs/06_status/proof/UTV2-1968/verification.md",
+    "scripts/ci/deploy-discord-commands.test.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/deploy.yml",
+    "scripts/ci/deploy-discord-commands.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1968/diff-summary.md",
+    "docs/06_status/proof/UTV2-1968/evidence.json",
+    "docs/06_status/proof/UTV2-1968/verification.md",
+    "docs/06_status/proof/UTV2-1968/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-10-03T07:24:24.218Z",
+  "heartbeat_at": "2026-10-05T01:50:38.376Z",
+  "closed_at": "2026-10-05T01:50:38.376Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1968-registration-isolation.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-05T01:50:25.130Z",
+      "verdict": "pass",
+      "merge_sha": "32634964f36ca65a8db5878e5dabe2e8e2573c21",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1968-registration-isolation",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

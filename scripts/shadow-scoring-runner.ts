@@ -41,9 +41,44 @@ import { loadEnvironment } from '@unit-talk/config';
  * resolve identically on the non-dry-run path, which no PR-triggered job takes.
  */
 type ApiRuntimeModule = typeof import('../apps/api/src/server.js');
-type CandidateScoringModule = typeof import('../apps/api/src/candidate-scoring-service.js');
+type CandidateScoringModule =
+  typeof import('../apps/api/src/candidate-scoring-service.js');
 
 type Client = SupabaseClient<Record<string, never>>;
+
+interface CandidatePickLink {
+  id: string;
+  pick_id: string | null;
+}
+
+interface CanonicalPick {
+  id: string;
+  market: string;
+  metadata: unknown;
+  selection: string;
+  source: string;
+  status: string;
+  submission_id: string | null;
+}
+
+interface SettlementWithPick {
+  id: string;
+  pick_id: string;
+  result: string | null;
+  status: string;
+  evidence_ref: string | null;
+  corrects_id: string | null;
+  picks: CanonicalPick | CanonicalPick[] | null;
+}
+
+interface PagedQueryResult<T> {
+  data: T[] | null;
+  error: { message: string } | null;
+}
+
+const QUERY_PAGE_SIZE = 1_000;
+const PICK_ID_BATCH_SIZE = 100;
+const CANONICAL_RESULTS = new Set(['win', 'loss', 'push']);
 
 export interface DailyCounts {
   rawPropsIngested: number;
@@ -103,7 +138,8 @@ export function parseCliOptions(args: string[]): CliOptions {
     .filter(Boolean);
 
   const batchSizeRaw = Number.parseInt(values.get('batch-size') ?? '100', 10);
-  const batchSize = Number.isFinite(batchSizeRaw) && batchSizeRaw > 0 ? batchSizeRaw : 100;
+  const batchSize =
+    Number.isFinite(batchSizeRaw) && batchSizeRaw > 0 ? batchSizeRaw : 100;
 
   return {
     dryRun: flags.has('dry-run'),
@@ -122,13 +158,193 @@ async function countTable(
   if (filter) q = filter(q) as typeof q;
   const { count, error } = await q;
   if (error) {
-    throw new Error(`[shadow-scoring-runner] count(${table}) failed: ${error.message}`);
+    throw new Error(
+      `[shadow-scoring-runner] count(${table}) failed: ${error.message}`,
+    );
   }
   return count ?? 0;
 }
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function jsonbHasTopLevelKey(value: unknown, key: string): boolean {
+  if (typeof value === 'string') return value === key;
+  if (Array.isArray(value)) return value.some((item) => item === key);
+  return value !== null && typeof value === 'object'
+    ? Object.hasOwn(value, key)
+    : false;
+}
+
+function jsonbObjectFieldText(value: unknown, key: string): string {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return '';
+  }
+
+  const field = (value as Record<string, unknown>)[key];
+  if (field === null || field === undefined) return '';
+  if (typeof field === 'string') return field;
+  return JSON.stringify(field) ?? '';
+}
+
+/** Mirrors reporting.pick_fixture_reason from the canonical reporting migration. */
+function isFixturePick(pick: CanonicalPick): boolean {
+  const eventName = jsonbObjectFieldText(pick.metadata, 'eventName');
+
+  return (
+    jsonbHasTopLevelKey(pick.metadata, 'proof_issue') ||
+    jsonbHasTopLevelKey(pick.metadata, 'proofRunId') ||
+    eventName.startsWith('db-smoke-') ||
+    /^utv2[ _-]/iu.test(eventName) ||
+    /^utv2[ _-]/iu.test(pick.selection) ||
+    /[[(]utv2-[0-9]+/iu.test(pick.selection) ||
+    pick.source === 't1-proof' ||
+    pick.source === 'canary-proof' ||
+    /command center qa/iu.test(eventName) ||
+    /staff-only dry run/iu.test(pick.selection) ||
+    ['test', 'foo', 'bar', 'dummy', 'sample'].includes(
+      pick.selection.toLowerCase(),
+    ) ||
+    pick.market === 'test'
+  );
+}
+
+function embeddedPick(row: SettlementWithPick): CanonicalPick | null {
+  if (Array.isArray(row.picks)) return row.picks[0] ?? null;
+  return row.picks;
+}
+
+function isCanonicalEvidenceSettlement(row: SettlementWithPick): boolean {
+  const pick = embeddedPick(row);
+  return Boolean(
+    pick &&
+    CANONICAL_RESULTS.has(row.result ?? '') &&
+    row.status === 'settled' &&
+    row.evidence_ref !== null &&
+    pick.id === row.pick_id &&
+    pick.submission_id !== null &&
+    pick.status !== 'voided' &&
+    pick.source !== 'shadow' &&
+    !isFixturePick(pick),
+  );
+}
+
+/**
+ * Count candidate rows backed by at least one canonical evidence-settled pick.
+ *
+ * pick_candidates.pick_id has no FK, so PostgREST cannot embed picks from that
+ * table. Read the links first, then traverse the real settlement_records →
+ * picks FK. Candidate and settlement scans are both stable and paginated;
+ * duplicate/correction settlement rows qualify their pick only once.
+ */
+export async function countSettledResultBacked(
+  client: Client,
+  pageSize = QUERY_PAGE_SIZE,
+  pickIdBatchSize = PICK_ID_BATCH_SIZE,
+): Promise<number> {
+  if (!Number.isInteger(pageSize) || pageSize <= 0) {
+    throw new Error(
+      '[shadow-scoring-runner] pageSize must be a positive integer',
+    );
+  }
+  if (!Number.isInteger(pickIdBatchSize) || pickIdBatchSize <= 0) {
+    throw new Error(
+      '[shadow-scoring-runner] pickIdBatchSize must be a positive integer',
+    );
+  }
+
+  const candidateLinks: CandidatePickLink[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const response = (await client
+      .from('pick_candidates')
+      .select('id,pick_id')
+      .not('pick_id', 'is', null)
+      .order('id', { ascending: true })
+      .range(
+        offset,
+        offset + pageSize - 1,
+      )) as unknown as PagedQueryResult<CandidatePickLink>;
+
+    if (response.error) {
+      throw new Error(
+        `[shadow-scoring-runner] candidate settlement links query failed: ${response.error.message}`,
+      );
+    }
+    if (response.data === null) {
+      throw new Error(
+        '[shadow-scoring-runner] candidate settlement links query returned no data',
+      );
+    }
+
+    candidateLinks.push(...response.data.filter((row) => row.pick_id !== null));
+    if (response.data.length < pageSize) break;
+  }
+
+  const uniquePickIds = [
+    ...new Set(
+      candidateLinks
+        .map((row) => row.pick_id)
+        .filter((pickId): pickId is string => pickId !== null),
+    ),
+  ];
+  const qualifyingPickIds = new Set<string>();
+
+  for (
+    let batchOffset = 0;
+    batchOffset < uniquePickIds.length;
+    batchOffset += pickIdBatchSize
+  ) {
+    const pickIds = uniquePickIds.slice(
+      batchOffset,
+      batchOffset + pickIdBatchSize,
+    );
+
+    for (let offset = 0; ; offset += pageSize) {
+      const response = (await client
+        .from('settlement_records')
+        .select(
+          'id,pick_id,result,status,evidence_ref,corrects_id,picks!inner(id,status,submission_id,source,metadata,selection,market)',
+        )
+        .in('pick_id', pickIds)
+        .in('result', [...CANONICAL_RESULTS])
+        .eq('status', 'settled')
+        .not('evidence_ref', 'is', null)
+        .neq('picks.status', 'voided')
+        .not('picks.submission_id', 'is', null)
+        .order('id', { ascending: true })
+        .range(
+          offset,
+          offset + pageSize - 1,
+        )) as unknown as PagedQueryResult<SettlementWithPick>;
+
+      if (response.error) {
+        throw new Error(
+          `[shadow-scoring-runner] canonical settlements query failed: ${response.error.message}`,
+        );
+      }
+      if (response.data === null) {
+        throw new Error(
+          '[shadow-scoring-runner] canonical settlements query returned no data',
+        );
+      }
+
+      for (const row of response.data) {
+        if (isCanonicalEvidenceSettlement(row))
+          qualifyingPickIds.add(row.pick_id);
+      }
+      if (response.data.length < pageSize) break;
+    }
+  }
+
+  return new Set(
+    candidateLinks
+      .filter(
+        (link) =>
+          link.pick_id !== null && qualifyingPickIds.has(link.pick_id),
+      )
+      .map((link) => link.id),
+  ).size;
 }
 
 async function queryDailyCounts(client: Client): Promise<DailyCounts> {
@@ -154,19 +370,24 @@ async function queryDailyCounts(client: Client): Promise<DailyCounts> {
     countTable(client, 'pick_candidates', (q) =>
       q.not('model_score', 'is', null).gte('updated_at', today),
     ),
-    countTable(client, 'pick_candidates', (q) => q.eq('is_board_candidate', true)),
+    countTable(client, 'pick_candidates', (q) =>
+      q.eq('is_board_candidate', true),
+    ),
     countTable(client, 'pick_candidates', (q) =>
       q.or('status.eq.posted,pick_id.not.is.null'),
     ),
     countTable(client, 'pick_candidates', (q) =>
       q.eq('shadow_mode', true).is('pick_id', null),
     ),
-    countTable(client, 'pick_candidates', (q) => q.not('outcome', 'is', null)),
+    countSettledResultBacked(client),
     countTable(client, 'market_universe', (q) =>
       q.not('opening_line', 'is', null).not('closing_line', 'is', null),
     ),
     countTable(client, 'pick_candidates', (q) =>
-      q.eq('shadow_mode', true).in('status', ['qualified', 'rejected']).is('model_score', null),
+      q
+        .eq('shadow_mode', true)
+        .in('status', ['qualified', 'rejected'])
+        .is('model_score', null),
     ),
   ]);
 
@@ -190,11 +411,17 @@ export function assertGuardrails(guardrails: Guardrails): void {
   if (guardrails.picksCreated !== 0)
     violations.push(`picksCreated=${guardrails.picksCreated} (must be 0)`);
   if (guardrails.shadowModeFalseSet !== 0)
-    violations.push(`shadowModeFalseSet=${guardrails.shadowModeFalseSet} (must be 0)`);
+    violations.push(
+      `shadowModeFalseSet=${guardrails.shadowModeFalseSet} (must be 0)`,
+    );
   if (guardrails.distributionEnqueued !== 0)
-    violations.push(`distributionEnqueued=${guardrails.distributionEnqueued} (must be 0)`);
+    violations.push(
+      `distributionEnqueued=${guardrails.distributionEnqueued} (must be 0)`,
+    );
   if (guardrails.promotionWidened !== 0)
-    violations.push(`promotionWidened=${guardrails.promotionWidened} (must be 0)`);
+    violations.push(
+      `promotionWidened=${guardrails.promotionWidened} (must be 0)`,
+    );
 
   if (violations.length > 0) {
     throw new Error(
@@ -267,12 +494,10 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
 
   if (!options.dryRun) {
     // Loaded here, not at module scope — see the note beside the type imports.
-    const { createApiRuntimeDependencies } = (await import(
-      '../apps/api/src/server.js'
-    )) as ApiRuntimeModule;
-    const { runCandidateScoring } = (await import(
-      '../apps/api/src/candidate-scoring-service.js'
-    )) as CandidateScoringModule;
+    const { createApiRuntimeDependencies } =
+      (await import('../apps/api/src/server.js')) as ApiRuntimeModule;
+    const { runCandidateScoring } =
+      (await import('../apps/api/src/candidate-scoring-service.js')) as CandidateScoringModule;
 
     const runtime = createApiRuntimeDependencies({ environment });
     const repos = runtime.repositories;
@@ -283,7 +508,9 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
         marketUniverse: repos.marketUniverse,
         marketFamilyTrust: repos.marketFamilyTrust,
         ...(repos.modelRegistry ? { modelRegistry: repos.modelRegistry } : {}),
-        ...(repos.experimentLedger ? { experimentLedger: repos.experimentLedger } : {}),
+        ...(repos.experimentLedger
+          ? { experimentLedger: repos.experimentLedger }
+          : {}),
       },
       {
         batchSize: options.batchSize,
@@ -297,7 +524,9 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
       `[shadow-scoring-runner] scored=${result.scored} skipped=${result.skipped} errors=${result.errors}`,
     );
   } else {
-    console.error('[shadow-scoring-runner] --dry-run: skipping scoring writes, counts only');
+    console.error(
+      '[shadow-scoring-runner] --dry-run: skipping scoring writes, counts only',
+    );
   }
 
   dailyCounts.candidatesScoredThisRun = candidatesScoredThisRun;
@@ -339,7 +568,9 @@ function isCliEntrypoint(): boolean {
   const invoked = process.argv[1];
   if (!invoked) return false;
   try {
-    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+    return (
+      realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url))
+    );
   } catch {
     return false;
   }

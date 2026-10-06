@@ -1,0 +1,147 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1799
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1799
+  objective: >-
+    `provider_offers.updated_at` does not exist. Two live operator paths query
+    it and throw on every invocation against real Supabase. Repoint both at
+    `provider_offer_current`, and replace the single-file regression regex with
+    a repo-wide guard.
+
+    `scripts/ops/ingestor-health-check.ts:117-127` —
+    `readLatestProviderOfferUpdatedAt()`: change `.from('provider_offers')` to
+    `.from('provider_offer_current')`. Live via `pnpm ingestor:health-check`
+    (`package.json:192`), called from `collectIngestorHealthCheck()` (line 195)
+    inside `main()` (line 211).
+
+    `scripts/ingestor-supervisor.ts:382-395` — `readDatabaseStatus()` carries
+    its **own independent copy** of the same bad query. Same fix. Live via `pnpm
+    ingestor:start/stop/restart` (`package.json:29,32,34`).
+
+    Verified column truth (`packages/db/src/database.types.ts:3809-3826`):
+    `provider_offers` Row is `bookmaker_key, created_at, devig_mode, id,
+    idempotency_key, is_closing, is_opening, line, over_odds, provider_event_id,
+    provider_key, provider_market_key, provider_participant_id, snapshot_at,
+    sport_key, under_odds` — no `updated_at`.
+    `provider_offer_current.updated_at` is non-null.
+    `scripts/runtime-health.ts:196-215` and
+    `scripts/stage-freshness-checks.ts:153` already use the correct table;
+    follow their pattern.
+  acceptance_criteria:
+    - "`pnpm ingestor:health-check` returns valid JSON with a non-null
+      `latestOfferUpdatedAt` against staging, instead of throwing
+      `provider_offers freshness query failed`."
+    - "`scripts/ingestor-supervisor.ts` `readDatabaseStatus()` returns a real
+      timestamp against staging instead of throwing."
+    - A new guard test scans `scripts/**` for any `provider_offers` query that
+      selects or orders by `updated_at` and fails on a hit. It must be repo-wide
+      — the existing guard at `scripts/ingestor-alert-check.test.ts:230` is a
+      120-character regex scoped to one file and did not catch either of these
+      two sites.
+    - "**Inversion (required):** revert either call site to `provider_offers`
+      and demonstrate the guard test goes red. A guard that is merely present
+      and green proves nothing."
+  guardrails:
+    - Production stays parked. Read-only `SELECT` against staging only. No SGO
+      call, no ingestion restart, no delivery unpark, no production mutation, no
+      secret access.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Child A of [UTV2-1738](https://linear.app/unit-talk-v2/issue/UTV2-1738/parent-alerting-can-go-silent-without-anything-noticing-dead-mans). Reverified against `main` @ `e48106fc` on 2026-09-01. **PM-ratified for dispatch (2026-09-02): Ready for Codex / High / A Griffin.**
+    - >-
+      Why this is production-relevant
+
+      Both are live operator paths. The supervisor's callers read the thrown
+      error as "no data" rather than as a broken query — the same fail-open
+      class that let the 116-day ingestion outage stay invisible.
+    - >-
+      Mechanical classification
+
+      * `tier-classifier --declared-tier T2 --files
+      scripts/ops/ingestor-health-check.ts scripts/ingestor-supervisor.ts` →
+      `mechanical_minimum: T3`, `derived_tier: T2`, `escalated: false`. **T2**
+      is above the floor and correct for a live-path DB read. Re-run the
+      classifier at lane-start; it is authoritative over this line.
+
+      * **Lane type: **`hygiene`. `.lane/lanes/hygiene.yml` `allowed_path_globs`
+      admits `scripts/**`, `.ops/sync/**`, `docs/06_status/lanes/**`,
+      `docs/06_status/proof/**`. The full file set is admitted by one lane type;
+      no forbidden-path hits.
+
+      * **Does not consume the runtime singleton.** Hygiene, cap 4 concurrent.
+
+      * **Executor: Codex CLI.** Mechanical repoint plus a test; no design
+      judgment.
+    - >-
+      File scope
+
+      * `scripts/ops/ingestor-health-check.ts` (exists)
+
+      * `scripts/ingestor-supervisor.ts` (exists)
+
+      * `scripts/ops/provider-offer-column-guard.test.ts` (NEW)
+
+      * `.ops/sync/UTV2-<id>.yml`, `docs/06_status/lanes/UTV2-<id>.json`,
+      `docs/06_status/proof/UTV2-<id>/diff-summary.md`,
+      `docs/06_status/proof/UTV2-<id>/verification.md`
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1799/repoint-the-two-live-provider-offersupdated-at-readers-at-provider
+    title: Repoint the two live provider_offers.updated_at readers at
+      provider_offer_current
+    description: |-
+      Child A of [UTV2-1738](https://linear.app/unit-talk-v2/issue/UTV2-1738/parent-alerting-can-go-silent-without-anything-noticing-dead-mans). Reverified against `main` @ `e48106fc` on 2026-09-01. **PM-ratified for dispatch (2026-09-02): Ready for Codex / High / A Griffin.**
+
+      ## Objective
+
+      `provider_offers.updated_at` does not exist. Two live operator paths query it and throw on every invocation against real Supabase. Repoint both at `provider_offer_current`, and replace the single-file regression regex with a repo-wide guard.
+
+      1. `scripts/ops/ingestor-health-check.ts:117-127` — `readLatestProviderOfferUpdatedAt()`: change `.from('provider_offers')` to `.from('provider_offer_current')`. Live via `pnpm ingestor:health-check` (`package.json:192`), called from `collectIngestorHealthCheck()` (line 195) inside `main()` (line 211).
+      2. `scripts/ingestor-supervisor.ts:382-395` — `readDatabaseStatus()` carries its **own independent copy** of the same bad query. Same fix. Live via `pnpm ingestor:start/stop/restart` (`package.json:29,32,34`).
+
+      Verified column truth (`packages/db/src/database.types.ts:3809-3826`): `provider_offers` Row is `bookmaker_key, created_at, devig_mode, id, idempotency_key, is_closing, is_opening, line, over_odds, provider_event_id, provider_key, provider_market_key, provider_participant_id, snapshot_at, sport_key, under_odds` — no `updated_at`. `provider_offer_current.updated_at` is non-null. `scripts/runtime-health.ts:196-215` and `scripts/stage-freshness-checks.ts:153` already use the correct table; follow their pattern.
+
+      ## Why this is production-relevant
+
+      Both are live operator paths. The supervisor's callers read the thrown error as "no data" rather than as a broken query — the same fail-open class that let the 116-day ingestion outage stay invisible.
+
+      ## Mechanical classification
+
+      * `tier-classifier --declared-tier T2 --files scripts/ops/ingestor-health-check.ts scripts/ingestor-supervisor.ts` → `mechanical_minimum: T3`, `derived_tier: T2`, `escalated: false`. **T2** is above the floor and correct for a live-path DB read. Re-run the classifier at lane-start; it is authoritative over this line.
+      * **Lane type: **`hygiene`. `.lane/lanes/hygiene.yml` `allowed_path_globs` admits `scripts/**`, `.ops/sync/**`, `docs/06_status/lanes/**`, `docs/06_status/proof/**`. The full file set is admitted by one lane type; no forbidden-path hits.
+      * **Does not consume the runtime singleton.** Hygiene, cap 4 concurrent.
+      * **Executor: Codex CLI.** Mechanical repoint plus a test; no design judgment.
+
+      ## File scope
+
+      * `scripts/ops/ingestor-health-check.ts` (exists)
+      * `scripts/ingestor-supervisor.ts` (exists)
+      * `scripts/ops/provider-offer-column-guard.test.ts` (NEW)
+      * `.ops/sync/UTV2-<id>.yml`, `docs/06_status/lanes/UTV2-<id>.json`, `docs/06_status/proof/UTV2-<id>/diff-summary.md`, `docs/06_status/proof/UTV2-<id>/verification.md`
+
+      ## Acceptance criteria
+
+      1. `pnpm ingestor:health-check` returns valid JSON with a non-null `latestOfferUpdatedAt` against staging, instead of throwing `provider_offers freshness query failed`.
+      2. `scripts/ingestor-supervisor.ts` `readDatabaseStatus()` returns a real timestamp against staging instead of throwing.
+      3. A new guard test scans `scripts/**` for any `provider_offers` query that selects or orders by `updated_at` and fails on a hit. It must be repo-wide — the existing guard at `scripts/ingestor-alert-check.test.ts:230` is a 120-character regex scoped to one file and did not catch either of these two sites.
+      4. **Inversion (required):** revert either call site to `provider_offers` and demonstrate the guard test goes red. A guard that is merely present and green proves nothing.
+
+      ## Guardrails
+
+      Production stays parked. Read-only `SELECT` against staging only. No SGO call, no ingestion restart, no delivery unpark, no production mutation, no secret access.
+    captured_at: 2026-10-05T02:35:06.677Z
+    description_sha256: 665fbcba3f500963a51c28f8c331472806793d3ad848ba1de07d26152115a325
+  contract_hash: 79d95024f814f8235a899dc8019b080648cf667797dd0e2b4997f2c05fd3eb4b

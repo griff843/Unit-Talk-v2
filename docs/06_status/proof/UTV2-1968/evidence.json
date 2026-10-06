@@ -1,0 +1,106 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1968",
+  "pr_number": 1713,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW_WITH_STAGING_DB_DEFERRED",
+  "generated_at": "2026-10-03T07:55:00Z",
+  "sha_binding": {
+    "merge_sha": "32634964f36ca65a8db5878e5dabe2e8e2573c21",
+    "verified_source_sha": "03f618806d000e25e6c0f015bde94f51f47630bb",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "verify": "required on the exact PR head",
+      "writable_db_proof": "required in the staging-ci environment"
+    },
+    "note": "Verified source is the October 4 governed current-main synchronization commit. Registration implementation is unchanged from PM-reviewed e812b8c90c5cb01b52f1db64541e49b518eebf34. Full pnpm verify passed static stages and refused the unidentified local DB before writes; fresh protected staging CI remains required. Original admitted CLI implementation/execution provenance is preserved unchanged.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-05T01:50:25.124Z"
+  },
+  "scope": {
+    "implementation_files": [
+      ".github/workflows/deploy.yml",
+      "scripts/ci/deploy-discord-commands.test.ts"
+    ],
+    "production_compose_changed": false,
+    "bot_source_changed": false,
+    "package_changed": false,
+    "database_changed": false
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "test": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "focused_regression": {
+      "command": "pnpm exec tsx --test 'scripts/ci/deploy-discord-commands.test.ts'",
+      "exit_code": 0,
+      "tests": 7,
+      "pass": 7,
+      "fail": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "status": "STATIC_PASS_DB_REFUSED",
+      "detail": "Every static stage passed. test:live-db then refused before any writable test because host=127.0.0.1 ref=unidentified did not match staging xskgrzbteyqdufktjrjx."
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+    "command": "pnpm test:db",
+    "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
+    "local_result": "REFUSED before database-smoke.test.ts or any write executed",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. Measured local guard detail: host=127.0.0.1 ref=unidentified.",
+    "queries": [
+      {
+        "name": "staging-only writable smoke",
+        "result": "not executed locally; ci:assert-staging refused the unidentified loopback target before writes"
+      }
+    ],
+    "row_counts": [
+      {
+        "name": "rows written, updated, or deleted by local DB proof",
+        "value": 0
+      },
+      {
+        "name": "writable DB assertions executed locally",
+        "value": 0
+      }
+    ],
+    "shell_runtime": {
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "proves": [
+        "disposable compose run isolation",
+        "256 MiB one-off memory bound",
+        "temporary override cleanup on success and failure",
+        "promoted tag and running image verification",
+        "stale release and stale image refusal",
+        "registrar exit-code propagation",
+        "no dependency start, port publication, live-service exec, or restart"
+      ]
+    }
+  },
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "independent_t1_approval_required": true
+  }
+}

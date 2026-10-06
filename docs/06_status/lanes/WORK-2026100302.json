@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100302-scope-override",
   "branch": "codex/work-2026100302-scope-override",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "7fef27230b1bb58ea2d614b2a6cd96892a093d9a",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1712",
   "files_changed": [],
   "file_scope_lock": [
@@ -25,14 +25,42 @@
     "docs/06_status/proof/WORK-2026100302/verification.md",
     "docs/06_status/proof/WORK-2026100302/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-10-03T07:21:35.764Z",
   "heartbeat_at": "2026-10-03T07:32:30.586Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100302-scope-override.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-05T02:34:29.188Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 43h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-05T12:47:34.354Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 53.3h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-05T13:14:59.077Z",
+      "verdict": "fail",
+      "merge_sha": "7fef27230b1bb58ea2d614b2a6cd96892a093d9a",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1712 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",

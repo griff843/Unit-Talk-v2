@@ -1,0 +1,42 @@
+[
+  {
+    "label": "object-marker",
+    "metadata": {
+      "proof_issue": null
+    },
+    "canonical_reason": "proof_issue_metadata"
+  },
+  {
+    "label": "array-marker",
+    "metadata": [
+      "proof_issue"
+    ],
+    "canonical_reason": "proof_issue_metadata"
+  },
+  {
+    "label": "string-marker",
+    "metadata": "proofRunId",
+    "canonical_reason": "proof_run_id_metadata"
+  },
+  {
+    "label": "event-object",
+    "metadata": {
+      "eventName": {
+        "label": "Command Center QA"
+      }
+    },
+    "canonical_reason": "command_center_qa"
+  },
+  {
+    "label": "real-null",
+    "metadata": null,
+    "canonical_reason": null
+  },
+  {
+    "label": "real-array",
+    "metadata": [
+      "production"
+    ],
+    "canonical_reason": null
+  }
+]
