@@ -18,6 +18,7 @@
 
 const GITHUB_ACTIONS_APP_SLUG = 'github-actions';
 const VERIFY_CHECK_NAME = 'verify';
+const ELIGIBLE_EVENT = 'pull_request';
 
 /**
  * From the full set of check-runs for a commit, selects the newest
@@ -42,8 +43,27 @@ function selectLatestVerifyCheckRun(checkRuns) {
   return candidates.reduce((latest, run) => (run.id > latest.id ? run : latest));
 }
 
+/**
+ * Selects the newest native Actions run eligible to publish a required result
+ * for this exact PR head. Status is deliberately not filtered: callers must
+ * refuse an unavailable newest target instead of retrying an older run.
+ */
+function selectEligibleRefreshRun(workflowRuns, options) {
+  const { workflowPath, prNumber, headSha } = options;
+  const candidates = (workflowRuns || []).filter((run) => {
+    if (!run || run.event !== ELIGIBLE_EVENT || run.path !== workflowPath || run.head_sha !== headSha) return false;
+    return (run.pull_requests || []).some(
+      (pr) => pr && pr.number === prNumber && (!pr.head || !pr.head.sha || pr.head.sha === headSha),
+    );
+  });
+  if (candidates.length === 0) return null;
+  return candidates.reduce((latest, run) => (run.id > latest.id ? run : latest));
+}
+
 module.exports = {
   selectLatestVerifyCheckRun,
+  selectEligibleRefreshRun,
   VERIFY_CHECK_NAME,
   GITHUB_ACTIONS_APP_SLUG,
+  ELIGIBLE_EVENT,
 };
