@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100602",
+  "pr_number": 1720,
+  "source_sha": "d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d",
+  "reviewed_head_sha": "d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d",
+  "evidence_commit_sha": null,
+  "generated_at": "2026-10-06T20:17:20.974Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts",
+      "tests": 108,
+      "pass": 108,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": "PASS",
+    "aggregate_test": "PASS",
+    "verify_static": "PASS",
+    "r_level": "PASS; 5 changed files; no matching rules",
+    "file_scope": "PASS; no conflicts or violations",
+    "exact_repair": "PASS; one deleted line and all non-legacy original evidence values preserved"
+  },
+  "runtime_proof": {
+    "status": "DEFERRED_TO_STAGING_CI",
+    "write_attempted": false,
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "local_guard_result": "REFUSED: host 127.0.0.1 resolved as unidentified before DB access",
+    "required_environment": "exact-HEAD protected staging-ci with CI_SUPABASE_* credentials",
+    "original_work_runtime_proof_regenerated": false
+  },
+  "repair_proof": {
+    "target_issue": "WORK-2026100501",
+    "target_pr": 1718,
+    "target_merge_sha": "9aef8ee772ea5a569f34619ad3089c1a51490c7d",
+    "removed_field": "top-level merge_sha",
+    "removed_value": null,
+    "canonical_merge_field": "sha_binding.merge_sha",
+    "original_manifest_status": "merged",
+    "failed_history_preserved": true,
+    "original_runtime_proof_preserved": true,
+    "passing_truth_check_authored": false,
+    "closure_forced": false
+  },
+  "gate_results": [
+    {
+      "gate": "ordinary admission",
+      "verdict": "PASS",
+      "detail": "Preflight PASS with waivers empty; PL1-PL6 passed; PT1 deferred_to_ci by documented containment; ordinary lane-start succeeded"
+    },
+    {
+      "gate": "focused proof-schema regression",
+      "verdict": "PASS",
+      "detail": "108 tests passed; 0 failed and 0 skipped"
+    },
+    {
+      "gate": "pnpm verify static phase",
+      "verdict": "PASS",
+      "detail": "Complete static verification chain passed before the writable target guard refused local DB access"
+    },
+    {
+      "gate": "writable DB proof",
+      "verdict": "FAIL",
+      "detail": "Deferred: local target is unidentified; exact-HEAD protected staging-ci evidence is required"
+    },
+    {
+      "gate": "PM merge approval",
+      "verdict": "FAIL",
+      "detail": "Pending genuine exact-HEAD pm-verdict/v1 approval; executor did not self-sign"
+    }
+  ]
+}

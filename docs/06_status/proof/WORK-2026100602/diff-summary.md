@@ -14,4 +14,4 @@ merge and was not invoked or expanded.
 Implementation SHA: `7fb68863fca23c0f6980fbcbb78b792a7bcb3c9d`
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1720
