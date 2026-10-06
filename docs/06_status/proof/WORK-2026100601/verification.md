@@ -8,6 +8,18 @@ Lane type: governance
 Implementation SHA: d8b3bb85877d5ea823a17d76c7c4c917aec93eda
 result: static_pass_live_db_deferred_to_staging_ci
 
+## Blocking technical review — rework required
+
+The two previous actual executor epochs failed; their provenance remains recorded. This candidate is NOT ready for PM approval. Parent-authored deterministic regressions in `scripts/ops/preflight.test.ts` currently fail for three real defects:
+
+1. Negated/revoked admission authority is incorrectly accepted. Require an explicit affirmative recovery grant and reject scoped denial/revocation, including a positive grant followed by revocation. The actual owner comment includes `Ownership/readmission bridge: AUTHORIZED, narrowly`; do not reject unrelated product restrictions in that valid comment.
+2. A proof rejection plus G6/C6/another substantive failure is incorrectly accepted. Require actual G1/G2/G3/G4/G6/C6 PASS evidence and reject all non-proof failures and unavailable/unknown gate evidence. The original run has P6/P9/R1/R2 proof-schema failures with C6 PASS. Preserve that existing runtime proof.
+3. This lane's own schema-v2 evidence incorrectly retains root `merge_sha: null`. Remove that forbidden root field only; preserve metrics and provenance, and validate using the unchanged shared contract.
+
+Run `pnpm exec tsx --test scripts/ops/preflight.test.ts scripts/ops/lane-start.test.ts` FIRST to reproduce the review before another aggregate verification. Implement meaningful helper corrections within admitted scope. `.out/parent-recovery-review.ts` independently reproduces actual positive and negative live fixtures; do not call the negative fixtures production evidence.
+
+For the sanctioned executor, checkpoint state lives in the ORDER checkout at `/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100601-order`, not this nested worktree. Use real `ops:exec-checkpoint` commands from that checkout to heartbeat and complete all five phases against the current epoch. Do not fabricate phase completion or start recursive executors. Run final `pnpm verify` once after final source changes and record the local staging guard refusal accurately. Parent will bind final external CI/staging after the wrapper commits model-routing metadata; do not idle waiting for those pre-metadata checks or claim they bind the new HEAD. Closeout phase may report external exact-HEAD CI and PM approval pending; lane remains in_review and draft until genuinely satisfied.
+
 ## ASSERTIONS:
 
 - [x] Recovery is an explicit all-or-nothing request naming the source WORK, original PR, actual merge SHA, failed closeout run, and authority comment.

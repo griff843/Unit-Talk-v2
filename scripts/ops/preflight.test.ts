@@ -31,6 +31,7 @@ import {
   runLinearChecks,
   runT1Checks,
 } from './preflight.js';
+import { validateEvidenceBundleContract } from './proof-schema.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
 import {
   evaluateMergedLaneRecoveryEvidence,
@@ -93,6 +94,7 @@ function mergedRecoveryEvidence(): MergedLaneRecoveryEvidence {
       `PUSH_SHA: ${mergeSha}`,
       `MERGE_SHA: ${mergeSha}`,
       'tsx scripts/ops/lane-close.ts WORK-2026100501 --repair-merged --post-merge-trusted --pr 1718',
+      ...['G1', 'G2', 'G3', 'G4', 'G6', 'C6'].map((id) => `[PASS] ${id} measured canonical gate passed`),
       '[FAIL] P6 shared evidence contract failed',
       '"code": "truth_check_failed"',
     ].join('\n'),
@@ -219,6 +221,33 @@ test('merged recovery deterministically refuses ordinary, mismatched, stale, suc
     assert.equal(result.ok, false, entry.name);
     if (!result.ok) assert.match(result.errors.join('; '), entry.expected, entry.name);
   }
+});
+
+test('merged recovery refuses negated or revoked admission authority', () => {
+  for (const decision of ['ADMISSION RECOVERY NOT AUTHORIZED', 'ADMISSION RECOVERY UNAUTHORIZED', 'ADMISSION RECOVERY AUTHORIZATION REVOKED', 'ADMISSION RECOVERY AUTHORIZED\nADMISSION RECOVERY AUTHORIZATION REVOKED']) {
+    const evidence = mergedRecoveryEvidence();
+    evidence.authority_comment!.body = `PM DECISION — ${decision} for #1718 / WORK-2026100501 at ${MERGED_RECOVERY_REQUEST.merge_sha}`;
+    assert.equal(evaluateMergedLaneRecoveryEvidence(MERGED_RECOVERY_REQUEST, evidence).ok, false, decision);
+  }
+});
+
+test('merged recovery refuses substantive failures and missing substantive PASS evidence', () => {
+  for (const gate of ['G1', 'G2', 'G3', 'G4', 'G6', 'C6', 'S1', 'L5', 'UNKNOWN']) {
+    const evidence = mergedRecoveryEvidence();
+    evidence.closeout_log += `\n[FAIL] ${gate} deterministic negative fixture`;
+    assert.equal(evaluateMergedLaneRecoveryEvidence(MERGED_RECOVERY_REQUEST, evidence).ok, false, gate);
+  }
+  for (const gate of ['G1', 'G2', 'G3', 'G4', 'G6', 'C6']) {
+    const evidence = mergedRecoveryEvidence();
+    evidence.closeout_log = evidence.closeout_log!.split('\n').filter((line) => !line.includes(`[PASS] ${gate} `)).join('\n');
+    assert.equal(evaluateMergedLaneRecoveryEvidence(MERGED_RECOVERY_REQUEST, evidence).ok, false, `missing ${gate}`);
+  }
+});
+
+test('this recovery evidence complies with the unchanged shared schema', () => {
+  const evidence: unknown = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs/06_status/proof/WORK-2026100601/evidence.json'), 'utf8'));
+  const result = validateEvidenceBundleContract(evidence, { gate: 'pre-merge', laneType: 'governance' });
+  assert.equal(result.valid, true, JSON.stringify(result));
 });
 
 test('preflight schema dependencies exist', () => {
