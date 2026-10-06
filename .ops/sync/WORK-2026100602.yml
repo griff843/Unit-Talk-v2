@@ -1,0 +1,185 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100602
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100602
+  objective: "Use ordinary governed admission on current main to repair only the
+    malformed proof of merged PR #1718 / WORK-2026100501. Griff authorized the
+    bounded correction in
+    https://github.com/griff843/Unit-Talk-v2/pull/1718#issuecomment-6007640817
+    and instructed a fresh ordinary-admission attempt on 2026-10-06. Do not
+    invoke or merge the special admission bridge from PR #1719. Current main
+    independently reconciles the original lane to merged, bound to actual merge
+    9aef8ee772ea5a569f34619ad3089c1a51490c7d, with failed closeout history
+    preserved."
+  acceptance_criteria:
+    - "Measure ordinary preflight and lane-start without merged-recovery flags,
+      special authorization exemptions, waived ownership checks or altered
+      admission scripts. If ordinary admission fails, report the measured
+      current blocker; do not expand PR #1719."
+    - Remove only the forbidden legacy top-level merge_sha:null from
+      docs/06_status/proof/WORK-2026100501/evidence.json. Preserve all existing
+      metrics, execution provenance and implementation evidence; canonical
+      closeout must bind the real merge SHA under sha_binding.merge_sha.
+    - "Original C6 runtime proof already PASS: do not manufacture or regenerate
+      runtime proof for the original work. Preserve original manifest identity,
+      merged PR, branch, real merge SHA and failed history. Never fabricate a
+      passing truth-check or directly force closure."
+    - Use existing proof-schema regression and canonical proof/closeout tools.
+      Run pnpm verify, R-level and exact-HEAD protected writable staging/T1 CI.
+      Execute through ops:codex-exec; a sanctioned child must not recursively
+      invoke it. Open a draft tier:T1 PR and obtain genuine exact-HEAD PM merge
+      approval.
+    - "After the repair merges, execute trusted canonical post-merge closeout
+      for the original WORK, recording a measured result. The separately
+      authorized P1 workflow privilege repair remains mandatory before any
+      production Shadow, PR #1714 integration or deployment."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100602 — ordinary T1 proof-closeout repair
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Invariants
+
+
+      No Discord product changes,
+      settlement/scoring/grading/routing/provider/activation/schema changes,
+      runtime proof fabrication, broad evidence rewrite, admission bypass,
+      branch protection or required-check weakening, fake identity, provenance
+      or success states, direct-main writes or admin merge. Do not change
+      docs/mission/intent.md or mission policy.
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026100501/evidence.json
+
+      - .ops/work/WORK-2026100602.md
+
+      - .ops/sync/WORK-2026100602.yml
+
+      - docs/06_status/lanes/WORK-2026100602.json
+
+      - docs/06_status/proof/WORK-2026100602/**
+
+
+      ## Proof
+
+
+      Named repair proof only: current main/source state, ordinary admission,
+      exact one-field evidence diff, preserved original evidence/provenance,
+      focused schema coverage, actual executor record, exact-HEAD CI/staging, PM
+      approval and governed merge. No unrelated documentation or status changes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100602.md
+    title: WORK-2026100602 — ordinary T1 proof-closeout repair
+    description: >-
+      # WORK-2026100602 — ordinary T1 proof-closeout repair
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Use ordinary governed admission on current main to repair only the
+      malformed proof of merged PR #1718 / WORK-2026100501. Griff authorized the
+      bounded correction in
+      https://github.com/griff843/Unit-Talk-v2/pull/1718#issuecomment-6007640817
+      and instructed a fresh ordinary-admission attempt on 2026-10-06. Do not
+      invoke or merge the special admission bridge from PR #1719. Current main
+      independently reconciles the original lane to merged, bound to actual
+      merge 9aef8ee772ea5a569f34619ad3089c1a51490c7d, with failed closeout
+      history preserved.
+
+
+      ## Acceptance Criteria
+
+
+      - Measure ordinary preflight and lane-start without merged-recovery flags,
+      special authorization exemptions, waived ownership checks or altered
+      admission scripts. If ordinary admission fails, report the measured
+      current blocker; do not expand PR #1719.
+
+      - Remove only the forbidden legacy top-level merge_sha:null from
+      docs/06_status/proof/WORK-2026100501/evidence.json. Preserve all existing
+      metrics, execution provenance and implementation evidence; canonical
+      closeout must bind the real merge SHA under sha_binding.merge_sha.
+
+      - Original C6 runtime proof already PASS: do not manufacture or regenerate
+      runtime proof for the original work. Preserve original manifest identity,
+      merged PR, branch, real merge SHA and failed history. Never fabricate a
+      passing truth-check or directly force closure.
+
+      - Use existing proof-schema regression and canonical proof/closeout tools.
+      Run pnpm verify, R-level and exact-HEAD protected writable staging/T1 CI.
+      Execute through ops:codex-exec; a sanctioned child must not recursively
+      invoke it. Open a draft tier:T1 PR and obtain genuine exact-HEAD PM merge
+      approval.
+
+      - After the repair merges, execute trusted canonical post-merge closeout
+      for the original WORK, recording a measured result. The separately
+      authorized P1 workflow privilege repair remains mandatory before any
+      production Shadow, PR #1714 integration or deployment.
+
+
+      ## Invariants
+
+
+      No Discord product changes,
+      settlement/scoring/grading/routing/provider/activation/schema changes,
+      runtime proof fabrication, broad evidence rewrite, admission bypass,
+      branch protection or required-check weakening, fake identity, provenance
+      or success states, direct-main writes or admin merge. Do not change
+      docs/mission/intent.md or mission policy.
+
+
+      ## File Scope
+
+
+      - docs/06_status/proof/WORK-2026100501/evidence.json
+
+      - .ops/work/WORK-2026100602.md
+
+      - .ops/sync/WORK-2026100602.yml
+
+      - docs/06_status/lanes/WORK-2026100602.json
+
+      - docs/06_status/proof/WORK-2026100602/**
+
+
+      ## Proof
+
+
+      Named repair proof only: current main/source state, ordinary admission,
+      exact one-field evidence diff, preserved original evidence/provenance,
+      focused schema coverage, actual executor record, exact-HEAD CI/staging, PM
+      approval and governed merge. No unrelated documentation or status changes.
+    captured_at: 2026-10-06T20:01:10.463Z
+    description_sha256: c45ea5f8a9ed721109d0e8125dbd5bf0a80de1eb039b7f35300836e5cffa1d81
+  contract_hash: 7a977080b3f49386b18a33b7001d4adfc1cad4e83948824ae2573dc16b051766
