@@ -1,0 +1,94 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100601",
+  "pr_number": 1719,
+  "source_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
+  "reviewed_head_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
+  "evidence_commit_sha": null,
+  "merge_sha": null,
+  "generated_at": "2026-10-06T02:41:24Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_EXACT_HEAD_CI_AND_PM_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "pending_merge",
+    "bound_at": "2026-10-06T02:41:24Z"
+  },
+  "admission_authority": {
+    "source_issue_id": "WORK-2026100501",
+    "source_branch": "codex/work-2026100501-required-check-publication",
+    "source_manifest_status": "in_review",
+    "original_pr_number": 1718,
+    "original_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1718",
+    "merge_sha": "9aef8ee772ea5a569f34619ad3089c1a51490c7d",
+    "failed_closeout_run_id": 37395130508,
+    "failed_closeout_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/37395130508",
+    "authority_comment_id": 6007640817,
+    "authority_comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1718#issuecomment-6007640817",
+    "workflow_path": ".github/workflows/post-merge-lane-close.yml",
+    "live_attestation": "PASS",
+    "source_lane_remains_counted": true
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test 'scripts/ops/lane-start.test.ts' 'scripts/ops/preflight.test.ts'",
+      "tests": 139,
+      "pass": 139,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": "PASS",
+    "aggregate_test": "PASS",
+    "verify_static": "PASS",
+    "r_level": "PASS; 10 changed files; no matching rules",
+    "file_scope": "PASS; no conflicts or violations"
+  },
+  "runtime_proof": {
+    "status": "DEFERRED_TO_STAGING_CI",
+    "write_attempted": false,
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "local_guard_result": "REFUSED: host 127.0.0.1 resolved as unidentified before DB access",
+    "required_environment": "staging-ci with CI_SUPABASE_* credentials",
+    "existing_c6_runtime_proof": "preserved; not regenerated or represented as new proof"
+  },
+  "gate_results": [
+    {
+      "gate": "focused tests",
+      "verdict": "PASS",
+      "detail": "139 tests passed; 0 failed and 0 skipped"
+    },
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "Complete static verification chain passed"
+    },
+    {
+      "gate": "r-level-check",
+      "verdict": "PASS",
+      "detail": "10 changed files; no R-level rules matched"
+    },
+    {
+      "gate": "writable DB and protected T1 proof",
+      "verdict": "SKIP",
+      "detail": "Local containment correctly refused host 127.0.0.1 before access; exact-HEAD staging-ci remains required"
+    },
+    {
+      "gate": "PM merge approval",
+      "verdict": "FAIL",
+      "detail": "Requires genuine exact-head pm-verdict/v1 approval and t1-approved label; executor did not self-sign"
+    }
+  ],
+  "hold_state": {
+    "pr_1715": "hold",
+    "production_shadow": "hold",
+    "pr_1714": "hold",
+    "release_condition": "both authorized repairs land and the original closeout succeeds"
+  },
+  "verdict": "READY_FOR_FINAL_EXACT_HEAD_CI_AND_PM_REVIEW"
+}

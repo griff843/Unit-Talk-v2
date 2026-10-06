@@ -7,7 +7,11 @@ entities:
     - WORK-2026100601
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/WORK-2026100601/diff-summary.md
+    - docs/06_status/proof/WORK-2026100601/evidence.json
+    - docs/06_status/proof/WORK-2026100601/verification.md
+    - docs/06_status/proof/WORK-2026100601/model-routing.json
 task_contract:
   schema_version: 1
   issue_id: WORK-2026100601
