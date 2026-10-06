@@ -1,0 +1,159 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100601
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100601
+  objective: "Implement the narrow admission recovery authorized by Griff on
+    merged PR #1718 in
+    https://github.com/griff843/Unit-Talk-v2/pull/1718#issuecomment-6007640817.
+    WORK-2026100501 is stranded in_review after fail-closed post-merge closeout
+    rejected a legacy evidence field. This lane repairs admission only; the
+    subsequent same-WORK recovery will correct the proof and workflow privilege
+    boundary."
+  acceptance_criteria:
+    - Admit a merged same-WORK recovery only with fresh GitHub-attested original
+      merged PR, matching identity/branch, real merge SHA on main, and a failed
+      canonical post-merge closeout run bound to that merge and identity. Refuse
+      ordinary active lanes, missing/mismatched/stale authority, successful
+      closeout, unrelated PRs and unavailable evidence.
+    - Preserve file-scope isolation, concurrency, T1 review, exact-HEAD
+      CI/proof, provenance, merge mutex and all existing fail-closed gates. Do
+      not fabricate history, silently release ownership or directly edit main.
+      Preserve the original PR/merge relationship and record recovery provenance
+      explicitly.
+    - Use node:test/assert deterministic positive and negative regression
+      coverage in existing directly runnable tests. Run focused tests, pnpm
+      verify, R-level and protected writable staging/T1 checks.
+    - Execute actual implementation through ops:codex-exec. A sanctioned child
+      must not invoke ops:codex-exec recursively. Open a draft tier:T1 PR and
+      obtain genuine exact-HEAD PM approval before normal governed merge.
+    - "Keep #1715, production Shadow and #1714 on hold until both authorized
+      repairs land and original closeout succeeds. C6 runtime proof already
+      passes; do not regenerate or fabricate it."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100601 — merged-lane closeout recovery admission
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Invariants
+
+
+      No general admission bypass, direct-main changes, admin merge, invented
+      checks or provenance, scope-lock weakening, approval weakening, or
+      Discord/product/settlement/scoring/routing/provider/activation/schema
+      changes.
+
+
+      ## File Scope
+
+
+      - scripts/ops/preflight.ts
+
+      - scripts/ops/preflight.test.ts
+
+      - scripts/ops/lane-start.ts
+
+      - scripts/ops/lane-start.test.ts
+
+      - scripts/ops/merged-lane-recovery.ts
+
+      - .ops/work/WORK-2026100601.md
+
+      - .ops/sync/WORK-2026100601.yml
+
+      - docs/06_status/lanes/WORK-2026100601.json
+
+      - docs/06_status/proof/WORK-2026100601/**
+
+
+      ## Proof
+
+
+      Named work proof only: authorization, admission design, deterministic
+      regressions, actual executor provenance, exact-HEAD verification/staging,
+      PM approval and governed merge. No unrelated documentation or status
+      edits.
+
+
+      ## Engineering guidance
+
+
+      Prefer an explicit recovery request that identifies the original WORK,
+      merged PR, actual merge SHA and failed canonical closeout run. A
+      separately identified recovery lane may own its new repair PR while
+      remaining bound to that original WORK; do not overwrite the original
+      lane's PR, branch, history or proof provenance to manufacture admission.
+      Record that relationship in a durable admission receipt. Permit only the
+      otherwise-blocked overlap with the attested merged source lane, after
+      fresh verification at both preflight and lane-start. Keep all other
+      overlap checks, lease checks and concurrency accounting unchanged,
+      including counting the source lane until truthful closeout. This is a
+      proposal for implementation, not authority to bypass any unchanged control
+      before this repair merges.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100601.md
+    title: WORK-2026100601 — merged-lane closeout recovery admission
+    description: |-
+      # WORK-2026100601 — merged-lane closeout recovery admission
+
+      Tier: T1
+      Lane type: governance
+      Executor: codex-cli
+
+      ## Objective
+
+      Implement the narrow admission recovery authorized by Griff on merged PR #1718 in https://github.com/griff843/Unit-Talk-v2/pull/1718#issuecomment-6007640817. WORK-2026100501 is stranded in_review after fail-closed post-merge closeout rejected a legacy evidence field. This lane repairs admission only; the subsequent same-WORK recovery will correct the proof and workflow privilege boundary.
+
+      ## Acceptance Criteria
+
+      - Admit a merged same-WORK recovery only with fresh GitHub-attested original merged PR, matching identity/branch, real merge SHA on main, and a failed canonical post-merge closeout run bound to that merge and identity. Refuse ordinary active lanes, missing/mismatched/stale authority, successful closeout, unrelated PRs and unavailable evidence.
+      - Preserve file-scope isolation, concurrency, T1 review, exact-HEAD CI/proof, provenance, merge mutex and all existing fail-closed gates. Do not fabricate history, silently release ownership or directly edit main. Preserve the original PR/merge relationship and record recovery provenance explicitly.
+      - Use node:test/assert deterministic positive and negative regression coverage in existing directly runnable tests. Run focused tests, pnpm verify, R-level and protected writable staging/T1 checks.
+      - Execute actual implementation through ops:codex-exec. A sanctioned child must not invoke ops:codex-exec recursively. Open a draft tier:T1 PR and obtain genuine exact-HEAD PM approval before normal governed merge.
+      - Keep #1715, production Shadow and #1714 on hold until both authorized repairs land and original closeout succeeds. C6 runtime proof already passes; do not regenerate or fabricate it.
+
+      ## Invariants
+
+      No general admission bypass, direct-main changes, admin merge, invented checks or provenance, scope-lock weakening, approval weakening, or Discord/product/settlement/scoring/routing/provider/activation/schema changes.
+
+      ## File Scope
+
+      - scripts/ops/preflight.ts
+      - scripts/ops/preflight.test.ts
+      - scripts/ops/lane-start.ts
+      - scripts/ops/lane-start.test.ts
+      - scripts/ops/merged-lane-recovery.ts
+      - .ops/work/WORK-2026100601.md
+      - .ops/sync/WORK-2026100601.yml
+      - docs/06_status/lanes/WORK-2026100601.json
+      - docs/06_status/proof/WORK-2026100601/**
+
+      ## Proof
+
+      Named work proof only: authorization, admission design, deterministic regressions, actual executor provenance, exact-HEAD verification/staging, PM approval and governed merge. No unrelated documentation or status edits.
+
+      ## Engineering guidance
+
+      Prefer an explicit recovery request that identifies the original WORK, merged PR, actual merge SHA and failed canonical closeout run. A separately identified recovery lane may own its new repair PR while remaining bound to that original WORK; do not overwrite the original lane's PR, branch, history or proof provenance to manufacture admission. Record that relationship in a durable admission receipt. Permit only the otherwise-blocked overlap with the attested merged source lane, after fresh verification at both preflight and lane-start. Keep all other overlap checks, lease checks and concurrency accounting unchanged, including counting the source lane until truthful closeout. This is a proposal for implementation, not authority to bypass any unchanged control before this repair merges.
+    captured_at: 2026-10-06T02:11:07.062Z
+    description_sha256: 7f8529ec0ff5f9ae026bc9f1f99daf6e8f027b4015defbd579930965c6d630f5
+  contract_hash: 12795bac8500c1913ce988eaf03c63ec414e405ff95b32de158f0611218407b4
