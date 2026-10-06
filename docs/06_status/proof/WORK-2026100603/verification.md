@@ -61,3 +61,9 @@ re-execution remain pending and are not implied by the completed static checks.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1721
 Execution SHA: 7824a0263ffc6f42df6351acd557bc2c10a266d1
+
+## Genuine outer executor completion
+
+Sanctioned native Codex CLI 0.153.3, gpt-5.6-sol/high, epoch dd8c1e84-1f63-4b5c-8729-684d46e7c0c9 attempt 3: outer SUCCESS, actual child exit 0, wrapper exit 0, four source changes, zero evidence-only credits. All mandatory phases were genuinely completed by the native executor. Raw outer output and completed persisted checkpoint are retained alongside all failed history.
+
+Implementation/current-main candidate 4d96f26ed99f12203676b7eb94767f0f9e246d3b passed GitHub CI run 37542056821: writable staging 9/9, T1 staging 152/152, downstream verify PASS. The outer wrapper then committed/pushed actual model provenance as eaf8fa140885fef3dae3adad8208f57df1c3dceb. This final evidence commit changes no executable code. Required CI must run again at the resulting exact HEAD before the outer reviewer publishes READY_FOR_REVIEW or requests normal binding PM merge approval. No success from an ancestor substitutes for final-HEAD required checks.
