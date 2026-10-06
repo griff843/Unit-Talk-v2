@@ -24,14 +24,24 @@
     "docs/06_status/proof/WORK-2026100401/verification.md",
     "docs/06_status/proof/WORK-2026100401/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "blocked",
   "started_at": "2026-10-05T02:11:33.023Z",
   "heartbeat_at": "2026-10-05T02:30:15.407Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100401-shadow-settlement-truth.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-06T21:56:22.534Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 43.4h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
