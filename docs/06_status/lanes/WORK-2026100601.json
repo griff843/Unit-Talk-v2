@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100601-order/.out/worktrees/codex__work-2026100601-merged-lane-recovery",
   "branch": "codex/work-2026100601-merged-lane-recovery",
   "base_branch": "main",
-  "commit_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
+  "commit_sha": "6cf66a1af0494321e9a2e740d4cc17760147390f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1719",
   "files_changed": [
     "scripts/ops/lane-start.test.ts",

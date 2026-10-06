@@ -5,14 +5,14 @@ MERGE_SHA: pending merge
 Issue: WORK-2026100601
 Tier: T1
 Lane type: governance
-Implementation SHA: d8b3bb85877d5ea823a17d76c7c4c917aec93eda
+Implementation SHA: 6cf66a1af0494321e9a2e740d4cc17760147390f
 result: static_pass_live_db_deferred_to_staging_ci
 
 ## Technical review rework resolved
 
 The two previous actual executor epochs failed; their provenance remains recorded. The current rework epoch resolves the three parent-authored deterministic regressions in `scripts/ops/preflight.test.ts`:
 
-1. Admission authority now requires an explicit affirmative recovery grant and rejects scoped denial/revocation, including a positive grant followed by revocation. The actual owner comment's `Ownership/readmission bridge: AUTHORIZED, narrowly` remains accepted without treating unrelated product restrictions as a denial.
+1. Admission authority now requires a canonical whole-line recovery decision and rejects scoped denial/revocation, quoted or example prose, and a positive grant followed by revocation. The actual owner comment's `Ownership/readmission bridge: AUTHORIZED, narrowly` remains accepted without treating unrelated product restrictions as a denial.
 2. Admission now requires actual G1/G2/G3/G4/G6/C6 PASS evidence and rejects every non-admitted or unknown failure. The original run's P6/P9/R1/R2 proof-schema failures remain the only admitted failures, and its existing C6 runtime proof is preserved.
 3. This lane's schema-v2 evidence no longer carries the forbidden root `merge_sha`; the unchanged shared evidence contract passes without changing metrics or provenance.
 
@@ -49,8 +49,8 @@ The deterministic regression suite measured:
 
 ```text
 $ pnpm exec tsx --test 'scripts/ops/lane-start.test.ts' 'scripts/ops/preflight.test.ts'
-# tests 142
-# pass 142
+# tests 143
+# pass 143
 # fail 0
 # skipped 0
 ```
@@ -58,7 +58,7 @@ $ pnpm exec tsx --test 'scripts/ops/lane-start.test.ts' 'scripts/ops/preflight.t
 ## Verification
 
 - `pnpm type-check` — PASS as part of the final static chain.
-- `pnpm test` — PASS as part of the final static chain, including all 142 focused recovery tests in `test:ops`.
+- `pnpm test` — PASS as part of the final static chain, including all 143 focused recovery tests in `test:ops`.
 - `pnpm verify:static` — PASS; DB-client boundary, sync/alignment, automation coverage, environment, lint, type-check, build, aggregate tests, production post-migration tests, Smart Form verification, command manifest, and migration checks completed successfully.
 - `pnpm verify` — the complete static chain passed, then the writable DB phase correctly REFUSED before DB access because local host `127.0.0.1` is not staging project `xskgrzbteyqdufktjrjx`.
 - `pnpm test:db` — correctly REFUSED at the same pre-write staging identity guard. Writable DB and protected T1 verification are deferred to the `staging-ci` GitHub environment using `CI_SUPABASE_*` credentials.

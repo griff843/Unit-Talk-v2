@@ -2,21 +2,21 @@
   "schema_version": 2,
   "issue_id": "WORK-2026100601",
   "pr_number": 1719,
-  "source_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
-  "reviewed_head_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
+  "source_sha": "6cf66a1af0494321e9a2e740d4cc17760147390f",
+  "reviewed_head_sha": "6cf66a1af0494321e9a2e740d4cc17760147390f",
   "evidence_commit_sha": null,
-  "generated_at": "2026-10-06T02:41:24Z",
+  "generated_at": "2026-10-06T03:58:40Z",
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
   "status": "READY_FOR_EXACT_HEAD_CI_AND_PM_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "d8b3bb85877d5ea823a17d76c7c4c917aec93eda",
+    "verified_source_sha": "6cf66a1af0494321e9a2e740d4cc17760147390f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "pending_merge",
-    "bound_at": "2026-10-06T02:41:24Z"
+    "bound_at": "2026-10-06T03:58:40Z"
   },
   "admission_authority": {
     "source_issue_id": "WORK-2026100501",
@@ -37,8 +37,8 @@
     "status": "PASS",
     "focused_tests": {
       "command": "pnpm exec tsx --test 'scripts/ops/lane-start.test.ts' 'scripts/ops/preflight.test.ts'",
-      "tests": 142,
-      "pass": 142,
+      "tests": 143,
+      "pass": 143,
       "fail": 0,
       "skipped": 0
     },
@@ -60,7 +60,7 @@
     {
       "gate": "focused tests",
       "verdict": "PASS",
-      "detail": "142 tests passed; 0 failed and 0 skipped"
+      "detail": "143 tests passed; 0 failed and 0 skipped"
     },
     {
       "gate": "pnpm verify:static",
