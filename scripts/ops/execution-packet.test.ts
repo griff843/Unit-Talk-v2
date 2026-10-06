@@ -471,6 +471,23 @@ test('closeout instructions include lane-finalize and current reconcile', () => 
   );
 });
 
+test('executor closeout is truthful about pre-merge duties and reserved post-merge work', () => {
+  const packet = generateExecutionPacket(createTestManifest({ tier: 'T1' }), {});
+  const instructions = packet.closeout_instructions.join('\n');
+
+  assert.match(instructions, /prepare and verify the review artifacts/i);
+  assert.match(instructions, /draft PR/i);
+  assert.match(
+    instructions,
+    /ops:exec-checkpoint phase-complete --issue UTV2-969 --phase <phase> --summary <measured-summary>/,
+  );
+  assert.match(instructions, /does not claim PM approval, merge, lane finalization, truth-check success/i);
+  assert.match(instructions, /Leave this pending.*PM approval and governed merge/i);
+  assert.match(instructions, /Leave this pending until canonical post-merge closeout/i);
+  assert.match(instructions, /Do not publish an executor-result\/v1 READY_FOR_REVIEW attestation from the child executor/i);
+  assert.match(instructions, /outer executor wrapper passes mandatory execution truth and persists provenance/i);
+});
+
 test('packet defaults to static-only and never restores the unsafe universal verify instruction', () => {
   const packet = generateExecutionPacket(
     createTestManifest({

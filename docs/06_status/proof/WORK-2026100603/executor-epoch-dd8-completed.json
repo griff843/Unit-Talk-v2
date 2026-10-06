@@ -1,0 +1,167 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100603",
+  "branch": "codex/work-2026100603-executor-proof-truth",
+  "worktree": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100603-order/.out/worktrees/codex__work-2026100603-executor-proof-truth",
+  "state_revision": 23,
+  "epoch": {
+    "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+    "mode": "fresh",
+    "implementation_baseline_sha": "43bd11515cb6ed375b6d9a09092e2eb3c3efe0ee",
+    "objective_identity": "WORK-2026100603:codex/work-2026100603-executor-proof-truth",
+    "findings_identity": "none",
+    "created_at": "2026-10-06T21:34:54.651Z",
+    "authority": "codex-exec"
+  },
+  "prior_epochs": [],
+  "status": "completed",
+  "phase": "closeout",
+  "attempt": 3,
+  "created_at": "2026-10-06T21:34:54.651Z",
+  "updated_at": "2026-10-06T22:58:07.340Z",
+  "last_activity_at": "2026-10-06T22:58:07.340Z",
+  "heartbeat_at": "2026-10-06T22:57:41.317Z",
+  "heartbeat_interval_ms": 60000,
+  "timeout_policy": {
+    "policy_id": "utv2-1594-exec-timeout-v1",
+    "tier": "T1",
+    "reasoning_effort": "high",
+    "phase": "verify",
+    "base_ms": 5400000,
+    "effort_multiplier": 1.5,
+    "phase_multiplier": 0.8,
+    "raw_ms": 6480000,
+    "timeout_ms": 6480000,
+    "hard_cap_ms": 14400000,
+    "floor_ms": 300000,
+    "clamped": "none",
+    "fallbacks": []
+  },
+  "completed_phases": [
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "phase": "orient",
+      "completed_at": "2026-10-06T21:40:07.096Z",
+      "attempt": 1,
+      "summary": "Inspected mission governance, retained failed executor results, active fresh checkpoint, frozen sync/manifest authority, PR #1720 machine failure, and the preserved four-file patch."
+    },
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "phase": "plan",
+      "completed_at": "2026-10-06T21:40:08.198Z",
+      "attempt": 1,
+      "summary": "Bounded repair keeps current-epoch diff measurement separate from original-admission authorization, preserves canonical scope semantics, requires structural object evidence, and keeps executor/post-merge duties distinct."
+    },
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "phase": "implement",
+      "completed_at": "2026-10-06T21:40:09.293Z",
+      "attempt": 1,
+      "summary": "Completed the four-file executor repair and deterministic regressions; focused codex-exec and execution-packet suites pass 154/154 including original-authority rework injection and adversarial artifact cases."
+    },
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "phase": "verify",
+      "completed_at": "2026-10-06T22:57:25.130Z",
+      "attempt": 3,
+      "summary": "Focused codex-exec/execution-packet regressions passed 156/156; pnpm verify:static passed; full local pnpm verify truthfully exited 1 only when writable DB identity resolved to localhost/unidentified and required staging CI; final-head R-level passed for 21 scoped files; exact-head GitHub CI run 37542056821 on 4d96f26ed99f12203676b7eb94767f0f9e246d3b passed protected writable staging/T1 live proof and downstream verify; branch is 0 behind current origin/main. Executor Result Validation and dependent Merge Gate remain intentionally failed pending outer mandatory execution-truth/provenance publication."
+    },
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "phase": "closeout",
+      "completed_at": "2026-10-06T22:57:41.317Z",
+      "attempt": 3,
+      "summary": "Prepared and verified draft PR #1721 (feat(ops): WORK-2026100603 executor proof truth) at exact head 4d96f26ed99f12203676b7eb94767f0f9e246d3b with tier:T1, clean scoped diff, required proof artifacts, green exact-head protected writable staging/T1 and verify jobs, and current-main ancestry. Executor closeout ends at this verified draft candidate; no child executor-result READY_FOR_REVIEW was published. Binding PM approval, governed merge, lane-finalize, orchestration reconciliation, and downstream PR #1720 re-execution remain pending for their authorized outer/post-merge paths."
+    }
+  ],
+  "findings": [
+    {
+      "id": "verify-1",
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "source_epoch_id": null,
+      "phase": "verify",
+      "summary": "Measured remaining binding anti-self-attestation regression on stable patch snapshot SHA256324890fd7da0386e9865563de616b38f587fec203e2471119a52b1371e3ddf82: frozen scope artifacts/**; only new artifacts/r2-determinism-WORK-9990001.json own generated proof changed; all isolated fixture phases complete. Expected FAIL_CLOSED, actual SUCCESS with source_files_changed1/evidence0. Repro /tmp/work-2026100603-assigned-self-proof-repro.ts; JSON sibling. Assigned generated proof is not source implementation. Exclude lane-generated proof/output/checkpoint namespaces and trusted expected_proof_paths from source corroboration; preserve real assigned source and external-artifact mode. Existing own-bookkeeping test uses unassigned examples, which misses this case. Include own manifest/sync/model-routing/executor-result and assigned checkpoint/output negatives; add explicit proof-only missing-closeout test required by PM. Resolve before candidate readiness; do not expand into admission or other controls.",
+      "recorded_at": "2026-10-06T21:41:49.092Z",
+      "attempt": 1
+    },
+    {
+      "id": "verify-2",
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "source_epoch_id": null,
+      "phase": "verify",
+      "summary": "Independent review: both isolated negative reproductions now fail closed against evaluator SHA256 5f1b84ae939c14dd5b9ecfb98a641efb5da0dcb2afd7911066daae91a1bdf290. Assigned artifacts/** own report source0/evidence0; rejected-HEAD authority injection source0/evidence0. Raw fixture outputs/limitations saved under own proof independent-* files; include intentional files in scoped proof commit. These are not actual executor/staging attestations; continue all mandatory phases.",
+      "recorded_at": "2026-10-06T21:52:43.500Z",
+      "attempt": 2
+    },
+    {
+      "id": "verify-3",
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "source_epoch_id": null,
+      "phase": "verify",
+      "summary": "Current live main advanced to ef7774cbe9f916d5ccc48981b9a691071d26047f; only docs/06_status/lanes/WORK-2026100401.json changed (auto-reconcile stale manifests). GitHub compare reports candidate cc6e4418673686413395c06cb78f240e705d4fce is 1 behind. Before verify/closeout completion, use normal serialized merge-mutex branch refresh to current main, preserve the repair code, and obtain fresh exact-HEAD CI/writable/T1 proof. No admission-code or product changes. Existing CI may finish and must not be represented as final HEAD proof. Parent is pausing this read-only CI-waiting attempt to load this finding via ordinary same-epoch resume; no cancellation flag, rework reset, or fabricated phase.",
+      "recorded_at": "2026-10-06T22:29:01.064Z",
+      "attempt": 2
+    },
+    {
+      "id": "verify-4",
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "source_epoch_id": null,
+      "phase": "verify",
+      "summary": "Parent control path fetched live origin/main ef7774cbe9f916d5ccc48981b9a691071d26047f (initial native wrapper used stale local origin/main9326) and completed the SAME sanctioned ops:merge-wrapper git-merge-main under acquired/released merge mutex. Actual new HEAD9255ae3f95cdd223ce5dadece0fb18aa7d47ed11 contains current main. Only inherited WORK0401 manifest changed; repair source unchanged. Re-inspect actual HEAD/current main, then bind fresh verification and proof to it. No phase was completed by parent. No product/admission changes.",
+      "recorded_at": "2026-10-06T22:31:01.451Z",
+      "attempt": 3
+    }
+  ],
+  "pending_actions": [],
+  "attempts": [
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "attempt": 1,
+      "started_at": "2026-10-06T21:34:54.651Z",
+      "ended_at": "2026-10-06T21:47:43.008Z",
+      "outcome": "failed",
+      "reason": "codex exited with status 1: non-zero exit",
+      "phase_at_start": "orient",
+      "phase_at_end": "verify",
+      "timeout_ms": 4050000,
+      "attempt_start_sha": "43bd11515cb6ed375b6d9a09092e2eb3c3efe0ee",
+      "released_resources": []
+    },
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "attempt": 2,
+      "started_at": "2026-10-06T21:48:01.481Z",
+      "ended_at": "2026-10-06T22:29:03.432Z",
+      "outcome": "failed",
+      "reason": "codex exited with status 1: non-zero exit",
+      "phase_at_start": "verify",
+      "phase_at_end": "verify",
+      "timeout_ms": 6480000,
+      "attempt_start_sha": "e904027c5b031a7d9f65f1af8eb36abe1cb06cfc",
+      "released_resources": []
+    },
+    {
+      "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+      "attempt": 3,
+      "started_at": "2026-10-06T22:29:35.208Z",
+      "ended_at": "2026-10-06T22:58:07.340Z",
+      "outcome": "completed",
+      "reason": "codex exited 0 and evidence persisted",
+      "phase_at_start": "verify",
+      "phase_at_end": "closeout",
+      "timeout_ms": 6480000,
+      "attempt_start_sha": "11fca2a838694dc9ef6c83ad7e8fac2a45a5da29",
+      "released_resources": []
+    }
+  ],
+  "cancel_requested": false,
+  "cancel_reason": null,
+  "owner": {
+    "pid": 3141247,
+    "host": "DESKTOP-GP6RM0V"
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "checksum": "add8b667a69421e49cd266051eda2452036c51f95e721bc012d83e5a0b055998"
+  }
+}

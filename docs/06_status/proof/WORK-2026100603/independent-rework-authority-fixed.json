@@ -1,0 +1,16 @@
+{
+  "test": "isolated rejected-HEAD scope injection",
+  "expected": "FAIL_CLOSED",
+  "actual": {
+    "ok": false,
+    "code": "REWORK_NO_SOURCE_CHANGE",
+    "exit_code": 1,
+    "message": "rework epoch 58f114b1-6d4b-451b-a10e-801c3bf2f8ff changed zero source files from rejected head 72a6a0f40df210481a38524287b25e70dd8b37ef",
+    "source_files_changed": 0,
+    "evidence_artifacts_changed": 0,
+    "changed_files": [
+      "docs/06_status/proof/WORK-9990002/evidence.json"
+    ],
+    "checkpoint_provenance": "primary"
+  }
+}
