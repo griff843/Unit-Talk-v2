@@ -49,7 +49,7 @@ The full fixture outputs are retained in
 - `pnpm verify:static` — PASS as the completed static stage of `pnpm verify`; lint, type-check, build, unit tests, production post-migration checks, Smart Form verification, and command/migration checks completed green.
 - `pnpm verify` — expected non-zero at the live-DB stage after the complete static stage passed. The command did not pass overall and is not reported as a pass.
 - `pnpm test:db` — REFUSED locally, exit 1: target identity resolved to `host=127.0.0.1 ref=unidentified`, while writable verification requires staging project `xskgrzbteyqdufktjrjx` through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
-- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — pending the exact review-candidate commit.
+- `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; 19 changed files, no matching R-level artifact rules.
 - Protected exact-HEAD T1 CI, including `verify` and `Writable DB proof (staging only)` — pending push of the final review-candidate commit.
 
 This is truthful pre-merge evidence. PM approval, governed merge,
@@ -59,5 +59,5 @@ re-execution remain pending and are not implied by the completed static checks.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1721
 Execution SHA: 7824a0263ffc6f42df6351acd557bc2c10a266d1
