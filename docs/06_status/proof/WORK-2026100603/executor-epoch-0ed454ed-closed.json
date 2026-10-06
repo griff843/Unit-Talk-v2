@@ -1,0 +1,155 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100603",
+  "branch": "codex/work-2026100603-executor-proof-truth",
+  "worktree": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100603-order/.out/worktrees/codex__work-2026100603-executor-proof-truth",
+  "state_revision": 16,
+  "epoch": {
+    "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+    "mode": "fresh",
+    "implementation_baseline_sha": "2f213fcc8ce1fb6911c64c2caaa66370f5898840",
+    "objective_identity": "WORK-2026100603:codex/work-2026100603-executor-proof-truth",
+    "findings_identity": "none",
+    "created_at": "2026-10-06T21:16:25.536Z",
+    "authority": "codex-exec"
+  },
+  "prior_epochs": [],
+  "status": "failed",
+  "phase": "implement",
+  "attempt": 2,
+  "created_at": "2026-10-06T21:16:25.536Z",
+  "updated_at": "2026-10-06T21:32:55.762Z",
+  "last_activity_at": "2026-10-06T21:32:55.762Z",
+  "heartbeat_at": "2026-10-06T21:30:42.896Z",
+  "heartbeat_interval_ms": 60000,
+  "timeout_policy": {
+    "policy_id": "utv2-1594-exec-timeout-v1",
+    "tier": "T1",
+    "reasoning_effort": "high",
+    "phase": "orient",
+    "base_ms": 5400000,
+    "effort_multiplier": 1.5,
+    "phase_multiplier": 0.5,
+    "raw_ms": 4050000,
+    "timeout_ms": 4050000,
+    "hard_cap_ms": 14400000,
+    "floor_ms": 300000,
+    "clamped": "none",
+    "fallbacks": []
+  },
+  "completed_phases": [
+    {
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "phase": "orient",
+      "completed_at": "2026-10-06T21:19:28.937Z",
+      "attempt": 2,
+      "summary": "Inspected mission governance, immutable checkpoint/source guard, frozen committed sync/manifest authority, and PR #1720 failed result; root cause is blanket docs exclusion plus unscoped source counting."
+    },
+    {
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "phase": "plan",
+      "completed_at": "2026-10-06T21:19:30.062Z",
+      "attempt": 2,
+      "summary": "Plan: load frozen authority from epoch baseline commit; qualify only in-scope source changes or explicitly named external proof JSON structural changes; preserve fail-closed ancestry/phase/rework controls; clarify pre/post-merge instructions; add adversarial regressions."
+    }
+  ],
+  "findings": [
+    {
+      "id": "orient-1",
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "source_epoch_id": null,
+      "phase": "orient",
+      "summary": "Measured PR #1720 failure: outer truth rejected source_files_changed=0 after closeout remained incomplete; frozen authority is committed in .ops/sync while local source work file is absent.",
+      "recorded_at": "2026-10-06T21:18:31.499Z",
+      "attempt": 2
+    },
+    {
+      "id": "implement-2",
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "source_epoch_id": null,
+      "phase": "implement",
+      "summary": "Parent review of initial patch: readFrozenExecutionAuthority currently uses the current epoch baseline. A rework epoch baseline is the rejected PR HEAD, whose manifest/sync may be child-modified. Preserve original admission authorization across prior_epochs; test widening scope plus a newly hashed contract in the rejected HEAD before rework, then changing that injected artifact. It must fail. Keep the current epoch baseline only for new-diff corroboration.",
+      "recorded_at": "2026-10-06T21:23:18.589Z",
+      "attempt": 2
+    },
+    {
+      "id": "implement-3",
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "source_epoch_id": null,
+      "phase": "implement",
+      "summary": "Parent review of initial patch: custom pathIsInFrozenScope handles only exact/directory/double-star, whereas canonical matchesLockPattern supports existing glob semantics. Preserve valid canonical source scopes. Structural evidence should remain an object artifact (reject scalar/array JSON masquerading as evidence); use deterministic key comparison so formatting/key order cannot create implementation credit.",
+      "recorded_at": "2026-10-06T21:23:20.313Z",
+      "attempt": 2
+    },
+    {
+      "id": "implement-4",
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "source_epoch_id": null,
+      "phase": "implement",
+      "summary": "Correction to parent matcher note: direct inspection of canonical matchesLockPattern shows the same exact/directory/double-star semantics, not general single-star glob support. Do not broaden glob semantics. Preserve canonical normalization. Additional exact-path test: acceptance mentioning evidence.json.backup must not authorize evidence.json merely because the current regex accepts a dot as a trailing boundary; sentence-final evidence.json followed by punctuation and whitespace may qualify.",
+      "recorded_at": "2026-10-06T21:24:50.163Z",
+      "attempt": 2
+    },
+    {
+      "id": "implement-5",
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "source_epoch_id": null,
+      "phase": "implement",
+      "summary": "Parent review: full-file Prettier expanded the four-file patch to about2600 inserted/675 deleted lines; format:check is not part of verify. Keep the bounded repair reviewable by avoiding unrelated formatting of existing unchanged declarations/tests. Preserve all existing test names and semantics; formatting new/changed blocks is fine. Resolve recorded frozen-authority and exact-path findings before claiming review readiness.",
+      "recorded_at": "2026-10-06T21:26:25.322Z",
+      "attempt": 2
+    },
+    {
+      "id": "implement-6",
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "source_epoch_id": null,
+      "phase": "implement",
+      "summary": "Measured parent negative fixture against a stable snapshot of the intermediate artifact guard (SHA256 a80b3bb86bdf2dea6f2df181e9caa4b9567bd1508af6398267de14dbaf133eb4): original scope scripts/**; rejected HEAD injects target artifact scope plus a valid rehashed task contract; rework then changes only that unassigned artifact. Expected FAIL_CLOSED, actual SUCCESS, source0/artifact1. Repro /tmp/work-2026100603-rework-authority-snapshot-repro.ts; output sibling.json. This is an intermediate-patch regression, not a real lane success. Fix original-admission authority anchoring and add the permanent regression before candidate readiness.",
+      "recorded_at": "2026-10-06T21:30:42.896Z",
+      "attempt": 2
+    }
+  ],
+  "pending_actions": [
+    "Before returning, genuinely finish and record all executor phases using --summary; pre-merge review-packet closeout is distinct from still-pending human PM approval, governed merge and canonical lane closure. Do not publish READY_FOR_REVIEW before the outer wrapper verdict/persistence. Preserve failure history.",
+    "Regression must cover #1720 resync: inherited repaired-main source files outside its frozen proof-only assignment cannot satisfy implementation corroboration. Artifact and source counters must remain distinct; no source work may be attributed to a proof-only lane. Read frozen original admission scope/contract, not mutable current metadata.",
+    "CLI attempt1 resolved old0.131 from non-login PATH and failed before implementation. Attempt2 uses the installed0.153.3 via login shell; no package/runtime installation or model-policy change was made."
+  ],
+  "attempts": [
+    {
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "attempt": 1,
+      "started_at": "2026-10-06T21:16:25.536Z",
+      "ended_at": "2026-10-06T21:16:34.379Z",
+      "outcome": "failed",
+      "reason": "codex exited with status 1: non-zero exit",
+      "phase_at_start": "orient",
+      "phase_at_end": "orient",
+      "timeout_ms": 4050000,
+      "attempt_start_sha": "2f213fcc8ce1fb6911c64c2caaa66370f5898840",
+      "released_resources": []
+    },
+    {
+      "epoch_id": "0ed454ed-d884-46a4-a7c6-be6bf7543bc3",
+      "attempt": 2,
+      "started_at": "2026-10-06T21:16:54.355Z",
+      "ended_at": "2026-10-06T21:32:55.762Z",
+      "outcome": "failed",
+      "reason": "codex exited with status 1: non-zero exit",
+      "phase_at_start": "orient",
+      "phase_at_end": "implement",
+      "timeout_ms": 4050000,
+      "attempt_start_sha": "47de14b54476ac35f51e22dc5cb51bc55be6b12b",
+      "released_resources": []
+    }
+  ],
+  "cancel_requested": true,
+  "cancel_reason": "Parent measured rejected-HEAD authority injection in intermediate control patch; restart same epoch to load recorded review findings before verification, preserve unfinished patch",
+  "owner": {
+    "pid": 3047405,
+    "host": "DESKTOP-GP6RM0V"
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "checksum": "f46a1bd9a0a4db04161ccd6b1bc5741b5981827c9c4090ebb8e077611e3431fd"
+  }
+}
