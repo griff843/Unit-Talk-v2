@@ -16,3 +16,5 @@ The parent returned SUCCESS with codex_exit_code 0, source_files_changed 2 and p
 Execution epoch: 19868c5b-555c-4780-8911-af50e2941367. The initial nested-dispatch attempts were interrupted, archived through the sanctioned checkpoint functions, and retained as failed history. The corrected task prohibited nested dispatch. No successful implementation or verification is attributed to the interrupted attempts.
 
 Source-head focused tests: 217/217. Integrated scope/shadow tests after main resync: 78/78. Local full verification passed its static chain and refused the unidentified localhost DB target. Source-head CI verify and staging/T1 proof passed. The subsequent final HEAD must have its own CI/staging receipt binding; this historical source attestation does not substitute for that.
+
+MERGE_SHA: pending merge

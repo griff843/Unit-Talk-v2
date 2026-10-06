@@ -21,3 +21,5 @@ required verification. Its exact path was added to the active lease before editi
 It adds the existing domain package dependency to ingestor so its webhook can
 consume the same pure builder. It does not change routes, activation, detectors,
 cooldowns, provider policy, grading or settlement.
+
+MERGE_SHA: pending merge

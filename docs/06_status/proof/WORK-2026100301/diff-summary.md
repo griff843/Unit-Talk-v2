@@ -88,3 +88,5 @@ After product review, this lane changed only control workflow/regression tests a
 | [scripts/ops/daily-digest.ts](../../../../scripts/ops/daily-digest.ts) | Approved implementation/dependency wiring |
 | [scripts/ops/stale-lane-alerter.ts](../../../../scripts/ops/stale-lane-alerter.ts) | Approved implementation/dependency wiring |
 | [scripts/worker-alert-check.ts](../../../../scripts/worker-alert-check.ts) | Approved implementation/dependency wiring |
+
+MERGE_SHA: pending merge

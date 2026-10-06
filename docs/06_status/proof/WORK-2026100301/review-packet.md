@@ -43,3 +43,5 @@ No prices, entitlements, permissions, channel topology, routing/promotion rules,
 PR 1712 landed the general WORK-ID parser repair; it is incorporated through the merge-mutex wrapper. An exact-HEAD external record must represent Griff's approved sender/control scope. Shadow execution is pinned entirely to the attested base checkout; live proof still requires approved read-only secrets. The sanctioned executor completed successfully and recorded actual closure model/effort/exit provenance. Source-head CI verify, writable staging DB, T1, tier and R-level checks passed; final current-head checks and receipts remain required. PM merge approval remains outstanding.
 
 The exact changed-file inventory is diff-summary.md. R2/R3/R4 artifacts are offline presentation evidence, not live production certification.
+
+MERGE_SHA: pending merge

@@ -104,3 +104,5 @@ inspect the same evidence despite the default artifacts ignore rule:
 The existing settled-result sender also needs its display-only capper fallback
 removed. Add `apps/api/src/grading-service.ts` and its test file exclusively for
 that rendering input; do not change grading, settlement, channels or stake guards.
+
+MERGE_SHA: pending merge

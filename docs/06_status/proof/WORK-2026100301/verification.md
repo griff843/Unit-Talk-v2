@@ -5,7 +5,7 @@ Tier: T1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
 EXECUTION_SHA: 4debf792778dc76de237ceacb8c91edaa805683f
 MERGE_SHA: pending merge
-result: BLOCKED — local static/focused proof passes; exact-HEAD staging DB, shadow parity, trusted scope approval and T1 approval remain CI/operator gates.
+result: PRE_MERGE — proof format corrected; the refreshed source has green CI/staging/Shadow evidence below. This proof-only successor requires fresh exact-head CI, scope authorization and executor-result validation before READY_FOR_REVIEW. PM merge approval remains separate.
 
 ## Verification
 
@@ -19,7 +19,7 @@ Control-closure verification on 2026-10-04:
 - `pnpm verify` at 4debf792778dc76de237ceacb8c91edaa805683f passed every static stage, then refused the unidentified localhost target. Source-head CI run 37240331566 passed required verify and writable staging DB proof; the smoke receipt records 7/7 passing tests against xskgrzbteyqdufktjrjx. T1 suites and the T1 Proof Gate also passed. Subsequent heads require fresh CI receipts.
 - The sanctioned parent completed successfully: model gpt-5.6-sol, medium reasoning effort, CLI 0.153.3, exit 0; actual closure implementation and verification only. Its immutable model-routing.json is executor-generated. The earlier desktop implementation remains historically unattested.
 
-## Assertions and measured evidence
+## ASSERTIONS: historical measured behavior
 
 - Shared gold accent, five distinct settled-state accents, all 22 launch families: discord-design-system.test.ts.
 - Source confidence cannot appear; null CLV is absent and measured 0.0% survives: design, worker, stats and result tests.
@@ -42,18 +42,56 @@ Control-closure verification on 2026-10-04:
 
 QA sandbox token, guild and role/channel map are unavailable. PNGs are explicitly labeled local Discord simulation, rendered from actual builder payloads. They prove layout, not live Discord access or delivery.
 
+## EVIDENCE: refreshed source and proof-only successor
+
+The following completed checks belong to source HEAD dbeae30a850ecf176846ca45172e7aef326c87c1, based on main 9326d4d6c150988b33db3f2840ed17fce659a6d8. They supersede the earlier credential/schema/scope blockers for that source. They do not bind the new proof-only successor: fresh synchronize-triggered checks and an exact-head executor comment are required after this correction is pushed. evidence.json and the model-routing sidecar retain historical source provenance; their old outstanding-gate list is not a statement of current remote check status.
+
+[CI run 37523408928](https://github.com/griff843/Unit-Talk-v2/actions/runs/37523408928) completed SUCCESS: staging-only writable DB proof, T1 live suites, static verification and the same-run DB receipt verification. The receipt uses the PR merge ref; the Actions run records the candidate head separately.
+
+```text
+candidate_head: dbeae30a850ecf176846ca45172e7aef326c87c1
+ci_run: 37523408928, attempt 1, SUCCESS
+receipt_artifact: 11441567878 / utv2-1630-db-proof-receipt-37523408928-1
+receipt_github_sha: 08edd9554cefcd096d437279dc29fedd557a709d (1714/merge)
+command: pnpm test:db; exit_code: 0
+observed_project_ref: xskgrzbteyqdufktjrjx (approved staging)
+smoke: tests 9, pass 9, fail 0, skipped 0
+receipt_sha256: ab83d52125717223bd806cb92644e62bb81b4cfe2241bbcf7ba769d426ddb2b3
+```
+
+[Shadow run 37523408665](https://github.com/griff843/Unit-Talk-v2/actions/runs/37523408665) completed SUCCESS with artifact 11440854628. This is a trusted-base production read-only observation, not candidate runtime execution or live Discord acceptance. Its counts are observations of existing data, not proof that this run posted messages.
+
+```text
+candidate_sha: dbeae30a850ecf176846ca45172e7aef326c87c1
+trusted_base_sha: 9326d4d6c150988b33db3f2840ed17fce659a6d8
+runtime_source: trusted-base
+observed_at: 2026-10-06T20:03:12.933Z
+candidatesScanned: 67689; shadowOnly: 67689
+picksCreated: 0; shadowModeFalseSet: 0
+distributionEnqueued: 0; promotionWidened: 0
+```
+
+The [exact-source scope rebind](https://github.com/griff843/Unit-Talk-v2/pull/1714#issuecomment-6024590301) covered the unchanged 80-path candidate set. File Scope Lock passed run 37523408629 after that authorization. It must be rebound to the proof-only successor by the authorized scope approver; this artifact grants no scope or PM authority. R-Level Compliance, Runtime Verifier, Proof Auditor, T1 Proof Gate and WFR-v2 checks were green on the refreshed source. Close Eligibility Preflight's branch parser skips WORK IDs; its green status does not establish that this lane passed the shared close-eligibility evaluation.
+
+## ASSERTIONS: evidence and review boundaries
+
+- [x] Refreshed-source staging DB proof succeeded against xskgrzbteyqdufktjrjx, with 9/9 smoke tests and same-run receipt verification, as recorded in CI run 37523408928.
+- [x] Refreshed-source trusted-base Shadow observation used the exact candidate/base identities above and recorded zero for all four mutation guardrails, as recorded in run 37523408665.
+- [x] Historical local verification refused the unidentified localhost DB target. Those refusals are retained above; no guard override or writable production proof is claimed.
+- [x] Historical model provenance is limited to the completed control-closure run: gpt-5.6-sol, medium, CLI 0.153.3, exit 0. Original desktop implementation model/effort remain unattested; this proof repair does not invent retroactive provenance.
+- [x] Render PNGs prove local simulation layout only. No live Discord acceptance, production readiness, or Discord-wave completion is established by these artifacts.
+- [ ] The proof-only successor has fresh exact-head CI/staging, Shadow, scope and executor-result evidence. Complete this externally through the exact-head checks and executor comment; do not claim old receipts apply to a new HEAD.
+- [ ] Independent PM has reviewed the final exact HEAD and supplied PM merge approval. No PM approval is asserted here.
+
 ## Remaining gates and policy gaps
 
-CI requires a trusted exact issue/PR/HEAD/path scope-override/v1 record. The WORK-ID parser repair landed in PR 1712 and was incorporated through the merge-mutex wrapper. It preserves CODEOWNER-human authorization, exact identity/path matching and fail-closed behavior. The explicitly approved sender/control scope still needs a current-head external authorization record; no UTV2 identity is invented.
+After this proof-only correction, all previous exact-head bindings are stale. Required synchronize-triggered checks, an authorized exact-head scope rebind, and a valid executor-result/v1 comment must precede READY_FOR_REVIEW. Independent PM review remains required; merge/deployment/live Discord authorization is not granted by this proof.
 
-The prior shallow merge-base/package-diff shadow blocker is resolved structurally: the workflow no longer installs or executes candidate dependencies or runtime. The reusable `assertUnmodified` implementation and its original fail-closed tests remain unchanged. Live shadow proof is still blocked until the operator provisions the approved mechanically read-only secrets.
+Separate product/routing gaps remain unchanged: receipt-derived result destinations do not ensure all-tier transparency; current result aggregation does not fully include void/correction history; existing unknown-stake guards suppress some posts; older delete/replace correction guidance conflicts with append-only history. No routing, lifecycle, containment, or policy correction is included in this proof repair.
 
-Tier synchronization passed on the control source head. tier:T1 remains applied. Final exact-HEAD CI and staging receipts, live shadow proof and PM merge approval remain necessary.
+## Merge SHA Binding
 
-Historical desktop implementation model/effort remain unattested. Closure provenance is now genuine sanctioned executor evidence, recorded after a completed run. Admission metadata is not substituted for actual execution. Interrupted nested attempts are retained in checkpoint history and are not claimed as successful closure.
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
 
-Separate product/routing gaps: receipt-derived result destinations do not ensure all-tier transparency; current result aggregation does not fully include void/correction history; existing unknown-stake guards suppress some posts; older delete/replace correction guidance conflicts with append-only history. Routing, lifecycle and policy remain unchanged.
-
-## Merge SHA binding
-
-Merge SHA: pending merge. Only authoritative post-merge automation may bind it.
+Only authoritative post-merge automation may bind the merge SHA.
