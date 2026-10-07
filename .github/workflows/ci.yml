@@ -4,19 +4,16 @@ on:
   push:
     branches:
       - main
-    # Closeout bookkeeping pushes (lane manifests, proof bundles, sync files)
-    # are metadata-only and cannot break the build; skipping them stops each
-    # lane closeout from invalidating every open PR a second time.
-    # Fail-closed: a push touching ANY path outside this list runs full verify.
-    # PR-triggered runs (the required "verify" context) are unaffected.
-    paths-ignore:
-      - 'docs/06_status/lanes/**'
-      - 'docs/06_status/proof/**'
-      - '.ops/sync/**'
+    # Every protected-main commit needs its own verify and writable-staging
+    # proof contexts. In particular, a squash merge whose diff contains only
+    # lane/proof metadata still carries a T1 deferred_to_ci obligation; path
+    # filters would strand that exact merge SHA without either G6 receipt.
   pull_request:
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # PR updates supersede older runs for that PR. Protected-main commits do not:
+  # every distinct merge SHA must retain its own exact-SHA proof producer.
+  group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:

@@ -777,7 +777,256 @@ test('CI avoids duplicate verify jobs for codex PR branches', () => {
   assert.deepStrictEqual(branches, ['main']);
   assert.ok(on.pull_request !== undefined, 'CI must still run for pull requests');
   assert.match(stringField(concurrency, 'group'), /pull_request\.number/);
+  assert.match(stringField(concurrency, 'group'), /github\.sha/, 'distinct main merge SHAs must not cancel each other');
+  assert.doesNotMatch(stringField(concurrency, 'group'), /github\.ref/, 'all main pushes must not share one cancellation key');
   assert.strictEqual(concurrency['cancel-in-progress'], true);
+});
+
+test('WORK-2026100701: protected-main CI does not suppress metadata-only merge proof producers', () => {
+  const push = objectField(objectField(readWorkflowYaml('ci.yml'), 'on'), 'push');
+  assert.deepStrictEqual(stringArrayField(push, 'branches'), ['main']);
+  assert.strictEqual(push['paths-ignore'], undefined, 'main pushes must always produce exact-SHA T1 receipts');
+  assert.strictEqual(push.paths, undefined, 'main proof production must not be narrowed by an allowlist');
+});
+
+test('WORK-2026100701: recovery is default-branch-controlled and isolates write authority', () => {
+  const workflow = readWorkflowYaml('merge-proof-recovery.yml');
+  const events = objectField(workflow, 'on');
+  assert.strictEqual(events.workflow_dispatch, undefined, 'branch-selectable workflow_dispatch is not trusted');
+  assert.deepStrictEqual(stringArrayField(objectField(events, 'repository_dispatch'), 'types'), [
+    'merge-proof-recovery',
+  ]);
+
+  const jobs = objectField(workflow, 'jobs');
+  const resolve = objectField(jobs, 'resolve');
+  const staging = objectField(jobs, 'staging-db-proof');
+  const verify = objectField(jobs, 'verify');
+  const publish = objectField(jobs, 'publish');
+  assert.strictEqual(staging.environment, 'staging-ci');
+  assert.strictEqual(objectField(staging, 'permissions').contents, 'read');
+  assert.strictEqual(objectField(publish, 'permissions').checks, 'write');
+  assert.notStrictEqual(objectField(resolve, 'permissions').checks, 'write');
+  assert.notStrictEqual(objectField(verify, 'permissions').checks, 'write');
+
+  const raw = readWorkflow('merge-proof-recovery.yml');
+  assert.match(raw, /repository_dispatch always loads the workflow definition/);
+  assert.doesNotMatch(raw, /PRODUCTION|zfzdnfwdarxucxtaojxm/, 'recovery must not reference production credentials or project');
+  assert.match(raw, /CI_SUPABASE_PROJECT_REF.*xskgrzbteyqdufktjrjx/s);
+});
+
+test('WORK-2026100701: recovery validates the real merged target through GitHub APIs', () => {
+  const workflow = readWorkflow('merge-proof-recovery.yml');
+  assert.match(workflow, /github\.rest\.git\.getRef/);
+  assert.match(workflow, /github\.rest\.pulls\.get/);
+  assert.match(workflow, /github\.rest\.repos\.compareCommitsWithBasehead/);
+  assert.match(workflow, /context\.payload\.client_payload\?\.pr_number/);
+  assert.match(workflow, /validateDispatchContext/);
+  assert.match(workflow, /validatePullTarget/);
+  assert.match(workflow, /validateReachability/);
+});
+
+test('WORK-2026100701: both native proof jobs check out and attest the exact merge SHA', () => {
+  const workflow = readWorkflow('merge-proof-recovery.yml');
+  const exactRefs = workflow.match(/ref: \$\{\{ needs\.resolve\.outputs\.merge_sha \}\}/g) ?? [];
+  const checkoutAssertions = workflow.match(/tested_sha=\$\(git rev-parse HEAD\)/g) ?? [];
+  const provenanceAssertions = workflow.match(/test "\$GITHUB_SHA" = "\$EXECUTION_SHA"/g) ?? [];
+  assert.strictEqual(exactRefs.length, 2);
+  assert.strictEqual(checkoutAssertions.length, 2);
+  assert.strictEqual(provenanceAssertions.length, 2);
+  assert.doesNotMatch(workflow, /GITHUB_SHA=/, 'execution provenance must never be spoofed');
+  assert.match(workflow, /pnpm verify:static/);
+  assert.match(workflow, /pnpm test:t1-proof:live/);
+  assert.match(workflow, /verify-db-proof-receipt\.ts/);
+});
+
+test('WORK-2026100701: publisher reads native jobs and reports exact G6 identities', () => {
+  const workflow = readWorkflow('merge-proof-recovery.yml');
+  assert.match(workflow, /github\.paginate\(github\.rest\.actions\.listJobsForWorkflowRun/);
+  assert.match(workflow, /buildPublishedProofResults/);
+  assert.match(workflow, /github\.rest\.checks\.create/);
+  assert.match(workflow, /github\.rest\.checks\.update/);
+  assert.match(workflow, /head_sha: result\.targetSha/);
+  assert.match(workflow, /Execution SHA:/);
+  assert.match(workflow, /Tested merge SHA:/);
+  assert.match(workflow, /core\.setFailed\(`Recovery proof refused:/);
+});
+
+test('WORK-2026100701: target validation accepts only a merged default-branch PR reachable from main', async () => {
+  const recovery = await import('./merge-proof-recovery.cjs');
+  const mergeSha = 'a'.repeat(40);
+  const mainSha = 'b'.repeat(40);
+  const execution = recovery.validateDispatchContext({
+    eventName: 'repository_dispatch',
+    action: 'merge-proof-recovery',
+    repository: 'griff843/Unit-Talk-v2',
+    defaultBranch: 'main',
+    ref: 'refs/heads/main',
+    executionSha: mainSha,
+    defaultHeadSha: mainSha,
+  });
+  const target = recovery.validatePullTarget({
+    requestedPrNumber: 1720,
+    repository: 'griff843/Unit-Talk-v2',
+    defaultBranch: 'main',
+    pull: {
+      number: 1720,
+      state: 'closed',
+      merged: true,
+      merged_at: '2026-10-07T00:00:00Z',
+      merge_commit_sha: mergeSha,
+      base: { ref: 'main', repo: { full_name: 'griff843/Unit-Talk-v2' } },
+    },
+  });
+  recovery.validateReachability({
+    mergeSha: target.mergeSha,
+    defaultHeadSha: execution.defaultHeadSha,
+    comparison: {
+      status: 'ahead',
+      base_commit: { sha: mergeSha },
+      merge_base_commit: { sha: mergeSha },
+      commits: [{ sha: mainSha }],
+    },
+  });
+  assert.strictEqual(target.mergeSha, mergeSha);
+});
+
+test('WORK-2026100701: target validation refuses stale definitions, altered targets, open PRs, and wrong bases', async () => {
+  const recovery = await import('./merge-proof-recovery.cjs');
+  const sha = 'c'.repeat(40);
+  const base = {
+    eventName: 'repository_dispatch',
+    action: 'merge-proof-recovery',
+    repository: 'griff843/Unit-Talk-v2',
+    defaultBranch: 'main',
+    ref: 'refs/heads/main',
+    executionSha: sha,
+    defaultHeadSha: sha,
+  };
+  assert.throws(() => recovery.validateDispatchContext({ ...base, ref: 'refs/heads/feature' }), /untrusted_workflow_ref/);
+  assert.throws(() => recovery.validateDispatchContext({ ...base, defaultHeadSha: 'd'.repeat(40) }), /stale_workflow_definition/);
+
+  const pull = {
+    number: 1720,
+    state: 'closed',
+    merged: true,
+    merged_at: '2026-10-07T00:00:00Z',
+    merge_commit_sha: sha,
+    base: { ref: 'main', repo: { full_name: 'griff843/Unit-Talk-v2' } },
+  };
+  const pullInput = {
+    requestedPrNumber: 1720,
+    repository: 'griff843/Unit-Talk-v2',
+    defaultBranch: 'main',
+    pull,
+  };
+  assert.throws(() => recovery.validatePullTarget({ ...pullInput, pull: { ...pull, state: 'open', merged: false } }), /unmerged_pull/);
+  assert.throws(
+    () => recovery.validatePullTarget({ ...pullInput, pull: { ...pull, base: { ...pull.base, ref: 'release' } } }),
+    /wrong_pull_base/,
+  );
+  assert.throws(
+    () => recovery.validateReachability({
+      mergeSha: sha,
+      defaultHeadSha: 'e'.repeat(40),
+      comparison: { status: 'diverged', merge_base_commit: { sha: 'f'.repeat(40) } },
+    }),
+    /merge_not_reachable/,
+  );
+  assert.throws(
+    () => recovery.validateReachability({
+      mergeSha: sha,
+      defaultHeadSha: 'e'.repeat(40),
+      comparison: { status: 'ahead', base_commit: { sha }, merge_base_commit: { sha: 'f'.repeat(40) } },
+    }),
+    /merge_base_mismatch/,
+  );
+});
+
+test('WORK-2026100701: only complete successful native jobs bound to the target publish success', async () => {
+  const recovery = await import('./merge-proof-recovery.cjs');
+  const executionSha = '1'.repeat(40);
+  const targetSha = '2'.repeat(40);
+  const runId = 1234;
+  const jobs = [
+    {
+      id: 10,
+      run_id: runId,
+      head_sha: executionSha,
+      name: recovery.NATIVE_JOB_NAMES.staging,
+      status: 'completed',
+      conclusion: 'success',
+      html_url: 'https://example.test/staging',
+    },
+    {
+      id: 11,
+      run_id: runId,
+      head_sha: executionSha,
+      name: recovery.NATIVE_JOB_NAMES.verify,
+      status: 'completed',
+      conclusion: 'success',
+      html_url: 'https://example.test/verify',
+    },
+  ];
+  const results = recovery.buildPublishedProofResults({
+    jobs,
+    runId,
+    runUrl: 'https://example.test/run',
+    executionSha,
+    targetSha,
+    declaredResults: { staging: 'success', verify: 'success' },
+    testedShas: { staging: targetSha, verify: targetSha },
+  });
+  assert.deepStrictEqual(results.map((result: { context: string }) => result.context), [
+    'Writable DB proof (staging only)',
+    'verify',
+  ]);
+  assert.ok(results.every((result: { succeeded: boolean; conclusion: string }) => result.succeeded && result.conclusion === 'success'));
+  assert.ok(results.every((result: { executionSha: string; targetSha: string }) => result.executionSha !== result.targetSha));
+});
+
+test('WORK-2026100701: skipped, failing, incomplete, missing, or mismatched native proof never publishes success', async () => {
+  const recovery = await import('./merge-proof-recovery.cjs');
+  const executionSha = '3'.repeat(40);
+  const targetSha = '4'.repeat(40);
+  const runId = 2222;
+  const native = (key: 'staging' | 'verify', id: number, status: string, conclusion: string | null) => ({
+    id,
+    run_id: runId,
+    head_sha: executionSha,
+    name: recovery.NATIVE_JOB_NAMES[key],
+    status,
+    conclusion,
+  });
+  const cases = [
+    { jobs: [native('staging', 1, 'completed', 'failure'), native('verify', 2, 'completed', 'success')] },
+    { jobs: [native('staging', 1, 'completed', 'success'), native('verify', 2, 'in_progress', null)] },
+    { jobs: [native('staging', 1, 'completed', 'success')] },
+    { jobs: [native('staging', 1, 'completed', 'skipped'), native('verify', 2, 'completed', 'success')] },
+  ];
+  for (const fixture of cases) {
+    const results = recovery.buildPublishedProofResults({
+      ...fixture,
+      runId,
+      runUrl: 'https://example.test/run',
+      executionSha,
+      targetSha,
+      declaredResults: { staging: 'success', verify: 'success' },
+      testedShas: { staging: targetSha, verify: targetSha },
+    });
+    assert.ok(results.some((result: { succeeded: boolean }) => !result.succeeded));
+  }
+
+  const mismatch = recovery.buildPublishedProofResults({
+    jobs: [native('staging', 1, 'completed', 'success'), native('verify', 2, 'completed', 'success')],
+    runId,
+    runUrl: 'https://example.test/run',
+    executionSha,
+    targetSha,
+    declaredResults: { staging: 'success', verify: 'success' },
+    testedShas: { staging: targetSha, verify: '5'.repeat(40) },
+  });
+  assert.strictEqual(mismatch.find((result: { key: string }) => result.key === 'verify')?.succeeded, false);
+  assert.match(mismatch.find((result: { key: string }) => result.key === 'verify')?.reason ?? '', /tested/);
 });
 
 test('loop-dispatch requires live governor commands before every cycle', () => {

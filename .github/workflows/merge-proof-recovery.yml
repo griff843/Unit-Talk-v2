@@ -1,0 +1,433 @@
+name: Merge proof recovery
+
+# repository_dispatch always loads the workflow definition from the repository's
+# default branch. That property is the credential boundary: unlike
+# workflow_dispatch, a caller cannot select a PR/feature ref containing an
+# altered workflow and then ask it to enter staging-ci.
+on:
+  repository_dispatch:
+    types: [merge-proof-recovery]
+
+concurrency:
+  group: merge-proof-recovery-${{ github.event.client_payload.pr_number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve trusted merged target
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      execution_sha: ${{ steps.target.outputs.execution_sha }}
+      merge_sha: ${{ steps.target.outputs.merge_sha }}
+      pr_number: ${{ steps.target.outputs.pr_number }}
+    steps:
+      - name: Checkout default-branch workflow source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Resolve and validate merged PR target
+        id: target
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const recovery = require('./scripts/ops/merge-proof-recovery.cjs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const repository = `${owner}/${repo}`;
+            const defaultBranch = context.payload.repository?.default_branch;
+            const requestedPrNumber = recovery.parseRecoveryPrNumber(
+              context.payload.client_payload?.pr_number,
+            );
+
+            const { data: defaultRef } = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: `heads/${defaultBranch}`,
+            });
+            const execution = recovery.validateDispatchContext({
+              eventName: context.eventName,
+              action: context.payload.action,
+              repository,
+              defaultBranch,
+              ref: context.ref,
+              executionSha: context.sha,
+              defaultHeadSha: defaultRef.object.sha,
+            });
+
+            const { data: pull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: requestedPrNumber,
+            });
+            const target = recovery.validatePullTarget({
+              requestedPrNumber,
+              pull,
+              repository,
+              defaultBranch,
+            });
+
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner,
+              repo,
+              basehead: `${target.mergeSha}...${execution.defaultHeadSha}`,
+            });
+            recovery.validateReachability({
+              mergeSha: target.mergeSha,
+              defaultHeadSha: execution.defaultHeadSha,
+              comparison,
+            });
+
+            core.setOutput('execution_sha', execution.executionSha);
+            core.setOutput('merge_sha', target.mergeSha);
+            core.setOutput('pr_number', String(target.prNumber));
+            core.notice(`Validated merged PR #${target.prNumber} at ${target.mergeSha}`);
+
+  staging-db-proof:
+    name: Merge recovery / writable DB proof
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: staging-ci
+    concurrency:
+      group: staging-ci-db
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    outputs:
+      tested_sha: ${{ steps.checkout_identity.outputs.tested_sha }}
+    steps:
+      - name: Checkout exact historical merge SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.merge_sha }}
+          persist-credentials: false
+
+      - name: Assert exact checkout
+        id: checkout_identity
+        env:
+          EXPECTED_MERGE_SHA: ${{ needs.resolve.outputs.merge_sha }}
+          EXECUTION_SHA: ${{ needs.resolve.outputs.execution_sha }}
+        run: |
+          set -euo pipefail
+          tested_sha=$(git rev-parse HEAD)
+          test "$tested_sha" = "$EXPECTED_MERGE_SHA" || {
+            echo "::error::checkout $tested_sha differs from validated merge $EXPECTED_MERGE_SHA"
+            exit 1
+          }
+          test "$GITHUB_SHA" = "$EXECUTION_SHA" || {
+            echo "::error::execution provenance changed from $EXECUTION_SHA to $GITHUB_SHA"
+            exit 1
+          }
+          echo "tested_sha=$tested_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Assert staging credentials present
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          for name in CI_SUPABASE_URL CI_SUPABASE_PROJECT_REF CI_SUPABASE_SECRET_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty — staging-ci did not release its secrets."
+              exit 1
+            fi
+          done
+          if [ "$CI_SUPABASE_PROJECT_REF" != "xskgrzbteyqdufktjrjx" ]; then
+            echo "::error::project ref is not the approved staging project"
+            exit 1
+          fi
+
+      - name: Materialize staging-only environment
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo "NODE_ENV=test"
+            echo "UNIT_TALK_APP_ENV=test"
+            echo "UNIT_TALK_ACTIVE_WORKSPACE=staging-ci"
+            echo "UNIT_TALK_LEGACY_WORKSPACE=staging-ci"
+            echo "LINEAR_TEAM_ID=staging-ci"
+            echo "LINEAR_TEAM_KEY=UTV2"
+            echo "LINEAR_TEAM_NAME=staging-ci"
+            echo "UNIT_TALK_API_RUNTIME_MODE=fail_open"
+            echo "UNIT_TALK_JWT_SECRET=staging-ci-not-a-production-secret"
+            echo "SUPABASE_URL=${CI_SUPABASE_URL}"
+            echo "SUPABASE_PROJECT_REF=${CI_SUPABASE_PROJECT_REF}"
+            echo "SUPABASE_ANON_KEY=${CI_SUPABASE_PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${CI_SUPABASE_SECRET_KEY}"
+            echo "UNIT_TALK_DB_ACCESS_MODE=writable-isolated"
+          } > local.env
+
+      - name: Record repository migration head
+        id: schema
+        run: |
+          set -euo pipefail
+          head=$(ls supabase/migrations/*.sql | tail -1 | xargs basename)
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: Seed synthetic staging fixtures
+        run: pnpm exec tsx scripts/ci/seed-staging-fixtures.ts
+
+      - name: Run writable DB proof against staging
+        env:
+          CI_REQUIRE_DB_SMOKE: 'true'
+          CI_DB_PROOF_RECEIPT_PATH: ${{ github.workspace }}/.out/ci-db-proof-receipt.json
+          CI_REPO_MIGRATION_HEAD: ${{ steps.schema.outputs.head }}
+          CI_FIXTURE_RUN_ID: merge-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p .out
+          pnpm ci:assert-staging
+          pnpm ci:db-smoke
+          test -f "$CI_DB_PROOF_RECEIPT_PATH" || { echo "::error::receipt not produced"; exit 1; }
+
+      - name: Run T1 live proof suites against staging
+        env:
+          CI_FIXTURE_RUN_ID: merge-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+        run: pnpm test:t1-proof:live
+
+      - name: Scrub credentials
+        if: always()
+        run: rm -f local.env
+
+      - name: Upload proof receipt from this recovery run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-recovery-db-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/ci-db-proof-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  verify:
+    name: Merge recovery / full verify
+    needs: [resolve, staging-db-proof]
+    if: always() && needs.resolve.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tested_sha: ${{ steps.checkout_identity.outputs.tested_sha }}
+    steps:
+      - name: Assert staging proof succeeded
+        run: |
+          set -euo pipefail
+          result="${{ needs.staging-db-proof.result }}"
+          test "$result" = "success" || {
+            echo "::error::recovery staging proof did not succeed ($result)"
+            exit 1
+          }
+
+      - name: Checkout exact historical merge SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.merge_sha }}
+          persist-credentials: false
+
+      - name: Assert exact checkout
+        id: checkout_identity
+        env:
+          EXPECTED_MERGE_SHA: ${{ needs.resolve.outputs.merge_sha }}
+          EXECUTION_SHA: ${{ needs.resolve.outputs.execution_sha }}
+        run: |
+          set -euo pipefail
+          tested_sha=$(git rev-parse HEAD)
+          test "$tested_sha" = "$EXPECTED_MERGE_SHA" || {
+            echo "::error::checkout $tested_sha differs from validated merge $EXPECTED_MERGE_SHA"
+            exit 1
+          }
+          test "$GITHUB_SHA" = "$EXECUTION_SHA" || {
+            echo "::error::execution provenance changed from $EXECUTION_SHA to $GITHUB_SHA"
+            exit 1
+          }
+          echo "tested_sha=$tested_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write credential-free CI environment
+        run: |
+          cat <<'EOF' > local.env
+          NODE_ENV=development
+          UNIT_TALK_APP_ENV=ci
+          COMMAND_CENTER_AUTH_TOKEN=ci-command-center-token
+          AUTH_SECRET=ci-auth-secret
+          NEXTAUTH_SECRET=ci-nextauth-secret
+          LINEAR_API_TOKEN=
+          LINEAR_TEAM_ID=
+          NOTION_TOKEN=
+          SLACK_BOT_TOKEN=
+          SLACK_SIGNING_SECRET=
+          UNIT_TALK_API_RUNTIME_MODE=fail_open
+          UNIT_TALK_JWT_SECRET=ci-static-not-a-real-secret
+          SUPABASE_URL=
+          SUPABASE_ANON_KEY=
+          SUPABASE_SERVICE_ROLE_KEY=
+          DISCORD_BOT_TOKEN=
+          DISCORD_GUILD_ID=
+          DISCORD_ANNOUNCEMENT_CHANNEL_ID=
+          OPENAI_API_KEY=
+          EOF
+
+      - name: Enforce DB writer classification
+        run: pnpm exec tsx scripts/ci/db-writer-inventory.ts
+
+      - name: Verify static suite
+        run: pnpm verify:static
+
+      - name: Command Center tests
+        run: pnpm test:command-center
+
+      - name: Download staging proof receipt from this recovery run
+        uses: actions/download-artifact@v4
+        with:
+          name: merge-recovery-db-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/receipt
+          if-no-files-found: error
+
+      - name: Verify staging proof receipt and native provenance
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/ci/verify-db-proof-receipt.ts \
+            --receipt .out/receipt/ci-db-proof-receipt.json \
+            --command "pnpm test:db" \
+            --expect-workflow "Merge proof recovery" \
+            --expect-job staging-db-proof
+
+  publish:
+    name: Publish truthful historical proof contexts
+    needs: [resolve, staging-db-proof, verify]
+    if: always() && needs.resolve.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: write
+      contents: read
+    steps:
+      - name: Checkout trusted publisher
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.execution_sha }}
+          persist-credentials: false
+
+      - name: Report native proof outcomes on the tested merge SHA
+        uses: actions/github-script@v7
+        env:
+          TARGET_MERGE_SHA: ${{ needs.resolve.outputs.merge_sha }}
+          EXECUTION_SHA: ${{ needs.resolve.outputs.execution_sha }}
+          STAGING_RESULT: ${{ needs.staging-db-proof.result }}
+          STAGING_TESTED_SHA: ${{ needs.staging-db-proof.outputs.tested_sha }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          VERIFY_TESTED_SHA: ${{ needs.verify.outputs.tested_sha }}
+        with:
+          script: |
+            const recovery = require('./scripts/ops/merge-proof-recovery.cjs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+              owner,
+              repo,
+              run_id: context.runId,
+              filter: 'latest',
+              per_page: 100,
+            });
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const results = recovery.buildPublishedProofResults({
+              jobs,
+              runId: context.runId,
+              runUrl,
+              executionSha: process.env.EXECUTION_SHA,
+              targetSha: process.env.TARGET_MERGE_SHA,
+              declaredResults: {
+                staging: process.env.STAGING_RESULT,
+                verify: process.env.VERIFY_RESULT,
+              },
+              testedShas: {
+                staging: process.env.STAGING_TESTED_SHA,
+                verify: process.env.VERIFY_TESTED_SHA,
+              },
+            });
+
+            const pending = [];
+            for (const result of results) {
+              const { data: check } = await github.rest.checks.create({
+                owner,
+                repo,
+                name: result.context,
+                head_sha: result.targetSha,
+                status: 'in_progress',
+                details_url: result.detailsUrl,
+                external_id: `merge-proof-recovery:${context.runId}:${result.key}`,
+                output: {
+                  title: 'Historical merge proof recovery is reporting',
+                  summary: `Execution SHA: ${result.executionSha}\nTested merge SHA: ${result.targetSha}`,
+                },
+              });
+              pending.push({ result, checkId: check.id });
+            }
+
+            for (const { result, checkId } of pending) {
+              await github.rest.checks.update({
+                owner,
+                repo,
+                check_run_id: checkId,
+                status: 'completed',
+                conclusion: result.conclusion,
+                completed_at: new Date().toISOString(),
+                details_url: result.detailsUrl,
+                output: {
+                  title: result.succeeded ? 'Recovered native proof passed' : 'Recovered native proof refused',
+                  summary: [
+                    `Native job: ${result.nativeJobName} (${result.nativeJobId ?? 'missing'})`,
+                    `Workflow run: ${result.runId}`,
+                    `Execution SHA: ${result.executionSha}`,
+                    `Tested merge SHA: ${result.targetSha}`,
+                    `Observed checkout SHA: ${result.testedSha ?? 'missing'}`,
+                    `Result: ${result.reason}`,
+                  ].join('\n'),
+                },
+              });
+            }
+
+            const refused = results.filter((result) => !result.succeeded);
+            if (refused.length > 0) {
+              core.setFailed(`Recovery proof refused: ${refused.map((result) => result.reason).join('; ')}`);
+            }
