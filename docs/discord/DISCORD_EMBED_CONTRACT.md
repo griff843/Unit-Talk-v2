@@ -1,185 +1,86 @@
-# Discord Embed Contract
+# Discord Automated Message Presentation Contract
 
-**Status:** RATIFIED  
-**Authority:** Runtime (`apps/worker/src/delivery-adapters.ts`, `apps/api/src/recap-service.ts`)  
-**Updated:** 2026-04-03
+Updated: 2026-10-03 · WORK-2026100301
 
----
+This contract describes the presentation implemented in `packages/domain/src/discord-presentation.ts`, the worker delivery adapter, API recap service and Discord bot. Membership, routing, access, settlement and activation contracts retain their authority. Presentation never authorizes a channel, member, promotion or trigger.
 
-## 1. Scope
+## Shared presentation
 
-This contract covers the structure and content policy for two types of Discord embeds:
+Default accent is gold `#C7A34B`, with white content and black/dark surrounding UI supplied by Discord. Every embed starts with the shared builder and Unit Talk footer. Discord controls fonts, background and field wrapping; these cannot be forced by an embed.
 
-1. **Pick embeds** — posted by the worker when delivering an outbox row to a pick channel
-2. **Recap embeds** — posted by the recap service to `discord:recaps`
+Mobile hierarchy: family/outcome and selection first, then market and canonical wager details, attribution, supporting evidence and optional media. Recap pages use at most six fields and one embed per message. Slash-command boards use descriptions split within the description limit.
 
-It does NOT cover bot slash commands (`apps/discord-bot`).
+Only actual settled outcomes use semantic accents: Win `#22C55E`, Loss `#EF4444`, Push `#9CA3AF`, Void `#64748B`, Correction `#8B5CF6`. Aggregate recaps and performance records stay gold regardless of net profit. Winners and losers use the same detail fields.
 
----
+## Truth and optional data
 
-## 2. Pick Embed Fields
+- Public scoring confidence and High/Medium/Low confidence labels are forbidden, even when source data contains them. Capper submission input and internal settlement evidence remain separate from public presentation.
+- Whitelist canonical display inputs. Never spread arbitrary pick metadata into an embed. Confidence minus implied probability is not EV or market edge.
+- No invented EV, edge, probabilities, statistics, records, sportsbook, identity, prices or timestamps. Current worker pick builders do not publish these unsupported enrichments.
+- Unknown fields disappear; no fake zero, default one-unit stake, Unit Talk capper attribution, TBD time or unknown placeholder. An actual measured numeric zero remains visible.
+- CLV renders only from a finite canonical settlement/API measurement. `null`, unknown or a missing sample disappears. A measured `0.0%` remains visible. Stats/profile average CLV requires its canonical sample. Existing stats small-sample rules remain unchanged.
+- Only source timestamps render. No rendering-time clock masquerades as posted/event/settled time.
+- Optional media requires a valid HTTPS URL; absence or invalid media never blocks text delivery. No lookup or invented fallback asset is required.
 
-Pick embeds are built in `buildDiscordMessagePayload()` in `delivery-adapters.ts`.
+## Family inventory and wiring
 
-### Required fields (always present)
+| Family | Implemented presentation | Existing runtime use |
+| --- | --- | --- |
+| Official Pick | Selection, market, odds, units, capper, known game time, thesis | Worker governed human-pick targets |
+| Pick Posted | Same whitelist and brand | Worker other existing targets; slash submission confirmation uses shared base |
+| Win / Loss / Push | Outcome, selection, market, P/L, odds, stake, capper, measured CLV | Existing settlement-result adapter and command recap |
+| Void / Correction | Same details, correction previous/effective result | Builder only; existing grading normalizer does not wire these states |
+| Daily / Weekly / Monthly Recap | Record, known net/ROI, sample, top play, every supplied settled pick; continuation pages | Existing API scheduler/manual posting and bot recap |
+| Capper Record / Profile | Source record, sample, measured ROI and sampled CLV | /stats record; profile standalone builder |
+| Leaderboard | Every returned ranked row, source sample/window | /leaderboard |
+| Welcome | Known member and next step | Builder only |
+| Trial Started / Expiring | Known expiry, approved access copy | Builder only; /trial-status uses shared brand on its existing response |
+| Upgrade | Approved support path; no invented VIP+ price | /upgrade |
+| Service Alert | Message, optional impact/action | Existing command unavailable/empty responses; no new event trigger |
+| Access Denied / Bot Error | Private response specification | Router and command errors |
+| Capper Onboarding | Canonical intake/stats/recap/contact guidance | Existing role-add onboarding handler |
+| System Maintenance | Message, optional impact/action | Builder only |
 
-| Field | Source | Notes |
-|-------|--------|-------|
-| `Pick` (inline) | `payload.selection` + `payload.line` | Line formatted as ` @ +N` or ` @ −N` |
-| `Odds` (inline) | `payload.odds` | Formatted as ` (+N)` or ` (−N)` |
-| `Capper` (inline) | `metadata.capper` | Falls back to `'Unit Talk'` |
-| `Posted` (inline) | `new Date()` | Local time with timezone short name |
+Existing line-movement, steam, hedge/arbitrage/middle and injury notification
+builders also consume the shared gold Service Alert presentation. Their existing
+activation, detection, cooldown and routing decisions are unchanged; builder
+availability does not claim those lanes are activated. Grading and ingestor
+operations webhooks use the same Service Alert builder without a synthetic timestamp.
+Existing grading/ingestor/worker/backup monitor scripts and operations daily-digest
+and stale-lane notifications use that builder too; their destinations, schedules,
+and alert conditions are preserved.
+Unknown steam counts/window, first-mover book, hedge probability and guaranteed
+profit are omitted instead of borrowing or defaulting metrics. Known source
+bookmaker/line information remains available in these notification records.
 
-### Conditional fields (present only when data exists)
+Compatibility singular recap/leaderboard accessors return the first page for old callers. Live multi-page paths use plural builders. Builder availability is not activation.
 
-| Field | Condition | Source |
-|-------|-----------|--------|
-| `Units` (inline) | `payload.stakeUnits != null` | Raw number, e.g. `1.5` |
-| `Confidence` (inline) | `payload.confidence != null` | Displayed as `XX%` (0–1 scaled to %) |
-| `Implied Prob` (inline) | `metadata.domainAnalysis.impliedProbability != null` | Displayed as `XX.X%` |
-| `Capper record` (appended to Capper) | `metadata.capperRecord` | Appended as `(record)` |
-| `CLV` (appended to Capper) | `metadata.capperClvPct != null` | Appended as `\| CLV: +X.X%` |
-| Lead field (full width, first) | Target-specific | See Section 4 |
+## Size, visibility and delivery
 
-### Embed-level fields
+Discord limits: title 256, description 4096, field name 256, field value 1024, at most 25 fields, combined embed text 6000 characters per message and at most 10 embeds. Shared recap pagination splits field content by Unicode code point, preserves all supplied rows and sends one embed per message. API recap continuations retain the original first-page idempotency key and add stable page suffixes; retries skip pages already sent.
 
-| Property | Value |
-|----------|-------|
-| `title` | Target-specific (see Section 4) |
-| `description` | `<sport> \| <eventName>` or target default |
-| `color` | Target-specific (see Section 4) |
-| `footer.text` | `'Unit Talk'` |
-| `timestamp` | ISO timestamp of delivery moment |
+No top-ten cutoff may hide losses in a supplied recap. Existing API query windows, caps, Track Only exclusions and evidence-plane exclusions remain unchanged. This presentation change does not claim complete history beyond those source boundaries.
 
----
+Access denial and bot failures stay ephemeral, including failures after a public leaderboard defer: delete the deferred public response and send a private follow-up. Detailed diagnostics stay in operator logs.
 
-## 3. What Is Never Shown in Pick Embeds
+Worker route checks, message nonce, receipts and dry-run behavior remain unchanged. API recap channel selection and delivery ownership remain unchanged. Missing media does not change delivery authority.
 
-The following data is explicitly excluded from public Discord embeds:
+## Commercial truth
 
-| Data | Reason |
-|------|--------|
-| Promotion score components (`edge`, `trust`, `readiness`, `uniqueness`, `boardFit`) | Internal evaluation signal, not a public claim |
-| `promotionScores` breakdown | Internal only |
-| `realEdge` / `realEdgeSource` | Confidence delta ≠ market edge; must not be labeled as edge |
-| Sportsbook name / book identifier | Not present in pick payload |
-| Member tier (Bronze/Silver/Gold/etc.) | Member access tier is not a pick evaluation signal |
-| `domainAnalysis` beyond `impliedProbability` | Internal enrichment |
-| Pick ID / internal IDs | Not relevant to members |
+Membership authority: [Membership Product Contract](../03_product/MEMBERSHIP_PRODUCT_CONTRACT.md). VIP+ price is reserved and never synthesized; Black Label is unavailable for purchase or activation. Settled results and recaps are transparent to all member tiers. Upgrade copy must not sell settled history as exclusive paid access.
 
-**Explicit runtime comment:** "Does NOT show fake edge — confidence delta is not market edge (Sprint D)."
+## Separate product/routing gaps
 
----
+The existing grading result-channel resolver follows the original delivery receipt channel. This does not establish all-tier visibility required by membership. Resolve through a separately approved routing/access plan; this change does not reroute or create channels.
 
-## 4. Target-Specific Presentation
+Void/correction delivery wiring, complete corrected-history aggregation and missing-stake grading behavior are outside this presentation packet. The recap-channel document's older delete/replace correction guidance also needs a policy reconciliation with append-only correction/history requirements.
 
-### `discord:best-bets`
+QA sandbox credentials and role/channel map are absent in this local environment. Local desktop/mobile fixture rendering is evidence of presentation only, not proof of live Discord delivery or channel access.
 
-| Property | Value |
-|----------|-------|
-| `title` | `Unit Talk V2 Best Bet` |
-| `color` | `0xffd700` (gold) |
-| Lead field name | `Best Bets Purpose` |
-| Lead field value | `This lane is for the most presentation-ready curated picks. It should feel like a premium showcase, not a raw canary dump.` |
-| `content` | `undefined` |
+## Related authorities
 
-### `discord:trader-insights`
-
-| Property | Value |
-|----------|-------|
-| `title` | `Unit Talk V2 Trader Insight` |
-| `color` | `0x4f8cff` (blue) |
-| Lead field name | `Trader Insights Purpose` |
-| Lead field value | `This lane is for sharper market-alerts signals: higher edge, higher trust, and cleaner timing than a general premium board.` |
-| `content` | `undefined` |
-
-### `discord:canary` and all other targets
-
-| Property | Value |
-|----------|-------|
-| `title` | `Unit Talk V2 Canary` |
-| `color` | `0xf5b041` (orange) |
-| Lead field | none |
-| `content` | `Canary delivery active. Validate formatting before expanding routing.` |
-
----
-
-## 5. Recap Embed Fields
-
-Recap embeds are built in `buildRecapEmbed()` in `recap-service.ts`.
-
-### Required fields (always present)
-
-| Field | Inline | Content |
-|-------|--------|---------|
-| `Record` | yes | `W-L-P` |
-| `Net Units` | yes | `+X.XXu` with sign |
-| `ROI` | yes | `+X.XX%` with sign |
-| `Sample` | yes | `N picks over D days` (+ small-sample warning if < 20 picks) |
-| `Top Play` | no (full width) | Selection (market), Result, P/L, Capper |
-
-### Embed-level fields
-
-| Property | Value |
-|----------|-------|
-| `title` | `<Period> Recap - <date range>` |
-| `color` | `0x2f855a` (green) if `netUnits ≥ 0`; `0xc53030` (red) otherwise |
-
-### Small sample warning
-
-If `totalPicks < 20`, the `Sample` field value appends:  
-`_Small sample — interpret with caution_`
-
----
-
-## 6. What Is Never Shown in Recap Embeds
-
-| Data | Reason |
-|------|--------|
-| Individual pick odds, confidence, edge | Not aggregated or surfaced per-pick in recaps |
-| Pick IDs | Not relevant to members |
-| Sportsbook names | Not present |
-| Member tiers | Not relevant |
-| CLV per pick | Not computed at recap time |
-
----
-
-## 7. Tier Display Policy
-
-**Member tiers (Bronze/Silver/Gold/etc.) are not shown in any public Discord embed.**
-
-Rationale: Member tier governs access to channels, not pick quality. Pick evaluation signals (confidence, implied probability, promotion qualification) are separate from membership tier. These must never be conflated in embeds or documentation.
-
-Pick-quality routing (best-bets vs trader-insights vs canary) is determined by promotion score, not by who is reading the channel.
-
----
-
-## 8. CLV Display Policy
-
-CLV (`capperClvPct`) is shown in pick embeds only when it is available in `pick.metadata.capperClvPct`. It is appended to the Capper field as `| CLV: +X.X%`.
-
-CLV is historical context (how a prior pick closed relative to the opening line), not a forward-looking signal. It should not be described as "edge."
-
-CLV is not shown in recap embeds.
-
----
-
-## 9. Receipt Type by Embed Type
-
-| Embed type | receiptType |
-|-----------|-------------|
-| Pick delivery (live) | `discord.message` |
-| Pick delivery (dry-run) | `discord.message` (dryRun flag in payload) |
-| Simulation | `worker.simulation` |
-| Recap delivery | `discord.message` |
-
----
-
-## 10. Stale / Superseded Docs
-
-The following documents are marked DESIGN INTENT and are superseded by this contract for public embed behavior:
-
-- `docs/discord/discord_embed_system_spec.md` — marked DESIGN INTENT; runtime is authoritative
-- `docs/02_architecture/tier_system_design_spec.md` — marked NOT YET CALIBRATED; tier display policy is in Section 7 of this contract
-
-For architectural tier definitions (scoring weights, calibration), see `@unit-talk/contracts` and `@unit-talk/domain`.
+- [Discord server architecture](../03_product/DISCORD_SERVER_ARCHITECTURE_CONTRACT.md)
+- [Routing](../05_operations/discord_routing.md)
+- [Closing-line wiring](../05_operations/T2_CLV_SETTLEMENT_WIRING_CONTRACT.md)
+- [Presentation design](discord_embed_system_spec.md)
+- [Asset policy](discord_embed_system_spec_addendum_assets.md)

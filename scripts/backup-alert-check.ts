@@ -1,3 +1,4 @@
+import { buildServicePresentation } from '@unit-talk/domain';
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { pathToFileURL } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
@@ -69,7 +70,7 @@ async function postDiscordAlert(message: string): Promise<void> {
       await fetch(env.UNIT_TALK_OPS_ALERT_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: `Backup alert\n${message}` }),
+        body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message: `Backup alert\n${message}` })] }),
       });
     } catch (error) {
       console.error('[backup-alert] Failed to post Discord webhook:', error instanceof Error ? error.message : String(error));
@@ -99,7 +100,7 @@ async function postDiscordAlert(message: string): Promise<void> {
         Authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ content: `Backup alert\n${message}` }),
+      body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message: `Backup alert\n${message}` })] }),
     });
   } catch (error) {
     console.error('[backup-alert] Failed to post Discord alert:', error instanceof Error ? error.message : String(error));

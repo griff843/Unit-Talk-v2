@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100301",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4debf792778dc76de237ceacb8c91edaa805683f",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "command": "pnpm verify:static",
+    "stages": [
+      "db-client-boundary",
+      "sync-check",
+      "system-alignment",
+      "automation-coverage",
+      "env-check",
+      "lint",
+      "type-check",
+      "build",
+      "test",
+      "production-post-migration static tests",
+      "smart-form verify",
+      "verify:commands"
+    ],
+    "note": "All static stages passed at control source 4debf792778dc76de237ceacb8c91edaa805683f, including exact-source pnpm verify and same-run CI verify. Final current HEAD requires fresh CI binding. Optional Smart Form E2E was not enabled."
+  },
+  "full_verify": {
+    "status": "BLOCKED",
+    "command": "pnpm verify",
+    "failure": "test:db / ci:assert-staging refused unresolved local target",
+    "host": "127.0.0.1",
+    "project_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "tail": "verify-tail.log"
+  },
+  "focused_tests": {
+    "closure_suite_passed": 217,
+    "shadow_control_file_passed": 15,
+    "new_shadow_control_regressions": 4,
+    "note": "Original assertUnmodified behavior remains covered; new cases prove exact-base checkout/install/runtime/parse/artifact ordering and candidate/base identity."
+  },
+  "shadow_control": {
+    "status": "STATIC_PASS_LIVE_PROOF_PENDING",
+    "trusted_runtime_ref": "github.event.pull_request.base.sha",
+    "candidate_ref": "github.event.pull_request.head.sha",
+    "candidate_execution": false,
+    "identity_artifact": "shadow-execution-identity.json",
+    "credential_posture": "mechanically read-only credentials required; missing credentials fail closed; no local credential supplied"
+  },
+  "product_diff_from_reviewed_sha": {
+    "reviewed_sha": "ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7",
+    "paths": [
+      "apps/**",
+      "packages/**"
+    ],
+    "changed_files": []
+  },
+  "r_level": {
+    "status": "PASS",
+    "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "rules": [
+      "lifecycle-fsm",
+      "discord-delivery",
+      "ingestor-provider"
+    ],
+    "evidence_mode": "offline deterministic fixtures, mocked old/new transport parity, presentation fault cases; no production chaos claim"
+  },
+  "rendering": {
+    "status": "PASS_LOCAL_SIMULATION",
+    "report": "render-report.json",
+    "desktop_width": 1440,
+    "mobile_width": 390,
+    "representative_embeds": 21,
+    "horizontal_overflow": false,
+    "retained_fixture_losses": 150,
+    "live_discord_proof": "UNAVAILABLE: sandbox token/guild/role-channel map absent"
+  },
+  "outstanding_gates": [
+    "fresh proof-only successor exact-head CI/staging proof",
+    "fresh successor trusted-base read-only Shadow observation",
+    "authorized successor exact-head scope rebind",
+    "valid successor executor-result/v1 comment",
+    "independent PM merge review and approval"
+  ],
+  "closure_executor": {
+    "status": "SUCCESS",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "cli_version": "0.153.3",
+    "exit_code": 0,
+    "sidecar": "model-routing.json",
+    "scope": "2026-10-04 control implementation and verification; does not retroactively attest the original desktop implementation"
+  },
+  "historical_source_ci": {
+    "source_sha": "4debf792778dc76de237ceacb8c91edaa805683f",
+    "run_id": 37240331566,
+    "verify": "PASS",
+    "staging_db": "PASS",
+    "smoke_tests_passed": 7,
+    "t1_live_suites": "PASS",
+    "artifact_id": 11316928623,
+    "receipt_sha256": "a90927de694a6a8cb49c635ab2f24f28b378168b249c5fbdcabefbe981810b7d",
+    "note": "Historical source proof only; subsequent HEADs require fresh exact-HEAD CI/staging proof."
+  },
+  "runtime_proof": {
+    "status": "HISTORICAL_SOURCE_PASS_FRESH_HEAD_REQUIRED",
+    "candidate_sha": "dbeae30a850ecf176846ca45172e7aef326c87c1",
+    "queries": [
+      {
+        "source": "CI 37523408928 / ci-db-proof-receipt.json",
+        "environment": "approved staging xskgrzbteyqdufktjrjx",
+        "description": "Canonical ingestor health/supervisor freshness SELECTs succeeded; latestOfferUpdatedAt=2026-10-06T19:50:09.12+00:00",
+        "command": "pnpm test:db",
+        "tests": 9,
+        "pass": 9,
+        "fail": 0,
+        "receipt_sha256": "ab83d52125717223bd806cb92644e62bb81b4cfe2241bbcf7ba769d426ddb2b3"
+      },
+      {
+        "source": "Shadow 37523408665 / artifact 11440854628",
+        "environment": "production read-only, trusted-base runtime",
+        "description": "Shadow candidate-count observation; this candidate code was not executed",
+        "trusted_base_sha": "9326d4d6c150988b33db3f2840ed17fce659a6d8",
+        "observed_at": "2026-10-06T20:03:12.933Z",
+        "guardrails": {
+          "picksCreated": 0,
+          "shadowModeFalseSet": 0,
+          "distributionEnqueued": 0,
+          "promotionWidened": 0
+        }
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "pick_candidates",
+        "metric": "shadowOnly",
+        "value": 67689,
+        "source": "Shadow 37523408665 / artifact 11440854628",
+        "observed_at": "2026-10-06T20:03:12.933Z",
+        "qualification": "Eligible shadow candidate count, not total table cardinality"
+      }
+    ],
+    "note": "Historical source evidence only. Fresh successor exact-head CI/staging and Shadow artifacts must be established after this proof-only correction. No live Discord acceptance or writable production proof."
+  },
+  "proof_correction": {
+    "date": "2026-10-06",
+    "reason": "Executor-result and shared close-eligibility validator failures",
+    "source_head": "dbeae30a850ecf176846ca45172e7aef326c87c1",
+    "historical_fields": "full_verify, shadow_control, historical_source_ci and closure_executor retain their original execution context; current proof truth is in verification.md",
+    "fresh_successor_bindings": "Required from current-head Actions runs and executor-result comment; old exact-head scope and CI bindings are stale"
+  }
+}

@@ -1,3 +1,4 @@
+import { createMemberEmbed } from '../embeds/presentation.js';
 /**
  * /ops-restart — Operator-only slash command to restart a named service.
  *
@@ -38,26 +39,30 @@ import {
 // ---------------------------------------------------------------------------
 
 function buildAllowedEmbed(service: string): EmbedBuilder {
-  return new EmbedBuilder()
+  return createMemberEmbed()
     .setTitle('Service Restart Initiated')
-    .setColor(0x22c55e)
+
     .addFields(
       { name: 'Service', value: service, inline: true },
       { name: 'Status', value: 'Restart request accepted', inline: true },
     )
-    .setFooter({ text: 'Restart audit entry written to .out/ops/restart-audit.jsonl' })
+    .setFooter({
+      text: 'Unit Talk · Restart audit entry written to .out/ops/restart-audit.jsonl',
+    })
     .setTimestamp();
 }
 
 function buildDeniedEmbed(service: string, reason: string): EmbedBuilder {
-  return new EmbedBuilder()
+  return createMemberEmbed()
     .setTitle('Restart Denied')
-    .setColor(0xef4444)
+
     .addFields(
       { name: 'Service', value: service, inline: true },
       { name: 'Reason', value: reason, inline: false },
     )
-    .setFooter({ text: 'Denial recorded in .out/ops/restart-audit.jsonl' })
+    .setFooter({
+      text: 'Unit Talk · Denial recorded in .out/ops/restart-audit.jsonl',
+    })
     .setTimestamp();
 }
 
@@ -65,7 +70,9 @@ function buildDeniedEmbed(service: string, reason: string): EmbedBuilder {
 // Command factory
 // ---------------------------------------------------------------------------
 
-export function createOpsRestartCommand(requiredRoles: string[]): CommandHandler {
+export function createOpsRestartCommand(
+  requiredRoles: string[],
+): CommandHandler {
   return {
     data: new SlashCommandBuilder()
       .setName('ops-restart')
@@ -91,7 +98,10 @@ export function createOpsRestartCommand(requiredRoles: string[]): CommandHandler
     responseVisibility: 'private',
 
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      const service = interaction.options.getString('service', true).trim().toLowerCase();
+      const service = interaction.options
+        .getString('service', true)
+        .trim()
+        .toLowerCase();
       const requestedBy = interaction.user.username;
 
       const decision = await processRestartRequest(service, requestedBy);
@@ -104,7 +114,9 @@ export function createOpsRestartCommand(requiredRoles: string[]): CommandHandler
       } else {
         await interaction.editReply({
           content: '',
-          embeds: [buildDeniedEmbed(service, decision.message ?? 'Request denied.')],
+          embeds: [
+            buildDeniedEmbed(service, decision.message ?? 'Request denied.'),
+          ],
         });
       }
     },

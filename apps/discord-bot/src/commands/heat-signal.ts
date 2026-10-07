@@ -1,3 +1,4 @@
+import { createMemberEmbed } from '../embeds/presentation.js';
 import {
   EmbedBuilder,
   SlashCommandBuilder,
@@ -34,7 +35,10 @@ export function createHeatSignalCommand(
       ),
     responseVisibility: 'private',
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      await interaction.editReply({ content: EMPTY_MESSAGE, embeds: [] });
+      await interaction.editReply({
+        content: '',
+        embeds: [createMemberEmbed().setDescription(EMPTY_MESSAGE)],
+      });
     },
   };
 }
@@ -44,27 +48,17 @@ export function buildHeatSignalEmbed(
   requestedCount: number,
 ): EmbedBuilder {
   const detections = response.detections.slice(0, 5);
-  const dominantTier = resolveDominantTier(detections);
-  const footerTimestamp =
-    detections[0]?.currentSnapshotAt ?? new Date().toISOString();
+  const footerTimestamp = detections[0]?.currentSnapshotAt;
 
-  return new EmbedBuilder()
+  return createMemberEmbed()
     .setTitle(`Heat Signal - Top ${requestedCount} Line Movements`)
-    .setColor(dominantTier === 'alert-worthy' ? 0xff6600 : 0xff9900)
-    .setDescription(detections.map(formatDetectionLine).join('\n'))
-    .setFooter({ text: `Last updated: ${footerTimestamp} - /heat-signal` });
-}
 
-function resolveDominantTier(detections: AlertsRecentResponse['detections']) {
-  const counts = detections.reduce(
-    (acc, detection) => {
-      acc[detection.tier] += 1;
-      return acc;
-    },
-    { notable: 0, 'alert-worthy': 0 },
-  );
-
-  return counts['alert-worthy'] > counts.notable ? 'alert-worthy' : 'notable';
+    .setDescription(detections.map(formatDetectionLine).join('\n') || null)
+    .setFooter({
+      text: footerTimestamp
+        ? `Unit Talk · Last updated: ${footerTimestamp}`
+        : 'Unit Talk',
+    });
 }
 
 function formatDetectionLine(

@@ -1,3 +1,4 @@
+import { buildPresentationEmbed, finiteMetric } from '@unit-talk/domain';
 import type {
   HedgeOpportunityPriority,
   HedgeOpportunityRecord,
@@ -6,7 +7,10 @@ import type {
 } from '@unit-talk/db';
 import { resolveDiscordChannelId } from './alert-notification-service.js';
 
-const COOLDOWN_MINUTES: Record<Exclude<HedgeOpportunityPriority, 'low'>, number> = {
+const COOLDOWN_MINUTES: Record<
+  Exclude<HedgeOpportunityPriority, 'low'>,
+  number
+> = {
   medium: 30,
   high: 30,
   critical: 15,
@@ -27,38 +31,45 @@ export interface HedgeNotificationPassOptions {
 
 export function buildHedgeEmbed(
   opportunity: HedgeOpportunityRecord,
-  channelName: string,
+  _channelName: string,
 ): Record<string, unknown> {
-  const color = opportunity.type === 'arbitrage' ? 0x00cc44 : 0x3366ff;
   const title =
     opportunity.type === 'arbitrage'
-      ? '💰 ARBITRAGE'
+      ? 'Arbitrage'
       : opportunity.type === 'middle'
-        ? `🔁 MIDDLE — ${opportunity.market_key.toUpperCase()}`
-        : '🛡️ HEDGE OPP';
+        ? `Middle · ${opportunity.market_key}`
+        : 'Hedge Opportunity';
 
   const fields: Array<{ name: string; value: string; inline: boolean }> = [
     { name: 'Type', value: opportunity.type, inline: true },
     { name: 'Priority', value: opportunity.priority, inline: true },
     {
       name: 'Arb %',
-      value: `${formatPercent(opportunity.arbitrage_percentage)}%`,
+      value: finiteMetric(opportunity.arbitrage_percentage)
+        ? `${formatPercent(opportunity.arbitrage_percentage)}%`
+        : '',
       inline: true,
     },
   ];
 
-  if (opportunity.type === 'arbitrage') {
+  if (
+    opportunity.type === 'arbitrage' &&
+    finiteMetric(opportunity.guaranteed_profit)
+  ) {
     fields.push({
       name: 'Guaranteed Profit',
-      value: `${formatPercent(opportunity.guaranteed_profit ?? opportunity.arbitrage_percentage)}%`,
+      value: `${formatPercent(opportunity.guaranteed_profit)}%`,
       inline: true,
     });
   }
 
-  if (opportunity.type === 'middle') {
+  if (
+    opportunity.type === 'middle' &&
+    finiteMetric(opportunity.win_probability)
+  ) {
     fields.push({
       name: 'Win Prob',
-      value: `${formatPercent((opportunity.win_probability ?? 0) * 100)}%`,
+      value: `${formatPercent(opportunity.win_probability * 100)}%`,
       inline: true,
     });
   }
@@ -70,12 +81,12 @@ export function buildHedgeEmbed(
   });
 
   return {
-    title,
-    description: `${opportunity.bookmaker_a.toUpperCase()} ${formatLine(opportunity.line_a)} vs ${opportunity.bookmaker_b.toUpperCase()} ${formatLine(opportunity.line_b)} (gap: ${formatLine(opportunity.line_discrepancy)})`,
-    color,
-    fields,
-    footer: { text: `${opportunity.detected_at} · ${channelName}` },
-    timestamp: opportunity.detected_at,
+    ...buildPresentationEmbed('service-alert', {
+      title,
+      description: `${opportunity.bookmaker_a.toUpperCase()} ${formatLine(opportunity.line_a)} vs ${opportunity.bookmaker_b.toUpperCase()} ${formatLine(opportunity.line_b)} (gap: ${formatLine(opportunity.line_discrepancy)})`,
+      fields,
+      timestamp: opportunity.detected_at,
+    }),
   };
 }
 
@@ -120,7 +131,9 @@ export async function runHedgeNotificationPass(
       continue;
     }
 
-    const channels = resolveChannels(opportunity.priority as Exclude<HedgeOpportunityPriority, 'low'>);
+    const channels = resolveChannels(
+      opportunity.priority as Exclude<HedgeOpportunityPriority, 'low'>,
+    );
 
     if (dryRun) {
       result.notified += channels.length > 0 ? 1 : 0;
@@ -151,8 +164,15 @@ export async function runHedgeNotificationPass(
       continue;
     }
 
-    const cooldownMs = COOLDOWN_MINUTES[opportunity.priority as Exclude<HedgeOpportunityPriority, 'low'>] * 60 * 1000;
-    const cooldownExpiresAt = new Date(now.getTime() + cooldownMs).toISOString();
+    const cooldownMs =
+      COOLDOWN_MINUTES[
+        opportunity.priority as Exclude<HedgeOpportunityPriority, 'low'>
+      ] *
+      60 *
+      1000;
+    const cooldownExpiresAt = new Date(
+      now.getTime() + cooldownMs,
+    ).toISOString();
 
     await repository.updateNotified({
       id: opportunity.id,
@@ -167,7 +187,9 @@ export async function runHedgeNotificationPass(
   return result;
 }
 
-function resolveChannels(priority: Exclude<HedgeOpportunityPriority, 'low'>): string[] {
+function resolveChannels(
+  priority: Exclude<HedgeOpportunityPriority, 'low'>,
+): string[] {
   if (priority === 'critical') {
     return ['discord:canary', 'discord:trader-insights'];
   }

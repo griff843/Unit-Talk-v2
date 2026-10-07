@@ -1,0 +1,204 @@
+{
+  "mode": "offline old/new adapter shadow with mocked transport; no production traffic",
+  "base": "45480f882982543f84b11d0eebe3dae0633d0461",
+  "cases": [
+    {
+      "target": "discord:canary",
+      "destinationUnchanged": true,
+      "receiptUnchanged": true,
+      "nonceUnchanged": true,
+      "before": {
+        "nonce": "0000000000004000800000000",
+        "enforce_nonce": true,
+        "embeds": [
+          {
+            "title": "Fixture player Over 24.5",
+            "description": "🏀 NBA | Fixture A vs Fixture B",
+            "color": 16101441,
+            "fields": [
+              {
+                "name": "Odds",
+                "value": " (-110)",
+                "inline": true
+              },
+              {
+                "name": "Units",
+                "value": "1",
+                "inline": true
+              },
+              {
+                "name": "Confidence",
+                "value": "81% (High)",
+                "inline": true
+              },
+              {
+                "name": "Implied Prob",
+                "value": "58.0%",
+                "inline": true
+              },
+              {
+                "name": "Capper",
+                "value": "Fixture capper (12-4) | CLV: +2.4%",
+                "inline": true
+              },
+              {
+                "name": "Game Time",
+                "value": "Oct 3, 7:00 PM EDT",
+                "inline": true
+              },
+              {
+                "name": "Posted",
+                "value": "Oct 3, 4:27 AM EDT",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "Unit Talk | Canary"
+            },
+            "timestamp": "2026-10-03T08:27:26.480Z"
+          }
+        ]
+      },
+      "after": {
+        "nonce": "0000000000004000800000000",
+        "enforce_nonce": true,
+        "embeds": [
+          {
+            "title": "Pick Posted · Fixture player Over 24.5",
+            "color": 13083467,
+            "fields": [
+              {
+                "name": "Market",
+                "value": "Points",
+                "inline": true
+              },
+              {
+                "name": "Odds",
+                "value": "-110",
+                "inline": true
+              },
+              {
+                "name": "Units",
+                "value": "1u",
+                "inline": true
+              },
+              {
+                "name": "Capper",
+                "value": "Fixture capper",
+                "inline": true
+              },
+              {
+                "name": "Game Time",
+                "value": "<t:1791068400:f>",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "Unit Talk"
+            },
+            "description": "NBA | Fixture A vs Fixture B"
+          }
+        ]
+      }
+    },
+    {
+      "target": "discord:best-bets",
+      "destinationUnchanged": true,
+      "receiptUnchanged": true,
+      "nonceUnchanged": true,
+      "before": {
+        "nonce": "0000000000004000800000000",
+        "enforce_nonce": true,
+        "embeds": [
+          {
+            "title": "Fixture player Over 24.5",
+            "description": "🏀 NBA | Fixture A vs Fixture B",
+            "color": 16766720,
+            "fields": [
+              {
+                "name": "Odds",
+                "value": " (-110)",
+                "inline": true
+              },
+              {
+                "name": "Units",
+                "value": "1",
+                "inline": true
+              },
+              {
+                "name": "Confidence",
+                "value": "81% (High)",
+                "inline": true
+              },
+              {
+                "name": "Implied Prob",
+                "value": "58.0%",
+                "inline": true
+              },
+              {
+                "name": "Capper",
+                "value": "Fixture capper (12-4) | CLV: +2.4%",
+                "inline": true
+              },
+              {
+                "name": "Game Time",
+                "value": "Oct 3, 7:00 PM EDT",
+                "inline": true
+              },
+              {
+                "name": "Posted",
+                "value": "Oct 3, 4:27 AM EDT",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "Unit Talk | Best Bets"
+            },
+            "timestamp": "2026-10-03T08:27:26.484Z"
+          }
+        ]
+      },
+      "after": {
+        "nonce": "0000000000004000800000000",
+        "enforce_nonce": true,
+        "embeds": [
+          {
+            "title": "Pick Posted · Fixture player Over 24.5",
+            "color": 13083467,
+            "fields": [
+              {
+                "name": "Market",
+                "value": "Points",
+                "inline": true
+              },
+              {
+                "name": "Odds",
+                "value": "-110",
+                "inline": true
+              },
+              {
+                "name": "Units",
+                "value": "1u",
+                "inline": true
+              },
+              {
+                "name": "Capper",
+                "value": "Fixture capper",
+                "inline": true
+              },
+              {
+                "name": "Game Time",
+                "value": "<t:1791068400:f>",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "Unit Talk"
+            },
+            "description": "NBA | Fixture A vs Fixture B"
+          }
+        ]
+      }
+    }
+  ]
+}

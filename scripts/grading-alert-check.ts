@@ -1,3 +1,4 @@
+import { buildServicePresentation } from '@unit-talk/domain';
 /**
  * Grading staleness alert check.
  *
@@ -132,7 +133,7 @@ async function postDiscordAlert(message: string) {
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `[grading-alert] ${message}` }),
+      body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message: `[grading-alert] ${message}` })] }),
     });
   } catch (err) {
     console.error(

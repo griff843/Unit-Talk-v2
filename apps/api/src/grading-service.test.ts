@@ -3205,6 +3205,14 @@ test('UTV2-1815 grading still publishes a recap for a real stake (negative contr
   assert.equal(body.embeds.length, 1);
 });
 
+test('WORK-2026100301 settled presentation omits an unknown capper without changing delivery', async () => {
+  const { posted, warnings } = await runRecap(2);
+  assert.equal(posted.length, 1, `existing delivery remains available: ${JSON.stringify(warnings)}`);
+  const body = posted[0] as {embeds: Array<{fields: Array<{name:string;value:string}>;footer:{text:string}}>};
+  assert.ok(!body.embeds[0]?.fields.some(field => field.name === 'Capper'));
+  assert.equal(body.embeds[0]?.footer.text, 'Unit Talk');
+});
+
 
 // ---------------------------------------------------------------------------
 // UTV2-1861: admit Track Only picks to the grading population

@@ -1,5 +1,10 @@
 # Discord Embed System Spec — Addendum: Headshots, Logos, and Visual Assets
 
+Implementation note (2026-10-03): the shared presentation builder accepts an optional
+valid HTTPS thumbnail URL and omits absent/invalid media. It introduces no asset lookup
+or fallback requirement. The [Discord Embed Contract](DISCORD_EMBED_CONTRACT.md) governs
+current family styling and wiring; asset availability never authorizes a trigger.
+
 ## Purpose
 
 Define how headshots, team logos, and other visual assets should be used in Discord embeds.

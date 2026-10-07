@@ -1,3 +1,4 @@
+import { buildServicePresentation } from '@unit-talk/domain';
 import { fileURLToPath } from 'node:url';
 import type { RepositoryBundle, SystemRunRecord } from '@unit-talk/db';
 import { createApiRuntimeDependencies } from './server.js';
@@ -319,7 +320,7 @@ async function postOpsAlert(webhookUrl: string, message: string): Promise<void> 
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content: message }),
+      body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message })] }),
     });
   } catch {
     // intentionally swallowed — this is a best-effort ops notification

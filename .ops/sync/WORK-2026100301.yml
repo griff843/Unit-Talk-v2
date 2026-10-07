@@ -1,0 +1,255 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100301
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100301
+  objective: PM approved the Discord implementation in principle at
+    ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7 and explicitly assigned
+    control/proof closure on 2026-10-04. Bring PR 1714 to one current exact-HEAD
+    review packet. Do not reimplement or redesign Discord.
+  acceptance_criteria:
+    - Resync current main first. Done without conflict at
+      63f98f46c44997e11a9df7c09f8be282c2ef04cb; preserve product behavior.
+    - File Scope Lock remains trusted, exact issue/PR/HEAD/paths and
+      authorized-human based. The separate WORK-2026100302 lane owns the WORK-ID
+      parser repair; do not edit its files or invent a UTV2 identity.
+    - Resolve Shadow Parity using only safe production read-only proof. The
+      complete current blocker includes shallow merge-base history, legitimately
+      changed package/dependency files, and absent SHADOW_PARITY read-only
+      secrets.
+    - Repair the general shadow execution control so credential-bearing
+      runtime/bootstrap code comes entirely from the GitHub-attested exact base
+      SHA, independently of PR dependency changes. Preserve fail-closed
+      credentials/guardrail checks; retain explicit candidate/base identity in
+      evidence. Do not execute candidate code with production credentials. This
+      is a control repair, not a waiver. If sanctioned policy disallows this
+      safe arrangement, report the exact decision rather than bypass it.
+    - Add focused regression coverage to the existing
+      scripts/ci/assert-unmodified-vs-base.test.ts for base-pinned shadow
+      checkout/install/runtime/artifact ordering and candidate/base identity. Do
+      not weaken the original assertUnmodified behavior.
+    - You are ALREADY the child launched by the sanctioned ops:codex-exec
+      parent. Do not launch ops:codex-exec again, directly or recursively. The
+      parent writes the actual model-routing sidecar when you return. Perform
+      the bounded shadow-control repair and focused proof in this process.
+      Preserve the historical desktop implementation's unattested provenance;
+      new verification cannot retroactively attest it.
+    - Run focused tests and pnpm verify. Stage-only writable DB and T1 proof
+      must bind exact final HEAD through CI. Do not supply production
+      credentials locally.
+    - Preserve draft state until controls genuinely pass. Do not merge. Return
+      current exact HEAD, main relationship, control resolutions, CI table and
+      staging receipts for PM pm-verdict/v1 and t1-approved.
+  guardrails:
+    - No changes to apps/**, packages/**, product presentation,
+      membership/prices, routing/permissions, grading/settlement,
+      scoring/promotion, providers, kill switches, Black Label, result routing
+      or unwired lifecycle triggers.
+    - No false human GitHub approval, fabricated execution provenance, invented
+      credentials, control disablement or special-case pass for PR 1714.
+    - Do not edit WORK-2026100302-owned parser/workflow/schema paths.
+    - Do not provision a production role or substitute service-role/anon keys.
+      Operator must provision approved read-only secrets.
+    - Do not mark PR ready while proof remains blocked. Never merge.
+  non_goals: []
+  required_evidence:
+    - Exact-HEAD focused/static verification, staging writable DB and T1
+      receipts; current CI/check table.
+    - Actual sanctioned executor model/effort/exit provenance for this closure
+      work only.
+    - Explicit unchanged product-path diff against reviewed
+      ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7.
+    - General shadow safety regression and truthful trusted source/candidate
+      identities.
+  exit_criteria:
+    - Candidate remains draft if any required control fails. Green exact-HEAD
+      review packet before ready transition. No merge.
+  unmapped_sections:
+    - >-
+      WORK-2026100301 — PR 1714 control and proof closure
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      ## File Scope
+
+
+      - .github/workflows/shadow-parity-required.yml
+
+      - scripts/ci/assert-unmodified-vs-base.test.ts
+
+      - .ops/work/WORK-2026100301.md
+
+      - .ops/sync/WORK-2026100301.yml
+
+      - docs/06_status/lanes/WORK-2026100301.json
+
+      - docs/06_status/proof/WORK-2026100301/**
+
+      - Existing product implementation locks remain held but are read-only
+      during closure.
+
+
+      ## Approval History
+
+
+      Griff assigned this closure directly in the current chat on 2026-10-04.
+      The previous implementation work order and frozen task contract are
+      retained under approved-product-work-order.md and
+      original-task-contract.yml. This replaces the implementation assignment
+      with the explicitly authorized control-only follow-up; it does not change
+      historical approval or waive scope controls.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100301.md
+    title: WORK-2026100301 — PR 1714 control and proof closure
+    description: >-
+      # WORK-2026100301 — PR 1714 control and proof closure
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      PM approved the Discord implementation in principle at
+      ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7 and explicitly assigned
+      control/proof closure on 2026-10-04. Bring PR 1714 to one current
+      exact-HEAD review packet. Do not reimplement or redesign Discord.
+
+
+      ## Acceptance Criteria
+
+
+      - Resync current main first. Done without conflict at
+      63f98f46c44997e11a9df7c09f8be282c2ef04cb; preserve product behavior.
+
+      - File Scope Lock remains trusted, exact issue/PR/HEAD/paths and
+      authorized-human based. The separate WORK-2026100302 lane owns the WORK-ID
+      parser repair; do not edit its files or invent a UTV2 identity.
+
+      - Resolve Shadow Parity using only safe production read-only proof. The
+      complete current blocker includes shallow merge-base history, legitimately
+      changed package/dependency files, and absent SHADOW_PARITY read-only
+      secrets.
+
+      - Repair the general shadow execution control so credential-bearing
+      runtime/bootstrap code comes entirely from the GitHub-attested exact base
+      SHA, independently of PR dependency changes. Preserve fail-closed
+      credentials/guardrail checks; retain explicit candidate/base identity in
+      evidence. Do not execute candidate code with production credentials. This
+      is a control repair, not a waiver. If sanctioned policy disallows this
+      safe arrangement, report the exact decision rather than bypass it.
+
+      - Add focused regression coverage to the existing
+      scripts/ci/assert-unmodified-vs-base.test.ts for base-pinned shadow
+      checkout/install/runtime/artifact ordering and candidate/base identity. Do
+      not weaken the original assertUnmodified behavior.
+
+      - You are ALREADY the child launched by the sanctioned ops:codex-exec
+      parent. Do not launch ops:codex-exec again, directly or recursively. The
+      parent writes the actual model-routing sidecar when you return. Perform
+      the bounded shadow-control repair and focused proof in this process.
+      Preserve the historical desktop implementation's unattested provenance;
+      new verification cannot retroactively attest it.
+
+      - Run focused tests and pnpm verify. Stage-only writable DB and T1 proof
+      must bind exact final HEAD through CI. Do not supply production
+      credentials locally.
+
+      - Preserve draft state until controls genuinely pass. Do not merge. Return
+      current exact HEAD, main relationship, control resolutions, CI table and
+      staging receipts for PM pm-verdict/v1 and t1-approved.
+
+
+      ## Guardrails
+
+
+      - No changes to apps/**, packages/**, product presentation,
+      membership/prices, routing/permissions, grading/settlement,
+      scoring/promotion, providers, kill switches, Black Label, result routing
+      or unwired lifecycle triggers.
+
+      - No false human GitHub approval, fabricated execution provenance,
+      invented credentials, control disablement or special-case pass for PR
+      1714.
+
+      - Do not edit WORK-2026100302-owned parser/workflow/schema paths.
+
+      - Do not provision a production role or substitute service-role/anon keys.
+      Operator must provision approved read-only secrets.
+
+      - Do not mark PR ready while proof remains blocked. Never merge.
+
+
+      ## File Scope
+
+
+      - .github/workflows/shadow-parity-required.yml
+
+      - scripts/ci/assert-unmodified-vs-base.test.ts
+
+      - .ops/work/WORK-2026100301.md
+
+      - .ops/sync/WORK-2026100301.yml
+
+      - docs/06_status/lanes/WORK-2026100301.json
+
+      - docs/06_status/proof/WORK-2026100301/**
+
+      - Existing product implementation locks remain held but are read-only
+      during closure.
+
+
+      ## Required Evidence
+
+
+      - Exact-HEAD focused/static verification, staging writable DB and T1
+      receipts; current CI/check table.
+
+      - Actual sanctioned executor model/effort/exit provenance for this closure
+      work only.
+
+      - Explicit unchanged product-path diff against reviewed
+      ca2ef310e6726a088f1a12e0d82d0e924ad8e2f7.
+
+      - General shadow safety regression and truthful trusted source/candidate
+      identities.
+
+
+      ## Exit Criteria
+
+
+      - Candidate remains draft if any required control fails. Green exact-HEAD
+      review packet before ready transition. No merge.
+
+
+      ## Approval History
+
+
+      Griff assigned this closure directly in the current chat on 2026-10-04.
+      The previous implementation work order and frozen task contract are
+      retained under approved-product-work-order.md and
+      original-task-contract.yml. This replaces the implementation assignment
+      with the explicitly authorized control-only follow-up; it does not change
+      historical approval or waive scope controls.
+    captured_at: 2026-10-04T22:15:10.151Z
+    description_sha256: e962900f725a473002f9845a4a5b755debea2f92e84c93e0f23a630f5d4590b8
+  contract_hash: e4250bfc4beec96b453c8e472657939161a0bc8f4da809d8eb77c0bff1ad987d

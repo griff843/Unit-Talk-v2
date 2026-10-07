@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertUnmodified } from './assert-unmodified-vs-base.js';
 import { ROOT } from '../ops/shared.js';
@@ -79,6 +80,75 @@ test('refuses when git itself fails instead of assuming a clean tree', () => {
 test('ignores blank lines in git output', () => {
   const result = assertUnmodified(['a.ts'], 'origin/main', 'HEAD', () => '\n\n');
   assert.equal(result.ok, true);
+});
+
+// ── Base-pinned shadow execution control ───────────────────────────────────
+
+const SHADOW_WORKFLOW = readFileSync(
+  join(ROOT, '.github/workflows/shadow-parity-required.yml'),
+  'utf8',
+);
+
+function workflowPosition(text: string): number {
+  const position = SHADOW_WORKFLOW.indexOf(text);
+  assert.notEqual(position, -1, `shadow workflow is missing: ${text}`);
+  return position;
+}
+
+test('shadow parity checks out the exact attested base and never checks out candidate code', () => {
+  assert.match(
+    SHADOW_WORKFLOW,
+    /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}\n\s+path: trusted-base\n\s+fetch-depth: 1\n\s+persist-credentials: false/,
+  );
+  assert.doesNotMatch(
+    SHADOW_WORKFLOW,
+    /ref: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/,
+  );
+});
+
+test('shadow parity installs and runs only from the base-pinned checkout', () => {
+  assert.match(
+    SHADOW_WORKFLOW,
+    /- name: Install trusted base dependencies\n\s+working-directory: trusted-base\n\s+run: pnpm install --frozen-lockfile/,
+  );
+  assert.match(
+    SHADOW_WORKFLOW,
+    /- name: Run shadow scorer \(dry-run\)[\s\S]*?working-directory: trusted-base[\s\S]*?npx tsx scripts\/shadow-scoring-runner\.ts --dry-run/,
+  );
+  assert.match(SHADOW_WORKFLOW, /cache-dependency-path: trusted-base\/pnpm-lock\.yaml/);
+});
+
+test('shadow parity records truthful candidate/base identity before credentialed runtime', () => {
+  assert.match(
+    SHADOW_WORKFLOW,
+    /'trusted_base_sha': '\$\{\{ github\.event\.pull_request\.base\.sha \}\}'/,
+  );
+  assert.match(
+    SHADOW_WORKFLOW,
+    /'candidate_sha': '\$\{\{ github\.event\.pull_request\.head\.sha \}\}'/,
+  );
+  assert.ok(
+    workflowPosition('Record trusted base and candidate identities') <
+      workflowPosition('Check for mechanically read-only parity credentials'),
+  );
+});
+
+test('shadow parity preserves checkout, install, runtime, parse, and artifact ordering', () => {
+  const orderedSteps = [
+    'Checkout trusted base runtime',
+    'Record trusted base and candidate identities',
+    'Install trusted base dependencies',
+    'Check for mechanically read-only parity credentials',
+    'Run shadow scorer (dry-run)',
+    'Parse shadow report and classify divergences',
+    'Upload shadow report artifact',
+  ].map(workflowPosition);
+
+  assert.deepEqual(orderedSteps, [...orderedSteps].sort((a, b) => a - b));
+  assert.match(
+    SHADOW_WORKFLOW,
+    /path: \|\n\s+trusted-base\/artifacts\/shadow-report\.json\n\s+trusted-base\/artifacts\/shadow-execution-identity\.json/,
+  );
 });
 
 // ── CLI ─────────────────────────────────────────────────────────────────────

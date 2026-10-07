@@ -195,6 +195,9 @@ importers:
       '@unit-talk/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@unit-talk/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@unit-talk/observability':
         specifier: workspace:*
         version: link:../../packages/observability
