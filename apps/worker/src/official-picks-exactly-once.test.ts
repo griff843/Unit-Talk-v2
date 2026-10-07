@@ -426,7 +426,20 @@ function adapterWith(fetchImpl: typeof fetch) {
     // A shared mapping is present so the pre-flight resolves; a human target
     // must still route only to its pinned capper channel.
     targetMap: { [TARGET]: '999999999999999999' },
-    fetchImpl,
+    fetchImpl: async (url, init) => {
+      if (init?.method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            id: '100000000000000002',
+            guild_id: '100000000000000001',
+            type: 11,
+            thread_metadata: { archived: false, locked: true },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return fetchImpl(url, init);
+    },
   });
 }
 

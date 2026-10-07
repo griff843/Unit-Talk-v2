@@ -23,14 +23,24 @@
     "docs/06_status/proof/WORK-2026100602/verification.md",
     "docs/06_status/proof/WORK-2026100602/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "blocked",
   "started_at": "2026-10-06T20:01:20.016Z",
   "heartbeat_at": "2026-10-06T20:16:23.494Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100602-proof-closeout.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-07T22:20:16.165Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 26.1h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",
