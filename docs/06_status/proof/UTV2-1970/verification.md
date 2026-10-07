@@ -45,6 +45,9 @@ PASS
   blocked/deferred: target identity could not be resolved from its URL
   (`host=unparseable`). Writable DB verification requires `xskgrzbteyqdufktjrjx` and
   must run through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; nine
+  changed files, `lifecycle-fsm` matched, with the PM-approved `r-scope: additive-guard`
+  annotation on PR #1722.
 - Exact-head CI and R-level results are recorded on the draft PR without changing the
   source SHA. No live Discord request or deployment was made during verification.
 

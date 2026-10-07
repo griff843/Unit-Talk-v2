@@ -24,6 +24,11 @@
       "detail": "Adapter plus exactly-once: 47/47 passed. Worker runtime regressions: 86/86 passed."
     },
     {
+      "gate": "R-level compliance",
+      "verdict": "PASS",
+      "detail": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: Changed files 9; rules matched lifecycle-fsm; verdict PASS. PR annotation: r-scope additive-guard."
+    },
+    {
       "gate": "pnpm test:db (local)",
       "verdict": "SKIP",
       "detail": "The mandatory staging identity guard refused host=127.0.0.1 ref=unidentified before database-smoke.test.ts or any write. Protected staging-ci proof is required."
