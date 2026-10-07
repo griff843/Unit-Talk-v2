@@ -18,6 +18,10 @@ const logger = createLogger({
   service: 'worker',
 });
 
+const DISCORD_PUBLIC_THREAD_TYPE = 11;
+const DEFAULT_DISCORD_REQUEST_TIMEOUT_MS = 25000;
+const DISCORD_AUDIT_LOG_REASON_MAX_LENGTH = 512;
+
 export interface DeliveryAdapterSelectionOptions {
   kind: 'stub' | 'discord';
   dryRun: boolean;
@@ -112,7 +116,15 @@ export function createDiscordDeliveryAdapter(options?: {
     );
   const apiBaseUrl = options?.apiBaseUrl ?? 'https://discord.com/api/v10';
   const fetchImpl = options?.fetchImpl ?? fetch;
-  const fetchTimeoutMs = options?.fetchTimeoutMs ?? 25000;
+  const fetchTimeoutMs =
+    options?.fetchTimeoutMs ?? DEFAULT_DISCORD_REQUEST_TIMEOUT_MS;
+  // The existing message POST supports disabling its adapter-level timer for
+  // tests. The new Official Picks inspection/mutation requests do not: each
+  // one must always have a bounded deadline.
+  const discordRequestTimeoutMs =
+    Number.isFinite(fetchTimeoutMs) && fetchTimeoutMs > 0
+      ? fetchTimeoutMs
+      : DEFAULT_DISCORD_REQUEST_TIMEOUT_MS;
 
   return async (outbox: OutboxRecord) => {
     if (!dryRun) {
@@ -142,6 +154,7 @@ export function createDiscordDeliveryAdapter(options?: {
           apiBaseUrl,
           botToken,
           fetchImpl,
+          discordRequestTimeoutMs,
         });
         const controller = fetchTimeoutMs > 0 ? new AbortController() : null;
         const fetchTimer = controller
@@ -294,6 +307,7 @@ interface DiscordRouteResolutionOptions {
   apiBaseUrl: string;
   botToken: string;
   fetchImpl: typeof fetch;
+  discordRequestTimeoutMs: number;
 }
 
 interface DiscordDeliveryRoute {
@@ -320,8 +334,13 @@ async function resolveDiscordDeliveryRoute(
   // would send every capper's picks to one channel, which is precisely the
   // behaviour this routing replaced. So for the human delivery target a missing
   // or malformed pin is a REFUSAL, not a reason to use the map.
+  const governedTarget = parseGovernedTargetFromDeliveryTarget(outbox.target);
   const pinned = readPinnedDeliveryDestination(outbox.payload);
   if (pinned) {
+    if (governedTarget !== null && isHumanDeliveryTarget(governedTarget)) {
+      await ensurePinnedOfficialPicksThread(outbox, pinned, options);
+    }
+
     return {
       channelId: pinned.channelId,
       payload: {
@@ -334,7 +353,6 @@ async function resolveDiscordDeliveryRoute(
     };
   }
 
-  const governedTarget = parseGovernedTargetFromDeliveryTarget(outbox.target);
   if (governedTarget !== null && isHumanDeliveryTarget(governedTarget)) {
     throw new Error(
       `Human capper delivery for outbox ${outbox.id} carries no pinned destination; refusing to fall back to a shared channel mapping.`,
@@ -350,6 +368,186 @@ async function resolveDiscordDeliveryRoute(
       route: 'channel',
     },
   };
+}
+
+interface PinnedDiscordDestination {
+  channelId: string;
+  guildId: string;
+}
+
+interface DiscordThreadState {
+  archived: boolean;
+  locked: boolean;
+}
+
+async function ensurePinnedOfficialPicksThread(
+  outbox: OutboxRecord,
+  pinned: PinnedDiscordDestination,
+  options: DiscordRouteResolutionOptions,
+): Promise<void> {
+  const initialState = await readPinnedDiscordThread(pinned, options);
+  if (!initialState.archived) {
+    return;
+  }
+
+  const reopenError = await performDiscordRequestWithDeadline(
+    options.fetchImpl,
+    `${options.apiBaseUrl}/channels/${pinned.channelId}`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bot ${options.botToken}`,
+        'Content-Type': 'application/json',
+        'X-Audit-Log-Reason': buildOfficialPicksReopenReason(outbox),
+      },
+      // Discord requires a thread manager to reopen a locked thread. Preserve
+      // that lock explicitly while reopening the archived thread.
+      body: JSON.stringify({ archived: false, locked: true }),
+    },
+    options.discordRequestTimeoutMs,
+    async (response) =>
+      response.ok
+        ? null
+        : {
+            status: response.status,
+            text: await response.text(),
+          },
+  );
+
+  if (reopenError) {
+    throw new Error(
+      `Discord pinned Official Picks thread reopen failed: HTTP ${reopenError.status}: ${reopenError.text}`,
+    );
+  }
+
+  const reopenedState = await readPinnedDiscordThread(pinned, options);
+  if (reopenedState.archived) {
+    throw new Error(
+      `Discord pinned Official Picks thread ${pinned.channelId} remained archived after reopen.`,
+    );
+  }
+}
+
+async function readPinnedDiscordThread(
+  pinned: PinnedDiscordDestination,
+  options: DiscordRouteResolutionOptions,
+): Promise<DiscordThreadState> {
+  return performDiscordRequestWithDeadline(
+    options.fetchImpl,
+    `${options.apiBaseUrl}/channels/${pinned.channelId}`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bot ${options.botToken}`,
+      },
+    },
+    options.discordRequestTimeoutMs,
+    async (response) => {
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Discord pinned Official Picks thread read failed: HTTP ${response.status}: ${errorText}`,
+        );
+      }
+
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch {
+        throw new Error(
+          `Discord pinned Official Picks thread ${pinned.channelId} returned malformed JSON.`,
+        );
+      }
+
+      return parsePinnedDiscordThread(body, pinned);
+    },
+  );
+}
+
+function parsePinnedDiscordThread(
+  value: unknown,
+  pinned: PinnedDiscordDestination,
+): DiscordThreadState {
+  if (!isRecord(value)) {
+    throw new Error(
+      `Discord pinned Official Picks destination ${pinned.channelId} returned a malformed channel.`,
+    );
+  }
+
+  if (value.id !== pinned.channelId) {
+    throw new Error(
+      `Discord pinned Official Picks destination id mismatch: expected ${pinned.channelId}.`,
+    );
+  }
+  if (value.guild_id !== pinned.guildId) {
+    throw new Error(
+      `Discord pinned Official Picks destination guild mismatch for ${pinned.channelId}.`,
+    );
+  }
+  if (value.type !== DISCORD_PUBLIC_THREAD_TYPE) {
+    throw new Error(
+      `Discord pinned Official Picks destination ${pinned.channelId} is not a public thread (type ${DISCORD_PUBLIC_THREAD_TYPE}).`,
+    );
+  }
+
+  const threadMetadata = value.thread_metadata;
+  if (
+    !isRecord(threadMetadata) ||
+    typeof threadMetadata.archived !== 'boolean' ||
+    typeof threadMetadata.locked !== 'boolean'
+  ) {
+    throw new Error(
+      `Discord pinned Official Picks destination ${pinned.channelId} has malformed thread_metadata.`,
+    );
+  }
+  if (!threadMetadata.locked) {
+    throw new Error(
+      `Discord pinned Official Picks destination ${pinned.channelId} is unlocked; refusing delivery.`,
+    );
+  }
+
+  return {
+    archived: threadMetadata.archived,
+    locked: threadMetadata.locked,
+  };
+}
+
+function buildOfficialPicksReopenReason(outbox: OutboxRecord): string {
+  const reason = encodeURIComponent(
+    `Unit Talk worker reopening locked Official Picks thread for outbox ${outbox.id}`,
+  );
+  return reason.slice(0, DISCORD_AUDIT_LOG_REASON_MAX_LENGTH);
+}
+
+async function performDiscordRequestWithDeadline<T>(
+  fetchImpl: typeof fetch,
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit,
+  timeoutMs: number,
+  consume: (response: Response) => Promise<T> | T,
+): Promise<T> {
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const request = (async () =>
+    consume(await fetchImpl(input, { ...init, signal: controller.signal })))();
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new Error(`Discord request timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([request, timeout]);
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`Discord request timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function resolveDiscordGameThreadRoute(
