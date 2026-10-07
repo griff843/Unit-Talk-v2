@@ -26,6 +26,7 @@ jobs:
       execution_sha: ${{ steps.target.outputs.execution_sha }}
       merge_sha: ${{ steps.target.outputs.merge_sha }}
       pr_number: ${{ steps.target.outputs.pr_number }}
+      changed_file_count: ${{ steps.target.outputs.changed_file_count }}
     steps:
       - name: Checkout default-branch workflow source
         uses: actions/checkout@v4
@@ -67,9 +68,16 @@ jobs:
               repo,
               pull_number: requestedPrNumber,
             });
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: requestedPrNumber,
+              per_page: 100,
+            });
             const target = recovery.validatePullTarget({
               requestedPrNumber,
               pull,
+              files,
               repository,
               defaultBranch,
             });
@@ -88,7 +96,8 @@ jobs:
             core.setOutput('execution_sha', execution.executionSha);
             core.setOutput('merge_sha', target.mergeSha);
             core.setOutput('pr_number', String(target.prNumber));
-            core.notice(`Validated merged PR #${target.prNumber} at ${target.mergeSha}`);
+            core.setOutput('changed_file_count', String(target.changedFileCount));
+            core.notice(`Validated ${target.changedFileCount} metadata-only files for merged PR #${target.prNumber} at ${target.mergeSha}`);
 
   staging-db-proof:
     name: Merge recovery / writable DB proof
@@ -341,6 +350,7 @@ jobs:
       actions: read
       checks: write
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout trusted publisher
         uses: actions/checkout@v4
@@ -353,6 +363,9 @@ jobs:
         env:
           TARGET_MERGE_SHA: ${{ needs.resolve.outputs.merge_sha }}
           EXECUTION_SHA: ${{ needs.resolve.outputs.execution_sha }}
+          RECOVERY_PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+          RESOLVED_CHANGED_FILE_COUNT: ${{ needs.resolve.outputs.changed_file_count }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           STAGING_RESULT: ${{ needs.staging-db-proof.result }}
           STAGING_TESTED_SHA: ${{ needs.staging-db-proof.outputs.tested_sha }}
           VERIFY_RESULT: ${{ needs.verify.result }}
@@ -362,6 +375,48 @@ jobs:
             const recovery = require('./scripts/ops/merge-proof-recovery.cjs');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const repository = `${owner}/${repo}`;
+            const defaultBranch = context.payload.repository?.default_branch;
+            const runAttempt = recovery.parsePositiveInteger(process.env.RUN_ATTEMPT, 'workflow run attempt');
+            const requestedPrNumber = recovery.parseRecoveryPrNumber(process.env.RECOVERY_PR_NUMBER);
+
+            const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+              owner,
+              repo,
+              run_id: context.runId,
+            });
+            recovery.validateWorkflowRun({
+              run: workflowRun,
+              runId: context.runId,
+              runAttempt,
+              repository,
+              defaultBranch,
+              executionSha: process.env.EXECUTION_SHA,
+            });
+
+            const { data: currentPull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: requestedPrNumber,
+            });
+            const currentFiles = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: requestedPrNumber,
+              per_page: 100,
+            });
+            const currentTarget = recovery.validatePullTarget({
+              requestedPrNumber,
+              pull: currentPull,
+              files: currentFiles,
+              repository,
+              defaultBranch,
+            });
+            if (currentTarget.mergeSha !== process.env.TARGET_MERGE_SHA
+              || String(currentTarget.changedFileCount) !== process.env.RESOLVED_CHANGED_FILE_COUNT) {
+              throw new Error('altered_target: merged PR target differs from the resolved recovery target');
+            }
+
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
               owner,
               repo,
@@ -373,6 +428,7 @@ jobs:
             const results = recovery.buildPublishedProofResults({
               jobs,
               runId: context.runId,
+              runAttempt,
               runUrl,
               executionSha: process.env.EXECUTION_SHA,
               targetSha: process.env.TARGET_MERGE_SHA,
@@ -395,10 +451,10 @@ jobs:
                 head_sha: result.targetSha,
                 status: 'in_progress',
                 details_url: result.detailsUrl,
-                external_id: `merge-proof-recovery:${context.runId}:${result.key}`,
+                external_id: `merge-proof-recovery:${context.runId}:${result.runAttempt}:${result.key}`,
                 output: {
                   title: 'Historical merge proof recovery is reporting',
-                  summary: `Execution SHA: ${result.executionSha}\nTested merge SHA: ${result.targetSha}`,
+                  summary: `Trusted workflow source SHA: ${result.executionSha}\nTested merge SHA: ${result.targetSha}\nWorkflow run attempt: ${result.runAttempt}`,
                 },
               });
               pending.push({ result, checkId: check.id });
@@ -417,10 +473,14 @@ jobs:
                   title: result.succeeded ? 'Recovered native proof passed' : 'Recovered native proof refused',
                   summary: [
                     `Native job: ${result.nativeJobName} (${result.nativeJobId ?? 'missing'})`,
-                    `Workflow run: ${result.runId}`,
-                    `Execution SHA: ${result.executionSha}`,
+                    `Native conclusion: ${result.nativeConclusion ?? 'missing'}`,
+                    `Workflow run: ${result.runId} (attempt ${result.runAttempt})`,
+                    `Workflow event/path/ref: repository_dispatch / ${recovery.RECOVERY_WORKFLOW_PATH} / ${defaultBranch}`,
+                    `Trusted workflow source SHA: ${result.executionSha}`,
                     `Tested merge SHA: ${result.targetSha}`,
                     `Observed checkout SHA: ${result.testedSha ?? 'missing'}`,
+                    `Observed workflow jobs: ${result.observedJobCount} (limit ${result.jobLimit})`,
+                    `Validated metadata files: ${currentTarget.changedFileCount}`,
                     `Result: ${result.reason}`,
                   ].join('\n'),
                 },
