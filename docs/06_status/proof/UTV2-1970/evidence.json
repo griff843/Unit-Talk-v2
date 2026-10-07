@@ -1,0 +1,118 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1970",
+  "pr_number": 1722,
+  "source_sha": "b9d5e698a84b7fae3411a6a8a3d7d12a49768acf",
+  "reviewed_head_sha": "b9d5e698a84b7fae3411a6a8a3d7d12a49768acf",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW_WITH_STAGING_DB_DEFERRED",
+  "generated_at": "2026-10-07T15:52:00Z",
+  "gate_results": [
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "All static stages passed on the verified implementation source, including lint, type-check, build, the full test matrix, command-manifest validation, and migration checks."
+    },
+    {
+      "gate": "focused worker tests",
+      "verdict": "PASS",
+      "detail": "Adapter plus exactly-once: 47/47 passed. Worker runtime regressions: 86/86 passed."
+    },
+    {
+      "gate": "pnpm test:db (local)",
+      "verdict": "SKIP",
+      "detail": "The mandatory staging identity guard refused host=127.0.0.1 ref=unidentified before database-smoke.test.ts or any write. Protected staging-ci proof is required."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b9d5e698a84b7fae3411a6a8a3d7d12a49768acf",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "verify": "required on the exact PR head",
+      "writable_db_proof": "required in the staging-ci environment"
+    },
+    "note": "Verified source is the implementation commit. The proof commit and exact PR head remain CI-bound; no merge SHA is asserted."
+  },
+  "scope": {
+    "implementation_files": [
+      "apps/worker/src/delivery-adapters.ts",
+      "apps/worker/src/delivery-adapters.test.ts",
+      "apps/worker/src/official-picks-exactly-once.test.ts"
+    ],
+    "production_compose_changed": false,
+    "bot_source_changed": false,
+    "package_changed": false,
+    "database_changed": false
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "focused_adapter_and_exactly_once": {
+      "command": "pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts apps/worker/src/official-picks-exactly-once.test.ts",
+      "exit_code": 0,
+      "tests": 47,
+      "pass": 47,
+      "fail": 0
+    },
+    "focused_worker_runtime": {
+      "command": "pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts",
+      "exit_code": 0,
+      "tests": 86,
+      "pass": 86,
+      "fail": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "status": "STATIC_PASS_DB_REFUSED",
+      "detail": "All static stages passed. test:live-db then refused before writable tests because host=127.0.0.1 ref=unidentified did not match staging xskgrzbteyqdufktjrjx."
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+    "command": "pnpm test:db",
+    "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
+    "local_result": "REFUSED before database-smoke.test.ts or any write executed",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. Measured local guard detail: host=127.0.0.1 ref=unidentified.",
+    "row_counts": [
+      {
+        "name": "rows written, updated, or deleted by local DB proof",
+        "value": 0
+      },
+      {
+        "name": "writable DB assertions executed locally",
+        "value": 0
+      }
+    ],
+    "discord_requests": {
+      "live_get": 0,
+      "live_patch": 0,
+      "live_post": 0
+    }
+  },
+  "sign_off": {
+    "executor": "codex-cli",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "independent_t1_approval_required": true
+  }
+}
