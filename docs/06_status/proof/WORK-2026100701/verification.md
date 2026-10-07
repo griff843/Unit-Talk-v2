@@ -2,27 +2,86 @@
 
 MERGE_SHA: pending merge
 
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
 Issue: WORK-2026100701
 Tier: T1
-result: not_run
+Lane type: governance
+Implementation SHA: fc468a6144677b855198f7e4370eb7a5c67a4430
+result: static_pass_live_db_deferred_to_staging_ci
 
 ## ASSERTIONS:
 
-- [ ] (state each behavior this lane proves, and the test that proves it)
+- [x] Protected-main CI no longer filters metadata-only pushes and uses the push SHA,
+  rather than the shared main ref, as its cancellation identity.
+- [x] Historical recovery is triggered only by `repository_dispatch`, whose workflow
+  definition comes from the protected default branch; branch-selectable
+  `workflow_dispatch` is absent.
+- [x] Recovery refuses an altered/stale workflow definition, an open or unmerged PR,
+  a wrong repository/base, an invalid merge SHA, and a merge not reachable from the
+  current protected default branch.
+- [x] Both proof jobs check out and attest the exact validated merge SHA while preserving
+  the separate workflow execution SHA and never rewriting `GITHUB_SHA`.
+- [x] Only the protected staging job receives `staging-ci`; it pins project
+  `xskgrzbteyqdufktjrjx`. No production project or production credential is referenced.
+- [x] Historical G6 check publication is derived from completed native jobs queried from
+  the current workflow run. Missing, failed, skipped, cancelled, incomplete, wrong-run,
+  wrong-execution-SHA, or wrong-tested-SHA proof cannot publish success.
+- [x] G6 implementation and policy are unchanged.
 
 ## EVIDENCE:
 
-(paste measured output here, in fenced blocks)
+Measured #1720 target before repair:
+
+```text
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1720
+state: MERGED
+base: main
+merge SHA: 0ad7e1eb6cb7cba1131743a46292a8e901f99e64
+check runs on merge SHA: 6
+verify: absent
+Writable DB proof (staging only): absent
+```
+
+Focused regression receipt:
+
+```text
+pnpm exec tsx --test 'scripts/ops/workflow-hardening.test.ts'
+tests 85
+pass 85
+fail 0
+skipped 0
+```
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
+- `node --check scripts/ops/merge-proof-recovery.cjs` — PASS.
+- YAML parse of `.github/workflows/ci.yml` and
+  `.github/workflows/merge-proof-recovery.yml` — PASS.
+- `pnpm exec tsx --test 'scripts/ops/workflow-hardening.test.ts'` — PASS: 85 tests,
+  0 failures, 0 skipped.
+- `pnpm verify:static` — PASS, including `pnpm type-check`, build, `pnpm test`, T1 local
+  proof suites, Smart Form verification, and command/migration checks.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS at
+  implementation SHA: 8 changed files, no matching R-level rules.
+- `pnpm test:db` — correctly REFUSED before DB access: local target resolved as
+  `host=127.0.0.1 ref=unidentified`, not approved staging project
+  `xskgrzbteyqdufktjrjx`. Writable proof is blocked/deferred to protected exact-HEAD
+  `staging-ci` with `CI_SUPABASE_*` credentials.
+- `git diff --check` — PASS.
+
+## Runtime Verification
+
+The recovery workflow itself must supply the writable receipt. The local machine is not
+an approved writable target and made no DB write. Exact-HEAD protected staging CI is
+pending on the draft PR; after governed merge, the sanctioned recovery must run against
+PR #1720 and its actual merge SHA before #1720 closeout is replayed.
+
+## Model Routing
+
+This is the sanctioned `ops:codex-exec` child and did not recursively invoke the wrapper.
+The outer wrapper owns and persists `model-routing.json` after the child exits, preserving
+actual process exit and elapsed-time provenance.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1724

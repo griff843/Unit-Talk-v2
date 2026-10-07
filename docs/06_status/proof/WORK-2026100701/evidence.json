@@ -1,0 +1,90 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100701",
+  "pr_number": 1724,
+  "source_sha": "fc468a6144677b855198f7e4370eb7a5c67a4430",
+  "reviewed_head_sha": "fc468a6144677b855198f7e4370eb7a5c67a4430",
+  "generated_at": "2026-10-07T19:15:21Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fc468a6144677b855198f7e4370eb7a5c67a4430",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test 'scripts/ops/workflow-hardening.test.ts'",
+      "tests": 85,
+      "pass": 85,
+      "fail": 0,
+      "skipped": 0
+    },
+    "verify_static": "PASS",
+    "type_check": "PASS through pnpm verify:static",
+    "aggregate_test": "PASS through pnpm verify:static",
+    "r_level": "PASS at implementation SHA; 8 changed files; no matching rules",
+    "syntax": "PASS: CommonJS syntax and both edited workflow YAML documents parsed",
+    "diff_check": "PASS"
+  },
+  "runtime_proof": {
+    "status": "DEFERRED_TO_PROTECTED_CI",
+    "write_attempted": false,
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "local_guard_result": "REFUSED before DB access: host=127.0.0.1 ref=unidentified",
+    "required_environment": "exact-HEAD protected staging-ci with CI_SUPABASE_* credentials",
+    "protected_ci": "pending draft PR",
+    "production_access": false
+  },
+  "measured_defect": {
+    "target_pr": 1720,
+    "target_merge_sha": "0ad7e1eb6cb7cba1131743a46292a8e901f99e64",
+    "merged_to": "main",
+    "merge_sha_check_runs": 6,
+    "verify_context": "absent",
+    "writable_db_context": "absent",
+    "g6_policy_changed": false
+  },
+  "recovery_safety": {
+    "trigger": "repository_dispatch/merge-proof-recovery",
+    "branch_selectable_dispatch": false,
+    "validated_target_source": "GitHub merged pull request API merge_commit_sha",
+    "reachability_source": "GitHub compare API against current default-branch head",
+    "exact_checkout_required": true,
+    "execution_sha_preserved_separately": true,
+    "native_jobs_queried_before_publication": true,
+    "non_success_publishes_success": false,
+    "production_credentials": false
+  },
+  "gate_results": [
+    {
+      "gate": "focused workflow hardening",
+      "verdict": "PASS",
+      "detail": "85 tests passed; positive and stale/mismatched/skipped/failing/incomplete adversarial cases included"
+    },
+    {
+      "gate": "full static verification",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static completed with zero failures"
+    },
+    {
+      "gate": "R-level",
+      "verdict": "PASS",
+      "detail": "8 changed files; no matching R-level rules"
+    },
+    {
+      "gate": "writable DB proof",
+      "verdict": "SKIP",
+      "detail": "Local guard refused before access; exact-HEAD staging-ci proof is required on the draft PR"
+    },
+    {
+      "gate": "PM merge approval",
+      "verdict": "SKIP",
+      "detail": "Executor did not self-approve or merge"
+    }
+  ]
+}
