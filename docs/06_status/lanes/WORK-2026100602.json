@@ -39,6 +39,15 @@
         "heartbeat_at 26.1h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-07T23:26:37.669Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 27.2h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
     }
   ],
   "reopen_history": [],
