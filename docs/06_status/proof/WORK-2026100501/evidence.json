@@ -5,7 +5,6 @@
   "source_sha": "0b87cd9b1288351ad90954dd0c2cc5c0ced642f5",
   "reviewed_head_sha": "0b87cd9b1288351ad90954dd0c2cc5c0ced642f5",
   "evidence_commit_sha": null,
-  "merge_sha": null,
   "generated_at": "2026-10-05T20:49:30Z",
   "tier": "T1",
   "lane_type": "governance",
