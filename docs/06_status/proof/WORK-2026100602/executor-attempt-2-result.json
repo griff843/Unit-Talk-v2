@@ -1,0 +1,39 @@
+{
+  "ok": false,
+  "code": "INCOMPLETE_PHASE_PROGRESSION",
+  "issue_id": "WORK-2026100602",
+  "branch": "codex/work-2026100602-proof-closeout",
+  "message": "current epoch f5a158c6-9231-4b67-8a78-46e5d8ee6e51 is missing required phase(s): closeout",
+  "codex_exit_code": 1,
+  "source_files_changed": 0,
+  "checkpoint_provenance": "primary",
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "codex_cli_version": "codex-cli 0.153.3",
+  "execution": {
+    "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+    "epoch_mode": "fresh",
+    "implementation_baseline_sha": "e22db28c0b41128cd0ef37acee1ef3074934c24b",
+    "attempt": 2,
+    "attempt_start_sha": "10b38dd45824a2df9aac87ece9f58e13cb70ac48",
+    "resumed": true,
+    "phase": "closeout",
+    "resumed_from_phase": "verify",
+    "skipped_phases": [
+      "orient",
+      "plan",
+      "implement"
+    ],
+    "carried_findings": 1,
+    "timeout_ms": 4320000,
+    "timeout_policy_id": "utv2-1594-exec-timeout-v1",
+    "timeout_clamped": "none",
+    "checkpoint_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100602-order/.out/worktrees/codex__work-2026100602-proof-closeout/.out/ops/execution-checkpoints/WORK-2026100602.json",
+    "outcome": "failed",
+    "heartbeat_state": "active",
+    "released_resources": []
+  }
+}

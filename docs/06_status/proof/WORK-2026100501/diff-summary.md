@@ -15,5 +15,5 @@ No product, Discord, scoring, grading, routing, provider, pricing, activation, m
 
 Implementation SHA: `0b87cd9b1288351ad90954dd0c2cc5c0ced642f5`
 
-Merge SHA: pending merge
+Merge SHA: 9aef8ee772ea5a569f34619ad3089c1a51490c7d
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1718

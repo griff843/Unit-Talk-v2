@@ -1,0 +1,174 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100602",
+  "branch": "codex/work-2026100602-proof-closeout",
+  "worktree": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100602-order/.out/worktrees/codex__work-2026100602-proof-closeout",
+  "state_revision": 49,
+  "epoch": {
+    "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+    "mode": "fresh",
+    "implementation_baseline_sha": "e22db28c0b41128cd0ef37acee1ef3074934c24b",
+    "objective_identity": "WORK-2026100602:codex/work-2026100602-proof-closeout",
+    "findings_identity": "none",
+    "created_at": "2026-10-06T20:02:07.729Z",
+    "authority": "codex-exec"
+  },
+  "prior_epochs": [],
+  "status": "completed",
+  "phase": "closeout",
+  "attempt": 4,
+  "created_at": "2026-10-06T20:02:07.729Z",
+  "updated_at": "2026-10-07T00:30:49.649Z",
+  "last_activity_at": "2026-10-07T00:30:49.649Z",
+  "heartbeat_at": "2026-10-07T00:30:40.835Z",
+  "heartbeat_interval_ms": 60000,
+  "timeout_policy": {
+    "policy_id": "utv2-1594-exec-timeout-v1",
+    "tier": "T1",
+    "reasoning_effort": "medium",
+    "phase": "closeout",
+    "base_ms": 5400000,
+    "effort_multiplier": 1,
+    "phase_multiplier": 0.5,
+    "raw_ms": 2700000,
+    "timeout_ms": 2700000,
+    "hard_cap_ms": 14400000,
+    "floor_ms": 300000,
+    "clamped": "none",
+    "fallbacks": []
+  },
+  "completed_phases": [
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "phase": "orient",
+      "completed_at": "2026-10-06T20:04:11.584Z",
+      "attempt": 1,
+      "summary": "Ordinary preflight PASS with waivers empty; PL1-PL6 passed; PT1 deferred_to_ci by documented containment; ordinary lane-start created started governance lane"
+    },
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "phase": "plan",
+      "completed_at": "2026-10-06T20:06:11.477Z",
+      "attempt": 1,
+      "summary": "Bounded implementation is one deletion in original evidence; focused proof-schema suite is the declared issue test; original runtime proof and failed closeout history remain untouched"
+    },
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "phase": "implement",
+      "completed_at": "2026-10-06T20:06:12.658Z",
+      "attempt": 1,
+      "summary": "Removed only top-level merge_sha:null from WORK-2026100501 evidence; all other JSON values preserve origin/main exactly"
+    },
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "phase": "verify",
+      "completed_at": "2026-10-06T20:49:58.128Z",
+      "attempt": 2,
+      "summary": "phase completed"
+    },
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "phase": "closeout",
+      "completed_at": "2026-10-07T00:30:40.835Z",
+      "attempt": 4,
+      "summary": "Draft PR #1720 at exact head 0b1f7db2e905027610307ac5a45a43ac476ef510 is a verified premerge review candidate: focused proof-schema 108/108, local verify static PASS with writable DB guard refusal before access, standalone test:db same contained refusal, R-level and scope PASS across 9 files, protected CI run 37550813135 PASS with writable staging 9/9 and T1 staging 152/152 plus static verify and receipt validation; PR remains draft tier:T1, PM approval/merge/finalize/original0501 postmerge closeout pending"
+    }
+  ],
+  "findings": [
+    {
+      "id": "verify-1",
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "source_epoch_id": null,
+      "phase": "verify",
+      "summary": "Local pnpm verify static chain passed; writable DB guard refused unidentified localhost before access and deferred to exact-HEAD protected staging CI; focused proof-schema 108/108 and R-level/scope PASS",
+      "recorded_at": "2026-10-06T20:20:01.308Z",
+      "attempt": 1
+    },
+    {
+      "id": "verify-2",
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "source_epoch_id": null,
+      "phase": "verify",
+      "summary": "",
+      "recorded_at": "2026-10-06T20:32:41.044Z",
+      "attempt": 2
+    },
+    {
+      "id": "closeout-3",
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "source_epoch_id": null,
+      "phase": "closeout",
+      "summary": "",
+      "recorded_at": "2026-10-06T20:50:37.005Z",
+      "attempt": 2
+    }
+  ],
+  "pending_actions": [
+    "Return to outer wrapper after measured verify and review-packet closeout phase records; do not publish SUCCESS before its execution-truth verdict. This frozen proof-only scope changes only docs and .ops, excluded by NON_SOURCE_PREFIXES; source_files_changed remains zero, so the final guard may fail and requires truthful disposition, not unrelated source edits.",
+    "Preserve real model-routing and negative attempt history; keep PR1720 draft, no self-signed PM verdict, no original lane closeout until genuine governed repair merge."
+  ],
+  "attempts": [
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "attempt": 1,
+      "started_at": "2026-10-06T20:02:07.729Z",
+      "ended_at": "2026-10-06T20:23:55.040Z",
+      "outcome": "failed",
+      "reason": "current epoch f5a158c6-9231-4b67-8a78-46e5d8ee6e51 is missing required phase(s): verify, closeout",
+      "phase_at_start": "orient",
+      "phase_at_end": "verify",
+      "timeout_ms": 2700000,
+      "attempt_start_sha": "e22db28c0b41128cd0ef37acee1ef3074934c24b",
+      "released_resources": []
+    },
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "attempt": 2,
+      "started_at": "2026-10-06T20:25:21.823Z",
+      "ended_at": "2026-10-06T20:51:21.559Z",
+      "outcome": "failed",
+      "reason": "current epoch f5a158c6-9231-4b67-8a78-46e5d8ee6e51 is missing required phase(s): closeout",
+      "phase_at_start": "verify",
+      "phase_at_end": "closeout",
+      "timeout_ms": 4320000,
+      "attempt_start_sha": "10b38dd45824a2df9aac87ece9f58e13cb70ac48",
+      "released_resources": []
+    },
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "attempt": 3,
+      "started_at": "2026-10-06T23:54:20.168Z",
+      "ended_at": "2026-10-07T00:12:43.990Z",
+      "outcome": "silent_no_heartbeat",
+      "reason": "executor produced no heartbeat: attempt 3 has not heartbeat for 678s (window 600s)",
+      "phase_at_start": "closeout",
+      "phase_at_end": "closeout",
+      "timeout_ms": 2700000,
+      "attempt_start_sha": "0e205e12bdd6ea2579ee9f71d41f5596633aba79",
+      "released_resources": []
+    },
+    {
+      "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+      "attempt": 4,
+      "started_at": "2026-10-07T00:13:20.119Z",
+      "ended_at": "2026-10-07T00:30:49.649Z",
+      "outcome": "completed",
+      "reason": "codex exited 0 and evidence persisted",
+      "phase_at_start": "closeout",
+      "phase_at_end": "closeout",
+      "timeout_ms": 2700000,
+      "attempt_start_sha": "0b1f7db2e905027610307ac5a45a43ac476ef510",
+      "released_resources": []
+    }
+  ],
+  "cancel_requested": false,
+  "cancel_reason": null,
+  "owner": {
+    "pid": 3373971,
+    "host": "DESKTOP-GP6RM0V"
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "checksum": "f5085a1db657d4718af8ca542d41750353a286bd699889653dbed68d6739faed"
+  }
+}

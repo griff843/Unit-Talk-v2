@@ -1,0 +1,38 @@
+{
+  "ok": false,
+  "code": "EXECUTION_SILENT",
+  "issue_id": "WORK-2026100602",
+  "branch": "codex/work-2026100602-proof-closeout",
+  "message": "executor produced no heartbeat: attempt 3 has not heartbeat for 678s (window 600s). Progress is checkpointed at /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100602-order/.out/worktrees/codex__work-2026100602-proof-closeout/.out/ops/execution-checkpoints/WORK-2026100602.json; the next dispatch resumes from phase 'closeout' instead of repeating completed analysis. Model routing evidence: /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100602-order/.out/worktrees/codex__work-2026100602-proof-closeout/docs/06_status/proof/WORK-2026100602/model-routing.json (persistence: committed and pushed)",
+  "codex_exit_code": 1,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "codex_cli_version": "codex-cli 0.153.3",
+  "execution": {
+    "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+    "epoch_mode": "fresh",
+    "implementation_baseline_sha": "e22db28c0b41128cd0ef37acee1ef3074934c24b",
+    "attempt": 3,
+    "attempt_start_sha": "0e205e12bdd6ea2579ee9f71d41f5596633aba79",
+    "resumed": true,
+    "phase": "closeout",
+    "resumed_from_phase": "closeout",
+    "skipped_phases": [
+      "orient",
+      "plan",
+      "implement",
+      "verify"
+    ],
+    "carried_findings": 3,
+    "timeout_ms": 2700000,
+    "timeout_policy_id": "utv2-1594-exec-timeout-v1",
+    "timeout_clamped": "none",
+    "checkpoint_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100602-order/.out/worktrees/codex__work-2026100602-proof-closeout/.out/ops/execution-checkpoints/WORK-2026100602.json",
+    "outcome": "silent_no_heartbeat",
+    "heartbeat_state": "silent",
+    "released_resources": []
+  }
+}
