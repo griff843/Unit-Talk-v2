@@ -2,8 +2,8 @@
   "schema_version": 2,
   "issue_id": "WORK-2026100701",
   "pr_number": 1724,
-  "source_sha": "aeede37ad0e7fdcf76534303cb369b84250f38d8",
-  "reviewed_head_sha": "aeede37ad0e7fdcf76534303cb369b84250f38d8",
+  "source_sha": "aeede37ad7a7f8b4e0aa03d330a0f80b58570a9e",
+  "reviewed_head_sha": "aeede37ad7a7f8b4e0aa03d330a0f80b58570a9e",
   "generated_at": "2026-10-07T19:51:00Z",
   "tier": "T1",
   "lane_type": "governance",
@@ -11,7 +11,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "aeede37ad0e7fdcf76534303cb369b84250f38d8",
+    "verified_source_sha": "aeede37ad7a7f8b4e0aa03d330a0f80b58570a9e",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
