@@ -11,12 +11,12 @@
   "proof_profile": "static",
   "status": "READY_FOR_PM_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "9aef8ee772ea5a569f34619ad3089c1a51490c7d",
     "verified_source_sha": "0b87cd9b1288351ad90954dd0c2cc5c0ced642f5",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "pending_merge",
-    "bound_at": "2026-10-05T20:49:30Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-07T18:31:30.674Z"
   },
   "static_proof": {
     "status": "PASS",
