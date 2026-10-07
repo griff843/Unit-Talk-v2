@@ -91,7 +91,7 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1720
 Execution SHA: d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d
 
 
-## Post-wrapper attestation — BLOCKED
+## Historical attempt 2 post-wrapper attestation — BLOCKED
 
 The resumed sanctioned executor completed its real CLI run, but the outer execution-truth
 check returned `INCOMPLETE_PHASE_PROGRESSION` (missing `closeout`). See the unmodified
@@ -110,3 +110,40 @@ this admitted proof-only scope. The current epoch therefore has no qualifying so
 change. The live attempt returned at the earlier missing-phase guard; the source-count
 failure is not represented as its actual return code. No source change or phase completion
 was fabricated to work around either control. Admission code is unchanged.
+
+## Repaired sanctioned executor — actual SUCCESS
+
+PR #1721 merged normally at `8c09e756948eeaba69c0acfcb38543c42c4f62c1`.
+Its trusted closeout run `37550633255` succeeded and persisted current main
+`b16b2a412` with the lane done. This repair was refreshed through the governed
+merge wrapper onto that main without changing the original evidence correction.
+
+Actual original epoch `f5a158c6-9231-4b67-8a78-46e5d8ee6e51`, attempt 4 completed
+through `ops:codex-exec`: SUCCESS, actual CLI exit 0, wrapper exit 0,
+primary checkpoint provenance, source files 0, qualifying external evidence artifacts 1.
+All orient/plan/implement/verify/closeout phases are genuinely complete. The original
+completed phases and failed attempts were preserved. Attempt 3 was interrupted during
+read-only CI waiting to refresh main; its actual EXECUTION_SILENT receipt is preserved.
+Attempt 4 maintained real checkpoint heartbeats during waits.
+
+The native executor verified source candidate
+`0b1f7db2e905027610307ac5a45a43ac476ef510`. Focused schema tests passed 108/108,
+full local static verification passed, and both local writable commands refused before
+DB access because the target was unidentified. Scope and R-level passed (9 files,
+no matching rules). Protected exact-candidate CI `37550813135` passed writable 9/9,
+T1 staging 152/152, and verify. The native closeout records a verified draft candidate;
+it does not claim PM approval, merge, original0501 closure, production access or deployment.
+
+Unmodified machine result and complete checkpoint are committed in
+`executor-attempt-4-result.json` and `executor-epoch-f5a158c6-completed.json`.
+The wrapper persisted actual model routing (Codex CLI 0.153.3, gpt-5.6-sol/medium),
+without inferring desktop model provenance. Model routing and these receipt commits
+postdate the verified source candidate and require independent final exact-HEAD checks.
+The final GitHub review packet will bind those actual current checks; prior CI is not
+claimed as exact-HEAD proof for later evidence commits.
+
+The historical zero-source concern above is resolved by #1721's frozen authorization
+for the existing, explicitly named external JSON artifact. No source or own proof is
+invented as corroboration. The original WORK-2026100501 artifact still differs from
+main by exactly one deleted top-level merge_sha line, every other byte preserved.
+Its nested sha_binding.merge_sha remains null until trusted post-merge closeout.

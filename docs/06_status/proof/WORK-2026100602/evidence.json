@@ -2,17 +2,17 @@
   "schema_version": 2,
   "issue_id": "WORK-2026100602",
   "pr_number": 1720,
-  "source_sha": "d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d",
-  "reviewed_head_sha": "d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d",
+  "source_sha": "0b1f7db2e905027610307ac5a45a43ac476ef510",
+  "reviewed_head_sha": "0b1f7db2e905027610307ac5a45a43ac476ef510",
   "evidence_commit_sha": null,
-  "generated_at": "2026-10-06T20:17:20.974Z",
+  "generated_at": "2026-10-07T00:32:06.287087+00:00",
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "d6d1f5fe40cb73b5f9358ebbfd0fc229a001882d",
+    "verified_source_sha": "0b1f7db2e905027610307ac5a45a43ac476ef510",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -28,17 +28,27 @@
     "type_check": "PASS",
     "aggregate_test": "PASS",
     "verify_static": "PASS",
-    "r_level": "PASS; 5 changed files; no matching rules",
+    "r_level": "PASS at verified candidate; 9 changed files; no matching rules; final evidence HEAD is checked independently",
     "file_scope": "PASS; no conflicts or violations",
     "exact_repair": "PASS; one deleted line and all non-legacy original evidence values preserved"
   },
   "runtime_proof": {
-    "status": "DEFERRED_TO_STAGING_CI",
+    "status": "PASS_AT_VERIFIED_CANDIDATE",
     "write_attempted": false,
     "required_project_ref": "xskgrzbteyqdufktjrjx",
     "local_guard_result": "REFUSED: host 127.0.0.1 resolved as unidentified before DB access",
     "required_environment": "exact-HEAD protected staging-ci with CI_SUPABASE_* credentials",
-    "original_work_runtime_proof_regenerated": false
+    "original_work_runtime_proof_regenerated": false,
+    "staging_ci": {
+      "head_sha": "0b1f7db2e905027610307ac5a45a43ac476ef510",
+      "run_id": 37550813135,
+      "writable_tests": 9,
+      "writable_pass": 9,
+      "t1_tests": 152,
+      "t1_pass": 152,
+      "verify": "PASS"
+    },
+    "final_head_note": "Model routing and raw machine receipts are evidence-only follow-up commits. Final exact-HEAD protected checks must pass independently before merge."
   },
   "repair_proof": {
     "target_issue": "WORK-2026100501",
@@ -71,13 +81,26 @@
     },
     {
       "gate": "writable DB proof",
-      "verdict": "FAIL",
-      "detail": "Deferred: local target is unidentified; exact-HEAD protected staging-ci evidence is required"
+      "verdict": "PASS",
+      "detail": "Protected staging CI 37550813135 at 0b1f7db2e905027610307ac5a45a43ac476ef510: writable 9/9, T1 152/152. Local target guard refusal remains preserved; final evidence HEAD awaits independent exact-HEAD CI."
     },
     {
       "gate": "PM merge approval",
       "verdict": "FAIL",
       "detail": "Pending genuine exact-HEAD pm-verdict/v1 approval; executor did not self-sign"
     }
-  ]
+  ],
+  "executor_proof": {
+    "result_path": "docs/06_status/proof/WORK-2026100602/executor-attempt-4-result.json",
+    "checkpoint_path": "docs/06_status/proof/WORK-2026100602/executor-epoch-f5a158c6-completed.json",
+    "outcome": "SUCCESS",
+    "attempt": 4,
+    "epoch_id": "f5a158c6-9231-4b67-8a78-46e5d8ee6e51",
+    "source_files_changed": 0,
+    "evidence_artifacts_changed": 1,
+    "failed_attempts_preserved": [
+      2,
+      3
+    ]
+  }
 }
