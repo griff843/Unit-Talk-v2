@@ -4,7 +4,7 @@ Issue: WORK-2026100301
 Tier: T1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
 EXECUTION_SHA: 4debf792778dc76de237ceacb8c91edaa805683f
-MERGE_SHA: pending merge
+MERGE_SHA: 9452d2de53f5af5465863664bb91ef48f4c275eb
 result: PRE_MERGE — proof format corrected; the refreshed source has green CI/staging/Shadow evidence below. This proof-only successor requires fresh exact-head CI, scope authorization and executor-result validation before READY_FOR_REVIEW. PM merge approval remains separate.
 
 ## Verification
@@ -91,7 +91,7 @@ Separate product/routing gaps remain unchanged: receipt-derived result destinati
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 9452d2de53f5af5465863664bb91ef48f4c275eb
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1714
 
 Only authoritative post-merge automation may bind the merge SHA.
