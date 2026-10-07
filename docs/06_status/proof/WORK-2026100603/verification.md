@@ -1,6 +1,6 @@
 # PROOF: WORK-2026100603
 
-MERGE_SHA: pending merge
+MERGE_SHA: 8c09e756948eeaba69c0acfcb38543c42c4f62c1
 
 Issue: WORK-2026100603
 Tier: T1
@@ -58,7 +58,7 @@ re-execution remain pending and are not implied by the completed static checks.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 8c09e756948eeaba69c0acfcb38543c42c4f62c1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1721
 Execution SHA: 7824a0263ffc6f42df6351acd557bc2c10a266d1
 
