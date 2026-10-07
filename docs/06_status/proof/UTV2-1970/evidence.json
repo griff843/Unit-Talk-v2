@@ -6,7 +6,6 @@
   "reviewed_head_sha": "b9d5e698a84b7fae3411a6a8a3d7d12a49768acf",
   "evidence_commit_sha": null,
   "current_head_sha": null,
-  "merge_sha": null,
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
@@ -96,6 +95,20 @@
     "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
     "local_result": "REFUSED before database-smoke.test.ts or any write executed",
     "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. Measured local guard detail: host=127.0.0.1 ref=unidentified.",
+    "queries": [
+      {
+        "name": "active locked pinned thread delivery",
+        "result": "Mock Discord trace is GET exact pinned channel, then POST unchanged message; no PATCH."
+      },
+      {
+        "name": "archived locked pinned thread delivery",
+        "result": "Mock Discord trace is GET, exact lock-preserving PATCH, re-GET active and locked, then POST."
+      },
+      {
+        "name": "precondition and request failure containment",
+        "result": "Malformed, mismatched, unlocked, failed, and timed-out GET/PATCH/re-read cases issue zero message POST requests."
+      }
+    ],
     "row_counts": [
       {
         "name": "rows written, updated, or deleted by local DB proof",
