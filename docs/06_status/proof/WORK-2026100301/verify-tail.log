@@ -1,0 +1,35 @@
+# todo 0
+# duration_ms 1473.138517
+smart-form e2e: not run (UNIT_TALK_SMART_FORM_E2E is not set).
+Set UNIT_TALK_SMART_FORM_E2E=1 to run it. It requires a Playwright browser:
+  pnpm exec playwright install chromium --with-deps
+
+> @unit-talk/v2@0.1.0 verify:commands /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100301-order/.out/worktrees/codex__work-2026100301-discord-design
+> pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs
+
+
+> @unit-talk/discord-bot@0.1.0 command-manifest:check /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100301-order/.out/worktrees/codex__work-2026100301-discord-design/apps/discord-bot
+> tsx scripts/sync-command-manifest.ts --check
+
+[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100301-order/.out/worktrees/codex__work-2026100301-discord-design/apps/discord-bot/command-manifest.json
+[check-migration-versions] 137 migration file(s) verified — no duplicate versions.
+[lint-migrations] Skipping schema baseline replay-root 00000000000000_baseline_live_schema.sql (snapshot, not a forward migration; fidelity verified by Live Schema Parity).
+[lint-migrations] 136 migration file(s) checked — no findings.
+
+> @unit-talk/v2@0.1.0 test:live-db /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100301-order/.out/worktrees/codex__work-2026100301-discord-design
+> pnpm test:db && pnpm test:t1-proof:live
+
+
+> @unit-talk/v2@0.1.0 test:db /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100301-order/.out/worktrees/codex__work-2026100301-discord-design
+> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts
+
+
+> @unit-talk/v2@0.1.0 ci:assert-staging /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100301-order/.out/worktrees/codex__work-2026100301-discord-design
+> tsx scripts/ci/assert-staging-target.ts
+
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.
+ ELIFECYCLE  Command failed with exit code 1.

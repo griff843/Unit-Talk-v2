@@ -1,0 +1,16 @@
+{
+  "mode": "offline presentation fault cases; no chaos activation",
+  "base": "45480f882982543f84b11d0eebe3dae0633d0461",
+  "cases": [
+    "missing-or-invalid-media:undefined",
+    "missing-or-invalid-media:",
+    "missing-or-invalid-media:not-a-url",
+    "missing-or-invalid-media:http://invalid.example/media.png",
+    "unknown-clv:null",
+    "unknown-clv:undefined",
+    "unknown-clv:NaN",
+    "unknown-clv:Infinity",
+    "long-recap-150-losses-preserved"
+  ],
+  "passed": 9
+}

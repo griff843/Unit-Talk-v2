@@ -1,3 +1,5 @@
+import { buildPresentationEmbed } from '@unit-talk/domain';
+import { replyWithPrivateError } from '../embeds/presentation.js';
 import {
   EmbedBuilder,
   SlashCommandBuilder,
@@ -35,53 +37,78 @@ export function createAlertsSetupCommand(
           embeds: [buildAlertsSetupEmbed(status)],
         });
       } catch {
-        await interaction.editReply({
-          content: ERROR_MESSAGE,
-          embeds: [],
-        });
+        await replyWithPrivateError(interaction, ERROR_MESSAGE);
       }
     },
   };
 }
 
-export function buildAlertsSetupEmbed(status: AlertStatusResponse): EmbedBuilder {
-  return new EmbedBuilder()
-    .setTitle('Alert Agent Status')
-    .setColor(0x5865f2)
-    .addFields(
-      { name: 'Agent', value: status.enabled ? 'Enabled' : 'Disabled', inline: false },
-      { name: 'Mode', value: status.effectiveMode.toUpperCase(), inline: false },
-      {
-        name: 'System Picks',
-        value:
-          status.systemPicksEnabled && status.effectiveMode === 'live'
-            ? 'Enabled'
-            : status.systemPicksEnabled
-              ? 'Configured (suppressed outside LIVE mode)'
-              : 'Disabled',
-        inline: false,
-      },
-      { name: 'Min Tier', value: status.minTier, inline: false },
-      { name: 'Lookback', value: `${status.lookbackMinutes} minutes`, inline: false },
-      {
-        name: 'Active Sports',
-        value: status.activeSports.join(', '),
-        inline: false,
-      },
-      {
-        name: 'System Pick Markets',
-        value: status.systemPickEligibleMarketTypes.join(', '),
-        inline: false,
-      },
-      { name: 'Last Hour - Notable', value: `${status.last1h.notable} signals`, inline: false },
-      {
-        name: 'Last Hour - Alert-Worthy',
-        value: `${status.last1h.alertWorthy} signals`,
-        inline: false,
-      },
-      { name: 'Last Hour - Notified', value: `${status.last1h.notified} sent`, inline: false },
-      { name: 'Last Detection', value: status.lastDetectedAt ?? '-', inline: false },
-    );
+export function buildAlertsSetupEmbed(
+  status: AlertStatusResponse,
+): EmbedBuilder {
+  return EmbedBuilder.from(
+    buildPresentationEmbed('service-alert', {
+      title: 'Alert Agent Status',
+      fields: [
+        {
+          name: 'Agent',
+          value: status.enabled ? 'Enabled' : 'Disabled',
+          inline: false,
+        },
+        {
+          name: 'Mode',
+          value: status.effectiveMode.toUpperCase(),
+          inline: false,
+        },
+        {
+          name: 'System Picks',
+          value:
+            status.systemPicksEnabled && status.effectiveMode === 'live'
+              ? 'Enabled'
+              : status.systemPicksEnabled
+                ? 'Configured (suppressed outside LIVE mode)'
+                : 'Disabled',
+          inline: false,
+        },
+        { name: 'Min Tier', value: status.minTier, inline: false },
+        {
+          name: 'Lookback',
+          value: `${status.lookbackMinutes} minutes`,
+          inline: false,
+        },
+        {
+          name: 'Active Sports',
+          value: status.activeSports.join(', '),
+          inline: false,
+        },
+        {
+          name: 'System Pick Markets',
+          value: status.systemPickEligibleMarketTypes.join(', '),
+          inline: false,
+        },
+        {
+          name: 'Last Hour - Notable',
+          value: `${status.last1h.notable} signals`,
+          inline: false,
+        },
+        {
+          name: 'Last Hour - Alert-Worthy',
+          value: `${status.last1h.alertWorthy} signals`,
+          inline: false,
+        },
+        {
+          name: 'Last Hour - Notified',
+          value: `${status.last1h.notified} sent`,
+          inline: false,
+        },
+        {
+          name: 'Last Detection',
+          value: status.lastDetectedAt,
+          inline: false,
+        },
+      ],
+    }),
+  );
 }
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {

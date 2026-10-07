@@ -1,3 +1,4 @@
+import { buildServicePresentation } from '@unit-talk/domain';
 import { pathToFileURL } from 'node:url';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 import {
@@ -581,7 +582,7 @@ async function postOpsAlert(
     const response = await fetchImpl(environment.UNIT_TALK_OPS_ALERT_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `Unit Talk monitor alert\n${message}` }),
+      body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message: `Unit Talk monitor alert\n${message}` })] }),
     });
     if (!response.ok) {
       throw new Error(`Operations webhook returned ${response.status}.`);
@@ -610,7 +611,7 @@ async function postOpsAlert(
       Authorization: `Bot ${environment.DISCORD_BOT_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ content: `Unit Talk monitor alert\n${message}` }),
+    body: JSON.stringify({ embeds: [buildServicePresentation('service-alert', { message: `Unit Talk monitor alert\n${message}` })] }),
   });
   if (!response.ok) {
     throw new Error(`Discord operations alert returned ${response.status}.`);

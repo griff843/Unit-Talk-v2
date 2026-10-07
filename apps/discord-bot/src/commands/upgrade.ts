@@ -1,17 +1,13 @@
+import { buildUpgradePresentation } from '@unit-talk/domain';
+import { EmbedBuilder } from 'discord.js';
 import {
-  EmbedBuilder,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
   type GuildMember,
 } from 'discord.js';
 import { loadBotConfig } from '../config.js';
 import type { CommandHandler } from '../command-registry.js';
-import {
-  resolveMemberTier,
-  type MemberTierContext,
-} from '../tier-resolver.js';
-
-const HIGHEST_TIER_REPLY = "You're already on our highest active tier.";
+import { resolveMemberTier, type MemberTierContext } from '../tier-resolver.js';
 
 export function createUpgradeCommand(
   config: ReturnType<typeof loadBotConfig>,
@@ -27,8 +23,8 @@ export function createUpgradeCommand(
 
       if (context.tier === 'vip-plus') {
         await interaction.editReply({
-          content: HIGHEST_TIER_REPLY,
-          embeds: [],
+          content: '',
+          embeds: [buildUpgradeEmbed(context)],
         });
         return;
       }
@@ -42,38 +38,7 @@ export function createUpgradeCommand(
 }
 
 export function buildUpgradeEmbed(context: MemberTierContext) {
-  return new EmbedBuilder()
-    .setTitle('Upgrade Your Access')
-    .setColor(0x5865f2)
-    .setDescription(resolveUpgradeDescription(context.tier))
-    .addFields({
-      name: 'Ready to upgrade?',
-      value: 'Contact an operator in #support or reach out to staff directly.',
-      inline: false,
-    })
-    .setFooter({ text: 'Unit Talk - /upgrade - V1 upgrade path' });
-}
-
-function resolveUpgradeDescription(tier: MemberTierContext['tier']) {
-  switch (tier) {
-    case 'trial':
-      return [
-        "You're currently on a trial with VIP-level access.",
-        '**VIP** - Keep everything you have now for as long as you are a member.',
-        '**VIP+** - Everything in VIP. Its market-intelligence features are not live yet.',
-      ].join('\n');
-    case 'vip':
-      return '**VIP+** - Everything in VIP. Its market-intelligence features are not live yet.';
-    case 'black-label':
-    case 'vip-plus':
-      return HIGHEST_TIER_REPLY;
-    case 'free':
-    default:
-      return [
-        '**VIP** - Official capper picks, recaps, results, and capper board access.',
-        '**VIP+** - Everything in VIP. Its market-intelligence features are not live yet.',
-      ].join('\n');
-  }
+  return EmbedBuilder.from(buildUpgradePresentation(context.tier));
 }
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {

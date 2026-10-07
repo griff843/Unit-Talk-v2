@@ -7,7 +7,12 @@ import {
   runAlertNotificationPass,
 } from './alert-notification-service.js';
 import type { AlertDetectionRecord } from '@unit-talk/db';
-import type { AuditLogCreateInput, AuditLogRow, AuditLogRepository, Json } from '@unit-talk/db';
+import type {
+  AuditLogCreateInput,
+  AuditLogRow,
+  AuditLogRepository,
+  Json,
+} from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,38 +95,73 @@ class FakeAuditLogRepository implements AuditLogRepository {
 // buildAlertEmbed
 // ---------------------------------------------------------------------------
 
-test('buildAlertEmbed — notable tier uses amber color 0xff9900', () => {
+test('buildAlertEmbed — notable tier uses shared gold', () => {
   const detection = makeDetection({ tier: 'notable' });
   const embed = buildAlertEmbed(detection, 'discord:canary');
-  assert.equal(embed.color, 0xff9900);
+  assert.equal(embed.color, 0xc7a34b);
 });
 
-test('buildAlertEmbed — alert-worthy tier uses orange color 0xff6600', () => {
+test('line movement omits unknown steam evidence and first mover instead of fabricating them', () => {
+  const embed = buildAlertEmbed(
+    makeDetection({
+      steam_detected: true,
+      first_mover_book: null,
+      metadata: {},
+    }),
+    'discord:canary',
+  );
+  const fields = embed.fields as Array<{ name: string; value: string }>;
+  assert.ok(
+    !fields.some(
+      (field) => field.name === 'Steam' || field.name === 'First mover',
+    ),
+  );
+  const measured = buildAlertEmbed(
+    makeDetection({
+      steam_detected: true,
+      metadata: { steamBookCount: 0, steamWindowMinutes: 0 },
+    }),
+    'discord:canary',
+  );
+  assert.ok(
+    (measured.fields as Array<{ name: string; value: string }>).some(
+      (field) =>
+        field.name === 'Steam' &&
+        field.value === '0 books same direction in 0m',
+    ),
+  );
+});
+
+test('buildAlertEmbed — alert-worthy tier uses shared gold', () => {
   const detection = makeDetection({ tier: 'alert-worthy' });
   const embed = buildAlertEmbed(detection, 'discord:canary');
-  assert.equal(embed.color, 0xff6600);
+  assert.equal(embed.color, 0xc7a34b);
 });
 
 test('buildAlertEmbed — title contains LINE MOVEMENT', () => {
   const detection = makeDetection();
   const embed = buildAlertEmbed(detection, 'discord:canary');
   assert.ok(typeof embed.title === 'string');
-  assert.ok((embed.title as string).includes('LINE MOVEMENT'));
+  assert.ok((embed.title as string).includes('Line Movement'));
 });
 
 test('buildAlertEmbed — description contains old and new line', () => {
-  const detection = makeDetection({ old_line: 4.5, new_line: 7.0, line_change: 2.5 });
+  const detection = makeDetection({
+    old_line: 4.5,
+    new_line: 7.0,
+    line_change: 2.5,
+  });
   const embed = buildAlertEmbed(detection, 'discord:canary');
   assert.ok(typeof embed.description === 'string');
   assert.ok((embed.description as string).includes('4.5'));
   assert.ok((embed.description as string).includes('7'));
 });
 
-test('buildAlertEmbed — footer contains channel name', () => {
+test('buildAlertEmbed — footer uses shared branding', () => {
   const detection = makeDetection();
   const embed = buildAlertEmbed(detection, 'discord:canary');
   const footer = embed.footer as { text: string };
-  assert.ok(footer.text.includes('discord:canary'));
+  assert.equal(footer.text, 'Unit Talk');
 });
 
 test('buildAlertEmbed — velocity elevated flag shown in field name', () => {
@@ -156,7 +196,7 @@ test('buildAlertEmbed — steam detections use steam title and summary field', (
     metadata: { steamBookCount: 3, steamWindowMinutes: 10 },
   });
   const embed = buildAlertEmbed(detection, 'discord:canary');
-  assert.ok(String(embed.title).includes('STEAM'));
+  assert.ok(String(embed.title).includes('Steam'));
   const fields = embed.fields as Array<{ name: string; value: string }>;
   const steamField = fields.find((field) => field.name === 'Steam');
   assert.ok(steamField !== undefined);
@@ -191,7 +231,9 @@ test('resolveDiscordChannelId — accepts raw numeric channel ID', () => {
 test('runAlertNotificationPass — watch tier never notified', async () => {
   const repo = new InMemoryAlertDetectionRepository();
   const detection = makeDetection({ tier: 'watch' });
-  const result = await runAlertNotificationPass([detection], repo, { dryRun: true });
+  const result = await runAlertNotificationPass([detection], repo, {
+    dryRun: true,
+  });
   assert.equal(result.skippedWatch, 1);
   assert.equal(result.notified, 0);
 });
@@ -233,8 +275,14 @@ test('runAlertNotificationPass — dry-run skips Discord post and writes no cool
   assert.equal(discordCalled, false, 'Discord should not be called in dry-run');
   assert.equal(result.notified, 1); // counted as would-notify
 
-  const updated = (await repo.listRecent(10)).find((r) => r.id === detection!.id);
-  assert.equal(updated?.notified, false, 'cooldown must not be written in dry-run');
+  const updated = (await repo.listRecent(10)).find(
+    (r) => r.id === detection!.id,
+  );
+  assert.equal(
+    updated?.notified,
+    false,
+    'cooldown must not be written in dry-run',
+  );
 });
 
 test('runAlertNotificationPass — notable routes to canary only', async () => {
@@ -263,7 +311,11 @@ test('runAlertNotificationPass — notable routes to canary only', async () => {
     velocity: detection.velocity,
     timeElapsedMinutes: detection.time_elapsed_minutes,
     direction: detection.direction as 'up' | 'down',
-    marketType: detection.market_type as 'spread' | 'total' | 'moneyline' | 'player_prop',
+    marketType: detection.market_type as
+      | 'spread'
+      | 'total'
+      | 'moneyline'
+      | 'player_prop',
     tier: 'notable',
     metadata: {},
   });
@@ -284,7 +336,10 @@ test('runAlertNotificationPass — notable routes to canary only', async () => {
     assert.equal(result.notified, 1);
     // notable should only post to canary (1 channel)
     assert.equal(calledChannels.length, 1);
-    assert.ok(calledChannels[0]!.includes('1296531122234327100'), 'should post to canary ID');
+    assert.ok(
+      calledChannels[0]!.includes('1296531122234327100'),
+      'should post to canary ID',
+    );
   } finally {
     if (originalEnv === undefined) {
       delete process.env.DISCORD_BOT_TOKEN;
@@ -395,8 +450,14 @@ test('runAlertNotificationPass — alert-worthy routes to canary and trader-insi
 
     assert.equal(result.notified, 1);
     assert.equal(calledChannels.length, 2, 'alert-worthy posts to 2 channels');
-    assert.ok(calledChannels.some((u) => u.includes('1296531122234327100')), 'canary');
-    assert.ok(calledChannels.some((u) => u.includes('1356613995175481405')), 'trader-insights');
+    assert.ok(
+      calledChannels.some((u) => u.includes('1296531122234327100')),
+      'canary',
+    );
+    assert.ok(
+      calledChannels.some((u) => u.includes('1356613995175481405')),
+      'trader-insights',
+    );
   } finally {
     if (originalEnv === undefined) {
       delete process.env.DISCORD_BOT_TOKEN;
@@ -482,7 +543,11 @@ test('runAlertNotificationPass — cooldown suppresses re-notification', async (
       fetchImpl: fakeFetch as typeof fetch,
     });
 
-    assert.equal(discordCalled, false, 'Discord should not be called — cooldown active');
+    assert.equal(
+      discordCalled,
+      false,
+      'Discord should not be called — cooldown active',
+    );
     assert.equal(result.skippedCooldown, 1);
     assert.equal(result.notified, 0);
   } finally {
@@ -598,7 +663,11 @@ test('runAlertNotificationPass — Discord failure leaves notified=false', async
     assert.equal(result.notified, 0);
 
     const updated = (await repo.listRecent(10)).find((r) => r.id === saved!.id);
-    assert.equal(updated?.notified, false, 'notified must remain false on Discord failure');
+    assert.equal(
+      updated?.notified,
+      false,
+      'notified must remain false on Discord failure',
+    );
     assert.equal(updated?.cooldown_expires_at, null);
   } finally {
     if (originalEnv === undefined) {
@@ -728,10 +797,30 @@ test('runAlertNotificationPass writes an audit row for each failed delivery atte
         attempt: (row.payload as Record<string, unknown>).attempt,
       })),
       [
-        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 1 },
-        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 2 },
-        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 3 },
-        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 4 },
+        {
+          entityType: 'alert_notification',
+          entityId: saved!.id,
+          action: 'notify_attempt',
+          attempt: 1,
+        },
+        {
+          entityType: 'alert_notification',
+          entityId: saved!.id,
+          action: 'notify_attempt',
+          attempt: 2,
+        },
+        {
+          entityType: 'alert_notification',
+          entityId: saved!.id,
+          action: 'notify_attempt',
+          attempt: 3,
+        },
+        {
+          entityType: 'alert_notification',
+          entityId: saved!.id,
+          action: 'notify_attempt',
+          attempt: 4,
+        },
       ],
     );
 
@@ -796,7 +885,9 @@ test('runAlertNotificationPass — cooldown written after successful notify', as
     assert.ok(updated?.cooldown_expires_at !== null);
 
     // alert-worthy cooldown = 15 min from now
-    const expectedExpiry = new Date(now.getTime() + 15 * 60 * 1000).toISOString();
+    const expectedExpiry = new Date(
+      now.getTime() + 15 * 60 * 1000,
+    ).toISOString();
     assert.equal(updated?.cooldown_expires_at, expectedExpiry);
   } finally {
     if (originalEnv === undefined) {

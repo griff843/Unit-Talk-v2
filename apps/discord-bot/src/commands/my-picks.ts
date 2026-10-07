@@ -1,5 +1,5 @@
+import { createMemberEmbed } from '../embeds/presentation.js';
 import {
-  EmbedBuilder,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
@@ -27,7 +27,10 @@ export function createMyPicksCommand(
       .setDescription('Show picks that match your Discord identity'),
     responseVisibility: 'private',
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      await interaction.editReply({ content: UNAVAILABLE_MESSAGE, embeds: [] });
+      await interaction.editReply({
+        content: '',
+        embeds: [createMemberEmbed().setDescription(UNAVAILABLE_MESSAGE)],
+      });
     },
   };
 }
@@ -36,13 +39,13 @@ export function buildMyPicksEmbeds(picks: QueriedPick[]) {
   const pages = paginate(picks, PAGE_SIZE);
 
   return pages.map((page, index) =>
-    new EmbedBuilder()
+    createMemberEmbed()
       .setTitle(
         pages.length > 1
           ? `My Picks - Page ${index + 1}/${pages.length}`
           : 'My Picks',
       )
-      .setColor(0x8b5cf6)
+
       .setDescription(
         page
           .map((pick) =>
@@ -60,7 +63,7 @@ export function buildMyPicksEmbeds(picks: QueriedPick[]) {
 
 function formatOdds(odds: number | null) {
   if (typeof odds !== 'number' || !Number.isFinite(odds)) {
-    return '(odds n/a)';
+    return '';
   }
 
   return odds > 0 ? `(+${odds})` : `(${odds})`;

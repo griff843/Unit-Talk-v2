@@ -1,3 +1,8 @@
+import {
+  buildPresentationEmbed,
+  finiteMetric,
+  knownText,
+} from '@unit-talk/domain';
 import type {
   AlertDetectionRecord,
   AlertDetectionRepository,
@@ -20,7 +25,8 @@ const DELIVERY_RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
 // alert-worthy → discord:canary + discord:trader-insights
 function resolveChannels(tier: AlertDetectionTier): string[] {
   if (tier === 'notable') return ['discord:canary'];
-  if (tier === 'alert-worthy') return ['discord:canary', 'discord:trader-insights'];
+  if (tier === 'alert-worthy')
+    return ['discord:canary', 'discord:trader-insights'];
   return [];
 }
 
@@ -38,7 +44,9 @@ export interface AlertNotificationPassOptions {
   sleepImpl?: ((ms: number) => Promise<void>) | undefined;
   audit?: AuditLogRepository | undefined;
   runs?: SystemRunRepository;
-  onNotified?: ((detection: AlertDetectionRecord) => Promise<void> | void) | undefined;
+  onNotified?:
+    | ((detection: AlertDetectionRecord) => Promise<void> | void)
+    | undefined;
 }
 
 /**
@@ -48,22 +56,21 @@ export interface AlertNotificationPassOptions {
  *   Title:       📈 LINE MOVEMENT — [EVENT LABEL]
  *   Description: [MARKET_KEY]: [OLD_LINE] → [NEW_LINE] (+/−X.X pts)
  *   Fields:      Direction, Tier, Book, Time Elapsed, Velocity (if elevated)
- *   Color:       0xff9900 amber for notable; 0xff6600 orange for alert-worthy
- *   Footer:      snapshot timestamp · channel name
+ *   Presentation: shared gold brand; detection, routing and cooldown policy unchanged
+ *   Footer:      Unit Talk; source snapshot timestamp when known
  */
 export function buildAlertEmbed(
   detection: AlertDetectionRecord,
-  channelName: string,
+  _channelName: string,
 ): Record<string, unknown> {
   const tier = detection.tier as AlertDetectionTier;
-  const effectiveTier: AlertDetectionTier = detection.steam_detected ? 'alert-worthy' : tier;
-  const color = effectiveTier === 'alert-worthy' ? 0xff6600 : 0xff9900;
+  const effectiveTier: AlertDetectionTier = detection.steam_detected
+    ? 'alert-worthy'
+    : tier;
 
   const metadata = asRecord(detection.metadata) ?? {};
   const eventLabel =
-    typeof metadata.event_name === 'string'
-      ? metadata.event_name
-      : detection.event_id.slice(0, 8);
+    typeof metadata.event_name === 'string' ? metadata.event_name : '';
 
   const change = Number(detection.line_change);
   const changeSign = change >= 0 ? '+' : '';
@@ -83,12 +90,14 @@ export function buildAlertEmbed(
     { name: 'Book', value: detection.bookmaker_key, inline: true },
     {
       name: 'Time Elapsed',
-      value: `${Number(detection.time_elapsed_minutes).toFixed(1)} min`,
+      value: finiteMetric(detection.time_elapsed_minutes)
+        ? `${detection.time_elapsed_minutes.toFixed(1)} min`
+        : '',
       inline: true,
     },
   ];
 
-  if (detection.velocity !== null && detection.velocity !== undefined) {
+  if (finiteMetric(detection.velocity)) {
     fields.push({
       name: velocityElevated ? '⚡ Velocity (elevated)' : 'Velocity',
       value: `${Number(detection.velocity).toFixed(3)} pts/min`,
@@ -99,30 +108,33 @@ export function buildAlertEmbed(
   if (effectiveTier === 'alert-worthy') {
     fields.push({
       name: 'First mover',
-      value: detection.first_mover_book ?? detection.bookmaker_key,
+      value: detection.first_mover_book ?? '',
       inline: true,
     });
   }
 
   if (detection.steam_detected) {
-    const steamBookCount =
-      typeof metadata.steamBookCount === 'number' ? metadata.steamBookCount : 0;
-    const steamWindowMinutes =
-      typeof metadata.steamWindowMinutes === 'number' ? metadata.steamWindowMinutes : 0;
-    fields.push({
-      name: 'Steam',
-      value: `${steamBookCount} books same direction in ${steamWindowMinutes}m`,
-      inline: false,
-    });
+    const steamBookCount = finiteMetric(metadata.steamBookCount)
+      ? metadata.steamBookCount
+      : null;
+    const steamWindowMinutes = finiteMetric(metadata.steamWindowMinutes)
+      ? metadata.steamWindowMinutes
+      : null;
+    if (steamBookCount !== null && steamWindowMinutes !== null)
+      fields.push({
+        name: 'Steam',
+        value: `${steamBookCount} books same direction in ${steamWindowMinutes}m`,
+        inline: false,
+      });
   }
 
   return {
-    title: `${detection.steam_detected ? '🔥 STEAM — ' : '📈 LINE MOVEMENT — '}${eventLabel.toUpperCase()}`,
-    description: `**${detection.market_key}**: ${detection.old_line} → ${detection.new_line} (${changeLabel})`,
-    color,
-    fields,
-    footer: { text: `${detection.current_snapshot_at} · ${channelName}` },
-    timestamp: detection.current_snapshot_at,
+    ...buildPresentationEmbed('service-alert', {
+      title: `${detection.steam_detected ? 'Steam' : 'Line Movement'}${knownText(eventLabel) ? ' · ' + eventLabel : ''}`,
+      description: `**${detection.market_key}**: ${detection.old_line} → ${detection.new_line} (${changeLabel})`,
+      fields,
+      timestamp: detection.current_snapshot_at,
+    }),
   };
 }
 
@@ -224,7 +236,9 @@ export async function runAlertNotificationPass(
 
   for (const detection of persistedSignals) {
     const tier = detection.tier as AlertDetectionTier;
-    const effectiveTier: AlertDetectionTier = detection.steam_detected ? 'alert-worthy' : tier;
+    const effectiveTier: AlertDetectionTier = detection.steam_detected
+      ? 'alert-worthy'
+      : tier;
 
     if (tier === 'watch') {
       if (!detection.steam_detected) {
@@ -296,8 +310,11 @@ export async function runAlertNotificationPass(
     }
 
     // Write cooldown only after at least one channel succeeds
-    const cooldownMs = COOLDOWN_MINUTES[effectiveTier as 'notable' | 'alert-worthy'] * 60 * 1000;
-    const cooldownExpiresAt = new Date(now.getTime() + cooldownMs).toISOString();
+    const cooldownMs =
+      COOLDOWN_MINUTES[effectiveTier as 'notable' | 'alert-worthy'] * 60 * 1000;
+    const cooldownExpiresAt = new Date(
+      now.getTime() + cooldownMs,
+    ).toISOString();
 
     await repository.updateNotified({
       id: detection.id,
@@ -340,7 +357,11 @@ async function postToDiscordWithRetry(input: {
   sleepImpl: (ms: number) => Promise<void>;
   audit?: AuditLogRepository | undefined;
 }) {
-  let lastResult: { ok: boolean; statusCode: number | null; error: string | null } = {
+  let lastResult: {
+    ok: boolean;
+    statusCode: number | null;
+    error: string | null;
+  } = {
     ok: false,
     statusCode: null,
     error: null,

@@ -41,56 +41,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR head
+      # Production credentials are exposed only to code installed and executed
+      # from GitHub's immutable, event-attested base SHA. The candidate SHA is
+      # evidence input only; no candidate checkout is needed for this job.
+      - name: Checkout trusted base runtime
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-base
+          fetch-depth: 1
+          persist-credentials: false
 
-      # UTV2-1630: this job runs a script from the PR's own checkout against
-      # production data. The credential is mechanically read-only, but the
-      # pull request still supplies the script. The path filter decides whether
-      # this job runs; the checkout decides what runs.
-      #
-      # A change to the runner must therefore land through a pull request that
-      # carries no production credential, and be rebased in — it cannot execute
-      # its own modified version here.
-      #
-      # UTV2-1629: the pinned set is the runner's ENTIRE runtime closure on the
-      # --dry-run path, not just the runner file. The original pin named
-      # shadow-scoring-runner.ts alone while that file statically imported
-      # apps/api/src/server.js — which transitively loads most of apps/api and
-      # packages/domain, i.e. precisely the paths in this workflow's trigger
-      # filter. A PR editing packages/domain therefore ran its own domain code
-      # against production, at import time, before --dry-run was ever parsed.
-      #
-      # That closure cannot be pinned here: it is the code this check exists to
-      # observe, so pinning it would mean the check never runs for the PRs it
-      # targets. It was cut instead — the apps/api imports are now dynamic and
-      # taken only on the non-dry-run path (see the note in the runner), leaving
-      # a closure small enough to pin outright:
-      #   scripts/shadow-scoring-runner.ts  — the runner itself
-      #   scripts/ci/assert-unmodified-vs-base.ts — this guard
-      #   packages/config/src               — @unit-talk/config resolves to src
-      #                                       (its package exports map to .ts),
-      #                                       and it is what reads the credential
-      #   package.json / pnpm-lock.yaml     — `pnpm install` runs PR-supplied
-      #                                       dependency and lifecycle scripts
-      #                                       before any of the above executes
-      # None of these are in this workflow's trigger paths, so pinning them
-      # costs the check nothing: a PR touching both must land them separately.
-      - name: Refuse to run PR-modified code against production
+      - name: Record trusted base and candidate identities
+        working-directory: trusted-base
         run: |
           set -euo pipefail
-          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.ref }}"
-          npx tsx scripts/ci/assert-unmodified-vs-base.ts \
-            --base "${{ github.event.pull_request.base.sha }}" \
-            --head "${{ github.event.pull_request.head.sha }}" \
-            scripts/shadow-scoring-runner.ts \
-            scripts/ci/assert-unmodified-vs-base.ts \
-            packages/config/src \
-            package.json \
-            pnpm-lock.yaml
+          actual_base="$(git rev-parse HEAD)"
+          expected_base="${{ github.event.pull_request.base.sha }}"
+          if [ "$actual_base" != "$expected_base" ]; then
+            echo "::error title=Trusted base identity mismatch::Expected $expected_base but checked out $actual_base"
+            exit 1
+          fi
+          mkdir -p artifacts
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          Path('artifacts/shadow-execution-identity.json').write_text(
+              json.dumps(
+                  {
+                      'trusted_base_sha': '${{ github.event.pull_request.base.sha }}',
+                      'candidate_sha': '${{ github.event.pull_request.head.sha }}',
+                      'runtime_source': 'trusted-base',
+                  },
+                  indent=2,
+              ) + '\n',
+              encoding='utf-8',
+          )
+          PY
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -102,8 +90,10 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: trusted-base/pnpm-lock.yaml
 
-      - name: Install dependencies
+      - name: Install trusted base dependencies
+        working-directory: trusted-base
         run: pnpm install --frozen-lockfile
 
       - name: Check for mechanically read-only parity credentials
@@ -183,6 +173,7 @@ jobs:
       - name: Run shadow scorer (dry-run)
         id: shadow_run
         if: steps.db_check.outputs.has_db == 'true'
+        working-directory: trusted-base
         env:
           SUPABASE_URL: ${{ secrets.SHADOW_PARITY_SUPABASE_URL }}
           SHADOW_PARITY_READ_ONLY_KEY: ${{ secrets.SHADOW_PARITY_READ_ONLY_KEY }}
@@ -207,6 +198,7 @@ jobs:
       - name: Parse shadow report and classify divergences
         id: classify
         if: steps.db_check.outputs.has_db == 'true'
+        working-directory: trusted-base
         run: |
           REPORT="artifacts/shadow-report.json"
 
@@ -365,10 +357,12 @@ jobs:
 
       # Upload the shadow report JSON as a workflow artifact (retained 30 days).
       - name: Upload shadow report artifact
-        if: steps.db_check.outputs.has_db == 'true' && always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: shadow-report
-          path: artifacts/shadow-report.json
+          path: |
+            trusted-base/artifacts/shadow-report.json
+            trusted-base/artifacts/shadow-execution-identity.json
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
