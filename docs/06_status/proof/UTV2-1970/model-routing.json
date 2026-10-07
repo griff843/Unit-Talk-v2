@@ -9,6 +9,9 @@
   "legacy_compatibility_used": false,
   "override_used": false,
   "override_authorized_by": null,
-  "execution_sha": "b9d5e698a84b7fae3411a6a8a3d7d12a49768acf",
-  "generated_at": "2026-10-07T15:44:35Z"
+  "codex_exit_code": 0,
+  "prompt_bytes": 23402,
+  "estimated_prompt_tokens": 5851,
+  "wall_time_ms": 3550660,
+  "generated_at": "2026-10-07T16:33:32.757Z"
 }
