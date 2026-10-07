@@ -1,0 +1,128 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100701
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100701
+  objective: "Griff explicitly authorized a separate bounded T1 repair of
+    metadata-only merge proof production/recovery on 2026-10-07. Merged PR #1720
+    has no CI run at its actual squash merge
+    0ad7e1eb6cb7cba1131743a46292a8e901f99e64 because CI skips metadata-only main
+    pushes. Its canonical closeout fails G6, despite genuine successful premerge
+    proof. Preserve G6 and exact-merge-SHA obligations. Keep the separately
+    authorized P1 refresh-workflow privilege repair out of this lane."
+  acceptance_criteria:
+    - Prevent metadata-only T1 merges from losing the full verify and protected
+      writable staging/T1 proof producer. Do not weaken G6, substitute premerge
+      proof, remove deferred_to_ci, waive a gate or fabricate successful check
+      states.
+    - Implement a narrowly bounded recovery for already-merged PRs using a
+      default-branch-controlled workflow definition, validated real merge SHA
+      reachable from protected main, actual checkout of that exact merge, and
+      real full CI/static plus protected staging proof. No arbitrary/open-PR
+      execution with write credentials. No production credentials or writes.
+    - If recovery must publish check results at the historical merge SHA,
+      publication must be automatic truthful reporting of actual native proof
+      jobs, never manual forced success. Fail closed on
+      missing/failed/cancelled/skipped proof, altered target, unmerged PR, wrong
+      base/repository, untrusted workflow ref or unreadable API. Preserve
+      execution-run SHA separately from tested merge SHA; never spoof GITHUB_SHA
+      or execution provenance. Do not create artificial branches/tags or dummy
+      implementation commits to trigger proof. Preserve current required native
+      PR checks and normal merge protection.
+    - Add deterministic positive and adversarial regressions in existing
+      node:test workflow-hardening coverage, including exact checkout,
+      stale/mismatched merge, skipped/failing/incomplete proof,
+      trusted-definition/write-permission boundary and real API/result wiring.
+      Keep G6 evaluator/policy unchanged.
+    - Execute the actual repair through ops:codex-exec and genuinely complete
+      all mandatory phases. Sanctioned child must not recursively invoke
+      ops:codex-exec. Run focused tests, pnpm verify, T1 DB proof, R-level, and
+      protected exact-HEAD CI/staging and normal controls. Open a separate draft
+      tier:T1 PR; obtain binding PM approval before normal governed merge.
+    - "After merge use the sanctioned recovery against PR #1720's real merge SHA
+      and rerun its truthful canonical closeout. Never claim closeout until all
+      gates pass. Then continue the separately authorized P1 workflow safety
+      repair before production Shadow and Discord deployment/live verification,
+      with reserved production deployment authority intact."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      WORK-2026100701 — metadata-only exact-merge proof recovery
+      Tier: T1
+      Lane type: governance
+      Executor: codex-cli
+
+      ## Invariants
+
+      No admission changes, G6 policy weakening, direct-main/admin bypass, branch-protection changes, fabricated check success, arbitrary write-capable PR workflow execution, production data access, Discord/product/settlement/scoring/grading/routing/provider/pricing/activation/schema changes, original runtime-proof regeneration, unrelated governance work or execution-provenance fabrication.
+
+      ## File Scope
+
+      - .github/workflows/ci.yml
+      - .github/workflows/merge-proof-recovery.yml
+      - scripts/ops/merge-proof-recovery.cjs
+      - scripts/ops/workflow-hardening.test.ts
+      - .ops/work/WORK-2026100701.md
+      - .ops/sync/WORK-2026100701.yml
+      - docs/06_status/lanes/WORK-2026100701.json
+      - docs/06_status/proof/WORK-2026100701/**
+
+      ## Proof
+
+      Named lane evidence only: measured missing merge-SHA producer, trusted recovery design, genuine actual-target test and staging receipts with separate workflow-run identity, regressions, exact-HEAD CI/native checks, actual executor machine attestation, PM approval and governed merge. Preserve G6 unchanged and original merged PR evidence. No general program/status documentation changes.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100701.md
+    title: WORK-2026100701 — metadata-only exact-merge proof recovery
+    description: |-
+      # WORK-2026100701 — metadata-only exact-merge proof recovery
+
+      Tier: T1
+      Lane type: governance
+      Executor: codex-cli
+
+      ## Objective
+
+      Griff explicitly authorized a separate bounded T1 repair of metadata-only merge proof production/recovery on 2026-10-07. Merged PR #1720 has no CI run at its actual squash merge 0ad7e1eb6cb7cba1131743a46292a8e901f99e64 because CI skips metadata-only main pushes. Its canonical closeout fails G6, despite genuine successful premerge proof. Preserve G6 and exact-merge-SHA obligations. Keep the separately authorized P1 refresh-workflow privilege repair out of this lane.
+
+      ## Acceptance Criteria
+
+      - Prevent metadata-only T1 merges from losing the full verify and protected writable staging/T1 proof producer. Do not weaken G6, substitute premerge proof, remove deferred_to_ci, waive a gate or fabricate successful check states.
+      - Implement a narrowly bounded recovery for already-merged PRs using a default-branch-controlled workflow definition, validated real merge SHA reachable from protected main, actual checkout of that exact merge, and real full CI/static plus protected staging proof. No arbitrary/open-PR execution with write credentials. No production credentials or writes.
+      - If recovery must publish check results at the historical merge SHA, publication must be automatic truthful reporting of actual native proof jobs, never manual forced success. Fail closed on missing/failed/cancelled/skipped proof, altered target, unmerged PR, wrong base/repository, untrusted workflow ref or unreadable API. Preserve execution-run SHA separately from tested merge SHA; never spoof GITHUB_SHA or execution provenance. Do not create artificial branches/tags or dummy implementation commits to trigger proof. Preserve current required native PR checks and normal merge protection.
+      - Add deterministic positive and adversarial regressions in existing node:test workflow-hardening coverage, including exact checkout, stale/mismatched merge, skipped/failing/incomplete proof, trusted-definition/write-permission boundary and real API/result wiring. Keep G6 evaluator/policy unchanged.
+      - Execute the actual repair through ops:codex-exec and genuinely complete all mandatory phases. Sanctioned child must not recursively invoke ops:codex-exec. Run focused tests, pnpm verify, T1 DB proof, R-level, and protected exact-HEAD CI/staging and normal controls. Open a separate draft tier:T1 PR; obtain binding PM approval before normal governed merge.
+      - After merge use the sanctioned recovery against PR #1720's real merge SHA and rerun its truthful canonical closeout. Never claim closeout until all gates pass. Then continue the separately authorized P1 workflow safety repair before production Shadow and Discord deployment/live verification, with reserved production deployment authority intact.
+
+      ## Invariants
+
+      No admission changes, G6 policy weakening, direct-main/admin bypass, branch-protection changes, fabricated check success, arbitrary write-capable PR workflow execution, production data access, Discord/product/settlement/scoring/grading/routing/provider/pricing/activation/schema changes, original runtime-proof regeneration, unrelated governance work or execution-provenance fabrication.
+
+      ## File Scope
+
+      - .github/workflows/ci.yml
+      - .github/workflows/merge-proof-recovery.yml
+      - scripts/ops/merge-proof-recovery.cjs
+      - scripts/ops/workflow-hardening.test.ts
+      - .ops/work/WORK-2026100701.md
+      - .ops/sync/WORK-2026100701.yml
+      - docs/06_status/lanes/WORK-2026100701.json
+      - docs/06_status/proof/WORK-2026100701/**
+
+      ## Proof
+
+      Named lane evidence only: measured missing merge-SHA producer, trusted recovery design, genuine actual-target test and staging receipts with separate workflow-run identity, regressions, exact-HEAD CI/native checks, actual executor machine attestation, PM approval and governed merge. Preserve G6 unchanged and original merged PR evidence. No general program/status documentation changes.
+    captured_at: 2026-10-07T18:58:05.829Z
+    description_sha256: d23a4d251dcd18df53d6c3fb30d38eadec8280c8dd530a4b5f5f7a7d14cfc7c3
+  contract_hash: fafdb645766fde2d4d3181f29aabb1126940a621b2ee0357062e1686fd9f03e5
