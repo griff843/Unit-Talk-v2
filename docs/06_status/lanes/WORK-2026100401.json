@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100401-order/.out/worktrees/codex__work-2026100401-shadow-settlement-truth",
   "branch": "codex/work-2026100401-shadow-settlement-truth",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "9326d4d6c150988b33db3f2840ed17fce659a6d8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1715",
   "files_changed": [],
   "file_scope_lock": [
@@ -24,7 +24,7 @@
     "docs/06_status/proof/WORK-2026100401/verification.md",
     "docs/06_status/proof/WORK-2026100401/model-routing.json"
   ],
-  "status": "blocked",
+  "status": "merged",
   "started_at": "2026-10-05T02:11:33.023Z",
   "heartbeat_at": "2026-10-05T02:30:15.407Z",
   "closed_at": null,
@@ -56,6 +56,15 @@
       "merge_sha": null,
       "failures": [
         "heartbeat_at 57.6h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-10-07T12:26:18.446Z",
+      "verdict": "fail",
+      "merge_sha": "9326d4d6c150988b33db3f2840ed17fce659a6d8",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1715 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
     }
