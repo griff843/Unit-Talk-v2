@@ -1,0 +1,362 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1970
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1970
+  objective: Make per-capper discord delivery fail closed unless its existing
+    pinned physical destination is the expected locked Discord public/forum
+    thread, and safely reopen an archived locked Official Picks thread without
+    ever dropping its lock.
+  acceptance_criteria:
+    - |-
+      ## PM plan approval and classification
+
+      PM explicitly approved this new bounded correction in the originating Codex chat on October 5, 2026. Do not reopen or widen [UTV2-1969](https://linear.app/unit-talk-v2/issue/UTV2-1969/smart-form-explicit-fail-closed-official-delivery-request-interaction).
+
+      * Tier: T1
+      * lane_type/work class: runtime
+      * Runtime singleton: yes
+      * Executor: Codex
+      * Orchestrator: Claude
+      * Tier C plan approval: granted
+      * Independent PM merge approval: required later at exact PR HEAD
+
+      ## Admission status: CLEARED
+
+      The earlier hold behind PR #1714 (WORK-2026100301) is resolved: #1714 merged as 9452d2de53f5af5465863664bb91ef48f4c275eb and WORK-2026100301 is closed, releasing the runtime singleton and the apps/worker/src/\*\* lock. This lane is admitted as the PM-approved T1 runtime lane. The earlier BLOCKED hold text is no longer execution authority. Do not stop for it.
+
+      Admission checks remain normal: runtime stays a singleton, and no other lane's locks may be overlapped, evicted or released. No deployment or live Discord mutation is authorized.
+
+      ## Approved substantive scope
+
+      * apps/worker/src/delivery-adapters.ts
+      * apps/worker/src/delivery-adapters.test.ts
+      * apps/worker/src/official-picks-exactly-once.test.ts
+
+      The third file was approved by PM on 2026-10-07 ONLY to update its existing Discord fetch mocks/fixtures for the new GET-before-POST contract, while preserving its existing nonce, idempotency and dispatch assertions. Production validation must not be weakened to accommodate stale mocks.
+
+      Normal issue-owned lane/sync/T1 proof artifacts allowed. No other implementation path authorized without returning to PM.
+
+      ## Objective
+
+      Make per-capper discord delivery fail closed unless its existing pinned physical destination is the expected locked Discord public/forum thread, and safely reopen an archived locked Official Picks thread without ever dropping its lock.
+
+      ## Required behavior
+
+      * Only human-cap discord with the existing valid pinned destination is affected.
+      * Before message POST, GET the pinned Discord channel with a bounded timeout.
+      * Require exact pinned channel ID, exact pinned guild ID, Discord public-thread type 11, structurally valid thread_metadata, and locked=true.
+      * Unknown/malformed/non-thread/unlocked/mismatched state: no message POST and no shared-map fallback.
+      * Active+locked: POST normally; do not mutate thread state.
+      * Archived+locked: PATCH only {archived, locked}, with an attributable bounded X-Audit-Log-Reason; re-GET; require same ID/guild/type and active+locked; only then POST.
+      * Never send locked=false.
+      * Never change permissions, overwrites, roles, parent, tags, name, routing, target maps or capper identity.
+      * No compensating re-archive behavior.
+      * Preserve existing message payload, Discord nonce/idempotency, resolved physical receipt channel and dispatch semantics.
+      * GET/PATCH/re-read failures occur before message POST and remain not-sent. Preserve ambiguous semantics only after message POST is actually issued.
+      * Every new Discord request has a bounded deadline.
+      * Killed official-picks stops upstream and produces zero adapter GET/PATCH/POST calls.
+      * No changes or activation for game-threads, strategy-room, exclusive-insights or any blocked/deferred target.
+
+      ## Focused tests
+
+      * Active locked success.
+      * Archived locked GET -> PATCH -> re-read -> POST.
+      * Unlocked refusal.
+      * Malformed/missing thread metadata refusal.
+      * Wrong ID/guild/type refusal.
+      * GET/PATCH/re-read failure and timeout refusal.
+      * Re-read unlocked refusal.
+      * Assert no request ever sends locked=false.
+      * Missing human-cap pin has no shared-map fallback.
+      * Unchanged nonce/message/receipt attribution.
+      * Zero POST for every precondition failure.
+      * Upstream kill-before-adapter remains green.
+      * Relevant voided/terminal containment regressions remain green.
+      * The existing apps/worker/src/official-picks-exactly-once.test.ts passes with its mocks updated to model the GET before POST and unchanged nonce/idempotency/dispatch assertions.
+
+      Use node:test and node:assert/strict; new tests directly runnable through tsx --test.
+
+      ## Verification and return
+
+      * pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts
+      * Relevant focused worker integration tests.
+      * pnpm verify.
+      * T1 staging pnpm test:db through sanctioned staging CI.
+      * R-level required artifacts.
+      * Exact-head CI/proof.
+      * Actual executor/model provenance.
+      * Independent PM PR review.
+
+      Never defeat the local staging guard or run writable production proof.
+
+      Return issue/work ID and lane manifest; exact PR and HEAD SHA; diff/scope audit; focused tests; verify/staging DB/R-level results; T1 proof bundle; confirmation no deployment/live Discord mutation occurred; discovered scope-widening needs as BLOCKED, never implemented.
+
+      ## Reserved authority
+
+      This plan approval does not authorize merge, deployment, live Discord thread mutation, role changes, official-picks release, replay/retry or watched delivery. PM merge approval and later Griff live authorizations remain separate. Existing Saints Track Only negative control remains untouched.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      PM plan approval and classification
+      PM explicitly approved this new bounded correction in the originating Codex chat on October 5, 2026. Do not reopen or widen [UTV2-1969](https://linear.app/unit-talk-v2/issue/UTV2-1969/smart-form-explicit-fail-closed-official-delivery-request-interaction).
+
+      * Tier: T1
+      * lane_type/work class: runtime
+      * Runtime singleton: yes
+      * Executor: Codex
+      * Orchestrator: Claude
+      * Tier C plan approval: granted
+      * Independent PM merge approval: required later at exact PR HEAD
+    - >-
+      Admission status: CLEARED
+
+      The earlier hold behind PR #1714 (WORK-2026100301) is resolved: #1714
+      merged as 9452d2de53f5af5465863664bb91ef48f4c275eb and WORK-2026100301 is
+      closed, releasing the runtime singleton and the apps/worker/src/\*\* lock.
+      This lane is admitted as the PM-approved T1 runtime lane. The earlier
+      BLOCKED hold text is no longer execution authority. Do not stop for it.
+
+
+      Admission checks remain normal: runtime stays a singleton, and no other
+      lane's locks may be overlapped, evicted or released. No deployment or live
+      Discord mutation is authorized.
+    - >-
+      Approved substantive scope
+
+      * apps/worker/src/delivery-adapters.ts
+
+      * apps/worker/src/delivery-adapters.test.ts
+
+      * apps/worker/src/official-picks-exactly-once.test.ts
+
+
+      The third file was approved by PM on 2026-10-07 ONLY to update its
+      existing Discord fetch mocks/fixtures for the new GET-before-POST
+      contract, while preserving its existing nonce, idempotency and dispatch
+      assertions. Production validation must not be weakened to accommodate
+      stale mocks.
+
+
+      Normal issue-owned lane/sync/T1 proof artifacts allowed. No other
+      implementation path authorized without returning to PM.
+    - >-
+      Required behavior
+
+      * Only human-cap discord with the existing valid pinned destination is
+      affected.
+
+      * Before message POST, GET the pinned Discord channel with a bounded
+      timeout.
+
+      * Require exact pinned channel ID, exact pinned guild ID, Discord
+      public-thread type 11, structurally valid thread_metadata, and
+      locked=true.
+
+      * Unknown/malformed/non-thread/unlocked/mismatched state: no message POST
+      and no shared-map fallback.
+
+      * Active+locked: POST normally; do not mutate thread state.
+
+      * Archived+locked: PATCH only {archived, locked}, with an attributable
+      bounded X-Audit-Log-Reason; re-GET; require same ID/guild/type and
+      active+locked; only then POST.
+
+      * Never send locked=false.
+
+      * Never change permissions, overwrites, roles, parent, tags, name,
+      routing, target maps or capper identity.
+
+      * No compensating re-archive behavior.
+
+      * Preserve existing message payload, Discord nonce/idempotency, resolved
+      physical receipt channel and dispatch semantics.
+
+      * GET/PATCH/re-read failures occur before message POST and remain
+      not-sent. Preserve ambiguous semantics only after message POST is actually
+      issued.
+
+      * Every new Discord request has a bounded deadline.
+
+      * Killed official-picks stops upstream and produces zero adapter
+      GET/PATCH/POST calls.
+
+      * No changes or activation for game-threads, strategy-room,
+      exclusive-insights or any blocked/deferred target.
+    - >-
+      Focused tests
+
+      * Active locked success.
+
+      * Archived locked GET -> PATCH -> re-read -> POST.
+
+      * Unlocked refusal.
+
+      * Malformed/missing thread metadata refusal.
+
+      * Wrong ID/guild/type refusal.
+
+      * GET/PATCH/re-read failure and timeout refusal.
+
+      * Re-read unlocked refusal.
+
+      * Assert no request ever sends locked=false.
+
+      * Missing human-cap pin has no shared-map fallback.
+
+      * Unchanged nonce/message/receipt attribution.
+
+      * Zero POST for every precondition failure.
+
+      * Upstream kill-before-adapter remains green.
+
+      * Relevant voided/terminal containment regressions remain green.
+
+      * The existing apps/worker/src/official-picks-exactly-once.test.ts passes
+      with its mocks updated to model the GET before POST and unchanged
+      nonce/idempotency/dispatch assertions.
+
+
+      Use node:test and node:assert/strict; new tests directly runnable through
+      tsx --test.
+    - >-
+      Verification and return
+
+      * pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts
+
+      * Relevant focused worker integration tests.
+
+      * pnpm verify.
+
+      * T1 staging pnpm test:db through sanctioned staging CI.
+
+      * R-level required artifacts.
+
+      * Exact-head CI/proof.
+
+      * Actual executor/model provenance.
+
+      * Independent PM PR review.
+
+
+      Never defeat the local staging guard or run writable production proof.
+
+
+      Return issue/work ID and lane manifest; exact PR and HEAD SHA; diff/scope
+      audit; focused tests; verify/staging DB/R-level results; T1 proof bundle;
+      confirmation no deployment/live Discord mutation occurred; discovered
+      scope-widening needs as BLOCKED, never implemented.
+    - >-
+      Reserved authority
+
+      This plan approval does not authorize merge, deployment, live Discord
+      thread mutation, role changes, official-picks release, replay/retry or
+      watched delivery. PM merge approval and later Griff live authorizations
+      remain separate. Existing Saints Track Only negative control remains
+      untouched.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1970/official-picks-enforce-pinned-locked-public-thread-delivery-and-safe
+    title: "Official Picks: enforce pinned locked public-thread delivery and safe
+      archive reopening"
+    description: |-
+      ## PM plan approval and classification
+
+      PM explicitly approved this new bounded correction in the originating Codex chat on October 5, 2026. Do not reopen or widen [UTV2-1969](https://linear.app/unit-talk-v2/issue/UTV2-1969/smart-form-explicit-fail-closed-official-delivery-request-interaction).
+
+      * Tier: T1
+      * lane_type/work class: runtime
+      * Runtime singleton: yes
+      * Executor: Codex
+      * Orchestrator: Claude
+      * Tier C plan approval: granted
+      * Independent PM merge approval: required later at exact PR HEAD
+
+      ## Admission status: CLEARED
+
+      The earlier hold behind PR #1714 (WORK-2026100301) is resolved: #1714 merged as 9452d2de53f5af5465863664bb91ef48f4c275eb and WORK-2026100301 is closed, releasing the runtime singleton and the apps/worker/src/\*\* lock. This lane is admitted as the PM-approved T1 runtime lane. The earlier BLOCKED hold text is no longer execution authority. Do not stop for it.
+
+      Admission checks remain normal: runtime stays a singleton, and no other lane's locks may be overlapped, evicted or released. No deployment or live Discord mutation is authorized.
+
+      ## Approved substantive scope
+
+      * apps/worker/src/delivery-adapters.ts
+      * apps/worker/src/delivery-adapters.test.ts
+      * apps/worker/src/official-picks-exactly-once.test.ts
+
+      The third file was approved by PM on 2026-10-07 ONLY to update its existing Discord fetch mocks/fixtures for the new GET-before-POST contract, while preserving its existing nonce, idempotency and dispatch assertions. Production validation must not be weakened to accommodate stale mocks.
+
+      Normal issue-owned lane/sync/T1 proof artifacts allowed. No other implementation path authorized without returning to PM.
+
+      ## Objective
+
+      Make per-capper discord delivery fail closed unless its existing pinned physical destination is the expected locked Discord public/forum thread, and safely reopen an archived locked Official Picks thread without ever dropping its lock.
+
+      ## Required behavior
+
+      * Only human-cap discord with the existing valid pinned destination is affected.
+      * Before message POST, GET the pinned Discord channel with a bounded timeout.
+      * Require exact pinned channel ID, exact pinned guild ID, Discord public-thread type 11, structurally valid thread_metadata, and locked=true.
+      * Unknown/malformed/non-thread/unlocked/mismatched state: no message POST and no shared-map fallback.
+      * Active+locked: POST normally; do not mutate thread state.
+      * Archived+locked: PATCH only {archived, locked}, with an attributable bounded X-Audit-Log-Reason; re-GET; require same ID/guild/type and active+locked; only then POST.
+      * Never send locked=false.
+      * Never change permissions, overwrites, roles, parent, tags, name, routing, target maps or capper identity.
+      * No compensating re-archive behavior.
+      * Preserve existing message payload, Discord nonce/idempotency, resolved physical receipt channel and dispatch semantics.
+      * GET/PATCH/re-read failures occur before message POST and remain not-sent. Preserve ambiguous semantics only after message POST is actually issued.
+      * Every new Discord request has a bounded deadline.
+      * Killed official-picks stops upstream and produces zero adapter GET/PATCH/POST calls.
+      * No changes or activation for game-threads, strategy-room, exclusive-insights or any blocked/deferred target.
+
+      ## Focused tests
+
+      * Active locked success.
+      * Archived locked GET -> PATCH -> re-read -> POST.
+      * Unlocked refusal.
+      * Malformed/missing thread metadata refusal.
+      * Wrong ID/guild/type refusal.
+      * GET/PATCH/re-read failure and timeout refusal.
+      * Re-read unlocked refusal.
+      * Assert no request ever sends locked=false.
+      * Missing human-cap pin has no shared-map fallback.
+      * Unchanged nonce/message/receipt attribution.
+      * Zero POST for every precondition failure.
+      * Upstream kill-before-adapter remains green.
+      * Relevant voided/terminal containment regressions remain green.
+      * The existing apps/worker/src/official-picks-exactly-once.test.ts passes with its mocks updated to model the GET before POST and unchanged nonce/idempotency/dispatch assertions.
+
+      Use node:test and node:assert/strict; new tests directly runnable through tsx --test.
+
+      ## Verification and return
+
+      * pnpm exec tsx --test apps/worker/src/delivery-adapters.test.ts
+      * Relevant focused worker integration tests.
+      * pnpm verify.
+      * T1 staging pnpm test:db through sanctioned staging CI.
+      * R-level required artifacts.
+      * Exact-head CI/proof.
+      * Actual executor/model provenance.
+      * Independent PM PR review.
+
+      Never defeat the local staging guard or run writable production proof.
+
+      Return issue/work ID and lane manifest; exact PR and HEAD SHA; diff/scope audit; focused tests; verify/staging DB/R-level results; T1 proof bundle; confirmation no deployment/live Discord mutation occurred; discovered scope-widening needs as BLOCKED, never implemented.
+
+      ## Reserved authority
+
+      This plan approval does not authorize merge, deployment, live Discord thread mutation, role changes, official-picks release, replay/retry or watched delivery. PM merge approval and later Griff live authorizations remain separate. Existing Saints Track Only negative control remains untouched.
+    captured_at: 2026-10-07T15:33:55.560Z
+    description_sha256: 343919670e979758df62d3dc4bea2317dbb115c2167a6126db778b7364008258
+  contract_hash: 986e741848bd27b99e967d6b8928a93c80873c5c891006dcc4a15838ae0cd460
