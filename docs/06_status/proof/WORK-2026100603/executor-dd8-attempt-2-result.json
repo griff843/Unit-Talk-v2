@@ -1,0 +1,37 @@
+{
+  "ok": false,
+  "code": "EXECUTION_FAILED",
+  "issue_id": "WORK-2026100603",
+  "branch": "codex/work-2026100603-executor-proof-truth",
+  "message": "codex exited with status 1: non-zero exit. Progress is checkpointed at /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100603-order/.out/worktrees/codex__work-2026100603-executor-proof-truth/.out/ops/execution-checkpoints/WORK-2026100603.json; the next dispatch resumes from phase 'verify' instead of repeating completed analysis. Model routing evidence: /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100603-order/.out/worktrees/codex__work-2026100603-executor-proof-truth/docs/06_status/proof/WORK-2026100603/model-routing.json (persistence: committed and pushed)",
+  "codex_exit_code": 1,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "codex_cli_version": "codex-cli 0.153.3",
+  "execution": {
+    "epoch_id": "dd8c1e84-1f63-4b5c-8729-684d46e7c0c9",
+    "epoch_mode": "fresh",
+    "implementation_baseline_sha": "43bd11515cb6ed375b6d9a09092e2eb3c3efe0ee",
+    "attempt": 2,
+    "attempt_start_sha": "e904027c5b031a7d9f65f1af8eb36abe1cb06cfc",
+    "resumed": true,
+    "phase": "verify",
+    "resumed_from_phase": "verify",
+    "skipped_phases": [
+      "orient",
+      "plan",
+      "implement"
+    ],
+    "carried_findings": 1,
+    "timeout_ms": 6480000,
+    "timeout_policy_id": "utv2-1594-exec-timeout-v1",
+    "timeout_clamped": "none",
+    "checkpoint_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100603-order/.out/worktrees/codex__work-2026100603-executor-proof-truth/.out/ops/execution-checkpoints/WORK-2026100603.json",
+    "outcome": "failed",
+    "heartbeat_state": "active",
+    "released_resources": []
+  }
+}
