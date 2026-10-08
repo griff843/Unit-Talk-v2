@@ -1,0 +1,95 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100701",
+  "pr_number": 1724,
+  "source_sha": "aeede37ad7a7f8b4e0aa03d330a0f80b58570a9e",
+  "reviewed_head_sha": "aeede37ad7a7f8b4e0aa03d330a0f80b58570a9e",
+  "generated_at": "2026-10-07T19:51:00Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "aeede37ad7a7f8b4e0aa03d330a0f80b58570a9e",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test 'scripts/ops/workflow-hardening.test.ts'",
+      "tests": 88,
+      "pass": 88,
+      "fail": 0,
+      "skipped": 0
+    },
+    "verify_static": "PASS",
+    "type_check": "PASS through pnpm verify:static",
+    "aggregate_test": "PASS through pnpm verify:static",
+    "r_level": "PASS at implementation SHA; 13 changed files; no matching rules",
+    "syntax": "PASS: CommonJS syntax and both edited workflow YAML documents parsed",
+    "diff_check": "PASS"
+  },
+  "runtime_proof": {
+    "status": "DEFERRED_TO_PROTECTED_CI",
+    "write_attempted": false,
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "local_guard_result": "REFUSED before DB access: host=127.0.0.1 ref=unidentified",
+    "required_environment": "exact-HEAD protected staging-ci with CI_SUPABASE_* credentials",
+    "protected_ci": "fresh exact-HEAD run pending for reworked draft PR head",
+    "production_access": false
+  },
+  "measured_defect": {
+    "target_pr": 1720,
+    "target_merge_sha": "0ad7e1eb6cb7cba1131743a46292a8e901f99e64",
+    "merged_to": "main",
+    "merge_sha_check_runs": 6,
+    "verify_context": "absent",
+    "writable_db_context": "absent",
+    "g6_policy_changed": false
+  },
+  "recovery_safety": {
+    "trigger": "repository_dispatch/merge-proof-recovery",
+    "branch_selectable_dispatch": false,
+    "validated_target_source": "GitHub merged pull request API merge_commit_sha",
+    "metadata_only_admission": "complete paginated list equal to pull.changed_files; filenames and rename sources restricted to .ops/sync and named status/proof trees",
+    "same_repository_head_required": true,
+    "reachability_source": "GitHub compare API against current default-branch head",
+    "exact_checkout_required": true,
+    "execution_sha_preserved_separately": true,
+    "native_jobs_queried_before_publication": true,
+    "workflow_run_identity_revalidated": "repository/event/path/default-branch head/execution SHA/run attempt",
+    "merged_target_revalidated_before_publication": true,
+    "refused_conclusion": "failure",
+    "non_success_publishes_success": false,
+    "production_credentials": false
+  },
+  "gate_results": [
+    {
+      "gate": "focused workflow hardening",
+      "verdict": "PASS",
+      "detail": "88 tests passed; literal resolver/publisher API execution plus metadata, rename, pagination, stale-attempt, wrong-run/head/checkout, missing/skipped/failing/incomplete adversarial cases included"
+    },
+    {
+      "gate": "full static verification",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static completed with zero failures"
+    },
+    {
+      "gate": "R-level",
+      "verdict": "PASS",
+      "detail": "13 changed files; no matching R-level rules"
+    },
+    {
+      "gate": "writable DB proof",
+      "verdict": "SKIP",
+      "detail": "Local guard refused before access; exact-HEAD staging-ci proof is required on the draft PR"
+    },
+    {
+      "gate": "PM merge approval",
+      "verdict": "SKIP",
+      "detail": "Executor did not self-approve or merge"
+    }
+  ]
+}

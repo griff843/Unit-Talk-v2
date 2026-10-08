@@ -1,0 +1,209 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100701",
+  "branch": "codex/work-2026100701-merge-proof-recovery",
+  "worktree": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100701-order/.out/worktrees/codex__work-2026100701-merge-proof-recovery",
+  "state_revision": 20,
+  "epoch": {
+    "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+    "mode": "rework",
+    "implementation_baseline_sha": "e776f859c09fdf3201e1363a9fdffa849628ba44",
+    "objective_identity": "WORK-2026100701:codex/work-2026100701-merge-proof-recovery",
+    "findings_identity": "265e8b41163fb8f9007054f06728e652fa16b42b103f062bd07ac767081b9f71",
+    "created_at": "2026-10-07T19:32:46.050Z",
+    "authority": "codex-exec"
+  },
+  "prior_epochs": [
+    {
+      "epoch": {
+        "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+        "mode": "fresh",
+        "implementation_baseline_sha": "a376e8aa53f1f7eb3c465a4144ae369fa3192fb4",
+        "objective_identity": "WORK-2026100701:codex/work-2026100701-merge-proof-recovery",
+        "findings_identity": "none",
+        "created_at": "2026-10-07T18:58:23.458Z",
+        "authority": "codex-exec"
+      },
+      "archived_at": "2026-10-07T19:32:46.050Z",
+      "completed_phases": [
+        {
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "phase": "orient",
+          "completed_at": "2026-10-07T19:01:26.011Z",
+          "attempt": 1,
+          "summary": "Confirmed clean sanctioned child worktree, authoritative captured contract hash, PR #1720 target merge SHA, unchanged G6 receipt contexts, and bounded allowed paths."
+        },
+        {
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "phase": "plan",
+          "completed_at": "2026-10-07T19:03:32.475Z",
+          "attempt": 1,
+          "summary": "Settled bounded design: all protected-main pushes retain native CI producers; repository_dispatch recovery validates current default-branch definition, merged PR/base/repository/ancestry, exact target checkout, protected staging proof, full static proof, and truthful check publication with separate execution/tested SHA identities."
+        },
+        {
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "phase": "implement",
+          "completed_at": "2026-10-07T19:04:48.590Z",
+          "attempt": 1,
+          "summary": "Implemented metadata-safe exact-SHA CI triggering and SHA-keyed push concurrency; added trusted repository_dispatch recovery with merged-target/ancestry validation, exact historical checkout, protected staging and full static native jobs, fail-closed truthful check reporting, and 9 positive/adversarial hardening regressions (85/85 focused suite)."
+        },
+        {
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "phase": "verify",
+          "completed_at": "2026-10-07T19:31:33.197Z",
+          "attempt": 1,
+          "summary": "Focused workflow hardening 85/85, local verify:static, YAML/CommonJS checks, proof audit, and final R-level passed; local DB guard refused unapproved target; protected exact-HEAD CI run 37673330935 passed writable staging/T1 job 112970817540 and receipt-consuming verify job 112974132181."
+        },
+        {
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "phase": "closeout",
+          "completed_at": "2026-10-07T19:31:34.366Z",
+          "attempt": 1,
+          "summary": "Draft PR #1724 is open, linked in the lane manifest, labeled tier:T1, clean/pushed at 69ad9c302e38b4827949b10d525f98b12ce7b0ca, and has native exact-HEAD proof receipts. Outer executor attestation, PM approval, merge, #1720 recovery, lane finalization, and orchestration reconcile remain intentionally pending."
+        }
+      ],
+      "findings": [
+        {
+          "id": "orient-1",
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "source_epoch_id": null,
+          "phase": "orient",
+          "summary": "Measured root cause: ci.yml paths-ignore suppresses exact-merge verify and Writable DB proof checks for metadata-only main pushes; unchanged G6 requires both contexts on the merge SHA. Captured task source is preserved in .ops/sync although transient .ops/work file is absent.",
+          "recorded_at": "2026-10-07T19:01:24.671Z",
+          "attempt": 1
+        },
+        {
+          "id": "verify-2",
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "source_epoch_id": null,
+          "phase": "verify",
+          "summary": "Protected CI run 37673330935 tested exact PR head 69ad9c302e38b4827949b10d525f98b12ce7b0ca; writable staging/T1 producer job 112970817540 passed and uploaded its same-run receipt.",
+          "recorded_at": "2026-10-07T19:26:21.266Z",
+          "attempt": 1
+        }
+      ],
+      "pending_actions": [],
+      "attempts": [
+        {
+          "epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+          "attempt": 1,
+          "started_at": "2026-10-07T18:58:23.458Z",
+          "ended_at": "2026-10-07T19:31:53.211Z",
+          "outcome": "completed",
+          "reason": "codex exited 0 and evidence persisted",
+          "phase_at_start": "orient",
+          "phase_at_end": "closeout",
+          "timeout_ms": 2700000,
+          "attempt_start_sha": "a376e8aa53f1f7eb3c465a4144ae369fa3192fb4",
+          "released_resources": []
+        }
+      ]
+    }
+  ],
+  "status": "completed",
+  "phase": "closeout",
+  "attempt": 1,
+  "created_at": "2026-10-07T18:58:23.458Z",
+  "updated_at": "2026-10-07T19:50:54.560Z",
+  "last_activity_at": "2026-10-07T19:50:54.560Z",
+  "heartbeat_at": "2026-10-07T19:50:40.721Z",
+  "heartbeat_interval_ms": 60000,
+  "timeout_policy": {
+    "policy_id": "utv2-1594-exec-timeout-v1",
+    "tier": "T1",
+    "reasoning_effort": "medium",
+    "phase": "orient",
+    "base_ms": 5400000,
+    "effort_multiplier": 1,
+    "phase_multiplier": 0.5,
+    "raw_ms": 2700000,
+    "timeout_ms": 2700000,
+    "hard_cap_ms": 14400000,
+    "floor_ms": 300000,
+    "clamped": "none",
+    "fallbacks": []
+  },
+  "completed_phases": [
+    {
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "phase": "orient",
+      "completed_at": "2026-10-07T19:48:45.061Z",
+      "attempt": 1,
+      "summary": "Rework epoch reviewed bounded findings, preserved frozen task/G6, confirmed clean branch and four-file implementation authority."
+    },
+    {
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "phase": "plan",
+      "completed_at": "2026-10-07T19:48:46.147Z",
+      "attempt": 1,
+      "summary": "Narrowed design to complete paginated metadata-only same-repo PR admission plus pre-publication workflow-run and merged-target revalidation with explicit failure outcomes."
+    },
+    {
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "phase": "implement",
+      "completed_at": "2026-10-07T19:48:47.221Z",
+      "attempt": 1,
+      "summary": "Implemented metadata path and rename-source allowlist, full file-count validation, same-repo head check, run/path/ref/head/attempt binding, fresh PR target checks, run-attempt provenance, and executable GitHub API mock regressions."
+    },
+    {
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "phase": "verify",
+      "completed_at": "2026-10-07T19:50:39.636Z",
+      "attempt": 1,
+      "summary": "Focused workflow hardening passed 88/88; syntax/YAML, diff check, pnpm verify:static, type-check/build/test, and R-level passed. Canonical pnpm verify reached the live DB gate and correctly refused local host 127.0.0.1 before access; protected staging-ci proof remains pending for fresh PR head."
+    },
+    {
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "phase": "closeout",
+      "completed_at": "2026-10-07T19:50:40.721Z",
+      "attempt": 1,
+      "summary": "Draft PR #1724 remains draft and tier:T1, pushed at 529e70b16 with reviewed source aeede37ad and refreshed named proof. Fresh exact-HEAD protected CI/staging, outer executor attestation, PM approval, merge, #1720 recovery, lane finalization, and reconcile remain pending external controls."
+    }
+  ],
+  "findings": [
+    {
+      "id": "orient-1",
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "source_epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+      "phase": "orient",
+      "summary": "Measured root cause: ci.yml paths-ignore suppresses exact-merge verify and Writable DB proof checks for metadata-only main pushes; unchanged G6 requires both contexts on the merge SHA. Captured task source is preserved in .ops/sync although transient .ops/work file is absent.",
+      "recorded_at": "2026-10-07T19:32:46.050Z",
+      "attempt": 1
+    },
+    {
+      "id": "verify-2",
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "source_epoch_id": "891c5c2c-39b3-41f5-8bc2-ec2170ae1106",
+      "phase": "verify",
+      "summary": "Protected CI run 37673330935 tested exact PR head 69ad9c302e38b4827949b10d525f98b12ce7b0ca; writable staging/T1 producer job 112970817540 passed and uploaded its same-run receipt.",
+      "recorded_at": "2026-10-07T19:32:46.050Z",
+      "attempt": 1
+    }
+  ],
+  "pending_actions": [],
+  "attempts": [
+    {
+      "epoch_id": "75fce2e3-36fe-4f27-86fe-bf8270728c80",
+      "attempt": 1,
+      "started_at": "2026-10-07T19:32:46.050Z",
+      "ended_at": "2026-10-07T19:50:54.560Z",
+      "outcome": "completed",
+      "reason": "codex exited 0 and evidence persisted",
+      "phase_at_start": "orient",
+      "phase_at_end": "closeout",
+      "timeout_ms": 2700000,
+      "attempt_start_sha": "e776f859c09fdf3201e1363a9fdffa849628ba44",
+      "released_resources": []
+    }
+  ],
+  "cancel_requested": false,
+  "cancel_reason": null,
+  "owner": {
+    "pid": 1040590,
+    "host": "DESKTOP-GP6RM0V"
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "checksum": "a7f41a89e586e612b30ac001c6c7388a7aff13750b0f54ca8ac045f7c8e20aaa"
+  }
+}
