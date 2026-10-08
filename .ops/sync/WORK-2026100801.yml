@@ -1,0 +1,299 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100801
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100801
+  objective: "Implement the one combined bounded T1 safety lane ratified by Griff
+    in PR #1724 comments 6064048646 and 6064625158, after historical PR #1720
+    recovery/closeout. Remove write-capable refresh authority from PR-controlled
+    workflow definitions and integrate the already-prepared approval
+    carry-forward design without weakening any substantive merge controls.
+    Authority:
+    https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064048646
+    and #issuecomment-6064625158."
+  acceptance_criteria:
+    - Preserve native required Executor Result Validation and Merge Gate
+      identities and eligible pull_request publications. Keep native
+      PR-triggered definitions wholly read-only. Move actions:write retry logic
+      into a separate definition whose event types guarantee
+      default-branch-controlled YAML (for example issue_comment,
+      repository_dispatch and validated workflow_run); do not rely on a mutable
+      in-workflow default-ref guard, and do not put workflow_dispatch with
+      selectable PR refs in the privileged definition. Preserve manual recovery
+      via default-controlled repository_dispatch if necessary; no pull_request
+      or pull_request_review-controlled write-capable definition, PR code
+      execution, PR checkout, artifact-sourced script or dependency bootstrap in
+      privileged jobs. Preserve exact eligible run/workflow/event/PR/head
+      selection and live HEAD recheck immediately before rerun; no forced check
+      state or fabricated success. Preserve PM comment, executor result, manual
+      default-branch and review refresh behavior through safe trusted event
+      handling. Re-evaluate carry-forward after exact-head native CI/ERV
+      completion through validated default-branch workflow_run signals if
+      needed; accept only expected workflows/events/repository/PR/head and
+      metadata, never upstream artifacts/code. Avoid retry loops and stale or
+      in-progress fallback. All unknown/mismatched/unreadable evidence refuses.
+    - Integrate the ratified existing carry-forward collector/verifier into
+      Merge Gate only for nonempty machine-classified stale-head-only verdict
+      errors, with complete matching codes and no prose matching or vacuous
+      fallback. Preserve message behavior, t1-approved, governance pause,
+      authorized human CODEOWNERS, exact-head technical checks and withdrawal
+      semantics. Preserve the original PM comment immutably. Emit separate
+      auditable computed output identifying original approval/comment and
+      successor head. Receipt is never accepted as input. Preserve existing
+      C1-C7 semantics and explicit deny-before-allow leaf rules, with no blanket
+      docs/.ops exemptions or expanded path allowlist.
+    - Trusted Merge Gate code may fetch head objects as inert data solely for
+      comparison; never checkout, execute, materialize or overwrite executed
+      code using head data. Adapt the prepared patch to current native jobs
+      rather than applying stale workflow context blindly. Keep hostile
+      git-show/checkout/curl materialization tests.
+    - Ensure the sanctioned immediate pre-merge authorization agrees with
+      ratified carry-forward by recomputing through the trusted collector, not
+      trusting a posted receipt or green Merge Gate alone. Retain live
+      required-check and head freshness rechecks, exact original approval
+      identity, no later withdrawal, fail-closed errors, and auditable receipt
+      fields. No branch-protection weakening, admin/direct-main or alternate SHA
+      fallback.
+    - Add deterministic literal workflow/API wiring and policy regressions for
+      trusted definition boundaries; same-repo malicious PR definition cannot
+      gain actions:write; exact run/head/PR selection; stale-only success;
+      missing/malformed codes; no approval; unauthorized/bot; wrong PR;
+      withdrawal; unknown/failed checks; unsafe/material/head conflict changes;
+      reserved paths; absent/unparseable/timed-out collector; receipt forgery;
+      live-head movement. Retain all prior checks/tests. Use node:test/assert
+      and directly executable tsx tests.
+    - Execute actual implementation through ops:codex-exec with genuine complete
+      phases and actual CLI/model provenance. Do not recursively invoke
+      ops:codex-exec. Run focused tests, pnpm verify, pnpm test:db, R-level and
+      protected exact-head CI/staging with genuine executor result. Local
+      unidentified DB guard refusal must remain honest and use existing
+      protected-CI deferral. Open separate draft tier:T1 PR; obtain new binding
+      PM merge approval. Do not deploy or access production from this lane.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100801 — native check refresh privilege boundary and ratified
+      approval carry-forward
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Invariants
+
+
+      No Discord product/presentation, scoring, grading, settlement semantics,
+      correction-chain interpretation, routing, membership/pricing,
+      permissions/topology, provider/kill-switch/Black Label/lifecycle
+      activation, schema, dependency, admission, concurrency, branch-protection
+      or unrelated governance changes. Preserve existence-based evidence-settled
+      semantics. No execution provenance fabrication, receipt-as-authority,
+      approval editing, manual forced checks, admin merge or direct-main bypass.
+
+
+      ## File Scope
+
+
+      - .github/workflows/executor-result-validator.yml
+
+      - .github/workflows/merge-gate.yml
+
+      - .github/workflows/required-check-refresh.yml
+
+      - scripts/ops/executor-result-check-selection.cjs
+
+      - scripts/ops/merge-gate-verdict.cjs
+
+      - scripts/ops/merge-gate-verdict.test.ts
+
+      - scripts/ops/pre-merge-authorization.ts
+
+      - scripts/ops/pre-merge-authorization.test.ts
+
+      - scripts/ops/workflow-hardening.test.ts
+
+      - .ops/work/WORK-2026100801.md
+
+      - .ops/sync/WORK-2026100801.yml
+
+      - docs/06_status/lanes/WORK-2026100801.json
+
+      - docs/06_status/proof/WORK-2026100801/**
+
+
+      ## Proof
+
+
+      Named lane proof only: canonical authority links, measured privilege
+      defect, actual executor history, focused security regressions, full verify
+      and protected staging receipts, exact-head check table, separate auditable
+      carry-forward output, PM decision and governed merge. Do not alter general
+      program/status or prepared canonical policy documents. If a genuinely
+      necessary file falls outside admitted scope, stop before editing it and
+      report the concrete requirement rather than quietly widening.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100801.md
+    title: WORK-2026100801 — native check refresh privilege boundary and ratified
+      approval carry-forward
+    description: >-
+      # WORK-2026100801 — native check refresh privilege boundary and ratified
+      approval carry-forward
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Implement the one combined bounded T1 safety lane ratified by Griff in PR
+      #1724 comments 6064048646 and 6064625158, after historical PR #1720
+      recovery/closeout. Remove write-capable refresh authority from
+      PR-controlled workflow definitions and integrate the already-prepared
+      approval carry-forward design without weakening any substantive merge
+      controls. Authority:
+      https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064048646
+      and #issuecomment-6064625158.
+
+
+      ## Acceptance Criteria
+
+
+      - Preserve native required Executor Result Validation and Merge Gate
+      identities and eligible pull_request publications. Keep native
+      PR-triggered definitions wholly read-only. Move actions:write retry logic
+      into a separate definition whose event types guarantee
+      default-branch-controlled YAML (for example issue_comment,
+      repository_dispatch and validated workflow_run); do not rely on a mutable
+      in-workflow default-ref guard, and do not put workflow_dispatch with
+      selectable PR refs in the privileged definition. Preserve manual recovery
+      via default-controlled repository_dispatch if necessary; no pull_request
+      or pull_request_review-controlled write-capable definition, PR code
+      execution, PR checkout, artifact-sourced script or dependency bootstrap in
+      privileged jobs. Preserve exact eligible run/workflow/event/PR/head
+      selection and live HEAD recheck immediately before rerun; no forced check
+      state or fabricated success. Preserve PM comment, executor result, manual
+      default-branch and review refresh behavior through safe trusted event
+      handling. Re-evaluate carry-forward after exact-head native CI/ERV
+      completion through validated default-branch workflow_run signals if
+      needed; accept only expected workflows/events/repository/PR/head and
+      metadata, never upstream artifacts/code. Avoid retry loops and stale or
+      in-progress fallback. All unknown/mismatched/unreadable evidence refuses.
+
+      - Integrate the ratified existing carry-forward collector/verifier into
+      Merge Gate only for nonempty machine-classified stale-head-only verdict
+      errors, with complete matching codes and no prose matching or vacuous
+      fallback. Preserve message behavior, t1-approved, governance pause,
+      authorized human CODEOWNERS, exact-head technical checks and withdrawal
+      semantics. Preserve the original PM comment immutably. Emit separate
+      auditable computed output identifying original approval/comment and
+      successor head. Receipt is never accepted as input. Preserve existing
+      C1-C7 semantics and explicit deny-before-allow leaf rules, with no blanket
+      docs/.ops exemptions or expanded path allowlist.
+
+      - Trusted Merge Gate code may fetch head objects as inert data solely for
+      comparison; never checkout, execute, materialize or overwrite executed
+      code using head data. Adapt the prepared patch to current native jobs
+      rather than applying stale workflow context blindly. Keep hostile
+      git-show/checkout/curl materialization tests.
+
+      - Ensure the sanctioned immediate pre-merge authorization agrees with
+      ratified carry-forward by recomputing through the trusted collector, not
+      trusting a posted receipt or green Merge Gate alone. Retain live
+      required-check and head freshness rechecks, exact original approval
+      identity, no later withdrawal, fail-closed errors, and auditable receipt
+      fields. No branch-protection weakening, admin/direct-main or alternate SHA
+      fallback.
+
+      - Add deterministic literal workflow/API wiring and policy regressions for
+      trusted definition boundaries; same-repo malicious PR definition cannot
+      gain actions:write; exact run/head/PR selection; stale-only success;
+      missing/malformed codes; no approval; unauthorized/bot; wrong PR;
+      withdrawal; unknown/failed checks; unsafe/material/head conflict changes;
+      reserved paths; absent/unparseable/timed-out collector; receipt forgery;
+      live-head movement. Retain all prior checks/tests. Use node:test/assert
+      and directly executable tsx tests.
+
+      - Execute actual implementation through ops:codex-exec with genuine
+      complete phases and actual CLI/model provenance. Do not recursively invoke
+      ops:codex-exec. Run focused tests, pnpm verify, pnpm test:db, R-level and
+      protected exact-head CI/staging with genuine executor result. Local
+      unidentified DB guard refusal must remain honest and use existing
+      protected-CI deferral. Open separate draft tier:T1 PR; obtain new binding
+      PM merge approval. Do not deploy or access production from this lane.
+
+
+      ## Invariants
+
+
+      No Discord product/presentation, scoring, grading, settlement semantics,
+      correction-chain interpretation, routing, membership/pricing,
+      permissions/topology, provider/kill-switch/Black Label/lifecycle
+      activation, schema, dependency, admission, concurrency, branch-protection
+      or unrelated governance changes. Preserve existence-based evidence-settled
+      semantics. No execution provenance fabrication, receipt-as-authority,
+      approval editing, manual forced checks, admin merge or direct-main bypass.
+
+
+      ## File Scope
+
+
+      - .github/workflows/executor-result-validator.yml
+
+      - .github/workflows/merge-gate.yml
+
+      - .github/workflows/required-check-refresh.yml
+
+      - scripts/ops/executor-result-check-selection.cjs
+
+      - scripts/ops/merge-gate-verdict.cjs
+
+      - scripts/ops/merge-gate-verdict.test.ts
+
+      - scripts/ops/pre-merge-authorization.ts
+
+      - scripts/ops/pre-merge-authorization.test.ts
+
+      - scripts/ops/workflow-hardening.test.ts
+
+      - .ops/work/WORK-2026100801.md
+
+      - .ops/sync/WORK-2026100801.yml
+
+      - docs/06_status/lanes/WORK-2026100801.json
+
+      - docs/06_status/proof/WORK-2026100801/**
+
+
+      ## Proof
+
+
+      Named lane proof only: canonical authority links, measured privilege
+      defect, actual executor history, focused security regressions, full verify
+      and protected staging receipts, exact-head check table, separate auditable
+      carry-forward output, PM decision and governed merge. Do not alter general
+      program/status or prepared canonical policy documents. If a genuinely
+      necessary file falls outside admitted scope, stop before editing it and
+      report the concrete requirement rather than quietly widening.
+    captured_at: 2026-10-08T17:27:20.199Z
+    description_sha256: 67afa43d7722cf08080d560d408110c6c284349d6c7713d30937537aaa63a047
+  contract_hash: 6b052c841dda9612a4387ed6214a6fb850ef1dcfba2e5f781b1d8723aaf6eb60
