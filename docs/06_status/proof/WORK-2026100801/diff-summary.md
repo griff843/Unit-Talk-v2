@@ -2,7 +2,7 @@
 
 Execution SHA: `9f8f19029cd94696e3449f4d38634a7b68342fad`<br>
 Diff base: `20f5c6e8b084655b6172da9ac76a6d8076ace642` (`origin/main`)<br>
-Merge SHA: pending merge<br>
+Merge SHA: fbcc25985e469d82f1ebd338f8e066fc7cec5729<br>
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1725
 
 ## What changed
@@ -50,5 +50,5 @@ lane manifest/sync records.
 ## SHA Binding
 
 Execution SHA: `9f8f19029cd94696e3449f4d38634a7b68342fad`<br>
-Merge SHA: pending merge<br>
+Merge SHA: fbcc25985e469d82f1ebd338f8e066fc7cec5729<br>
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1725
