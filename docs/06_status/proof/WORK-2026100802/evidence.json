@@ -1,0 +1,104 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100802",
+  "pr_number": 1727,
+  "source_sha": "4f75b0017512e86737a9c59892a7673dfe9536da",
+  "reviewed_head_sha": "4f75b0017512e86737a9c59892a7673dfe9536da",
+  "generated_at": "2026-10-08T21:08:06Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4f75b0017512e86737a9c59892a7673dfe9536da",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "4f75b0017512e86737a9c59892a7673dfe9536da",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/proof-generate.test.ts",
+      "tests": 302,
+      "pass": 302,
+      "fail": 0,
+      "skipped": 0
+    },
+    "note": "Local static verification exited 0; protected exact-head CI and staging receipts remain pending."
+  },
+  "gate_results": [
+    {
+      "gate": "focused closeout-control regressions",
+      "verdict": "PASS",
+      "detail": "302 tests passed; literal workflow extraction, push binding, attested WORK recovery, P3/C4, and refusal controls included"
+    },
+    {
+      "gate": "full static verification",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static completed with zero failures"
+    },
+    {
+      "gate": "writable DB proof",
+      "verdict": "SKIP",
+      "detail": "Local guard refused before access: host=127.0.0.1 ref=unidentified; protected staging-ci required"
+    },
+    {
+      "gate": "protected exact-head CI",
+      "verdict": "SKIP",
+      "detail": "Pending final proof push on draft PR #1727"
+    },
+    {
+      "gate": "PM merge approval and post-merge closeout",
+      "verdict": "SKIP",
+      "detail": "Reserved post-executor work; executor does not claim approval, merge, finalization, or self-closure"
+    }
+  ],
+  "measured_defects": {
+    "push_discovery_run": 37833846230,
+    "manual_recovery_run": 37836968538,
+    "before": [
+      "push extraction recognized only UTV2 IDs",
+      "Merge SHA: pending merge<br> was not a bindable placeholder"
+    ],
+    "after": [
+      "literal workflow extraction passes WORK, UNI, UTV2, none, embedded, and ambiguous cases",
+      "push and attested dispatch paths bind diff-summary.md while preserving strict P3/C4 controls"
+    ]
+  },
+  "verification": {
+    "focused_tests": "302 pass, 0 fail",
+    "type_check": "pass through pnpm verify:static",
+    "test": "pass through pnpm verify:static",
+    "verify_static": "pass",
+    "r_level": "pending exact-head proof commit",
+    "scope": "all changed files are within the WORK-2026100802 file scope lock"
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "exit_code": 1,
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "write_attempted": false
+  },
+  "preserved_controls": [
+    "GitHub-backed PR identity",
+    "authoritative merge SHA reachability and ownership",
+    "push/PR merge-SHA divergence refusal",
+    "immutable model-routing closeout_binding",
+    "merge mutex and branch protection",
+    "UTV2-1576 unexpected-tracked-changes guard",
+    "fail-closed partial-rebind read-back"
+  ],
+  "pending": [
+    "R-level receipt on final proof head",
+    "protected exact-head CI and staging receipt",
+    "outer-wrapper executor-result/v1 publication",
+    "PM approval, governed merge, lane finalization, self-closure, and WORK-2026100801 trusted closeout"
+  ]
+}

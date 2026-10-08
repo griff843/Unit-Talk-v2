@@ -8,8 +8,19 @@
   "branch": "codex/work-2026100802-closeout-control",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1727",
+  "files_changed": [
+    ".github/workflows/post-merge-lane-close.yml",
+    ".ops/sync/WORK-2026100802.yml",
+    "docs/06_status/lanes/WORK-2026100802.json",
+    "docs/06_status/proof/WORK-2026100802/diff-summary.md",
+    "docs/06_status/proof/WORK-2026100802/evidence.json",
+    "docs/06_status/proof/WORK-2026100802/model-routing.json",
+    "docs/06_status/proof/WORK-2026100802/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/proof-generate.test.ts",
+    "scripts/ops/proof-generate.ts"
+  ],
   "file_scope_lock": [
     ".github/workflows/post-merge-lane-close.yml",
     ".ops/sync/WORK-2026100802.yml",
@@ -27,9 +38,9 @@
     "docs/06_status/proof/WORK-2026100802/verification.md",
     "docs/06_status/proof/WORK-2026100802/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-08T20:55:02.773Z",
-  "heartbeat_at": "2026-10-08T20:55:02.773Z",
+  "heartbeat_at": "2026-10-08T21:08:06.537Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100802-closeout-control.json",
