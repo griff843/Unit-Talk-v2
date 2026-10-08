@@ -1,0 +1,277 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100802
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100802
+  objective: >-
+    Repair the trusted post-merge closeout controls so a merged repository-owned
+    `WORK-<n>` lane closes normally and a manual recovery binds every proof
+    artifact that truth-check P3/C4 scans. Ratified by the PM on PR #1726
+    (CHANGES_REQUIRED on a one-file workaround) after WORK-2026100801 / PR #1725
+    stranded. Then use the repaired control to close WORK-2026100801. Measured
+    defects:
+
+    `.github/workflows/post-merge-lane-close.yml` "Extract issue ID" greps only
+    `UTV2-\d+` in the commit
+
+    message and the PR branch, so a merged `WORK-*` (or `UNI-*`) lane is never
+    discovered on push and every later step is skipped (run 37833846230).
+
+    `scripts/ops/proof-generate.ts` `PLACEHOLDER_VALUE_PATTERN` is anchored and
+    does not admit a trailing
+
+    markdown line break, so `Merge SHA: pending merge<br>` in `diff-summary.md`
+    is "no bindable anchor". `rebindMergeShaAnchorsInMarkdown` leaves it
+    untouched, `ops:proof-generate` refuses it and `ops:lane-close
+    --repair-merged` fails closed, leaving truth-check P3/C4 red (dispatch run
+    37836968538).
+  acceptance_criteria:
+    - Issue extraction recognizes canonical repository-owned IDs `UTV2-<n>`,
+      `UNI-<n>` and `WORK-<n>` from the
+    - merge commit message and, failing that, from the associated PR branch,
+      case-insensitively and normalized to upper case. Existing UTV2 behavior
+      and precedence are unchanged. No ID is ever invented, no partial or
+      embedded token (for example inside a longer word) is accepted, and when
+      several IDs are present the first in the message wins exactly as today.
+      The same workflow's notices and the header comment are updated to say so.
+    - The merge-SHA rebinder admits a trailing markdown line break (`<br>`,
+      `<br/>`, `<br />`) after a
+    - "placeholder value on a labelled merge-SHA line, preserves that suffix,
+      and binds the authoritative merge SHA. It does not widen what counts as a
+      placeholder: any other trailing text, an authored non-placeholder value, a
+      SHA already present, and content inside fenced blocks keep today's
+      behavior. No blanket accept."
+    - Both the push path (`ops:proof-generate --merge-sha`) and the
+      `workflow_dispatch` recovery
+    - (`ops:lane-close --repair-merged` rebind) bind `diff-summary.md` as well
+      as verification.md, evidence.json and the model-routing protections
+      already in place, with the existing read-back that refuses a partial
+      rebind. P3 and C4 are not weakened.
+    - "Preserved unchanged: GitHub-backed PR identity, authoritative merge SHA,
+      merge-SHA reachability and"
+    - ownership, push/PR merge-SHA divergence refusal (cross-merge replay),
+      immutable model-routing `closeout_binding`, merge mutex, branch
+      protection, the UTV2-1576 unexpected-tracked-changes guard, and
+      fail-closed behavior. No direct-main mutation path is added.
+    - "Regressions (node:test, extending existing test files; a new test file is
+      out of scope): a merged WORK"
+    - lane is discovered and closes on push (literal workflow extraction
+      (executed from lane-close.test.ts, which already reads
+      post-merge-lane-close.yml) against commit-message and branch inputs for
+      WORK, UNI, UTV2, none, and ambiguous); a manual workflow_dispatch recovery
+      of an already-merged WORK lane binds `diff-summary.md` and passes P3/C4;
+      wrong PR, wrong merge SHA, unreachable SHA and cross-merge replay refuse;
+      existing UTV2 and UNI behavior is unchanged; the `<br>` forms bind and
+      look-alike non-placeholders do not.
+    - This lane's own proof bundle must be bindable by the corrected push path
+      so the lane self-closes on
+    - merge. Do not touch WORK-2026100801 proof files, and do not special-case
+      any one lane.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100802 — post-merge closeout control repair for WORK-* lanes
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Invariants
+
+
+      No branch-protection, required-check, merge-gate, ERV, File Scope Lock,
+      tier, admission, concurrency or
+
+      truth-check (P3/C4/G-series) weakening. No product, runtime, schema,
+      dependency, Discord, settlement,
+
+      grading, routing, membership or Smart Form change. No admin or direct-main
+      bypass. No manual forced
+
+      check state. No fabrication of executor provenance.
+
+
+      ## File Scope
+
+
+      - .github/workflows/post-merge-lane-close.yml
+
+      - scripts/ops/proof-generate.ts
+
+      - scripts/ops/proof-generate.test.ts
+
+      - scripts/ops/lane-close.ts
+
+      - scripts/ops/lane-close.test.ts
+
+      - .ops/work/WORK-2026100802.md
+
+      - .ops/sync/WORK-2026100802.yml
+
+      - docs/06_status/lanes/WORK-2026100802.json
+
+      - docs/06_status/proof/WORK-2026100802/**
+
+
+      ## Proof
+
+
+      Named lane proof only: measured before/after reproductions of both
+      defects, focused regression output,
+
+      exact-head CI and protected staging receipts, the self-closure result on
+      merge, and then the trusted
+
+      closeout of WORK-2026100801 with full truth-check PASS. Proof binding rows
+      use the pre-merge contract
+
+      (`Merge SHA: pending merge`, no trailing markup). If a genuinely necessary
+      file falls outside this scope,
+
+      stop before editing it and report the concrete requirement.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100802.md
+    title: WORK-2026100802 — post-merge closeout control repair for WORK-* lanes
+    description: >-
+      # WORK-2026100802 — post-merge closeout control repair for WORK-* lanes
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Repair the trusted post-merge closeout controls so a merged
+      repository-owned `WORK-<n>` lane closes
+
+      normally and a manual recovery binds every proof artifact that truth-check
+      P3/C4 scans. Ratified by the
+
+      PM on PR #1726 (CHANGES_REQUIRED on a one-file workaround) after
+      WORK-2026100801 / PR #1725 stranded.
+
+      Then use the repaired control to close WORK-2026100801. Measured defects:
+
+
+      1. `.github/workflows/post-merge-lane-close.yml` "Extract issue ID" greps
+      only `UTV2-\d+` in the commit
+         message and the PR branch, so a merged `WORK-*` (or `UNI-*`) lane is never discovered on push and every
+         later step is skipped (run 37833846230).
+      2. `scripts/ops/proof-generate.ts` `PLACEHOLDER_VALUE_PATTERN` is anchored
+      and does not admit a trailing
+         markdown line break, so `Merge SHA: pending merge<br>` in `diff-summary.md` is "no bindable anchor".
+         `rebindMergeShaAnchorsInMarkdown` leaves it untouched, `ops:proof-generate` refuses it and
+         `ops:lane-close --repair-merged` fails closed, leaving truth-check P3/C4 red (dispatch run 37836968538).
+
+      ## Acceptance Criteria
+
+
+      - Issue extraction recognizes canonical repository-owned IDs `UTV2-<n>`,
+      `UNI-<n>` and `WORK-<n>` from the
+        merge commit message and, failing that, from the associated PR branch, case-insensitively and normalized
+        to upper case. Existing UTV2 behavior and precedence are unchanged. No ID is ever invented, no partial
+        or embedded token (for example inside a longer word) is accepted, and when several IDs are present the
+        first in the message wins exactly as today. The same workflow's notices and the header comment are
+        updated to say so.
+      - The merge-SHA rebinder admits a trailing markdown line break (`<br>`,
+      `<br/>`, `<br />`) after a
+        placeholder value on a labelled merge-SHA line, preserves that suffix, and binds the authoritative merge
+        SHA. It does not widen what counts as a placeholder: any other trailing text, an authored non-placeholder
+        value, a SHA already present, and content inside fenced blocks keep today's behavior. No blanket accept.
+      - Both the push path (`ops:proof-generate --merge-sha`) and the
+      `workflow_dispatch` recovery
+        (`ops:lane-close --repair-merged` rebind) bind `diff-summary.md` as well as verification.md,
+        evidence.json and the model-routing protections already in place, with the existing read-back that
+        refuses a partial rebind. P3 and C4 are not weakened.
+      - Preserved unchanged: GitHub-backed PR identity, authoritative merge SHA,
+      merge-SHA reachability and
+        ownership, push/PR merge-SHA divergence refusal (cross-merge replay), immutable model-routing
+        `closeout_binding`, merge mutex, branch protection, the UTV2-1576 unexpected-tracked-changes guard, and
+        fail-closed behavior. No direct-main mutation path is added.
+      - Regressions (node:test, extending existing test files; a new test file
+      is out of scope): a merged WORK
+        lane is discovered and closes on push (literal workflow extraction (executed from lane-close.test.ts, which already reads post-merge-lane-close.yml) against commit-message and
+        branch inputs for WORK, UNI, UTV2, none, and ambiguous); a manual workflow_dispatch recovery of an
+        already-merged WORK lane binds `diff-summary.md` and passes P3/C4; wrong PR, wrong merge SHA, unreachable
+        SHA and cross-merge replay refuse; existing UTV2 and UNI behavior is unchanged; the `<br>` forms bind
+        and look-alike non-placeholders do not.
+      - This lane's own proof bundle must be bindable by the corrected push path
+      so the lane self-closes on
+        merge. Do not touch WORK-2026100801 proof files, and do not special-case any one lane.
+
+      ## Invariants
+
+
+      No branch-protection, required-check, merge-gate, ERV, File Scope Lock,
+      tier, admission, concurrency or
+
+      truth-check (P3/C4/G-series) weakening. No product, runtime, schema,
+      dependency, Discord, settlement,
+
+      grading, routing, membership or Smart Form change. No admin or direct-main
+      bypass. No manual forced
+
+      check state. No fabrication of executor provenance.
+
+
+      ## File Scope
+
+
+      - .github/workflows/post-merge-lane-close.yml
+
+      - scripts/ops/proof-generate.ts
+
+      - scripts/ops/proof-generate.test.ts
+
+      - scripts/ops/lane-close.ts
+
+      - scripts/ops/lane-close.test.ts
+
+      - .ops/work/WORK-2026100802.md
+
+      - .ops/sync/WORK-2026100802.yml
+
+      - docs/06_status/lanes/WORK-2026100802.json
+
+      - docs/06_status/proof/WORK-2026100802/**
+
+
+      ## Proof
+
+
+      Named lane proof only: measured before/after reproductions of both
+      defects, focused regression output,
+
+      exact-head CI and protected staging receipts, the self-closure result on
+      merge, and then the trusted
+
+      closeout of WORK-2026100801 with full truth-check PASS. Proof binding rows
+      use the pre-merge contract
+
+      (`Merge SHA: pending merge`, no trailing markup). If a genuinely necessary
+      file falls outside this scope,
+
+      stop before editing it and report the concrete requirement.
+    captured_at: 2026-10-08T20:54:52.347Z
+    description_sha256: 38f38633e6894a6923fdc931bb6a2a36e4f048400f8e4026e665b6aefc6ffdaf
+  contract_hash: 1218c44ea83e6e74b07f4800a4d3c36f343f691cdf538ceb136b19316d72eec7
