@@ -2781,6 +2781,134 @@ test('UTV2-1586 #15 pre-existing repair path with populated pr_url is unchanged'
   assert.strictEqual(result.manifest.pr_url, manifest.pr_url);
 });
 
+function workflowRunScript(workflow: string, stepName: string): string {
+  const stepStart = workflow.indexOf(`      - name: ${stepName}`);
+  assert.notStrictEqual(stepStart, -1, `workflow step not found: ${stepName}`);
+  const nextStep = workflow.indexOf('\n      - name:', stepStart + 1);
+  const step = workflow.slice(stepStart, nextStep === -1 ? undefined : nextStep);
+  const runStart = step.indexOf('        run: |\n');
+  assert.notStrictEqual(runStart, -1, `workflow step has no literal run block: ${stepName}`);
+  return step
+    .slice(runStart + '        run: |\n'.length)
+    .split('\n')
+    .map((line) => line.startsWith('          ') ? line.slice(10) : line)
+    .join('\n');
+}
+
+function executeWorkflowIssueExtraction(commitMessage: string, prBranch: string): string {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const script = workflowRunScript(workflow, 'Extract issue ID from commit message and PR branch')
+    .replaceAll('${{ github.repository }}', 'griff843/Unit-Talk-v2');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026100802-extract-'));
+  try {
+    const binDir = path.join(root, 'bin');
+    const outputPath = path.join(root, 'github-output');
+    fs.mkdirSync(binDir);
+    const curlPath = path.join(binDir, 'curl');
+    const jqPath = path.join(binDir, 'jq');
+    fs.writeFileSync(curlPath, '#!/bin/sh\nprintf \'%s\\n\' "$MOCK_API_RESPONSE"\n');
+    fs.writeFileSync(
+      jqPath,
+      [
+        '#!/bin/sh',
+        'case "$*" in',
+        '  *number*) printf \'%s\\n\' "$MOCK_PR_NUMBER" ;;',
+        '  *head.ref*) printf \'%s\\n\' "$MOCK_PR_BRANCH" ;;',
+        '  *) exit 1 ;;',
+        'esac',
+        '',
+      ].join('\n'),
+    );
+    fs.chmodSync(curlPath, 0o755);
+    fs.chmodSync(jqPath, 0o755);
+
+    execFileSync('bash', ['-e', '-c', script], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        COMMIT_MSG: commitMessage,
+        COMMIT_SHA: 'a'.repeat(40),
+        DISPATCH_ISSUE_ID: '',
+        DISPATCH_PR: '',
+        GITHUB_OUTPUT: outputPath,
+        GITHUB_TOKEN: 'test-token',
+        MOCK_API_RESPONSE: '[]',
+        MOCK_PR_NUMBER: '1726',
+        MOCK_PR_BRANCH: prBranch,
+      },
+    });
+
+    const issueLine = fs.readFileSync(outputPath, 'utf8')
+      .split('\n')
+      .find((line) => line.startsWith('issue_id='));
+    assert.ok(issueLine, 'literal workflow script must emit issue_id');
+    return issueLine.slice('issue_id='.length);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test('WORK-2026100802: literal push extraction recognizes repository-owned IDs with boundaries and message precedence', () => {
+  const cases = [
+    {
+      name: 'WORK from commit message',
+      message: 'feat(ops): work-2026100802 closeout controls',
+      branch: 'codex/unrelated',
+      expected: 'WORK-2026100802',
+    },
+    {
+      name: 'UNI from PR branch fallback',
+      message: 'squashed governance repair',
+      branch: 'codex/uni-204-repair',
+      expected: 'UNI-204',
+    },
+    {
+      name: 'UTV2 remains supported',
+      message: 'fix: UTV2-670 stale lane alerter',
+      branch: 'codex/unrelated',
+      expected: 'UTV2-670',
+    },
+    {
+      name: 'embedded tokens are rejected',
+      message: 'fix preWORK-88post and xUTV2-42y',
+      branch: 'codex/preUNI-9post',
+      expected: '',
+    },
+    {
+      name: 'first message match wins over later message and branch IDs',
+      message: 'fix UNI-7 before WORK-8 and UTV2-9',
+      branch: 'codex/work-10-fallback-must-not-win',
+      expected: 'UNI-7',
+    },
+  ];
+
+  for (const fixture of cases) {
+    assert.strictEqual(
+      executeWorkflowIssueExtraction(fixture.message, fixture.branch),
+      fixture.expected,
+      fixture.name,
+    );
+  }
+});
+
+test('WORK-2026100802: push/PR merge-SHA divergence remains a hard refusal', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const resolveScript = workflowRunScript(workflow, 'Resolve merge SHA');
+  assert.match(
+    resolveScript,
+    /if \[ "\$EVENT_NAME" = "push" \] && \[ "\$merge_sha" != "\$PUSH_SHA" \]; then/u,
+  );
+  assert.match(resolveScript, /Refusing cross-merge closeout/u);
+  assert.match(resolveScript, /exit 1/u);
+});
+
 test('UTV2-1586 #16 workflow dispatch forwards PR only to the trusted repair command', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
@@ -4273,6 +4401,88 @@ function writeDiffSummary(proofDir: string, issueId: string, anchorValue: string
   );
   return diffSummaryPath;
 }
+
+test('WORK-2026100802: attested workflow_dispatch recovery binds the full WORK proof bundle and clears P3/C4', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const issueId = 'WORK-2026100802';
+    const proofDir = writeLegacySectionOnlyBundle(repoRoot, issueId);
+    const diffSummaryPath = path.join(proofDir, 'diff-summary.md');
+    fs.writeFileSync(
+      diffSummaryPath,
+      [
+        `# Diff summary: ${issueId}`,
+        '',
+        'Measured recovery evidence must survive rebinding.',
+        '',
+        'Merge SHA: pending merge<br>',
+        '',
+      ].join('\n'),
+    );
+    const manifest = utv2_1745Manifest(issueId);
+    manifest.branch = 'codex/work-2026100802-closeout-control';
+    manifest.expected_proof_paths = [
+      'diff-summary.md',
+      'evidence.json',
+      'verification.md',
+      'model-routing.json',
+    ].map((name) => path.posix.join('docs', '06_status', 'proof', issueId, name));
+
+    const outcomes = rebindRepairedLaneProof(manifest, {
+      repoRoot,
+      now: new Date('2026-10-08T21:00:00.000Z'),
+      ...utv2_1745RebindDeps(manifest),
+    });
+
+    assert.deepStrictEqual(
+      outcomes.map((outcome) => [path.posix.basename(outcome.path), outcome.status]),
+      [
+        ['evidence.json', 'updated'],
+        ['verification.md', 'updated'],
+        ['diff-summary.md', 'updated'],
+        ['model-routing.json', 'updated'],
+      ],
+    );
+    assert.match(
+      fs.readFileSync(diffSummaryPath, 'utf8'),
+      new RegExp(`^Merge SHA: ${UTV2_1745_MERGE_SHA}<br>$`, 'mu'),
+    );
+
+    const proofArtifacts = manifest.expected_proof_paths.map((proofPath) => ({
+      path: proofPath,
+      content: fs.readFileSync(path.join(repoRoot, proofPath), 'utf8'),
+      mtime_ms: 2_000,
+    }));
+    const staleForP3 = proofArtifacts
+      .filter((artifact) => !artifact.content.includes(UTV2_1745_MERGE_SHA))
+      .map((artifact) => artifact.path);
+    assert.deepStrictEqual(staleForP3, [], 'P3 must see the authoritative merge SHA in every proof artifact');
+
+    const c4 = evaluateCloseoutTruthGate({
+      manifest: {
+        issue_id: issueId,
+        status: 'merged',
+        commit_sha: UTV2_1745_MERGE_SHA,
+        pr_url: manifest.pr_url,
+        files_changed: manifest.files_changed,
+        expected_proof_paths: manifest.expected_proof_paths,
+        created_by: 'codex-cli',
+      },
+      linear_state: 'Done',
+      pr_merged: true,
+      pr_merge_sha: UTV2_1745_MERGE_SHA,
+      pr_head_sha: UTV2_1745_APPROVED_HEAD,
+      proof_artifacts: proofArtifacts,
+      merge_timestamp_ms: 1_000,
+      runtime_proof_required: false,
+      transition_age_ms: 0,
+    }).find((check) => check.id === 'C4');
+    assert.deepStrictEqual(c4, {
+      id: 'C4',
+      status: 'pass',
+      detail: 'proof artifacts are SHA-bound or no SHA-bound proof is applicable',
+    });
+  });
+});
 
 test('UTV2-1828: the attested recovery rebinds diff-summary.md, not just evidence.json and verification.md', () => {
   withTempRepairState(({ repoRoot }) => {
