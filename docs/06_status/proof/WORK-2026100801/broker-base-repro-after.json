@@ -1,0 +1,5 @@
+{
+  "scenario": "same-repository PR targets non-default feature branch",
+  "reruns": [],
+  "refusal": "Error: PR #1725 is not an open same-repository pull request targeting main; refusing refresh."
+}

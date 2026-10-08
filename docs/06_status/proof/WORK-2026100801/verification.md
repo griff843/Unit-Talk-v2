@@ -9,7 +9,7 @@ Execution SHA: `9f8f19029cd94696e3449f4d38634a7b68342fad`<br>
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1725<br>
 result: local_static_pass_staging_deferred
 
-## Assertions
+## ASSERTIONS:
 
 - [x] Native required-check workflows are read-only and preserve the required `pull_request`
       identities `Executor Result Validation` and `Merge Gate`.
@@ -31,13 +31,13 @@ result: local_static_pass_staging_deferred
 - [x] Hostile checkout, `git show`, curl/materialization, receipt forgery, withdrawal, failed checks,
       unsafe changes, malformed evidence and head-race regressions remain fail-closed.
 
-## Evidence
+## EVIDENCE:
 
 Canonical authority:
 
 - https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064048646
 - https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064625158
-- Historical recovery PR #1720 merged at `0ad7e1eb98dacb87c9b586f8e630290f2e2c9303`.
+- Historical recovery PR #1720 merged at `0ad7e1eb6cb7cba1131743a46292a8e901f99e64`.
 
 Measured privilege boundary at `origin/main` versus the execution SHA:
 
@@ -98,3 +98,7 @@ No deployment or production access was performed.
 Merge SHA: pending merge<br>
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1725<br>
 Execution SHA: `9f8f19029cd94696e3449f4d38634a7b68342fad`
+
+## Measured executor and independent review
+
+The original epoch timed out during protected-CI waiting; its failure is retained in `executor-attempt-1-result.json`. The separate rework epoch `4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6` completed all five phases and the outer wrapper returned SUCCESS with exit 0. The measured result is `executor-attempt-2-result.json`; the complete primary checkpoint and actual model-routing sidecar are archived beside it. Independent focused verification passed 272/272, including the unchanged canonical collector/verifier tests. Both original reproductions now refuse safely; before/after records are retained. Protected exact-HEAD CI remains a separate pending gate.

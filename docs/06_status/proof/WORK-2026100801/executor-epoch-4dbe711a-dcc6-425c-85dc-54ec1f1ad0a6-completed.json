@@ -1,0 +1,177 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100801",
+  "branch": "codex/work-2026100801-workflow-safety",
+  "worktree": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100801-order/.out/worktrees/codex__work-2026100801-workflow-safety",
+  "state_revision": 17,
+  "epoch": {
+    "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+    "mode": "rework",
+    "implementation_baseline_sha": "c6b48147097ee04088bea53f5eb946965da4e917",
+    "objective_identity": "WORK-2026100801:codex/work-2026100801-workflow-safety",
+    "findings_identity": "3566cb720ea6ccb8f872bb5155da2291295cf7b56978b195f7bc4a56e0aaae7f",
+    "created_at": "2026-10-08T18:14:52.661Z",
+    "authority": "codex-exec"
+  },
+  "prior_epochs": [
+    {
+      "epoch": {
+        "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+        "mode": "fresh",
+        "implementation_baseline_sha": "eea1815d5c8d5e5bc1882edfbb278576e2e61a0e",
+        "objective_identity": "WORK-2026100801:codex/work-2026100801-workflow-safety",
+        "findings_identity": "none",
+        "created_at": "2026-10-08T17:27:43.551Z",
+        "authority": "codex-exec"
+      },
+      "archived_at": "2026-10-08T18:14:52.661Z",
+      "completed_phases": [
+        {
+          "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+          "phase": "orient",
+          "completed_at": "2026-10-08T17:28:43.164Z",
+          "attempt": 1,
+          "summary": "Loaded static/full repo state, mission governance authority, exact PM ratification, historical PR 1720 completion, parent work order, current clean branch, and prepared carry-forward design."
+        },
+        {
+          "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+          "phase": "plan",
+          "completed_at": "2026-10-08T17:30:08.028Z",
+          "attempt": 1,
+          "summary": "Designed default-controlled required-check-refresh event graph (issue_comment, repository_dispatch, validated workflow_run), stale-only coded Merge Gate carry-forward, and independent pre-merge collector recomputation with final live-head recheck; scope remains limited to the packet allowlist."
+        },
+        {
+          "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+          "phase": "implement",
+          "completed_at": "2026-10-08T17:36:48.466Z",
+          "attempt": 1,
+          "summary": "Removed actions:write jobs and comment/manual triggers from PR-controlled ERV/Merge Gate definitions; added default-controlled retry broker with exact workflow/event/repository/PR/head selection and live recheck; integrated coded stale-only C1-C7 carry-forward into Merge Gate and independent pre-merge recomputation; focused security suite passes 185/185 and type-check passes."
+        }
+      ],
+      "findings": [
+        {
+          "id": "orient-1",
+          "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+          "source_epoch_id": null,
+          "phase": "orient",
+          "summary": "Confirmed PM comments 6064048646 and 6064625158 ratify one combined T1 workflow privilege-boundary and carry-forward lane; captured contract is embedded in sync manifest and exact source work order exists at parent commit d2e412326.",
+          "recorded_at": "2026-10-08T17:28:42.101Z",
+          "attempt": 1
+        }
+      ],
+      "pending_actions": [],
+      "attempts": [
+        {
+          "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+          "attempt": 1,
+          "started_at": "2026-10-08T17:27:43.551Z",
+          "ended_at": "2026-10-08T18:12:45.330Z",
+          "outcome": "timed_out",
+          "reason": "attempt exceeded its bounded timeout of 45m (utv2-1594-exec-timeout-v1)",
+          "phase_at_start": "orient",
+          "phase_at_end": "verify",
+          "timeout_ms": 2700000,
+          "attempt_start_sha": "eea1815d5c8d5e5bc1882edfbb278576e2e61a0e",
+          "released_resources": []
+        }
+      ]
+    }
+  ],
+  "status": "completed",
+  "phase": "closeout",
+  "attempt": 1,
+  "created_at": "2026-10-08T17:27:43.551Z",
+  "updated_at": "2026-10-08T18:28:36.093Z",
+  "last_activity_at": "2026-10-08T18:28:36.093Z",
+  "heartbeat_at": "2026-10-08T18:28:06.121Z",
+  "heartbeat_interval_ms": 60000,
+  "timeout_policy": {
+    "policy_id": "utv2-1594-exec-timeout-v1",
+    "tier": "T1",
+    "reasoning_effort": "medium",
+    "phase": "orient",
+    "base_ms": 5400000,
+    "effort_multiplier": 1,
+    "phase_multiplier": 0.5,
+    "raw_ms": 2700000,
+    "timeout_ms": 2700000,
+    "hard_cap_ms": 14400000,
+    "floor_ms": 300000,
+    "clamped": "none",
+    "fallbacks": []
+  },
+  "completed_phases": [
+    {
+      "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+      "phase": "orient",
+      "completed_at": "2026-10-08T18:19:58.941Z",
+      "attempt": 1,
+      "summary": "Loaded full repo, PR #1725, captured T1 contract, current rework epoch baseline, parent reproducers, and scoped proof/checkpoint state; confirmed clean starting tree and bounded admitted paths."
+    },
+    {
+      "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+      "phase": "plan",
+      "completed_at": "2026-10-08T18:20:00.123Z",
+      "attempt": 1,
+      "summary": "Bound repair to post-collector required-check/comment/label/head freshness, default-branch broker identity, literal YAML execution regressions, and complete computed carry-forward audit output without changing C1-C7 policy."
+    },
+    {
+      "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+      "phase": "implement",
+      "completed_at": "2026-10-08T18:20:01.241Z",
+      "attempt": 1,
+      "summary": "Implemented post-collector exact-identity check refresh with withdrawal/label/head revalidation, default-base and adjacent final broker identity validation, complete native carry-forward receipt output, and executable security matrices; both supplied reproducers refuse and focused suite passes 191/191."
+    },
+    {
+      "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+      "phase": "verify",
+      "completed_at": "2026-10-08T18:26:57.755Z",
+      "attempt": 1,
+      "summary": "Focused security suite passes 191/191; both parent reproducers refuse; pnpm verify completed all static gates then honestly refused the unidentified local DB target; explicit pnpm test:db refused the same guard; R-level PASS with no matched rules and scope-diff clean."
+    },
+    {
+      "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+      "phase": "closeout",
+      "completed_at": "2026-10-08T18:28:06.121Z",
+      "attempt": 1,
+      "summary": "Pushed rework and named proof to draft PR #1725 at b12218254526b06814ab5141c5ed6b9750c6b3b7, confirmed tier:T1 and updated review packet. Protected exact-head CI/staging, exact-head proof binding, outer executor result, PM approval, merge and lane finalization remain explicitly pending."
+    }
+  ],
+  "findings": [
+    {
+      "id": "orient-1",
+      "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+      "source_epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+      "phase": "orient",
+      "summary": "Confirmed PM comments 6064048646 and 6064625158 ratify one combined T1 workflow privilege-boundary and carry-forward lane; captured contract is embedded in sync manifest and exact source work order exists at parent commit d2e412326.",
+      "recorded_at": "2026-10-08T18:14:52.661Z",
+      "attempt": 1
+    }
+  ],
+  "pending_actions": [],
+  "attempts": [
+    {
+      "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+      "attempt": 1,
+      "started_at": "2026-10-08T18:14:52.661Z",
+      "ended_at": "2026-10-08T18:28:36.093Z",
+      "outcome": "completed",
+      "reason": "codex exited 0 and evidence persisted",
+      "phase_at_start": "orient",
+      "phase_at_end": "closeout",
+      "timeout_ms": 2700000,
+      "attempt_start_sha": "c6b48147097ee04088bea53f5eb946965da4e917",
+      "released_resources": []
+    }
+  ],
+  "cancel_requested": false,
+  "cancel_reason": null,
+  "owner": {
+    "pid": 2294062,
+    "host": "DESKTOP-GP6RM0V"
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "checksum": "4a4e890ebc42a5d22d9ba5f24dbb144ca6bff375bbf6167698018d21ebf1d865"
+  }
+}

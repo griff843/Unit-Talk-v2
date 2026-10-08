@@ -6,7 +6,6 @@
   "reviewed_head_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
   "evidence_commit_sha": null,
   "current_head_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
-  "merge_sha": null,
   "gate_results": [
     {
       "gate": "focused-security-tests",
@@ -59,16 +58,24 @@
       "https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064048646",
       "https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064625158"
     ],
-    "historical_recovery_merge_sha": "0ad7e1eb98dacb87c9b586f8e630290f2e2c9303"
+    "historical_recovery_merge_sha": "0ad7e1eb6cb7cba1131743a46292a8e901f99e64"
   },
   "verification": {
-    "focused_security_tests": { "pass": 191, "fail": 0 },
+    "focused_security_tests": {
+      "pass": 191,
+      "fail": 0
+    },
     "type_check": "pass",
     "test": "pass",
     "verify_static": "pass",
     "r_level": "PASS; 21 changed files; no rules matched",
     "scope_diff": "clean; 5 rework implementation files within declared scope",
-    "verify": "static phase passed; writable DB phase refused unidentified local target and is deferred to protected staging CI"
+    "verify": "static phase passed; writable DB phase refused unidentified local target and is deferred to protected staging CI",
+    "independent_focused_suite": {
+      "pass": 272,
+      "fail": 0,
+      "includes_canonical_collector_verifier": true
+    }
   },
   "db_verification": {
     "local_command": "pnpm test:db",
@@ -100,13 +107,27 @@
     "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
     "implementation_baseline_sha": "c6b48147097ee04088bea53f5eb946965da4e917",
     "execution_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
-    "freshness_reproducer": { "check_reads": 2, "authorized": false },
-    "broker_base_reproducer": { "reruns": 0, "refused": true }
+    "freshness_reproducer": {
+      "check_reads": 2,
+      "authorized": false
+    },
+    "broker_base_reproducer": {
+      "reruns": 0,
+      "refused": true
+    }
   },
   "pending": [
     "protected exact-head CI and staging receipt",
     "outer-wrapper executor-result/v1 publication",
     "new binding PM merge approval",
     "governed merge and post-merge lane finalization"
-  ]
+  ],
+  "executor_attestation": {
+    "result_artifact": "executor-attempt-2-result.json",
+    "checkpoint_artifact": "executor-epoch-4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6-completed.json",
+    "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+    "code": "SUCCESS",
+    "wrapper_exit_code": 0,
+    "all_five_phases_completed": true
+  }
 }

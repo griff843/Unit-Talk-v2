@@ -1,0 +1,6 @@
+{
+  "scenario": "required checks become pending during collection at unchanged HEAD",
+  "becamePending": true,
+  "checkReads": 2,
+  "authorized": false
+}
