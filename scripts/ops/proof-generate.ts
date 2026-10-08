@@ -707,9 +707,14 @@ function escapeRegExpLiteral(literal: string): string {
  * was stranded post-merge with its branch already gone. UTV2-1822 hit this for
  * real. Deriving the alternative from the constant is what keeps the two ends
  * of the contract from drifting apart again.
+ *
+ * WORK-2026100802 admits only the three exact HTML line-break spellings the
+ * Markdown proof templates use. The suffix is captured separately so the SHA
+ * substitution preserves it, while any other trailing text still fails the
+ * anchored placeholder test.
  */
 const PLACEHOLDER_VALUE_PATTERN = new RegExp(
-  `^\`?(?:${escapeRegExpLiteral(MERGE_AUTHORITY_PLACEHOLDER)}|N/A|TBD|pending|stale|<merge[_ -]?sha>)\`?$`,
+  `^(\`?(?:${escapeRegExpLiteral(MERGE_AUTHORITY_PLACEHOLDER)}|N/A|TBD|pending|stale|<merge[_ -]?sha>)\`?)(<br>|<br/>|<br />)?$`,
   'i',
 );
 
@@ -724,9 +729,13 @@ function substituteMergeShaValue(value: string, mergeSha: string): string | null
     return value.replace(FULL_SHA_TOKEN_PATTERN, mergeSha);
   }
   const trimmed = value.trim();
-  if (PLACEHOLDER_VALUE_PATTERN.test(trimmed)) {
-    const backticked = trimmed.startsWith('`');
-    return value.replace(trimmed, backticked ? `\`${mergeSha}\`` : mergeSha);
+  const placeholder = PLACEHOLDER_VALUE_PATTERN.exec(trimmed);
+  if (placeholder) {
+    const placeholderValue = placeholder[1];
+    const markdownLineBreak = placeholder[2] ?? '';
+    const backticked = placeholderValue.startsWith('`');
+    const replacement = backticked ? `\`${mergeSha}\`` : mergeSha;
+    return value.replace(trimmed, `${replacement}${markdownLineBreak}`);
   }
   return null;
 }

@@ -11,13 +11,14 @@ name: Post-Merge Lane Close
 #   4. Update Linear            — skipped (linear-auto-close.yml handles it)
 #
 # Issue ID extraction:
-#   1. Scans the head commit message for UTV2-\d+ patterns (case-insensitive):
-#      - Branch name in merge commit (e.g., claude/utv2-670-stale-lane-alerter)
-#      - Explicit close markers (Closes UTV2-###, Fixes UTV2-###)
-#      - Conventional commit scope (e.g., feat(ops): UTV2-670)
+#   1. Scans the head commit message for canonical repository-owned IDs
+#      (UTV2-<n>, UNI-<n>, or WORK-<n>, case-insensitive):
+#      - Branch name in merge commit (e.g., codex/work-2026100802-closeout-control)
+#      - Explicit close markers (Closes UTV2-###, Fixes UNI-###)
+#      - Conventional commit scope (e.g., feat(ops): WORK-2026100802)
 #   2. If not found in the commit message, queries the GitHub API for the PR
 #      associated with the merge commit and extracts the ID from the branch name
-#      (format: */utv2-NNN-* or */UTV2-NNN-*). This handles squash-merges.
+#      (same three canonical forms). This handles squash-merges.
 #   Only the FIRST matched ID is used (one commit = one lane).
 #   If no issue ID can be extracted, a warning is posted and the workflow exits
 #   cleanly (non-lane PRs should not fail the workflow).
@@ -42,7 +43,7 @@ on:
   workflow_dispatch:
     inputs:
       issue_id:
-        description: "Issue ID to manually close (e.g. UTV2-961)"
+        description: "Issue ID to manually close (UTV2-<n>, UNI-<n>, or WORK-<n>)"
         required: true
         type: string
       pr:
@@ -88,7 +89,7 @@ jobs:
           fi
 
           # push trigger: extract from commit message then PR branch (handles squash merges).
-          issue_id=$(echo "$COMMIT_MSG" | grep -oP '(?i)UTV2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
+          issue_id=$(echo "$COMMIT_MSG" | grep -oP '(?i)(?<![a-z0-9_])(?:UTV2|UNI|WORK)-\d+(?![a-z0-9_])' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
 
           pr_number=""
           pr_branch=""
@@ -103,7 +104,7 @@ jobs:
           pr_branch=$(echo "$api_resp" | jq -r '.[0].head.ref // empty' 2>/dev/null || true)
 
           if [ -z "$issue_id" ] && [ -n "$pr_branch" ]; then
-            branch_issue=$(echo "$pr_branch" | grep -oiP '(?<![a-zA-Z])utv2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
+            branch_issue=$(echo "$pr_branch" | grep -oP '(?i)(?<![a-z0-9_])(?:UTV2|UNI|WORK)-\d+(?![a-z0-9_])' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
             if [ -n "$branch_issue" ]; then
               issue_id="$branch_issue"
               echo "::notice title=post-merge-lane-close::Found issue $issue_id from PR branch $pr_branch"
@@ -111,7 +112,7 @@ jobs:
           fi
 
           if [ -z "$issue_id" ]; then
-            echo "::notice title=post-merge-lane-close::No UTV2-### found in commit message or PR branch. Nothing to close."
+            echo "::notice title=post-merge-lane-close::No canonical UTV2-<n>, UNI-<n>, or WORK-<n> ID found in commit message or PR branch. Nothing to close."
             echo "issue_id=" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=post-merge-lane-close::Found issue $issue_id"

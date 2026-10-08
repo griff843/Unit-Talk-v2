@@ -2924,6 +2924,84 @@ test('UTV2-1825: an authored non-placeholder value is still refused, not overwri
   );
 });
 
+test('WORK-2026100802: labelled placeholders preserve each admitted trailing markdown line break', () => {
+  for (const suffix of ['<br>', '<br/>', '<br />']) {
+    const source = `# Proof\n\nMerge SHA: ${MERGE_AUTHORITY_PLACEHOLDER}${suffix}\n`;
+    const rebound = rebindMergeShaAnchorsInMarkdown(source, UTV2_1825_MERGE_SHA, null);
+    assert.strictEqual(
+      rebound,
+      `# Proof\n\nMerge SHA: ${UTV2_1825_MERGE_SHA}${suffix}\n`,
+      `expected ${suffix} to survive byte-for-byte`,
+    );
+  }
+
+  const backticked = `MERGE_SHA: \`${MERGE_AUTHORITY_PLACEHOLDER}\`<br />\n`;
+  assert.strictEqual(
+    rebindMergeShaAnchorsInMarkdown(backticked, UTV2_1825_MERGE_SHA, null),
+    `MERGE_SHA: \`${UTV2_1825_MERGE_SHA}\`<br />\n`,
+  );
+});
+
+test('WORK-2026100802: markdown line-break support does not admit look-alikes or authored values', () => {
+  for (const value of [
+    `${MERGE_AUTHORITY_PLACEHOLDER}<br >`,
+    `${MERGE_AUTHORITY_PLACEHOLDER}<br data-proof>`,
+    `${MERGE_AUTHORITY_PLACEHOLDER}<br><br>`,
+    `${MERGE_AUTHORITY_PLACEHOLDER} trailing text`,
+    'see the release ticket<br>',
+  ]) {
+    const source = `Merge SHA: ${value}\n`;
+    assert.strictEqual(
+      rebindMergeShaAnchorsInMarkdown(source, UTV2_1825_MERGE_SHA, null),
+      source,
+      `look-alike must remain authored content: ${value}`,
+    );
+  }
+
+  const alreadyBound = `Merge SHA: ${HEAD_SHA}<br />\n`;
+  assert.strictEqual(
+    rebindMergeShaAnchorsInMarkdown(alreadyBound, UTV2_1825_MERGE_SHA, null),
+    `Merge SHA: ${UTV2_1825_MERGE_SHA}<br />\n`,
+    'an existing SHA keeps the prior full-SHA substitution behavior',
+  );
+
+  const fenced = ['```', `Merge SHA: ${MERGE_AUTHORITY_PLACEHOLDER}<br>`, '```', ''].join('\n');
+  assert.strictEqual(
+    rebindMergeShaAnchorsInMarkdown(fenced, UTV2_1825_MERGE_SHA, null),
+    fenced,
+    'an otherwise bindable placeholder inside a fence stays quoted evidence',
+  );
+});
+
+test('WORK-2026100802: push proof generation binds an authored diff-summary.md with a trailing <br>', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'work-2026100802-push-rebind-'));
+  try {
+    const issueId = 'WORK-2026100802';
+    const proofDir = path.join(root, 'docs', '06_status', 'proof', issueId);
+    fs.mkdirSync(proofDir, { recursive: true });
+    const diffSummaryPath = path.join(proofDir, 'diff-summary.md');
+    const authored = [
+      `# Diff summary: ${issueId}`,
+      '',
+      'Measured closeout-control changes are preserved.',
+      '',
+      `Merge SHA: ${MERGE_AUTHORITY_PLACEHOLDER}<br>`,
+      '',
+    ].join('\n');
+    fs.writeFileSync(diffSummaryPath, authored);
+
+    const result = generateProofArtifacts(input({ issue_id: issueId }), { root });
+    const rebound = fs.readFileSync(diffSummaryPath, 'utf8');
+
+    assert.ok(result.rebound_paths.includes(`docs/06_status/proof/${issueId}/diff-summary.md`));
+    assert.match(rebound, /Measured closeout-control changes are preserved\./u);
+    assert.match(rebound, new RegExp(`^Merge SHA: ${MERGE_SHA}<br>$`, 'mu'));
+    assert.ok(!rebound.includes(MERGE_AUTHORITY_PLACEHOLDER));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('UTV2-1825: a placeholder inside a fenced evidence block is left untouched', () => {
   const fenced = [
     '# PROOF: UTV2-1825',
