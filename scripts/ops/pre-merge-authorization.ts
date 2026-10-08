@@ -708,7 +708,7 @@ export async function evaluatePreMergeAuthorization(
     };
   }
 
-  const requiredCheckResult = await evaluateRequiredChecksWithHeadFallback({
+  let requiredCheckResult = await evaluateRequiredChecksWithHeadFallback({
     mergeSha: null,
     headSha,
     requiredChecks,
@@ -723,7 +723,7 @@ export async function evaluatePreMergeAuthorization(
     headSha,
   });
 
-  const receiptChecks: RequiredCheckReceiptEntry[] = (requiredCheckResult.evidence ?? []).map((entry) => ({
+  let receiptChecks: RequiredCheckReceiptEntry[] = (requiredCheckResult.evidence ?? []).map((entry) => ({
     context: entry.context,
     matched: entry.matched,
     source: entry.source,
@@ -733,11 +733,6 @@ export async function evaluatePreMergeAuthorization(
   }));
 
   const reasons: string[] = [];
-  if (!requiredCheckResult.passed) {
-    reasons.push(
-      `required checks missing or failing on head ${headSha}: ${requiredCheckResult.missing.join(', ')}`,
-    );
-  }
   // Authoritative tier comes from the lane manifest AT THIS HEAD, never from
   // the mutable PR label. Any failure to read it leaves manifestTier null,
   // which fails closed to requiring a verdict.
@@ -841,13 +836,64 @@ export async function evaluatePreMergeAuthorization(
         computed?.original_verdict_url === pmVerdict.commentUrl &&
         completeConditions;
 
-      // Collector work occurs after the ordinary live-head read. Re-read the
-      // PR now so a push during collection cannot inherit the old decision.
+      // Collector work can be slow enough for every mutable authorization
+      // surface to change. Re-read required contexts/evidence, comments and
+      // PR state after it completes. The ordinary exact-identity/latest-wins
+      // matcher remains the sole authority for the auditable check table.
+      const finalRequiredChecks = await fetchRequiredCheckContexts(input);
+      const finalCheckResult = await evaluateRequiredChecksWithHeadFallback({
+        mergeSha: null,
+        headSha,
+        requiredChecks: finalRequiredChecks,
+        allowAdminMergeGateBypass: false,
+        fetchChecks: (sha) => fetchChecksForSha({
+          ...input,
+          sha,
+          requiredChecks: finalRequiredChecks,
+        }),
+      });
+      const finalComments = await fetchComments(input);
+      const finalVerdict = buildPmVerdictReceipt(finalComments, {
+        prNumber: input.prNumber,
+        headSha,
+      });
+      const finalVerdictCodes = Array.isArray(finalVerdict.errors.codes)
+        ? finalVerdict.errors.codes
+        : null;
+      const finalVerdictIsSameStaleApproval =
+        finalVerdict.errors.length > 0 &&
+        finalVerdictCodes !== null &&
+        finalVerdictCodes.length === finalVerdict.errors.length &&
+        finalVerdictCodes.every((code) => code === 'stale_head') &&
+        finalVerdict.pmVerdict.commentUrl === pmVerdict.commentUrl &&
+        finalVerdict.pmVerdict.parsedHeadSha === pmVerdict.parsedHeadSha;
+
+      requiredCheckResult = finalCheckResult;
+      receiptChecks = (finalCheckResult.evidence ?? []).map((entry) => ({
+        context: entry.context,
+        matched: entry.matched,
+        source: entry.source,
+        candidateId: entry.candidate_id,
+        conclusion: entry.conclusion,
+        passed: entry.passed,
+      }));
+
+      // Keep the head read immediately adjacent to the final decision, while
+      // also refreshing labels so approval-label withdrawal or a governance
+      // pause cannot race a long-running collector.
       const finalState = await fetchPullRequestState(input);
       const headStillCurrent = finalState.headSha === headSha;
+      const finalLabelsPermitMerge =
+        finalState.labels.includes('t1-approved') &&
+        !finalState.labels.includes('governance:pause');
       approvalCarryForward = {
         schema: 'approval-carry-forward/v1',
-        valid: evidenceMatches && headStillCurrent,
+        valid:
+          evidenceMatches &&
+          finalCheckResult.passed &&
+          finalVerdictIsSameStaleApproval &&
+          headStillCurrent &&
+          finalLabelsPermitMerge,
         originalVerdictSha:
           typeof computed?.original_verdict_sha === 'string' ? computed.original_verdict_sha : null,
         originalVerdictUrl:
@@ -859,8 +905,14 @@ export async function evaluatePreMergeAuthorization(
         })),
         ...(!evidenceMatches
           ? { reason: 'collector result was absent, refused, malformed, incomplete, or did not match the exact approval/issue/head' }
+          : !finalCheckResult.passed
+            ? { reason: `required checks changed during collection: ${finalCheckResult.missing.join(', ')}` }
+            : !finalVerdictIsSameStaleApproval
+              ? { reason: 'PM approval identity or withdrawal state changed during collection' }
           : !headStillCurrent
             ? { reason: `live PR head moved from ${headSha} to ${finalState.headSha ?? 'unresolved'} during authorization` }
+            : !finalLabelsPermitMerge
+              ? { reason: 't1-approved was absent or governance:pause was active after collection' }
             : {}),
       };
     } catch (error) {
@@ -874,6 +926,12 @@ export async function evaluatePreMergeAuthorization(
         reason: `collector failed closed: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
+  }
+
+  if (!requiredCheckResult.passed) {
+    reasons.push(
+      `required checks missing or failing on head ${headSha}: ${requiredCheckResult.missing.join(', ')}`,
+    );
   }
 
   // Verdict defects only block when the tier actually requires a verdict.

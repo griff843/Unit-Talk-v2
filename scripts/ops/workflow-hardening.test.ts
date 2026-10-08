@@ -417,7 +417,7 @@ test('WORK-2026100801: refresh broker is default-controlled and rechecks live HE
     'Merge Gate',
   ]);
   const raw = readWorkflow('required-check-refresh.yml');
-  assert.match(raw, /current\.head\.sha !== headSha/);
+  assert.match(raw, /current\.head\?\.sha !== headSha/);
   assert.match(raw, /refusing stale refresh/);
   assert.match(raw, /github\.rest\.actions\.reRunWorkflow/);
   assert.doesNotMatch(raw, /github\.rest\.checks\.(create|update)/);
@@ -784,7 +784,7 @@ test('WORK-2026100801: literal refresh broker reruns only the exact eligible nat
             number: 1725,
             state: 'open',
             head: { sha: headSha, repo: { full_name: 'griff843/Unit-Talk-v2' } },
-            base: { repo: { full_name: 'griff843/Unit-Talk-v2' } },
+            base: { ref: 'main', repo: { full_name: 'griff843/Unit-Talk-v2' } },
           } };
         },
       },
@@ -813,6 +813,7 @@ test('WORK-2026100801: literal refresh broker reruns only the exact eligible nat
       repo: { owner: 'griff843', repo: 'Unit-Talk-v2' },
       eventName: 'issue_comment',
       payload: {
+        repository: { default_branch: 'main' },
         issue: { number: 1725, pull_request: { url: 'https://api.example.test/pulls/1725' } },
         comment: { body: 'EXECUTOR_RESULT: READY_FOR_REVIEW' },
       },
@@ -844,7 +845,7 @@ test('WORK-2026100801: review workflow_run resolves an empty PR list through exa
     number: 1726,
     state: 'open',
     head: { sha: headSha, repo: { full_name: repository } },
-    base: { repo: { full_name: repository } },
+    base: { ref: 'main', repo: { full_name: repository } },
   };
   await executeGithubScript(script, {
     github: {
@@ -884,7 +885,10 @@ test('WORK-2026100801: review workflow_run resolves an empty PR list through exa
     context: {
       repo: { owner: 'griff843', repo: 'Unit-Talk-v2' },
       eventName: 'workflow_run',
-      payload: { workflow_run: { id: runId, head_sha: headSha, path: '.github/workflows/merge-gate.yml' } },
+      payload: {
+        repository: { default_branch: 'main' },
+        workflow_run: { id: runId, head_sha: headSha, path: '.github/workflows/merge-gate.yml' },
+      },
     },
     core: { info: () => undefined },
     require: () => selection,
@@ -909,7 +913,7 @@ test('WORK-2026100801: literal refresh broker refuses head movement before mutat
           pulls: { get: async () => ({ data: {
             state: 'open',
             head: { sha: reads++ === 0 ? original : 'c'.repeat(40), repo: { full_name: 'griff843/Unit-Talk-v2' } },
-            base: { repo: { full_name: 'griff843/Unit-Talk-v2' } },
+            base: { ref: 'main', repo: { full_name: 'griff843/Unit-Talk-v2' } },
           } }) },
           actions: {
             listWorkflowRuns: async () => undefined,
@@ -929,6 +933,7 @@ test('WORK-2026100801: literal refresh broker refuses head movement before mutat
         repo: { owner: 'griff843', repo: 'Unit-Talk-v2' },
         eventName: 'issue_comment',
         payload: {
+          repository: { default_branch: 'main' },
           issue: { number: 1725, pull_request: {} },
           comment: { body: 'PM_VERDICT: APPROVED' },
         },
@@ -936,9 +941,116 @@ test('WORK-2026100801: literal refresh broker refuses head movement before mutat
       core: { info: () => undefined },
       require: () => selection,
     }),
-    /PR HEAD changed.*refusing stale refresh/,
+    /PR identity changed.*refusing stale refresh/,
   );
   assert.strictEqual(mutated, false);
+});
+
+test('WORK-2026100801 rework: literal broker refuses every target and final-identity mismatch without rerun', async () => {
+  const selection = await import('./executor-result-check-selection.cjs');
+  const script = githubScriptStep(
+    'required-check-refresh.yml',
+    'refresh',
+    'Resolve trusted signal and retry exact-head native run',
+  );
+  const repository = 'griff843/Unit-Talk-v2';
+  const headSha = '9'.repeat(40);
+  const basePull = {
+    number: 1725,
+    state: 'open',
+    head: { sha: headSha, repo: { full_name: repository } },
+    base: { ref: 'main', repo: { full_name: repository } },
+  };
+  const baseRun = {
+    id: 9001,
+    name: 'CI',
+    path: '.github/workflows/ci.yml',
+    event: 'pull_request',
+    status: 'completed',
+    conclusion: 'success',
+    head_sha: headSha,
+    repository: { full_name: repository },
+    head_repository: { full_name: repository },
+    pull_requests: [{ ...basePull }],
+  };
+  const eligibleTarget = {
+    id: 77,
+    event: 'pull_request',
+    path: '.github/workflows/executor-result-validator.yml',
+    head_sha: headSha,
+    status: 'completed',
+    run_attempt: 1,
+    pull_requests: [{ number: 1725, head: { sha: headSha } }],
+  };
+
+  const cases: Array<{
+    name: string;
+    eventName?: string;
+    payload?: Record<string, unknown>;
+    run?: Record<string, unknown>;
+    initialPull?: typeof basePull;
+    finalPull?: typeof basePull;
+    target?: Record<string, unknown>;
+  }> = [
+    { name: 'wrong source repository', run: { ...baseRun, repository: { full_name: 'evil/fork' } } },
+    { name: 'wrong source workflow', run: { ...baseRun, name: 'Untrusted Workflow' } },
+    { name: 'wrong source event', run: { ...baseRun, event: 'workflow_dispatch' } },
+    { name: 'source head differs from live head', run: { ...baseRun, head_sha: '8'.repeat(40) } },
+    { name: 'incomplete source workflow', run: { ...baseRun, status: 'in_progress' } },
+    { name: 'wrong head repository', initialPull: { ...basePull, head: { ...basePull.head, repo: { full_name: 'evil/fork' } } } },
+    { name: 'wrong base repository', initialPull: { ...basePull, base: { ...basePull.base, repo: { full_name: 'evil/fork' } } } },
+    { name: 'wrong base branch', initialPull: { ...basePull, base: { ...basePull.base, ref: 'feature-untrusted-base' } } },
+    { name: 'newest target incomplete', target: { ...eligibleTarget, status: 'in_progress', run_attempt: 2 } },
+    {
+      name: 'malformed manual target',
+      eventName: 'repository_dispatch',
+      payload: { action: 'required-check-refresh', client_payload: { pr_number: 1725, target: 'unknown' } },
+    },
+    { name: 'final PR closed', finalPull: { ...basePull, state: 'closed' } },
+    { name: 'final base drift', finalPull: { ...basePull, base: { ...basePull.base, ref: 'feature-untrusted-base' } } },
+    { name: 'final repository drift', finalPull: { ...basePull, head: { ...basePull.head, repo: { full_name: 'evil/fork' } } } },
+    { name: 'final head drift', finalPull: { ...basePull, head: { ...basePull.head, sha: '7'.repeat(40) } } },
+  ];
+
+  for (const fixture of cases) {
+    const reruns: number[] = [];
+    let pullReads = 0;
+    const eventName = fixture.eventName ?? 'workflow_run';
+    const payload = {
+      repository: { default_branch: 'main' },
+      ...(fixture.payload ?? {
+        workflow_run: { id: 9001, head_sha: headSha, path: '.github/workflows/ci.yml' },
+      }),
+    };
+    await assert.rejects(
+      executeGithubScript(script, {
+        github: {
+          rest: {
+            pulls: {
+              get: async () => ({
+                data: pullReads++ === 0
+                  ? (fixture.initialPull ?? basePull)
+                  : (fixture.finalPull ?? fixture.initialPull ?? basePull),
+              }),
+            },
+            repos: { listPullRequestsAssociatedWithCommit: async () => undefined },
+            actions: {
+              getWorkflowRun: async () => ({ data: fixture.run ?? baseRun }),
+              listWorkflowRuns: async () => undefined,
+              reRunWorkflow: async ({ run_id }: { run_id: number }) => { reruns.push(run_id); },
+            },
+          },
+          paginate: async () => [fixture.target ?? eligibleTarget],
+        },
+        context: { repo: { owner: 'griff843', repo: 'Unit-Talk-v2' }, eventName, payload },
+        core: { info: () => undefined },
+        require: () => selection,
+      }),
+      undefined,
+      fixture.name,
+    );
+    assert.deepStrictEqual(reruns, [], fixture.name);
+  }
 });
 
 test('codex return review extracts issue IDs without sed delimiter traps', () => {
@@ -1760,6 +1872,181 @@ test('WORK-2026100801: Merge Gate invokes the collector only behind complete non
   assert.match(script, /parsed\.current_head_sha === headSha/);
   assert.match(script, /APPROVAL_CARRY_FORWARD_COMPUTED=/);
   assert.doesNotMatch(script, /APPROVAL_CARRY_FORWARD:.*parse|renderReceipt|receipt.*input/is);
+});
+
+test('WORK-2026100801 rework: literal Merge Gate executes stale-only carry-forward and refuses every incomplete authority shape', async () => {
+  const actualVerdict = await import('./merge-gate-verdict.cjs');
+  const script = githubScriptStep('merge-gate.yml', 'gate', 'Evaluate merge gate');
+  const prNumber = 1725;
+  const issueId = 'WORK-2026100801';
+  const oldHead = '1'.repeat(40);
+  const headSha = '2'.repeat(40);
+  const originalUrl = `https://github.com/griff843/Unit-Talk-v2/pull/${prNumber}#issuecomment-1`;
+  const approvedBody = (overrides: { pr?: number; head?: string } = {}) => [
+    'PM_VERDICT: APPROVED',
+    'schema: pm-verdict/v1',
+    `Issue: ${issueId}`,
+    `PR: ${overrides.pr ?? prNumber}`,
+    `Head SHA: ${overrides.head ?? oldHead}`,
+  ].join('\n');
+  const comment = (body: string, overrides: { login?: string; type?: string; url?: string; created?: string } = {}) => ({
+    body,
+    user: { login: overrides.login ?? 'griff843', type: overrides.type ?? 'User' },
+    html_url: overrides.url ?? originalUrl,
+    created_at: overrides.created ?? '2026-10-08T12:00:00Z',
+  });
+  const validCollector = {
+    schema: 'approval-carry-forward/v1',
+    verdict: 'VERIFIED',
+    issue_id: issueId,
+    original_verdict_sha: oldHead,
+    original_verdict_url: originalUrl,
+    current_head_sha: headSha,
+    main_anchor_sha: '3'.repeat(40),
+    pr_diff_patch_id: { atApproved: 'patch-id', atHead: 'patch-id' },
+    conditions: ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7'].map((id) => ({
+      id,
+      title: `${id} verified`,
+      status: 'pass',
+      detail: `${id} evidence passed`,
+    })),
+    admitted_paths: [{ path: 'docs/06_status/proof/WORK-2026100801/verification.md', rule: 'named lane proof' }],
+    refusals: [],
+  };
+
+  async function runGate(options: {
+    comments?: Array<Record<string, unknown>>;
+    collector?: Record<string, unknown> | string;
+    spawnResult?: Record<string, unknown>;
+    verdictModule?: Record<string, unknown>;
+  } = {}) {
+    const failures: string[] = [];
+    const notices: string[] = [];
+    const infos: string[] = [];
+    const summaries: string[] = [];
+    let collectorCalls = 0;
+    const summary = {
+      addHeading(value: string) { summaries.push(value); return this; },
+      addCodeBlock(value: string) { summaries.push(value); return this; },
+      async write() { return this; },
+    };
+    const manifest = Buffer.from(JSON.stringify({ issue_id: issueId, tier: 'T1' })).toString('base64');
+    const collectorStdout = typeof options.collector === 'string'
+      ? options.collector
+      : JSON.stringify(options.collector ?? validCollector);
+    await executeGithubScript(script, {
+      github: {
+        rest: {
+          issues: {
+            get: async () => ({ data: { labels: [{ name: 'tier:T1' }, { name: 't1-approved' }] } }),
+            listComments: async () => ({ data: options.comments ?? [comment(approvedBody())] }),
+          },
+          repos: {
+            getContent: async ({ path: requestedPath }: { path: string }) => {
+              if (requestedPath === `docs/06_status/lanes/${issueId}.json`) {
+                return { data: { content: manifest, encoding: 'base64' } };
+              }
+              const absent = new Error('not found') as Error & { status?: number };
+              absent.status = 404;
+              throw absent;
+            },
+          },
+          pulls: {
+            listReviews: async () => ({ data: [] }),
+            listFiles: async () => undefined,
+          },
+        },
+        paginate: async () => [],
+      },
+      context: {
+        repo: { owner: 'griff843', repo: 'Unit-Talk-v2' },
+        serverUrl: 'https://github.com',
+        runId: 456,
+        payload: {
+          pull_request: {
+            number: prNumber,
+            title: `feat(ops): ${issueId} harden workflow safety`,
+            head: { sha: headSha, ref: 'codex/work-2026100801-workflow-safety' },
+            base: { sha: '4'.repeat(40) },
+          },
+        },
+      },
+      core: {
+        info: (message: string) => infos.push(message),
+        notice: (message: string) => notices.push(message),
+        setFailed: (message: string) => failures.push(message),
+        summary,
+      },
+      process: { env: { GITHUB_TOKEN: 'test-token', GITHUB_RUN_ATTEMPT: '3' } },
+      Buffer,
+      require: (specifier: string) => {
+        if (specifier === './scripts/ops/merge-gate-verdict.cjs') {
+          return options.verdictModule ?? actualVerdict;
+        }
+        assert.strictEqual(specifier, 'child_process');
+        return {
+          spawnSync: () => {
+            collectorCalls += 1;
+            return options.spawnResult ?? { stdout: collectorStdout, status: 0, signal: null, error: undefined };
+          },
+        };
+      },
+    });
+    return { failures, notices, infos, summaries, collectorCalls };
+  }
+
+  const success = await runGate();
+  assert.deepStrictEqual(success.failures, []);
+  assert.strictEqual(success.collectorCalls, 1);
+  assert.match(success.notices.join('\n'), /"original_verdict_sha":"1{40}"/);
+  assert.match(success.notices.join('\n'), /"current_head_sha":"2{40}"/);
+  assert.match(success.notices.join('\n'), /"generated_by":"https:\/\/github\.com\/griff843\/Unit-Talk-v2\/actions\/runs\/456\/attempts\/3"/);
+  assert.match(success.infos.join('\n'), /Conditions:[\s\S]*C1[\s\S]*C7/);
+  assert.match(success.summaries.join('\n'), /not an independent review/);
+
+  const codedError = (codes: Array<string | null> | undefined) => {
+    const errors = ['synthetic stale classification'] as string[] & { codes?: Array<string | null> };
+    if (codes !== undefined) Object.defineProperty(errors, 'codes', { value: codes });
+    return errors;
+  };
+  for (const fixture of [
+    { name: 'missing codes', verdictModule: { ...actualVerdict, validateT1Verdicts: () => codedError(undefined) } },
+    { name: 'empty codes', verdictModule: { ...actualVerdict, validateT1Verdicts: () => codedError([]) } },
+    { name: 'misaligned codes', verdictModule: { ...actualVerdict, validateT1Verdicts: () => codedError(['stale_head', null]) } },
+    { name: 'no approval', comments: [] },
+    { name: 'unauthorized approval', comments: [comment(approvedBody(), { login: 'outsider' })] },
+    { name: 'bot approval', comments: [comment(approvedBody(), { login: 'bot', type: 'Bot' })] },
+    { name: 'wrong PR', comments: [comment(approvedBody({ pr: prNumber + 1 }))] },
+    {
+      name: 'withdrawn approval',
+      comments: [
+        comment(approvedBody()),
+        comment([
+          'PM_VERDICT: CHANGES_REQUIRED',
+          'schema: pm-verdict/v1',
+          `Issue: ${issueId}`,
+          'Bounce: 1',
+        ].join('\n'), { created: '2026-10-08T12:01:00Z' }),
+      ],
+    },
+  ]) {
+    const result = await runGate(fixture);
+    assert.strictEqual(result.collectorCalls, 0, `${fixture.name}: collector must not run`);
+    assert.ok(result.failures.length > 0, `${fixture.name}: gate must fail`);
+  }
+
+  for (const fixture of [
+    { name: 'malformed approval identity', collector: { ...validCollector, original_verdict_url: 'https://example.test/forged' } },
+    { name: 'incorrect successor head', collector: { ...validCollector, current_head_sha: '5'.repeat(40) } },
+    { name: 'incomplete conditions', collector: { ...validCollector, conditions: validCollector.conditions.slice(0, 6) } },
+    { name: 'failed collector', spawnResult: { stdout: JSON.stringify(validCollector), status: 1, signal: null } },
+    { name: 'timed-out collector', spawnResult: { stdout: '', status: null, signal: 'SIGTERM', error: new Error('timed out') } },
+    { name: 'unparseable collector', collector: '{not-json' },
+  ]) {
+    const result = await runGate(fixture);
+    assert.strictEqual(result.collectorCalls, 1, `${fixture.name}: stale-only evidence should invoke collector once`);
+    assert.ok(result.failures.length > 0, `${fixture.name}: gate must fail`);
+  }
 });
 
 test('UTV2-1543 (Codex P1): merge-gate.yml checks out the repo, pinned to a trusted ref, before requiring the verdict helper', () => {

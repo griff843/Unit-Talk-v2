@@ -511,14 +511,44 @@ jobs:
                   }
 
                   if (carried) {
+                    const generatingRunUrl =
+                      `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}` +
+                      `/attempts/${process.env.GITHUB_RUN_ATTEMPT || '1'}`;
+                    const disclaimer =
+                      'This receipt carries forward the PM decision recorded at Original-Verdict-SHA. ' +
+                      'It is not an independent review and asserts nothing about the implementation.';
                     const computed = {
-                      schema: carried.schema,
-                      original_verdict_sha: carried.original_verdict_sha,
-                      original_verdict_url: carried.original_verdict_url,
-                      successor_head_sha: carried.current_head_sha,
-                      conditions: carried.conditions.map(c => ({ id: c.id, status: c.status })),
+                      ...carried,
+                      generated_by: generatingRunUrl,
+                      disclaimer,
                     };
                     core.notice(`APPROVAL_CARRY_FORWARD_COMPUTED=${JSON.stringify(computed)}`);
+                    const canonicalReceipt = [
+                      `APPROVAL_CARRY_FORWARD: ${carried.verdict}`,
+                      `schema: ${carried.schema}`,
+                      `Issue: ${carried.issue_id}`,
+                      `Original-Verdict-SHA: ${carried.original_verdict_sha}`,
+                      `Original-Verdict-URL: ${carried.original_verdict_url}`,
+                      `Current-Head-SHA: ${carried.current_head_sha}`,
+                      `Main-Anchor-SHA: ${carried.main_anchor_sha}`,
+                      `PR-Diff-Patch-Id: ${carried.pr_diff_patch_id?.atApproved ?? 'unavailable'} (approved) / ` +
+                        `${carried.pr_diff_patch_id?.atHead ?? 'unavailable'} (head)`,
+                      `Generated-By: ${generatingRunUrl}`,
+                      '',
+                      'Conditions:',
+                      ...carried.conditions.map(c =>
+                        `- [${c.status === 'pass' ? 'x' : ' '}] ${c.id} — ${c.title}: ${c.detail}`),
+                      ...(carried.admitted_paths?.length > 0
+                        ? ['', 'Admitted paths:', ...carried.admitted_paths.map(a => `- ${a.path} (rule: ${a.rule})`)]
+                        : []),
+                      '',
+                      disclaimer,
+                    ].join('\n');
+                    core.info(canonicalReceipt);
+                    await core.summary
+                      .addHeading('Computed approval carry-forward')
+                      .addCodeBlock(canonicalReceipt, 'text')
+                      .write();
                     notes.push(
                       `Approval carried forward from ${carried.original_verdict_sha.slice(0, 12)} ` +
                       `to ${headSha.slice(0, 12)}; original comment ${carried.original_verdict_url}`,

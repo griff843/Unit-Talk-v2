@@ -204,7 +204,7 @@ function t1CarryForwardDeps(
   collectCarryForward: NonNullable<PreMergeAuthorizationDeps['collectCarryForward']>,
   fetchPullRequestState: NonNullable<PreMergeAuthorizationDeps['fetchPullRequestState']> = async () => ({
     headSha: CURRENT_HEAD_SHA,
-    labels: ['tier:T1'],
+    labels: ['tier:T1', 't1-approved'],
     headRef: 'codex/utv2-1592-carry-forward',
   }),
 ): PreMergeAuthorizationDeps {
@@ -289,6 +289,119 @@ test('WORK-2026100801: live head movement during collector execution refuses aut
   );
   assert.strictEqual(receipt.authorized, false);
   assert.match(receipt.approvalCarryForward?.reason ?? '', /live PR head moved/);
+});
+
+test('WORK-2026100801 rework: required checks are re-read after collection and newer pending evidence refuses', async () => {
+  let checkReads = 0;
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...t1CarryForwardDeps(async () => verifiedCarryForward()),
+    fetchChecksForSha: async (_args) => {
+      checkReads += 1;
+      return evaluateRequiredCheckResults({
+        requiredChecks: GREEN_REQUIRED_CHECKS,
+        statuses: [],
+        checkRuns: checkReads === 1
+          ? GREEN_CHECK_RUNS
+          : [
+              ...GREEN_CHECK_RUNS,
+              {
+                ...checkRun('Merge Gate', 'success', 3),
+                status: 'in_progress',
+                conclusion: null,
+                completed_at: null,
+                started_at: '2026-07-26T00:06:00.000Z',
+              },
+            ],
+      });
+    },
+  });
+
+  assert.strictEqual(checkReads, 2);
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.requiredChecks.find((entry) => entry.context === 'Merge Gate')?.candidateId, 3);
+  assert.strictEqual(receipt.requiredChecks.find((entry) => entry.context === 'Merge Gate')?.passed, false);
+  assert.match(receipt.approvalCarryForward?.reason ?? '', /required checks changed/);
+});
+
+test('WORK-2026100801 rework: a newer failed run during collection replaces the earlier green run', async () => {
+  let checkReads = 0;
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...t1CarryForwardDeps(async () => verifiedCarryForward()),
+    fetchChecksForSha: async () => {
+      checkReads += 1;
+      return evaluateRequiredCheckResults({
+        requiredChecks: GREEN_REQUIRED_CHECKS,
+        statuses: [],
+        checkRuns: checkReads === 1
+          ? GREEN_CHECK_RUNS
+          : [
+              ...GREEN_CHECK_RUNS,
+              {
+                ...checkRun('Executor Result Validation', 'failure', 4),
+                completed_at: '2026-07-26T00:07:00.000Z',
+              },
+            ],
+      });
+    },
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  const executor = receipt.requiredChecks.find((entry) => entry.context === 'Executor Result Validation');
+  assert.strictEqual(executor?.candidateId, 4);
+  assert.strictEqual(executor?.conclusion, 'failure');
+  assert.strictEqual(executor?.passed, false);
+});
+
+test('WORK-2026100801 rework: a required context added during collection is missing and refuses', async () => {
+  let contextReads = 0;
+  const addedContext = { context: 'New Protected Check', app_id: null };
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...t1CarryForwardDeps(async () => verifiedCarryForward()),
+    fetchRequiredCheckContexts: async () => {
+      contextReads += 1;
+      return contextReads === 1 ? GREEN_REQUIRED_CHECKS : [...GREEN_REQUIRED_CHECKS, addedContext];
+    },
+    fetchChecksForSha: async ({ requiredChecks }) =>
+      evaluateRequiredCheckResults({ requiredChecks, statuses: [], checkRuns: GREEN_CHECK_RUNS }),
+  });
+
+  assert.strictEqual(contextReads, 2);
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.requiredChecks.find((entry) => entry.context === addedContext.context)?.matched, false);
+  assert.match(receipt.reason ?? '', /New Protected Check/);
+});
+
+test('WORK-2026100801 rework: approval withdrawal and label/governance changes during collection refuse', async () => {
+  for (const fixture of [
+    { name: 'withdrawal', finalLabels: ['tier:T1', 't1-approved'], withdraw: true },
+    { name: 'approval label removed', finalLabels: ['tier:T1'], withdraw: false },
+    { name: 'governance pause', finalLabels: ['tier:T1', 't1-approved', 'governance:pause'], withdraw: false },
+  ]) {
+    let commentReads = 0;
+    let stateReads = 0;
+    const receipt = await evaluatePreMergeAuthorization(INPUT, {
+      ...t1CarryForwardDeps(async () => verifiedCarryForward()),
+      fetchComments: async () => {
+        commentReads += 1;
+        return commentReads === 1 || !fixture.withdraw
+          ? [pmVerdictComment(approvedVerdictBody(STALE_HEAD_SHA))]
+          : [
+              pmVerdictComment(approvedVerdictBody(STALE_HEAD_SHA)),
+              pmVerdictComment(approvedVerdictBody(STALE_HEAD_SHA).replace('APPROVED', 'CHANGES_REQUIRED')),
+            ];
+      },
+      fetchPullRequestState: async () => {
+        stateReads += 1;
+        return {
+          headSha: CURRENT_HEAD_SHA,
+          labels: stateReads === 1 ? ['tier:T1', 't1-approved'] : fixture.finalLabels,
+          headRef: 'codex/utv2-1592-carry-forward',
+        };
+      },
+    });
+    assert.strictEqual(receipt.authorized, false, fixture.name);
+    assert.strictEqual(receipt.approvalCarryForward?.valid, false, fixture.name);
+  }
 });
 
 test('race-prevention: the head SHA is re-fetched fresh on every call, and it is the last fetch performed before the decision', async () => {

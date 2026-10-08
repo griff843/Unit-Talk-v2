@@ -42,6 +42,10 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const repository = `${owner}/${repo}`;
+            const defaultBranch = context.payload.repository?.default_branch;
+            if (typeof defaultBranch !== 'string' || defaultBranch.length === 0) {
+              throw new Error('Repository default branch is absent; refusing refresh.');
+            }
             const configs = {
               executor: {
                 workflowId: 'executor-result-validator.yml',
@@ -119,7 +123,8 @@ jobs:
                   candidate.state === 'open' &&
                   candidate.head?.sha === run.head_sha &&
                   candidate.head?.repo?.full_name === repository &&
-                  candidate.base?.repo?.full_name === repository);
+                  candidate.base?.repo?.full_name === repository &&
+                  candidate.base?.ref === defaultBranch);
               }
               if (linkedPulls.length !== 1) {
                 throw new Error(`workflow_run ${run.id} does not resolve exactly one open same-repository pull request; refusing refresh.`);
@@ -139,8 +144,11 @@ jobs:
               throw new Error(`Invalid pull request number ${prNumber}; refusing refresh.`);
             }
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            if (pr.state !== 'open' || pr.base.repo.full_name !== repository || pr.head.repo.full_name !== repository) {
-              throw new Error(`PR #${prNumber} is not an open same-repository pull request; refusing refresh.`);
+            if (pr.state !== 'open' ||
+                pr.base.repo.full_name !== repository ||
+                pr.base.ref !== defaultBranch ||
+                pr.head.repo.full_name !== repository) {
+              throw new Error(`PR #${prNumber} is not an open same-repository pull request targeting ${defaultBranch}; refusing refresh.`);
             }
             const headSha = pr.head.sha;
             if (signalHeadSha && signalHeadSha !== headSha) {
@@ -172,8 +180,12 @@ jobs:
               // This API read is intentionally adjacent to the only mutation.
               // A head movement at any earlier point refuses the rerun.
               const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-              if (current.head.sha !== headSha) {
-                throw new Error(`PR HEAD changed from ${headSha} to ${current.head.sha}; refusing stale refresh.`);
+              if (current.state !== 'open' ||
+                  current.base?.repo?.full_name !== repository ||
+                  current.base?.ref !== defaultBranch ||
+                  current.head?.repo?.full_name !== repository ||
+                  current.head?.sha !== headSha) {
+                throw new Error(`PR identity changed before rerun; expected open ${repository}:${defaultBranch} at ${headSha}; refusing stale refresh.`);
               }
               await github.rest.actions.reRunWorkflow({ owner, repo, run_id: target.id });
               core.info(`Requested native retry of ${config.label} run ${target.id} for PR #${prNumber} at ${headSha}.`);
