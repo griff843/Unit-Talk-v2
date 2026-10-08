@@ -1,0 +1,17 @@
+{
+  "issue_id": "WORK-2026100801",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "2.0.0",
+  "codex_cli_version": "codex-cli 0.153.3",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "prompt_bytes": 13907,
+  "estimated_prompt_tokens": 3477,
+  "wall_time_ms": 2700164,
+  "generated_at": "2026-10-08T18:12:43.719Z"
+}

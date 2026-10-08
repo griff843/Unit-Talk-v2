@@ -1,0 +1,7 @@
+{
+  "scenario": "same-repository PR targets non-default feature branch",
+  "reruns": [
+    77
+  ],
+  "refusal": null
+}

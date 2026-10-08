@@ -1,0 +1,100 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100801",
+  "branch": "codex/work-2026100801-workflow-safety",
+  "worktree": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100801-order/.out/worktrees/codex__work-2026100801-workflow-safety",
+  "state_revision": 10,
+  "epoch": {
+    "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+    "mode": "fresh",
+    "implementation_baseline_sha": "eea1815d5c8d5e5bc1882edfbb278576e2e61a0e",
+    "objective_identity": "WORK-2026100801:codex/work-2026100801-workflow-safety",
+    "findings_identity": "none",
+    "created_at": "2026-10-08T17:27:43.551Z",
+    "authority": "codex-exec"
+  },
+  "prior_epochs": [],
+  "status": "timed_out",
+  "phase": "verify",
+  "attempt": 1,
+  "created_at": "2026-10-08T17:27:43.551Z",
+  "updated_at": "2026-10-08T18:12:45.330Z",
+  "last_activity_at": "2026-10-08T18:12:45.330Z",
+  "heartbeat_at": "2026-10-08T18:11:30.600Z",
+  "heartbeat_interval_ms": 60000,
+  "timeout_policy": {
+    "policy_id": "utv2-1594-exec-timeout-v1",
+    "tier": "T1",
+    "reasoning_effort": "medium",
+    "phase": "orient",
+    "base_ms": 5400000,
+    "effort_multiplier": 1,
+    "phase_multiplier": 0.5,
+    "raw_ms": 2700000,
+    "timeout_ms": 2700000,
+    "hard_cap_ms": 14400000,
+    "floor_ms": 300000,
+    "clamped": "none",
+    "fallbacks": []
+  },
+  "completed_phases": [
+    {
+      "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+      "phase": "orient",
+      "completed_at": "2026-10-08T17:28:43.164Z",
+      "attempt": 1,
+      "summary": "Loaded static/full repo state, mission governance authority, exact PM ratification, historical PR 1720 completion, parent work order, current clean branch, and prepared carry-forward design."
+    },
+    {
+      "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+      "phase": "plan",
+      "completed_at": "2026-10-08T17:30:08.028Z",
+      "attempt": 1,
+      "summary": "Designed default-controlled required-check-refresh event graph (issue_comment, repository_dispatch, validated workflow_run), stale-only coded Merge Gate carry-forward, and independent pre-merge collector recomputation with final live-head recheck; scope remains limited to the packet allowlist."
+    },
+    {
+      "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+      "phase": "implement",
+      "completed_at": "2026-10-08T17:36:48.466Z",
+      "attempt": 1,
+      "summary": "Removed actions:write jobs and comment/manual triggers from PR-controlled ERV/Merge Gate definitions; added default-controlled retry broker with exact workflow/event/repository/PR/head selection and live recheck; integrated coded stale-only C1-C7 carry-forward into Merge Gate and independent pre-merge recomputation; focused security suite passes 185/185 and type-check passes."
+    }
+  ],
+  "findings": [
+    {
+      "id": "orient-1",
+      "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+      "source_epoch_id": null,
+      "phase": "orient",
+      "summary": "Confirmed PM comments 6064048646 and 6064625158 ratify one combined T1 workflow privilege-boundary and carry-forward lane; captured contract is embedded in sync manifest and exact source work order exists at parent commit d2e412326.",
+      "recorded_at": "2026-10-08T17:28:42.101Z",
+      "attempt": 1
+    }
+  ],
+  "pending_actions": [],
+  "attempts": [
+    {
+      "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+      "attempt": 1,
+      "started_at": "2026-10-08T17:27:43.551Z",
+      "ended_at": "2026-10-08T18:12:45.330Z",
+      "outcome": "timed_out",
+      "reason": "attempt exceeded its bounded timeout of 45m (utv2-1594-exec-timeout-v1)",
+      "phase_at_start": "orient",
+      "phase_at_end": "verify",
+      "timeout_ms": 2700000,
+      "attempt_start_sha": "eea1815d5c8d5e5bc1882edfbb278576e2e61a0e",
+      "released_resources": []
+    }
+  ],
+  "cancel_requested": false,
+  "cancel_reason": null,
+  "owner": {
+    "pid": 2153157,
+    "host": "DESKTOP-GP6RM0V"
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "checksum": "1c3675b83eab6a26b812a58d438788caed2666b025e7b51fb38651d958f315f2"
+  }
+}
