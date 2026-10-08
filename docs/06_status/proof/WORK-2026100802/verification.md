@@ -1,6 +1,6 @@
 # PROOF: WORK-2026100802
 
-MERGE_SHA: pending merge
+MERGE_SHA: 85466b34eeb39a9db7acd1837b3de3274cee5199
 
 Issue: WORK-2026100802
 Tier: T1
@@ -60,6 +60,6 @@ No production database or deployment was accessed.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 85466b34eeb39a9db7acd1837b3de3274cee5199
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1727
 Execution SHA: 4f75b0017512e86737a9c59892a7673dfe9536da

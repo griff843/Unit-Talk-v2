@@ -39,5 +39,5 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1727
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 85466b34eeb39a9db7acd1837b3de3274cee5199
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1727
