@@ -95,7 +95,7 @@ No deployment or production access was performed.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge<br>
+Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1725<br>
 Execution SHA: `9f8f19029cd94696e3449f4d38634a7b68342fad`
 
