@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100801",
+  "pr_number": 1725,
+  "source_sha": "b8860735ac9127b1d92f202a5481debb0e14b4ff",
+  "reviewed_head_sha": "b8860735ac9127b1d92f202a5481debb0e14b4ff",
+  "evidence_commit_sha": null,
+  "current_head_sha": "b8860735ac9127b1d92f202a5481debb0e14b4ff",
+  "merge_sha": null,
+  "gate_results": [
+    {
+      "gate": "focused-security-tests",
+      "verdict": "PASS",
+      "detail": "185 pass, 0 fail"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0 locally"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "13 changed files; no rules matched"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Local target identity refused; protected staging CI required"
+    },
+    {
+      "gate": "protected-exact-head-ci",
+      "verdict": "SKIP",
+      "detail": "Pending exact-head execution on draft PR #1725"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-08T17:58:49Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b8860735ac9127b1d92f202a5481debb0e14b4ff",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "b8860735ac9127b1d92f202a5481debb0e14b4ff",
+    "note": "Local static verification exited 0. Protected exact-head CI receipt remains pending PR publication."
+  },
+  "authority": {
+    "ratification_comments": [
+      "https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064048646",
+      "https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064625158"
+    ],
+    "historical_recovery_merge_sha": "0ad7e1eb98dacb87c9b586f8e630290f2e2c9303"
+  },
+  "verification": {
+    "focused_security_tests": { "pass": 185, "fail": 0 },
+    "type_check": "pass",
+    "test": "pass",
+    "verify_static": "pass",
+    "r_level": "PASS; 13 changed files; no rules matched"
+  },
+  "db_verification": {
+    "local_command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "exit_code": 1,
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false
+  },
+  "privilege_boundary": {
+    "base_native_workflows_with_actions_write": 2,
+    "execution_native_workflows_with_actions_write": 0,
+    "default_controlled_retry_brokers_with_actions_write": 1,
+    "forced_check_state": false,
+    "pr_code_executed_by_privileged_job": false
+  },
+  "carry_forward_output": {
+    "schema": "approval-carry-forward/v1",
+    "notice_name": "APPROVAL_CARRY_FORWARD_COMPUTED",
+    "receipt_accepted_as_input": false,
+    "live_pr_output_status": "pending_post_executor_pm_approval_or_qualifying_successor_head"
+  },
+  "pending": [
+    "protected exact-head CI and staging receipt",
+    "outer-wrapper executor-result/v1 publication",
+    "new binding PM merge approval",
+    "governed merge and post-merge lane finalization"
+  ]
+}
