@@ -33,7 +33,7 @@ broker.
 ## Git diff stat at execution SHA
 
 ```text
-13 files changed, 1260 insertions(+), 199 deletions(-)
+15 files changed at final local R-level evaluation; no R-level rules matched.
 ```
 
 Proof artifacts added after the execution SHA are confined to this named proof directory and the

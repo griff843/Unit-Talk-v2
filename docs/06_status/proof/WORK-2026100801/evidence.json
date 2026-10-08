@@ -66,7 +66,8 @@
     "type_check": "pass",
     "test": "pass",
     "verify_static": "pass",
-    "r_level": "PASS; 13 changed files; no rules matched"
+    "r_level": "PASS; 15 changed files; no rules matched",
+    "verify": "static phase passed; writable DB phase refused unidentified local target and is deferred to protected staging CI"
   },
   "db_verification": {
     "local_command": "pnpm test:db",
@@ -75,7 +76,8 @@
     "observed_host": "127.0.0.1",
     "observed_ref": "unidentified",
     "required_staging_ref": "xskgrzbteyqdufktjrjx",
-    "production_accessed": false
+    "production_accessed": false,
+    "verify_command_reached_same_guard": true
   },
   "privilege_boundary": {
     "base_native_workflows_with_actions_write": 2,

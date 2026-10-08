@@ -54,12 +54,13 @@ and any qualifying successor-head evaluation and is not claimed here.
 - [x] `pnpm test`: exit 0.
 - [x] `pnpm verify:static`: exit 0, including lint, type-check, build, full tests, Smart Form verify,
       command-manifest check and migration checks.
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 13 changed files;
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 15 changed files;
       no R-level rules or artifacts required.
 - [ ] `pnpm test:db`: executed locally and refused before any write because the resolved target was
       `host=127.0.0.1 ref=unidentified`, not required staging ref `xskgrzbteyqdufktjrjx`.
-- [ ] `pnpm verify`: final invocation pending the proof commit. Its writable DB phase must retain the
-      same local refusal and be completed by protected staging CI with `CI_SUPABASE_*` credentials.
+- [ ] `pnpm verify`: executed on the linked review tree. `verify:static` completed successfully, then
+      the writable DB phase exited 1 at the same local target-identity guard. Protected staging CI
+      with `CI_SUPABASE_*` credentials must supply the required full-pass receipt.
 - [ ] Protected exact-head CI/staging receipts and genuine executor result: pending PR publication
       and the authorized outer executor path.
 - [ ] New binding PM merge approval and governed merge: explicitly post-executor; not claimed.
