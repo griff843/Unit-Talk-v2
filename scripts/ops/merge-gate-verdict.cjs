@@ -79,10 +79,24 @@ function parseVerdict(body) {
  */
 function validateT1Verdicts(verdicts, ctx) {
   const errors = [];
+  const codes = [];
+  const push = (message, code = null) => {
+    errors[errors.length] = message;
+    codes[codes.length] = code;
+  };
+  const finish = () => {
+    if (errors.length !== codes.length) {
+      throw new Error(
+        `validateT1Verdicts: ${errors.length} errors but ${codes.length} codes; refusing desynchronised evidence`,
+      );
+    }
+    Object.defineProperty(errors, 'codes', { value: codes, enumerable: false });
+    return errors;
+  };
 
   if (verdicts.length === 0) {
-    errors.push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
-    return errors;
+    push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
+    return finish();
   }
 
   // UTV2-1554: authorization filtering happens BEFORE latest-verdict
@@ -101,38 +115,39 @@ function validateT1Verdicts(verdicts, ctx) {
     // closed exactly as the no-comments-at-all case above.
     const rawLatest = verdicts[verdicts.length - 1];
     if (rawLatest.userType === 'Bot') {
-      errors.push(
+      push(
         `PM verdict from bot account "${rawLatest.user}" is not authorized. Must be a human CODEOWNERS member.`,
       );
     } else {
-      errors.push(
+      push(
         `PM verdict author "${rawLatest.user}" is not in CODEOWNERS. Authorized: ${[...ctx.authorizedReviewers].join(', ')}.`,
       );
     }
-    errors.push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
-    return errors;
+    push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
+    return finish();
   }
 
   const latest = authorized[authorized.length - 1];
 
   if (latest.parsed.verdict !== 'APPROVED') {
-    errors.push(`Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`);
+    push(`Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`);
   } else {
     // PR/head-SHA freshness only gates verdicts intended to approve the
     // merge -- a CHANGES_REQUIRED verdict already blocks above regardless.
     if (!latest.parsed.prNumber) {
-      errors.push('T1 pm-verdict/v1 comment is missing a "PR:" field. PM must bind the verdict to this exact PR.');
+      push('T1 pm-verdict/v1 comment is missing a "PR:" field. PM must bind the verdict to this exact PR.');
     } else if (latest.parsed.prNumber !== ctx.prNumber) {
-      errors.push(`PM verdict PR mismatch: comment declares PR #${latest.parsed.prNumber}, actual is #${ctx.prNumber}.`);
+      push(`PM verdict PR mismatch: comment declares PR #${latest.parsed.prNumber}, actual is #${ctx.prNumber}.`);
     }
 
     if (!latest.parsed.headSha) {
-      errors.push(
+      push(
         'T1 pm-verdict/v1 comment is missing a "Head SHA:" field. PM must bind approval to the exact reviewed head.',
       );
     } else if (latest.parsed.headSha.toLowerCase() !== ctx.headSha.toLowerCase()) {
-      errors.push(
+      push(
         `PM verdict is stale: comment approved head SHA "${latest.parsed.headSha}", current PR head is "${ctx.headSha}". A fresh verdict bound to the new head is required.`,
+        STALE_HEAD,
       );
     }
   }
@@ -170,12 +185,14 @@ function validateT1Verdicts(verdicts, ctx) {
     .filter((n) => Number.isInteger(n) && n >= 1);
   const bounceState = declaredBounces.length > 0 ? Math.max(...declaredBounces) : 0;
   if (bounceState >= 3) {
-    errors.push(
+    push(
       `Bounce limit exceeded (PM declared Bounce: ${bounceState}). Issue should be moved to Failed for PM triage.`,
     );
   }
 
-  return errors;
+  return finish();
 }
 
-module.exports = { parseVerdict, validateT1Verdicts };
+const STALE_HEAD = 'stale_head';
+
+module.exports = { parseVerdict, validateT1Verdicts, STALE_HEAD };

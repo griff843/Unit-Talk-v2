@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100801",
+  "pr_number": 1725,
+  "source_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
+  "reviewed_head_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
+  "evidence_commit_sha": null,
+  "current_head_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
+  "gate_results": [
+    {
+      "gate": "focused-security-tests",
+      "verdict": "PASS",
+      "detail": "191 pass, 0 fail"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0 locally"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "21 changed files; no rules matched"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Local target identity refused; protected staging CI required"
+    },
+    {
+      "gate": "protected-exact-head-ci",
+      "verdict": "SKIP",
+      "detail": "Pending exact-head execution on draft PR #1725"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-08T18:26:07Z",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
+    "note": "Local static verification exited 0. Protected exact-head CI receipt remains pending PR publication."
+  },
+  "authority": {
+    "ratification_comments": [
+      "https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064048646",
+      "https://github.com/griff843/Unit-Talk-v2/pull/1724#issuecomment-6064625158"
+    ],
+    "historical_recovery_merge_sha": "0ad7e1eb6cb7cba1131743a46292a8e901f99e64"
+  },
+  "verification": {
+    "focused_security_tests": {
+      "pass": 191,
+      "fail": 0
+    },
+    "type_check": "pass",
+    "test": "pass",
+    "verify_static": "pass",
+    "r_level": "PASS; 21 changed files; no rules matched",
+    "scope_diff": "clean; 5 rework implementation files within declared scope",
+    "verify": "static phase passed; writable DB phase refused unidentified local target and is deferred to protected staging CI",
+    "independent_focused_suite": {
+      "pass": 272,
+      "fail": 0,
+      "includes_canonical_collector_verifier": true
+    }
+  },
+  "db_verification": {
+    "local_command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "exit_code": 1,
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "production_accessed": false,
+    "verify_command_reached_same_guard": true
+  },
+  "privilege_boundary": {
+    "base_native_workflows_with_actions_write": 2,
+    "execution_native_workflows_with_actions_write": 0,
+    "default_controlled_retry_brokers_with_actions_write": 1,
+    "forced_check_state": false,
+    "pr_code_executed_by_privileged_job": false
+  },
+  "carry_forward_output": {
+    "schema": "approval-carry-forward/v1",
+    "notice_name": "APPROVAL_CARRY_FORWARD_COMPUTED",
+    "receipt_accepted_as_input": false,
+    "complete_canonical_facts_in_native_log_and_summary": true,
+    "generating_workflow_run_provenance": true,
+    "independent_review_disclaimer": true,
+    "live_pr_output_status": "pending_post_executor_pm_approval_or_qualifying_successor_head"
+  },
+  "rework_epoch": {
+    "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+    "implementation_baseline_sha": "c6b48147097ee04088bea53f5eb946965da4e917",
+    "execution_sha": "9f8f19029cd94696e3449f4d38634a7b68342fad",
+    "freshness_reproducer": {
+      "check_reads": 2,
+      "authorized": false
+    },
+    "broker_base_reproducer": {
+      "reruns": 0,
+      "refused": true
+    }
+  },
+  "pending": [
+    "protected exact-head CI and staging receipt",
+    "outer-wrapper executor-result/v1 publication",
+    "new binding PM merge approval",
+    "governed merge and post-merge lane finalization"
+  ],
+  "executor_attestation": {
+    "result_artifact": "executor-attempt-2-result.json",
+    "checkpoint_artifact": "executor-epoch-4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6-completed.json",
+    "epoch_id": "4dbe711a-dcc6-425c-85dc-54ec1f1ad0a6",
+    "code": "SUCCESS",
+    "wrapper_exit_code": 0,
+    "all_five_phases_completed": true
+  }
+}

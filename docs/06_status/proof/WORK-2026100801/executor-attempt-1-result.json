@@ -1,0 +1,33 @@
+{
+  "ok": false,
+  "code": "EXECUTION_TIMED_OUT",
+  "issue_id": "WORK-2026100801",
+  "branch": "codex/work-2026100801-workflow-safety",
+  "message": "attempt exceeded its bounded timeout of 45m (utv2-1594-exec-timeout-v1). Progress is checkpointed at /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100801-order/.out/worktrees/codex__work-2026100801-workflow-safety/.out/ops/execution-checkpoints/WORK-2026100801.json; the next dispatch resumes from phase 'verify' instead of repeating completed analysis. Model routing evidence: /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100801-order/.out/worktrees/codex__work-2026100801-workflow-safety/docs/06_status/proof/WORK-2026100801/model-routing.json (persistence: committed and pushed)",
+  "codex_exit_code": 0,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "codex_cli_version": "codex-cli 0.153.3",
+  "execution": {
+    "epoch_id": "85c654ba-204d-47f5-9f14-00fa2b88f7dc",
+    "epoch_mode": "fresh",
+    "implementation_baseline_sha": "eea1815d5c8d5e5bc1882edfbb278576e2e61a0e",
+    "attempt": 1,
+    "attempt_start_sha": "eea1815d5c8d5e5bc1882edfbb278576e2e61a0e",
+    "resumed": false,
+    "phase": "verify",
+    "resumed_from_phase": "orient",
+    "skipped_phases": [],
+    "carried_findings": 0,
+    "timeout_ms": 2700000,
+    "timeout_policy_id": "utv2-1594-exec-timeout-v1",
+    "timeout_clamped": "none",
+    "checkpoint_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100801-order/.out/worktrees/codex__work-2026100801-workflow-safety/.out/ops/execution-checkpoints/WORK-2026100801.json",
+    "outcome": "timed_out",
+    "heartbeat_state": "active",
+    "released_resources": []
+  }
+}

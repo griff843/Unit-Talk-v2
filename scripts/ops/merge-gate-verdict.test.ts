@@ -165,6 +165,36 @@ test('no verdicts at all fails with the generic missing-verdict message', () => 
   assert.match(errors[0], /requires a valid pm-verdict\/v1 comment/i);
 });
 
+test('WORK-2026100801: every verdict error has a complete parallel machine code and only stale head is classified', () => {
+  const ctx = { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS };
+  const cases = [
+    { name: 'stale only', verdicts: [verdictRecord(approvedComment({ headSha: OLD_HEAD_SHA }))], expected: ['stale_head'] },
+    { name: 'missing', verdicts: [], expected: [null] },
+    { name: 'bot', verdicts: [verdictRecord(approvedComment(), { user: 'bot', userType: 'Bot' })], expected: [null, null] },
+    { name: 'wrong PR', verdicts: [verdictRecord(approvedComment({ pr: PR_NUMBER + 1 }))], expected: [null] },
+    {
+      name: 'missing head',
+      verdicts: [verdictRecord(`PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: UTV2-1501\nPR: ${PR_NUMBER}`)],
+      expected: [null],
+    },
+  ];
+  for (const fixture of cases) {
+    const errors = validateT1Verdicts(fixture.verdicts, ctx) as string[] & { codes?: Array<string | null> };
+    assert.strictEqual(errors.codes?.length, errors.length, `${fixture.name} must not return incomplete codes`);
+    assert.deepStrictEqual(errors.codes, fixture.expected, fixture.name);
+  }
+});
+
+test('WORK-2026100801: codes are non-enumerable so existing message behavior is byte-compatible', () => {
+  const errors = validateT1Verdicts(
+    [verdictRecord(approvedComment({ headSha: OLD_HEAD_SHA }))],
+    { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS },
+  ) as string[] & { codes?: Array<string | null> };
+  assert.deepStrictEqual(Object.keys(errors), ['0']);
+  assert.deepStrictEqual(errors.codes, ['stale_head']);
+  assert.match(errors[0], /PM verdict is stale:/);
+});
+
 test('bounce limit is preserved: a declared bounce 3 trips the limit', () => {
   // UTV2-1926: the fixture used to be three identical `Bounce: 1` comments,
   // which passed only because the implementation counted comments. Under the
