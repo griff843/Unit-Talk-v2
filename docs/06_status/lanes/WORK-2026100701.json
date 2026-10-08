@@ -7,9 +7,24 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__work-2026100701-order/.out/worktrees/codex__work-2026100701-merge-proof-recovery",
   "branch": "codex/work-2026100701-merge-proof-recovery",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d7f035857c16694411d9f0a84ea4decedc1f8a45",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1724",
-  "files_changed": [],
+  "files_changed": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/merge-proof-recovery.yml",
+    "docs/06_status/proof/WORK-2026100701/diff-summary.md",
+    "docs/06_status/proof/WORK-2026100701/evidence.json",
+    "docs/06_status/proof/WORK-2026100701/executor-attempt-1-result.json",
+    "docs/06_status/proof/WORK-2026100701/executor-epoch-75fce2e3-completed.json",
+    "docs/06_status/proof/WORK-2026100701/executor-epoch-75fce2e3-model-routing.json",
+    "docs/06_status/proof/WORK-2026100701/executor-epoch-891c5c2c-completed.json",
+    "docs/06_status/proof/WORK-2026100701/executor-epoch-891c5c2c-model-routing.json",
+    "docs/06_status/proof/WORK-2026100701/executor-rework-attempt-1-result.json",
+    "docs/06_status/proof/WORK-2026100701/model-routing.json",
+    "docs/06_status/proof/WORK-2026100701/verification.md",
+    "scripts/ops/merge-proof-recovery.cjs",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
     ".github/workflows/merge-proof-recovery.yml",
@@ -26,14 +41,22 @@
     "docs/06_status/proof/WORK-2026100701/verification.md",
     "docs/06_status/proof/WORK-2026100701/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-07T18:58:14.687Z",
-  "heartbeat_at": "2026-10-07T19:16:59.415Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-08T17:19:55.733Z",
+  "closed_at": "2026-10-08T17:19:55.733Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100701-merge-proof-recovery.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-08T17:19:52.203Z",
+      "verdict": "pass",
+      "merge_sha": "d7f035857c16694411d9f0a84ea4decedc1f8a45",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",

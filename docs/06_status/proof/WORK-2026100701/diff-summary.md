@@ -13,5 +13,5 @@ surface, schema, original #1720 proof, or separately authorized P1 workflow was 
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d7f035857c16694411d9f0a84ea4decedc1f8a45
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1724

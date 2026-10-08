@@ -1,6 +1,6 @@
 # PROOF: WORK-2026100701
 
-MERGE_SHA: pending merge
+MERGE_SHA: d7f035857c16694411d9f0a84ea4decedc1f8a45
 
 Issue: WORK-2026100701
 Tier: T1
@@ -90,5 +90,5 @@ actual process exit and elapsed-time provenance.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `d7f035857c16694411d9f0a84ea4decedc1f8a45`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1724
