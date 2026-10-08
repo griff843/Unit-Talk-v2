@@ -41,6 +41,11 @@
       "detail": "pnpm verify:static completed with zero failures"
     },
     {
+      "gate": "R-level",
+      "verdict": "PASS",
+      "detail": "10 changed files; no matching R-level rules or artifacts required"
+    },
+    {
       "gate": "writable DB proof",
       "verdict": "SKIP",
       "detail": "Local guard refused before access: host=127.0.0.1 ref=unidentified; protected staging-ci required"
@@ -73,7 +78,7 @@
     "type_check": "pass through pnpm verify:static",
     "test": "pass through pnpm verify:static",
     "verify_static": "pass",
-    "r_level": "pending exact-head proof commit",
+    "r_level": "PASS; 10 changed files; no matching rules or artifacts required",
     "scope": "all changed files are within the WORK-2026100802 file scope lock"
   },
   "db_verification": {
@@ -96,7 +101,6 @@
     "fail-closed partial-rebind read-back"
   ],
   "pending": [
-    "R-level receipt on final proof head",
     "protected exact-head CI and staging receipt",
     "outer-wrapper executor-result/v1 publication",
     "PM approval, governed merge, lane finalization, self-closure, and WORK-2026100801 trusted closeout"

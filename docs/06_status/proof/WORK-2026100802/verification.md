@@ -50,8 +50,8 @@ controls, and the cross-merge guard.
 - [ ] `pnpm test:db`: executed and refused before DB access by the staging-target guard:
       `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx`. Writable DB verification is
       blocked/deferred to the protected `staging-ci` GitHub environment with `CI_SUPABASE_*`.
-- [ ] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: pending the final
-      proof commit so the receipt evaluates the exact review head.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 10 changed
+      files, no matching R-level rules, and no R-level artifacts required.
 - [ ] Protected exact-head CI/staging receipts: pending the final proof push; not claimed locally.
 - [ ] PM approval, governed merge, self-closure, and trusted WORK-2026100801 closeout are authorized
       post-executor steps and are not claimed by this draft review candidate.
