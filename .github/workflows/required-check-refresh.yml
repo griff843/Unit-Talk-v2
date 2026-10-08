@@ -1,0 +1,180 @@
+# Trusted retry broker for the native required-check workflows.
+#
+# WORK-2026100801: every event below loads this definition from the default
+# branch. No pull_request or pull_request_review event can select privileged
+# YAML. The broker consumes only GitHub API metadata, never upstream artifacts
+# or code, and can only rerun a completed native pull_request run already bound
+# to the same repository, PR, workflow path and live head SHA.
+
+name: Required Check Refresh
+
+on:
+  issue_comment:
+    types: [created, edited]
+  repository_dispatch:
+    types: [required-check-refresh]
+  workflow_run:
+    workflows: [CI, Executor Result Validator, Merge Gate]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    name: Retry eligible native required checks
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout trusted default-branch code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Resolve trusted signal and retry exact-head native run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { selectEligibleRefreshRun } = require('./scripts/ops/executor-result-check-selection.cjs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const repository = `${owner}/${repo}`;
+            const configs = {
+              executor: {
+                workflowId: 'executor-result-validator.yml',
+                workflowPath: '.github/workflows/executor-result-validator.yml',
+                label: 'Executor Result Validation',
+              },
+              merge: {
+                workflowId: 'merge-gate.yml',
+                workflowPath: '.github/workflows/merge-gate.yml',
+                label: 'Merge Gate',
+              },
+            };
+
+            let prNumber;
+            let signalHeadSha = null;
+            let targets = [];
+
+            if (context.eventName === 'issue_comment') {
+              if (!context.payload.issue?.pull_request) {
+                throw new Error('issue_comment does not identify a pull request; refusing refresh.');
+              }
+              prNumber = Number(context.payload.issue.number);
+              const body = String(context.payload.comment?.body || '');
+              if (body.includes('EXECUTOR_RESULT:')) targets.push('executor');
+              if (body.includes('PM_VERDICT:')) targets.push('merge');
+              if (targets.length === 0) {
+                core.info('Comment contains no recognized refresh signal.');
+                return;
+              }
+            } else if (context.eventName === 'repository_dispatch') {
+              if (context.payload.action !== 'required-check-refresh') {
+                throw new Error(`Unexpected repository_dispatch action ${context.payload.action}; refusing refresh.`);
+              }
+              prNumber = Number(context.payload.client_payload?.pr_number);
+              const requested = String(context.payload.client_payload?.target || 'both');
+              if (!['executor', 'merge', 'both'].includes(requested)) {
+                throw new Error(`Unknown manual refresh target ${requested}; refusing refresh.`);
+              }
+              targets = requested === 'both' ? ['executor', 'merge'] : [requested];
+            } else if (context.eventName === 'workflow_run') {
+              const advertised = context.payload.workflow_run;
+              const { data: run } = await github.rest.actions.getWorkflowRun({
+                owner, repo, run_id: Number(advertised?.id),
+              });
+              if (run.repository?.full_name !== repository || run.head_repository?.full_name !== repository) {
+                throw new Error('workflow_run repository identity mismatch; refusing refresh.');
+              }
+              if (run.status !== 'completed') {
+                throw new Error(`workflow_run ${run.id} is ${run.status}; refusing incomplete signal.`);
+              }
+              if (advertised?.id !== run.id || advertised?.head_sha !== run.head_sha || advertised?.path !== run.path) {
+                throw new Error('workflow_run payload/API metadata mismatch; refusing refresh.');
+              }
+              const trustedSignals = {
+                'CI': { path: '.github/workflows/ci.yml', event: 'pull_request', conclusion: 'success', targets: ['executor'] },
+                'Executor Result Validator': { path: '.github/workflows/executor-result-validator.yml', event: 'pull_request', conclusion: 'success', targets: ['merge'] },
+                'Merge Gate': { path: '.github/workflows/merge-gate.yml', event: 'pull_request_review', conclusion: null, targets: ['merge'] },
+              };
+              const expected = trustedSignals[run.name];
+              if (!expected || run.path !== expected.path || run.event !== expected.event) {
+                throw new Error(`Untrusted workflow_run identity ${run.name}/${run.path}/${run.event}; refusing refresh.`);
+              }
+              if (expected.conclusion && run.conclusion !== expected.conclusion) {
+                throw new Error(`Trusted workflow_run ${run.id} concluded ${run.conclusion}; refusing refresh.`);
+              }
+              let linkedPulls = Array.isArray(run.pull_requests) ? run.pull_requests : [];
+              if (linkedPulls.length === 0 && run.event === 'pull_request_review') {
+                // GitHub's real workflow-run API leaves pull_requests empty for
+                // pull_request_review runs. Resolve server-side association by
+                // the exact run SHA; never trust a branch name or artifact.
+                linkedPulls = (await github.paginate(
+                  github.rest.repos.listPullRequestsAssociatedWithCommit,
+                  { owner, repo, commit_sha: run.head_sha, per_page: 100 },
+                )).filter(candidate =>
+                  candidate.state === 'open' &&
+                  candidate.head?.sha === run.head_sha &&
+                  candidate.head?.repo?.full_name === repository &&
+                  candidate.base?.repo?.full_name === repository);
+              }
+              if (linkedPulls.length !== 1) {
+                throw new Error(`workflow_run ${run.id} does not resolve exactly one open same-repository pull request; refusing refresh.`);
+              }
+              const linked = linkedPulls[0];
+              prNumber = Number(linked.number);
+              signalHeadSha = run.head_sha;
+              if (linked.head?.sha && linked.head.sha !== signalHeadSha) {
+                throw new Error('workflow_run pull-request/head metadata mismatch; refusing refresh.');
+              }
+              targets = expected.targets;
+            } else {
+              throw new Error(`Unsupported event ${context.eventName}; refusing refresh.`);
+            }
+
+            if (!Number.isSafeInteger(prNumber) || prNumber <= 0) {
+              throw new Error(`Invalid pull request number ${prNumber}; refusing refresh.`);
+            }
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            if (pr.state !== 'open' || pr.base.repo.full_name !== repository || pr.head.repo.full_name !== repository) {
+              throw new Error(`PR #${prNumber} is not an open same-repository pull request; refusing refresh.`);
+            }
+            const headSha = pr.head.sha;
+            if (signalHeadSha && signalHeadSha !== headSha) {
+              throw new Error(`Trusted signal head ${signalHeadSha} is not live PR head ${headSha}; refusing stale refresh.`);
+            }
+
+            for (const targetName of [...new Set(targets)]) {
+              const config = configs[targetName];
+              if (!config) throw new Error(`Unknown retry target ${targetName}; refusing refresh.`);
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                owner, repo,
+                workflow_id: config.workflowId,
+                event: 'pull_request',
+                head_sha: headSha,
+                per_page: 100,
+              });
+              const target = selectEligibleRefreshRun(runs, {
+                workflowPath: config.workflowPath,
+                prNumber,
+                headSha,
+              });
+              if (!target) {
+                throw new Error(`No eligible ${config.label} pull_request run exists for PR #${prNumber} at ${headSha}.`);
+              }
+              if (target.status !== 'completed') {
+                throw new Error(`Newest eligible ${config.label} run ${target.id} is ${target.status}; refusing older fallback.`);
+              }
+
+              // This API read is intentionally adjacent to the only mutation.
+              // A head movement at any earlier point refuses the rerun.
+              const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+              if (current.head.sha !== headSha) {
+                throw new Error(`PR HEAD changed from ${headSha} to ${current.head.sha}; refusing stale refresh.`);
+              }
+              await github.rest.actions.reRunWorkflow({ owner, repo, run_id: target.id });
+              core.info(`Requested native retry of ${config.label} run ${target.id} for PR #${prNumber} at ${headSha}.`);
+            }

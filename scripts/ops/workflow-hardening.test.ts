@@ -312,20 +312,19 @@ test('tier label sync runs on opened so PM does not manually apply GitHub tier l
 });
 
 
-test('WORK-2026100501: Merge Gate publishes natively and non-PR events only refresh it', () => {
+test('WORK-2026100801: Merge Gate publishes natively and its PR-controlled definition is read-only', () => {
   const workflow = readWorkflowYaml('merge-gate.yml');
   const jobs = objectField(workflow, 'jobs');
   const gate = objectField(jobs, 'gate');
-  const refresh = objectField(jobs, 'refresh');
 
   assert.strictEqual(
     gate.name,
     "${{ github.event_name == 'pull_request' && 'Merge Gate' || 'Merge Gate (ineligible event)' }}",
   );
   assert.strictEqual(stringField(gate, 'if'), "github.event_name == 'pull_request'");
-  assert.match(stringField(refresh, 'if'), /PM_VERDICT:/);
-  assert.match(stringField(refresh, 'if'), /pull_request_review/);
-  assert.match(stringField(refresh, 'if'), /repository\.default_branch/, 'manual refresh must refuse a non-default ref');
+  assert.strictEqual(jobs.refresh, undefined, 'write-capable refresh must not live in merge-gate.yml');
+  assert.strictEqual(objectField(workflow, 'on').issue_comment, undefined);
+  assert.strictEqual(objectField(workflow, 'on').workflow_dispatch, undefined);
   assert.deepStrictEqual(stringArrayField(workflowEvent('merge-gate.yml', 'pull_request'), 'types'), [
     'opened',
     'synchronize',
@@ -337,18 +336,23 @@ test('WORK-2026100501: Merge Gate publishes natively and non-PR events only refr
 
   const raw = readWorkflow('merge-gate.yml');
   assert.doesNotMatch(raw, /github\.rest\.checks\.(create|update)/, 'Merge Gate must not fabricate required check runs');
-  assert.match(raw, /github\.rest\.actions\.reRunWorkflow/, 'approval events must retry the eligible native run');
+  for (const [jobId, value] of Object.entries(jobs)) {
+    const permissions = objectField(value as WorkflowDocument, 'permissions');
+    assert.notStrictEqual(permissions.actions, 'write', `${jobId} must not receive actions:write`);
+  }
   assert.match(raw, /core\.setFailed\(`Merge Gate blocked:/, 'policy denial must fail the native required job');
   assert.match(raw, /Merge Gate \(ineligible event\)/, 'skipped non-PR jobs must not carry the protected name');
 });
 
-test('WORK-2026100501: refresh jobs cannot impersonate required contexts', () => {
+test('WORK-2026100801: trusted refresh broker cannot impersonate required contexts', () => {
   const executorJobs = objectField(readWorkflowYaml('executor-result-validator.yml'), 'jobs');
   const mergeJobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
+  const refreshJobs = objectField(readWorkflowYaml('required-check-refresh.yml'), 'jobs');
   assert.match(String(objectField(executorJobs, 'validate').name), /Executor Result Validation \(ineligible event\)/);
-  assert.strictEqual(objectField(executorJobs, 'refresh').name, 'Refresh Executor Result Validation');
   assert.match(String(objectField(mergeJobs, 'gate').name), /Merge Gate \(ineligible event\)/);
-  assert.strictEqual(objectField(mergeJobs, 'refresh').name, 'Refresh Merge Gate');
+  assert.strictEqual(objectField(refreshJobs, 'refresh').name, 'Retry eligible native required checks');
+  assert.notStrictEqual(objectField(refreshJobs, 'refresh').name, 'Executor Result Validation');
+  assert.notStrictEqual(objectField(refreshJobs, 'refresh').name, 'Merge Gate');
 });
 
 test('WORK-2026100501: parsed native job expressions reserve required identities for evaluated PR jobs', () => {
@@ -380,29 +384,44 @@ test('WORK-2026100501: parsed native job expressions reserve required identities
   }
 });
 
-test('WORK-2026100501: actions-write is isolated from PR-native policy jobs', () => {
-  for (const [workflowName, nativeId, refreshId] of [
-    ['executor-result-validator.yml', 'validate', 'refresh'],
-    ['merge-gate.yml', 'gate', 'refresh'],
+test('WORK-2026100801: actions-write exists only in the default-controlled retry broker', () => {
+  for (const [workflowName, nativeId] of [
+    ['executor-result-validator.yml', 'validate'],
+    ['merge-gate.yml', 'gate'],
   ] as const) {
     const jobs = objectField(readWorkflowYaml(workflowName), 'jobs');
     const nativePermissions = objectField(objectField(jobs, nativeId), 'permissions');
-    const refreshPermissions = objectField(objectField(jobs, refreshId), 'permissions');
     assert.notStrictEqual(nativePermissions.actions, 'write', `${workflowName} native job must not write Actions`);
     assert.notStrictEqual(nativePermissions.checks, 'write', `${workflowName} native job must not write checks`);
-    assert.strictEqual(refreshPermissions.actions, 'write', `${workflowName} refresh requires only Actions retry authority`);
-    assert.notStrictEqual(refreshPermissions.checks, 'write', `${workflowName} refresh must not write checks`);
+    for (const [jobId, value] of Object.entries(jobs)) {
+      const permissions = objectField(value as WorkflowDocument, 'permissions');
+      assert.notStrictEqual(permissions.actions, 'write', `${workflowName}/${jobId} must not receive actions:write`);
+    }
   }
+  const refresh = objectField(objectField(readWorkflowYaml('required-check-refresh.yml'), 'jobs'), 'refresh');
+  const permissions = objectField(refresh, 'permissions');
+  assert.strictEqual(permissions.actions, 'write');
+  assert.notStrictEqual(permissions.checks, 'write');
 });
 
-test('WORK-2026100501: refresh wiring rechecks PR HEAD immediately before retry', () => {
-  for (const workflowName of ['executor-result-validator.yml', 'merge-gate.yml']) {
-    const raw = readWorkflow(workflowName);
-    const pullReads = raw.match(/github\.rest\.pulls\.get/g) ?? [];
-    assert.ok(pullReads.length >= 2, `${workflowName} must resolve and then recheck the current PR HEAD`);
-    assert.match(raw, /current\.head\.sha !== headSha/);
-    assert.match(raw, /refusing stale refresh/);
-  }
+test('WORK-2026100801: refresh broker is default-controlled and rechecks live HEAD adjacent to retry', () => {
+  const workflow = readWorkflowYaml('required-check-refresh.yml');
+  const events = objectField(workflow, 'on');
+  assert.strictEqual(events.pull_request, undefined);
+  assert.strictEqual(events.pull_request_review, undefined);
+  assert.strictEqual(events.workflow_dispatch, undefined, 'no branch-selectable privileged dispatch');
+  assert.deepStrictEqual(stringArrayField(objectField(events, 'repository_dispatch'), 'types'), ['required-check-refresh']);
+  assert.deepStrictEqual(stringArrayField(objectField(events, 'workflow_run'), 'workflows'), [
+    'CI',
+    'Executor Result Validator',
+    'Merge Gate',
+  ]);
+  const raw = readWorkflow('required-check-refresh.yml');
+  assert.match(raw, /current\.head\.sha !== headSha/);
+  assert.match(raw, /refusing stale refresh/);
+  assert.match(raw, /github\.rest\.actions\.reRunWorkflow/);
+  assert.doesNotMatch(raw, /github\.rest\.checks\.(create|update)/);
+  assert.doesNotMatch(raw, /download-artifact|artifacts\.|pnpm install|pull_request\.head\.sha/);
 });
 
 test('P1 fix (UTV2-1551 follow-up): tier-label-check.yml never references SYNC_BOT_TOKEN anywhere', () => {
@@ -537,12 +556,11 @@ test('required pull-request gates are wired to executable blocking jobs', () => 
   }
 });
 
-test('WORK-2026100501: executor result publishes natively and comment/manual events only refresh it', () => {
+test('WORK-2026100801: executor result publishes only from its native read-only PR definition', () => {
   const workflow = readWorkflowYaml('executor-result-validator.yml');
   const pullRequest = objectField(objectField(workflow, 'on'), 'pull_request');
   const jobs = objectField(workflow, 'jobs');
   const validate = objectField(jobs, 'validate');
-  const refresh = objectField(jobs, 'refresh');
 
   assert.ok(
     stringArrayField(pullRequest, 'types').includes('synchronize'),
@@ -553,16 +571,16 @@ test('WORK-2026100501: executor result publishes natively and comment/manual eve
     "${{ github.event_name == 'pull_request' && 'Executor Result Validation' || 'Executor Result Validation (ineligible event)' }}",
   );
   assert.strictEqual(stringField(validate, 'if'), "github.event_name == 'pull_request'");
-  assert.match(stringField(refresh, 'if'), /EXECUTOR_RESULT:/);
-  assert.match(stringField(refresh, 'if'), /repository\.default_branch/, 'manual refresh must refuse a non-default ref');
+  assert.strictEqual(jobs.refresh, undefined);
+  assert.deepStrictEqual(Object.keys(objectField(workflow, 'on')), ['pull_request']);
   const raw = readWorkflow('executor-result-validator.yml');
   assert.doesNotMatch(raw, /github\.rest\.checks\.(create|update)/, 'validator must not fabricate required check runs');
-  assert.match(raw, /github\.rest\.actions\.reRunWorkflow/, 'result comments must retry the eligible native run');
+  assert.doesNotMatch(raw, /actions:\s*write/);
   assert.match(raw, /core\.setFailed\(`Executor result validation failed:/, 'policy denial must fail the native job');
   assert.match(raw, /Executor Result Validation \(ineligible event\)/, 'skipped non-PR jobs must not carry the protected name');
 });
 
-test('WORK-2026100501: required evaluators and write-capable refresh jobs execute trusted-base code only', () => {
+test('WORK-2026100801: required evaluators and retry broker execute only trusted code', () => {
   const workflow = readWorkflowYaml('executor-result-validator.yml');
   const jobs = objectField(workflow, 'jobs');
   const job = objectField(jobs, 'validate');
@@ -582,13 +600,21 @@ test('WORK-2026100501: required evaluators and write-capable refresh jobs execut
   );
 
   const mergeJobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
-  for (const jobId of ['gate', 'refresh']) {
-    const candidate = objectField(mergeJobs, jobId);
-    const candidateSteps = candidate.steps as Array<Record<string, unknown>>;
-    const checkout = candidateSteps.find((step) => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'));
-    assert.ok(checkout, `${jobId} must checkout trusted code`);
-    assert.ok(objectField(checkout, 'with').ref, `${jobId} checkout must carry an explicit trusted ref`);
-  }
+  const gate = objectField(mergeJobs, 'gate');
+  const gateCheckout = (gate.steps as Array<Record<string, unknown>>)
+    .find((step) => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'));
+  assert.ok(gateCheckout);
+  assert.strictEqual(objectField(gateCheckout, 'with').ref, '${{ github.event.pull_request.base.sha }}');
+
+  const refresh = objectField(objectField(readWorkflowYaml('required-check-refresh.yml'), 'jobs'), 'refresh');
+  const refreshCheckout = (refresh.steps as Array<Record<string, unknown>>)
+    .find((step) => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'));
+  assert.ok(refreshCheckout);
+  assert.strictEqual(
+    objectField(refreshCheckout, 'with').ref,
+    '${{ github.event.repository.default_branch }}',
+    'privileged broker may execute only default-branch code',
+  );
 
   const wfr = objectField(mergeJobs, 'wfr-validators');
   const wfrPermissions = objectField(wfr, 'permissions');
@@ -736,6 +762,183 @@ test('WORK-2026100501: newest exact-head retry target wins and unavailable newes
   const newest = run(11, 'in_progress', 2);
   assert.deepStrictEqual(selectEligibleRefreshRun([older, newest], options), newest);
   assert.strictEqual(selectEligibleRefreshRun([{ ...older, head_sha: 'd'.repeat(40) }], options), null);
+});
+
+test('WORK-2026100801: literal refresh broker reruns only the exact eligible native run after a live-head recheck', async () => {
+  const selection = await import('./executor-result-check-selection.cjs');
+  const script = githubScriptStep(
+    'required-check-refresh.yml',
+    'refresh',
+    'Resolve trusted signal and retry exact-head native run',
+  );
+  const headSha = 'a'.repeat(40);
+  const listWorkflowRuns = async () => undefined;
+  const reruns: number[] = [];
+  let pullReads = 0;
+  const github = {
+    rest: {
+      pulls: {
+        get: async () => {
+          pullReads += 1;
+          return { data: {
+            number: 1725,
+            state: 'open',
+            head: { sha: headSha, repo: { full_name: 'griff843/Unit-Talk-v2' } },
+            base: { repo: { full_name: 'griff843/Unit-Talk-v2' } },
+          } };
+        },
+      },
+      actions: {
+        listWorkflowRuns,
+        reRunWorkflow: async ({ run_id }: { run_id: number }) => { reruns.push(run_id); },
+      },
+    },
+    paginate: async (endpoint: unknown, input: Record<string, unknown>) => {
+      assert.strictEqual(endpoint, listWorkflowRuns);
+      assert.strictEqual(input.event, 'pull_request');
+      assert.strictEqual(input.head_sha, headSha);
+      return [{
+        id: 77,
+        event: 'pull_request',
+        path: '.github/workflows/executor-result-validator.yml',
+        head_sha: headSha,
+        status: 'completed',
+        pull_requests: [{ number: 1725, head: { sha: headSha } }],
+      }];
+    },
+  };
+  await executeGithubScript(script, {
+    github,
+    context: {
+      repo: { owner: 'griff843', repo: 'Unit-Talk-v2' },
+      eventName: 'issue_comment',
+      payload: {
+        issue: { number: 1725, pull_request: { url: 'https://api.example.test/pulls/1725' } },
+        comment: { body: 'EXECUTOR_RESULT: READY_FOR_REVIEW' },
+      },
+    },
+    core: { info: () => undefined },
+    require: (specifier: string) => {
+      assert.strictEqual(specifier, './scripts/ops/executor-result-check-selection.cjs');
+      return selection;
+    },
+  });
+  assert.strictEqual(pullReads, 2);
+  assert.deepStrictEqual(reruns, [77]);
+});
+
+test('WORK-2026100801: review workflow_run resolves an empty PR list through exact commit association', async () => {
+  const selection = await import('./executor-result-check-selection.cjs');
+  const script = githubScriptStep(
+    'required-check-refresh.yml',
+    'refresh',
+    'Resolve trusted signal and retry exact-head native run',
+  );
+  const headSha = 'd'.repeat(40);
+  const runId = 9001;
+  const listAssociated = async () => undefined;
+  const listRuns = async () => undefined;
+  const reruns: number[] = [];
+  const repository = 'griff843/Unit-Talk-v2';
+  const pull = {
+    number: 1726,
+    state: 'open',
+    head: { sha: headSha, repo: { full_name: repository } },
+    base: { repo: { full_name: repository } },
+  };
+  await executeGithubScript(script, {
+    github: {
+      rest: {
+        pulls: { get: async () => ({ data: pull }) },
+        repos: { listPullRequestsAssociatedWithCommit: listAssociated },
+        actions: {
+          getWorkflowRun: async () => ({ data: {
+            id: runId,
+            name: 'Merge Gate',
+            path: '.github/workflows/merge-gate.yml',
+            event: 'pull_request_review',
+            status: 'completed',
+            conclusion: 'failure',
+            head_sha: headSha,
+            repository: { full_name: repository },
+            head_repository: { full_name: repository },
+            pull_requests: [],
+          } }),
+          listWorkflowRuns: listRuns,
+          reRunWorkflow: async ({ run_id }: { run_id: number }) => { reruns.push(run_id); },
+        },
+      },
+      paginate: async (endpoint: unknown) => {
+        if (endpoint === listAssociated) return [pull];
+        assert.strictEqual(endpoint, listRuns);
+        return [{
+          id: 88,
+          event: 'pull_request',
+          path: '.github/workflows/merge-gate.yml',
+          head_sha: headSha,
+          status: 'completed',
+          pull_requests: [{ number: 1726, head: { sha: headSha } }],
+        }];
+      },
+    },
+    context: {
+      repo: { owner: 'griff843', repo: 'Unit-Talk-v2' },
+      eventName: 'workflow_run',
+      payload: { workflow_run: { id: runId, head_sha: headSha, path: '.github/workflows/merge-gate.yml' } },
+    },
+    core: { info: () => undefined },
+    require: () => selection,
+  });
+  assert.deepStrictEqual(reruns, [88]);
+});
+
+test('WORK-2026100801: literal refresh broker refuses head movement before mutation', async () => {
+  const selection = await import('./executor-result-check-selection.cjs');
+  const script = githubScriptStep(
+    'required-check-refresh.yml',
+    'refresh',
+    'Resolve trusted signal and retry exact-head native run',
+  );
+  const original = 'b'.repeat(40);
+  let reads = 0;
+  let mutated = false;
+  await assert.rejects(
+    executeGithubScript(script, {
+      github: {
+        rest: {
+          pulls: { get: async () => ({ data: {
+            state: 'open',
+            head: { sha: reads++ === 0 ? original : 'c'.repeat(40), repo: { full_name: 'griff843/Unit-Talk-v2' } },
+            base: { repo: { full_name: 'griff843/Unit-Talk-v2' } },
+          } }) },
+          actions: {
+            listWorkflowRuns: async () => undefined,
+            reRunWorkflow: async () => { mutated = true; },
+          },
+        },
+        paginate: async () => [{
+          id: 78,
+          event: 'pull_request',
+          path: '.github/workflows/merge-gate.yml',
+          head_sha: original,
+          status: 'completed',
+          pull_requests: [{ number: 1725, head: { sha: original } }],
+        }],
+      },
+      context: {
+        repo: { owner: 'griff843', repo: 'Unit-Talk-v2' },
+        eventName: 'issue_comment',
+        payload: {
+          issue: { number: 1725, pull_request: {} },
+          comment: { body: 'PM_VERDICT: APPROVED' },
+        },
+      },
+      core: { info: () => undefined },
+      require: () => selection,
+    }),
+    /PR HEAD changed.*refusing stale refresh/,
+  );
+  assert.strictEqual(mutated, false);
 });
 
 test('codex return review extracts issue IDs without sed delimiter traps', () => {
@@ -1543,6 +1746,22 @@ test('UTV2-1543: merge-gate.yml validates T1 pm-verdict/v1 PR + Head SHA via the
   assert.ok(staleErrors.some((e) => /stale/i.test(e)), 'a verdict bound to a different head SHA must fail closed');
 });
 
+test('WORK-2026100801: Merge Gate invokes the collector only behind complete nonempty stale-head codes', () => {
+  const script = githubScriptStep('merge-gate.yml', 'gate', 'Evaluate merge gate');
+  assert.match(script, /t1Errors\.length > 0/);
+  assert.match(script, /t1Codes !== null/);
+  assert.match(script, /t1Codes\.length === t1Errors\.length/);
+  assert.match(script, /t1Codes\.every\(code => code === 'stale_head'\)/);
+  assert.doesNotMatch(script, /codes\s*\|\|\s*\[\]/, 'missing codes must never become vacuous success');
+  assert.doesNotMatch(script, /t1Errors.*stale/i, 'classification must not prose-match error messages');
+  assert.match(script, /scripts\/ops\/carry-forward-collect\.ts/);
+  assert.match(script, /parsed\.original_verdict_sha === latestAuthorized\?\.parsed\.headSha/);
+  assert.match(script, /parsed\.original_verdict_url === latestAuthorized\?\.htmlUrl/);
+  assert.match(script, /parsed\.current_head_sha === headSha/);
+  assert.match(script, /APPROVAL_CARRY_FORWARD_COMPUTED=/);
+  assert.doesNotMatch(script, /APPROVAL_CARRY_FORWARD:.*parse|renderReceipt|receipt.*input/is);
+});
+
 test('UTV2-1543 (Codex P1): merge-gate.yml checks out the repo, pinned to a trusted ref, before requiring the verdict helper', () => {
   const workflow = readWorkflowYaml('merge-gate.yml');
   const jobs = objectField(workflow, 'jobs');
@@ -1572,7 +1791,7 @@ test('UTV2-1543 (Codex P1): merge-gate.yml checks out the repo, pinned to a trus
   );
 });
 
-test('UTV2-1554/UTV2-1543: merge-gate.yml gate job never fetches or executes content keyed on pull_request.head.sha', () => {
+test('WORK-2026100801: merge-gate reads head objects only through one inert fetch and never materializes head code', () => {
   const workflow = readWorkflowYaml('merge-gate.yml');
   const jobs = objectField(workflow, 'jobs');
   const gate = objectField(jobs, 'gate');
@@ -1595,18 +1814,23 @@ test('UTV2-1554/UTV2-1543: merge-gate.yml gate job never fetches or executes con
       }
     }
 
-    // 2. No `run:` step may materialize file content by combining
-    //    pull_request.head.sha with a fetch/read/write verb. This is the
-    //    "PR-head bootstrap fetch fallback" shape that must never exist:
-    //    it would let a PR overwrite the trusted verdict-validation module
-    //    before this privileged job requires it.
+    // 2. A bare fetch may place inert objects in the object database for the
+    //    collector. No read/materialization verb may write PR bytes into the
+    //    trusted working tree, and the fetch step may contain no second command.
     if (typeof step.run === 'string') {
       const referencesHeadSha = /pull_request\.head\.sha/.test(step.run);
-      const materializesContent = /git\s+(fetch|show|checkout)|curl\s|wget\s|>\s*scripts\//.test(step.run);
+      const materializesContent = /git\s+(show|checkout)|curl\s|wget\s|>\s*scripts\//.test(step.run);
       assert.ok(
         !(referencesHeadSha && materializesContent),
-        `${stepName}: run step must not fetch/materialize content keyed on pull_request.head.sha -- found a bootstrap-style fallback:\n${step.run}`,
+        `${stepName}: run step must not materialize content keyed on pull_request.head.sha:\n${step.run}`,
       );
+      if (referencesHeadSha && /git\s+fetch/.test(step.run)) {
+        assert.match(
+          step.run.trim(),
+          /^git fetch --no-tags origin "\$\{\{ github\.event\.pull_request\.head\.sha \}\}"$/,
+          `${stepName}: head fetch must be the single inert fetch command`,
+        );
+      }
     }
 
     // 3. The github-script step's require() must resolve the committed,
@@ -1635,6 +1859,15 @@ test('UTV2-1554/UTV2-1543: merge-gate.yml gate job never fetches or executes con
     undefined,
     'merge-gate.yml must not carry a PR-head bootstrap-recovery step for merge-gate-verdict.cjs; main always has the trusted file post-UTV2-1554',
   );
+
+  const raw = readWorkflow('merge-gate.yml');
+  for (const hostile of [
+    /git show .*pull_request\.head\.sha.*>\s*scripts\//,
+    /git checkout .*pull_request\.head\.sha.*scripts\//,
+    /curl .*pull_request\.head\.sha.*(?:-o|>)\s*scripts\//,
+  ]) {
+    assert.doesNotMatch(raw, hostile);
+  }
 });
 
 // ---------------------------------------------------------------------------

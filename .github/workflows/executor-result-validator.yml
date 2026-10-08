@@ -3,23 +3,15 @@
 # Validates executor completion claims independently. Does NOT trust comment
 # content — verifies CI, proof files, and SHA binding via GitHub API.
 #
-# WORK-2026100501: the required identity is the native job result from an
-# eligible pull_request run. Comment/manual events only request a retry of
-# that exact PR/head workflow run. They cannot create or force-green a check.
+# WORK-2026100801: this PR-controlled definition is wholly read-only. Trusted
+# comment/manual/native-completion events request exact-run retries through
+# required-check-refresh.yml, whose definition is loaded from the default branch.
 #
 # Spec: docs/05_operations/GOVERNED_LOOP_SPEC.md (sections 2B, 3A, 3D, 3E)
 
 name: Executor Result Validator
 
 on:
-  issue_comment:
-    types: [created, edited]
-  workflow_dispatch:
-    inputs:
-      pull_number:
-        description: 'PR number to re-validate (recovery/manual re-run path)'
-        required: true
-        type: number
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -28,9 +20,8 @@ permissions:
 
 jobs:
   validate:
-    # Non-PR triggers still materialize skipped jobs. Give those jobs a
-    # distinct identity so a workflow_dispatch against a PR ref can never
-    # publish a skipped required context on that PR HEAD.
+    # Keep the event-qualified identity defensive: only the eligible native
+    # pull_request publication may satisfy the required context.
     name: ${{ github.event_name == 'pull_request' && 'Executor Result Validation' || 'Executor Result Validation (ineligible event)' }}
     if: github.event_name == 'pull_request'
     permissions:
@@ -412,56 +403,3 @@ jobs:
             } else {
               core.setFailed(`Executor result validation failed:\n${errors.map(e => '- ' + e).join('\n')}`);
             }
-
-  refresh:
-    name: Refresh Executor Result Validation
-    if: >-
-      (github.event_name == 'workflow_dispatch' &&
-       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, 'EXECUTOR_RESULT:'))
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Checkout trusted default-branch code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-
-      - name: Retry exact-head eligible validation run
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { selectEligibleRefreshRun } = require('./scripts/ops/executor-result-check-selection.cjs');
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const prNumber = context.eventName === 'workflow_dispatch'
-              ? Number(context.payload.inputs.pull_number)
-              : context.payload.issue.number;
-            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            const headSha = pr.head.sha;
-            const workflowPath = '.github/workflows/executor-result-validator.yml';
-            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-              owner, repo,
-              workflow_id: 'executor-result-validator.yml',
-              event: 'pull_request',
-              head_sha: headSha,
-              per_page: 100,
-            });
-            const target = selectEligibleRefreshRun(runs, { workflowPath, prNumber, headSha });
-            if (!target) {
-              throw new Error(`No eligible pull_request validation run exists for PR #${prNumber} at ${headSha}.`);
-            }
-            if (target.status !== 'completed') {
-              throw new Error(`Eligible validation run ${target.id} is ${target.status}; refusing an older retry target.`);
-            }
-            const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            if (current.head.sha !== headSha) {
-              throw new Error(`PR HEAD changed from ${headSha} to ${current.head.sha}; refusing stale refresh.`);
-            }
-            await github.rest.actions.reRunWorkflow({ owner, repo, run_id: target.id });
-            core.info(`Requested native retry of validation run ${target.id} for PR #${prNumber} at ${headSha}.`);

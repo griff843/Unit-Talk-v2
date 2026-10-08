@@ -21,12 +21,6 @@
 name: Merge Gate
 
 on:
-  workflow_dispatch:
-    inputs:
-      pull_number:
-        description: 'PR number to re-evaluate (for P0 lanes where self-approval is structurally blocked)'
-        required: true
-        type: number
   pull_request:
     # UTV2-1551: `opened` was missing here, so a brand-new PR got zero Merge
     # Gate evaluation from PR creation itself -- only from a later
@@ -42,8 +36,6 @@ on:
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
   pull_request_review:
     types: [submitted, edited, dismissed]
-  issue_comment:
-    types: [created, edited]
 
 permissions:
   contents: read
@@ -80,6 +72,24 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install trusted dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The collector compares commit/blob objects but never materializes or
+      # executes PR-head bytes. The working tree remains pinned to base.sha.
+      - name: Fetch PR head as inert comparison data
+        run: git fetch --no-tags origin "${{ github.event.pull_request.head.sha }}"
 
       # UTV2-1554 landed the final scripts/ops/merge-gate-verdict.cjs on main
       # ahead of this lane specifically so this job never needs to fetch or
@@ -90,6 +100,8 @@ jobs:
       # anything keyed on pull_request.head.sha.
       - name: Evaluate merge gate
         uses: actions/github-script@v7
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -442,17 +454,78 @@ jobs:
                       userType: c.user?.type,
                       parsed: parseVerdict(c.body),
                       createdAt: c.created_at,
+                      htmlUrl: c.html_url,
                     }))
                     .filter(v => v.parsed !== null);
 
                   // UTV2-1543: also requires PR: and Head SHA: to match this
                   // exact PR/head, fail-closed on stale/mismatched verdicts —
                   // see scripts/ops/merge-gate-verdict.cjs and its test suite.
-                  errors.push(...validateT1Verdicts(verdicts, {
+                  const t1Errors = validateT1Verdicts(verdicts, {
                     prNumber,
                     headSha,
                     authorizedReviewers: AUTHORIZED_REVIEWERS,
-                  }));
+                  });
+                  const t1Codes = Array.isArray(t1Errors.codes) ? t1Errors.codes : null;
+                  const onlyStaleness =
+                    t1Errors.length > 0 &&
+                    t1Codes !== null &&
+                    t1Codes.length === t1Errors.length &&
+                    t1Codes.every(code => code === 'stale_head');
+
+                  let carried = null;
+                  if (onlyStaleness) {
+                    const latestAuthorized = verdicts
+                      .filter(v => v.userType !== 'Bot' && AUTHORIZED_REVIEWERS.has(v.user))
+                      .at(-1);
+                    const run = require('child_process').spawnSync(
+                      'pnpm',
+                      ['exec', 'tsx', 'scripts/ops/carry-forward-collect.ts',
+                       '--pr', String(prNumber), '--issue', issueId],
+                      {
+                        encoding: 'utf8',
+                        timeout: 120000,
+                        env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
+                      },
+                    );
+                    try {
+                      const parsed = JSON.parse(run.stdout || '{}');
+                      const completeConditions =
+                        Array.isArray(parsed.conditions) &&
+                        parsed.conditions.length === 7 &&
+                        ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7'].every((id, index) =>
+                          parsed.conditions[index]?.id === id && parsed.conditions[index]?.status === 'pass');
+                      if (!run.error && run.signal === null && run.status === 0 &&
+                          parsed.schema === 'approval-carry-forward/v1' &&
+                          parsed.verdict === 'VERIFIED' &&
+                          parsed.issue_id === issueId &&
+                          parsed.current_head_sha === headSha &&
+                          parsed.original_verdict_sha === latestAuthorized?.parsed.headSha &&
+                          parsed.original_verdict_url === latestAuthorized?.htmlUrl &&
+                          completeConditions) {
+                        carried = parsed;
+                      }
+                    } catch {
+                      carried = null;
+                    }
+                  }
+
+                  if (carried) {
+                    const computed = {
+                      schema: carried.schema,
+                      original_verdict_sha: carried.original_verdict_sha,
+                      original_verdict_url: carried.original_verdict_url,
+                      successor_head_sha: carried.current_head_sha,
+                      conditions: carried.conditions.map(c => ({ id: c.id, status: c.status })),
+                    };
+                    core.notice(`APPROVAL_CARRY_FORWARD_COMPUTED=${JSON.stringify(computed)}`);
+                    notes.push(
+                      `Approval carried forward from ${carried.original_verdict_sha.slice(0, 12)} ` +
+                      `to ${headSha.slice(0, 12)}; original comment ${carried.original_verdict_url}`,
+                    );
+                  } else {
+                    errors.push(...t1Errors);
+                  }
 
                   if (!labels.includes('t1-approved')) {
                     errors.push(
@@ -476,62 +549,6 @@ jobs:
               core.setFailed(`Merge Gate blocked:\n${errors.map(e => '- ' + e).join('\n')}`);
             }
 
-  refresh:
-    name: Refresh Merge Gate
-    if: >-
-      (github.event_name == 'workflow_dispatch' &&
-       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) ||
-      github.event_name == 'pull_request_review' ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request &&
-       contains(github.event.comment.body, 'PM_VERDICT:'))
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-      contents: read
-      pull-requests: read
-    steps:
-      - name: Checkout trusted base code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ (github.event_name == 'pull_request_review' && github.event.pull_request.base.sha) || github.event.repository.default_branch }}
-
-      - name: Retry exact-head eligible merge-gate run
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { selectEligibleRefreshRun } = require('./scripts/ops/executor-result-check-selection.cjs');
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const prNumber = context.eventName === 'workflow_dispatch'
-              ? Number(context.payload.inputs.pull_number)
-              : context.eventName === 'pull_request_review'
-                ? context.payload.pull_request.number
-                : context.payload.issue.number;
-            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            const headSha = pr.head.sha;
-            const workflowPath = '.github/workflows/merge-gate.yml';
-            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
-              owner, repo,
-              workflow_id: 'merge-gate.yml',
-              event: 'pull_request',
-              head_sha: headSha,
-              per_page: 100,
-            });
-            const target = selectEligibleRefreshRun(runs, { workflowPath, prNumber, headSha });
-            if (!target) {
-              throw new Error(`No eligible pull_request Merge Gate run exists for PR #${prNumber} at ${headSha}.`);
-            }
-            if (target.status !== 'completed') {
-              throw new Error(`Eligible Merge Gate run ${target.id} is ${target.status}; refusing an older retry target.`);
-            }
-            const { data: current } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
-            if (current.head.sha !== headSha) {
-              throw new Error(`PR HEAD changed from ${headSha} to ${current.head.sha}; refusing stale refresh.`);
-            }
-            await github.rest.actions.reRunWorkflow({ owner, repo, run_id: target.id });
-            core.info(`Requested native retry of Merge Gate run ${target.id} for PR #${prNumber} at ${headSha}.`);
-
   # ── WFR-v2 Validators ──────────────────────────────────────────────────────
   # Workflow Runtime v2 Phase D: consume proof-check, tier-sync, review state.
   # Runs in parallel with the gate job. Fails closed on stale/missing/invalid
@@ -552,8 +569,9 @@ jobs:
         # This supporting read-only validator intentionally preserves the
         # pre-repair PR checkout. tier-sync and proof-check consume candidate
         # lane metadata that does not exist on the trusted base yet. The
-        # required gate above and the actions:write refresh job remain pinned
-        # to trusted executable code.
+        # required gate above remains pinned to trusted executable code; the
+        # actions:write retry broker lives in required-check-refresh.yml and is
+        # loaded only from the default branch.
 
       - name: Setup Node
         uses: actions/setup-node@v4

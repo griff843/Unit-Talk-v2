@@ -58,6 +58,11 @@ import {
   parseArgs,
   readConfiguredEnvValue,
 } from './shared.js';
+import { collectAndEvaluate } from './carry-forward-collect.js';
+
+interface VerdictErrors extends Array<string> {
+  codes?: Array<string | null>;
+}
 
 const require = createRequire(import.meta.url);
 const mergeGateVerdict = require('./merge-gate-verdict.cjs') as {
@@ -70,7 +75,7 @@ const mergeGateVerdict = require('./merge-gate-verdict.cjs') as {
       createdAt: string;
     }>,
     ctx: { prNumber: number; headSha: string; authorizedReviewers: Set<string> },
-  ) => string[];
+  ) => VerdictErrors;
 };
 const { parseVerdict, validateT1Verdicts } = mergeGateVerdict;
 
@@ -149,6 +154,11 @@ export interface PreMergeAuthorizationDeps {
   ) => Promise<{ authorizations?: unknown } | null>;
   /** Lists the PR's changed file paths, for the phase-1 diff-scope constraint. */
   fetchChangedFiles?: (input: PreMergeAuthorizationInput) => Promise<string[]>;
+  /** Recomputes carry-forward from git/GitHub evidence; receipts are never inputs. */
+  collectCarryForward?: (input: {
+    prNumber: number;
+    issueId: string;
+  }) => unknown | Promise<unknown>;
 }
 
 /**
@@ -156,7 +166,7 @@ export interface PreMergeAuthorizationDeps {
  * `UTV2-1661`), which is how the manifest path is located.
  */
 export function issueIdFromHeadRef(headRef: string): string | null {
-  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(headRef);
+  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni|work)-(\d+)(?:-|$)/i.exec(headRef);
   return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
 }
 
@@ -393,6 +403,16 @@ export interface PmVerdictReceipt {
   valid: boolean;
 }
 
+export interface ApprovalCarryForwardReceipt {
+  schema: 'approval-carry-forward/v1';
+  valid: boolean;
+  originalVerdictSha: string | null;
+  originalVerdictUrl: string | null;
+  successorHeadSha: string;
+  conditions: Array<{ id: string; status: string }>;
+  reason?: string;
+}
+
 export type MergeAuthorityTier = 'T1' | 'T2' | 'T3';
 
 /** The exact required-check context whose green state may relax T2/T3. */
@@ -543,6 +563,8 @@ export interface PreMergeAuthorizationReceipt {
   headSha: string;
   requiredChecks: RequiredCheckReceiptEntry[];
   pmVerdict: PmVerdictReceipt;
+  /** Independently recomputed result; never populated from a posted receipt. */
+  approvalCarryForward?: ApprovalCarryForwardReceipt;
   /** Tier resolution and whether it required a pm-verdict. Diagnostic + auditable. */
   tier: TierReceipt;
   authorized: boolean;
@@ -552,7 +574,7 @@ export interface PreMergeAuthorizationReceipt {
 function buildPmVerdictReceipt(
   comments: PullRequestComment[],
   ctx: { prNumber: number; headSha: string },
-): { pmVerdict: PmVerdictReceipt; errors: string[] } {
+): { pmVerdict: PmVerdictReceipt; errors: VerdictErrors } {
   const verdicts = comments
     .map((comment) => ({
       user: comment.user?.login ?? null,
@@ -651,6 +673,9 @@ export async function evaluatePreMergeAuthorization(
   const fetchBootstrapAuthorizations =
     deps.fetchBootstrapAuthorizations ?? defaultFetchBootstrapAuthorizations;
   const fetchChangedFiles = deps.fetchChangedFiles ?? defaultFetchChangedFiles;
+  const collectCarryForward =
+    deps.collectCarryForward ??
+    ((args: { prNumber: number; issueId: string }) => collectAndEvaluate(args));
 
   // Fetches that do not depend on the live head SHA go first.
   const requiredChecks = await fetchRequiredCheckContexts(input);
@@ -778,22 +803,99 @@ export async function evaluatePreMergeAuthorization(
     pmVerdictRequired: verdictRequired,
   };
 
+  let approvalCarryForward: ApprovalCarryForwardReceipt | undefined;
+  const verdictCodes = Array.isArray(verdictErrors.codes) ? verdictErrors.codes : null;
+  const onlyStaleness =
+    verdictErrors.length > 0 &&
+    verdictCodes !== null &&
+    verdictCodes.length === verdictErrors.length &&
+    verdictCodes.every((code) => code === 'stale_head');
+
+  if (verdictRequired && onlyStaleness && issueId) {
+    try {
+      const computed = (await collectCarryForward({ prNumber: input.prNumber, issueId })) as {
+        schema?: unknown;
+        verdict?: unknown;
+        issue_id?: unknown;
+        original_verdict_sha?: unknown;
+        original_verdict_url?: unknown;
+        current_head_sha?: unknown;
+        conditions?: unknown;
+        reason?: unknown;
+        refusals?: unknown;
+      };
+      const conditions = Array.isArray(computed?.conditions)
+        ? computed.conditions as Array<{ id?: unknown; status?: unknown }>
+        : [];
+      const completeConditions =
+        conditions.length === 7 &&
+        ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7'].every(
+          (id, index) => conditions[index]?.id === id && conditions[index]?.status === 'pass',
+        );
+      const evidenceMatches =
+        computed?.schema === 'approval-carry-forward/v1' &&
+        computed?.verdict === 'VERIFIED' &&
+        computed?.issue_id === issueId &&
+        computed?.current_head_sha === headSha &&
+        computed?.original_verdict_sha === pmVerdict.parsedHeadSha &&
+        computed?.original_verdict_url === pmVerdict.commentUrl &&
+        completeConditions;
+
+      // Collector work occurs after the ordinary live-head read. Re-read the
+      // PR now so a push during collection cannot inherit the old decision.
+      const finalState = await fetchPullRequestState(input);
+      const headStillCurrent = finalState.headSha === headSha;
+      approvalCarryForward = {
+        schema: 'approval-carry-forward/v1',
+        valid: evidenceMatches && headStillCurrent,
+        originalVerdictSha:
+          typeof computed?.original_verdict_sha === 'string' ? computed.original_verdict_sha : null,
+        originalVerdictUrl:
+          typeof computed?.original_verdict_url === 'string' ? computed.original_verdict_url : null,
+        successorHeadSha: headSha,
+        conditions: conditions.map((condition) => ({
+          id: String(condition.id ?? ''),
+          status: String(condition.status ?? ''),
+        })),
+        ...(!evidenceMatches
+          ? { reason: 'collector result was absent, refused, malformed, incomplete, or did not match the exact approval/issue/head' }
+          : !headStillCurrent
+            ? { reason: `live PR head moved from ${headSha} to ${finalState.headSha ?? 'unresolved'} during authorization` }
+            : {}),
+      };
+    } catch (error) {
+      approvalCarryForward = {
+        schema: 'approval-carry-forward/v1',
+        valid: false,
+        originalVerdictSha: pmVerdict.parsedHeadSha,
+        originalVerdictUrl: pmVerdict.commentUrl,
+        successorHeadSha: headSha,
+        conditions: [],
+        reason: `collector failed closed: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
   // Verdict defects only block when the tier actually requires a verdict.
   // On T2/T3 they are still recorded in the receipt's pmVerdict block for
   // diagnostics, but they are not merge-blocking reasons -- surfacing a
   // T1-only failure message on a T2 PR is the exact defect this lane fixes
   // (observed live on a T2 PR whose four required checks were all green).
-  if (verdictErrors.length > 0 && verdictRequired) {
+  if (verdictErrors.length > 0 && verdictRequired && !approvalCarryForward?.valid) {
     reasons.push(...verdictErrors);
+    if (approvalCarryForward?.reason) reasons.push(approvalCarryForward.reason);
   }
 
-  const authorized = requiredCheckResult.passed && (!verdictRequired || pmVerdict.valid);
+  const authorized =
+    requiredCheckResult.passed &&
+    (!verdictRequired || pmVerdict.valid || approvalCarryForward?.valid === true);
 
   return {
     prNumber: input.prNumber,
     headSha,
     requiredChecks: receiptChecks,
     pmVerdict,
+    ...(approvalCarryForward ? { approvalCarryForward } : {}),
     tier: tierReceipt,
     authorized,
     ...(reasons.length > 0 ? { reason: reasons.join(' | ') } : {}),
