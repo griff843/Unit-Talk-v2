@@ -20,7 +20,7 @@ result: STATIC_PASS_RUNTIME_DEFERRED
 Implementation source commit:
 
 ```text
-1a210d1a26412eb2f3b35e34429bd5d3fdc7328e
+2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b
 ```
 
 Rework provenance:
@@ -104,4 +104,4 @@ No live row count is claimed, no canonical readiness artifact was changed, and n
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1728
-Execution SHA: 1a210d1a26412eb2f3b35e34429bd5d3fdc7328e
+Execution SHA: 2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b

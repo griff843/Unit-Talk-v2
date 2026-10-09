@@ -3,10 +3,10 @@
   "issue_id": "WORK-2026100901",
   "pr_number": 1728,
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1728",
-  "source_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
-  "reviewed_head_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
+  "source_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
+  "reviewed_head_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
   "evidence_commit_sha": null,
-  "current_head_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
+  "current_head_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
   "gate_results": [
     {
       "gate": "focused-health-tests",
@@ -53,7 +53,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
+    "verified_source_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -65,7 +65,7 @@
   },
   "static_proof": {
     "status": "PASS",
-    "implementation_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
+    "implementation_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
     "focused_tests": [
       {
         "command": "pnpm exec tsx --test 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'",
