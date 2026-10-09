@@ -1,0 +1,317 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026100901
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026100901
+  objective: >-
+    Close the three confirmed, still-present launch gaps that stand between
+    `discord:official-picks` and one controlled real-pick canary. Each was
+    re-verified against `origin/main` `1ef25a5db` on 2026-10-09; the other
+    historical findings (freshness from receipts, Discord nonce, embed footer,
+    kill-switch release reason) are FIXED on main and are out of scope.
+
+    Repository-owned work order (tracker independence). No Linear issue exists
+    for this identity by design. Do not redesign Discord presentation. Do not
+    un-kill `official-picks`; do not touch kill-switch rows, outbox rows,
+    containment or any production data.
+  acceptance_criteria:
+    - "Each gap has a regression that fails on current main and passes after the
+      change (mutation-style: revert the guard, the test must fail). Extend
+      existing test files; do not add new test files unless unavoidable (then
+      declare them)."
+    - "Replay: official-picks accepted by name and included in `--target all`
+      only if that is safe given the guard; sent-receipt and ledger refusal
+      tested for official-picks and for the existing targets; no behavior change
+      for canary/best-bets beyond the added guard."
+    - "Health: zombie-check failure → not healthy (status and HTTP semantics
+      consistent with the existing degraded/unhealthy contract); human-capper
+      delivery-eligible picks covered; Track Only/voided/killed-target
+      exclusions explicit and tested; no new network or DB write."
+    - "Readiness: never-claimed check wired into `worker_outbox_health` without
+      making the dimension fail on the 2 voided picks' intentionally-pending
+      `official-picks` rows or on the 32 stranded canary `processing` rows (they
+      must remain untouched and classified)."
+    - All reads read-only. No schema change, no migration, no dependency change,
+      no new endpoint.
+    - "`pnpm verify` and `pnpm test:db` green; R-level artifacts present; T1
+      evidence bundle SHA-tied. Execute implementation through `ops:codex-exec`
+      with genuine phases and actual provenance."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026100901 — official-picks canary hardening: replay, health and
+      never-claimed visibility
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      ## Confirmed gaps (current main)
+
+
+      1. **Replay excludes official-picks and has no sent-receipt guard.**
+      `apps/worker/src/replay-failed-delivery.ts`: `LIVE_TARGETS` is only
+      `discord:canary` and `discord:best-bets` (line ~11); `--target all` omits
+      official-picks (~183-187); only those two targets are accepted (~307-310);
+      replay resets `failed`/`dead_letter` rows to `pending` and bumps
+      `attempt_count` with no check for an existing `sent` receipt or
+      dispatch-ledger outcome. The API route `retry-delivery-controller.ts`
+      (RETRY_DUPLICATE_GUARD, lines ~87-137) already refuses `ALREADY_DELIVERED`
+      / `DELIVERY_OUTCOME_AMBIGUOUS`; replay must hold the same refusal. Replay
+      of a row whose pick already has a `sent` receipt for that target must
+      refuse, and an ambiguous dispatch-ledger outcome must refuse unless
+      explicitly confirmed not delivered by the same mechanism the API route
+      uses.
+
+      2. **`/health` fails open and ignores human-capper picks.**
+      `apps/api/src/routes/health.ts`: the zombie check `.catch(() =>
+      ({status:'healthy', count:0}))` (~271-278) reports healthy when the check
+      throws; picks with `promotion_target == null` (every human-capper pick)
+      are skipped (~101, 148-152, and `packages/db/src/runtime-repositories.ts`
+      ~3520 `.not('promotion_target','is',null)`). A thrown zombie check must
+      report degraded/unknown, never healthy. Delivery-eligible human-capper
+      picks that are routed to `official-picks` must be covered by the
+      stuck/zombie check using their actual delivery target, without flagging
+      Track Only picks, voided picks, or picks whose target is killed by design.
+
+      3. **`worker_outbox_health` is blind to never-claimed rows.**
+      `scripts/ops/readiness-refresh.ts` (~714-719) flags stuck pending only
+      when `attempt_count > 0`. A `pending` row with `attempt_count = 0` that no
+      worker claims never trips it. Add a never-claimed-pending check with an
+      age threshold, classified per
+      `docs/05_operations/QUEUE_READINESS_SEMANTICS.md`, that does NOT fail on
+      rows for a target whose live kill switch is engaged, rows whose pick is
+      voided/terminal, or the known unclaimable canary targets, and that is
+      reported with evidence rather than silently passing.
+
+      4. **Residual (same lane, small):** `scripts/pipeline-health.ts` receipt
+      read (~127) does not read `status`; a non-`sent` receipt would count as
+      delivered. Only `sent` receipts count toward delivery freshness.
+
+
+      ## Invariants
+
+
+      No Discord presentation/embed change, no scoring/grading/settlement
+      semantics, no routing or promotion logic change, no membership/pricing, no
+      kill-switch or containment change, no provider/SGO activation, no
+      production deploy or production write, no governance/CI/workflow edits, no
+      un-kill. Fail closed: unknown or unreadable evidence is never scored as
+      healthy.
+
+
+      ## File Scope
+
+
+      - apps/worker/src/replay-failed-delivery.ts
+
+      - apps/worker/src/replay-failed-delivery.test.ts
+
+      - apps/api/src/routes/health.ts
+
+      - apps/api/src/server.test.ts
+
+      - packages/db/src/runtime-repositories.ts
+
+      - scripts/ops/readiness-refresh.ts
+
+      - scripts/ops/readiness-refresh.test.ts
+
+      - scripts/pipeline-health.ts
+
+      - scripts/ops/pipeline-health-classification.ts
+
+      - scripts/ops/pipeline-health-classification.test.ts
+
+      - .ops/work/WORK-2026100901.md
+
+      - .ops/sync/WORK-2026100901.yml
+
+      - docs/06_status/lanes/WORK-2026100901.json
+
+      - docs/06_status/proof/WORK-2026100901/**
+
+
+      ## Proof
+
+
+      Named lane proof only: before/after regression evidence per gap, mutation
+      proof for each guard, full verify and test:db receipts, runtime proof
+      against real Supabase read-only where the lane requires it. If a necessary
+      file falls outside this scope, stop before editing it and report the
+      concrete requirement rather than widening.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026100901.md
+    title: "WORK-2026100901 — official-picks canary hardening: replay, health and
+      never-claimed visibility"
+    description: >-
+      # WORK-2026100901 — official-picks canary hardening: replay, health and
+      never-claimed visibility
+
+
+      Tier: T1
+
+      Lane type: runtime
+
+      Executor: codex-cli
+
+
+      ## Objective
+
+
+      Close the three confirmed, still-present launch gaps that stand between
+      `discord:official-picks` and one controlled real-pick canary. Each was
+      re-verified against `origin/main` `1ef25a5db` on 2026-10-09; the other
+      historical findings (freshness from receipts, Discord nonce, embed footer,
+      kill-switch release reason) are FIXED on main and are out of scope.
+
+
+      Repository-owned work order (tracker independence). No Linear issue exists
+      for this identity by design. Do not redesign Discord presentation. Do not
+      un-kill `official-picks`; do not touch kill-switch rows, outbox rows,
+      containment or any production data.
+
+
+      ## Confirmed gaps (current main)
+
+
+      1. **Replay excludes official-picks and has no sent-receipt guard.**
+      `apps/worker/src/replay-failed-delivery.ts`: `LIVE_TARGETS` is only
+      `discord:canary` and `discord:best-bets` (line ~11); `--target all` omits
+      official-picks (~183-187); only those two targets are accepted (~307-310);
+      replay resets `failed`/`dead_letter` rows to `pending` and bumps
+      `attempt_count` with no check for an existing `sent` receipt or
+      dispatch-ledger outcome. The API route `retry-delivery-controller.ts`
+      (RETRY_DUPLICATE_GUARD, lines ~87-137) already refuses `ALREADY_DELIVERED`
+      / `DELIVERY_OUTCOME_AMBIGUOUS`; replay must hold the same refusal. Replay
+      of a row whose pick already has a `sent` receipt for that target must
+      refuse, and an ambiguous dispatch-ledger outcome must refuse unless
+      explicitly confirmed not delivered by the same mechanism the API route
+      uses.
+
+      2. **`/health` fails open and ignores human-capper picks.**
+      `apps/api/src/routes/health.ts`: the zombie check `.catch(() =>
+      ({status:'healthy', count:0}))` (~271-278) reports healthy when the check
+      throws; picks with `promotion_target == null` (every human-capper pick)
+      are skipped (~101, 148-152, and `packages/db/src/runtime-repositories.ts`
+      ~3520 `.not('promotion_target','is',null)`). A thrown zombie check must
+      report degraded/unknown, never healthy. Delivery-eligible human-capper
+      picks that are routed to `official-picks` must be covered by the
+      stuck/zombie check using their actual delivery target, without flagging
+      Track Only picks, voided picks, or picks whose target is killed by design.
+
+      3. **`worker_outbox_health` is blind to never-claimed rows.**
+      `scripts/ops/readiness-refresh.ts` (~714-719) flags stuck pending only
+      when `attempt_count > 0`. A `pending` row with `attempt_count = 0` that no
+      worker claims never trips it. Add a never-claimed-pending check with an
+      age threshold, classified per
+      `docs/05_operations/QUEUE_READINESS_SEMANTICS.md`, that does NOT fail on
+      rows for a target whose live kill switch is engaged, rows whose pick is
+      voided/terminal, or the known unclaimable canary targets, and that is
+      reported with evidence rather than silently passing.
+
+      4. **Residual (same lane, small):** `scripts/pipeline-health.ts` receipt
+      read (~127) does not read `status`; a non-`sent` receipt would count as
+      delivered. Only `sent` receipts count toward delivery freshness.
+
+
+      ## Acceptance Criteria
+
+
+      - Each gap has a regression that fails on current main and passes after
+      the change (mutation-style: revert the guard, the test must fail). Extend
+      existing test files; do not add new test files unless unavoidable (then
+      declare them).
+
+      - Replay: official-picks accepted by name and included in `--target all`
+      only if that is safe given the guard; sent-receipt and ledger refusal
+      tested for official-picks and for the existing targets; no behavior change
+      for canary/best-bets beyond the added guard.
+
+      - Health: zombie-check failure → not healthy (status and HTTP semantics
+      consistent with the existing degraded/unhealthy contract); human-capper
+      delivery-eligible picks covered; Track Only/voided/killed-target
+      exclusions explicit and tested; no new network or DB write.
+
+      - Readiness: never-claimed check wired into `worker_outbox_health` without
+      making the dimension fail on the 2 voided picks' intentionally-pending
+      `official-picks` rows or on the 32 stranded canary `processing` rows (they
+      must remain untouched and classified).
+
+      - All reads read-only. No schema change, no migration, no dependency
+      change, no new endpoint.
+
+      - `pnpm verify` and `pnpm test:db` green; R-level artifacts present; T1
+      evidence bundle SHA-tied. Execute implementation through `ops:codex-exec`
+      with genuine phases and actual provenance.
+
+
+      ## Invariants
+
+
+      No Discord presentation/embed change, no scoring/grading/settlement
+      semantics, no routing or promotion logic change, no membership/pricing, no
+      kill-switch or containment change, no provider/SGO activation, no
+      production deploy or production write, no governance/CI/workflow edits, no
+      un-kill. Fail closed: unknown or unreadable evidence is never scored as
+      healthy.
+
+
+      ## File Scope
+
+
+      - apps/worker/src/replay-failed-delivery.ts
+
+      - apps/worker/src/replay-failed-delivery.test.ts
+
+      - apps/api/src/routes/health.ts
+
+      - apps/api/src/server.test.ts
+
+      - packages/db/src/runtime-repositories.ts
+
+      - scripts/ops/readiness-refresh.ts
+
+      - scripts/ops/readiness-refresh.test.ts
+
+      - scripts/pipeline-health.ts
+
+      - scripts/ops/pipeline-health-classification.ts
+
+      - scripts/ops/pipeline-health-classification.test.ts
+
+      - .ops/work/WORK-2026100901.md
+
+      - .ops/sync/WORK-2026100901.yml
+
+      - docs/06_status/lanes/WORK-2026100901.json
+
+      - docs/06_status/proof/WORK-2026100901/**
+
+
+      ## Proof
+
+
+      Named lane proof only: before/after regression evidence per gap, mutation
+      proof for each guard, full verify and test:db receipts, runtime proof
+      against real Supabase read-only where the lane requires it. If a necessary
+      file falls outside this scope, stop before editing it and report the
+      concrete requirement rather than widening.
+    captured_at: 2026-10-09T02:10:04.660Z
+    description_sha256: 3a5f651372a88840526f5c1e0eedb4cc53f4ac7268a4f624b63bfc134123d5c4
+  contract_hash: 62a7b37240b238769ad0586b280d8b99ae85c989017133eca68c4bd07c1089dc
