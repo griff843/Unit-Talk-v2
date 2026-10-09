@@ -4,21 +4,14 @@
   "model_profile": "codex-sol-high",
   "model": "gpt-5.6-sol",
   "reasoning_effort": "high",
-  "execution_sha": "bb0f4973929055edfc35a8a3d1dba1fac02cef8c",
   "policy_version": "2.0.0",
   "codex_cli_version": "codex-cli 0.153.3",
   "legacy_compatibility_used": false,
   "override_used": false,
   "override_authorized_by": null,
-  "codex_exit_code": null,
-  "prompt_bytes": null,
-  "estimated_prompt_tokens": null,
-  "wall_time_ms": null,
-  "generated_at": "2026-10-09T02:35:45Z",
-  "provenance": {
-    "kind": "in_progress_codex_exec_routing_record",
-    "source": "docs/06_status/lanes/WORK-2026100901.json",
-    "runtime_model_attested": false,
-    "note": "Pre-closeout sidecar records the manifest-selected route and implementation SHA only. The outer ops:codex-exec wrapper owns final exit code, timing, prompt-size provenance, commit, and push after the child executor returns."
-  }
+  "codex_exit_code": 0,
+  "prompt_bytes": 22129,
+  "estimated_prompt_tokens": 5533,
+  "wall_time_ms": 1816399,
+  "generated_at": "2026-10-09T02:40:49.320Z"
 }
