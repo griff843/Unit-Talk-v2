@@ -2667,6 +2667,12 @@ test('WORK-2026100901 mutation control: reverting the zombie failure guard makes
   };
   const runtime = createApiRuntimeDependencies({ repositories });
   runtime.persistenceMode = 'database';
+  // Isolate this mutation to zombie-health semantics. Hosted CI configures the
+  // ops webhook while local runs may not, so make that independent health
+  // dimension deterministically healthy in both environments.
+  assert.ok(runtime.environment);
+  runtime.environment.UNIT_TALK_OPS_ALERT_WEBHOOK_URL =
+    'https://example.invalid/unit-talk-ops-test';
 
   await withZombieFailureGuardReverted(async (mutant) => {
     let statusCode = 0;
@@ -2691,11 +2697,8 @@ test('WORK-2026100901 mutation control: reverting the zombie failure guard makes
     await handle(response, runtime);
 
     const body = JSON.parse(responseBody) as {
-      status: string;
       zombiePicks: { status: string };
     };
-    assert.equal(statusCode, 503);
-    assert.equal(body.status, 'degraded');
     assert.equal(body.zombiePicks.status, 'healthy');
   });
 });
