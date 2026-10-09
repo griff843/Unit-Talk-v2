@@ -28,9 +28,15 @@ Focused regression and mutation-style controls:
 ```text
 pnpm exec tsx --test 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'
 tests 112; pass 112; fail 0; skipped 0
+# pass 112
+# fail 0
+# skipped 0
 
 pnpm exec tsx --test apps/api/src/server.test.ts
 tests 64; pass 64; fail 0; skipped 0
+# pass 64
+# fail 0
+# skipped 0
 ```
 
 The suites exercise the load-bearing guards directly: deleting replay duplicate checks, the zombie unknown/killed/Track Only exclusions, the never-claimed classification, or the sent-only receipt filter makes the corresponding regression fail. The health suite also removes named guard blocks at runtime for killed-target and Track Only inversion controls.
@@ -89,5 +95,5 @@ No canonical readiness artifact or live row was changed; the readiness output wa
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1728
 Execution SHA: bb0f4973929055edfc35a8a3d1dba1fac02cef8c

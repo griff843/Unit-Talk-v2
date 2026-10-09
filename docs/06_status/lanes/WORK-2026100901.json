@@ -8,7 +8,7 @@
   "branch": "codex/work-2026100901-official-picks-canary",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1728",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/routes/health.ts",
@@ -28,9 +28,9 @@
     "docs/06_status/proof/WORK-2026100901/verification.md",
     "docs/06_status/proof/WORK-2026100901/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-09T02:10:18.717Z",
-  "heartbeat_at": "2026-10-09T02:10:18.717Z",
+  "heartbeat_at": "2026-10-09T02:38:55.125Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026100901-official-picks-canary.json",

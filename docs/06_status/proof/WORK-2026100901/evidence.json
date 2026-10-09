@@ -1,6 +1,8 @@
 {
   "schema_version": 2,
   "issue_id": "WORK-2026100901",
+  "pr_number": 1728,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1728",
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
