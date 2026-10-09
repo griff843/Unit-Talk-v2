@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
-import type { UnitTalkSupabaseClient } from '@unit-talk/db';
+import { DatabasePickRepository, type UnitTalkSupabaseClient } from '@unit-talk/db';
 import { evaluateQueueHealth } from '@unit-talk/observability';
 import {
   buildApiRuntimeTruth,
@@ -2787,6 +2787,109 @@ test('WORK-2026100901: voided and settled human-capper picks are excluded from z
     assert.equal(health.status, 'healthy', lifecycleState);
     assert.equal(health.count, 0, lifecycleState);
   }
+});
+
+test('WORK-2026100901: database zombie reads paginate only promoted or authorized human candidates', async () => {
+  interface RecordedPickQuery {
+    table: string;
+    select: string | null;
+    inFilters: Array<{ column: string; values: readonly unknown[] }>;
+    eqFilters: Array<{ column: string; value: unknown }>;
+    notFilters: Array<{ column: string; operator: string; value: unknown }>;
+    orders: Array<{ column: string; ascending: boolean | undefined }>;
+    ranges: Array<{ from: number; to: number }>;
+  }
+
+  const queries: RecordedPickQuery[] = [];
+  const client = {
+    from(table: string) {
+      const recorded: RecordedPickQuery = {
+        table,
+        select: null,
+        inFilters: [],
+        eqFilters: [],
+        notFilters: [],
+        orders: [],
+        ranges: [],
+      };
+      queries.push(recorded);
+      const builder = {
+        select(columns: string) {
+          recorded.select = columns;
+          return builder;
+        },
+        in(column: string, values: readonly unknown[]) {
+          recorded.inFilters.push({ column, values });
+          return builder;
+        },
+        eq(column: string, value: unknown) {
+          recorded.eqFilters.push({ column, value });
+          return builder;
+        },
+        not(column: string, operator: string, value: unknown) {
+          recorded.notFilters.push({ column, operator, value });
+          return builder;
+        },
+        order(column: string, options: { ascending?: boolean }) {
+          recorded.orders.push({ column, ascending: options.ascending });
+          return builder;
+        },
+        range(from: number, to: number) {
+          recorded.ranges.push({ from, to });
+          return Promise.resolve({ data: [], error: null });
+        },
+      };
+      return builder;
+    },
+  } as unknown as UnitTalkSupabaseClient;
+  const repository = Object.create(DatabasePickRepository.prototype) as DatabasePickRepository;
+  (repository as unknown as { client: UnitTalkSupabaseClient }).client = client;
+
+  const candidates = await repository.listPromotedByLifecycleStates(
+    ['draft', 'validated'],
+    ['qualified', 'promoted'],
+  );
+
+  assert.deepEqual(candidates, []);
+  assert.equal(queries.length, 2);
+  for (const query of queries) {
+    assert.equal(query.table, 'picks');
+    assert.equal(
+      query.select,
+      'id,status,promotion_status,promotion_target,metadata,selection,created_at',
+    );
+    assert.deepEqual(query.inFilters[0], {
+      column: 'status',
+      values: ['draft', 'validated'],
+    });
+    assert.deepEqual(query.orders, [
+      { column: 'created_at', ascending: true },
+      { column: 'id', ascending: true },
+    ]);
+    assert.deepEqual(query.ranges, [{ from: 0, to: POSTGREST_MAX_ROWS - 1 }]);
+  }
+
+  const promotedQuery = queries.find((query) =>
+    query.inFilters.some((filter) => filter.column === 'promotion_status'),
+  );
+  assert.ok(promotedQuery, 'promoted candidate branch must be queried');
+  assert.deepEqual(promotedQuery.inFilters[1], {
+    column: 'promotion_status',
+    values: ['qualified', 'promoted'],
+  });
+  assert.deepEqual(promotedQuery.notFilters, [
+    { column: 'promotion_target', operator: 'is', value: null },
+  ]);
+
+  const humanQuery = queries.find((query) => query.eqFilters.length > 0);
+  assert.ok(humanQuery, 'authorized human-capper candidate branch must be queried');
+  assert.deepEqual(humanQuery.eqFilters, [
+    { column: 'metadata->>distributionMode', value: 'delivery-eligible' },
+    {
+      column: 'metadata->deliveryAuthorization->>decision',
+      value: 'authorized',
+    },
+  ]);
 });
 
 test('mutation control: removing ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD makes /health 503 on a legitimate Track Only submission', async () => {

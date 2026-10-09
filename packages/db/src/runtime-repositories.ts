@@ -3515,30 +3515,54 @@ export class DatabasePickRepository implements PickRepository {
     lifecycleStates: readonly CanonicalPick['lifecycleState'][],
     promotionStatuses: readonly string[],
   ): Promise<PromotedPickCandidate[]> {
-    // PostgREST returns at most POSTGREST_MAX_ROWS rows per response whatever
-    // `.limit()` asks for, so a single read silently truncates. Page on a total
-    // order (`created_at`, then `id`) so a page boundary can neither skip nor
-    // repeat a row.
-    return readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
+    const select = 'id,status,promotion_status,promotion_target,metadata,selection,created_at';
+    const readPromoted = readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
       this.client
         .from('picks')
-        .select('id,status,promotion_status,promotion_target,metadata,selection,created_at')
+        .select(select)
         .in('status', [...lifecycleStates])
+        .in('promotion_status', [...promotionStatuses])
+        .not('promotion_target', 'is', null)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to),
-    )
-      .then((picks) =>
-        picks.filter((pick) => {
-          const metadata = asPickMetadata(pick.metadata);
-          return (
-            (promotionStatuses.includes(pick.promotion_status) &&
-              pick.promotion_target != null) ||
-            (readSmartFormDistributionMode(metadata) === 'delivery-eligible' &&
-              isHumanCapperDeliveryAuthorized(metadata))
+    );
+    const readAuthorizedHuman = readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
+      this.client
+        .from('picks')
+        .select(select)
+        .in('status', [...lifecycleStates])
+        .eq('metadata->>distributionMode', 'delivery-eligible')
+        .eq('metadata->deliveryAuthorization->>decision', 'authorized')
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+
+    // Each branch is filtered before PostgREST pagination, so health never
+    // reads the full draft/validated population. Merge by id because a human
+    // pick may later also satisfy the promotion branch, then re-check the
+    // contract predicates so query filters can only narrow the answer.
+    return Promise.all([readPromoted, readAuthorizedHuman])
+      .then(([promoted, authorizedHuman]) => {
+        const candidates = new Map(
+          [...promoted, ...authorizedHuman].map((pick) => [pick.id, pick]),
+        );
+        return [...candidates.values()]
+          .filter((pick) => {
+            const metadata = asPickMetadata(pick.metadata);
+            return (
+              (promotionStatuses.includes(pick.promotion_status) &&
+                pick.promotion_target != null) ||
+              (readSmartFormDistributionMode(metadata) === 'delivery-eligible' &&
+                isHumanCapperDeliveryAuthorized(metadata))
+            );
+          })
+          .sort(
+            (left, right) =>
+              left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id),
           );
-        }),
-      )
+      })
       .catch((error: unknown) => {
         throw new Error(
           `Failed to list promoted picks by lifecycle states: ${error instanceof Error ? error.message : String(error)}`,
