@@ -1,0 +1,113 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026100901",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "bb0f4973929055edfc35a8a3d1dba1fac02cef8c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "implementation_sha": "bb0f4973929055edfc35a8a3d1dba1fac02cef8c",
+    "focused_tests": [
+      {
+        "command": "pnpm exec tsx --test 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'",
+        "tests": 112,
+        "pass": 112,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
+        "tests": 64,
+        "pass": 64,
+        "fail": 0,
+        "skipped": 0
+      }
+    ],
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS"
+    },
+    "mutation_controls": [
+      {
+        "guard": "REPLAY_DUPLICATE_GUARD",
+        "inversion": "Removing receipt/ledger refusal makes the sent, delivered, and ambiguous cases replay for canary, best-bets, and official-picks."
+      },
+      {
+        "guard": "ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD and target exclusions",
+        "inversion": "Restoring the healthy fallback or removing killed/Track Only exclusions breaks the 503/unknown and non-zombie regression cases; named guard blocks are mutation-loaded by the server suite."
+      },
+      {
+        "guard": "NEVER_CLAIMED_PENDING_GUARD",
+        "inversion": "Removing the attempt_count=0 read/classification makes the released governed row pass instead of failing worker_outbox_health."
+      },
+      {
+        "guard": "sent-only receipt freshness",
+        "inversion": "Counting the newer failed receipt changes freshness to the wrong timestamp and fails the classification regression."
+      }
+    ],
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": ["lifecycle-fsm"]
+    }
+  },
+  "full_verify": {
+    "command": "pnpm verify",
+    "status": "BLOCKED_DEFERRED",
+    "static_phase": "PASS",
+    "blocked_phase": "pnpm test:db / ci:assert-staging",
+    "observed_host": "127.0.0.1",
+    "observed_project_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "follow_up": "Run through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED",
+    "write_posture": "No production write was attempted; all lane-owned runtime probes are read-only.",
+    "queries": [
+      {
+        "command": "pnpm pipeline:health",
+        "result": "FAIL_CLOSED",
+        "detail": "heartbeat fetch failed; outbox paged read failed at offset 0"
+      },
+      {
+        "command": "pnpm ops:readiness-refresh -- --out /tmp/WORK-2026100901-readiness.json --json",
+        "result": "UNKNOWN",
+        "detail": "worker_outbox_health was not scored as passing because production Supabase credentials were unavailable"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_outbox",
+        "count": null,
+        "status": "not measured locally",
+        "detail": "Read-only production handle unavailable; packet-known two voided official-picks rows and 32 unclaimable canary processing rows are covered by deterministic classification regressions, not claimed as a fresh live observation."
+      }
+    ],
+    "staging_db": {
+      "command": "pnpm test:db",
+      "status": "BLOCKED_DEFERRED",
+      "guard": "ci:assert-staging refused before database access"
+    }
+  },
+  "scope_and_containment": {
+    "production_writes": 0,
+    "schema_changes": 0,
+    "migration_changes": 0,
+    "dependency_changes": 0,
+    "new_endpoints": 0,
+    "kill_switch_changes": 0,
+    "presentation_changes": 0
+  }
+}
