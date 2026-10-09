@@ -1,19 +1,22 @@
 # Diff summary: WORK-2026100901
 
-Implementation source: `bb0f4973929055edfc35a8a3d1dba1fac02cef8c`.
+Implementation source: `1a210d1a26412eb2f3b35e34429bd5d3fdc7328e`.
+
+This rework implements the owner/PM `CHANGES_REQUIRED` verdict on PR #1728. The lane is narrowed to the health gap only.
 
 | Files | Change |
 |---|---|
-| `apps/worker/src/replay-failed-delivery.ts` and existing test | Admit `discord:official-picks`, include it in `--target all`, and refuse replay on sent receipts or delivered/ambiguous dispatch-ledger truth; explicit non-delivery reconciliation is audited before reset. |
-| `apps/api/src/routes/health.ts`, `apps/api/src/server.test.ts`, `packages/db/src/runtime-repositories.ts` | Make failed zombie reads degraded/503, include delivery-eligible human-capper picks on `discord:official-picks`, and explicitly exclude Track Only, terminal, fixture, and live-killed targets. |
-| `scripts/ops/readiness-refresh.ts` and existing test | Classify aged `pending`/`attempt_count=0` rows as actionable never-claimed, killed, terminal, canary-only, or unclaimable without writing to the database. |
-| `scripts/pipeline-health.ts`, classification helper, and existing test | Count only `sent` receipts as delivery freshness. |
-| `docs/06_status/proof/WORK-2026100901/*` | SHA-bound static, mutation, deferred staging-DB, and read-only runtime evidence for review. |
+| `apps/api/src/routes/health.ts` | Treat unreadable zombie evidence as `unknown`, degrade `/health`, and return HTTP 503. Resolve authorized delivery-eligible human-capper picks to `discord:official-picks`, while excluding Track Only, terminal, fixture, and live-killed-target cases. |
+| `packages/db/src/runtime-repositories.ts` | Include canonically authorized delivery-eligible human-capper picks in the read-only zombie candidate population while preserving the existing promoted-pick population and complete ordered paging. |
+| `apps/api/src/server.test.ts` | Add regressions for fail-closed health, authorized human-capper coverage, killed targets, and voided/settled exclusions, with mutation controls for the failure fallback and killed-target guard. |
+| `docs/06_status/proof/WORK-2026100901/*` | Rebind health-only regression, static, runtime-deferral, and model-routing evidence for review. |
 
-No schema, migration, dependency, endpoint, presentation, kill-switch, outbox, containment, or production-data mutation was added.
+The prior replay expansion, readiness never-claimed implementation, pipeline-freshness change, and generated readiness-score change were restored exactly to `origin/main`. In particular, `discord:official-picks` remains excluded from replay under the first-release policy.
+
+No schema, migration, dependency, endpoint, presentation, kill-switch state, outbox row, containment state, or production data was changed. Runtime probes were read-only and failed closed.
 
 ## SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1728
-Execution SHA: bb0f4973929055edfc35a8a3d1dba1fac02cef8c
+Execution SHA: 1a210d1a26412eb2f3b35e34429bd5d3fdc7328e

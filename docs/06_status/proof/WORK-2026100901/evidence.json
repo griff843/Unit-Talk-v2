@@ -3,33 +3,85 @@
   "issue_id": "WORK-2026100901",
   "pr_number": 1728,
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1728",
+  "source_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
+  "reviewed_head_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
+  "evidence_commit_sha": null,
+  "current_head_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
+  "gate_results": [
+    {
+      "gate": "focused-health-tests",
+      "verdict": "PASS",
+      "detail": "apps/api/src/server.test.ts: 65 pass, 0 fail, including health regressions and mutation controls"
+    },
+    {
+      "gate": "restored-out-of-scope-suites",
+      "verdict": "PASS",
+      "detail": "replay, readiness, and pipeline-health suites: 93 pass, 0 fail; official-picks replay remains excluded"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0 locally"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "9 changed files; no rules matched"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Local target identity refused before database access; protected staging CI required"
+    },
+    {
+      "gate": "runtime-read",
+      "verdict": "SKIP",
+      "detail": "Read-only Supabase probe failed closed because fetch was unavailable; no live row claim is made"
+    },
+    {
+      "gate": "protected-exact-head-ci",
+      "verdict": "SKIP",
+      "detail": "Pending publication of the reworked draft PR head"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-09T11:57:33Z",
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "bb0f4973929055edfc35a8a3d1dba1fac02cef8c",
+    "verified_source_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
+  "rework": {
+    "epoch_id": "d70b4dc6-5a59-4991-8478-a35c87eb090c",
+    "baseline_sha": "6336402a0fcc829b5dbaa19dfd9444a6bc212547",
+    "verdict": "CHANGES_REQUIRED",
+    "result": "health-only scope retained; replay, readiness, freshness, and generated readiness changes reverted to origin/main"
+  },
   "static_proof": {
     "status": "PASS",
-    "implementation_sha": "bb0f4973929055edfc35a8a3d1dba1fac02cef8c",
+    "implementation_sha": "1a210d1a26412eb2f3b35e34429bd5d3fdc7328e",
     "focused_tests": [
       {
         "command": "pnpm exec tsx --test 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'",
-        "tests": 112,
-        "pass": 112,
+        "tests": 93,
+        "pass": 93,
         "fail": 0,
-        "skipped": 0
+        "skipped": 0,
+        "purpose": "confirms replay exclusion and the reverted readiness/freshness suites remain at main behavior"
       },
       {
         "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
-        "tests": 64,
-        "pass": 64,
+        "tests": 65,
+        "pass": 65,
         "fail": 0,
-        "skipped": 0
+        "skipped": 0,
+        "purpose": "health regressions and mutation controls"
       }
     ],
     "type_check": {
@@ -42,33 +94,27 @@
     },
     "mutation_controls": [
       {
-        "guard": "REPLAY_DUPLICATE_GUARD",
-        "inversion": "Removing receipt/ledger refusal makes the sent, delivered, and ambiguous cases replay for canary, best-bets, and official-picks."
+        "guard": "ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD",
+        "inversion": "Restoring main's healthy fallback changes the unreadable zombie dimension from unknown to healthy and breaks the regression."
       },
       {
-        "guard": "ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD and target exclusions",
-        "inversion": "Restoring the healthy fallback or removing killed/Track Only exclusions breaks the 503/unknown and non-zombie regression cases; named guard blocks are mutation-loaded by the server suite."
-      },
-      {
-        "guard": "NEVER_CLAIMED_PENDING_GUARD",
-        "inversion": "Removing the attempt_count=0 read/classification makes the released governed row pass instead of failing worker_outbox_health."
-      },
-      {
-        "guard": "sent-only receipt freshness",
-        "inversion": "Counting the newer failed receipt changes freshness to the wrong timestamp and fails the classification regression."
+        "guard": "ZOMBIE_HEALTH_KILLED_TARGET_EXCLUSION_GUARD",
+        "inversion": "Removing the exclusion makes an authorized human-capper pick on killed official-picks report as a zombie."
       }
     ],
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "rules_matched": ["lifecycle-fsm"]
+      "changed_files": 9,
+      "rules_matched": []
     }
   },
   "full_verify": {
     "command": "pnpm verify",
     "status": "BLOCKED_DEFERRED",
+    "exit_code": 1,
     "static_phase": "PASS",
-    "blocked_phase": "pnpm test:db / ci:assert-staging",
+    "blocked_phase": "pnpm test:live-db / ci:assert-staging",
     "observed_host": "127.0.0.1",
     "observed_project_ref": "unidentified",
     "required_staging_ref": "xskgrzbteyqdufktjrjx",
@@ -76,30 +122,27 @@
   },
   "runtime_proof": {
     "status": "BLOCKED_DEFERRED",
-    "write_posture": "No production write was attempted; all lane-owned runtime probes are read-only.",
+    "write_posture": "No production write was attempted; the runtime probe was read-only.",
     "queries": [
       {
         "command": "pnpm pipeline:health",
         "result": "FAIL_CLOSED",
-        "detail": "heartbeat fetch failed; outbox paged read failed at offset 0"
-      },
-      {
-        "command": "pnpm ops:readiness-refresh -- --out /tmp/WORK-2026100901-readiness.json --json",
-        "result": "UNKNOWN",
-        "detail": "worker_outbox_health was not scored as passing because production Supabase credentials were unavailable"
+        "exit_code": 1,
+        "detail": "heartbeat query failed: TypeError: fetch failed; outbox paged read failed at offset 0"
       }
     ],
     "row_counts": [
       {
-        "table": "distribution_outbox",
+        "table": "picks",
         "count": null,
         "status": "not measured locally",
-        "detail": "Read-only production handle unavailable; packet-known two voided official-picks rows and 32 unclaimable canary processing rows are covered by deterministic classification regressions, not claimed as a fresh live observation."
+        "detail": "The read-only production handle was unavailable; no live row claim is made."
       }
     ],
     "staging_db": {
       "command": "pnpm test:db",
       "status": "BLOCKED_DEFERRED",
+      "exit_code": 1,
       "guard": "ci:assert-staging refused before database access"
     }
   },
@@ -110,6 +153,9 @@
     "dependency_changes": 0,
     "new_endpoints": 0,
     "kill_switch_changes": 0,
-    "presentation_changes": 0
+    "presentation_changes": 0,
+    "replay_behavior_changes": 0,
+    "readiness_behavior_changes": 0,
+    "freshness_behavior_changes": 0
   }
 }
