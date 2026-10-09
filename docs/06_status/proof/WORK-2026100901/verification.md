@@ -10,6 +10,7 @@ result: STATIC_PASS_RUNTIME_DEFERRED
 
 - [x] `/health` treats an unreadable zombie check as `unknown`, returns degraded status, and uses HTTP 503.
 - [x] Authorized, delivery-eligible human-capper picks in delivery lifecycle states are checked against their actual `discord:official-picks` target.
+- [x] Database candidate reads filter and paginate only promoted/non-null-target rows or authorized delivery-eligible human-capper rows; they do not scan the full draft/validated population.
 - [x] Track Only, voided/settled, fixture, and live-killed-target picks are explicitly excluded or classified without becoming actionable zombies.
 - [x] Existing promoted canary/best-bets health behavior is preserved.
 - [x] `discord:official-picks` remains excluded from replay; readiness and receipt-freshness behavior are unchanged from `origin/main`.
@@ -20,30 +21,32 @@ result: STATIC_PASS_RUNTIME_DEFERRED
 Implementation source commit:
 
 ```text
-2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b
+892634bf61b91806f8a888ab475308f91b015a0a
 ```
 
 Rework provenance:
 
 ```text
-epoch: d70b4dc6-5a59-4991-8478-a35c87eb090c
+epoch: d90e2156-c6ac-49e6-8b96-dbdad1487d2a
 mode: rework
-reviewed baseline: 6336402a0fcc829b5dbaa19dfd9444a6bc212547
-owner/PM verdict: CHANGES_REQUIRED
-result: health-only implementation retained; replay/readiness/freshness changes reverted
+reviewed baseline: 98244597b819fb7c53c81b6867aeb279fc3ae48b
+owner/PM verdict: CHANGES_REQUIRED (second rework)
+result: health-only implementation retained; database candidate filtering moved ahead of pagination
 ```
 
 Focused regression and mutation-style controls:
 
 ```text
 pnpm exec tsx --test apps/api/src/server.test.ts
-tests 65; pass 65; fail 0; skipped 0
+tests 66; pass 66; fail 0; skipped 0
 
 pnpm exec tsx --test 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'
 tests 93; pass 93; fail 0; skipped 0
 ```
 
 The health suite dynamically restores main's healthy zombie-check fallback and removes the killed-target guard. Those mutants report the wrong health dimension or count the deliberately held official-picks candidate, demonstrating that both guards are load-bearing. The authorized human-capper regression uses the real in-memory repository method and fails on current main because that repository omits human candidates.
+
+The second-rework mutation removed the promoted-status/non-null-target filters and both human metadata filters from the database repository. `apps/api/src/server.test.ts` then exited 1 with 65 pass / 1 fail; restoring those four filters returned the suite to 66/66. The failing query-shape regression is therefore load-bearing and would catch a return to paging the full lifecycle population.
 
 The restored three-file suite asserts that official-picks is not an accepted replay target and that `--target all` never replays it. `git diff origin/main` contains no replay, readiness, pipeline-health, classification-helper, or generated readiness-score path.
 
@@ -93,7 +96,7 @@ No live row count is claimed, no canonical readiness artifact was changed, and n
 
 - `pnpm type-check` — PASS.
 - Required focused three-file command — PASS, 93/93.
-- `pnpm exec tsx --test apps/api/src/server.test.ts` — PASS, 65/65.
+- `pnpm exec tsx --test apps/api/src/server.test.ts` — PASS, 66/66; DB-filter mutant 65/66 with the query-shape regression failing.
 - `pnpm verify:static` — PASS.
 - `pnpm verify` — static PASS; writable staging phase BLOCKED/DEFERRED by the target-identity guard.
 - `pnpm test:db` — BLOCKED/DEFERRED by the same staging target guard before access.
@@ -104,4 +107,4 @@ No live row count is claimed, no canonical readiness artifact was changed, and n
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1728
-Execution SHA: 2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b
+Execution SHA: 892634bf61b91806f8a888ab475308f91b015a0a

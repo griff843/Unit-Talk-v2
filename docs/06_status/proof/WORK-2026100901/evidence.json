@@ -3,15 +3,15 @@
   "issue_id": "WORK-2026100901",
   "pr_number": 1728,
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1728",
-  "source_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
-  "reviewed_head_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
+  "source_sha": "892634bf61b91806f8a888ab475308f91b015a0a",
+  "reviewed_head_sha": "892634bf61b91806f8a888ab475308f91b015a0a",
   "evidence_commit_sha": null,
-  "current_head_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
+  "current_head_sha": "892634bf61b91806f8a888ab475308f91b015a0a",
   "gate_results": [
     {
       "gate": "focused-health-tests",
       "verdict": "PASS",
-      "detail": "apps/api/src/server.test.ts: 65 pass, 0 fail, including health regressions and mutation controls"
+      "detail": "apps/api/src/server.test.ts: 66 pass, 0 fail, including health regressions, database query-shape coverage, and mutation controls"
     },
     {
       "gate": "restored-out-of-scope-suites",
@@ -46,26 +46,26 @@
   ],
   "reviewer_verdict": null,
   "pm_verdict": null,
-  "generated_at": "2026-10-09T11:57:33Z",
+  "generated_at": "2026-10-09T13:52:41Z",
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
+    "verified_source_sha": "892634bf61b91806f8a888ab475308f91b015a0a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "rework": {
-    "epoch_id": "d70b4dc6-5a59-4991-8478-a35c87eb090c",
-    "baseline_sha": "6336402a0fcc829b5dbaa19dfd9444a6bc212547",
-    "verdict": "CHANGES_REQUIRED",
-    "result": "health-only scope retained; replay, readiness, freshness, and generated readiness changes reverted to origin/main"
+    "epoch_id": "d90e2156-c6ac-49e6-8b96-dbdad1487d2a",
+    "baseline_sha": "98244597b819fb7c53c81b6867aeb279fc3ae48b",
+    "verdict": "CHANGES_REQUIRED (second rework)",
+    "result": "health-only scope retained; database candidate predicates now filter both promoted and authorized human branches before pagination"
   },
   "static_proof": {
     "status": "PASS",
-    "implementation_sha": "2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b",
+    "implementation_sha": "892634bf61b91806f8a888ab475308f91b015a0a",
     "focused_tests": [
       {
         "command": "pnpm exec tsx --test 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'",
@@ -77,11 +77,11 @@
       },
       {
         "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
-        "tests": 65,
-        "pass": 65,
+        "tests": 66,
+        "pass": 66,
         "fail": 0,
         "skipped": 0,
-        "purpose": "health regressions and mutation controls"
+        "purpose": "health regressions, database query-shape coverage, and mutation controls"
       }
     ],
     "type_check": {
@@ -100,6 +100,10 @@
       {
         "guard": "ZOMBIE_HEALTH_KILLED_TARGET_EXCLUSION_GUARD",
         "inversion": "Removing the exclusion makes an authorized human-capper pick on killed official-picks report as a zombie."
+      },
+      {
+        "guard": "DATABASE_ZOMBIE_CANDIDATE_QUERY_FILTERS",
+        "inversion": "Removing the promoted and human metadata predicates makes the query-shape regression fail (65 pass, 1 fail); restoring them returns 66/66."
       }
     ],
     "r_level": {

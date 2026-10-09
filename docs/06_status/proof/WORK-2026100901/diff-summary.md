@@ -1,14 +1,14 @@
 # Diff summary: WORK-2026100901
 
-Implementation source: `2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b`.
+Implementation source: `892634bf61b91806f8a888ab475308f91b015a0a`.
 
-This rework implements the owner/PM `CHANGES_REQUIRED` verdict on PR #1728. The lane is narrowed to the health gap only.
+This second rework implements the owner/PM query-shape correction on PR #1728. The lane remains narrowed to the health gap only.
 
 | Files | Change |
 |---|---|
 | `apps/api/src/routes/health.ts` | Treat unreadable zombie evidence as `unknown`, degrade `/health`, and return HTTP 503. Resolve authorized delivery-eligible human-capper picks to `discord:official-picks`, while excluding Track Only, terminal, fixture, and live-killed-target cases. |
-| `packages/db/src/runtime-repositories.ts` | Include canonically authorized delivery-eligible human-capper picks in the read-only zombie candidate population while preserving the existing promoted-pick population and complete ordered paging. |
-| `apps/api/src/server.test.ts` | Add regressions for fail-closed health, authorized human-capper coverage, killed targets, and voided/settled exclusions, with mutation controls for the failure fallback and killed-target guard. |
+| `packages/db/src/runtime-repositories.ts` | Read the promoted/non-null-target branch and authorized delivery-eligible human-capper branch through separate server-filtered, fully paginated queries; deduplicate and contract-recheck the union. The health check no longer pages the full draft/validated population. |
+| `apps/api/src/server.test.ts` | Retain the health regressions and mutation controls, and add a database query-shape regression that proves lifecycle plus both candidate branches are filtered before pagination. |
 | `docs/06_status/proof/WORK-2026100901/*` | Rebind health-only regression, static, runtime-deferral, and model-routing evidence for review. |
 
 The prior replay expansion, readiness never-claimed implementation, pipeline-freshness change, and generated readiness-score change were restored exactly to `origin/main`. In particular, `discord:official-picks` remains excluded from replay under the first-release policy.
@@ -19,4 +19,4 @@ No schema, migration, dependency, endpoint, presentation, kill-switch state, out
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1728
-Execution SHA: 2cf71252cb50cd4f1bcba12b562a5c2ae2f4290b
+Execution SHA: 892634bf61b91806f8a888ab475308f91b015a0a
