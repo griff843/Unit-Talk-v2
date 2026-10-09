@@ -1,9 +1,9 @@
 // Pipeline health check — run with: tsx scripts/pipeline-health.ts [--output-json <path>]
-import { loadEnvironment } from '@unit-talk/config'
-import { resolveTargetRegistry } from '@unit-talk/contracts'
-import { evaluateQueueHealth, evaluateSlo } from '@unit-talk/observability'
+import { loadEnvironment } from '@unit-talk/config';
+import { resolveTargetRegistry } from '@unit-talk/contracts';
+import { evaluateQueueHealth, evaluateSlo } from '@unit-talk/observability';
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
-import fs from 'node:fs'
+import fs from 'node:fs';
 import {
   countByReasonClass,
   countByTarget,
@@ -20,444 +20,699 @@ import {
   resolveDeployedWorkerTargets,
   type KillSwitchRow,
   type RangeQuery,
-} from './ops/pipeline-health-classification.js'
+} from './ops/pipeline-health-classification.js';
 
-const args = process.argv.slice(2)
-const jsonFlagIdx = args.indexOf('--output-json')
-const outputJsonPath = jsonFlagIdx !== -1 ? args[jsonFlagIdx + 1] : null
+const args = process.argv.slice(2);
+const jsonFlagIdx = args.indexOf('--output-json');
+const outputJsonPath = jsonFlagIdx !== -1 ? args[jsonFlagIdx + 1] : null;
 
-const env = loadEnvironment()
-const url = env.SUPABASE_URL ?? ''
-const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-if (!url || !key) { console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
+const env = loadEnvironment();
+const url = env.SUPABASE_URL ?? '';
+const key = env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+if (!url || !key) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
 
-const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
+const db = createPrivilegedClient(url, key, {
+  auth: { persistSession: false },
+});
 // WORK-2026092701: liveness and target resolution share one heartbeat window.
-const HEARTBEAT_WINDOW_MINUTES = 10
+const HEARTBEAT_WINDOW_MINUTES = 10;
 
 async function main() {
-const now = new Date()
+  const now = new Date();
 
-// ── 0. Which worker is deployed ───────────────────────────────────────────
-// The running worker records the targets it polls on each heartbeat. Judge the
-// queue against that worker, not against a default that is not deployed.
-const { data: heartbeats, error: heartbeatErr } = await db
-  .from('system_runs')
-  .select('id, status, started_at, finished_at, run_type, details')
-  .eq('run_type', 'worker.heartbeat')
-  .order('started_at', { ascending: false })
-  .limit(10)
-if (heartbeatErr) console.error('heartbeat query failed:', heartbeatErr.message)
-const resolvedWorker = resolveDeployedWorkerTargets({
-  heartbeats: heartbeats ?? [],
-  envTargets: env.UNIT_TALK_DISTRIBUTION_TARGETS,
-  now,
-  maxHeartbeatAgeMinutes: HEARTBEAT_WINDOW_MINUTES,
-})
-const workerTargets = resolvedWorker.targets
-const targetMismatches = resolveTargetRegistry(env)
-  .filter((entry) => entry.enabled)
-  .map((entry) => ({
-    target: entry.target,
-    requiredWorkerTarget: env.UNIT_TALK_APP_ENV === 'local' ? 'discord:canary' : `discord:${entry.target}`,
-    reason: 'missing-worker' as const,
-  }))
-  .filter((entry) => !workerTargets.includes(entry.requiredWorkerTarget))
+  // ── 0. Which worker is deployed ───────────────────────────────────────────
+  // The running worker records the targets it polls on each heartbeat. Judge the
+  // queue against that worker, not against a default that is not deployed.
+  const { data: heartbeats, error: heartbeatErr } = await db
+    .from('system_runs')
+    .select('id, status, started_at, finished_at, run_type, details')
+    .eq('run_type', 'worker.heartbeat')
+    .order('started_at', { ascending: false })
+    .limit(10);
+  if (heartbeatErr)
+    console.error('heartbeat query failed:', heartbeatErr.message);
+  const resolvedWorker = resolveDeployedWorkerTargets({
+    heartbeats: heartbeats ?? [],
+    envTargets: env.UNIT_TALK_DISTRIBUTION_TARGETS,
+    now,
+    maxHeartbeatAgeMinutes: HEARTBEAT_WINDOW_MINUTES,
+  });
+  const workerTargets = resolvedWorker.targets;
+  const targetMismatches = resolveTargetRegistry(env)
+    .filter((entry) => entry.enabled)
+    .map((entry) => ({
+      target: entry.target,
+      requiredWorkerTarget:
+        env.UNIT_TALK_APP_ENV === 'local'
+          ? 'discord:canary'
+          : `discord:${entry.target}`,
+      reason: 'missing-worker' as const,
+    }))
+    .filter((entry) => !workerTargets.includes(entry.requiredWorkerTarget));
 
-// The live kill switch the worker consults before delivering. null = unreadable,
-// in which case no row is treated as held (fail closed).
-const { data: killSwitchData, error: killSwitchErr } = await db
-  .from('delivery_kill_switch')
-  .select('target, killed')
-const killSwitchRows: KillSwitchRow[] | null = killSwitchErr ? null : (killSwitchData ?? [])
+  // The live kill switch the worker consults before delivering. null = unreadable,
+  // in which case no row is treated as held (fail closed).
+  const { data: killSwitchData, error: killSwitchErr } = await db
+    .from('delivery_kill_switch')
+    .select('target, killed');
+  const killSwitchRows: KillSwitchRow[] | null = killSwitchErr
+    ? null
+    : (killSwitchData ?? []);
 
-function ageMin(ts: string) { return Math.round((now.getTime() - new Date(ts).getTime()) / 60000) }
-function ageFmt(ts: string) { const m = ageMin(ts); return m < 60 ? `${m}m` : `${Math.round(m/60*10)/10}h` }
-function alertDetail(alert: { target?: string; status?: string; ageMs?: number; remediation?: string }) {
-  const parts: string[] = []
-  if (alert.target) parts.push(`target=${alert.target}`)
-  if (alert.status) parts.push(`status=${alert.status}`)
-  if (typeof alert.ageMs === 'number') parts.push(`age=${Math.round(alert.ageMs / 60000)}m`)
-  if (alert.remediation) parts.push(`remediation=${alert.remediation}`)
-  return parts.length > 0 ? ` [${parts.join(' | ')}]` : ''
-}
+  function ageMin(ts: string) {
+    return Math.round((now.getTime() - new Date(ts).getTime()) / 60000);
+  }
+  function ageFmt(ts: string) {
+    const m = ageMin(ts);
+    return m < 60 ? `${m}m` : `${Math.round((m / 60) * 10) / 10}h`;
+  }
+  function alertDetail(alert: {
+    target?: string;
+    status?: string;
+    ageMs?: number;
+    remediation?: string;
+  }) {
+    const parts: string[] = [];
+    if (alert.target) parts.push(`target=${alert.target}`);
+    if (alert.status) parts.push(`status=${alert.status}`);
+    if (typeof alert.ageMs === 'number')
+      parts.push(`age=${Math.round(alert.ageMs / 60000)}m`);
+    if (alert.remediation) parts.push(`remediation=${alert.remediation}`);
+    return parts.length > 0 ? ` [${parts.join(' | ')}]` : '';
+  }
 
-// ── 1. Outbox queue state ─────────────────────────────────────────────────
-// UTV2-1249: the previous unbounded select silently hit Supabase's 1000-row
-// default cap; with >1000 outbox rows the newest sent rows fell outside the
-// result set and delivery freshness was computed from a stale subset. Queue
-// evaluation only needs non-sent rows; sent-row truth (freshness,
-// count, last-5) is fetched exactly below.
-// WORK-2026092703: `.limit(5000)` never applied — PostgREST caps a response at
-// 1000 rows, and production holds more non-sent rows than that. Read every page
-// in id order, and refuse to report a partial population as whole.
-type OutboxRow = {
-  id: string; status: string; target: string; created_at: string; updated_at: string
-  claimed_at: string | null; pick_id: string | null; attempt_count: number; last_error: string | null
-}
-let outbox: OutboxRow[]
-try {
-  outbox = await readAllPages<OutboxRow>(() =>
-    db
-      .from('distribution_outbox')
-      .select('id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count, last_error')
-      .neq('status', 'sent') as unknown as RangeQuery<OutboxRow>,
+  // ── 1. Outbox queue state ─────────────────────────────────────────────────
+  // UTV2-1249: the previous unbounded select silently hit Supabase's 1000-row
+  // default cap; with >1000 outbox rows the newest sent rows fell outside the
+  // result set and delivery freshness was computed from a stale subset. Queue
+  // evaluation only needs non-sent rows; sent-row truth (freshness,
+  // count, last-5) is fetched exactly below.
+  // WORK-2026092703: `.limit(5000)` never applied — PostgREST caps a response at
+  // 1000 rows, and production holds more non-sent rows than that. Read every page
+  // in id order, and refuse to report a partial population as whole.
+  type OutboxRow = {
+    id: string;
+    status: string;
+    target: string;
+    created_at: string;
+    updated_at: string;
+    claimed_at: string | null;
+    pick_id: string | null;
+    attempt_count: number;
+    last_error: string | null;
+  };
+  let outbox: OutboxRow[];
+  try {
+    outbox = await readAllPages<OutboxRow>(
+      () =>
+        db
+          .from('distribution_outbox')
+          .select(
+            'id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count, last_error',
+          )
+          .neq('status', 'sent') as unknown as RangeQuery<OutboxRow>,
+    );
+  } catch (e) {
+    console.error('outbox query failed:', (e as Error).message);
+    process.exit(1);
+  }
+
+  const { count: nonSentCount, error: nonSentCountErr } = await db
+    .from('distribution_outbox')
+    .select('id', { count: 'exact', head: true })
+    .neq('status', 'sent');
+  if (nonSentCountErr) {
+    console.error('non-sent count query failed:', nonSentCountErr.message);
+    process.exit(1);
+  }
+  const outboxReadComplete =
+    typeof nonSentCount === 'number' && nonSentCount === outbox.length;
+
+  // ── Receipts in the authority window (read once; used for freshness and §8) ─
+  // WORK-2026092708: every receipt recorded inside the authority window is read,
+  // in id-ordered pages checked against an exact count, and judged by its logical
+  // target against the governed registry. Receipts older than the window are
+  // history and are not judged.
+  type ReceiptRow = {
+    id: string;
+    channel: string | null;
+    payload: unknown;
+    recorded_at: string;
+    status: string;
+  };
+  const receiptWindowStart = new Date(
+    now.getTime() - RECEIPT_AUTHORITY_WINDOW_DAYS * 86_400_000,
+  ).toISOString();
+  let windowReceipts: ReceiptRow[] = [];
+  let receiptReadError: string | null = null;
+  try {
+    windowReceipts = await readAllPages<ReceiptRow>(
+      () =>
+        db
+          .from('distribution_receipts')
+          .select('id, channel, payload, recorded_at, status')
+          .gte(
+            'recorded_at',
+            receiptWindowStart,
+          ) as unknown as RangeQuery<ReceiptRow>,
+    );
+  } catch (e) {
+    receiptReadError = (e as Error).message;
+  }
+  const { count: windowReceiptCount, error: receiptCountErr } = await db
+    .from('distribution_receipts')
+    .select('id', { count: 'exact', head: true })
+    .gte('recorded_at', receiptWindowStart);
+  const receiptReadComplete =
+    receiptReadError === null &&
+    !receiptCountErr &&
+    typeof windowReceiptCount === 'number' &&
+    windowReceiptCount === windowReceipts.length;
+  const receiptAuthority = partitionReceiptAuthority(windowReceipts);
+
+  // WORK-2026092811: delivery freshness comes from receipts, never from a `sent`
+  // outbox row — the worker marks a settled or voided pick's row `sent` with no
+  // receipt. An incomplete receipt read reports no delivery rather than a guess.
+  const lastSuccessfulDeliveryAt = receiptReadComplete
+    ? newestDeliveredReceiptAt(windowReceipts)
+    : null;
+  const newestGovernedByTarget = receiptReadComplete
+    ? newestGovernedReceiptByTarget(windowReceipts)
+    : {};
+
+  const { count: sentCount, error: sentCountErr } = await db
+    .from('distribution_outbox')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'sent');
+  if (sentCountErr) {
+    console.error('sent-count query failed:', sentCountErr.message);
+    process.exit(1);
+  }
+
+  const rows = outbox;
+  // WORK-2026092703: the readiness gate's dead-letter rule (classifyDeadLetter x
+  // attempt_count), not a local prefix list, so both report the same row the same way.
+  const deadLetters = partitionDeadLetters(rows);
+  const governanceBrake = deadLetters.governanceHold;
+  const unattemptedDeadLetter = deadLetters.unattemptedUnclassified;
+  const trueDeadLetter = deadLetters.trueFailure;
+  const nonFailureDeadLetterIds = new Set(
+    [...governanceBrake, ...unattemptedDeadLetter].map((r) => r.id),
+  );
+  // Rows held by the kill switch and processing rows no deployed worker can claim
+  // are reported below as warnings; they are not evidence of a stranded queue or a
+  // stuck worker, and are kept out of the rows evaluateQueueHealth judges.
+  const { held: heldPending, rest: notHeld } = partitionHeldPendingRows(
+    rows.filter((r) => !nonFailureDeadLetterIds.has(r.id)),
+    killSwitchRows,
+    workerTargets,
+  );
+  const { unclaimable: unclaimableProcessing, rest: queueEvaluationRows } =
+    partitionUnclaimableProcessing(notHeld, workerTargets);
+  const heldIds = new Set(heldPending.map((r) => r.id));
+  const queueHealth = evaluateQueueHealth({
+    observedAt: now.toISOString(),
+    workerTargets,
+    lastSuccessfulDeliveryAt,
+    outboxRows: queueEvaluationRows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      target: row.target,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      claimedAt: row.claimed_at,
+      attemptCount: row.attempt_count,
+    })),
+    targetMismatches,
+  });
+  const sloReport = evaluateSlo(queueHealth);
+  const counts: Record<string, number> = {};
+  for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+  counts['sent'] = sentCount ?? 0;
+
+  console.log(
+    '\n╔══ OUTBOX QUEUE STATE ══════════════════════════════════════',
+  );
+  for (const [status, count] of Object.entries(counts)) {
+    console.log(`  ${status.padEnd(12)} ${count}`);
+  }
+  if (!Object.keys(counts).length) console.log('  (empty)');
+
+  // ── 2. Stuck rows ─────────────────────────────────────────────────────────
+  const stuckProc = rows.filter(
+    (r) =>
+      workerTargets.includes(r.target) &&
+      r.status === 'processing' &&
+      r.claimed_at &&
+      ageMin(r.claimed_at) > 5,
+  );
+  const stuckPend = rows.filter(
+    (r) =>
+      workerTargets.includes(r.target) &&
+      r.status === 'pending' &&
+      !heldIds.has(r.id) &&
+      ageMin(r.created_at) > 30,
+  );
+  const deferredPend = rows.filter(
+    (r) =>
+      !workerTargets.includes(r.target) &&
+      r.status === 'pending' &&
+      ageMin(r.created_at) > 30,
+  );
+
+  console.log(
+    '\n╔══ STUCK ROWS ═══════════════════════════════════════════════',
+  );
+  console.log(
+    `  Worker targets:     ${workerTargets.join(', ') || 'UNKNOWN'} (${resolvedWorker.note})`,
+  );
+  console.log(
+    `  Held by kill switch: ${heldPending.length === 0 ? 'NONE' : formatTargetCounts(countByTarget(heldPending))}`,
+  );
+  console.log(
+    `  Unclaimable processing: ${unclaimableProcessing.length === 0 ? 'NONE' : formatTargetCounts(countByTarget(unclaimableProcessing))}`,
+  );
+  console.log(
+    `  Processing >5min:  ${stuckProc.length === 0 ? 'NONE' : stuckProc.map((r) => r.id.slice(0, 8)).join(', ')}`,
+  );
+  console.log(
+    `  Pending >30min:    ${stuckPend.length === 0 ? 'NONE' : stuckPend.length + ' rows, oldest=' + ageFmt(stuckPend.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0].created_at)}`,
+  );
+  console.log(
+    `  Deferred pending:   ${deferredPend.length === 0 ? 'NONE' : deferredPend.length + ' rows outside worker targets, oldest=' + ageFmt(deferredPend.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0].created_at)}`,
+  );
+
+  // ── 3. Dead-letter & failed ───────────────────────────────────────────────
+  // Governance brake rows (P7A): last_error starts with 'proof-pick-blocked:' and were never
+  // attempted (attempt_count=0). These are expected, designed behaviour — not system failures.
+  // They remain visible as INFO but must not count toward CRITICAL/FAILED thresholds.
+  const failed = rows.filter((r) => r.status === 'failed');
+
+  console.log(
+    '\n╔══ DEAD LETTER & FAILED ═════════════════════════════════════',
+  );
+  if (trueDeadLetter.length === 0) {
+    console.log('  Dead letter (true failures): NONE');
+  } else {
+    for (const r of trueDeadLetter)
+      console.log(
+        `  DEAD_LETTER id=${r.id.slice(0, 8)} target=${r.target} pick=${r.pick_id?.slice(0, 8)} attempts=${r.attempt_count} age=${ageFmt(r.created_at)}`,
+      );
+  }
+  if (governanceBrake.length > 0)
+    console.log(
+      `  Governance hold (recognised disposition, expected): ${governanceBrake.length} rows — ${formatTargetCounts(countByReasonClass(governanceBrake))}`,
+    );
+  if (unattemptedDeadLetter.length > 0)
+    console.log(
+      `  Unattempted, no recognised reason: ${unattemptedDeadLetter.length} rows — ${formatTargetCounts(countByTarget(unattemptedDeadLetter))}`,
+    );
+
+  if (failed.length === 0) {
+    console.log('  Failed: NONE');
+  } else {
+    for (const r of failed) {
+      const { data: rec } = await db
+        .from('distribution_receipts')
+        .select('id')
+        .eq('outbox_id', r.id)
+        .limit(1);
+      const conflict = rec?.length
+        ? ' *** CONFLICTED (receipt exists) ***'
+        : '';
+      console.log(
+        `  FAILED id=${r.id.slice(0, 8)} target=${r.target} attempts=${r.attempt_count} age=${ageFmt(r.created_at)}${conflict}`,
+      );
+    }
+  }
+
+  // ── 4+5. System runs / worker liveness ────────────────────────────────────
+  const { data: runs } = await db
+    .from('system_runs')
+    .select('id, status, started_at, finished_at, run_type')
+    .eq('run_type', 'distribution.process')
+    .order('started_at', { ascending: false })
+    .limit(10);
+
+  console.log(
+    '\n╔══ WORKER / SYSTEM RUNS (last 10 distribution) ═════════════',
+  );
+  let lastSuccessAge: number | null = null;
+  for (const r of runs ?? []) {
+    const age = ageFmt(r.started_at);
+    const finAt = r.finished_at ? new Date(r.finished_at) : null;
+    const startAt = new Date(r.started_at);
+    const dur = finAt
+      ? Math.round((finAt.getTime() - startAt.getTime()) / 1000) + 's'
+      : 'RUNNING';
+    const clockAnomaly = finAt && finAt < startAt ? ' ⚠ CLOCK_ANOMALY' : '';
+    console.log(
+      `  [${r.status.padEnd(10)}] ${age} ago  dur=${dur}${clockAnomaly}`,
+    );
+    if (r.status === 'succeeded' && lastSuccessAge === null)
+      lastSuccessAge = ageMin(r.started_at);
+  }
+  if (!runs?.length) console.log('  (no distribution runs found)');
+
+  const runsInWindow = (runs ?? []).filter((r) => ageMin(r.started_at) <= 120);
+  const heartbeatsInWindow = (heartbeats ?? []).filter(
+    (r) => ageMin(r.started_at) <= HEARTBEAT_WINDOW_MINUTES,
+  );
+  const stuckRunning = (runs ?? []).filter(
+    (r) => r.status === 'running' && !r.finished_at && ageMin(r.started_at) > 5,
+  );
+  const lastRun = runs?.[0];
+  const lastHeartbeat = heartbeats?.[0];
+  console.log(`  Runs in 120min window: ${runsInWindow.length}`);
+  console.log(`  Heartbeats in 10min window: ${heartbeatsInWindow.length}`);
+  console.log(`  Last run status: ${lastRun?.status ?? 'NONE'}`);
+  console.log(
+    `  Last heartbeat: ${lastHeartbeat ? ageFmt(lastHeartbeat.started_at) + ' ago (' + lastHeartbeat.status + ')' : 'NONE'}`,
+  );
+  console.log(
+    `  Stuck running (>5min): ${stuckRunning.length === 0 ? 'NONE' : stuckRunning.length}`,
+  );
+  console.log(
+    `  Last successful run: ${lastSuccessAge !== null ? lastSuccessAge + 'm ago' : 'NONE in last 10'}`,
+  );
+  console.log(`  Queue health: ${queueHealth.status.toUpperCase()}`);
+  console.log(
+    `  Last successful delivery: ${queueHealth.lastSuccessfulDeliveryAt ? queueHealth.lastSuccessfulDeliveryAt + ' (' + Math.round((queueHealth.lastSuccessfulDeliveryAgeMs ?? 0) / 60000) + 'm ago)' : 'NONE'}`,
+  );
+  console.log(
+    `  Newest governed receipt by target: ${
+      Object.keys(newestGovernedByTarget).length === 0
+        ? 'NONE in window'
+        : Object.entries(newestGovernedByTarget)
+            .map(([t, at]) => `${t}=${at}`)
+            .join(', ')
+    }`,
+  );
+
+  // ── 6. Backlog age ────────────────────────────────────────────────────────
+  // Computed before verdict so idle-vs-DOWN distinction can use pending count.
+  const pending = rows.filter(
+    (r) =>
+      workerTargets.includes(r.target) &&
+      r.status === 'pending' &&
+      !heldIds.has(r.id),
+  );
+
+  // Worker verdict
+  let workerVerdict = 'HEALTHY';
+  if (heartbeatsInWindow.length === 0 && !lastRun)
+    workerVerdict = 'DOWN — no runs or heartbeats found';
+  else if (
+    heartbeatsInWindow.length === 0 &&
+    runsInWindow.length === 0 &&
+    pending.length > 0
   )
-} catch (e) { console.error('outbox query failed:', (e as Error).message); process.exit(1) }
+    workerVerdict =
+      'DOWN — no runs or heartbeats in health window (pending work exists)';
+  else if (heartbeatsInWindow.length === 0 && runsInWindow.length === 0)
+    workerVerdict = 'HEALTHY — idle, no eligible rows in queue';
+  else if (lastRun?.status === 'failed')
+    workerVerdict = 'DEGRADED — last run failed';
+  else if (lastRun?.status === 'cancelled')
+    workerVerdict = 'DEGRADED — last run cancelled';
+  else if (stuckRunning.length > 0)
+    workerVerdict = 'DEGRADED — stuck running row';
+  else if (runsInWindow.length === 0)
+    workerVerdict =
+      'HEALTHY — heartbeat fresh, no eligible distribution rows processed';
+  console.log(`  Worker verdict: ${workerVerdict}`);
+  const oldestPending = pending.sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  )[0];
 
-const { count: nonSentCount, error: nonSentCountErr } = await db
-  .from('distribution_outbox')
-  .select('id', { count: 'exact', head: true })
-  .neq('status', 'sent')
-if (nonSentCountErr) { console.error('non-sent count query failed:', nonSentCountErr.message); process.exit(1) }
-const outboxReadComplete = typeof nonSentCount === 'number' && nonSentCount === outbox.length
+  console.log(
+    '\n╔══ BACKLOG AGE ══════════════════════════════════════════════',
+  );
+  if (oldestPending) {
+    const age = ageMin(oldestPending.created_at);
+    const flag = age > 120 ? ' ⛔ CRITICAL' : age > 30 ? ' ⚠ WARN' : ' OK';
+    console.log(
+      `  Oldest eligible pending: ${ageFmt(oldestPending.created_at)} ago${flag}`,
+    );
+  } else {
+    console.log('  No pending rows for worker targets');
+  }
+  console.log(
+    `  Pending by target: ${
+      Object.entries(queueHealth.pendingByTarget)
+        .map(([target, count]) => `${target}=${count}`)
+        .join(', ') || 'NONE'
+    }`,
+  );
+  for (const alert of queueHealth.alerts) {
+    const label = alert.level === 'critical' ? 'CRITICAL' : 'WARN';
+    console.log(`  ${label}: ${alert.message}${alertDetail(alert)}`);
+  }
 
-// ── Receipts in the authority window (read once; used for freshness and §8) ─
-// WORK-2026092708: every receipt recorded inside the authority window is read,
-// in id-ordered pages checked against an exact count, and judged by its logical
-// target against the governed registry. Receipts older than the window are
-// history and are not judged.
-type ReceiptRow = { id: string; channel: string | null; payload: unknown; recorded_at: string }
-const receiptWindowStart = new Date(now.getTime() - RECEIPT_AUTHORITY_WINDOW_DAYS * 86_400_000).toISOString()
-let windowReceipts: ReceiptRow[] = []
-let receiptReadError: string | null = null
-try {
-  windowReceipts = await readAllPages<ReceiptRow>(() =>
-    db
-      .from('distribution_receipts')
-      .select('id, channel, payload, recorded_at')
-      .gte('recorded_at', receiptWindowStart) as unknown as RangeQuery<ReceiptRow>,
+  // ── 7. Delivery truth (last 5 sent rows) ──────────────────────────────────
+  // UTV2-1249: fetched exactly (newest first) instead of filtering the capped row set.
+  const { data: recentSentRows, error: recentSentErr } = await db
+    .from('distribution_outbox')
+    .select('id, pick_id, created_at')
+    .eq('status', 'sent')
+    .order('created_at', { ascending: false })
+    .limit(5);
+  if (recentSentErr) {
+    console.error('recent-sent query failed:', recentSentErr.message);
+    process.exit(1);
+  }
+  const sent = recentSentRows ?? [];
+
+  console.log(
+    '\n╔══ DELIVERY TRUTH (last 5 sent) ════════════════════════════',
+  );
+  if (sent.length === 0) {
+    console.log('  No sent rows');
+  } else {
+    for (const row of sent) {
+      const { data: rec } = await db
+        .from('distribution_receipts')
+        .select('channel')
+        .eq('outbox_id', row.id)
+        .limit(1);
+      const { data: pick } = await db
+        .from('picks')
+        .select('status')
+        .eq('id', row.pick_id)
+        .limit(1);
+      const { data: lc } = await db
+        .from('pick_lifecycle')
+        .select('id')
+        .eq('pick_id', row.pick_id)
+        .eq('to_state', 'posted')
+        .limit(1);
+      const hasRec = !!rec?.length;
+      const lcPosted = !!lc?.length;
+      const pickStatus = pick?.[0]?.status ?? 'MISSING';
+      const channel = rec?.[0]?.channel ?? 'ABSENT';
+      const deliveredStatus =
+        pickStatus === 'posted' || pickStatus === 'settled';
+      const partial =
+        !hasRec || !lcPosted || !deliveredStatus ? ' ⚠ PARTIAL' : ' ✓';
+      console.log(
+        `  pick=${row.pick_id.slice(0, 8)} status=${pickStatus} lc_posted=${lcPosted} receipt=${hasRec} channel=${channel}${partial}`,
+      );
+    }
+  }
+
+  // ── 8. Authorized delivery targets ─────────────────────────────────────
+  // The receipt read itself runs before the queue evaluation (WORK-2026092811).
+
+  console.log(
+    '\n╔══ AUTHORITY BOUNDARY ═══════════════════════════════════════',
+  );
+  console.log(
+    `  window: receipts since ${receiptWindowStart} (${RECEIPT_AUTHORITY_WINDOW_DAYS}d) — read ${windowReceipts.length} of ${windowReceiptCount ?? 'unknown'}`,
+  );
+  console.log(
+    `  governed=${receiptAuthority.governed.length} control=${receiptAuthority.control.length} simulated=${receiptAuthority.simulated.length} unrecognized=${receiptAuthority.unrecognized.length}`,
+  );
+  if (!receiptReadComplete) {
+    console.log(
+      `  ⛔ receipt read incomplete — ${receiptReadError ?? receiptCountErr?.message ?? 'row count does not match the exact count'}`,
+    );
+  } else if (receiptAuthority.unrecognized.length > 0) {
+    console.log(
+      `  ⛔ ${receiptAuthority.unrecognized.length} receipt(s) inside the window on a destination the registry does not govern:`,
+    );
+    for (const r of receiptAuthority.unrecognized.slice(0, 10)) {
+      console.log(
+        `    receipt ${r.id.slice(0, 8)} at ${r.recorded_at} target=${receiptLogicalTarget(r) ?? 'NONE'} channel=${r.channel ?? 'NULL'}`,
+      );
+    }
+  } else {
+    console.log(
+      '  Every receipt in the window is on a governed or control destination: CLEAN',
+    );
+  }
+
+  // ── SLO status ────────────────────────────────────────────────────────────
+  console.log(
+    '\n╔══ SLO STATUS ═══════════════════════════════════════════════',
+  );
+  console.log(
+    `  Overall: ${sloReport.overallStatus.toUpperCase()}  |  Deploy risk: ${sloReport.deployRisk.toUpperCase()}`,
+  );
+  for (const e of sloReport.evaluations) {
+    const icon = e.status === 'ok' ? '✓' : e.status === 'at_risk' ? '⚠' : '⛔';
+    console.log(
+      `  ${icon} [${e.objective.id}] ${e.status.toUpperCase()} — ${e.note}`,
+    );
+  }
+  if (sloReport.violatedObjectives.length > 0) {
+    console.log(
+      `  Violated objectives: ${sloReport.violatedObjectives.join(', ')}`,
+    );
+  }
+  if (sloReport.atRiskObjectives.length > 0) {
+    console.log(
+      `  At-risk objectives:  ${sloReport.atRiskObjectives.join(', ')}`,
+    );
+  }
+
+  // ── Summary ───────────────────────────────────────────────────────────────
+  console.log(
+    '\n╔══ VERDICT ══════════════════════════════════════════════════',
+  );
+  const warns: string[] = [];
+  const criticals: string[] = [];
+  if (resolvedWorker.source === 'unknown')
+    criticals.push(
+      `deployed worker target set unknown — ${resolvedWorker.note}`,
+    );
+  if (killSwitchRows === null)
+    criticals.push(
+      `delivery_kill_switch could not be read (${killSwitchErr?.message ?? 'unknown error'}) — no pending row was treated as held`,
+    );
+  if (heldPending.length > 0)
+    warns.push(
+      `${heldPending.length} pending row(s) held by kill switch (${formatTargetCounts(countByTarget(heldPending))}) — release is an operator/owner decision; do not reroute or remove the row`,
+    );
+  if (unclaimableProcessing.length > 0)
+    warns.push(
+      `${unclaimableProcessing.length} processing row(s) on targets the deployed worker does not poll (${formatTargetCounts(countByTarget(unclaimableProcessing))}) — unclaimable data hygiene, not a stuck worker`,
+    );
+  if (trueDeadLetter.length > 0)
+    criticals.push(`${trueDeadLetter.length} dead_letter rows (true failures)`);
+  if (!outboxReadComplete)
+    criticals.push(
+      `outbox read incomplete — read ${rows.length} non-sent row(s), exact count is ${nonSentCount ?? 'unknown'}; every outbox count in this report is partial`,
+    );
+  if (governanceBrake.length > 0)
+    warns.push(
+      `${governanceBrake.length} dead_letter row(s) with a recognised disposition (${formatTargetCounts(countByReasonClass(governanceBrake))}) — expected, not delivery failures`,
+    );
+  if (unattemptedDeadLetter.length > 0)
+    warns.push(
+      `${unattemptedDeadLetter.length} dead_letter row(s) never attempted and with no recognised reason — not delivery failures, but unexplained`,
+    );
+  if (failed.length > 0) warns.push(`${failed.length} failed rows`);
+  if (stuckProc.length > 0)
+    criticals.push(`${stuckProc.length} stuck processing rows`);
+  if (stuckPend.length > 0)
+    warns.push(`${stuckPend.length} pending rows stuck >30min`);
+  if (deferredPend.length > 0)
+    warns.push(`${deferredPend.length} pending row(s) outside worker targets`);
+  if (!receiptReadComplete)
+    criticals.push(
+      `receipt read incomplete — read ${windowReceipts.length} receipt(s) in the ${RECEIPT_AUTHORITY_WINDOW_DAYS}d authority window, exact count is ${windowReceiptCount ?? 'unknown'}; the authority boundary was not checked`,
+    );
+  if (receiptReadComplete && receiptAuthority.unrecognized.length > 0)
+    criticals.push(
+      `${receiptAuthority.unrecognized.length} receipt(s) in the last ${RECEIPT_AUTHORITY_WINDOW_DAYS}d on a destination the registry does not govern`,
+    );
+  if (!workerVerdict.startsWith('HEALTHY'))
+    (workerVerdict.startsWith('DOWN') ? criticals : warns).push(workerVerdict);
+  for (const alert of queueHealth.alerts) {
+    const detail = alertDetail(alert);
+    if (alert.level === 'critical') criticals.push(`${alert.message}${detail}`);
+    else warns.push(`${alert.message}${detail}`);
+  }
+
+  if (criticals.length > 0) {
+    console.log(`  CRITICAL (${criticals.length}):`);
+    for (const c of criticals) console.log(`    ⛔ ${c}`);
+  }
+  if (warns.length > 0) {
+    console.log(`  WARN (${warns.length}):`);
+    for (const w of warns) console.log(`    ⚠  ${w}`);
+  }
+  if (criticals.length === 0 && warns.length === 0) {
+    console.log('  ✅ HEALTHY — no issues found');
+  }
+  console.log();
+
+  if (outputJsonPath) {
+    const report = {
+      checked_at: now.toISOString(),
+      worker_targets: workerTargets,
+      worker_targets_source: resolvedWorker.source,
+      worker_targets_note: resolvedWorker.note,
+      kill_switch_readable: killSwitchRows !== null,
+      outbox_held_by_kill_switch: countByTarget(heldPending),
+      outbox_unclaimable_processing: countByTarget(unclaimableProcessing),
+      outbox_dead_letter_count: trueDeadLetter.length,
+      outbox_governance_brake_count: governanceBrake.length,
+      outbox_dead_letter_unattempted_unclassified_count:
+        unattemptedDeadLetter.length,
+      outbox_non_sent_count: nonSentCount ?? null,
+      outbox_read_complete: outboxReadComplete,
+      outbox_failed_count: failed.length,
+      outbox_stuck_processing: stuckProc.length,
+      outbox_pending_by_target: queueHealth.pendingByTarget,
+      outbox_oldest_pending_age_ms: queueHealth.oldestPendingAgeMs,
+      last_successful_delivery_at: queueHealth.lastSuccessfulDeliveryAt,
+      last_successful_delivery_age_ms: queueHealth.lastSuccessfulDeliveryAgeMs,
+      queue_health_status: queueHealth.status,
+      silent_stranding_risk: queueHealth.silentStrandingRisk,
+      queue_health_alerts: queueHealth.alerts,
+      worker_verdict: workerVerdict,
+      receipt_authority_window_days: RECEIPT_AUTHORITY_WINDOW_DAYS,
+      receipt_authority_read_complete: receiptReadComplete,
+      receipt_authority_counts: {
+        governed: receiptAuthority.governed.length,
+        control: receiptAuthority.control.length,
+        simulated: receiptAuthority.simulated.length,
+        unrecognized: receiptAuthority.unrecognized.length,
+      },
+      slo_overall_status: sloReport.overallStatus,
+      slo_deploy_risk: sloReport.deployRisk,
+      slo_violated_objectives: sloReport.violatedObjectives,
+      slo_at_risk_objectives: sloReport.atRiskObjectives,
+      criticals,
+      warns,
+      has_anomaly:
+        criticals.length > 0 ||
+        trueDeadLetter.length > 0 ||
+        queueHealth.status !== 'healthy' ||
+        queueHealth.silentStrandingRisk,
+    };
+    fs.mkdirSync(outputJsonPath.split('/').slice(0, -1).join('/') || '.', {
+      recursive: true,
+    });
+    fs.writeFileSync(outputJsonPath, JSON.stringify(report, null, 2) + '\n');
+    console.log(`JSON report written to ${outputJsonPath}`);
+  }
+  if (
+    queueHealth.status === 'down' ||
+    queueHealth.silentStrandingRisk ||
+    resolvedWorker.source === 'unknown' ||
+    killSwitchRows === null ||
+    !outboxReadComplete
   )
-} catch (e) { receiptReadError = (e as Error).message }
-const { count: windowReceiptCount, error: receiptCountErr } = await db
-  .from('distribution_receipts')
-  .select('id', { count: 'exact', head: true })
-  .gte('recorded_at', receiptWindowStart)
-const receiptReadComplete =
-  receiptReadError === null && !receiptCountErr && typeof windowReceiptCount === 'number' && windowReceiptCount === windowReceipts.length
-const receiptAuthority = partitionReceiptAuthority(windowReceipts)
-
-// WORK-2026092811: delivery freshness comes from receipts, never from a `sent`
-// outbox row — the worker marks a settled or voided pick's row `sent` with no
-// receipt. An incomplete receipt read reports no delivery rather than a guess.
-const lastSuccessfulDeliveryAt = receiptReadComplete ? newestDeliveredReceiptAt(windowReceipts) : null
-const newestGovernedByTarget = receiptReadComplete ? newestGovernedReceiptByTarget(windowReceipts) : {}
-
-const { count: sentCount, error: sentCountErr } = await db
-  .from('distribution_outbox')
-  .select('id', { count: 'exact', head: true })
-  .eq('status', 'sent')
-if (sentCountErr) { console.error('sent-count query failed:', sentCountErr.message); process.exit(1) }
-
-const rows = outbox
-// WORK-2026092703: the readiness gate's dead-letter rule (classifyDeadLetter x
-// attempt_count), not a local prefix list, so both report the same row the same way.
-const deadLetters = partitionDeadLetters(rows)
-const governanceBrake = deadLetters.governanceHold
-const unattemptedDeadLetter = deadLetters.unattemptedUnclassified
-const trueDeadLetter = deadLetters.trueFailure
-const nonFailureDeadLetterIds = new Set([...governanceBrake, ...unattemptedDeadLetter].map(r => r.id))
-// Rows held by the kill switch and processing rows no deployed worker can claim
-// are reported below as warnings; they are not evidence of a stranded queue or a
-// stuck worker, and are kept out of the rows evaluateQueueHealth judges.
-const { held: heldPending, rest: notHeld } = partitionHeldPendingRows(
-  rows.filter(r => !nonFailureDeadLetterIds.has(r.id)),
-  killSwitchRows,
-  workerTargets,
-)
-const { unclaimable: unclaimableProcessing, rest: queueEvaluationRows } =
-  partitionUnclaimableProcessing(notHeld, workerTargets)
-const heldIds = new Set(heldPending.map(r => r.id))
-const queueHealth = evaluateQueueHealth({
-  observedAt: now.toISOString(),
-  workerTargets,
-  lastSuccessfulDeliveryAt,
-  outboxRows: queueEvaluationRows.map((row) => ({
-    id: row.id,
-    status: row.status,
-    target: row.target,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    claimedAt: row.claimed_at,
-    attemptCount: row.attempt_count,
-  })),
-  targetMismatches,
-})
-const sloReport = evaluateSlo(queueHealth)
-const counts: Record<string, number> = {}
-for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1
-counts['sent'] = sentCount ?? 0
-
-console.log('\n╔══ OUTBOX QUEUE STATE ══════════════════════════════════════')
-for (const [status, count] of Object.entries(counts)) {
-  console.log(`  ${status.padEnd(12)} ${count}`)
-}
-if (!Object.keys(counts).length) console.log('  (empty)')
-
-// ── 2. Stuck rows ─────────────────────────────────────────────────────────
-const stuckProc = rows.filter(r =>
-  workerTargets.includes(r.target) &&
-  r.status === 'processing' && r.claimed_at &&
-  ageMin(r.claimed_at) > 5
-)
-const stuckPend = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending' && !heldIds.has(r.id) && ageMin(r.created_at) > 30)
-const deferredPend = rows.filter(r => !workerTargets.includes(r.target) && r.status === 'pending' && ageMin(r.created_at) > 30)
-
-console.log('\n╔══ STUCK ROWS ═══════════════════════════════════════════════')
-console.log(`  Worker targets:     ${workerTargets.join(', ') || 'UNKNOWN'} (${resolvedWorker.note})`)
-console.log(`  Held by kill switch: ${heldPending.length === 0 ? 'NONE' : formatTargetCounts(countByTarget(heldPending))}`)
-console.log(`  Unclaimable processing: ${unclaimableProcessing.length === 0 ? 'NONE' : formatTargetCounts(countByTarget(unclaimableProcessing))}`)
-console.log(`  Processing >5min:  ${stuckProc.length === 0 ? 'NONE' : stuckProc.map(r => r.id.slice(0,8)).join(', ')}`)
-console.log(`  Pending >30min:    ${stuckPend.length === 0 ? 'NONE' : stuckPend.length + ' rows, oldest=' + ageFmt(stuckPend.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0].created_at)}`)
-console.log(`  Deferred pending:   ${deferredPend.length === 0 ? 'NONE' : deferredPend.length + ' rows outside worker targets, oldest=' + ageFmt(deferredPend.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0].created_at)}`)
-
-// ── 3. Dead-letter & failed ───────────────────────────────────────────────
-// Governance brake rows (P7A): last_error starts with 'proof-pick-blocked:' and were never
-// attempted (attempt_count=0). These are expected, designed behaviour — not system failures.
-// They remain visible as INFO but must not count toward CRITICAL/FAILED thresholds.
-const failed = rows.filter(r => r.status === 'failed')
-
-console.log('\n╔══ DEAD LETTER & FAILED ═════════════════════════════════════')
-if (trueDeadLetter.length === 0) {
-  console.log('  Dead letter (true failures): NONE')
-} else {
-  for (const r of trueDeadLetter)
-    console.log(`  DEAD_LETTER id=${r.id.slice(0,8)} target=${r.target} pick=${r.pick_id?.slice(0,8)} attempts=${r.attempt_count} age=${ageFmt(r.created_at)}`)
-}
-if (governanceBrake.length > 0)
-  console.log(`  Governance hold (recognised disposition, expected): ${governanceBrake.length} rows — ${formatTargetCounts(countByReasonClass(governanceBrake))}`)
-if (unattemptedDeadLetter.length > 0)
-  console.log(`  Unattempted, no recognised reason: ${unattemptedDeadLetter.length} rows — ${formatTargetCounts(countByTarget(unattemptedDeadLetter))}`)
-
-if (failed.length === 0) {
-  console.log('  Failed: NONE')
-} else {
-  for (const r of failed) {
-    const { data: rec } = await db.from('distribution_receipts').select('id').eq('outbox_id', r.id).limit(1)
-    const conflict = rec?.length ? ' *** CONFLICTED (receipt exists) ***' : ''
-    console.log(`  FAILED id=${r.id.slice(0,8)} target=${r.target} attempts=${r.attempt_count} age=${ageFmt(r.created_at)}${conflict}`)
-  }
-}
-
-// ── 4+5. System runs / worker liveness ────────────────────────────────────
-const { data: runs } = await db
-  .from('system_runs')
-  .select('id, status, started_at, finished_at, run_type')
-  .eq('run_type', 'distribution.process')
-  .order('started_at', { ascending: false })
-  .limit(10)
-
-console.log('\n╔══ WORKER / SYSTEM RUNS (last 10 distribution) ═════════════')
-let lastSuccessAge: number | null = null
-for (const r of runs ?? []) {
-  const age = ageFmt(r.started_at)
-  const finAt = r.finished_at ? new Date(r.finished_at) : null
-  const startAt = new Date(r.started_at)
-  const dur = finAt ? Math.round((finAt.getTime() - startAt.getTime()) / 1000) + 's' : 'RUNNING'
-  const clockAnomaly = finAt && finAt < startAt ? ' ⚠ CLOCK_ANOMALY' : ''
-  console.log(`  [${r.status.padEnd(10)}] ${age} ago  dur=${dur}${clockAnomaly}`)
-  if (r.status === 'succeeded' && lastSuccessAge === null) lastSuccessAge = ageMin(r.started_at)
-}
-if (!runs?.length) console.log('  (no distribution runs found)')
-
-const runsInWindow = (runs ?? []).filter(r => ageMin(r.started_at) <= 120)
-const heartbeatsInWindow = (heartbeats ?? []).filter(r => ageMin(r.started_at) <= HEARTBEAT_WINDOW_MINUTES)
-const stuckRunning = (runs ?? []).filter(r => r.status === 'running' && !r.finished_at && ageMin(r.started_at) > 5)
-const lastRun = runs?.[0]
-const lastHeartbeat = heartbeats?.[0]
-console.log(`  Runs in 120min window: ${runsInWindow.length}`)
-console.log(`  Heartbeats in 10min window: ${heartbeatsInWindow.length}`)
-console.log(`  Last run status: ${lastRun?.status ?? 'NONE'}`)
-console.log(`  Last heartbeat: ${lastHeartbeat ? ageFmt(lastHeartbeat.started_at) + ' ago (' + lastHeartbeat.status + ')' : 'NONE'}`)
-console.log(`  Stuck running (>5min): ${stuckRunning.length === 0 ? 'NONE' : stuckRunning.length}`)
-console.log(`  Last successful run: ${lastSuccessAge !== null ? lastSuccessAge + 'm ago' : 'NONE in last 10'}`)
-console.log(`  Queue health: ${queueHealth.status.toUpperCase()}`)
-console.log(`  Last successful delivery: ${queueHealth.lastSuccessfulDeliveryAt ? queueHealth.lastSuccessfulDeliveryAt + ' (' + Math.round((queueHealth.lastSuccessfulDeliveryAgeMs ?? 0) / 60000) + 'm ago)' : 'NONE'}`)
-console.log(`  Newest governed receipt by target: ${Object.keys(newestGovernedByTarget).length === 0 ? 'NONE in window' : Object.entries(newestGovernedByTarget).map(([t, at]) => `${t}=${at}`).join(', ')}`)
-
-// ── 6. Backlog age ────────────────────────────────────────────────────────
-// Computed before verdict so idle-vs-DOWN distinction can use pending count.
-const pending = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending' && !heldIds.has(r.id))
-
-// Worker verdict
-let workerVerdict = 'HEALTHY'
-if (heartbeatsInWindow.length === 0 && !lastRun) workerVerdict = 'DOWN — no runs or heartbeats found'
-else if (heartbeatsInWindow.length === 0 && runsInWindow.length === 0 && pending.length > 0) workerVerdict = 'DOWN — no runs or heartbeats in health window (pending work exists)'
-else if (heartbeatsInWindow.length === 0 && runsInWindow.length === 0) workerVerdict = 'HEALTHY — idle, no eligible rows in queue'
-else if (lastRun?.status === 'failed') workerVerdict = 'DEGRADED — last run failed'
-else if (lastRun?.status === 'cancelled') workerVerdict = 'DEGRADED — last run cancelled'
-else if (stuckRunning.length > 0) workerVerdict = 'DEGRADED — stuck running row'
-else if (runsInWindow.length === 0) workerVerdict = 'HEALTHY — heartbeat fresh, no eligible distribution rows processed'
-console.log(`  Worker verdict: ${workerVerdict}`)
-const oldestPending = pending.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
-
-console.log('\n╔══ BACKLOG AGE ══════════════════════════════════════════════')
-if (oldestPending) {
-  const age = ageMin(oldestPending.created_at)
-  const flag = age > 120 ? ' ⛔ CRITICAL' : age > 30 ? ' ⚠ WARN' : ' OK'
-  console.log(`  Oldest eligible pending: ${ageFmt(oldestPending.created_at)} ago${flag}`)
-} else {
-  console.log('  No pending rows for worker targets')
-}
-console.log(`  Pending by target: ${Object.entries(queueHealth.pendingByTarget).map(([target, count]) => `${target}=${count}`).join(', ') || 'NONE'}`)
-for (const alert of queueHealth.alerts) {
-  const label = alert.level === 'critical' ? 'CRITICAL' : 'WARN'
-  console.log(`  ${label}: ${alert.message}${alertDetail(alert)}`)
-}
-
-// ── 7. Delivery truth (last 5 sent rows) ──────────────────────────────────
-// UTV2-1249: fetched exactly (newest first) instead of filtering the capped row set.
-const { data: recentSentRows, error: recentSentErr } = await db
-  .from('distribution_outbox')
-  .select('id, pick_id, created_at')
-  .eq('status', 'sent')
-  .order('created_at', { ascending: false })
-  .limit(5)
-if (recentSentErr) { console.error('recent-sent query failed:', recentSentErr.message); process.exit(1) }
-const sent = recentSentRows ?? []
-
-console.log('\n╔══ DELIVERY TRUTH (last 5 sent) ════════════════════════════')
-if (sent.length === 0) {
-  console.log('  No sent rows')
-} else {
-  for (const row of sent) {
-    const { data: rec } = await db.from('distribution_receipts').select('channel').eq('outbox_id', row.id).limit(1)
-    const { data: pick } = await db.from('picks').select('status').eq('id', row.pick_id).limit(1)
-    const { data: lc } = await db.from('pick_lifecycle').select('id').eq('pick_id', row.pick_id).eq('to_state', 'posted').limit(1)
-    const hasRec = !!rec?.length
-    const lcPosted = !!lc?.length
-    const pickStatus = pick?.[0]?.status ?? 'MISSING'
-    const channel = rec?.[0]?.channel ?? 'ABSENT'
-    const deliveredStatus = pickStatus === 'posted' || pickStatus === 'settled'
-    const partial = (!hasRec || !lcPosted || !deliveredStatus) ? ' ⚠ PARTIAL' : ' ✓'
-    console.log(`  pick=${row.pick_id.slice(0,8)} status=${pickStatus} lc_posted=${lcPosted} receipt=${hasRec} channel=${channel}${partial}`)
-  }
-}
-
-// ── 8. Authorized delivery targets ─────────────────────────────────────
-// The receipt read itself runs before the queue evaluation (WORK-2026092811).
-
-console.log('\n╔══ AUTHORITY BOUNDARY ═══════════════════════════════════════')
-console.log(`  window: receipts since ${receiptWindowStart} (${RECEIPT_AUTHORITY_WINDOW_DAYS}d) — read ${windowReceipts.length} of ${windowReceiptCount ?? 'unknown'}`)
-console.log(`  governed=${receiptAuthority.governed.length} control=${receiptAuthority.control.length} simulated=${receiptAuthority.simulated.length} unrecognized=${receiptAuthority.unrecognized.length}`)
-if (!receiptReadComplete) {
-  console.log(`  ⛔ receipt read incomplete — ${receiptReadError ?? receiptCountErr?.message ?? 'row count does not match the exact count'}`)
-} else if (receiptAuthority.unrecognized.length > 0) {
-  console.log(`  ⛔ ${receiptAuthority.unrecognized.length} receipt(s) inside the window on a destination the registry does not govern:`)
-  for (const r of receiptAuthority.unrecognized.slice(0, 10)) {
-    console.log(`    receipt ${r.id.slice(0,8)} at ${r.recorded_at} target=${receiptLogicalTarget(r) ?? 'NONE'} channel=${r.channel ?? 'NULL'}`)
-  }
-} else {
-  console.log('  Every receipt in the window is on a governed or control destination: CLEAN')
-}
-
-// ── SLO status ────────────────────────────────────────────────────────────
-console.log('\n╔══ SLO STATUS ═══════════════════════════════════════════════')
-console.log(`  Overall: ${sloReport.overallStatus.toUpperCase()}  |  Deploy risk: ${sloReport.deployRisk.toUpperCase()}`)
-for (const e of sloReport.evaluations) {
-  const icon = e.status === 'ok' ? '✓' : e.status === 'at_risk' ? '⚠' : '⛔'
-  console.log(`  ${icon} [${e.objective.id}] ${e.status.toUpperCase()} — ${e.note}`)
-}
-if (sloReport.violatedObjectives.length > 0) {
-  console.log(`  Violated objectives: ${sloReport.violatedObjectives.join(', ')}`)
-}
-if (sloReport.atRiskObjectives.length > 0) {
-  console.log(`  At-risk objectives:  ${sloReport.atRiskObjectives.join(', ')}`)
-}
-
-// ── Summary ───────────────────────────────────────────────────────────────
-console.log('\n╔══ VERDICT ══════════════════════════════════════════════════')
-const warns: string[] = []
-const criticals: string[] = []
-if (resolvedWorker.source === 'unknown') criticals.push(`deployed worker target set unknown — ${resolvedWorker.note}`)
-if (killSwitchRows === null) criticals.push(`delivery_kill_switch could not be read (${killSwitchErr?.message ?? 'unknown error'}) — no pending row was treated as held`)
-if (heldPending.length > 0) warns.push(`${heldPending.length} pending row(s) held by kill switch (${formatTargetCounts(countByTarget(heldPending))}) — release is an operator/owner decision; do not reroute or remove the row`)
-if (unclaimableProcessing.length > 0) warns.push(`${unclaimableProcessing.length} processing row(s) on targets the deployed worker does not poll (${formatTargetCounts(countByTarget(unclaimableProcessing))}) — unclaimable data hygiene, not a stuck worker`)
-if (trueDeadLetter.length > 0) criticals.push(`${trueDeadLetter.length} dead_letter rows (true failures)`)
-if (!outboxReadComplete) criticals.push(`outbox read incomplete — read ${rows.length} non-sent row(s), exact count is ${nonSentCount ?? 'unknown'}; every outbox count in this report is partial`)
-if (governanceBrake.length > 0) warns.push(`${governanceBrake.length} dead_letter row(s) with a recognised disposition (${formatTargetCounts(countByReasonClass(governanceBrake))}) — expected, not delivery failures`)
-if (unattemptedDeadLetter.length > 0) warns.push(`${unattemptedDeadLetter.length} dead_letter row(s) never attempted and with no recognised reason — not delivery failures, but unexplained`)
-if (failed.length > 0) warns.push(`${failed.length} failed rows`)
-if (stuckProc.length > 0) criticals.push(`${stuckProc.length} stuck processing rows`)
-if (stuckPend.length > 0) warns.push(`${stuckPend.length} pending rows stuck >30min`)
-if (deferredPend.length > 0) warns.push(`${deferredPend.length} pending row(s) outside worker targets`)
-if (!receiptReadComplete) criticals.push(`receipt read incomplete — read ${windowReceipts.length} receipt(s) in the ${RECEIPT_AUTHORITY_WINDOW_DAYS}d authority window, exact count is ${windowReceiptCount ?? 'unknown'}; the authority boundary was not checked`)
-if (receiptReadComplete && receiptAuthority.unrecognized.length > 0) criticals.push(`${receiptAuthority.unrecognized.length} receipt(s) in the last ${RECEIPT_AUTHORITY_WINDOW_DAYS}d on a destination the registry does not govern`)
-if (!workerVerdict.startsWith('HEALTHY')) (workerVerdict.startsWith('DOWN') ? criticals : warns).push(workerVerdict)
-for (const alert of queueHealth.alerts) {
-  const detail = alertDetail(alert)
-  if (alert.level === 'critical') criticals.push(`${alert.message}${detail}`)
-  else warns.push(`${alert.message}${detail}`)
-}
-
-if (criticals.length > 0) {
-  console.log(`  CRITICAL (${criticals.length}):`)
-  for (const c of criticals) console.log(`    ⛔ ${c}`)
-}
-if (warns.length > 0) {
-  console.log(`  WARN (${warns.length}):`)
-  for (const w of warns) console.log(`    ⚠  ${w}`)
-}
-if (criticals.length === 0 && warns.length === 0) {
-  console.log('  ✅ HEALTHY — no issues found')
-}
-console.log()
-
-if (outputJsonPath) {
-  const report = {
-    checked_at: now.toISOString(),
-    worker_targets: workerTargets,
-    worker_targets_source: resolvedWorker.source,
-    worker_targets_note: resolvedWorker.note,
-    kill_switch_readable: killSwitchRows !== null,
-    outbox_held_by_kill_switch: countByTarget(heldPending),
-    outbox_unclaimable_processing: countByTarget(unclaimableProcessing),
-    outbox_dead_letter_count: trueDeadLetter.length,
-    outbox_governance_brake_count: governanceBrake.length,
-    outbox_dead_letter_unattempted_unclassified_count: unattemptedDeadLetter.length,
-    outbox_non_sent_count: nonSentCount ?? null,
-    outbox_read_complete: outboxReadComplete,
-    outbox_failed_count: failed.length,
-    outbox_stuck_processing: stuckProc.length,
-    outbox_pending_by_target: queueHealth.pendingByTarget,
-    outbox_oldest_pending_age_ms: queueHealth.oldestPendingAgeMs,
-    last_successful_delivery_at: queueHealth.lastSuccessfulDeliveryAt,
-    last_successful_delivery_age_ms: queueHealth.lastSuccessfulDeliveryAgeMs,
-    queue_health_status: queueHealth.status,
-    silent_stranding_risk: queueHealth.silentStrandingRisk,
-    queue_health_alerts: queueHealth.alerts,
-    worker_verdict: workerVerdict,
-    receipt_authority_window_days: RECEIPT_AUTHORITY_WINDOW_DAYS,
-    receipt_authority_read_complete: receiptReadComplete,
-    receipt_authority_counts: {
-      governed: receiptAuthority.governed.length,
-      control: receiptAuthority.control.length,
-      simulated: receiptAuthority.simulated.length,
-      unrecognized: receiptAuthority.unrecognized.length,
-    },
-    slo_overall_status: sloReport.overallStatus,
-    slo_deploy_risk: sloReport.deployRisk,
-    slo_violated_objectives: sloReport.violatedObjectives,
-    slo_at_risk_objectives: sloReport.atRiskObjectives,
-    criticals,
-    warns,
-    has_anomaly:
-      criticals.length > 0 ||
-      trueDeadLetter.length > 0 ||
-      queueHealth.status !== 'healthy' ||
-      queueHealth.silentStrandingRisk,
-  }
-  fs.mkdirSync(outputJsonPath.split('/').slice(0, -1).join('/') || '.', { recursive: true })
-  fs.writeFileSync(outputJsonPath, JSON.stringify(report, null, 2) + '\n')
-  console.log(`JSON report written to ${outputJsonPath}`)
-}
-if (
-  queueHealth.status === 'down' ||
-  queueHealth.silentStrandingRisk ||
-  resolvedWorker.source === 'unknown' ||
-  killSwitchRows === null ||
-  !outboxReadComplete
-) process.exitCode = 1
+    process.exitCode = 1;
 } // end main
 
-main().catch(e => { console.error(e); process.exit(1) })
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

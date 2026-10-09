@@ -5,8 +5,10 @@ import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
 import { PickCandidatesSchemaCacheDriftError } from './repositories.js';
 import {
   V1_REFERENCE_DATA,
+  isHumanCapperDeliveryAuthorized,
   isMemberVisibleOfficialPick,
   isTrackOnlyPickMetadata,
+  readSmartFormDistributionMode,
   type MemberVisibleOfficialPickStatus,
   type ProviderOfferInsert,
   type ReferenceDataCatalog,
@@ -505,11 +507,20 @@ export async function readAllOrderedPages<T>(
   fetchPage: (
     from: number,
     to: number,
-  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+  ) => PromiseLike<{
+    data: unknown[] | null;
+    error: { message: string } | null;
+  }>,
   pageSize: number = POSTGREST_MAX_ROWS,
 ): Promise<T[]> {
-  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > POSTGREST_MAX_ROWS) {
-    throw new Error(`pageSize must be an integer from 1 to ${POSTGREST_MAX_ROWS}; received ${pageSize}`);
+  if (
+    !Number.isInteger(pageSize) ||
+    pageSize < 1 ||
+    pageSize > POSTGREST_MAX_ROWS
+  ) {
+    throw new Error(
+      `pageSize must be an integer from 1 to ${POSTGREST_MAX_ROWS}; received ${pageSize}`,
+    );
   }
   const rows: T[] = [];
   for (let from = 0; ; from += pageSize) {
@@ -640,7 +651,10 @@ export class InMemoryPickRepository implements PickRepository {
       .filter(
         (pick) =>
           statuses.includes(pick.status as MemberVisibleOfficialPickStatus) &&
-          isMemberVisibleOfficialPick({ status: pick.status, metadata: asPickMetadata(pick.metadata) }),
+          isMemberVisibleOfficialPick({
+            status: pick.status,
+            metadata: asPickMetadata(pick.metadata),
+          }),
       )
       .sort((left, right) => right.created_at.localeCompare(left.created_at))
       .slice(0, limit);
@@ -651,15 +665,26 @@ export class InMemoryPickRepository implements PickRepository {
     promotionStatuses: readonly string[],
   ): Promise<PromotedPickCandidate[]> {
     return Array.from(this.picks.values())
-      .filter(
-        (pick) =>
-          lifecycleStates.includes(pick.status as CanonicalPick['lifecycleState']) &&
-          promotionStatuses.includes(pick.promotion_status) &&
-          pick.promotion_target != null,
-      )
+      .filter((pick) => {
+        if (
+          !lifecycleStates.includes(
+            pick.status as CanonicalPick['lifecycleState'],
+          )
+        ) {
+          return false;
+        }
+        const metadata = asPickMetadata(pick.metadata);
+        return (
+          (promotionStatuses.includes(pick.promotion_status) &&
+            pick.promotion_target != null) ||
+          (readSmartFormDistributionMode(metadata) === 'delivery-eligible' &&
+            isHumanCapperDeliveryAuthorized(metadata))
+        );
+      })
       .sort(
         (left, right) =>
-          left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id),
+          left.created_at.localeCompare(right.created_at) ||
+          left.id.localeCompare(right.id),
       );
   }
 
@@ -778,8 +803,10 @@ export class InMemoryPickRepository implements PickRepository {
         // `qualified` for the whole 7-day window. Without this it occupies live
         // board capacity it can never use, and once caps are reached it
         // suppresses picks that genuinely are deliverable.
-        !isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null)
-        // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_END
+        !isTrackOnlyPickMetadata(
+          isRecord(pick.metadata) ? pick.metadata : null,
+        ),
+      // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_END
     );
 
     return {
@@ -1540,7 +1567,6 @@ export class InMemoryGradeResultRepository implements GradeResultRepository {
   async listByEvent(eventId: string): Promise<GradeResultRecord[]> {
     return this.records.filter((record) => record.event_id === eventId);
   }
-
 }
 
 export class InMemoryGradingResultRepository
@@ -1812,8 +1838,11 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
           o.provider_market_key === criteria.providerMarketKey &&
           (o.sport_key ?? null) === criteria.sportKey &&
           o.provider_event_id === criteria.providerEventId &&
-          (o.provider_participant_id ?? null) === criteria.providerParticipantId &&
-          (criteria.providerKey ? o.provider_key === criteria.providerKey : true),
+          (o.provider_participant_id ?? null) ===
+            criteria.providerParticipantId &&
+          (criteria.providerKey
+            ? o.provider_key === criteria.providerKey
+            : true),
       )
       .sort((left, right) =>
         compareProviderOfferRecordsDescending(left, right),
@@ -2446,7 +2475,9 @@ export class InMemoryDeliveryKillSwitchRepository implements DeliveryKillSwitchR
     return entry ? entry.killed : true;
   }
 
-  async setKilled(input: DeliveryKillSwitchSetInput): Promise<DeliveryKillSwitchRow> {
+  async setKilled(
+    input: DeliveryKillSwitchSetInput,
+  ): Promise<DeliveryKillSwitchRow> {
     const row: DeliveryKillSwitchRow = {
       target: input.target,
       killed: input.killed,
@@ -2554,13 +2585,17 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         // id, so a seeded team must answer with its own row id. The synthetic
         // form is kept only for a catalog with no seeded team participants,
         // where there is no real id to return and no player to match it.
-        participantId: this.findSeededTeamId(sportId, t) ?? `team:${sportId}:${t}`,
+        participantId:
+          this.findSeededTeamId(sportId, t) ?? `team:${sportId}:${t}`,
         displayName: t,
         sport: sportId,
       }));
   }
 
-  private findSeededTeamId(sportId: string, displayName: string): string | null {
+  private findSeededTeamId(
+    sportId: string,
+    displayName: string,
+  ): string | null {
     const match = this.participants.find(
       (row) =>
         row.participant_type === 'team' &&
@@ -2599,12 +2634,18 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
           participantId: row.id,
           displayName: row.display_name,
           sport: row.sport ?? sportId,
-          teamId: externalId === null ? null : this.findSeededTeamIdByExternalId(sportId, externalId),
+          teamId:
+            externalId === null
+              ? null
+              : this.findSeededTeamIdByExternalId(sportId, externalId),
         };
       });
   }
 
-  private findSeededTeamIdByExternalId(sportId: string, externalId: string): string | null {
+  private findSeededTeamIdByExternalId(
+    sportId: string,
+    externalId: string,
+  ): string | null {
     const match = this.participants.find(
       (row) =>
         row.participant_type === 'team' &&
@@ -3492,14 +3533,19 @@ export class DatabasePickRepository implements PickRepository {
       .limit(limit);
 
     if (error) {
-      throw new Error(`Failed to list member-visible official picks: ${error.message}`);
+      throw new Error(
+        `Failed to list member-visible official picks: ${error.message}`,
+      );
     }
 
     // The query is a narrowing; the contract predicate is the authority.
     return (data ?? []).filter(
       (pick) =>
         statuses.includes(pick.status as MemberVisibleOfficialPickStatus) &&
-        isMemberVisibleOfficialPick({ status: pick.status, metadata: asPickMetadata(pick.metadata) }),
+        isMemberVisibleOfficialPick({
+          status: pick.status,
+          metadata: asPickMetadata(pick.metadata),
+        }),
     );
   }
 
@@ -3514,18 +3560,31 @@ export class DatabasePickRepository implements PickRepository {
     return readAllOrderedPages<PromotedPickCandidate>(async (from, to) =>
       this.client
         .from('picks')
-        .select('id,status,promotion_status,promotion_target,metadata,selection,created_at')
+        .select(
+          'id,status,promotion_status,promotion_target,metadata,selection,created_at',
+        )
         .in('status', [...lifecycleStates])
-        .in('promotion_status', [...promotionStatuses])
-        .not('promotion_target', 'is', null)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to),
-    ).catch((error: unknown) => {
-      throw new Error(
-        `Failed to list promoted picks by lifecycle states: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    });
+    )
+      .then((picks) =>
+        picks.filter((pick) => {
+          const metadata = asPickMetadata(pick.metadata);
+          const boardCandidate =
+            promotionStatuses.includes(pick.promotion_status) &&
+            pick.promotion_target != null;
+          const humanCandidate =
+            readSmartFormDistributionMode(metadata) === 'delivery-eligible' &&
+            isHumanCapperDeliveryAuthorized(metadata);
+          return boardCandidate || humanCandidate;
+        }),
+      )
+      .catch((error: unknown) => {
+        throw new Error(
+          `Failed to list promoted picks by lifecycle states: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
   }
 
   async listBySource(
@@ -3697,7 +3756,10 @@ export class DatabasePickRepository implements PickRepository {
     // force-qualified to best-bets and never enqueued, so it would hold live
     // board capacity for 7 days without ever being deliverable.
     const promoted = (data ?? []).filter(
-      (pick) => !isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null),
+      (pick) =>
+        !isTrackOnlyPickMetadata(
+          isRecord(pick.metadata) ? pick.metadata : null,
+        ),
     );
     // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_END
     return {
@@ -4921,7 +4983,9 @@ export class DatabaseSettlementRepository implements SettlementRepository {
           .range(offset, offset + limit - 1);
 
         if (error) {
-          throw new Error(`Failed to load latest settlements: ${error.message}`);
+          throw new Error(
+            `Failed to load latest settlements: ${error.message}`,
+          );
         }
 
         return data ?? [];
@@ -5054,7 +5118,6 @@ export class DatabaseGradeResultRepository implements GradeResultRepository {
 
     return data ?? [];
   }
-
 }
 
 export class DatabaseGradingResultRepository
@@ -5070,7 +5133,9 @@ export class DatabaseGradingResultRepository
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to load latest game result timestamp: ${error.message}`);
+      throw new Error(
+        `Failed to load latest game result timestamp: ${error.message}`,
+      );
     }
 
     return data?.sourced_at ?? null;
@@ -6184,7 +6249,9 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
       .range(0, AUDIT_ENTITY_READ_LIMIT - 1);
 
     if (error) {
-      throw new Error(`Failed to list audit log rows for entity: ${error.message}`);
+      throw new Error(
+        `Failed to list audit log rows for entity: ${error.message}`,
+      );
     }
 
     const rows = data ?? [];
@@ -6253,7 +6320,9 @@ export class DatabaseDeliveryKillSwitchRepository implements DeliveryKillSwitchR
     return data.killed;
   }
 
-  async setKilled(input: DeliveryKillSwitchSetInput): Promise<DeliveryKillSwitchRow> {
+  async setKilled(
+    input: DeliveryKillSwitchSetInput,
+  ): Promise<DeliveryKillSwitchRow> {
     const { data, error } = await this.client
       .from('delivery_kill_switch')
       .upsert({
@@ -6282,7 +6351,9 @@ export class DatabaseDeliveryKillSwitchRepository implements DeliveryKillSwitchR
   }
 
   async listAll(): Promise<DeliveryKillSwitchRow[]> {
-    const { data, error } = await this.client.from('delivery_kill_switch').select('*');
+    const { data, error } = await this.client
+      .from('delivery_kill_switch')
+      .select('*');
 
     if (error) {
       throw new Error(`Failed to list kill switch state: ${error.message}`);
@@ -7138,10 +7209,15 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     // selectable or set `teamsAvailable` the way the 26 player fixtures would
     // have. This read is unlimited and bounded by the sport's 30-32 teams, so
     // filtering in process here is exact rather than page-dependent.
-    const rows = (data ?? []).filter((row) => !isConfirmedProofFixture(row.metadata));
+    const rows = (data ?? []).filter(
+      (row) => !isConfirmedProofFixture(row.metadata),
+    );
     if (needle.length === 0) {
       return rows
-        .filter((row) => typeof row.display_name === 'string' && row.display_name.length > 0)
+        .filter(
+          (row) =>
+            typeof row.display_name === 'string' && row.display_name.length > 0,
+        )
         .map((row) => ({
           participantId: row.id as string,
           displayName: row.display_name as string,
@@ -7151,9 +7227,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         .slice(0, limit);
     }
 
-    const scored: Array<{ score: number; displayName: string; participantId: string }> = [];
+    const scored: Array<{
+      score: number;
+      displayName: string;
+      participantId: string;
+    }> = [];
     for (const row of rows) {
-      const displayName = typeof row.display_name === 'string' ? row.display_name : '';
+      const displayName =
+        typeof row.display_name === 'string' ? row.display_name : '';
       if (displayName.length === 0) continue;
       const haystacks = teamSearchHaystacks(row);
       // Rank so that a nickname prefix beats a city or abbreviation hit; the
@@ -7169,7 +7250,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       scored.push({ score, displayName, participantId: row.id as string });
     }
 
-    scored.sort((a, b) => a.score - b.score || a.displayName.localeCompare(b.displayName));
+    scored.sort(
+      (a, b) => a.score - b.score || a.displayName.localeCompare(b.displayName),
+    );
 
     return scored.slice(0, limit).map((row) => ({
       participantId: row.participantId,
@@ -7235,7 +7318,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         // A player whose metadata carries no team key, or whose key names no team
         // participant in this sport, gets a null team. That is honest partial
         // coverage; never substitute a guessed team.
-        teamId: externalId === null ? null : (teamIdsByExternalId.get(externalId) ?? null),
+        teamId:
+          externalId === null
+            ? null
+            : (teamIdsByExternalId.get(externalId) ?? null),
       };
     });
     // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_END
@@ -7545,7 +7631,8 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       .eq('sport', sportId)
       .in('external_id', externalIds);
 
-    if (error) throw new Error(`Failed to resolve team participants: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to resolve team participants: ${error.message}`);
 
     for (const row of data ?? []) {
       if (typeof row.external_id === 'string' && row.external_id.length > 0) {
@@ -9354,7 +9441,9 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     outbox: new InMemoryOutboxRepository(async (pickId) => {
       const pick = await picks.findPickById(pickId);
       const metadata = pick?.metadata;
-      return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      return metadata &&
+        typeof metadata === 'object' &&
+        !Array.isArray(metadata)
         ? (metadata as Record<string, unknown>)
         : null;
     }),
@@ -9788,7 +9877,9 @@ function createSeededTeamParticipants(): ParticipantRow[] {
  * One player per sport carries no team key, so the honest-null branch of
  * `searchPlayers` stays exercised by real data rather than only by tests.
  */
-function createSeededPlayerParticipants(teams: ParticipantRow[]): ParticipantRow[] {
+function createSeededPlayerParticipants(
+  teams: ParticipantRow[],
+): ParticipantRow[] {
   const now = new Date().toISOString();
   const rows: ParticipantRow[] = [];
   for (const sport of V1_REFERENCE_DATA.sports) {
@@ -9919,12 +10010,15 @@ function normalizeSearchText(value: string): string {
  */
 function teamSearchHaystacks(row: Record<string, unknown>): string[] {
   const values: string[] = [];
-  if (typeof row.display_name === 'string') values.push(normalizeSearchText(row.display_name));
-  if (typeof row.external_id === 'string') values.push(normalizeSearchText(row.external_id));
+  if (typeof row.display_name === 'string')
+    values.push(normalizeSearchText(row.display_name));
+  if (typeof row.external_id === 'string')
+    values.push(normalizeSearchText(row.external_id));
   const metadata = row.metadata;
   if (typeof metadata === 'object' && metadata !== null) {
     const abbreviation = (metadata as Record<string, unknown>)['abbreviation'];
-    if (typeof abbreviation === 'string') values.push(normalizeSearchText(abbreviation));
+    if (typeof abbreviation === 'string')
+      values.push(normalizeSearchText(abbreviation));
   }
   return values.filter((value) => value.length > 0);
 }

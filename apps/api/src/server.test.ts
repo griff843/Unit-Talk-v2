@@ -41,7 +41,8 @@ const hadFileDistributionTargets = Object.prototype.hasOwnProperty.call(
   process.env,
   'UNIT_TALK_DISTRIBUTION_TARGETS',
 );
-const previousFileDistributionTargets = process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+const previousFileDistributionTargets =
+  process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
 const hadFileEnabledTargets = Object.prototype.hasOwnProperty.call(
   process.env,
   'UNIT_TALK_ENABLED_TARGETS',
@@ -59,7 +60,8 @@ after(() => {
     process.env.UNIT_TALK_APP_ENV = previousFileAppEnv;
   }
   if (hadFileDistributionTargets) {
-    process.env.UNIT_TALK_DISTRIBUTION_TARGETS = previousFileDistributionTargets;
+    process.env.UNIT_TALK_DISTRIBUTION_TARGETS =
+      previousFileDistributionTargets;
   } else {
     delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
   }
@@ -80,10 +82,26 @@ const RATE_LIMIT_TEST_CONFIG: ApiSubmissionRateLimit = {
 test('rate limit store increments a shared counter and resets after window expiry', () => {
   const store = new InMemoryApiRateLimitStore();
 
-  const first = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 1_000);
-  const second = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 2_000);
-  const third = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 3_000);
-  const reset = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 62_000);
+  const first = store.consume(
+    'submission:auth:submitter',
+    RATE_LIMIT_TEST_CONFIG,
+    1_000,
+  );
+  const second = store.consume(
+    'submission:auth:submitter',
+    RATE_LIMIT_TEST_CONFIG,
+    2_000,
+  );
+  const third = store.consume(
+    'submission:auth:submitter',
+    RATE_LIMIT_TEST_CONFIG,
+    3_000,
+  );
+  const reset = store.consume(
+    'submission:auth:submitter',
+    RATE_LIMIT_TEST_CONFIG,
+    62_000,
+  );
 
   assert.equal(first.exceeded, false);
   assert.equal(first.remaining, 1);
@@ -104,9 +122,21 @@ test('rate limit RPC store shares state across simulated API instances', async (
     store: 'supabase_rpc',
   };
 
-  const first = await instanceA.consume('submission:auth:submitter', sharedLimit, 1_000);
-  const second = await instanceB.consume('submission:auth:submitter', sharedLimit, 2_000);
-  const third = await instanceA.consume('submission:auth:submitter', sharedLimit, 3_000);
+  const first = await instanceA.consume(
+    'submission:auth:submitter',
+    sharedLimit,
+    1_000,
+  );
+  const second = await instanceB.consume(
+    'submission:auth:submitter',
+    sharedLimit,
+    2_000,
+  );
+  const third = await instanceA.consume(
+    'submission:auth:submitter',
+    sharedLimit,
+    3_000,
+  );
 
   assert.equal(first.exceeded, false);
   assert.equal(second.exceeded, false);
@@ -289,7 +319,10 @@ test('GET /api/runtime/truth returns redacted operator runtime truth', async () 
         lastWorkAt: string | null;
       };
       details: {
-        build: { gitShaShort: string | null; deploymentIdentifier: string | null };
+        build: {
+          gitShaShort: string | null;
+          deploymentIdentifier: string | null;
+        };
         auth: { configuredKeyCount: number };
       };
       redaction: { secretsExposed: boolean };
@@ -305,10 +338,16 @@ test('GET /api/runtime/truth returns redacted operator runtime truth', async () 
     assert.equal(body.work.dryRun, false);
     assert.equal(body.work.lastWorkAt, null);
     assert.equal(body.details.build.gitShaShort, 'abcdef123456');
-    assert.equal(body.details.build.deploymentIdentifier, 'deploy-runtime-truth');
+    assert.equal(
+      body.details.build.deploymentIdentifier,
+      'deploy-runtime-truth',
+    );
     assert.equal(body.details.auth.configuredKeyCount >= 1, true);
     assert.equal(body.redaction.secretsExposed, false);
-    assert.equal(JSON.stringify(body).includes('op-runtime-truth-secret'), false);
+    assert.equal(
+      JSON.stringify(body).includes('op-runtime-truth-secret'),
+      false,
+    );
   } finally {
     server.close();
     restoreEnv('UNIT_TALK_API_KEY_OPERATOR', previousOperatorKey);
@@ -327,7 +366,10 @@ test('buildApiRuntimeTruth marks database persistence as real API work', () => {
 
   assert.equal(report.observedAt, '2026-05-13T12:00:00.000Z');
   assert.equal(report.work.doingRealWork, true);
-  assert.equal(report.work.reason, 'database persistence is active for API writes');
+  assert.equal(
+    report.work.reason,
+    'database persistence is active for API writes',
+  );
 });
 
 test('GET /health uses a valid UUID probe when persistenceMode is database', async () => {
@@ -409,7 +451,11 @@ test('GET /health exposes queue health and fails when pending work has no delive
     const response = await fetch(`http://127.0.0.1:${address.port}/health`);
     const body = (await response.json()) as {
       status: string;
-      queueHealth: { status: string; pendingCount: number; alerts: Array<{ code: string }> };
+      queueHealth: {
+        status: string;
+        pendingCount: number;
+        alerts: Array<{ code: string }>;
+      };
       warnings: string[];
     };
 
@@ -417,10 +463,20 @@ test('GET /health exposes queue health and fails when pending work has no delive
     assert.equal(body.status, 'down');
     assert.equal(body.queueHealth.status, 'down');
     assert.equal(body.queueHealth.pendingCount, 1);
-    assert.ok(body.queueHealth.alerts.some((alert) => alert.code === 'delivery_missing'));
-    assert.ok(body.warnings.some((warning) => warning.includes('no successful delivery')));
+    assert.ok(
+      body.queueHealth.alerts.some(
+        (alert) => alert.code === 'delivery_missing',
+      ),
+    );
+    assert.ok(
+      body.warnings.some((warning) =>
+        warning.includes('no successful delivery'),
+      ),
+    );
     assert.equal(
-      runtime.metricsCollector.snapshot().gauges['distribution_outbox_pending_total']?.[0]?.value,
+      runtime.metricsCollector.snapshot().gauges[
+        'distribution_outbox_pending_total'
+      ]?.[0]?.value,
       1,
     );
   } finally {
@@ -441,6 +497,7 @@ test('GET /health fails when a qualified pick has no active outbox row', async (
 
   const repositories = createInMemoryRepositoryBundle();
   await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
 
   const runtime = createApiRuntimeDependencies({ repositories });
   runtime.persistenceMode = 'database';
@@ -466,8 +523,62 @@ test('GET /health fails when a qualified pick has no active outbox row', async (
     assert.equal(body.status, 'down');
     assert.equal(body.zombiePicks.status, 'down');
     assert.equal(body.zombiePicks.count, 1);
-    assert.match(body.zombiePicks.remediation ?? '', /\/api\/picks\/:id\/requeue/);
-    assert.ok(body.warnings.some((warning) => warning.includes('zombie picks detected')));
+    assert.match(
+      body.zombiePicks.remediation ?? '',
+      /\/api\/picks\/:id\/requeue/,
+    );
+    assert.ok(
+      body.warnings.some((warning) =>
+        warning.includes('zombie picks detected'),
+      ),
+    );
+  } finally {
+    server.close();
+    restoreEnv('SUPABASE_URL', previousSupabaseUrl);
+    restoreEnv('SUPABASE_ANON_KEY', previousSupabaseAnonKey);
+    restoreEnv('SUPABASE_SERVICE_ROLE_KEY', previousSupabaseServiceRoleKey);
+  }
+});
+
+test('WORK-2026100901: a thrown zombie check degrades /health with HTTP 503, never healthy', async () => {
+  const previousSupabaseUrl = process.env.SUPABASE_URL;
+  const previousSupabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const previousSupabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'not-a-url';
+  process.env.SUPABASE_ANON_KEY = 'anon-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const repositories = createInMemoryRepositoryBundle();
+  await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
+  repositories.outbox.findByPickAndTarget = async () => {
+    throw new Error('zombie read exploded');
+  };
+
+  const runtime = createApiRuntimeDependencies({ repositories });
+  runtime.persistenceMode = 'database';
+  const server = createApiServer({ runtime });
+  server.listen(0);
+  await once(server, 'listening');
+
+  try {
+    const address = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+    const body = (await response.json()) as {
+      status: string;
+      zombiePicks: { status: string; remediation: string | null };
+      warnings: string[];
+    };
+
+    assert.equal(response.status, 503);
+    assert.equal(body.status, 'degraded');
+    assert.equal(body.zombiePicks.status, 'unknown');
+    assert.match(body.zombiePicks.remediation ?? '', /zombie read exploded/u);
+    assert.ok(
+      body.warnings.some((warning) =>
+        warning.includes('zombie pick health unknown'),
+      ),
+    );
   } finally {
     server.close();
     restoreEnv('SUPABASE_URL', previousSupabaseUrl);
@@ -1091,7 +1202,11 @@ test('GET /api/reference-data/availability distinguishes populated and empty spo
     );
     const body = (await response.json()) as {
       ok: boolean;
-      data?: { sportId: string; teamsAvailable: boolean; playersAvailable: boolean };
+      data?: {
+        sportId: string;
+        teamsAvailable: boolean;
+        playersAvailable: boolean;
+      };
     };
 
     assert.equal(response.status, 200);
@@ -1112,8 +1227,18 @@ test('GET /api/reference-data/search/players constrains results to selected team
     ...repositories.referenceData,
     async searchPlayers() {
       return [
-        { participantId: 'player-lebron', displayName: 'LeBron James', sport: 'NBA', teamId: 'team-lakers' },
-        { participantId: 'player-harden', displayName: 'James Harden', sport: 'NBA', teamId: 'team-clippers' },
+        {
+          participantId: 'player-lebron',
+          displayName: 'LeBron James',
+          sport: 'NBA',
+          teamId: 'team-lakers',
+        },
+        {
+          participantId: 'player-harden',
+          displayName: 'James Harden',
+          sport: 'NBA',
+          teamId: 'team-clippers',
+        },
       ];
     },
     async getEventBrowse(eventId: string) {
@@ -1159,7 +1284,12 @@ test('GET /api/reference-data/search/players constrains results to selected team
 
     assert.equal(response.status, 200);
     assert.deepEqual(body.data, [
-      { participantId: 'player-lebron', displayName: 'LeBron James', sport: 'NBA', teamId: 'team-lakers' },
+      {
+        participantId: 'player-lebron',
+        displayName: 'LeBron James',
+        sport: 'NBA',
+        teamId: 'team-lakers',
+      },
     ]);
   } finally {
     server.close();
@@ -1722,6 +1852,7 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', as
 test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pick', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   const beforeRecovery = await checkZombiePickHealth(runtime);
@@ -1809,7 +1940,7 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'authorization': 'Bearer test-poster-key',
+          authorization: 'Bearer test-poster-key',
         },
         body: JSON.stringify({ period: 'daily' }),
       },
@@ -1884,7 +2015,7 @@ test('POST /api/recap/post returns no settled picks reason when the requested wi
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'authorization': 'Bearer test-poster-key',
+          authorization: 'Bearer test-poster-key',
         },
         body: JSON.stringify({ period: 'daily' }),
       },
@@ -1896,7 +2027,8 @@ test('POST /api/recap/post returns no settled picks reason when the requested wi
     assert.equal(body.reason, 'no settled picks in window');
   } finally {
     server.close();
-    if (prevPosterKey === undefined) delete process.env.UNIT_TALK_API_KEY_POSTER;
+    if (prevPosterKey === undefined)
+      delete process.env.UNIT_TALK_API_KEY_POSTER;
     else process.env.UNIT_TALK_API_KEY_POSTER = prevPosterKey;
   }
 });
@@ -1934,7 +2066,7 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'authorization': 'Bearer test-poster-key',
+          authorization: 'Bearer test-poster-key',
         },
         body: JSON.stringify({ period: 'daily' }),
       },
@@ -1956,7 +2088,8 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
     } else {
       process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
     }
-    if (prevPosterKey === undefined) delete process.env.UNIT_TALK_API_KEY_POSTER;
+    if (prevPosterKey === undefined)
+      delete process.env.UNIT_TALK_API_KEY_POSTER;
     else process.env.UNIT_TALK_API_KEY_POSTER = prevPosterKey;
   }
 });
@@ -1984,6 +2117,19 @@ async function createQualifiedPick(
     },
     repositories,
   );
+}
+
+async function releaseHealthTarget(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  target: string,
+) {
+  assert.ok(repositories.killSwitch);
+  await repositories.killSwitch.setKilled({
+    target,
+    killed: false,
+    actor: 'health-test',
+    reason: 'exercise delivery-eligible zombie health',
+  });
 }
 
 async function createSettledAlertAgentPick(
@@ -2530,7 +2676,9 @@ async function withHealthGuardRemoved<T>(
   guardName: string,
   run: (mutant: Record<string, unknown>) => Promise<T>,
 ): Promise<T> {
-  const sourcePath = fileURLToPath(new URL('./routes/health.ts', import.meta.url));
+  const sourcePath = fileURLToPath(
+    new URL('./routes/health.ts', import.meta.url),
+  );
   const suffix = `__mutant_${guardName}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
   const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
   const source = await readFile(sourcePath, 'utf8');
@@ -2541,14 +2689,17 @@ async function withHealthGuardRemoved<T>(
     ),
     '',
   );
-  assert.notEqual(mutantSource, source, `mutation control could not remove ${guardName}`);
+  assert.notEqual(
+    mutantSource,
+    source,
+    `mutation control could not remove ${guardName}`,
+  );
   await writeFile(mutantPath, mutantSource, 'utf8');
   try {
     return await run(
-      (await import(`${pathToFileURL(mutantPath).href}?mutation=${guardName}`)) as Record<
-        string,
-        unknown
-      >,
+      (await import(
+        `${pathToFileURL(mutantPath).href}?mutation=${guardName}`
+      )) as Record<string, unknown>,
     );
   } finally {
     await unlink(mutantPath).catch(() => undefined);
@@ -2558,6 +2709,7 @@ async function withHealthGuardRemoved<T>(
 test('a Track Only pick is not a zombie: it is force-qualified and deliberately never enqueued', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await createTrackOnlyQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   const health = await checkZombiePickHealth(runtime);
@@ -2566,9 +2718,79 @@ test('a Track Only pick is not a zombie: it is force-qualified and deliberately 
   assert.equal(health.remediation, null);
 });
 
+function humanCapperHealthCandidate(status = 'validated') {
+  return {
+    id: '00000000-0000-0000-0000-000000000901',
+    status,
+    promotion_status: 'not_eligible',
+    promotion_target: null,
+    selection: 'Human Capper Over 24.5',
+    created_at: '2026-10-09T00:00:00.000Z',
+    metadata: {
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: {
+        version: 'human-capper-delivery/v1',
+        decision: 'authorized',
+        capperId: 'griff843',
+        authority: 'server-allowlist',
+        allowlistSource: 'UNIT_TALK_HUMAN_CAPPER_ALLOWLIST',
+        decidedAt: '2026-10-09T00:00:00.000Z',
+      },
+    },
+  };
+}
+
+function runtimeWithHumanCapperCandidate(status = 'validated') {
+  const repositories = createInMemoryRepositoryBundle();
+  const runtime = createApiRuntimeDependencies({ repositories });
+  runtime.repositories.picks.listPromotedByLifecycleStates = async () => [
+    humanCapperHealthCandidate(status),
+  ];
+  return { repositories, runtime };
+}
+
+test('WORK-2026100901: a delivery-eligible human-capper pick with no official-picks row is a zombie', async () => {
+  const { repositories, runtime } = runtimeWithHumanCapperCandidate();
+  await releaseHealthTarget(repositories, 'official-picks');
+
+  const health = await checkZombiePickHealth(runtime);
+
+  assert.equal(health.status, 'down');
+  assert.equal(health.count, 1);
+});
+
+test('WORK-2026100901: a human-capper pick held by the official-picks kill switch is not a zombie', async () => {
+  const { runtime } = runtimeWithHumanCapperCandidate();
+
+  assert.equal((await checkZombiePickHealth(runtime)).status, 'healthy');
+
+  await withHealthGuardRemoved(
+    'ZOMBIE_HEALTH_KILLED_TARGET_EXCLUSION_GUARD',
+    async (mutant) => {
+      const check = mutant[
+        'checkZombiePickHealth'
+      ] as typeof checkZombiePickHealth;
+      const mutated = await check(runtime);
+      assert.equal(mutated.status, 'down');
+      assert.equal(mutated.count, 1);
+    },
+  );
+});
+
+test('WORK-2026100901: a voided human-capper pick is explicitly excluded from zombie health', async () => {
+  const { repositories, runtime } = runtimeWithHumanCapperCandidate('voided');
+  await releaseHealthTarget(repositories, 'official-picks');
+
+  const health = await checkZombiePickHealth(runtime);
+
+  assert.equal(health.status, 'healthy');
+  assert.equal(health.count, 0);
+});
+
 test('mutation control: removing ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD makes /health 503 on a legitimate Track Only submission', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await createTrackOnlyQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   // Baseline: healthy.
@@ -2576,13 +2798,18 @@ test('mutation control: removing ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD makes 
 
   // Mutant: the same pick is counted as a zombie and /health reports down,
   // prescribing a requeue that TRACK_ONLY_REQUEUE_GUARD refuses.
-  await withHealthGuardRemoved('ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD', async (mutant) => {
-    const check = mutant['checkZombiePickHealth'] as typeof checkZombiePickHealth;
-    const mutated = await check(runtime);
-    assert.equal(mutated.count, 1);
-    assert.equal(mutated.status, 'down');
-    assert.match(mutated.remediation ?? '', /requeue/iu);
-  });
+  await withHealthGuardRemoved(
+    'ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD',
+    async (mutant) => {
+      const check = mutant[
+        'checkZombiePickHealth'
+      ] as typeof checkZombiePickHealth;
+      const mutated = await check(runtime);
+      assert.equal(mutated.count, 1);
+      assert.equal(mutated.status, 'down');
+      assert.match(mutated.remediation ?? '', /requeue/iu);
+    },
+  );
 });
 
 test('a Track Only pick does not occupy live board capacity', async () => {
@@ -2826,6 +3053,7 @@ test('a real zombie still fails /health when a stranded fixture sits beside it',
   const repositories = createInMemoryRepositoryBundle();
   await createQualifiedFixturePick(repositories);
   await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   const health = await checkZombiePickHealth(runtime);
@@ -2838,22 +3066,29 @@ test('a real zombie still fails /health when a stranded fixture sits beside it',
 test('mutation control: removing ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD makes a proof fixture fail /health', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await createQualifiedFixturePick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   assert.equal((await checkZombiePickHealth(runtime)).status, 'healthy');
 
-  await withHealthGuardRemoved('ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD', async (mutant) => {
-    const check = mutant['checkZombiePickHealth'] as typeof checkZombiePickHealth;
-    const mutated = await check(runtime);
-    assert.equal(mutated.count, 1);
-    assert.equal(mutated.fixtureCount, 0);
-    assert.equal(mutated.status, 'down');
-  });
+  await withHealthGuardRemoved(
+    'ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD',
+    async (mutant) => {
+      const check = mutant[
+        'checkZombiePickHealth'
+      ] as typeof checkZombiePickHealth;
+      const mutated = await check(runtime);
+      assert.equal(mutated.count, 1);
+      assert.equal(mutated.fixtureCount, 0);
+      assert.equal(mutated.status, 'down');
+    },
+  );
 });
 
 test('zombie detection reads past the first 1,000 candidates when the repository only pages', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const runtime = createApiRuntimeDependencies({ repositories });
+  await releaseHealthTarget(repositories, 'best-bets');
 
   // 2,345 validated picks: every one before the last page is not a candidate,
   // and the single stranded zombie sits at row 2,344. A read that stops at one
@@ -2867,11 +3102,18 @@ test('zombie detection reads past the first 1,000 candidates when the repository
     selection: 'Player Over 8.5',
     created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
   }));
-  const calls: Array<{ limit: number | undefined; offset: number | undefined }> = [];
+  const calls: Array<{
+    limit: number | undefined;
+    offset: number | undefined;
+  }> = [];
   const pagingOnlyPicks = {
     ...repositories.picks,
     listPromotedByLifecycleStates: undefined,
-    async listByLifecycleStates(_states: unknown, limit?: number, offset?: number) {
+    async listByLifecycleStates(
+      _states: unknown,
+      limit?: number,
+      offset?: number,
+    ) {
       calls.push({ limit, offset });
       // Serve at most POSTGREST_MAX_ROWS rows, whatever is asked, as PostgREST does.
       const start = offset ?? 0;
@@ -2893,31 +3135,51 @@ test('zombie detection reads past the first 1,000 candidates when the repository
 test('readAllOrderedPages returns every row across capped pages and stops on a short page', async () => {
   const rows = Array.from({ length: 2500 }, (_, index) => ({ index }));
   const ranges: Array<[number, number]> = [];
-  const read = await readAllOrderedPages<{ index: number }>(async (from, to) => {
-    ranges.push([from, to]);
-    return { data: rows.slice(from, Math.min(to + 1, from + POSTGREST_MAX_ROWS)), error: null };
-  });
+  const read = await readAllOrderedPages<{ index: number }>(
+    async (from, to) => {
+      ranges.push([from, to]);
+      return {
+        data: rows.slice(from, Math.min(to + 1, from + POSTGREST_MAX_ROWS)),
+        error: null,
+      };
+    },
+  );
   assert.equal(read.length, 2500);
-  assert.deepEqual(read.map((row) => row.index), rows.map((row) => row.index));
-  assert.deepEqual(ranges, [[0, 999], [1000, 1999], [2000, 2999]]);
+  assert.deepEqual(
+    read.map((row) => row.index),
+    rows.map((row) => row.index),
+  );
+  assert.deepEqual(ranges, [
+    [0, 999],
+    [1000, 1999],
+    [2000, 2999],
+  ]);
 
   // An exact multiple of the page size needs one empty page to prove the end.
-  const exact = await readAllOrderedPages<{ index: number }>(async (from, to) => ({
-    data: rows.slice(0, 2000).slice(from, to + 1),
-    error: null,
-  }));
+  const exact = await readAllOrderedPages<{ index: number }>(
+    async (from, to) => ({
+      data: rows.slice(0, 2000).slice(from, to + 1),
+      error: null,
+    }),
+  );
   assert.equal(exact.length, 2000);
 });
 
 test('readAllOrderedPages refuses a page size above the server cap, and surfaces a page error', async () => {
   await assert.rejects(
-    readAllOrderedPages(async () => ({ data: [], error: null }), POSTGREST_MAX_ROWS + 1),
+    readAllOrderedPages(
+      async () => ({ data: [], error: null }),
+      POSTGREST_MAX_ROWS + 1,
+    ),
     /pageSize must be an integer from 1 to 1000/u,
   );
   await assert.rejects(
     readAllOrderedPages(async (from) =>
       from === 0
-        ? { data: Array.from({ length: POSTGREST_MAX_ROWS }, () => ({})), error: null }
+        ? {
+            data: Array.from({ length: POSTGREST_MAX_ROWS }, () => ({})),
+            error: null,
+          }
         : { data: null, error: { message: 'boom on page 2' } },
     ),
     /boom on page 2/u,
@@ -2941,9 +3203,18 @@ test('checkSchemaDrift probes canonical tables concurrently and keeps their orde
         : { count: 1, error: null };
     },
   });
-  assert.ok(maxInFlight > 1, `expected concurrent probes, saw ${maxInFlight} in flight`);
-  assert.ok(maxInFlight <= 8, `expected at most 8 probes in flight, saw ${maxInFlight}`);
-  assert.deepEqual(result.tables.map((entry) => entry.table), tables);
+  assert.ok(
+    maxInFlight > 1,
+    `expected concurrent probes, saw ${maxInFlight} in flight`,
+  );
+  assert.ok(
+    maxInFlight <= 8,
+    `expected at most 8 probes in flight, saw ${maxInFlight}`,
+  );
+  assert.deepEqual(
+    result.tables.map((entry) => entry.table),
+    tables,
+  );
   assert.equal(result.status, 'drift');
   assert.deepEqual(result.unreachableTableNames, ['table_7']);
 });

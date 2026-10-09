@@ -53,13 +53,17 @@ import {
   extractProjectRefFromUrl,
 } from '../ci/isolated-proof-attestation.js';
 import { classifyDeadLetter } from './outbox-triage.js';
-import { isGovernedDeliveryTarget } from '@unit-talk/contracts';
+import {
+  isGovernedDeliveryTarget,
+  parseGovernedTargetFromDeliveryTarget,
+} from '@unit-talk/contracts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /** The one path the Readiness Regression Gate reads. */
-export const CANONICAL_LEDGER_PATH = 'docs/06_status/readiness/readiness-score.json';
+export const CANONICAL_LEDGER_PATH =
+  'docs/06_status/readiness/readiness-score.json';
 
 export const READINESS_LEDGER_SCHEMA_VERSION = 2;
 
@@ -67,7 +71,7 @@ export const READINESS_LEDGER_SCHEMA_VERSION = 2;
  * Bumped whenever measurement semantics change, so a ledger can be attributed to
  * the code that produced it rather than to "some earlier version of the script".
  */
-export const GENERATOR_VERSION = '1.1.0';
+export const GENERATOR_VERSION = '1.2.0';
 
 /**
  * Freshness contract. The refresher runs every 6h; `max_age_hours` is the SLA an
@@ -108,12 +112,17 @@ export const SCHEDULED_OBSERVERS = [
 ] as const;
 
 export const QUEUE_SEMANTICS_VERSION = '1.2';
-export const QUEUE_SEMANTICS_DOC = 'docs/05_operations/QUEUE_READINESS_SEMANTICS.md';
+export const QUEUE_SEMANTICS_DOC =
+  'docs/05_operations/QUEUE_READINESS_SEMANTICS.md';
 
 // ── Ledger shape ─────────────────────────────────────────────────────────────
 
 export type DimensionStatus = 'pass' | 'fail' | 'unknown';
-export type MethodKind = 'supabase_read' | 'github_api' | 'repo_scan' | 'not_measurable';
+export type MethodKind =
+  | 'supabase_read'
+  | 'github_api'
+  | 'repo_scan'
+  | 'not_measurable';
 export type Verdict = 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN';
 export type Observability = 'complete' | 'degraded';
 
@@ -219,7 +228,10 @@ export interface GithubReader {
    */
   failedSteps(runId: number): Promise<string[]>;
   headSha(branch: string): Promise<string>;
-  latestRun(workflowFile: string, options?: { branch?: string; status?: string }): Promise<WorkflowRun | null>;
+  latestRun(
+    workflowFile: string,
+    options?: { branch?: string; status?: string },
+  ): Promise<WorkflowRun | null>;
   commitsBetween(base: string, head: string): Promise<number | null>;
 }
 
@@ -239,7 +251,10 @@ export function minutesBetween(from: string, to: Date): number {
 }
 
 export function hoursBetween(from: string, to: Date): number {
-  return Math.round(((to.getTime() - new Date(from).getTime()) / 3_600_000) * 10) / 10;
+  return (
+    Math.round(((to.getTime() - new Date(from).getTime()) / 3_600_000) * 10) /
+    10
+  );
 }
 
 function errorMessage(error: unknown): string {
@@ -266,7 +281,8 @@ function unreadable(
 function requireDb(ctx: ProbeContext): ReadOnlyDb {
   if (!ctx.db) {
     throw new Error(
-      ctx.dbUnavailableReason ?? 'no read-only production database handle was available',
+      ctx.dbUnavailableReason ??
+        'no read-only production database handle was available',
     );
   }
   return ctx.db;
@@ -274,7 +290,9 @@ function requireDb(ctx: ProbeContext): ReadOnlyDb {
 
 function requireGithub(ctx: ProbeContext): GithubReader {
   if (!ctx.github) {
-    throw new Error(ctx.githubUnavailableReason ?? 'no GitHub API reader was available');
+    throw new Error(
+      ctx.githubUnavailableReason ?? 'no GitHub API reader was available',
+    );
   }
   return ctx.github;
 }
@@ -289,8 +307,10 @@ function requireGithub(ctx: ProbeContext): GithubReader {
 export function computeVerdict(dimensions: ReadinessDimension[]): Verdict {
   const blocking = dimensions.filter((dimension) => dimension.blocking);
   if (blocking.some((dimension) => dimension.status === 'fail')) return 'RED';
-  if (blocking.some((dimension) => dimension.status === 'unknown')) return 'UNKNOWN';
-  if (dimensions.some((dimension) => dimension.status !== 'pass')) return 'YELLOW';
+  if (blocking.some((dimension) => dimension.status === 'unknown'))
+    return 'UNKNOWN';
+  if (dimensions.some((dimension) => dimension.status !== 'pass'))
+    return 'YELLOW';
   return 'GREEN';
 }
 
@@ -299,13 +319,19 @@ export function computeVerdict(dimensions: ReadinessDimension[]): Verdict {
  * a trustworthy RED (everything read, something is broken) or an untrustworthy
  * anything (a reading failed). Collapsing the two is the defect this lane fixes.
  */
-export function computeObservability(dimensions: ReadinessDimension[]): Observability {
-  return dimensions.some((dimension) => dimension.status === 'unknown') ? 'degraded' : 'complete';
+export function computeObservability(
+  dimensions: ReadinessDimension[],
+): Observability {
+  return dimensions.some((dimension) => dimension.status === 'unknown')
+    ? 'degraded'
+    : 'complete';
 }
 
 // ── Probes ───────────────────────────────────────────────────────────────────
 
-export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeDeploySha(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'deploy_sha_alignment',
     title: 'Production SHA matches main HEAD',
@@ -332,13 +358,19 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
         status: 'fail',
         observed_at: ctx.now.toISOString(),
         evidence: `No successful deploy.yml run exists on main. main HEAD is ${mainSha}; nothing has been proven deployed.`,
-        measured: { main_sha: mainSha, deployed_sha: null, successful_deploy_runs: 0 },
+        measured: {
+          main_sha: mainSha,
+          deployed_sha: null,
+          successful_deploy_runs: 0,
+        },
         unreadable_reason: null,
       };
     }
 
     const aligned = deployRun.head_sha === mainSha;
-    const behind = aligned ? 0 : await github.commitsBetween(deployRun.head_sha, mainSha);
+    const behind = aligned
+      ? 0
+      : await github.commitsBetween(deployRun.head_sha, mainSha);
     const ageHours = hoursBetween(deployRun.updated_at, ctx.now);
 
     return {
@@ -348,7 +380,9 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
       evidence: aligned
         ? `Last successful deploy (${deployRun.html_url}, ${deployRun.updated_at}) shipped ${deployRun.head_sha}, which is main HEAD.`
         : `Last successful deploy (${deployRun.html_url}, ${deployRun.updated_at}, ${ageHours}h ago) shipped ${deployRun.head_sha}; main HEAD is ${mainSha}` +
-          (behind === null ? ' (commit distance unreadable).' : `, ${behind} commits ahead.`),
+          (behind === null
+            ? ' (commit distance unreadable).'
+            : `, ${behind} commits ahead.`),
       measured: {
         main_sha: mainSha,
         deployed_sha: deployRun.head_sha,
@@ -364,7 +398,9 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
   }
 }
 
-export async function probeIngestorHealth(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeIngestorHealth(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'ingestor_health',
     title: `Ingestor cycled successfully within ${THRESHOLDS.ingestorCycleMaxMinutes} minutes`,
@@ -397,23 +433,42 @@ export async function probeIngestorHealth(ctx: ProbeContext): Promise<ReadinessD
       db.latestRow('game_results', 'created_at', [], 'created_at'),
     ]);
 
-    const cycleStartedAt = typeof cycle?.['started_at'] === 'string' ? (cycle['started_at'] as string) : null;
-    const cycleStatus = typeof cycle?.['status'] === 'string' ? (cycle['status'] as string) : null;
-    const mergedAt = typeof merged?.['updated_at'] === 'string' ? (merged['updated_at'] as string) : null;
-    const resultAt = typeof result?.['created_at'] === 'string' ? (result['created_at'] as string) : null;
+    const cycleStartedAt =
+      typeof cycle?.['started_at'] === 'string'
+        ? (cycle['started_at'] as string)
+        : null;
+    const cycleStatus =
+      typeof cycle?.['status'] === 'string'
+        ? (cycle['status'] as string)
+        : null;
+    const mergedAt =
+      typeof merged?.['updated_at'] === 'string'
+        ? (merged['updated_at'] as string)
+        : null;
+    const resultAt =
+      typeof result?.['created_at'] === 'string'
+        ? (result['created_at'] as string)
+        : null;
 
-    const cycleAge = cycleStartedAt ? minutesBetween(cycleStartedAt, ctx.now) : null;
+    const cycleAge = cycleStartedAt
+      ? minutesBetween(cycleStartedAt, ctx.now)
+      : null;
     const offerAge = mergedAt ? minutesBetween(mergedAt, ctx.now) : null;
 
     const failures: string[] = [];
     if (cycleAge === null) failures.push('no ingestor.cycle row exists');
     else if (cycleAge > THRESHOLDS.ingestorCycleMaxMinutes)
-      failures.push(`latest ingestor.cycle started ${cycleStartedAt} (${cycleAge}m old, threshold ${THRESHOLDS.ingestorCycleMaxMinutes}m)`);
+      failures.push(
+        `latest ingestor.cycle started ${cycleStartedAt} (${cycleAge}m old, threshold ${THRESHOLDS.ingestorCycleMaxMinutes}m)`,
+      );
     if (cycleStatus && cycleStatus !== 'success' && cycleStatus !== 'completed')
       failures.push(`latest ingestor.cycle status is "${cycleStatus}"`);
-    if (offerAge === null) failures.push('no merged provider_cycle_status row exists');
+    if (offerAge === null)
+      failures.push('no merged provider_cycle_status row exists');
     else if (offerAge > THRESHOLDS.ingestorOfferMaxMinutes)
-      failures.push(`latest merged provider cycle updated ${mergedAt} (${offerAge}m old, threshold ${THRESHOLDS.ingestorOfferMaxMinutes}m)`);
+      failures.push(
+        `latest merged provider cycle updated ${mergedAt} (${offerAge}m old, threshold ${THRESHOLDS.ingestorOfferMaxMinutes}m)`,
+      );
 
     return {
       ...base,
@@ -448,7 +503,9 @@ function recordValue(value: unknown): Record<string, unknown> | null {
  * Grading health is the outcome of the latest completed pass, not evidence that
  * the cron woke up. A fresh heartbeat alongside a stale-input no-op is RED.
  */
-export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeGradingHealth(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'grading_health',
     title: 'Latest grading pass has healthy work/input outcome',
@@ -479,7 +536,8 @@ export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDi
         ...base,
         status: 'fail',
         observed_at: ctx.now.toISOString(),
-        evidence: 'No completed grading.run exists; grading outcome and input freshness are unproven.',
+        evidence:
+          'No completed grading.run exists; grading outcome and input freshness are unproven.',
         measured: {
           outcome_class: null,
           input_freshness_status: null,
@@ -502,15 +560,21 @@ export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDi
         ? freshness['threshold_hours']
         : null;
     const gradedCount =
-      typeof details?.['graded_count'] === 'number' ? details['graded_count'] : null;
+      typeof details?.['graded_count'] === 'number'
+        ? details['graded_count']
+        : null;
     const dataDependentSkipped =
       typeof details?.['data_dependent_skipped_count'] === 'number'
         ? details['data_dependent_skipped_count']
         : null;
     const rowsScanned =
-      typeof details?.['rows_scanned'] === 'number' ? details['rows_scanned'] : null;
+      typeof details?.['rows_scanned'] === 'number'
+        ? details['rows_scanned']
+        : null;
     const skippedCount =
-      typeof details?.['skipped_count'] === 'number' ? details['skipped_count'] : null;
+      typeof details?.['skipped_count'] === 'number'
+        ? details['skipped_count']
+        : null;
 
     const failures: string[] = [];
     if (!outcomeClass) {
@@ -520,19 +584,29 @@ export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDi
     } else if (outcomeClass === 'failed') {
       failures.push('latest grading.run reports failed');
     } else if (outcomeClass === 'succeeded_with_work') {
-      if (runStatus !== 'succeeded') failures.push(`succeeded_with_work has status ${runStatus ?? 'missing'}`);
+      if (runStatus !== 'succeeded')
+        failures.push(
+          `succeeded_with_work has status ${runStatus ?? 'missing'}`,
+        );
       if (gradedCount === null || gradedCount <= 0)
-        failures.push('succeeded_with_work does not report a positive graded_count');
+        failures.push(
+          'succeeded_with_work does not report a positive graded_count',
+        );
     } else if (outcomeClass === 'no_op_nothing_gradeable') {
       if (runStatus !== 'succeeded')
-        failures.push(`no_op_nothing_gradeable has status ${runStatus ?? 'missing'}`);
+        failures.push(
+          `no_op_nothing_gradeable has status ${runStatus ?? 'missing'}`,
+        );
       // Rows were examined and none graded. That is a legitimate outcome, but it
       // must not be recorded as `no_op_no_input`, which positively asserts the
       // population was empty.
       if (rowsScanned === 0 && skippedCount === 0)
-        failures.push('no_op_nothing_gradeable examined nothing; that is no_op_no_input');
+        failures.push(
+          'no_op_nothing_gradeable examined nothing; that is no_op_no_input',
+        );
     } else if (outcomeClass === 'no_op_no_input') {
-      if (runStatus !== 'succeeded') failures.push(`no_op_no_input has status ${runStatus ?? 'missing'}`);
+      if (runStatus !== 'succeeded')
+        failures.push(`no_op_no_input has status ${runStatus ?? 'missing'}`);
       // The conflation this lane exists to remove: a pass that examined rows and
       // graded none must never be recorded as having had no input.
       if ((rowsScanned ?? 0) > 0 || (skippedCount ?? 0) > 0)
@@ -544,7 +618,9 @@ export async function probeGradingHealth(ctx: ProbeContext): Promise<ReadinessDi
           `no_op_no_input has ${dataDependentSkipped} data-dependent skips with ${freshnessStatus ?? 'missing'} input`,
         );
     } else {
-      failures.push(`latest grading.run has unknown outcome_class ${outcomeClass}`);
+      failures.push(
+        `latest grading.run has unknown outcome_class ${outcomeClass}`,
+      );
     }
     if (
       thresholdHours !== null &&
@@ -663,10 +739,90 @@ export function bucketStaleProcessingRows(
   return buckets;
 }
 
-export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<ReadinessDimension> {
+export const NEVER_CLAIMED_READ_LIMIT = 20_000;
+
+export interface NeverClaimedPendingBuckets {
+  actionable: number;
+  killed: number;
+  terminalPick: number;
+  canaryOnly: number;
+  unclaimable: number;
+  unclaimableTargets: string[];
+}
+
+function joinedPickStatus(row: Record<string, unknown>): string | null {
+  const joined = row['picks'];
+  const pick = Array.isArray(joined) ? joined[0] : joined;
+  if (!pick || typeof pick !== 'object' || Array.isArray(pick)) return null;
+  const status = (pick as Record<string, unknown>)['status'];
+  return typeof status === 'string' ? status : null;
+}
+
+/**
+ * Classify aged `pending, attempt_count=0` rows without changing them.
+ *
+ * A released governed target plus a non-terminal pick is actionable: the row
+ * should have been claimed at least once. Killed targets, terminal picks, the
+ * canary control lane, and targets no governed worker owns stay visible but do
+ * not gate readiness. Missing target/pick evidence is actionable (fail closed).
+ */
+export function bucketNeverClaimedPendingRows(
+  rows: readonly Record<string, unknown>[],
+  killSwitchState: ReadonlyMap<string, boolean>,
+): NeverClaimedPendingBuckets {
+  const buckets: NeverClaimedPendingBuckets = {
+    actionable: 0,
+    killed: 0,
+    terminalPick: 0,
+    canaryOnly: 0,
+    unclaimable: 0,
+    unclaimableTargets: [],
+  };
+  const unclaimableTargets = new Set<string>();
+
+  for (const row of rows) {
+    const rawTarget = row['target'];
+    if (typeof rawTarget !== 'string' || rawTarget.trim() === '') {
+      buckets.actionable += 1;
+      continue;
+    }
+    const target = rawTarget.trim();
+    if (target === 'discord:canary' || target === 'canary') {
+      buckets.canaryOnly += 1;
+      continue;
+    }
+
+    const governedTarget =
+      parseGovernedTargetFromDeliveryTarget(target) ??
+      (isGovernedDeliveryTarget(target) ? target : null);
+    if (governedTarget === null) {
+      buckets.unclaimable += 1;
+      unclaimableTargets.add(target);
+      continue;
+    }
+
+    const pickStatus = joinedPickStatus(row);
+    if (pickStatus === 'voided' || pickStatus === 'settled') {
+      buckets.terminalPick += 1;
+      continue;
+    }
+    if (killSwitchState.get(governedTarget) !== false) {
+      buckets.killed += 1;
+      continue;
+    }
+    buckets.actionable += 1;
+  }
+
+  buckets.unclaimableTargets = [...unclaimableTargets].sort();
+  return buckets;
+}
+
+export async function probeWorkerOutboxHealth(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'worker_outbox_health',
-    title: 'Worker heartbeat current and no stuck outbox rows',
+    title: 'Worker heartbeat current and no stuck or never-claimed outbox rows',
     blocking: true,
     method: {
       kind: 'supabase_read' as const,
@@ -676,6 +832,7 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
         "select target from distribution_outbox where status='processing' and updated_at < now-5m, " +
         'partitioned by isGovernedDeliveryTarget(target); ' +
         "count distribution_outbox where status='pending' and attempt_count>0 and updated_at < now-30m; " +
+        'select pending attempt_count=0 rows older than 30m with pick status and live kill-switch classification; ' +
         "count distribution_outbox where status in ('pending','processing')",
     },
   };
@@ -689,15 +846,26 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
       ctx.now.getTime() - THRESHOLDS.outboxStalePendingMinutes * 60_000,
     ).toISOString();
 
-    const [heartbeat, pending, processing, staleProcessingRows, stuckRetryable] = await Promise.all([
+    const [
+      heartbeat,
+      pending,
+      processing,
+      staleProcessingRows,
+      stuckRetryable,
+      neverClaimedRows,
+    ] = await Promise.all([
       db.latestRow(
         'system_runs',
         'status, started_at',
         [{ column: 'run_type', op: 'eq', value: 'worker.heartbeat' }],
         'started_at',
       ),
-      db.countRows('distribution_outbox', [{ column: 'status', op: 'eq', value: 'pending' }]),
-      db.countRows('distribution_outbox', [{ column: 'status', op: 'eq', value: 'processing' }]),
+      db.countRows('distribution_outbox', [
+        { column: 'status', op: 'eq', value: 'pending' },
+      ]),
+      db.countRows('distribution_outbox', [
+        { column: 'status', op: 'eq', value: 'processing' },
+      ]),
       // Bucket 5 (stale-unknown): processing past the expected processing window.
       // Rows, not a count -- the verdict depends on each row's target, and
       // `DbFilter` cannot express "the target is one a worker governs".
@@ -717,19 +885,70 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
         { column: 'attempt_count', op: 'gt', value: 0 },
         { column: 'updated_at', op: 'lt', value: stalePendingBefore },
       ]),
+      // WORK-2026100901 NEVER_CLAIMED_PENDING_GUARD_START
+      // A worker that never claims an eligible row leaves attempt_count at zero,
+      // so the attempted-only query above cannot observe that failure mode.
+      db.selectRows(
+        'distribution_outbox',
+        'id,target,updated_at,picks(status)',
+        [
+          { column: 'status', op: 'eq', value: 'pending' },
+          { column: 'attempt_count', op: 'eq', value: 0 },
+          { column: 'updated_at', op: 'lt', value: stalePendingBefore },
+        ],
+        NEVER_CLAIMED_READ_LIMIT,
+      ),
+      // WORK-2026100901 NEVER_CLAIMED_PENDING_GUARD_END
     ]);
 
-    const heartbeatAt = typeof heartbeat?.['started_at'] === 'string' ? (heartbeat['started_at'] as string) : null;
-    const heartbeatStatus = typeof heartbeat?.['status'] === 'string' ? (heartbeat['status'] as string) : null;
-    const heartbeatAge = heartbeatAt ? minutesBetween(heartbeatAt, ctx.now) : null;
+    const governedNeverClaimedTargets = new Set<string>();
+    for (const row of neverClaimedRows) {
+      const rawTarget = row['target'];
+      if (typeof rawTarget !== 'string') continue;
+      const governedTarget =
+        parseGovernedTargetFromDeliveryTarget(rawTarget) ??
+        (isGovernedDeliveryTarget(rawTarget) ? rawTarget : null);
+      if (governedTarget !== null)
+        governedNeverClaimedTargets.add(governedTarget);
+    }
+    const killSwitchState = new Map<string, boolean>();
+    await Promise.all(
+      [...governedNeverClaimedTargets].map(async (target) => {
+        const row = await db.latestRow(
+          'delivery_kill_switch',
+          'target,killed,updated_at',
+          [{ column: 'target', op: 'eq', value: target }],
+          'updated_at',
+        );
+        killSwitchState.set(target, row?.['killed'] === false ? false : true);
+      }),
+    );
+
+    const heartbeatAt =
+      typeof heartbeat?.['started_at'] === 'string'
+        ? (heartbeat['started_at'] as string)
+        : null;
+    const heartbeatStatus =
+      typeof heartbeat?.['status'] === 'string'
+        ? (heartbeat['status'] as string)
+        : null;
+    const heartbeatAge = heartbeatAt
+      ? minutesBetween(heartbeatAt, ctx.now)
+      : null;
 
     const staleBuckets = bucketStaleProcessingRows(staleProcessingRows);
     const staleUnknown = staleBuckets.claimable + staleBuckets.unclaimable;
+    const neverClaimed = bucketNeverClaimedPendingRows(
+      neverClaimedRows,
+      killSwitchState,
+    );
 
     const failures: string[] = [];
     if (heartbeatAge === null) failures.push('no worker.heartbeat row exists');
     else if (heartbeatAge > THRESHOLDS.workerHeartbeatMaxMinutes)
-      failures.push(`worker.heartbeat is ${heartbeatAge}m old (threshold ${THRESHOLDS.workerHeartbeatMaxMinutes}m), last status "${heartbeatStatus}"`);
+      failures.push(
+        `worker.heartbeat is ${heartbeatAge}m old (threshold ${THRESHOLDS.workerHeartbeatMaxMinutes}m), last status "${heartbeatStatus}"`,
+      );
     // Only claimable rows fail the dimension. An unclaimable row is a data-hygiene
     // finding, not a worker-health one: no worker can drain it, so failing on it
     // pins this blocking dimension red forever and hides the rows that matter.
@@ -743,7 +962,17 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
         `stale processing read hit its ${STALE_PROCESSING_READ_LIMIT}-row limit, so the partition is incomplete`,
       );
     if (stuckRetryable > 0)
-      failures.push(`${stuckRetryable} attempted rows still pending after ${THRESHOLDS.outboxStalePendingMinutes}m`);
+      failures.push(
+        `${stuckRetryable} attempted rows still pending after ${THRESHOLDS.outboxStalePendingMinutes}m`,
+      );
+    if (neverClaimed.actionable > 0)
+      failures.push(
+        `${neverClaimed.actionable} bucket:never_claimed rows (eligible pending attempt_count=0 after ${THRESHOLDS.outboxStalePendingMinutes}m)`,
+      );
+    if (neverClaimedRows.length >= NEVER_CLAIMED_READ_LIMIT)
+      failures.push(
+        `never-claimed pending read hit its ${NEVER_CLAIMED_READ_LIMIT}-row limit, so the classification is incomplete`,
+      );
 
     return {
       ...base,
@@ -756,9 +985,18 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
         (staleBuckets.unclaimableTargets.length > 0
           ? ` on ${staleBuckets.unclaimableTargets.join(', ')}`
           : '') +
-        `), attempted-and-stuck=${stuckRetryable}. ` +
+        `), attempted-and-stuck=${stuckRetryable}, ` +
+        `never_claimed=${neverClaimed.actionable}, governance_hold_killed=${neverClaimed.killed}, ` +
+        `terminal_pick=${neverClaimed.terminalPick}, canary_only=${neverClaimed.canaryOnly}, ` +
+        `never_claimed_unclaimable=${neverClaimed.unclaimable}` +
+        (neverClaimed.unclaimableTargets.length > 0
+          ? ` on ${neverClaimed.unclaimableTargets.join(', ')}`
+          : '') +
+        `. ` +
         `worker.heartbeat ${heartbeatAt ?? 'none'} (${heartbeatAge ?? 'n/a'}m, status ${heartbeatStatus ?? 'n/a'}). ` +
-        (failures.length === 0 ? 'No stuck rows.' : `FAIL: ${failures.join('; ')}.`),
+        (failures.length === 0
+          ? 'No stuck rows.'
+          : `FAIL: ${failures.join('; ')}.`),
       measured: {
         heartbeat_started_at: heartbeatAt,
         heartbeat_status: heartbeatStatus,
@@ -770,6 +1008,12 @@ export async function probeWorkerOutboxHealth(ctx: ProbeContext): Promise<Readin
         stale_unknown_unclaimable_count: staleBuckets.unclaimable,
         stale_unknown_unclaimable_targets: staleBuckets.unclaimableTargets,
         stuck_retryable_count: stuckRetryable,
+        never_claimed_count: neverClaimed.actionable,
+        never_claimed_killed_count: neverClaimed.killed,
+        never_claimed_terminal_pick_count: neverClaimed.terminalPick,
+        never_claimed_canary_only_count: neverClaimed.canaryOnly,
+        never_claimed_unclaimable_count: neverClaimed.unclaimable,
+        never_claimed_unclaimable_targets: neverClaimed.unclaimableTargets,
       },
       unreadable_reason: null,
     };
@@ -840,7 +1084,8 @@ export function bucketDeadLetterRows(
     const attempted = typeof rawAttempts === 'number' ? rawAttempts > 0 : true;
     const classification = classifyDeadLetter(reason);
     const recognised =
-      classification !== 'unrecognised' && classification !== 'unclassified_null_reason';
+      classification !== 'unrecognised' &&
+      classification !== 'unclassified_null_reason';
 
     if (recognised) {
       buckets.governanceHold += 1;
@@ -854,7 +1099,9 @@ export function bucketDeadLetterRows(
   return buckets;
 }
 
-export async function probeDeadLetterCount(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeDeadLetterCount(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'dead_letter_count',
     title: 'Dead-letter queue: zero true delivery failures',
@@ -871,7 +1118,9 @@ export async function probeDeadLetterCount(ctx: ProbeContext): Promise<Readiness
 
   try {
     const db = requireDb(ctx);
-    const deadLetterOnly: DbFilter[] = [{ column: 'status', op: 'eq', value: 'dead_letter' }];
+    const deadLetterOnly: DbFilter[] = [
+      { column: 'status', op: 'eq', value: 'dead_letter' },
+    ];
     const [total, rows] = await Promise.all([
       db.countRows('distribution_outbox', deadLetterOnly),
       db.selectRows(
@@ -924,7 +1173,9 @@ export async function probeDeadLetterCount(ctx: ProbeContext): Promise<Readiness
 /** The db-health-tripwire.yml step whose failure alone means a tripwire fired. */
 export const DB_TRIPWIRE_VERDICT_STEP = 'Report DB health verdict';
 
-export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeDbTripwires(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'db_tripwires',
     title: 'No CRITICAL DB tripwires active',
@@ -932,7 +1183,8 @@ export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDime
     method: {
       kind: 'github_api' as const,
       source: 'github:actions/runs/db-health-tripwire.yml',
-      query: 'latest completed run of db-health-tripwire.yml (conclusion, completed_at, failed steps)',
+      query:
+        'latest completed run of db-health-tripwire.yml (conclusion, completed_at, failed steps)',
     },
   };
 
@@ -966,7 +1218,12 @@ export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDime
         status: 'pass',
         observed_at: ctx.now.toISOString(),
         evidence: `db-health-tripwire.yml run ${run.html_url} concluded success at ${run.updated_at} (${ageHours}h ago); no CRITICAL tripwire fired.`,
-        measured: { run_url: run.html_url, conclusion: run.conclusion, completed_at: run.updated_at, age_hours: ageHours },
+        measured: {
+          run_url: run.html_url,
+          conclusion: run.conclusion,
+          completed_at: run.updated_at,
+          age_hours: ageHours,
+        },
         unreadable_reason: null,
       };
     }
@@ -984,7 +1241,10 @@ export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDime
     // steps recorded. The test suite pins this step name and its lack of a
     // condition to the workflow file.
     const failedSteps = await github.failedSteps(run.id);
-    if (failedSteps.length === 1 && failedSteps[0] === DB_TRIPWIRE_VERDICT_STEP) {
+    if (
+      failedSteps.length === 1 &&
+      failedSteps[0] === DB_TRIPWIRE_VERDICT_STEP
+    ) {
       return {
         ...base,
         status: 'fail',
@@ -1013,7 +1273,9 @@ export async function probeDbTripwires(ctx: ProbeContext): Promise<ReadinessDime
   }
 }
 
-export async function probeCiVerify(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeCiVerify(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'pnpm_verify',
     title: 'CI verify green on main HEAD',
@@ -1021,7 +1283,8 @@ export async function probeCiVerify(ctx: ProbeContext): Promise<ReadinessDimensi
     method: {
       kind: 'github_api' as const,
       source: 'github:actions/runs/ci.yml',
-      query: 'latest completed run of ci.yml on main (head_sha, conclusion) vs commits/main',
+      query:
+        'latest completed run of ci.yml on main (head_sha, conclusion) vs commits/main',
     },
   };
 
@@ -1035,7 +1298,9 @@ export async function probeCiVerify(ctx: ProbeContext): Promise<ReadinessDimensi
     if (!run || run.status !== 'completed') {
       return unreadable(
         base,
-        run ? `latest ci.yml run on main is ${run.status}` : 'no ci.yml run exists on main',
+        run
+          ? `latest ci.yml run on main is ${run.status}`
+          : 'no ci.yml run exists on main',
         ctx.now,
       );
     }
@@ -1049,7 +1314,9 @@ export async function probeCiVerify(ctx: ProbeContext): Promise<ReadinessDimensi
       observed_at: ctx.now.toISOString(),
       evidence:
         `ci.yml run ${run.html_url} on ${run.head_sha} concluded "${run.conclusion}" at ${run.updated_at} (${ageHours}h ago). ` +
-        (onHead ? 'That commit is main HEAD.' : `main HEAD is ${mainSha}, so main HEAD itself has no completed CI result.`),
+        (onHead
+          ? 'That commit is main HEAD.'
+          : `main HEAD is ${mainSha}, so main HEAD itself has no completed CI result.`),
       measured: {
         main_sha: mainSha,
         run_head_sha: run.head_sha,
@@ -1064,7 +1331,9 @@ export async function probeCiVerify(ctx: ProbeContext): Promise<ReadinessDimensi
   }
 }
 
-export async function probeScheduledObservers(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeScheduledObservers(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'scheduled_observer_health',
     title: 'Scheduled production observers are running and green',
@@ -1098,20 +1367,32 @@ export async function probeScheduledObservers(ctx: ProbeContext): Promise<Readin
       }),
     );
 
-    const failing = observers.filter((observer) => observer.conclusion !== null && observer.conclusion !== 'success');
-    const missing = observers.filter((observer) => observer.conclusion === null);
+    const failing = observers.filter(
+      (observer) =>
+        observer.conclusion !== null && observer.conclusion !== 'success',
+    );
+    const missing = observers.filter(
+      (observer) => observer.conclusion === null,
+    );
     const stale = observers.filter(
-      (observer) => observer.age_hours !== null && observer.age_hours > THRESHOLDS.scheduledObserverMaxHours,
+      (observer) =>
+        observer.age_hours !== null &&
+        observer.age_hours > THRESHOLDS.scheduledObserverMaxHours,
     );
 
     const problems = [
       ...failing.map(
         (observer) =>
           `${observer.workflow} concluded "${observer.conclusion}"` +
-          (observer.failed_steps.length > 0 ? ` (failed step: ${observer.failed_steps.join(', ')})` : ''),
+          (observer.failed_steps.length > 0
+            ? ` (failed step: ${observer.failed_steps.join(', ')})`
+            : ''),
       ),
       ...missing.map((observer) => `${observer.workflow} has no run`),
-      ...stale.map((observer) => `${observer.workflow} last ran ${observer.age_hours}h ago`),
+      ...stale.map(
+        (observer) =>
+          `${observer.workflow} last ran ${observer.age_hours}h ago`,
+      ),
     ];
 
     return {
@@ -1154,27 +1435,46 @@ export function measureProofCoverage(
   for (const file of files) {
     let manifest: Record<string, unknown>;
     try {
-      manifest = JSON.parse(fs.readFileSync(path.join(lanesDir, file), 'utf8')) as Record<string, unknown>;
+      manifest = JSON.parse(
+        fs.readFileSync(path.join(lanesDir, file), 'utf8'),
+      ) as Record<string, unknown>;
     } catch {
       continue;
     }
     const status = manifest['status'];
     const closedAt = manifest['closed_at'];
     const issueId = manifest['issue_id'];
-    if (status !== 'done' || typeof closedAt !== 'string' || typeof issueId !== 'string') continue;
+    if (
+      status !== 'done' ||
+      typeof closedAt !== 'string' ||
+      typeof issueId !== 'string'
+    )
+      continue;
     if (new Date(closedAt) < cutoff) continue;
 
     considered.push(issueId);
-    const verification = path.join(repoRoot, 'docs', '06_status', 'proof', issueId, 'verification.md');
-    const text = fs.existsSync(verification) ? fs.readFileSync(verification, 'utf8') : '';
-    if (/merge[\s_-]*sha\D{0,20}[0-9a-f]{7,40}/i.test(text)) bound.push(issueId);
+    const verification = path.join(
+      repoRoot,
+      'docs',
+      '06_status',
+      'proof',
+      issueId,
+      'verification.md',
+    );
+    const text = fs.existsSync(verification)
+      ? fs.readFileSync(verification, 'utf8')
+      : '';
+    if (/merge[\s_-]*sha\D{0,20}[0-9a-f]{7,40}/i.test(text))
+      bound.push(issueId);
     else unbound.push(issueId);
   }
 
   return { considered, bound, unbound };
 }
 
-export async function probeProofCoverage(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeProofCoverage(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   const base = {
     id: 'proof_coverage',
     title: `Lanes closed in the last ${THRESHOLDS.proofCoverageWindowDays} days carry merge-SHA-bound proof`,
@@ -1202,7 +1502,9 @@ export async function probeProofCoverage(ctx: ProbeContext): Promise<ReadinessDi
       observed_at: ctx.now.toISOString(),
       evidence:
         `${coverage.bound.length}/${coverage.considered.length} lanes closed in the window carry a merge-SHA binding in verification.md` +
-        (coverage.unbound.length > 0 ? `; unbound: ${coverage.unbound.join(', ')}.` : '.'),
+        (coverage.unbound.length > 0
+          ? `; unbound: ${coverage.unbound.join(', ')}.`
+          : '.'),
       measured: {
         considered: coverage.considered.length,
         bound: coverage.bound.length,
@@ -1222,7 +1524,9 @@ export async function probeProofCoverage(ctx: ProbeContext): Promise<ReadinessDi
  * proves structural preservation, not convergence percentage — so it is recorded
  * `unknown`, never `pass`.
  */
-export async function probeConstitutionConvergence(ctx: ProbeContext): Promise<ReadinessDimension> {
+export async function probeConstitutionConvergence(
+  ctx: ProbeContext,
+): Promise<ReadinessDimension> {
   return unreadable(
     {
       id: 'constitution_convergence',
@@ -1260,7 +1564,10 @@ export interface LedgerMeta {
   runUrl: string | null;
 }
 
-export async function collectLedger(ctx: ProbeContext, meta: LedgerMeta): Promise<ReadinessLedger> {
+export async function collectLedger(
+  ctx: ProbeContext,
+  meta: LedgerMeta,
+): Promise<ReadinessLedger> {
   const startedAt = ctx.now.toISOString();
   const dimensions: ReadinessDimension[] = [];
   for (const probe of PROBES) {
@@ -1268,9 +1575,13 @@ export async function collectLedger(ctx: ProbeContext, meta: LedgerMeta): Promis
   }
   const completedAt = new Date().toISOString();
 
-  const deployDimension = dimensions.find((dimension) => dimension.id === 'deploy_sha_alignment');
-  const mainSha = (deployDimension?.measured?.['main_sha'] as string | undefined) ?? null;
-  const deployedSha = (deployDimension?.measured?.['deployed_sha'] as string | undefined) ?? null;
+  const deployDimension = dimensions.find(
+    (dimension) => dimension.id === 'deploy_sha_alignment',
+  );
+  const mainSha =
+    (deployDimension?.measured?.['main_sha'] as string | undefined) ?? null;
+  const deployedSha =
+    (deployDimension?.measured?.['deployed_sha'] as string | undefined) ?? null;
 
   return {
     schema_version: READINESS_LEDGER_SCHEMA_VERSION,
@@ -1285,7 +1596,8 @@ export async function collectLedger(ctx: ProbeContext, meta: LedgerMeta): Promis
     freshness: { ...FRESHNESS_CONTRACT },
     target: {
       supabase_project_ref: ctx.db?.projectRef ?? null,
-      expected_production_project_ref: CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
+      expected_production_project_ref:
+        CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
       production_target_confirmed: ctx.db !== null,
     },
     main_sha: mainSha,
@@ -1293,8 +1605,12 @@ export async function collectLedger(ctx: ProbeContext, meta: LedgerMeta): Promis
     verdict: computeVerdict(dimensions),
     observability: computeObservability(dimensions),
     dimensions,
-    blockers: dimensions.filter((d) => d.blocking && d.status === 'fail').map((d) => d.id),
-    unreadable: dimensions.filter((d) => d.status === 'unknown').map((d) => d.id),
+    blockers: dimensions
+      .filter((d) => d.blocking && d.status === 'fail')
+      .map((d) => d.id),
+    unreadable: dimensions
+      .filter((d) => d.status === 'unknown')
+      .map((d) => d.id),
     open_gap_count: dimensions.filter((d) => d.status !== 'pass').length,
     queue_semantics_version: QUEUE_SEMANTICS_VERSION,
     queue_semantics_doc: QUEUE_SEMANTICS_DOC,
@@ -1320,10 +1636,18 @@ interface FilterBuilder extends PromiseLike<QueryResult> {
   range(from: number, to: number): FilterBuilder;
 }
 interface ReadOnlyClient {
-  from(table: string): { select(columns: string, options?: { count?: 'exact'; head?: boolean }): FilterBuilder };
+  from(table: string): {
+    select(
+      columns: string,
+      options?: { count?: 'exact'; head?: boolean },
+    ): FilterBuilder;
+  };
 }
 
-function applyFilters(builder: FilterBuilder, filters: DbFilter[]): FilterBuilder {
+function applyFilters(
+  builder: FilterBuilder,
+  filters: DbFilter[],
+): FilterBuilder {
   return filters.reduce((query, filter) => {
     switch (filter.op) {
       case 'eq':
@@ -1343,11 +1667,17 @@ function applyFilters(builder: FilterBuilder, filters: DbFilter[]): FilterBuilde
 /** PostgREST's `max-rows` on this project; no response is ever larger. */
 export const SELECT_PAGE_SIZE = 1000;
 
-export function wrapReadOnlyClient(client: ReadOnlyClient, projectRef: string): ReadOnlyDb {
+export function wrapReadOnlyClient(
+  client: ReadOnlyClient,
+  projectRef: string,
+): ReadOnlyDb {
   return {
     projectRef,
     async latestRow(table, columns, filters, orderColumn) {
-      const { data, error } = await applyFilters(client.from(table).select(columns), filters)
+      const { data, error } = await applyFilters(
+        client.from(table).select(columns),
+        filters,
+      )
         .order(orderColumn, { ascending: false })
         .limit(1);
       if (error) throw new Error(`${table} read failed: ${error.message}`);
@@ -1359,7 +1689,8 @@ export function wrapReadOnlyClient(client: ReadOnlyClient, projectRef: string): 
         filters,
       );
       if (error) throw new Error(`${table} count failed: ${error.message}`);
-      if (count === null || count === undefined) throw new Error(`${table} count returned no value`);
+      if (count === null || count === undefined)
+        throw new Error(`${table} count returned no value`);
       return count;
     },
     // PostgREST caps every response at its `max-rows` (1000 here) whatever
@@ -1372,7 +1703,10 @@ export function wrapReadOnlyClient(client: ReadOnlyClient, projectRef: string): 
       while (rows.length < limit) {
         const from = rows.length;
         const to = Math.min(from + SELECT_PAGE_SIZE, limit) - 1;
-        const { data, error } = await applyFilters(client.from(table).select(columns), filters)
+        const { data, error } = await applyFilters(
+          client.from(table).select(columns),
+          filters,
+        )
           .order('id', { ascending: true })
           .range(from, to);
         if (error) throw new Error(`${table} read failed: ${error.message}`);
@@ -1418,27 +1752,48 @@ export function resolveProductionDb(env: NodeJS.ProcessEnv): {
   // production from a restricted context (node:test, staging-only policy) — which
   // is the correct outcome: a readiness measurement taken from inside the test
   // suite would not be a production readiness measurement either.
-  const client = createPrivilegedClient(url, key, { auth: { persistSession: false } }, 'readiness-refresh production read') as unknown as ReadOnlyClient;
+  const client = createPrivilegedClient(
+    url,
+    key,
+    { auth: { persistSession: false } },
+    'readiness-refresh production read',
+  ) as unknown as ReadOnlyClient;
   return { db: wrapReadOnlyClient(client, projectRef), reason: null };
 }
 
 function ghApi(endpoint: string): unknown {
-  const stdout = execFileSync('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  const stdout = execFileSync('gh', ['api', endpoint], {
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  });
   return JSON.parse(stdout) as unknown;
 }
 
-export function createGithubReader(): { github: GithubReader | null; reason: string | null } {
+export function createGithubReader(): {
+  github: GithubReader | null;
+  reason: string | null;
+} {
   try {
-    const repo = execFileSync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], {
-      encoding: 'utf8',
-    }).trim();
-    if (!repo) return { github: null, reason: 'gh could not resolve the current repository' };
+    const repo = execFileSync(
+      'gh',
+      ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
+      {
+        encoding: 'utf8',
+      },
+    ).trim();
+    if (!repo)
+      return {
+        github: null,
+        reason: 'gh could not resolve the current repository',
+      };
 
     return {
       github: {
         repo,
         async headSha(branch) {
-          const commit = ghApi(`repos/${repo}/commits/${branch}`) as { sha?: string };
+          const commit = ghApi(`repos/${repo}/commits/${branch}`) as {
+            sha?: string;
+          };
           if (!commit.sha) throw new Error(`commits/${branch} returned no sha`);
           return commit.sha;
         },
@@ -1452,8 +1807,12 @@ export function createGithubReader(): { github: GithubReader | null; reason: str
           return response.workflow_runs?.[0] ?? null;
         },
         async failedSteps(runId) {
-          const response = ghApi(`repos/${repo}/actions/runs/${runId}/jobs`) as {
-            jobs?: { steps?: { name?: string; conclusion?: string | null }[] }[];
+          const response = ghApi(
+            `repos/${repo}/actions/runs/${runId}/jobs`,
+          ) as {
+            jobs?: {
+              steps?: { name?: string; conclusion?: string | null }[];
+            }[];
           };
           return (response.jobs ?? []).flatMap((job) =>
             (job.steps ?? [])
@@ -1463,8 +1822,12 @@ export function createGithubReader(): { github: GithubReader | null; reason: str
         },
         async commitsBetween(baseSha, headSha) {
           try {
-            const comparison = ghApi(`repos/${repo}/compare/${baseSha}...${headSha}`) as { ahead_by?: number };
-            return typeof comparison.ahead_by === 'number' ? comparison.ahead_by : null;
+            const comparison = ghApi(
+              `repos/${repo}/compare/${baseSha}...${headSha}`,
+            ) as { ahead_by?: number };
+            return typeof comparison.ahead_by === 'number'
+              ? comparison.ahead_by
+              : null;
           } catch {
             return null;
           }
@@ -1473,13 +1836,19 @@ export function createGithubReader(): { github: GithubReader | null; reason: str
       reason: null,
     };
   } catch (error) {
-    return { github: null, reason: `gh CLI unavailable or unauthenticated: ${errorMessage(error)}` };
+    return {
+      github: null,
+      reason: `gh CLI unavailable or unauthenticated: ${errorMessage(error)}`,
+    };
   }
 }
 
 function gitHeadSha(repoRoot: string): string | null {
   try {
-    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).trim();
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    }).trim();
   } catch {
     return null;
   }
@@ -1496,12 +1865,21 @@ export function formatSummary(ledger: ReadinessLedger): string {
     '',
   ];
   for (const dimension of ledger.dimensions) {
-    const mark = dimension.status === 'pass' ? 'PASS' : dimension.status === 'fail' ? 'FAIL' : 'UNKN';
-    lines.push(`  [${mark}] ${dimension.id}${dimension.blocking ? ' (blocking)' : ''}`);
+    const mark =
+      dimension.status === 'pass'
+        ? 'PASS'
+        : dimension.status === 'fail'
+          ? 'FAIL'
+          : 'UNKN';
+    lines.push(
+      `  [${mark}] ${dimension.id}${dimension.blocking ? ' (blocking)' : ''}`,
+    );
     lines.push(`         ${dimension.evidence}`);
   }
-  if (ledger.blockers.length > 0) lines.push('', `  blockers:  ${ledger.blockers.join(', ')}`);
-  if (ledger.unreadable.length > 0) lines.push(`  unreadable: ${ledger.unreadable.join(', ')}`);
+  if (ledger.blockers.length > 0)
+    lines.push('', `  blockers:  ${ledger.blockers.join(', ')}`);
+  if (ledger.unreadable.length > 0)
+    lines.push(`  unreadable: ${ledger.unreadable.join(', ')}`);
   return lines.join('\n');
 }
 
@@ -1509,7 +1887,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   const outIndex = argv.indexOf('--out');
   const outPath = path.resolve(
     REPO_ROOT,
-    outIndex >= 0 && argv[outIndex + 1] ? (argv[outIndex + 1] as string) : CANONICAL_LEDGER_PATH,
+    outIndex >= 0 && argv[outIndex + 1]
+      ? (argv[outIndex + 1] as string)
+      : CANONICAL_LEDGER_PATH,
   );
 
   const { db, reason: dbReason } = resolveProductionDb(process.env);
@@ -1527,7 +1907,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     {
       gitHeadSha: gitHeadSha(REPO_ROOT),
       runUrl:
-        process.env['GITHUB_SERVER_URL'] && process.env['GITHUB_REPOSITORY'] && process.env['GITHUB_RUN_ID']
+        process.env['GITHUB_SERVER_URL'] &&
+        process.env['GITHUB_REPOSITORY'] &&
+        process.env['GITHUB_RUN_ID']
           ? `${process.env['GITHUB_SERVER_URL']}/${process.env['GITHUB_REPOSITORY']}/actions/runs/${process.env['GITHUB_RUN_ID']}`
           : null,
     },
@@ -1537,21 +1919,30 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8');
   } catch (error) {
-    console.error(`[readiness-refresh] FAILED to persist ledger to ${outPath}: ${errorMessage(error)}`);
+    console.error(
+      `[readiness-refresh] FAILED to persist ledger to ${outPath}: ${errorMessage(error)}`,
+    );
     return 1;
   }
 
   console.log(formatSummary(ledger));
-  console.log(`\n[readiness-refresh] wrote ${path.relative(REPO_ROOT, outPath)}`);
+  console.log(
+    `\n[readiness-refresh] wrote ${path.relative(REPO_ROOT, outPath)}`,
+  );
   if (argv.includes('--json')) console.log(JSON.stringify(ledger, null, 2));
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().then(
     (code) => process.exit(code),
     (error: unknown) => {
-      console.error(`[readiness-refresh] unhandled error: ${errorMessage(error)}`);
+      console.error(
+        `[readiness-refresh] unhandled error: ${errorMessage(error)}`,
+      );
       process.exit(1);
     },
   );
