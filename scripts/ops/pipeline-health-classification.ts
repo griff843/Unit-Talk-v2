@@ -46,12 +46,7 @@ function heartbeatTargets(details: unknown): string[] | null {
   if (details === null || typeof details !== 'object') return null;
   const targets = (details as { targets?: unknown }).targets;
   if (!Array.isArray(targets) || targets.length === 0) return null;
-  if (
-    !targets.every(
-      (t): t is string => typeof t === 'string' && t.trim().length > 0,
-    )
-  )
-    return null;
+  if (!targets.every((t): t is string => typeof t === 'string' && t.trim().length > 0)) return null;
   return [...new Set(targets.map((t) => t.trim()))];
 }
 
@@ -62,9 +57,7 @@ function heartbeatTargets(details: unknown): string[] | null {
  * heartbeat says otherwise. With neither, the target set is unknown — there is
  * deliberately no default.
  */
-export function resolveDeployedWorkerTargets(
-  input: ResolveWorkerTargetsInput,
-): ResolvedWorkerTargets {
+export function resolveDeployedWorkerTargets(input: ResolveWorkerTargetsInput): ResolvedWorkerTargets {
   const maxAgeMs = input.maxHeartbeatAgeMinutes * 60_000;
   for (const heartbeat of input.heartbeats) {
     const startedMs = new Date(heartbeat.started_at).getTime();
@@ -145,9 +138,7 @@ export function partitionHeldPendingRows<Row extends OutboxRowLike>(
 ): HeldPartition<Row> {
   if (killSwitchRows === null) return { held: [], rest: [...rows] };
   const polled = new Set(workerTargets);
-  const liveByKey = new Map(
-    killSwitchRows.map((row) => [row.target, row.killed]),
-  );
+  const liveByKey = new Map(killSwitchRows.map((row) => [row.target, row.killed]));
   const held: Row[] = [];
   const rest: Row[] = [];
   for (const row of rows) {
@@ -179,17 +170,12 @@ export function partitionUnclaimableProcessing<Row extends OutboxRowLike>(
   const unclaimable: Row[] = [];
   const rest: Row[] = [];
   for (const row of rows) {
-    (row.status === 'processing' && !polled.has(row.target)
-      ? unclaimable
-      : rest
-    ).push(row);
+    (row.status === 'processing' && !polled.has(row.target) ? unclaimable : rest).push(row);
   }
   return { unclaimable, rest };
 }
 
-export function countByTarget(
-  rows: readonly { target: string }[],
-): Record<string, number> {
+export function countByTarget(rows: readonly { target: string }[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const row of rows) counts[row.target] = (counts[row.target] ?? 0) + 1;
   return counts;
@@ -204,10 +190,7 @@ export function formatTargetCounts(counts: Record<string, number>): string {
 
 // ── dead letters (WORK-2026092703) ────────────────────────────────────────
 
-export type DeadLetterBucket =
-  | 'governance_hold'
-  | 'unattempted_unclassified'
-  | 'true_failure';
+export type DeadLetterBucket = 'governance_hold' | 'unattempted_unclassified' | 'true_failure';
 
 export interface DeadLetterRowLike {
   status: string;
@@ -225,13 +208,9 @@ export interface DeadLetterRowLike {
  */
 export function deadLetterBucket(row: DeadLetterRowLike): DeadLetterBucket {
   const reason = typeof row.last_error === 'string' ? row.last_error : null;
-  const attempted =
-    typeof row.attempt_count === 'number' ? row.attempt_count > 0 : true;
+  const attempted = typeof row.attempt_count === 'number' ? row.attempt_count > 0 : true;
   const classification = classifyDeadLetter(reason);
-  if (
-    classification !== 'unrecognised' &&
-    classification !== 'unclassified_null_reason'
-  ) {
+  if (classification !== 'unrecognised' && classification !== 'unclassified_null_reason') {
     return 'governance_hold';
   }
   return attempted ? 'true_failure' : 'unattempted_unclassified';
@@ -245,9 +224,7 @@ export interface DeadLetterPartition<Row> {
   rest: Row[];
 }
 
-export function partitionDeadLetters<Row extends DeadLetterRowLike>(
-  rows: readonly Row[],
-): DeadLetterPartition<Row> {
+export function partitionDeadLetters<Row extends DeadLetterRowLike>(rows: readonly Row[]): DeadLetterPartition<Row> {
   const partition: DeadLetterPartition<Row> = {
     governanceHold: [],
     unattemptedUnclassified: [],
@@ -261,21 +238,16 @@ export function partitionDeadLetters<Row extends DeadLetterRowLike>(
     }
     const bucket = deadLetterBucket(row);
     if (bucket === 'governance_hold') partition.governanceHold.push(row);
-    else if (bucket === 'unattempted_unclassified')
-      partition.unattemptedUnclassified.push(row);
+    else if (bucket === 'unattempted_unclassified') partition.unattemptedUnclassified.push(row);
     else partition.trueFailure.push(row);
   }
   return partition;
 }
 
-export function countByReasonClass(
-  rows: readonly DeadLetterRowLike[],
-): Record<string, number> {
+export function countByReasonClass(rows: readonly DeadLetterRowLike[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const row of rows) {
-    const key = classifyDeadLetter(
-      typeof row.last_error === 'string' ? row.last_error : null,
-    );
+    const key = classifyDeadLetter(typeof row.last_error === 'string' ? row.last_error : null);
     counts[key] = (counts[key] ?? 0) + 1;
   }
   return counts;
@@ -288,10 +260,7 @@ export const OUTBOX_PAGE_SIZE = 1000;
 
 export interface RangeQuery<Row> {
   order(column: string, options: { ascending: boolean }): RangeQuery<Row>;
-  range(
-    from: number,
-    to: number,
-  ): PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
+  range(from: number, to: number): PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
 }
 
 /**
@@ -312,8 +281,7 @@ export async function readAllPages<Row extends { id: string }>(
     const { data, error } = await makeQuery()
       .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
-    if (error)
-      throw new Error(`paged read failed at offset ${from}: ${error.message}`);
+    if (error) throw new Error(`paged read failed at offset ${from}: ${error.message}`);
     const page = data ?? [];
     if (page.length === 0) break;
     for (const row of page) byId.set(row.id, row);
@@ -326,18 +294,13 @@ export async function readAllPages<Row extends { id: string }>(
 /** Receipts recorded inside this many days are judged; older ones are history. */
 export const RECEIPT_AUTHORITY_WINDOW_DAYS = 30;
 
-export type ReceiptDestinationClass =
-  | 'governed'
-  | 'control'
-  | 'simulated'
-  | 'unrecognized';
+export type ReceiptDestinationClass = 'governed' | 'control' | 'simulated' | 'unrecognized';
 
 export interface ReceiptRowLike {
   id: string;
   channel: string | null;
   payload?: unknown;
   recorded_at?: string;
-  status?: unknown;
 }
 
 /**
@@ -350,12 +313,9 @@ export function receiptLogicalTarget(row: ReceiptRowLike): string | null {
   const payload = row.payload;
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
     const target = (payload as Record<string, unknown>).target;
-    if (typeof target === 'string' && target.trim() !== '')
-      return target.trim();
+    if (typeof target === 'string' && target.trim() !== '') return target.trim();
   }
-  return typeof row.channel === 'string' && row.channel.trim() !== ''
-    ? row.channel.trim()
-    : null;
+  return typeof row.channel === 'string' && row.channel.trim() !== '' ? row.channel.trim() : null;
 }
 
 /**
@@ -365,17 +325,14 @@ export function receiptLogicalTarget(row: ReceiptRowLike): string | null {
  * including a bare channel id with no logical target, is `unrecognized`: the
  * monitor cannot show it was authorized, so it does not call it clean.
  */
-export function classifyReceiptDestination(
-  row: ReceiptRowLike,
-): ReceiptDestinationClass {
+export function classifyReceiptDestination(row: ReceiptRowLike): ReceiptDestinationClass {
   const logical = receiptLogicalTarget(row);
   if (logical === null) return 'unrecognized';
   let name = logical.toLowerCase();
   if (name.startsWith('simulated:')) return 'simulated';
   if (name.startsWith('discord:')) name = name.slice('discord:'.length);
   if (name.startsWith('#')) name = name.slice(1);
-  if ((governedDeliveryTargets as readonly string[]).includes(name))
-    return 'governed';
+  if ((governedDeliveryTargets as readonly string[]).includes(name)) return 'governed';
   if (name === 'canary') return 'control';
   return 'unrecognized';
 }
@@ -390,12 +347,7 @@ export interface ReceiptAuthorityPartition<Row> {
 export function partitionReceiptAuthority<Row extends ReceiptRowLike>(
   rows: readonly Row[],
 ): ReceiptAuthorityPartition<Row> {
-  const out: ReceiptAuthorityPartition<Row> = {
-    governed: [],
-    control: [],
-    simulated: [],
-    unrecognized: [],
-  };
+  const out: ReceiptAuthorityPartition<Row> = { governed: [], control: [], simulated: [], unrecognized: [] };
   for (const row of rows) out[classifyReceiptDestination(row)].push(row);
   return out;
 }
@@ -410,13 +362,10 @@ export function partitionReceiptAuthority<Row extends ReceiptRowLike>(
  * delivered. `simulated` receipts delivered nothing and `unrecognized` ones
  * cannot be shown to be authorized, so neither counts.
  */
-export function newestDeliveredReceiptAt(
-  rows: readonly ReceiptRowLike[],
-): string | null {
+export function newestDeliveredReceiptAt(rows: readonly ReceiptRowLike[]): string | null {
   let newest: string | null = null;
   let newestMs = Number.NEGATIVE_INFINITY;
   for (const row of rows) {
-    if (row.status !== 'sent') continue;
     const cls = classifyReceiptDestination(row);
     if (cls !== 'governed' && cls !== 'control') continue;
     const ms = row.recorded_at ? Date.parse(row.recorded_at) : Number.NaN;
@@ -429,21 +378,16 @@ export function newestDeliveredReceiptAt(
 }
 
 /** Newest governed receipt per logical target, for the operator readout. */
-export function newestGovernedReceiptByTarget(
-  rows: readonly ReceiptRowLike[],
-): Record<string, string> {
+export function newestGovernedReceiptByTarget(rows: readonly ReceiptRowLike[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const row of rows) {
-    if (row.status !== 'sent') continue;
-    if (classifyReceiptDestination(row) !== 'governed' || !row.recorded_at)
-      continue;
+    if (classifyReceiptDestination(row) !== 'governed' || !row.recorded_at) continue;
     const target = receiptLogicalTarget(row);
     if (target === null) continue;
     const ms = Date.parse(row.recorded_at);
     if (!Number.isFinite(ms)) continue;
     const current = out[target];
-    if (current === undefined || ms > Date.parse(current))
-      out[target] = row.recorded_at;
+    if (current === undefined || ms > Date.parse(current)) out[target] = row.recorded_at;
   }
   return out;
 }

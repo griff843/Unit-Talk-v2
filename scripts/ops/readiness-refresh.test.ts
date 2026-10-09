@@ -17,9 +17,7 @@ import {
   probeDeploySha,
   probeIngestorHealth,
   probeWorkerOutboxHealth,
-  bucketNeverClaimedPendingRows,
   bucketStaleProcessingRows,
-  NEVER_CLAIMED_READ_LIMIT,
   STALE_PROCESSING_READ_LIMIT,
   resolveProductionDb,
   wrapReadOnlyClient,
@@ -81,10 +79,7 @@ function stubDb(handlers: {
 }
 
 /** One dead-letter row, shaped as `selectRows` returns it. */
-function deadLetterRow(
-  attemptCount: number,
-  lastError: string | null,
-): Record<string, unknown> {
+function deadLetterRow(attemptCount: number, lastError: string | null): Record<string, unknown> {
   return { attempt_count: attemptCount, last_error: lastError };
 }
 
@@ -146,33 +141,21 @@ test('an unreadable blocking dimension is never scored as passing', () => {
 
 test('a measured failure outranks an unreadable dimension — RED is still RED', () => {
   assert.equal(
-    computeVerdict([
-      dimension({ id: 'a', status: 'fail' }),
-      dimension({ id: 'b', status: 'unknown' }),
-    ]),
+    computeVerdict([dimension({ id: 'a', status: 'fail' }), dimension({ id: 'b', status: 'unknown' })]),
     'RED',
   );
 });
 
 test('a non-blocking gap yields YELLOW, not GREEN', () => {
   assert.equal(
-    computeVerdict([
-      dimension({ status: 'pass' }),
-      dimension({ blocking: false, status: 'fail' }),
-    ]),
+    computeVerdict([dimension({ status: 'pass' }), dimension({ blocking: false, status: 'fail' })]),
     'YELLOW',
   );
 });
 
 test('GREEN requires every dimension measured and passing', () => {
-  assert.equal(
-    computeVerdict([dimension({}), dimension({ blocking: false })]),
-    'GREEN',
-  );
-  assert.equal(
-    computeObservability([dimension({}), dimension({ blocking: false })]),
-    'complete',
-  );
+  assert.equal(computeVerdict([dimension({}), dimension({ blocking: false })]), 'GREEN');
+  assert.equal(computeObservability([dimension({}), dimension({ blocking: false })]), 'complete');
 });
 
 // ── Probes record how and when, and degrade to unknown ───────────────────────
@@ -187,10 +170,7 @@ test('a probe whose reader is missing records unknown with the reason, not a def
 
 test('a probe whose read throws records unknown, never pass', async () => {
   const result = await probeIngestorHealth(
-    context({
-      db: stubDb({ throwOn: 'system_runs' }),
-      dbUnavailableReason: null,
-    }),
+    context({ db: stubDb({ throwOn: 'system_runs' }), dbUnavailableReason: null }),
   );
   assert.equal(result.status, 'unknown');
   assert.match(result.unreadable_reason ?? '', /system_runs exploded/);
@@ -229,10 +209,7 @@ test('ingestor health passes only when the cycle and merged offers are both curr
   assert.match(stale.evidence, /threshold 30m/);
 });
 
-async function deadLetterProbe(
-  rows: Record<string, unknown>[],
-  total = rows.length,
-) {
+async function deadLetterProbe(rows: Record<string, unknown>[], total = rows.length) {
   return probeDeadLetterCount(
     context({
       dbUnavailableReason: null,
@@ -250,19 +227,10 @@ async function deadLetterProbe(
 // the same probe called governance holds.
 test('a governance refusal that consumed an attempt is not a true delivery failure', async () => {
   const result = await deadLetterProbe([
-    deadLetterRow(
-      0,
-      "proof-pick-blocked: source 't1-proof' is not a live source",
-    ),
-    deadLetterRow(
-      1,
-      "proof-pick-blocked: source 't1-proof' is not a live source",
-    ),
+    deadLetterRow(0, "proof-pick-blocked: source 't1-proof' is not a live source"),
+    deadLetterRow(1, "proof-pick-blocked: source 't1-proof' is not a live source"),
     deadLetterRow(0, 'stale_pending_operator_review'),
-    deadLetterRow(
-      0,
-      'operator-disposition-2026-06-10: stale posts voided per PM go',
-    ),
+    deadLetterRow(0, 'operator-disposition-2026-06-10: stale posts voided per PM go'),
     deadLetterRow(0, 'governance_public_delivery_suppressed_mode1_predeploy'),
   ]);
 
@@ -304,10 +272,7 @@ test('a dead letter that was never attempted is never a true failure', async () 
 // UTV2-1875 assertion 4. Under-reading shrinks true_failure toward zero -- the
 // reassuring direction -- so a partial read must not produce a verdict at all.
 test('a partial dead-letter read is unreadable, not a pass on the rows that arrived', async () => {
-  const result = await deadLetterProbe(
-    [deadLetterRow(0, 'stale_pending_operator_review')],
-    1954,
-  );
+  const result = await deadLetterProbe([deadLetterRow(0, 'stale_pending_operator_review')], 1954);
 
   assert.equal(result.status, 'unknown');
   assert.match(result.unreadable_reason ?? '', /read 1 of 1954/);
@@ -316,10 +281,7 @@ test('a partial dead-letter read is unreadable, not a pass on the rows that arri
 
 test('the dead-letter evidence names the buckets it actually used', async () => {
   const result = await deadLetterProbe([
-    deadLetterRow(
-      1,
-      "proof-pick-blocked: source 't1-proof' is not a live source",
-    ),
+    deadLetterRow(1, "proof-pick-blocked: source 't1-proof' is not a live source"),
     deadLetterRow(0, null),
     deadLetterRow(1, 'unexplained'),
   ]);
@@ -350,20 +312,6 @@ function staleProcessingRow(target: unknown): Record<string, unknown> {
   return { id: 'row', target, updated_at: minutesAgo(60) };
 }
 
-function neverClaimedRow(
-  target: unknown,
-  pickStatus: unknown = 'validated',
-): Record<string, unknown> {
-  return {
-    id: `pending-${String(target)}`,
-    target,
-    status: 'pending',
-    attempt_count: 0,
-    updated_at: minutesAgo(60),
-    picks: pickStatus === null ? null : { status: pickStatus },
-  };
-}
-
 function healthyHeartbeat() {
   return { system_runs: { status: 'success', started_at: minutesAgo(1) } };
 }
@@ -388,10 +336,7 @@ test('a governed target is claimable and an ungoverned one is not', () => {
 
   assert.equal(buckets.claimable, 2);
   assert.equal(buckets.unclaimable, 3);
-  assert.deepEqual(buckets.unclaimableTargets, [
-    'utv2-1497-canary-a',
-    'utv2-1497-canary-b',
-  ]);
+  assert.deepEqual(buckets.unclaimableTargets, ['utv2-1497-canary-a', 'utv2-1497-canary-b']);
 });
 
 // Fail-closed: an unreadable target is not evidence that nothing owns the row.
@@ -437,9 +382,7 @@ test('the unclaimable rows are never hidden — the evidence names their targets
 
   assert.match(result.evidence, /unclaimable=1/);
   assert.match(result.evidence, /utv2-1497-canary-a/);
-  assert.deepEqual(result.measured?.['stale_unknown_unclaimable_targets'], [
-    'utv2-1497-canary-a',
-  ]);
+  assert.deepEqual(result.measured?.['stale_unknown_unclaimable_targets'], ['utv2-1497-canary-a']);
 });
 
 test('a stale-processing read that hits its row limit fails rather than partitioning a partial set', async () => {
@@ -456,141 +399,11 @@ test('worker/outbox health fails on a stale heartbeat even with an empty queue',
   const result = await probeWorkerOutboxHealth(
     context({
       dbUnavailableReason: null,
-      db: stubDb({
-        rows: {
-          system_runs: { status: 'success', started_at: minutesAgo(400) },
-        },
-      }),
+      db: stubDb({ rows: { system_runs: { status: 'success', started_at: minutesAgo(400) } } }),
     }),
   );
   assert.equal(result.status, 'fail');
   assert.match(result.evidence, /worker\.heartbeat/);
-});
-
-test('WORK-2026100901 mutation control: a released governed row never claimed after 30m fails worker health', async () => {
-  const result = await probeWorkerOutboxHealth(
-    context({
-      dbUnavailableReason: null,
-      db: stubDb({
-        rows: {
-          ...healthyHeartbeat(),
-          delivery_kill_switch: { target: 'official-picks', killed: false },
-        },
-        selected: [neverClaimedRow('discord:official-picks')],
-      }),
-    }),
-  );
-
-  assert.equal(result.status, 'fail');
-  assert.equal(result.measured?.['never_claimed_count'], 1);
-  assert.match(result.evidence, /bucket:never_claimed/u);
-});
-
-test('WORK-2026100901: an official-picks row held by the kill switch is classified and does not fail', async () => {
-  const result = await probeWorkerOutboxHealth(
-    context({
-      dbUnavailableReason: null,
-      db: stubDb({
-        rows: {
-          ...healthyHeartbeat(),
-          delivery_kill_switch: { target: 'official-picks', killed: true },
-        },
-        selected: [neverClaimedRow('discord:official-picks')],
-      }),
-    }),
-  );
-
-  assert.equal(result.status, 'pass');
-  assert.equal(result.measured?.['never_claimed_count'], 0);
-  assert.equal(result.measured?.['never_claimed_killed_count'], 1);
-  assert.match(result.evidence, /governance_hold_killed=1/u);
-});
-
-test('WORK-2026100901: the two voided official-picks rows remain non-gating and explicitly classified', () => {
-  const buckets = bucketNeverClaimedPendingRows(
-    [
-      neverClaimedRow('discord:official-picks', 'voided'),
-      {
-        ...neverClaimedRow('discord:official-picks', 'voided'),
-        id: 'pending-official-2',
-      },
-    ],
-    new Map([['official-picks', false]]),
-  );
-
-  assert.equal(buckets.actionable, 0);
-  assert.equal(buckets.terminalPick, 2);
-});
-
-test('WORK-2026100901: two voided official-picks rows do not fail worker_outbox_health', async () => {
-  const result = await probeWorkerOutboxHealth(
-    context({
-      dbUnavailableReason: null,
-      db: stubDb({
-        rows: {
-          ...healthyHeartbeat(),
-          delivery_kill_switch: { target: 'official-picks', killed: false },
-        },
-        selected: [
-          neverClaimedRow('discord:official-picks', 'voided'),
-          {
-            ...neverClaimedRow('discord:official-picks', 'voided'),
-            id: 'pending-official-2',
-          },
-        ],
-      }),
-    }),
-  );
-
-  assert.equal(result.status, 'pass');
-  assert.equal(result.measured?.['never_claimed_terminal_pick_count'], 2);
-  assert.equal(result.measured?.['never_claimed_count'], 0);
-});
-
-test('WORK-2026100901: canary and ungoverned pending rows are reported without gating', () => {
-  const buckets = bucketNeverClaimedPendingRows(
-    [
-      neverClaimedRow('discord:canary'),
-      neverClaimedRow('discord:utv2-1497-canary-a'),
-      neverClaimedRow('discord:utv2-1497-canary-b'),
-    ],
-    new Map(),
-  );
-
-  assert.equal(buckets.actionable, 0);
-  assert.equal(buckets.canaryOnly, 1);
-  assert.equal(buckets.unclaimable, 2);
-  assert.deepEqual(buckets.unclaimableTargets, [
-    'discord:utv2-1497-canary-a',
-    'discord:utv2-1497-canary-b',
-  ]);
-});
-
-test('WORK-2026100901: unreadable pick state fails closed on a released target', () => {
-  const buckets = bucketNeverClaimedPendingRows(
-    [neverClaimedRow('discord:official-picks', null)],
-    new Map([['official-picks', false]]),
-  );
-  assert.equal(buckets.actionable, 1);
-});
-
-test('WORK-2026100901: a capped never-claimed read fails instead of passing a partial classification', async () => {
-  const rows = Array.from({ length: NEVER_CLAIMED_READ_LIMIT }, (_, index) => ({
-    ...neverClaimedRow('discord:utv2-1497-canary-a'),
-    id: `never-${index}`,
-  }));
-  const result = await probeWorkerOutboxHealth(
-    context({
-      dbUnavailableReason: null,
-      db: stubDb({ rows: healthyHeartbeat(), selected: rows }),
-    }),
-  );
-
-  assert.equal(result.status, 'fail');
-  assert.match(
-    result.evidence,
-    /never-claimed pending read hit its 20000-row limit/u,
-  );
 });
 
 test('deploy alignment compares the deployed SHA to main HEAD', async () => {
@@ -705,11 +518,7 @@ test('the verdict step failing alongside another step stays unknown', async () =
         }),
       }),
     );
-    assert.equal(
-      result.status,
-      'unknown',
-      `failed steps ${JSON.stringify(steps)}`,
-    );
+    assert.equal(result.status, 'unknown', `failed steps ${JSON.stringify(steps)}`);
   }
 });
 
@@ -720,39 +529,18 @@ test('the verdict step exists in db-health-tripwire.yml, unconditioned, after th
     path.join(process.cwd(), '.github/workflows/db-health-tripwire.yml'),
     'utf8',
   );
-  const steps = workflow
-    .split(/\n\s*- name: /)
-    .slice(1)
-    .map((block) => {
-      const [name = '', ...rest] = block.split('\n');
-      return { name: name.trim(), body: rest.join('\n') };
-    });
+  const steps = workflow.split(/\n\s*- name: /).slice(1).map((block) => {
+    const [name = '', ...rest] = block.split('\n');
+    return { name: name.trim(), body: rest.join('\n') };
+  });
   const names = steps.map((step) => step.name);
   const verdictIndex = names.indexOf(DB_TRIPWIRE_VERDICT_STEP);
-  assert.ok(
-    verdictIndex >= 0,
-    `no step named "${DB_TRIPWIRE_VERDICT_STEP}" in db-health-tripwire.yml`,
-  );
-  assert.ok(
-    verdictIndex > names.indexOf('Run DB health checks'),
-    'verdict step must follow the harness step',
-  );
-  assert.ok(
-    verdictIndex > names.indexOf('Prove the checks executed'),
-    'verdict step must follow the proof step',
-  );
-  assert.ok(
-    names.indexOf('Run DB health checks') >= 0 &&
-      names.indexOf('Prove the checks executed') >= 0,
-  );
-  const verdictBody = steps[verdictIndex]!.body.split(
-    /\n\s*- (?:name|uses):/,
-  )[0]!;
-  assert.doesNotMatch(
-    verdictBody,
-    /^\s*if:/m,
-    'verdict step must not carry an if: condition',
-  );
+  assert.ok(verdictIndex >= 0, `no step named "${DB_TRIPWIRE_VERDICT_STEP}" in db-health-tripwire.yml`);
+  assert.ok(verdictIndex > names.indexOf('Run DB health checks'), 'verdict step must follow the harness step');
+  assert.ok(verdictIndex > names.indexOf('Prove the checks executed'), 'verdict step must follow the proof step');
+  assert.ok(names.indexOf('Run DB health checks') >= 0 && names.indexOf('Prove the checks executed') >= 0);
+  const verdictBody = steps[verdictIndex]!.body.split(/\n\s*- (?:name|uses):/)[0]!;
+  assert.doesNotMatch(verdictBody, /^\s*if:/m, 'verdict step must not carry an if: condition');
 });
 
 test('a tripwire observer that has not run recently cannot prove anything', async () => {
@@ -761,10 +549,7 @@ test('a tripwire observer that has not run recently cannot prove anything', asyn
       githubUnavailableReason: null,
       github: stubGithub({
         async latestRun() {
-          return run({
-            conclusion: 'success',
-            updated_at: minutesAgo(60 * 40),
-          });
+          return run({ conclusion: 'success', updated_at: minutesAgo(60 * 40) });
         },
       }),
     }),
@@ -783,39 +568,24 @@ test('constitutional convergence is recorded unknown rather than reproducing a h
 // ── Ledger assembly ──────────────────────────────────────────────────────────
 
 test('a ledger with no readers at all is UNKNOWN and degraded, never GREEN', async () => {
-  const ledger = await collectLedger(context(), {
-    gitHeadSha: 'e'.repeat(40),
-    runUrl: null,
-  });
+  const ledger = await collectLedger(context(), { gitHeadSha: 'e'.repeat(40), runUrl: null });
   assert.equal(ledger.verdict, 'UNKNOWN');
   assert.equal(ledger.observability, 'degraded');
   assert.equal(ledger.target.production_target_confirmed, false);
   assert.ok(ledger.unreadable.length > 0);
   for (const entry of ledger.dimensions) {
-    assert.ok(
-      entry.observed_at,
-      `${entry.id} must record when it was observed`,
-    );
-    assert.ok(
-      entry.method.query.length > 0,
-      `${entry.id} must record how it was measured`,
-    );
+    assert.ok(entry.observed_at, `${entry.id} must record when it was observed`);
+    assert.ok(entry.method.query.length > 0, `${entry.id} must record how it was measured`);
   }
 });
 
 test('the ledger carries a per-run generator receipt and freshness contract', async () => {
-  const ledger = await collectLedger(context(), {
-    gitHeadSha: 'f'.repeat(40),
-    runUrl: 'https://run',
-  });
+  const ledger = await collectLedger(context(), { gitHeadSha: 'f'.repeat(40), runUrl: 'https://run' });
   assert.equal(ledger.generator.git_head_sha, 'f'.repeat(40));
   assert.equal(ledger.generator.run_url, 'https://run');
   assert.equal(ledger.freshness.max_age_hours, 24);
   assert.equal(ledger.freshness.hard_stale_hours, 48);
-  assert.ok(
-    new Date(ledger.observation_window.started_at).getTime() <=
-      new Date(ledger.generated_at).getTime(),
-  );
+  assert.ok(new Date(ledger.observation_window.started_at).getTime() <= new Date(ledger.generated_at).getTime());
 });
 
 // ── Production targeting ─────────────────────────────────────────────────────
@@ -841,17 +611,8 @@ test('a staging or unidentified database target yields no handle, so nothing is 
 // ── Read-only guarantee ──────────────────────────────────────────────────────
 
 test('the generator source contains no database mutation path', () => {
-  const source = fs.readFileSync(
-    new URL('./readiness-refresh.ts', import.meta.url),
-    'utf8',
-  );
-  for (const mutation of [
-    '.insert(',
-    '.update(',
-    '.upsert(',
-    '.delete(',
-    '.rpc(',
-  ]) {
+  const source = fs.readFileSync(new URL('./readiness-refresh.ts', import.meta.url), 'utf8');
+  for (const mutation of ['.insert(', '.update(', '.upsert(', '.delete(', '.rpc(']) {
     assert.equal(
       source.includes(mutation),
       false,
@@ -888,13 +649,7 @@ test('the read-only wrapper issues select reads and surfaces errors instead of r
       calls.push(`limit:${count}`);
       return builder;
     },
-    then<R>(
-      resolve: (value: {
-        data: Record<string, unknown>[] | null;
-        error: null;
-        count: number;
-      }) => R,
-    ): R {
+    then<R>(resolve: (value: { data: Record<string, unknown>[] | null; error: null; count: number }) => R): R {
       return resolve({ data: [{ started_at: 'now' }], error: null, count: 7 });
     },
   };
@@ -911,20 +666,9 @@ test('the read-only wrapper issues select reads and surfaces errors instead of r
   };
 
   const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
-  const row = await db.latestRow(
-    'system_runs',
-    'started_at',
-    [{ column: 'run_type', op: 'eq', value: 'x' }],
-    'started_at',
-  );
+  const row = await db.latestRow('system_runs', 'started_at', [{ column: 'run_type', op: 'eq', value: 'x' }], 'started_at');
   assert.deepEqual(row, { started_at: 'now' });
-  assert.deepEqual(calls, [
-    'from:system_runs',
-    'select:started_at',
-    'eq:run_type=x',
-    'order:started_at',
-    'limit:1',
-  ]);
+  assert.deepEqual(calls, ['from:system_runs', 'select:started_at', 'eq:run_type=x', 'order:started_at', 'limit:1']);
 
   const failing = {
     from() {
@@ -940,13 +684,8 @@ test('the read-only wrapper issues select reads and surfaces errors instead of r
             limit() {
               return this;
             },
-            then<R>(
-              resolve: (value: { data: null; error: { message: string } }) => R,
-            ): R {
-              return resolve({
-                data: null,
-                error: { message: 'permission denied' },
-              });
+            then<R>(resolve: (value: { data: null; error: { message: string } }) => R): R {
+              return resolve({ data: null, error: { message: 'permission denied' } });
             },
           };
         },
@@ -954,13 +693,7 @@ test('the read-only wrapper issues select reads and surfaces errors instead of r
     },
   };
   await assert.rejects(
-    () =>
-      wrapReadOnlyClient(failing as never, 'zfzdnfwdarxucxtaojxm').latestRow(
-        'picks',
-        'id',
-        [],
-        'id',
-      ),
+    () => wrapReadOnlyClient(failing as never, 'zfzdnfwdarxucxtaojxm').latestRow('picks', 'id', [], 'id'),
     /permission denied/,
   );
 });
@@ -981,10 +714,7 @@ function cappedClient(
   const client = {
     from() {
       return {
-        select(
-          _columns: string,
-          selectOptions?: { count?: 'exact'; head?: boolean },
-        ) {
+        select(_columns: string, selectOptions?: { count?: 'exact'; head?: boolean }) {
           let rows = [...population];
           let window: [number, number] | null = null;
           let limit: number | null = null;
@@ -994,22 +724,12 @@ function cappedClient(
               rows = rows.filter((row) => row[column] === value);
               return builder;
             },
-            neq() {
-              return builder;
-            },
-            gt() {
-              return builder;
-            },
-            gte() {
-              return builder;
-            },
-            lt() {
-              return builder;
-            },
+            neq() { return builder; },
+            gt() { return builder; },
+            gte() { return builder; },
+            lt() { return builder; },
             order(column: string) {
-              rows.sort((a, b) =>
-                String(a[column]).localeCompare(String(b[column])),
-              );
+              rows.sort((a, b) => String(a[column]).localeCompare(String(b[column])));
               ordered = true;
               return builder;
             },
@@ -1021,38 +741,16 @@ function cappedClient(
               window = [from, to];
               return builder;
             },
-            then<R>(
-              resolve: (value: {
-                data: Record<string, unknown>[] | null;
-                error: { message: string } | null;
-                count: number | null;
-              }) => R,
-            ): R {
-              if (selectOptions?.head)
-                return resolve({ data: null, error: null, count: rows.length });
-              reads.push(
-                window ? `range:${window[0]}-${window[1]}` : `limit:${limit}`,
-              );
-              if (
-                options.failOnPage !== undefined &&
-                reads.length === options.failOnPage
-              ) {
-                return resolve({
-                  data: null,
-                  error: { message: 'statement timeout' },
-                  count: null,
-                });
+            then<R>(resolve: (value: { data: Record<string, unknown>[] | null; error: { message: string } | null; count: number | null }) => R): R {
+              if (selectOptions?.head) return resolve({ data: null, error: null, count: rows.length });
+              reads.push(window ? `range:${window[0]}-${window[1]}` : `limit:${limit}`);
+              if (options.failOnPage !== undefined && reads.length === options.failOnPage) {
+                return resolve({ data: null, error: { message: 'statement timeout' }, count: null });
               }
               const [from, to] = window ?? [0, (limit ?? rows.length) - 1];
-              const shift = ordered
-                ? 0
-                : (reads.length * 337) % Math.max(rows.length, 1);
+              const shift = ordered ? 0 : (reads.length * 337) % Math.max(rows.length, 1);
               const served = [...rows.slice(shift), ...rows.slice(0, shift)];
-              return resolve({
-                data: served.slice(from, Math.min(to + 1, from + maxRows)),
-                error: null,
-                count: null,
-              });
+              return resolve({ data: served.slice(from, Math.min(to + 1, from + maxRows)), error: null, count: null });
             },
           };
           return builder;
@@ -1079,25 +777,12 @@ test('selectRows reads a population larger than the PostgREST row cap in full', 
   const { client, reads } = cappedClient(population);
   const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
 
-  const rows = await db.selectRows(
-    'distribution_outbox',
-    'id',
-    [{ column: 'status', op: 'eq', value: 'dead_letter' }],
-    20000,
-  );
+  const rows = await db.selectRows('distribution_outbox', 'id', [{ column: 'status', op: 'eq', value: 'dead_letter' }], 20000);
 
   assert.equal(SELECT_PAGE_SIZE, 1000);
   assert.equal(rows.length, 1954);
-  assert.equal(
-    new Set(rows.map((row) => row['id'])).size,
-    1954,
-    'no row is read twice',
-  );
-  assert.deepEqual(reads, [
-    'range:0-999',
-    'range:1000-1999',
-    'range:1954-2953',
-  ]);
+  assert.equal(new Set(rows.map((row) => row['id'])).size, 1954, 'no row is read twice');
+  assert.deepEqual(reads, ['range:0-999', 'range:1000-1999', 'range:1954-2953']);
 });
 
 test('selectRows still reads everything when the server cap is smaller than a page', async () => {
@@ -1124,19 +809,13 @@ test('a failed page rejects the whole read rather than returning the pages befor
   const { client } = cappedClient(deadLetters(1954), { failOnPage: 2 });
   const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
 
-  await assert.rejects(
-    () => db.selectRows('distribution_outbox', 'id', [], 20000),
-    /statement timeout/,
-  );
+  await assert.rejects(() => db.selectRows('distribution_outbox', 'id', [], 20000), /statement timeout/);
 });
 
 test('the dead-letter dimension issues a verdict over a queue larger than the row cap', async () => {
   const { client } = cappedClient(deadLetters(1954));
   const result = await probeDeadLetterCount(
-    context({
-      dbUnavailableReason: null,
-      db: wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm'),
-    }),
+    context({ dbUnavailableReason: null, db: wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm') }),
   );
 
   assert.equal(result.status, 'pass');
@@ -1158,19 +837,12 @@ test('proof coverage counts only lanes closed inside the window and needs a merg
 
   write('UTV2-1', 'done', minutesAgo(60));
   write('UTV2-2', 'done', minutesAgo(60));
-  write(
-    'UTV2-3',
-    'done',
-    new Date(NOW.getTime() - 90 * 86_400_000).toISOString(),
-  );
+  write('UTV2-3', 'done', new Date(NOW.getTime() - 90 * 86_400_000).toISOString());
   write('UTV2-4', 'in_progress', minutesAgo(60));
 
   const proofDir = path.join(root, 'docs', '06_status', 'proof', 'UTV2-1');
   fs.mkdirSync(proofDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(proofDir, 'verification.md'),
-    '## Verification\nMerge SHA: 1234567890abcdef\n',
-  );
+  fs.writeFileSync(path.join(proofDir, 'verification.md'), '## Verification\nMerge SHA: 1234567890abcdef\n');
 
   const coverage = measureProofCoverage(root, NOW);
   assert.deepEqual(coverage.considered.sort(), ['UTV2-1', 'UTV2-2']);
@@ -1179,8 +851,5 @@ test('proof coverage counts only lanes closed inside the window and needs a merg
 });
 
 test('the canonical ledger path is the one the gate reads', () => {
-  assert.equal(
-    CANONICAL_LEDGER_PATH,
-    'docs/06_status/readiness/readiness-score.json',
-  );
+  assert.equal(CANONICAL_LEDGER_PATH, 'docs/06_status/readiness/readiness-score.json');
 });

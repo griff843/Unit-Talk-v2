@@ -3,22 +3,12 @@ import {
   createDatabaseClientFromConnection,
   createServiceRoleDatabaseConnectionConfig,
 } from '@unit-talk/db';
-import {
-  dispatchLedgerActions,
-  isDispatchAmbiguous,
-  readDispatchLedger,
-  type DispatchLedgerRow,
-} from '@unit-talk/contracts';
 import { pathToFileURL } from 'node:url';
 
 const DEFAULT_LIMIT = 10;
 const MAX_REPLAY_LIMIT = 50;
 const DEFAULT_MIN_AGE_HOURS = 1;
-const LIVE_TARGETS = [
-  'discord:canary',
-  'discord:best-bets',
-  'discord:official-picks',
-] as const;
+const LIVE_TARGETS = ['discord:canary', 'discord:best-bets'] as const;
 
 export const REPLAYABLE_STATUSES = ['failed', 'dead_letter'] as const;
 export type ReplayableStatus = (typeof REPLAYABLE_STATUSES)[number];
@@ -30,8 +20,6 @@ export interface ReplayOptions {
   minAgeHours: number;
   target: ReplayTarget;
   status: ReplayableStatus | 'all';
-  confirmedNotDelivered: boolean;
-  confirmationReason: string | null;
 }
 
 export interface ReplayAuditLog {
@@ -60,17 +48,6 @@ interface AuditLogInsert {
   entity_ref?: string | null;
   entity_type: string;
   payload?: unknown;
-}
-
-interface ReceiptGuardRow {
-  id: string;
-  outbox_id: string;
-  status: string;
-  [key: string]: unknown;
-}
-
-interface DispatchAuditRow extends DispatchLedgerRow {
-  [key: string]: unknown;
 }
 
 interface QueryResult<T> {
@@ -102,14 +79,8 @@ export interface ReplayDatabaseClient {
     select(columns: string): SelectQuery<FailedOutboxRow>;
     update(values: Record<string, unknown>): UpdateQuery<FailedOutboxRow>;
   };
-  from(table: 'distribution_receipts'): {
-    select(columns: string): SelectQuery<ReceiptGuardRow>;
-  };
   from(table: 'audit_log'): {
-    select(columns: string): SelectQuery<DispatchAuditRow>;
-    insert(
-      values: AuditLogInsert,
-    ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+    insert(values: AuditLogInsert): PromiseLike<{ data: unknown; error: { message: string } | null }>;
   };
 }
 
@@ -120,8 +91,6 @@ export function parseReplayArgs(argv: string[]): ReplayOptions {
     minAgeHours: DEFAULT_MIN_AGE_HOURS,
     target: 'all',
     status: 'all',
-    confirmedNotDelivered: false,
-    confirmationReason: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -138,18 +107,12 @@ export function parseReplayArgs(argv: string[]): ReplayOptions {
     }
 
     if (token?.startsWith('--limit=')) {
-      options.limit = readPositiveInteger(
-        token.slice('--limit='.length),
-        '--limit',
-      );
+      options.limit = readPositiveInteger(token.slice('--limit='.length), '--limit');
       continue;
     }
 
     if (token === '--min-age-hours') {
-      options.minAgeHours = readNonNegativeNumber(
-        argv[index + 1],
-        '--min-age-hours',
-      );
+      options.minAgeHours = readNonNegativeNumber(argv[index + 1], '--min-age-hours');
       index += 1;
       continue;
     }
@@ -184,36 +147,11 @@ export function parseReplayArgs(argv: string[]): ReplayOptions {
       continue;
     }
 
-    if (token === '--confirmed-not-delivered') {
-      options.confirmedNotDelivered = true;
-      continue;
-    }
-
-    if (token === '--reason') {
-      options.confirmationReason = readNonEmptyString(
-        argv[index + 1],
-        '--reason',
-      );
-      index += 1;
-      continue;
-    }
-
-    if (token?.startsWith('--reason=')) {
-      options.confirmationReason = readNonEmptyString(
-        token.slice('--reason='.length),
-        '--reason',
-      );
-      continue;
-    }
-
     throw new Error(`Unsupported argument: ${token ?? '(missing)'}`);
   }
 
   if (options.limit > MAX_REPLAY_LIMIT) {
     throw new Error(`--limit must be ${MAX_REPLAY_LIMIT} or less`);
-  }
-  if (options.confirmedNotDelivered && options.confirmationReason === null) {
-    throw new Error('--reason is required with --confirmed-not-delivered');
   }
 
   return options;
@@ -229,9 +167,7 @@ export async function replayFailedDeliveries(
   }
 
   const startedAt = Date.now();
-  const cutoff = new Date(
-    now.getTime() - options.minAgeHours * 60 * 60 * 1000,
-  ).toISOString();
+  const cutoff = new Date(now.getTime() - options.minAgeHours * 60 * 60 * 1000).toISOString();
 
   const replayableStatuses: readonly string[] =
     options.status === 'all' ? REPLAYABLE_STATUSES : [options.status];
@@ -250,9 +186,7 @@ export async function replayFailedDeliveries(
     query = query.in('target', LIVE_TARGETS);
   }
 
-  query = query
-    .order('updated_at', { ascending: true })
-    .limit(MAX_REPLAY_LIMIT + 1);
+  query = query.order('updated_at', { ascending: true }).limit(MAX_REPLAY_LIMIT + 1);
 
   const { data, error } = await query;
   if (error) {
@@ -274,95 +208,9 @@ export async function replayFailedDeliveries(
 
   for (const row of selectedRows) {
     if (!REPLAYABLE_STATUSES.includes(row.status as ReplayableStatus)) {
-      errors.push(
-        `Skipping outbox ${row.id}: status '${row.status}' is not replayable`,
-      );
+      errors.push(`Skipping outbox ${row.id}: status '${row.status}' is not replayable`);
       continue;
     }
-
-    // WORK-2026100901 REPLAY_DUPLICATE_GUARD_START
-    // Replay re-enables a Discord POST. The same two sources of delivery truth
-    // used by the API retry route therefore gate every replay target: a sent
-    // receipt proves delivery, while a delivered or ambiguous dispatch ledger
-    // proves that another POST is unsafe. An operator can reconcile ambiguity,
-    // but the attestation is written before the row is reset.
-    const receiptResult = await db
-      .from('distribution_receipts')
-      .select('id,outbox_id,status')
-      .eq('outbox_id', row.id)
-      .eq('status', 'sent')
-      .limit(1);
-    if (receiptResult.error) {
-      errors.push(
-        `Skipping outbox ${row.id}: delivery receipt evidence is unreadable: ${receiptResult.error.message}`,
-      );
-      continue;
-    }
-    const sentReceipt = receiptResult.data?.[0];
-    if (sentReceipt) {
-      errors.push(
-        `Skipping outbox ${row.id}: ALREADY_DELIVERED (sent receipt ${sentReceipt.id})`,
-      );
-      continue;
-    }
-
-    const ledgerResult = await db
-      .from('audit_log')
-      .select('action,payload,created_at')
-      .eq('entity_type', 'distribution_outbox')
-      .eq('entity_id', row.id)
-      .in('action', Object.values(dispatchLedgerActions))
-      .order('created_at', { ascending: true })
-      .limit(500);
-    if (ledgerResult.error) {
-      errors.push(
-        `Skipping outbox ${row.id}: dispatch ledger evidence is unreadable: ${ledgerResult.error.message}`,
-      );
-      continue;
-    }
-
-    const ledger = readDispatchLedger(ledgerResult.data ?? []);
-    if (ledger.delivered) {
-      errors.push(
-        `Skipping outbox ${row.id}: ALREADY_DELIVERED (dispatch ledger attempt ${ledger.delivered.attempt})`,
-      );
-      continue;
-    }
-    if (isDispatchAmbiguous(ledger)) {
-      if (!options.confirmedNotDelivered) {
-        errors.push(
-          `Skipping outbox ${row.id}: DELIVERY_OUTCOME_AMBIGUOUS (attempts ${ledger.unresolvedAttempts.join(',') || 'unreadable'})`,
-        );
-        continue;
-      }
-      if (ledger.malformed > 0) {
-        errors.push(
-          `Skipping outbox ${row.id}: DISPATCH_LEDGER_MALFORMED (${ledger.malformed} unreadable row(s))`,
-        );
-        continue;
-      }
-
-      const { error: reconcileError } = await db.from('audit_log').insert({
-        action: dispatchLedgerActions.reconciled,
-        actor: 'replay-failed-delivery',
-        entity_type: 'distribution_outbox',
-        entity_id: row.id,
-        entity_ref: row.pick_id,
-        payload: {
-          outboxId: row.id,
-          target: row.target,
-          throughAttempt: ledger.lastAttempt,
-          reason: options.confirmationReason,
-        },
-      });
-      if (reconcileError) {
-        errors.push(
-          `Skipping outbox ${row.id}: failed to record dispatch reconciliation: ${reconcileError.message}`,
-        );
-        continue;
-      }
-    }
-    // WORK-2026100901 REPLAY_DUPLICATE_GUARD_END
 
     const previousStatus = row.status;
     const nextAttemptCount = row.attempt_count + 1;
@@ -380,9 +228,7 @@ export async function replayFailedDeliveries(
       .single();
 
     if (updateError || !updated) {
-      errors.push(
-        `Failed to replay outbox ${row.id}: ${updateError?.message ?? 'no row returned'}`,
-      );
+      errors.push(`Failed to replay outbox ${row.id}: ${updateError?.message ?? 'no row returned'}`);
       continue;
     }
 
@@ -403,9 +249,7 @@ export async function replayFailedDeliveries(
     });
 
     if (auditError) {
-      errors.push(
-        `Replayed outbox ${row.id} but audit log failed: ${auditError.message}`,
-      );
+      errors.push(`Replayed outbox ${row.id} but audit log failed: ${auditError.message}`);
     }
 
     replayed += 1;
@@ -430,10 +274,7 @@ export async function runReplayFailedDeliveryCli(
     const env = loadEnvironment();
     const connection = createServiceRoleDatabaseConnectionConfig(env);
     const db = createDatabaseClientFromConnection(connection);
-    const result = await replayFailedDeliveries(
-      db as unknown as ReplayDatabaseClient,
-      options,
-    );
+    const result = await replayFailedDeliveries(db as unknown as ReplayDatabaseClient, options);
 
     stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     if (!Array.isArray(result) && result.errors.length > 0) {
@@ -463,38 +304,19 @@ function readNonNegativeNumber(value: string | undefined, name: string) {
 }
 
 function readTarget(value: string | undefined): ReplayTarget {
-  if (
-    value === 'all' ||
-    value === 'discord:canary' ||
-    value === 'discord:best-bets' ||
-    value === 'discord:official-picks'
-  ) {
+  if (value === 'all' || value === 'discord:canary' || value === 'discord:best-bets') {
     return value;
   }
-  throw new Error(
-    '--target must be discord:canary, discord:best-bets, discord:official-picks, or all',
-  );
+  throw new Error('--target must be discord:canary, discord:best-bets, or all');
 }
 
-function readReplayableStatus(
-  value: string | undefined,
-): ReplayableStatus | 'all' {
+function readReplayableStatus(value: string | undefined): ReplayableStatus | 'all' {
   if (value === 'all' || value === 'failed' || value === 'dead_letter') {
     return value;
   }
   throw new Error(`--status must be failed, dead_letter, or all`);
 }
 
-function readNonEmptyString(value: string | undefined, name: string): string {
-  if (value === undefined || value.trim().length === 0) {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-  return value.trim();
-}
-
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = await runReplayFailedDeliveryCli(process.argv.slice(2));
 }

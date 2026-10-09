@@ -1,14 +1,7 @@
 import type { ServerResponse } from 'node:http';
-import type {
-  ApiRuntimeDependencies,
-  ApiHealthResponse,
-  ApiHealthStatus,
-} from '../server.js';
+import type { ApiRuntimeDependencies, ApiHealthResponse, ApiHealthStatus } from '../server.js';
 import { writeJson } from '../http-utils.js';
-import {
-  checkSchemaDrift,
-  type SchemaDriftCheckResult,
-} from '../model-health-scanner.js';
+import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-scanner.js';
 import { recordQueueHealthMetrics } from '@unit-talk/observability';
 import { isProductionLikeRuntime } from '@unit-talk/config';
 import {
@@ -22,10 +15,7 @@ import { POSTGREST_MAX_ROWS, type PromotedPickCandidate } from '@unit-talk/db';
 import { isTestFixturePick } from '../fixture-pick.js';
 
 const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
-const ZOMBIE_PICK_LIFECYCLE_STATES: PickLifecycleState[] = [
-  'draft',
-  'validated',
-];
+const ZOMBIE_PICK_LIFECYCLE_STATES: PickLifecycleState[] = ['draft', 'validated'];
 const ZOMBIE_PICK_PROMOTION_STATUSES = new Set(['qualified', 'promoted']);
 const ZOMBIE_PICK_OUTBOX_STATUSES = ['pending', 'sent', 'delivered'] as const;
 const ZOMBIE_OUTBOX_LOOKUP_CONCURRENCY = 8;
@@ -36,9 +26,7 @@ const SCHEMA_DRIFT_CACHE_MS = 60_000;
  * repository.  Returns true only when persistence is backed by a real database
  * AND the database is reachable.
  */
-async function probeDbConnectivity(
-  runtime: ApiRuntimeDependencies,
-): Promise<boolean> {
+async function probeDbConnectivity(runtime: ApiRuntimeDependencies): Promise<boolean> {
   if (runtime.persistenceMode !== 'database') {
     return false;
   }
@@ -100,12 +88,8 @@ function asMetadata(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function deliveryTargetForCandidate(
-  pick: PromotedPickCandidate,
-): string | null {
-  if (
-    !ZOMBIE_PICK_LIFECYCLE_STATES.includes(pick.status as PickLifecycleState)
-  ) {
+function deliveryTargetForCandidate(pick: PromotedPickCandidate): string | null {
+  if (!ZOMBIE_PICK_LIFECYCLE_STATES.includes(pick.status as PickLifecycleState)) {
     return null;
   }
   const metadata = asMetadata(pick.metadata);
@@ -132,9 +116,10 @@ async function listZombieCandidates(
 ): Promise<PromotedPickCandidate[]> {
   const picks = runtime.repositories.picks;
   if (picks.listPromotedByLifecycleStates) {
-    return picks.listPromotedByLifecycleStates(ZOMBIE_PICK_LIFECYCLE_STATES, [
-      ...ZOMBIE_PICK_PROMOTION_STATUSES,
-    ]);
+    return picks.listPromotedByLifecycleStates(
+      ZOMBIE_PICK_LIFECYCLE_STATES,
+      [...ZOMBIE_PICK_PROMOTION_STATUSES],
+    );
   }
   const candidates: PromotedPickCandidate[] = [];
   for (let offset = 0; ; offset += POSTGREST_MAX_ROWS) {
@@ -159,16 +144,13 @@ async function mapWithConcurrency<T, R>(
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
-  const workers = Array.from(
-    { length: Math.min(concurrency, items.length) },
-    async () => {
-      while (next < items.length) {
-        const index = next;
-        next += 1;
-        results[index] = await fn(items[index] as T);
-      }
-    },
-  );
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index] as T);
+    }
+  });
   await Promise.all(workers);
   return results;
 }
@@ -221,19 +203,16 @@ export async function checkZombiePickHealth(
       const killSwitchKey = target.startsWith('discord:')
         ? target.slice('discord:'.length)
         : target;
-      // A pick deliberately held by the live kill switch is not a zombie. The
-      // repository fails closed for missing/unreadable rows, matching the
-      // worker's dequeue gate. The pick remains untouched and becomes eligible
-      // for this check automatically when an operator releases the target.
       const targetKilled = runtime.repositories.killSwitch
         ? await runtime.repositories.killSwitch.isKilled(killSwitchKey)
         : false;
-      const activeOutbox =
-        await runtime.repositories.outbox.findByPickAndTarget(
-          pick.id,
-          target,
-          ZOMBIE_PICK_OUTBOX_STATUSES,
-        );
+      // Keep fixtures visible in fixtureCount even when their target is killed;
+      // the kill-switch exclusion applies only to genuine delivery candidates.
+      const activeOutbox = await runtime.repositories.outbox.findByPickAndTarget(
+        pick.id,
+        target,
+        ZOMBIE_PICK_OUTBOX_STATUSES,
+      );
       return activeOutbox ? null : { pick, targetKilled };
     },
   );
@@ -267,28 +246,21 @@ export async function checkZombiePickHealth(
     count,
     fixtureCount,
     checkedAt,
-    remediation:
-      count > 0
-        ? 'Operator recovery: POST /api/picks/:id/requeue for each zombie pick. The requeue path checks for existing active outbox rows before enqueueing, so replay repairs missing work without duplicate delivery.'
-        : null,
+    remediation: count > 0
+      ? 'Operator recovery: POST /api/picks/:id/requeue for each zombie pick. The requeue path checks for existing active outbox rows before enqueueing, so replay repairs missing work without duplicate delivery.'
+      : null,
   };
 }
 
-function formatQueueAlertWarning(
-  alert: NonNullable<ApiRuntimeDependencies['queueHealth']>['alerts'][number],
-): string {
+function formatQueueAlertWarning(alert: NonNullable<ApiRuntimeDependencies['queueHealth']>['alerts'][number]): string {
   const detailParts = [
     alert.target ? `target=${alert.target}` : null,
     alert.status ? `status=${alert.status}` : null,
-    typeof alert.ageMs === 'number'
-      ? `age=${Math.round(alert.ageMs / 60000)}m`
-      : null,
+    typeof alert.ageMs === 'number' ? `age=${Math.round(alert.ageMs / 60000)}m` : null,
     alert.remediation ? `remediation=${alert.remediation}` : null,
   ].filter((value): value is string => value !== null);
 
-  return detailParts.length > 0
-    ? `${alert.message} [${detailParts.join(' | ')}]`
-    : alert.message;
+  return detailParts.length > 0 ? `${alert.message} [${detailParts.join(' | ')}]` : alert.message;
 }
 
 // Per runtime, so one server's cached result can never answer for another.
@@ -316,10 +288,7 @@ async function readSchemaDriftCached(
   return result;
 }
 
-export async function handleHealth(
-  response: ServerResponse,
-  runtime: ApiRuntimeDependencies,
-): Promise<void> {
+export async function handleHealth(response: ServerResponse, runtime: ApiRuntimeDependencies): Promise<void> {
   const dbReachable = await probeDbConnectivity(runtime);
   const schemaDrift = await (async () => {
     if (runtime.persistenceMode !== 'database' || !dbReachable) return null;
@@ -328,19 +297,13 @@ export async function handleHealth(
     } catch (err: unknown) {
       // Supabase credentials unavailable in this environment — skip drift check.
       runtime.logger.warn(
-        JSON.stringify({
-          event: 'schema_drift_check_skipped',
-          reason: String(err),
-        }),
+        JSON.stringify({ event: 'schema_drift_check_skipped', reason: String(err) }),
       );
       return null;
     }
   })();
 
-  const isDurable =
-    runtime.persistenceMode === 'database' &&
-    dbReachable &&
-    schemaDrift?.status !== 'drift';
+  const isDurable = runtime.persistenceMode === 'database' && dbReachable && schemaDrift?.status !== 'drift';
   const queueHealth = runtime.queueHealth ?? null;
   // WORK-2026100901 ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD_START
   const zombiePicks: ZombiePickHealth = dbReachable
@@ -356,15 +319,13 @@ export async function handleHealth(
         count: 0,
         fixtureCount: 0,
         checkedAt: new Date(runtime.now()).toISOString(),
-        remediation:
-          'Zombie-pick health check was not run because the database is unreachable.',
+        remediation: 'Zombie-pick health check was not run because the database is unreachable.',
       };
   // WORK-2026100901 ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD_END
   if (queueHealth) {
     recordQueueHealthMetrics(runtime.metricsCollector, queueHealth);
   }
-  const queueUnhealthy =
-    queueHealth?.status === 'degraded' || queueHealth?.status === 'down';
+  const queueUnhealthy = queueHealth?.status === 'degraded' || queueHealth?.status === 'down';
   const zombiePickUnhealthy = zombiePicks.status === 'down';
   const zombiePickUnknown = zombiePicks.status === 'unknown';
   // UTV2-1427: the ops alert webhook must fail loud when unset in a production-like
@@ -386,13 +347,11 @@ export async function handleHealth(
     ? 'degraded'
     : zombiePickUnhealthy
       ? 'down'
-      : queueHealth?.status === 'down'
-        ? 'down'
-        : queueHealth?.status === 'degraded' ||
-            zombiePickUnknown ||
-            opsAlertWebhookMissing
-          ? 'degraded'
-          : 'healthy';
+    : queueHealth?.status === 'down'
+      ? 'down'
+      : queueHealth?.status === 'degraded' || zombiePickUnknown || opsAlertWebhookMissing
+        ? 'degraded'
+        : 'healthy';
   const httpStatus =
     isDurable &&
     !queueUnhealthy &&
@@ -403,17 +362,14 @@ export async function handleHealth(
       : 503;
   const warnings = [
     ...(schemaDrift?.warnings ?? []),
-    ...(queueHealth?.alerts.map((alert) => formatQueueAlertWarning(alert)) ??
-      []),
+    ...(queueHealth?.alerts.map((alert) => formatQueueAlertWarning(alert)) ?? []),
     ...(zombiePicks.status === 'down'
       ? [
           `zombie picks detected: count=${zombiePicks.count} [remediation=${zombiePicks.remediation}]`,
         ]
       : []),
     ...(zombiePicks.status === 'unknown'
-      ? [
-          `zombie pick health unknown: ${zombiePicks.remediation ?? 'check failed'}`,
-        ]
+      ? [`zombie pick health unknown: ${zombiePicks.remediation ?? 'check failed'}`]
       : []),
     ...(zombiePicks.fixtureCount > 0
       ? [
