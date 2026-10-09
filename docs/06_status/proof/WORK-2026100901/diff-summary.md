@@ -1,6 +1,8 @@
 # Diff summary: WORK-2026100901
 
-Implementation source: `892634bf61b91806f8a888ab475308f91b015a0a`.
+Verified source snapshot: `bc4ff73c7f75a2e6184a247cfb2358ae318668e8`.
+
+Implementation change commit: `892634bf61b91806f8a888ab475308f91b015a0a`.
 
 This second rework implements the owner/PM query-shape correction on PR #1728. The lane remains narrowed to the health gap only.
 
@@ -19,4 +21,4 @@ No schema, migration, dependency, endpoint, presentation, kill-switch state, out
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1728
-Execution SHA: 892634bf61b91806f8a888ab475308f91b015a0a
+Execution SHA: bc4ff73c7f75a2e6184a247cfb2358ae318668e8

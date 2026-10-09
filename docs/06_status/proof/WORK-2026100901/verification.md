@@ -18,7 +18,13 @@ result: STATIC_PASS_RUNTIME_DEFERRED
 
 ## EVIDENCE:
 
-Implementation source commit:
+Verified source snapshot (after refreshing from `origin/main`):
+
+```text
+bc4ff73c7f75a2e6184a247cfb2358ae318668e8
+```
+
+Implementation change commit:
 
 ```text
 892634bf61b91806f8a888ab475308f91b015a0a
@@ -42,6 +48,9 @@ tests 66; pass 66; fail 0; skipped 0
 
 pnpm exec tsx --test 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'
 tests 93; pass 93; fail 0; skipped 0
+
+pnpm exec tsx --test 'apps/api/src/server.test.ts' 'apps/worker/src/replay-failed-delivery.test.ts' 'scripts/ops/pipeline-health-classification.test.ts' 'scripts/ops/readiness-refresh.test.ts'
+tests 159; pass 159; fail 0; skipped 0 (exact refreshed source snapshot)
 ```
 
 The health suite dynamically restores main's healthy zombie-check fallback and removes the killed-target guard. Those mutants report the wrong health dimension or count the deliberately held official-picks candidate, demonstrating that both guards are load-bearing. The authorized human-capper regression uses the real in-memory repository method and fails on current main because that repository omits human candidates.
@@ -95,7 +104,7 @@ No live row count is claimed, no canonical readiness artifact was changed, and n
 ## Verification
 
 - `pnpm type-check` — PASS.
-- Required focused three-file command — PASS, 93/93.
+- Required focused three-file command — PASS, 93/93; combined exact-head focused command — PASS, 159/159.
 - `pnpm exec tsx --test apps/api/src/server.test.ts` — PASS, 66/66; DB-filter mutant 65/66 with the query-shape regression failing.
 - `pnpm verify:static` — PASS.
 - `pnpm verify` — static PASS; writable staging phase BLOCKED/DEFERRED by the target-identity guard.
@@ -107,4 +116,4 @@ No live row count is claimed, no canonical readiness artifact was changed, and n
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1728
-Execution SHA: 892634bf61b91806f8a888ab475308f91b015a0a
+Execution SHA: bc4ff73c7f75a2e6184a247cfb2358ae318668e8
