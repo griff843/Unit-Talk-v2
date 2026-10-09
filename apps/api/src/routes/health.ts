@@ -4,7 +4,13 @@ import { writeJson } from '../http-utils.js';
 import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-scanner.js';
 import { recordQueueHealthMetrics } from '@unit-talk/observability';
 import { isProductionLikeRuntime } from '@unit-talk/config';
-import { isTrackOnlyPickMetadata, type PickLifecycleState } from '@unit-talk/contracts';
+import {
+  humanDeliveryTargets,
+  isHumanCapperDeliveryAuthorized,
+  isTrackOnlyPickMetadata,
+  readSmartFormDistributionMode,
+  type PickLifecycleState,
+} from '@unit-talk/contracts';
 import { POSTGREST_MAX_ROWS, type PromotedPickCandidate } from '@unit-talk/db';
 import { isTestFixturePick } from '../fixture-pick.js';
 
@@ -59,7 +65,7 @@ interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
 }
 
 export interface ZombiePickHealth {
-  status: 'healthy' | 'down';
+  status: 'healthy' | 'down' | 'unknown';
   count: number;
   /**
    * Stranded picks that are CI / proof fixtures. Reported so they stay
@@ -69,6 +75,34 @@ export interface ZombiePickHealth {
   fixtureCount: number;
   checkedAt: string;
   remediation: string | null;
+}
+
+interface DeliveryCandidate {
+  pick: PromotedPickCandidate;
+  target: string;
+}
+
+function asMetadata(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function deliveryTargetForCandidate(pick: PromotedPickCandidate): string | null {
+  if (!ZOMBIE_PICK_LIFECYCLE_STATES.includes(pick.status as PickLifecycleState)) {
+    return null;
+  }
+  const metadata = asMetadata(pick.metadata);
+  if (
+    readSmartFormDistributionMode(metadata) === 'delivery-eligible' &&
+    isHumanCapperDeliveryAuthorized(metadata)
+  ) {
+    return `discord:${humanDeliveryTargets[0]}`;
+  }
+  return ZOMBIE_PICK_PROMOTION_STATUSES.has(pick.promotion_status) &&
+    pick.promotion_target != null
+    ? `discord:${pick.promotion_target}`
+    : null;
 }
 
 /**
@@ -95,11 +129,7 @@ async function listZombieCandidates(
       offset,
     );
     candidates.push(
-      ...page.filter(
-        (pick) =>
-          ZOMBIE_PICK_PROMOTION_STATUSES.has(pick.promotion_status) &&
-          pick.promotion_target != null,
-      ),
+      ...page.filter((pick) => deliveryTargetForCandidate(pick) !== null),
     );
     if (page.length < POSTGREST_MAX_ROWS) {
       return candidates;
@@ -142,15 +172,8 @@ export async function checkZombiePickHealth(
    */
   const candidates = await listZombieCandidates(runtime);
 
-  const awaitingDelivery: PromotedPickCandidate[] = [];
+  const awaitingDelivery: DeliveryCandidate[] = [];
   for (const pick of candidates) {
-    if (
-      !ZOMBIE_PICK_PROMOTION_STATUSES.has(pick.promotion_status) ||
-      pick.promotion_target == null
-    ) {
-      continue;
-    }
-
     // UTV2-1672 ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD_START
     // A zombie is a pick that *should* have delivery work and does not. A Track
     // Only pick is force-qualified to best-bets by the smart-form promotion
@@ -159,16 +182,16 @@ export async function checkZombiePickHealth(
     // /health reports 503 after the first legitimate capper submission and
     // prescribes a requeue that the Track Only guard refuses -- an unresolvable
     // alarm that trains operators to ignore a real one.
-    const pickMetadata =
-      pick.metadata && typeof pick.metadata === 'object' && !Array.isArray(pick.metadata)
-        ? (pick.metadata as Record<string, unknown>)
-        : null;
+    const pickMetadata = asMetadata(pick.metadata);
     if (isTrackOnlyPickMetadata(pickMetadata)) {
       continue;
     }
     // UTV2-1672 ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD_END
 
-    awaitingDelivery.push(pick);
+    const target = deliveryTargetForCandidate(pick);
+    if (target !== null) {
+      awaitingDelivery.push({ pick, target });
+    }
   }
 
   // One outbox lookup per candidate, run concurrently: serially they dominated
@@ -176,20 +199,29 @@ export async function checkZombiePickHealth(
   const stranded = await mapWithConcurrency(
     awaitingDelivery,
     ZOMBIE_OUTBOX_LOOKUP_CONCURRENCY,
-    async (pick) => {
+    async ({ pick, target }) => {
+      const killSwitchKey = target.startsWith('discord:')
+        ? target.slice('discord:'.length)
+        : target;
+      const targetKilled = runtime.repositories.killSwitch
+        ? await runtime.repositories.killSwitch.isKilled(killSwitchKey)
+        : false;
+      // Keep fixtures visible in fixtureCount even when their target is killed;
+      // the kill-switch exclusion applies only to genuine delivery candidates.
       const activeOutbox = await runtime.repositories.outbox.findByPickAndTarget(
         pick.id,
-        `discord:${pick.promotion_target}`,
+        target,
         ZOMBIE_PICK_OUTBOX_STATUSES,
       );
-      return activeOutbox ? null : pick;
+      return activeOutbox ? null : { pick, targetKilled };
     },
   );
 
   let count = 0;
   let fixtureCount = 0;
-  for (const pick of stranded) {
-    if (!pick) continue;
+  for (const strandedPick of stranded) {
+    if (!strandedPick) continue;
+    const { pick, targetKilled } = strandedPick;
     // WORK-2026092404 ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD_START
     // Production holds CI proof fixtures from before staging isolation. A
     // complete read finds stranded ones (8 on 2026-09-24, every one a fixture),
@@ -201,6 +233,11 @@ export async function checkZombiePickHealth(
       continue;
     }
     // WORK-2026092404 ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD_END
+    // WORK-2026100901 ZOMBIE_HEALTH_KILLED_TARGET_EXCLUSION_GUARD_START
+    if (targetKilled) {
+      continue;
+    }
+    // WORK-2026100901 ZOMBIE_HEALTH_KILLED_TARGET_EXCLUSION_GUARD_END
     count += 1;
   }
 
@@ -268,26 +305,29 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
 
   const isDurable = runtime.persistenceMode === 'database' && dbReachable && schemaDrift?.status !== 'drift';
   const queueHealth = runtime.queueHealth ?? null;
+  // WORK-2026100901 ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD_START
   const zombiePicks: ZombiePickHealth = dbReachable
-    ? await checkZombiePickHealth(runtime).catch(() => ({
-        status: 'healthy' as const,
+    ? await checkZombiePickHealth(runtime).catch((error: unknown) => ({
+        status: 'unknown' as const,
         count: 0,
         fixtureCount: 0,
         checkedAt: new Date(runtime.now()).toISOString(),
-        remediation: null,
+        remediation: `Zombie-pick health check failed: ${error instanceof Error ? error.message : String(error)}`,
       }))
     : {
-        status: 'healthy' as const,
+        status: 'unknown' as const,
         count: 0,
         fixtureCount: 0,
         checkedAt: new Date(runtime.now()).toISOString(),
-        remediation: null,
+        remediation: 'Zombie-pick health check was not run because the database is unreachable.',
       };
+  // WORK-2026100901 ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD_END
   if (queueHealth) {
     recordQueueHealthMetrics(runtime.metricsCollector, queueHealth);
   }
   const queueUnhealthy = queueHealth?.status === 'degraded' || queueHealth?.status === 'down';
   const zombiePickUnhealthy = zombiePicks.status === 'down';
+  const zombiePickUnknown = zombiePicks.status === 'unknown';
   // UTV2-1427: the ops alert webhook must fail loud when unset in a production-like
   // environment where Discord delivery is active — previously it silently
   // dropped alerts (DEVOPS_PRODUCTION_POSTURE_AUDIT.md:186,234). Reads the
@@ -309,10 +349,17 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
       ? 'down'
     : queueHealth?.status === 'down'
       ? 'down'
-      : queueHealth?.status === 'degraded' || opsAlertWebhookMissing
+      : queueHealth?.status === 'degraded' || zombiePickUnknown || opsAlertWebhookMissing
         ? 'degraded'
         : 'healthy';
-  const httpStatus = isDurable && !queueUnhealthy && !zombiePickUnhealthy && !opsAlertWebhookMissing ? 200 : 503;
+  const httpStatus =
+    isDurable &&
+    !queueUnhealthy &&
+    !zombiePickUnhealthy &&
+    !zombiePickUnknown &&
+    !opsAlertWebhookMissing
+      ? 200
+      : 503;
   const warnings = [
     ...(schemaDrift?.warnings ?? []),
     ...(queueHealth?.alerts.map((alert) => formatQueueAlertWarning(alert)) ?? []),
@@ -320,6 +367,9 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
       ? [
           `zombie picks detected: count=${zombiePicks.count} [remediation=${zombiePicks.remediation}]`,
         ]
+      : []),
+    ...(zombiePicks.status === 'unknown'
+      ? [`zombie pick health unknown: ${zombiePicks.remediation ?? 'check failed'}`]
       : []),
     ...(zombiePicks.fixtureCount > 0
       ? [

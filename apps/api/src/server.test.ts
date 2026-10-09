@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
-import type { UnitTalkSupabaseClient } from '@unit-talk/db';
+import { DatabasePickRepository, type UnitTalkSupabaseClient } from '@unit-talk/db';
 import { evaluateQueueHealth } from '@unit-talk/observability';
 import {
   buildApiRuntimeTruth,
@@ -24,6 +24,7 @@ import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 import { checkZombiePickHealth } from './routes/health.js';
 import { checkSchemaDrift } from './model-health-scanner.js';
 import { POSTGREST_MAX_ROWS, readAllOrderedPages } from '@unit-talk/db';
+import type { CanonicalPick } from '@unit-talk/contracts';
 
 // Requeue/routing-preview tests assert delivery-target routing directly. This
 // depends on three ambient env vars read by distribution-service.ts (via
@@ -441,6 +442,7 @@ test('GET /health fails when a qualified pick has no active outbox row', async (
 
   const repositories = createInMemoryRepositoryBundle();
   await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
 
   const runtime = createApiRuntimeDependencies({ repositories });
   runtime.persistenceMode = 'database';
@@ -468,6 +470,51 @@ test('GET /health fails when a qualified pick has no active outbox row', async (
     assert.equal(body.zombiePicks.count, 1);
     assert.match(body.zombiePicks.remediation ?? '', /\/api\/picks\/:id\/requeue/);
     assert.ok(body.warnings.some((warning) => warning.includes('zombie picks detected')));
+  } finally {
+    server.close();
+    restoreEnv('SUPABASE_URL', previousSupabaseUrl);
+    restoreEnv('SUPABASE_ANON_KEY', previousSupabaseAnonKey);
+    restoreEnv('SUPABASE_SERVICE_ROLE_KEY', previousSupabaseServiceRoleKey);
+  }
+});
+
+test('WORK-2026100901: a thrown zombie check degrades /health with HTTP 503, never healthy', async () => {
+  const previousSupabaseUrl = process.env.SUPABASE_URL;
+  const previousSupabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const previousSupabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'not-a-url';
+  process.env.SUPABASE_ANON_KEY = 'anon-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const repositories = createInMemoryRepositoryBundle();
+  await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
+  repositories.outbox.findByPickAndTarget = async () => {
+    throw new Error('zombie read exploded');
+  };
+
+  const runtime = createApiRuntimeDependencies({ repositories });
+  runtime.persistenceMode = 'database';
+  const server = createApiServer({ runtime });
+  server.listen(0);
+  await once(server, 'listening');
+
+  try {
+    const address = server.address() as AddressInfo;
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+    const body = (await response.json()) as {
+      status: string;
+      zombiePicks: { status: string; remediation: string | null };
+      warnings: string[];
+    };
+
+    assert.equal(response.status, 503);
+    assert.equal(body.status, 'degraded');
+    assert.equal(body.zombiePicks.status, 'unknown');
+    assert.match(body.zombiePicks.remediation ?? '', /zombie read exploded/u);
+    assert.ok(
+      body.warnings.some((warning) => warning.includes('zombie pick health unknown')),
+    );
   } finally {
     server.close();
     restoreEnv('SUPABASE_URL', previousSupabaseUrl);
@@ -1722,6 +1769,7 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', as
 test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pick', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   const beforeRecovery = await checkZombiePickHealth(runtime);
@@ -1984,6 +2032,19 @@ async function createQualifiedPick(
     },
     repositories,
   );
+}
+
+async function releaseHealthTarget(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  target: string,
+) {
+  assert.ok(repositories.killSwitch);
+  await repositories.killSwitch.setKilled({
+    target,
+    killed: false,
+    actor: 'health-test',
+    reason: 'exercise delivery-eligible zombie health',
+  });
 }
 
 async function createSettledAlertAgentPick(
@@ -2555,9 +2616,97 @@ async function withHealthGuardRemoved<T>(
   }
 }
 
+async function withZombieFailureGuardReverted<T>(
+  run: (mutant: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const sourcePath = fileURLToPath(new URL('./routes/health.ts', import.meta.url));
+  const mutantPath = sourcePath.replace(
+    /\.ts$/u,
+    `__mutant_failure_reverted_${process.pid}_${Math.random().toString(36).slice(2, 8)}.ts`,
+  );
+  const source = await readFile(sourcePath, 'utf8');
+  const mutantSource = source.replace(
+    /[ ]*\/\/ WORK-2026100901 ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD_START[\s\S]*?\/\/ WORK-2026100901 ZOMBIE_HEALTH_FAILURE_UNKNOWN_GUARD_END\n/u,
+    `  const zombiePicks: ZombiePickHealth = dbReachable
+    ? await checkZombiePickHealth(runtime).catch(() => ({
+        status: 'healthy' as const,
+        count: 0,
+        fixtureCount: 0,
+        checkedAt: new Date(runtime.now()).toISOString(),
+        remediation: null,
+      }))
+    : {
+        status: 'healthy' as const,
+        count: 0,
+        fixtureCount: 0,
+        checkedAt: new Date(runtime.now()).toISOString(),
+        remediation: null,
+      };
+`,
+  );
+  assert.notEqual(mutantSource, source, 'mutation control could not revert zombie failure guard');
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    return await run(
+      (await import(`${pathToFileURL(mutantPath).href}?mutation=failure-reverted`)) as Record<
+        string,
+        unknown
+      >,
+    );
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+}
+
+test('WORK-2026100901 mutation control: reverting the zombie failure guard makes an unreadable check report healthy', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
+  repositories.outbox.findByPickAndTarget = async () => {
+    throw new Error('zombie read exploded');
+  };
+  const runtime = createApiRuntimeDependencies({ repositories });
+  runtime.persistenceMode = 'database';
+  // Isolate this mutation to zombie-health semantics. Hosted CI configures the
+  // ops webhook while local runs may not, so make that independent health
+  // dimension deterministically healthy in both environments.
+  assert.ok(runtime.environment);
+  runtime.environment.UNIT_TALK_OPS_ALERT_WEBHOOK_URL =
+    'https://example.invalid/unit-talk-ops-test';
+
+  await withZombieFailureGuardReverted(async (mutant) => {
+    let statusCode = 0;
+    let responseBody = '';
+    const response = {
+      setHeader() {},
+      end(body: string) {
+        responseBody = body;
+      },
+      get statusCode() {
+        return statusCode;
+      },
+      set statusCode(value: number) {
+        statusCode = value;
+      },
+    } as unknown as import('node:http').ServerResponse;
+    const handle = mutant['handleHealth'] as (
+      response: import('node:http').ServerResponse,
+      runtime: ReturnType<typeof createApiRuntimeDependencies>,
+    ) => Promise<void>;
+
+    await handle(response, runtime);
+
+    const body = JSON.parse(responseBody) as {
+      zombiePicks: { status: string };
+    };
+    assert.equal(body.zombiePicks.status, 'healthy');
+  });
+});
+
 test('a Track Only pick is not a zombie: it is force-qualified and deliberately never enqueued', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await createTrackOnlyQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   const health = await checkZombiePickHealth(runtime);
@@ -2566,9 +2715,187 @@ test('a Track Only pick is not a zombie: it is force-qualified and deliberately 
   assert.equal(health.remediation, null);
 });
 
+async function saveHumanCapperHealthCandidate(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  lifecycleState: CanonicalPick['lifecycleState'] = 'validated',
+) {
+  await repositories.picks.savePick({
+    id: '00000000-0000-0000-0000-000000000901',
+    submissionId: `health-human-${lifecycleState}`,
+    market: 'NBA points',
+    selection: 'Human Capper Over 24.5',
+    source: 'api',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState,
+    metadata: {
+      distributionMode: 'delivery-eligible',
+      deliveryAuthorization: {
+        version: 'human-capper-delivery/v1',
+        decision: 'authorized',
+        capperId: 'griff843',
+        authority: 'server-allowlist',
+        allowlistSource: 'UNIT_TALK_HUMAN_CAPPER_ALLOWLIST',
+        decidedAt: '2026-10-09T00:00:00.000Z',
+      },
+    },
+    createdAt: '2026-10-09T00:00:00.000Z',
+  });
+}
+
+test('WORK-2026100901: a delivery-eligible human-capper pick with no official-picks row is a zombie', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await saveHumanCapperHealthCandidate(repositories);
+  await releaseHealthTarget(repositories, 'official-picks');
+
+  const health = await checkZombiePickHealth(
+    createApiRuntimeDependencies({ repositories }),
+  );
+
+  assert.equal(health.status, 'down');
+  assert.equal(health.count, 1);
+});
+
+test('WORK-2026100901: a human-capper pick held by the official-picks kill switch is not a zombie', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await saveHumanCapperHealthCandidate(repositories);
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  assert.equal((await checkZombiePickHealth(runtime)).status, 'healthy');
+
+  await withHealthGuardRemoved(
+    'ZOMBIE_HEALTH_KILLED_TARGET_EXCLUSION_GUARD',
+    async (mutant) => {
+      const check = mutant['checkZombiePickHealth'] as typeof checkZombiePickHealth;
+      const mutated = await check(runtime);
+      assert.equal(mutated.status, 'down');
+      assert.equal(mutated.count, 1);
+    },
+  );
+});
+
+test('WORK-2026100901: voided and settled human-capper picks are excluded from zombie health', async () => {
+  for (const lifecycleState of ['voided', 'settled'] as const) {
+    const repositories = createInMemoryRepositoryBundle();
+    await saveHumanCapperHealthCandidate(repositories, lifecycleState);
+    await releaseHealthTarget(repositories, 'official-picks');
+
+    const health = await checkZombiePickHealth(
+      createApiRuntimeDependencies({ repositories }),
+    );
+
+    assert.equal(health.status, 'healthy', lifecycleState);
+    assert.equal(health.count, 0, lifecycleState);
+  }
+});
+
+test('WORK-2026100901: database zombie reads paginate only promoted or authorized human candidates', async () => {
+  interface RecordedPickQuery {
+    table: string;
+    select: string | null;
+    inFilters: Array<{ column: string; values: readonly unknown[] }>;
+    eqFilters: Array<{ column: string; value: unknown }>;
+    notFilters: Array<{ column: string; operator: string; value: unknown }>;
+    orders: Array<{ column: string; ascending: boolean | undefined }>;
+    ranges: Array<{ from: number; to: number }>;
+  }
+
+  const queries: RecordedPickQuery[] = [];
+  const client = {
+    from(table: string) {
+      const recorded: RecordedPickQuery = {
+        table,
+        select: null,
+        inFilters: [],
+        eqFilters: [],
+        notFilters: [],
+        orders: [],
+        ranges: [],
+      };
+      queries.push(recorded);
+      const builder = {
+        select(columns: string) {
+          recorded.select = columns;
+          return builder;
+        },
+        in(column: string, values: readonly unknown[]) {
+          recorded.inFilters.push({ column, values });
+          return builder;
+        },
+        eq(column: string, value: unknown) {
+          recorded.eqFilters.push({ column, value });
+          return builder;
+        },
+        not(column: string, operator: string, value: unknown) {
+          recorded.notFilters.push({ column, operator, value });
+          return builder;
+        },
+        order(column: string, options: { ascending?: boolean }) {
+          recorded.orders.push({ column, ascending: options.ascending });
+          return builder;
+        },
+        range(from: number, to: number) {
+          recorded.ranges.push({ from, to });
+          return Promise.resolve({ data: [], error: null });
+        },
+      };
+      return builder;
+    },
+  } as unknown as UnitTalkSupabaseClient;
+  const repository = Object.create(DatabasePickRepository.prototype) as DatabasePickRepository;
+  (repository as unknown as { client: UnitTalkSupabaseClient }).client = client;
+
+  const candidates = await repository.listPromotedByLifecycleStates(
+    ['draft', 'validated'],
+    ['qualified', 'promoted'],
+  );
+
+  assert.deepEqual(candidates, []);
+  assert.equal(queries.length, 2);
+  for (const query of queries) {
+    assert.equal(query.table, 'picks');
+    assert.equal(
+      query.select,
+      'id,status,promotion_status,promotion_target,metadata,selection,created_at',
+    );
+    assert.deepEqual(query.inFilters[0], {
+      column: 'status',
+      values: ['draft', 'validated'],
+    });
+    assert.deepEqual(query.orders, [
+      { column: 'created_at', ascending: true },
+      { column: 'id', ascending: true },
+    ]);
+    assert.deepEqual(query.ranges, [{ from: 0, to: POSTGREST_MAX_ROWS - 1 }]);
+  }
+
+  const promotedQuery = queries.find((query) =>
+    query.inFilters.some((filter) => filter.column === 'promotion_status'),
+  );
+  assert.ok(promotedQuery, 'promoted candidate branch must be queried');
+  assert.deepEqual(promotedQuery.inFilters[1], {
+    column: 'promotion_status',
+    values: ['qualified', 'promoted'],
+  });
+  assert.deepEqual(promotedQuery.notFilters, [
+    { column: 'promotion_target', operator: 'is', value: null },
+  ]);
+
+  const humanQuery = queries.find((query) => query.eqFilters.length > 0);
+  assert.ok(humanQuery, 'authorized human-capper candidate branch must be queried');
+  assert.deepEqual(humanQuery.eqFilters, [
+    { column: 'metadata->>distributionMode', value: 'delivery-eligible' },
+    {
+      column: 'metadata->deliveryAuthorization->>decision',
+      value: 'authorized',
+    },
+  ]);
+});
+
 test('mutation control: removing ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD makes /health 503 on a legitimate Track Only submission', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await createTrackOnlyQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   // Baseline: healthy.
@@ -2810,6 +3137,7 @@ async function createQualifiedFixturePick(
 test('a stranded proof fixture is reported in fixtureCount, not counted as a zombie', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedFixturePick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   // Premise: the fixture really is stranded -- qualified, validated, no outbox.
   assert.equal(created.pick.promotionStatus, 'qualified');
   assert.equal(created.pick.lifecycleState, 'validated');
@@ -2826,6 +3154,7 @@ test('a real zombie still fails /health when a stranded fixture sits beside it',
   const repositories = createInMemoryRepositoryBundle();
   await createQualifiedFixturePick(repositories);
   await createQualifiedPick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   const health = await checkZombiePickHealth(runtime);
@@ -2838,6 +3167,7 @@ test('a real zombie still fails /health when a stranded fixture sits beside it',
 test('mutation control: removing ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD makes a proof fixture fail /health', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await createQualifiedFixturePick(repositories);
+  await releaseHealthTarget(repositories, 'best-bets');
   const runtime = createApiRuntimeDependencies({ repositories });
 
   assert.equal((await checkZombiePickHealth(runtime)).status, 'healthy');
@@ -2854,6 +3184,7 @@ test('mutation control: removing ZOMBIE_HEALTH_FIXTURE_EXCLUSION_GUARD makes a p
 test('zombie detection reads past the first 1,000 candidates when the repository only pages', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const runtime = createApiRuntimeDependencies({ repositories });
+  await releaseHealthTarget(repositories, 'best-bets');
 
   // 2,345 validated picks: every one before the last page is not a candidate,
   // and the single stranded zombie sits at row 2,344. A read that stops at one
