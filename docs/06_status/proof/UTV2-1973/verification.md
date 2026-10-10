@@ -58,7 +58,7 @@ $ pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts
 - [x] `pnpm verify:static`: exit 0. This includes lint, type-check, build, the repository test suite, production post-migration checks, Smart Form verification, and command/migration checks.
 - [x] `pnpm type-check`: passed as a constituent of `pnpm verify:static`.
 - [x] `pnpm test`: passed as a constituent of `pnpm verify:static`.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: `Verdict: PASS`; 7 changed files; no rules matched.
+- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: `Verdict: PASS`; 9 changed files; no rules matched.
 - [ ] `pnpm test:db`: exit 1 at the target-identity guard before DB access. Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (`host=127.0.0.1`, `ref=unidentified`). Writable DB verification requires `xskgrzbteyqdufktjrjx`; run it through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
 - [ ] `pnpm verify` is not claimed PASS locally: its static phase is proven above, while its writable live-DB phase requires the same protected staging receipt.
 - [ ] Protected exact-head CI, PM approval, and governed merge remain pending.
