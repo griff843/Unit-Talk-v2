@@ -13,7 +13,8 @@
   "file_scope_lock": [
     ".github/workflows/migration-reversibility-gate.yml",
     "scripts/ci/participant-catalog-seed-drill.test.ts",
-    "scripts/ci/participant-catalog-seed-drill.ts"
+    "scripts/ci/participant-catalog-seed-drill.ts",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1973/diff-summary.md",

@@ -1,5 +1,27 @@
 # Diff summary: UTV2-1973
 
+## Approved closeout continuation
+
+PM scope amendment comment 6100422279 explicitly authorizes only appending
+`scripts/ci/participant-catalog-seed-drill.test.ts` to existing `test:ops`.
+The desktop session made that exact append and updated issue-owned scope and
+task-contract metadata. No dependency, lockfile or other package value changed.
+The old package-wiring blocker in verification/evidence is historical and must
+be replaced with measured current results after this continuation verifies it.
+
+Resume the existing execution epoch with its preserved admission baseline;
+record genuinely completed phases and heartbeats via ops:exec-checkpoint using
+the originating execution identity supplied in the environment. Finish bounded
+verification and draft PR updates; no merge, deployment or catalog implementation.
+Do not inspect unrelated historical proof bundles. Inspect only this issue's
+proof, current validators and focused new test. Existing DDL regressions are in
+`scripts/ci/migration-precondition-drill.test.ts` and
+`scripts/ci/migration-reversibility-gate.test.ts`.
+The disposable PostgreSQL installation described below is preserved but stopped;
+start only that ignored local data directory for focused scratch tests if needed.
+Local full verification must preserve the staging guard and record any refusal;
+fresh protected CI must supply the sanctioned staging proof. Do not use production.
+
 Implementation SHA: `cd23bc28724e8378d39d0da5470346518d0603f5`
 
 ## Summary
