@@ -1,0 +1,47 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1973
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1973
+  objective: "Participant catalog: truthful data-seed CI refusal and reversibility proof"
+  acceptance_criteria:
+    - |-
+      PM plan approved 2026-10-10 in Codex chat. Support slice must precede [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) and [UTV2-1972](https://linear.app/unit-talk-v2/issue/UTV2-1972/wnba-canonical-participants-and-manual-human-submission-support). Scope ONLY .github/workflows/migration-reversibility-gate.yml; new scripts/ci/participant-catalog-seed-drill.ts and participant-catalog-seed-drill.test.ts; issue-owned lane/proof metadata. No merge approval yet.
+
+      Acceptance criteria: route only recognized NCAAF/WNBA catalog migration basenames to meaningful disposable Postgres seed proof. Count only passing seed proof. All other migrations retain unchanged DDL refusal path/tests. No arbitrary marker/exemption/counter-only workaround/schema objects.
+      Seed proof captures baseline; conflicts refuse atomically; clean apply matches frozen identities; repeat no UUID/count/data churn; existing matching canonical ID preserved; paired rollback removes only inserted IDs and refuses referenced rows; exact baseline restored; reapply stable; no writes to teams/picks/provider/delivery/event data.
+      Only ephemeral or sanctioned staging DB. No production credentials or writes/deploy/Discord/delivery activation. NCAAF rollback separately approved exact path 20261010170000_ncaaf_participant_catalog.down.sql; WNBA one frozen matching down file in its later lane. Support slice does not implement catalogs.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      PM plan approved 2026-10-10 in Codex chat. Support slice must precede [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) and [UTV2-1972](https://linear.app/unit-talk-v2/issue/UTV2-1972/wnba-canonical-participants-and-manual-human-submission-support). Scope ONLY .github/workflows/migration-reversibility-gate.yml; new scripts/ci/participant-catalog-seed-drill.ts and participant-catalog-seed-drill.test.ts; issue-owned lane/proof metadata. No merge approval yet.
+
+      Acceptance criteria: route only recognized NCAAF/WNBA catalog migration basenames to meaningful disposable Postgres seed proof. Count only passing seed proof. All other migrations retain unchanged DDL refusal path/tests. No arbitrary marker/exemption/counter-only workaround/schema objects.
+      Seed proof captures baseline; conflicts refuse atomically; clean apply matches frozen identities; repeat no UUID/count/data churn; existing matching canonical ID preserved; paired rollback removes only inserted IDs and refuses referenced rows; exact baseline restored; reapply stable; no writes to teams/picks/provider/delivery/event data.
+      Only ephemeral or sanctioned staging DB. No production credentials or writes/deploy/Discord/delivery activation. NCAAF rollback separately approved exact path 20261010170000_ncaaf_participant_catalog.down.sql; WNBA one frozen matching down file in its later lane. Support slice does not implement catalogs.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1973/participant-catalog-truthful-data-seed-ci-refusal-and-reversibility
+    title: "Participant catalog: truthful data-seed CI refusal and reversibility
+      proof"
+    description: |-
+      PM plan approved 2026-10-10 in Codex chat. Support slice must precede [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) and [UTV2-1972](https://linear.app/unit-talk-v2/issue/UTV2-1972/wnba-canonical-participants-and-manual-human-submission-support). Scope ONLY .github/workflows/migration-reversibility-gate.yml; new scripts/ci/participant-catalog-seed-drill.ts and participant-catalog-seed-drill.test.ts; issue-owned lane/proof metadata. No merge approval yet.
+
+      Acceptance criteria: route only recognized NCAAF/WNBA catalog migration basenames to meaningful disposable Postgres seed proof. Count only passing seed proof. All other migrations retain unchanged DDL refusal path/tests. No arbitrary marker/exemption/counter-only workaround/schema objects.
+      Seed proof captures baseline; conflicts refuse atomically; clean apply matches frozen identities; repeat no UUID/count/data churn; existing matching canonical ID preserved; paired rollback removes only inserted IDs and refuses referenced rows; exact baseline restored; reapply stable; no writes to teams/picks/provider/delivery/event data.
+      Only ephemeral or sanctioned staging DB. No production credentials or writes/deploy/Discord/delivery activation. NCAAF rollback separately approved exact path 20261010170000_ncaaf_participant_catalog.down.sql; WNBA one frozen matching down file in its later lane. Support slice does not implement catalogs.
+    captured_at: 2026-10-10T17:04:49.709Z
+    description_sha256: e7b4ff65872e2e525c637901dac95e6d232b2db4a87c5c0c52d99ae68ea0b772
+  contract_hash: 19df59fe74a6cae060c354f1e88160e51c581dc04588ecae8f24612e0ab0458b

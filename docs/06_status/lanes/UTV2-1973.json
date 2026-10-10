@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1973",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1973-participant-seed-proof",
+  "branch": "codex/utv2-1973-participant-seed-proof",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/migration-reversibility-gate.yml",
+    "scripts/ci/participant-catalog-seed-drill.test.ts",
+    "scripts/ci/participant-catalog-seed-drill.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1973/diff-summary.md",
+    "docs/06_status/proof/UTV2-1973/evidence.json",
+    "docs/06_status/proof/UTV2-1973/verification.md",
+    "docs/06_status/proof/UTV2-1973/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-10-10T17:05:07.726Z",
+  "heartbeat_at": "2026-10-10T17:05:07.726Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1973-participant-seed-proof.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1973-participant-seed-proof",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
