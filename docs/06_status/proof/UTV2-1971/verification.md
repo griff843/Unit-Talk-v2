@@ -9,7 +9,7 @@ Issue: UTV2-1971
 Tier: T1
 Lane type: migration
 Proof profile: migration
-Execution SHA: `82106a80506cc6204c4fa958f684ae69017d48bf`
+Execution SHA: `82106a80503974d08f8b215f4046ab2c94a62588`
 Verified source SHA: `3fbf73356ea5b5d733a95ed7c8ca86ea41752229`
 result: pass_pending_pm_approval
 
@@ -75,7 +75,7 @@ with `CI_SUPABASE_*` credentials. No local guard was bypassed. Disposable loopba
 
 Merge SHA: pending merge
 PR: #1730
-Execution SHA: 82106a80506cc6204c4fa958f684ae69017d48bf
+Execution SHA: 82106a80503974d08f8b215f4046ab2c94a62588
 
 ## Independent executor review evidence
 
