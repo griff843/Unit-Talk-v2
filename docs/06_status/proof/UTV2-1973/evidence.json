@@ -30,7 +30,7 @@
     {
       "gate": "r-level",
       "verdict": "PASS",
-      "detail": "9 changed files; no R-level rules matched"
+      "detail": "10 changed files; no R-level rules matched"
     },
     {
       "gate": "writable-staging-db",
@@ -56,7 +56,7 @@
       "skipped": 0,
       "database": "disposable loopback PostgreSQL 18.6"
     },
-    "r_level": "PASS; 9 changed files; no rules matched"
+    "r_level": "PASS; 10 changed files; no rules matched"
   },
   "runtime_proof": {
     "kind": "disposable-postgres-seed-lifecycle",
