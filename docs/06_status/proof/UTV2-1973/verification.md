@@ -5,9 +5,20 @@ MERGE_SHA: pending merge
 Issue: UTV2-1973<br>
 Tier: T1<br>
 Execution SHA: `cd23bc28724e8378d39d0da5470346518d0603f5`<br>
-result: local_static_pass_staging_deferred
+result: BLOCKED_scope_expansion_required
 
 ## Summary
+
+Executor closeout is BLOCKED by the current Return Review Packet validator:
+`scripts/ci/participant-catalog-seed-drill.test.ts` is missing package-script wiring.
+The new workflow invokes this test directly, but the separate return validator
+requires a reference in `package.json`. That file is outside the PM-approved
+support scope. No package file or validator exception was changed.
+Minimum proposed amendment: append this test path to the existing `test:ops`
+command, preserving every existing entry and all dependencies. Until approved
+and verified, no READY_FOR_REVIEW executor attestation is authorized by this proof.
+The governed CLI attempt was interrupted at this scope boundary; its actual
+nonzero exit is retained in the wrapper-produced model-routing sidecar.
 
 The exact-path seed-proof router and its disposable-PostgreSQL lifecycle drill are complete
 and statically verified. The focused runtime fixture passed locally against loopback PostgreSQL.
