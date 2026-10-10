@@ -1,0 +1,13 @@
+{
+  "issue_id": "UTV2-1971",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "execution_sha": "82106a80506cc6204c4fa958f684ae69017d48bf",
+  "policy_version": "2.0.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "generated_at": "2026-10-10T20:49:00Z"
+}
