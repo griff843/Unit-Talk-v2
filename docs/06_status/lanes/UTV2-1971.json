@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1971-ncaaf-participant-catalog",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1730",
   "files_changed": [],
   "file_scope_lock": [
     "db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql",
@@ -22,9 +22,9 @@
     "docs/06_status/proof/UTV2-1971/verification.md",
     "docs/06_status/proof/UTV2-1971/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-10T20:23:56.285Z",
-  "heartbeat_at": "2026-10-10T20:23:56.285Z",
+  "heartbeat_at": "2026-10-10T20:51:31.229Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1971-ncaaf-participant-catalog.json",
