@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1974",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "generated_at": "2026-10-10T22:57:04Z",
+  "pr_number": 1731,
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ccb475ffabf42319b109fd83abd41153d347e246",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "verified_source_sha": "ccb475ffabf42319b109fd83abd41153d347e246",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
+        "result": "pass",
+        "detail": "136 passed, 0 failed"
+      },
+      {
+        "command": "pnpm type-check",
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test",
+        "result": "pass"
+      },
+      {
+        "command": "pnpm verify:static",
+        "result": "pass"
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "result": "pass",
+        "detail": "Verdict PASS; 8 changed files; no R-level rules matched"
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "web_root_admitted": "pass",
+    "web_derives_to_web": "pass",
+    "cross_app_scope_refused": "pass",
+    "unknown_scope_refused": "pass",
+    "caps_and_fail_closed_checks_preserved": "pass"
+  },
+  "writable_db_proof": {
+    "status": "blocked_deferred_to_staging_ci",
+    "detail": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "production_accessed": false
+  },
+  "pending": [
+    "outer executor wrapper execution-truth and provenance publication",
+    "protected exact-head CI after this proof commit",
+    "PM approval and governed merge",
+    "post-merge lane finalization and orchestration reconciliation"
+  ]
+}
