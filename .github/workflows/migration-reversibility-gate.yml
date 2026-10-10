@@ -18,6 +18,8 @@ on:
       - 'scripts/ci/migration-reversibility-gate.ts'
       - 'scripts/ci/schema-roundtrip-hash.ts'
       - 'scripts/ci/migration-precondition-drill.ts'
+      - 'scripts/ci/participant-catalog-seed-drill.ts'
+      - 'scripts/ci/participant-catalog-seed-drill.test.ts'
       - '.github/workflows/migration-reversibility-gate.yml'
 
 permissions:
@@ -418,6 +420,11 @@ jobs:
             fi
           done
 
+      - name: Participant seed drill adversarial tests (scratch only)
+        env:
+          PARTICIPANT_CATALOG_TEST_ADMIN_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: pnpm exec tsx --test scripts/ci/participant-catalog-seed-drill.test.ts
+
       - name: Drill each new migration's fail-closed precondition
         if: steps.detect.outputs.has_migration == 'true'
         env:
@@ -427,6 +434,28 @@ jobs:
           DRILLED=0
           while IFS= read -r MIGRATION; do
             [[ -z "$MIGRATION" ]] && continue
+
+            # Exact governed candidates only. No marker can opt other SQL into
+            # the seed path; a seed counts only after all data assertions pass.
+            case "$MIGRATION" in
+              supabase/migrations/20261010170000_ncaaf_participant_catalog.sql|supabase/migrations/20261010170100_wnba_participant_catalog.sql)
+                SEED_DB="participant_catalog_drill_${GITHUB_RUN_ID}_${DRILLED}"
+                if ! PGPASSWORD=postgres createdb -h localhost -U postgres -T postgres "$SEED_DB"; then
+                  FAIL=1
+                  continue
+                fi
+                if POSTGRES_URL="postgresql://postgres:postgres@localhost:5432/$SEED_DB" \
+                  pnpm exec tsx scripts/ci/participant-catalog-seed-drill.ts "$MIGRATION"; then
+                  DRILLED=$((DRILLED + 1))
+                else
+                  FAIL=1
+                fi
+                if ! PGPASSWORD=postgres dropdb -h localhost -U postgres "$SEED_DB"; then
+                  FAIL=1
+                fi
+                continue
+                ;;
+            esac
 
             # Both marker greps are anchored to the start of a comment line.
             # An unanchored grep matches PROSE that merely mentions a marker, which
