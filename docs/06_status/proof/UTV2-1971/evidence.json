@@ -1,0 +1,140 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1971",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "title": "Additive 2026 NCAA Division I football participant catalog",
+  "status": "evidence_complete_pending_pm_approval",
+  "generated_at": "2026-10-10T21:05:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "d859fec024e2601eba112c896467fde3b2c68f4a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "commands": [
+      {
+        "command": "pnpm type-check",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm test",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm exec tsx --test packages/db/src/canonical-reference-schema.test.ts",
+        "tests": 26,
+        "pass": 25,
+        "fail": 0,
+        "skipped": 1
+      },
+      {
+        "command": "pnpm verify:commands",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm verify:static",
+        "result": "PASS locally and in exact-head CI run 38089100054 job 114323326879"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "result": "PASS; no R-level rules matched"
+      }
+    ],
+    "note": "Local static verification and exact-head hosted verify both passed."
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "head": "d859fec024e2601eba112c896467fde3b2c68f4a",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 38089100046,
+      "job": 114321669432,
+      "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
+      "cases": [
+        "baseline captured before participant seed",
+        "identity conflict refused atomically",
+        "applied to an empty candidate catalog in scratch after prerequisite schema initialization: 266 frozen identities; protected tables unchanged",
+        "repeat application produced zero data, UUID, or count churn",
+        "rollback refused a referenced identity, including an ON DELETE CASCADE foreign key",
+        "rollback restored the exact baseline",
+        "reapply preserved stable governed identities",
+        "matching pre-existing canonical UUID was preserved through apply, repeat, and rollback"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 38089100046,
+      "job": 114321669440,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
+      "detail": "pre-up equaled post-down and post-up equaled post-reapply for 20261010170000_ncaaf_participant_catalog"
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 38089100054,
+      "job": 114321782207,
+      "workflow": "CI / Writable DB proof (staging only)",
+      "target": "xskgrzbteyqdufktjrjx",
+      "detail": "sanctioned staging writable proof and all T1 live proof suites passed; same-run receipt uploaded"
+    },
+    "live_schema_parity": {
+      "result": "PASS",
+      "run": 38089100058,
+      "job": 114321695360,
+      "workflow": "Live Schema Parity / Live Schema Parity",
+      "detail": "repository schema and read-only live schema parity check passed; this is not a production data apply"
+    },
+    "verify": {
+      "result": "PASS",
+      "run": 38089100054,
+      "job": 114323326879,
+      "workflow": "CI / verify"
+    },
+    "local_containment": "pnpm test:db refused host=127.0.0.1 ref=unidentified before mutation; writable verification was correctly delegated to sanctioned staging CI"
+  },
+  "catalog": {
+    "participants": 266,
+    "fbs": 138,
+    "fcs": 128,
+    "writes": [
+      "public.participants"
+    ],
+    "forbidden_writes": [
+      "public.teams"
+    ],
+    "membership_only_ncaa_org_ids": [
+      470,
+      11740
+    ],
+    "excluded_standings_only": [
+      "Saint Francis"
+    ]
+  },
+  "pending_evidence": [
+    "PM exact-head merge approval",
+    "post-merge production apply and canonical closeout"
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1730",
+  "independent_executor_review": {
+    "contribution": "Frozen roster input and bounded rollback concurrency correction within approved paths",
+    "database": "Disposable PostgreSQL18.6 loopback only",
+    "focused_tests": {
+      "tests": 26,
+      "pass": 26,
+      "fail": 0,
+      "skipped": 0
+    },
+    "concurrency": [
+      "55P03 concurrent insertion refusal",
+      "P0001 committed-reference rollback refusal",
+      "exact participant and downstream snapshot preserved"
+    ],
+    "actual_seed_drill": "PASS, all eight reported phases after row-lock correction",
+    "lint": "PASS",
+    "type_check": "PASS",
+    "production_mutation": false
+  }
+}

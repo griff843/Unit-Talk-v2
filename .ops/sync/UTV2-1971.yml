@@ -1,0 +1,91 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1971
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1971
+  objective: "NCAAF canonical participants: additive 2026 Division I football catalog"
+  acceptance_criteria:
+    - |-
+      PM APPROVE PLAN received from Griff in the current Codex conversation on 2026-10-10. Plan approval only; PM exact-head merge approval remains required. No production apply/deployment/provider activation/delivery release authorized.
+
+      Approved scope: one additive supabase/migrations/\*\_ncaaf_participant_catalog.sql; packages/db/src/canonical-reference-schema.test.ts; one reviewed roster fixture packages/db/src/ncaaf-participant-roster.json; issue-owned lane/proof artifacts.
+
+      Acceptance criteria:
+
+      * participants is canonical; no teams writes.
+      * Freeze current NCAA Division I football FBS+FCS membership from authoritative membership evidence, reconciling standings and transitions/independents.
+      * School-qualified names prevent mascot collisions.
+      * Stable UUIDs; repeat application creates no duplicates or UUID churn. No invented provider IDs. Preserve existing IDs/references.
+      * No event/odds/grading/provider/worker/routing/delivery/schema replacement changes.
+      * Focused tsx schema tests, pnpm verify, R-level artifacts, sanctioned T1 staging DB and exact-head CI proof. Do not defeat local staging guard.
+
+      Current main e2ac5dbf93f1de634400d3b310c5badf5699d067. Read-only production NCAAF participant count 0. Official NCAA directory capture 2026-10-10: 138 FBS + 128 FCS (academicYear 2027). Standings reconciliation required; known stale FCS standings include Saint Francis (now DIII) and omit New Haven/West Florida.
+
+      WNBA is separately approved manual-support lane and will be admitted only after singleton/file locks permit. Capitals pick and containment remain untouched.
+
+      2026-10-10 executor scope finding: implementation not started. Current migration CI requires db/migrations-rollback/<basename>.down.sql (outside approved substantive paths). Its DDL-specific precondition drill cannot prove a data-only seed; the existing NO-PRECONDITION-REQUIRED branch skips the seed but then fails when DRILLED=0. A narrow rollback/proof-runner scope amendment is required. No guard bypass, fabricated schema object, production write or deployment performed. Current-head preflight is running; baseline from old local main is not claimed current-head evidence.
+
+      2026-10-10 executor admission update: the earlier proof-runner/rollback scope blocker is resolved. PM approved the bounded participant-catalog proof amendment in the current thread. [UTV2-1973](https://linear.app/unit-talk-v2/issue/UTV2-1973/participant-catalog-truthful-data-seed-ci-refusal-and-reversibility) / PR [griff843/Unit-Talk-v2#1729](https://linear.app/unit-talk-v2/review/featops-utv2-1973-participant-catalog-seed-proof-482bbb44108c) merged via governed wrapper at d30af5322f039cd11d5e3bbdf7d2794f7ba2051e; merge-SHA staging/verify and hosted lane closeout passed; current main c800234b77295265210cba9965e36e29a0673494. NCAAF scope additionally includes exactly db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql. Frozen recognized migration is supabase/migrations/20261010170000_ncaaf_participant_catalog.sql. Fresh authoritative NCAA directory responses match the frozen 138 FBS + 128 FCS roster byte-for-byte. Return to Ready for Codex for normal singleton/file-lock preflight and bounded implementation. Plan approval only; exact-head PM merge approval, production apply, deployment, events/providers and delivery release remain separate. No additional implementation paths are authorized.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      PM APPROVE PLAN received from Griff in the current Codex conversation on 2026-10-10. Plan approval only; PM exact-head merge approval remains required. No production apply/deployment/provider activation/delivery release authorized.
+
+      Approved scope: one additive supabase/migrations/\*\_ncaaf_participant_catalog.sql; packages/db/src/canonical-reference-schema.test.ts; one reviewed roster fixture packages/db/src/ncaaf-participant-roster.json; issue-owned lane/proof artifacts.
+
+      Acceptance criteria:
+
+      * participants is canonical; no teams writes.
+      * Freeze current NCAA Division I football FBS+FCS membership from authoritative membership evidence, reconciling standings and transitions/independents.
+      * School-qualified names prevent mascot collisions.
+      * Stable UUIDs; repeat application creates no duplicates or UUID churn. No invented provider IDs. Preserve existing IDs/references.
+      * No event/odds/grading/provider/worker/routing/delivery/schema replacement changes.
+      * Focused tsx schema tests, pnpm verify, R-level artifacts, sanctioned T1 staging DB and exact-head CI proof. Do not defeat local staging guard.
+
+      Current main e2ac5dbf93f1de634400d3b310c5badf5699d067. Read-only production NCAAF participant count 0. Official NCAA directory capture 2026-10-10: 138 FBS + 128 FCS (academicYear 2027). Standings reconciliation required; known stale FCS standings include Saint Francis (now DIII) and omit New Haven/West Florida.
+
+      WNBA is separately approved manual-support lane and will be admitted only after singleton/file locks permit. Capitals pick and containment remain untouched.
+
+      2026-10-10 executor scope finding: implementation not started. Current migration CI requires db/migrations-rollback/<basename>.down.sql (outside approved substantive paths). Its DDL-specific precondition drill cannot prove a data-only seed; the existing NO-PRECONDITION-REQUIRED branch skips the seed but then fails when DRILLED=0. A narrow rollback/proof-runner scope amendment is required. No guard bypass, fabricated schema object, production write or deployment performed. Current-head preflight is running; baseline from old local main is not claimed current-head evidence.
+
+      2026-10-10 executor admission update: the earlier proof-runner/rollback scope blocker is resolved. PM approved the bounded participant-catalog proof amendment in the current thread. [UTV2-1973](https://linear.app/unit-talk-v2/issue/UTV2-1973/participant-catalog-truthful-data-seed-ci-refusal-and-reversibility) / PR [griff843/Unit-Talk-v2#1729](https://linear.app/unit-talk-v2/review/featops-utv2-1973-participant-catalog-seed-proof-482bbb44108c) merged via governed wrapper at d30af5322f039cd11d5e3bbdf7d2794f7ba2051e; merge-SHA staging/verify and hosted lane closeout passed; current main c800234b77295265210cba9965e36e29a0673494. NCAAF scope additionally includes exactly db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql. Frozen recognized migration is supabase/migrations/20261010170000_ncaaf_participant_catalog.sql. Fresh authoritative NCAA directory responses match the frozen 138 FBS + 128 FCS roster byte-for-byte. Return to Ready for Codex for normal singleton/file-lock preflight and bounded implementation. Plan approval only; exact-head PM merge approval, production apply, deployment, events/providers and delivery release remain separate. No additional implementation paths are authorized.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog
+    title: "NCAAF canonical participants: additive 2026 Division I football catalog"
+    description: |-
+      PM APPROVE PLAN received from Griff in the current Codex conversation on 2026-10-10. Plan approval only; PM exact-head merge approval remains required. No production apply/deployment/provider activation/delivery release authorized.
+
+      Approved scope: one additive supabase/migrations/\*\_ncaaf_participant_catalog.sql; packages/db/src/canonical-reference-schema.test.ts; one reviewed roster fixture packages/db/src/ncaaf-participant-roster.json; issue-owned lane/proof artifacts.
+
+      Acceptance criteria:
+
+      * participants is canonical; no teams writes.
+      * Freeze current NCAA Division I football FBS+FCS membership from authoritative membership evidence, reconciling standings and transitions/independents.
+      * School-qualified names prevent mascot collisions.
+      * Stable UUIDs; repeat application creates no duplicates or UUID churn. No invented provider IDs. Preserve existing IDs/references.
+      * No event/odds/grading/provider/worker/routing/delivery/schema replacement changes.
+      * Focused tsx schema tests, pnpm verify, R-level artifacts, sanctioned T1 staging DB and exact-head CI proof. Do not defeat local staging guard.
+
+      Current main e2ac5dbf93f1de634400d3b310c5badf5699d067. Read-only production NCAAF participant count 0. Official NCAA directory capture 2026-10-10: 138 FBS + 128 FCS (academicYear 2027). Standings reconciliation required; known stale FCS standings include Saint Francis (now DIII) and omit New Haven/West Florida.
+
+      WNBA is separately approved manual-support lane and will be admitted only after singleton/file locks permit. Capitals pick and containment remain untouched.
+
+      2026-10-10 executor scope finding: implementation not started. Current migration CI requires db/migrations-rollback/<basename>.down.sql (outside approved substantive paths). Its DDL-specific precondition drill cannot prove a data-only seed; the existing NO-PRECONDITION-REQUIRED branch skips the seed but then fails when DRILLED=0. A narrow rollback/proof-runner scope amendment is required. No guard bypass, fabricated schema object, production write or deployment performed. Current-head preflight is running; baseline from old local main is not claimed current-head evidence.
+
+      2026-10-10 executor admission update: the earlier proof-runner/rollback scope blocker is resolved. PM approved the bounded participant-catalog proof amendment in the current thread. [UTV2-1973](https://linear.app/unit-talk-v2/issue/UTV2-1973/participant-catalog-truthful-data-seed-ci-refusal-and-reversibility) / PR [griff843/Unit-Talk-v2#1729](https://linear.app/unit-talk-v2/review/featops-utv2-1973-participant-catalog-seed-proof-482bbb44108c) merged via governed wrapper at d30af5322f039cd11d5e3bbdf7d2794f7ba2051e; merge-SHA staging/verify and hosted lane closeout passed; current main c800234b77295265210cba9965e36e29a0673494. NCAAF scope additionally includes exactly db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql. Frozen recognized migration is supabase/migrations/20261010170000_ncaaf_participant_catalog.sql. Fresh authoritative NCAA directory responses match the frozen 138 FBS + 128 FCS roster byte-for-byte. Return to Ready for Codex for normal singleton/file-lock preflight and bounded implementation. Plan approval only; exact-head PM merge approval, production apply, deployment, events/providers and delivery release remain separate. No additional implementation paths are authorized.
+    captured_at: 2026-10-10T20:23:45.094Z
+    description_sha256: 8b5cf5408be665158651cc0e4ce7ffb680f0ef4c90e7a8655c0136b7728346e7
+  contract_hash: cad8c498edd8f5909e773870380795317ec666c008821cc2545162435bdf49c5
