@@ -1,6 +1,6 @@
 # PROOF: UTV2-1974
 
-MERGE_SHA: pending merge
+MERGE_SHA: 9c364d339492e4212de8896793593b71bf8c1db4
 Issue: UTV2-1974
 Tier: T2
 result: local_static_pass_staging_deferred
@@ -36,6 +36,6 @@ writable-db: BLOCKED/DEFERRED to protected staging CI
 - Exact-head CI: pending the proof commit.
 
 ## Merge SHA Binding
-Merge SHA: pending merge
+Merge SHA: 9c364d339492e4212de8896793593b71bf8c1db4
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1731
 Execution SHA: ccb475ffabf42319b109fd83abd41153d347e246

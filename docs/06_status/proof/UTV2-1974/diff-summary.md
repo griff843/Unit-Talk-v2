@@ -10,5 +10,5 @@ The delivery-ui policy already allows apps/web, but the app-root registry omitte
 The focused test failed before the registry change and passed afterward. The full shared suite passed 136 tests. This is the separately approved admission correction; the website implementation belongs to UTV2-1801.
 
 ## SHA Binding
-Merge SHA: pending merge
+Merge SHA: 9c364d339492e4212de8896793593b71bf8c1db4
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1731
