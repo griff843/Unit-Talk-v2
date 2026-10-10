@@ -4,10 +4,14 @@
   "model_profile": "codex-sol-medium",
   "model": "gpt-5.6-sol",
   "reasoning_effort": "medium",
-  "execution_sha": "82106a80506cc6204c4fa958f684ae69017d48bf",
   "policy_version": "2.0.0",
+  "codex_cli_version": "codex-cli 0.153.3",
   "legacy_compatibility_used": false,
   "override_used": false,
   "override_authorized_by": null,
-  "generated_at": "2026-10-10T20:49:00Z"
+  "codex_exit_code": null,
+  "prompt_bytes": 19984,
+  "estimated_prompt_tokens": 4996,
+  "wall_time_ms": 2700163,
+  "generated_at": "2026-10-10T21:10:33.017Z"
 }
