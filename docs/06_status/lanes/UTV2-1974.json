@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1974-web-admission",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1731",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/shared.test.ts",
@@ -20,9 +20,9 @@
     "docs/06_status/proof/UTV2-1974/verification.md",
     "docs/06_status/proof/UTV2-1974/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-10T20:40:29.294Z",
-  "heartbeat_at": "2026-10-10T20:40:29.294Z",
+  "heartbeat_at": "2026-10-10T20:54:26.817Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1974-web-admission.json",
