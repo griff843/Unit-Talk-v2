@@ -9,7 +9,9 @@
     "verified_source_sha": "ed8a0fa338fbcec427215bcd10376dd6effc075f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "merge_sha": null
+    "merge_sha": "d30af5322f039cd11d5e3bbdf7d2794f7ba2051e",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-10T19:41:22.393Z"
   },
   "gate_results": [
     {

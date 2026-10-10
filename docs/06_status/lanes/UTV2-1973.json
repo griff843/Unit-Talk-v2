@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1973-participant-seed-proof",
   "branch": "codex/utv2-1973-participant-seed-proof",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d30af5322f039cd11d5e3bbdf7d2794f7ba2051e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1729",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
     "docs/06_status/proof/UTV2-1973/verification.md",
     "docs/06_status/proof/UTV2-1973/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-10T17:05:07.726Z",
-  "heartbeat_at": "2026-10-10T17:33:58.189Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-10T19:41:27.437Z",
+  "closed_at": "2026-10-10T19:41:27.437Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1973-participant-seed-proof.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-10T19:41:24.271Z",
+      "verdict": "pass",
+      "merge_sha": "d30af5322f039cd11d5e3bbdf7d2794f7ba2051e",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",

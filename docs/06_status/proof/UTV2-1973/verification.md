@@ -1,6 +1,6 @@
 # PROOF: UTV2-1973
 
-MERGE_SHA: pending merge
+MERGE_SHA: d30af5322f039cd11d5e3bbdf7d2794f7ba2051e
 
 Issue: UTV2-1973<br>
 Tier: T1<br>
@@ -82,6 +82,6 @@ writable staging verification remains explicitly deferred as recorded above.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d30af5322f039cd11d5e3bbdf7d2794f7ba2051e
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1729
 Execution SHA: `ed8a0fa338fbcec427215bcd10376dd6effc075f`

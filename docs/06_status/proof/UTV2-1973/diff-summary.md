@@ -63,5 +63,5 @@ $ git diff --stat origin/main...HEAD -- .github/workflows/migration-reversibilit
 ## SHA Binding
 
 Execution SHA: `ed8a0fa338fbcec427215bcd10376dd6effc075f`
-Merge SHA: pending merge
+Merge SHA: d30af5322f039cd11d5e3bbdf7d2794f7ba2051e
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1729
