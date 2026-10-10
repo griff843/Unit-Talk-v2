@@ -3,10 +3,10 @@
   "issue_id": "UTV2-1973",
   "pr_number": 1729,
   "proof_profile": "static",
-  "status": "BLOCKED_scope_expansion_required",
-  "generated_at": "2026-10-10T17:29:42Z",
+  "status": "REVIEW_CANDIDATE_PENDING_PROTECTED_CI",
+  "generated_at": "2026-10-10T18:19:22Z",
   "sha_binding": {
-    "verified_source_sha": "cd23bc28724e8378d39d0da5470346518d0603f5",
+    "verified_source_sha": "ed8a0fa338fbcec427215bcd10376dd6effc075f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "merge_sha": null
@@ -14,8 +14,8 @@
   "gate_results": [
     {
       "gate": "return-review-packet-test-wiring",
-      "verdict": "FAIL",
-      "detail": "New participant-catalog-seed-drill.test.ts is wired in the workflow, but current return validator requires a package.json script reference. package.json is outside approved scope; no exemption or package edit applied."
+      "verdict": "PASS",
+      "detail": "PM-approved package.json amendment appends participant-catalog-seed-drill.test.ts to test:ops while preserving all prior entries; no dependency, lockfile, rename, or validator exemption."
     },
     {
       "gate": "focused-participant-seed-drill",
@@ -48,7 +48,7 @@
   "static_proof": {
     "command": "pnpm verify:static",
     "conclusion": "success",
-    "verified_source_sha": "cd23bc28724e8378d39d0da5470346518d0603f5",
+    "verified_source_sha": "ed8a0fa338fbcec427215bcd10376dd6effc075f",
     "focused_test": {
       "command": "pnpm exec tsx --test scripts/ci/participant-catalog-seed-drill.test.ts",
       "pass": 14,
@@ -85,7 +85,6 @@
     "production_accessed": false
   },
   "pending": [
-    "PM scope amendment: package.json, append new test path to existing test:ops without replacing any entry or changing dependencies",
     "protected exact-head CI and staging receipt",
     "outer-wrapper executor-result publication",
     "PM merge approval",

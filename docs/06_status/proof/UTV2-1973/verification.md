@@ -4,21 +4,17 @@ MERGE_SHA: pending merge
 
 Issue: UTV2-1973<br>
 Tier: T1<br>
-Execution SHA: `cd23bc28724e8378d39d0da5470346518d0603f5`<br>
-result: BLOCKED_scope_expansion_required
+Execution SHA: `ed8a0fa338fbcec427215bcd10376dd6effc075f`<br>
+result: REVIEW_CANDIDATE_PENDING_PROTECTED_CI
 
 ## Summary
 
-Executor closeout is BLOCKED by the current Return Review Packet validator:
-`scripts/ci/participant-catalog-seed-drill.test.ts` is missing package-script wiring.
-The new workflow invokes this test directly, but the separate return validator
-requires a reference in `package.json`. That file is outside the PM-approved
-support scope. No package file or validator exception was changed.
-Minimum proposed amendment: append this test path to the existing `test:ops`
-command, preserving every existing entry and all dependencies. Until approved
-and verified, no READY_FOR_REVIEW executor attestation is authorized by this proof.
-The governed CLI attempt was interrupted at this scope boundary; its actual
-nonzero exit is retained in the wrapper-produced model-routing sidecar.
+PM scope amendment comment 6100422279 authorized appending the focused test to
+the existing `test:ops` command. The append is committed with every prior entry
+preserved and no dependency, lockfile, script rename, or validator exemption.
+Local static and disposable-PostgreSQL proof is green. Protected exact-head CI
+and its sanctioned staging receipt remain pending; this child executor does not
+publish a READY_FOR_REVIEW attestation.
 
 The exact-path seed-proof router and its disposable-PostgreSQL lifecycle drill are complete
 and statically verified. The focused runtime fixture passed locally against loopback PostgreSQL.
@@ -66,7 +62,7 @@ $ pnpm exec tsx --test scripts/ci/migration-precondition-drill.test.ts
 
 ## Verification
 
-- [x] `pnpm verify:static`: exit 0. This includes lint, type-check, build, the repository test suite, production post-migration checks, Smart Form verification, and command/migration checks.
+- [x] `pnpm verify:static`: exit 0 at implementation SHA `ed8a0fa338fbcec427215bcd10376dd6effc075f`. This includes lint, type-check, build, the repository test suite, production post-migration checks, Smart Form verification, and command/migration checks.
 - [x] `pnpm type-check`: passed as a constituent of `pnpm verify:static`.
 - [x] `pnpm test`: passed as a constituent of `pnpm verify:static`.
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: `Verdict: PASS`; 9 changed files; no rules matched.
@@ -80,7 +76,7 @@ was used.
 ## Runtime Verification
 
 The disposable loopback runtime proof passed 14 tests with zero skips at execution SHA
-`cd23bc28724e8378d39d0da5470346518d0603f5`. It used synthetic migration fixtures to prove the
+`ed8a0fa338fbcec427215bcd10376dd6effc075f`. It used synthetic migration fixtures to prove the
 support drill itself; it does not claim execution of the later catalog migrations. Sanctioned
 writable staging verification remains explicitly deferred as recorded above.
 
@@ -88,4 +84,4 @@ writable staging verification remains explicitly deferred as recorded above.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1729
-Execution SHA: `cd23bc28724e8378d39d0da5470346518d0603f5`
+Execution SHA: `ed8a0fa338fbcec427215bcd10376dd6effc075f`
