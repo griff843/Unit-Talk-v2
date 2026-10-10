@@ -9,7 +9,7 @@ Issue: UTV2-1971
 Tier: T1
 Lane type: migration
 Proof profile: migration
-Execution SHA: `82106a80503974d08f8b215f4046ab2c94a62588`
+Execution SHA: `82106a80506cc6204c4fa958f684ae69017d48bf`
 Verified source SHA: `3fbf73356ea5b5d733a95ed7c8ca86ea41752229`
 result: pass_pending_pm_approval
 
@@ -75,7 +75,7 @@ with `CI_SUPABASE_*` credentials. No local guard was bypassed. Disposable loopba
 
 Merge SHA: pending merge
 PR: #1730
-Execution SHA: 82106a80503974d08f8b215f4046ab2c94a62588
+Execution SHA: 82106a80506cc6204c4fa958f684ae69017d48bf
 
 ## Independent executor review evidence
 
@@ -92,3 +92,14 @@ Post-correction scoped ESLint and type-check: PASS
 ```
 
 Ignored local transcripts: `.out/production-resume-20261009/ncaaf-focused-postgres.log`, `ncaaf-actual-seed-drill.log`, `ncaaf-rollback-concurrency-proof.json`. Scratch databases were removed after each test. The optional concurrency regression ran locally with a disposable admin URL; this does not claim it ran in hosted CI.
+
+## Machine-verified source identity
+
+This Git output supersedes conflicting primary checkpoint notes that mistook a draft sidecar value for the source commit. It changes no implementation.
+
+```
+git rev-parse 82106a805
+82106a80506cc6204c4fa958f684ae69017d48bf
+git cat-file -t 82106a80506cc6204c4fa958f684ae69017d48bf
+commit
+```
