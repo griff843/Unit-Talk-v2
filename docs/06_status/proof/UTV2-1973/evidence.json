@@ -1,0 +1,93 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1973",
+  "pr_number": 1729,
+  "proof_profile": "static",
+  "status": "REVIEW_CANDIDATE_PENDING_PROTECTED_CI",
+  "generated_at": "2026-10-10T18:19:22Z",
+  "sha_binding": {
+    "verified_source_sha": "ed8a0fa338fbcec427215bcd10376dd6effc075f",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": null
+  },
+  "gate_results": [
+    {
+      "gate": "return-review-packet-test-wiring",
+      "verdict": "PASS",
+      "detail": "PM-approved package.json amendment appends participant-catalog-seed-drill.test.ts to test:ops while preserving all prior entries; no dependency, lockfile, rename, or validator exemption."
+    },
+    {
+      "gate": "focused-participant-seed-drill",
+      "verdict": "PASS",
+      "detail": "14 pass, 0 fail, 0 skipped against disposable loopback PostgreSQL 18.6"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static exited 0"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "10 changed files; no R-level rules matched"
+    },
+    {
+      "gate": "writable-staging-db",
+      "verdict": "SKIP",
+      "detail": "Local target identity refused before DB access; protected staging-ci execution required"
+    },
+    {
+      "gate": "protected-exact-head-ci",
+      "verdict": "SKIP",
+      "detail": "Pending on draft PR #1729"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "static_proof": {
+    "command": "pnpm verify:static",
+    "conclusion": "success",
+    "verified_source_sha": "ed8a0fa338fbcec427215bcd10376dd6effc075f",
+    "focused_test": {
+      "command": "pnpm exec tsx --test scripts/ci/participant-catalog-seed-drill.test.ts",
+      "pass": 14,
+      "fail": 0,
+      "skipped": 0,
+      "database": "disposable loopback PostgreSQL 18.6"
+    },
+    "r_level": "PASS; 10 changed files; no rules matched"
+  },
+  "runtime_proof": {
+    "kind": "disposable-postgres-seed-lifecycle",
+    "result": "PASS",
+    "cases": [
+      "NCAAF and WNBA complete seed/rollback lifecycles",
+      "atomic canonical-identity conflict refusal",
+      "unrelated-table write refusal",
+      "repeat-apply churn refusal",
+      "governed UUID enforcement",
+      "cascading-reference rollback refusal",
+      "broad rollback deletion refusal",
+      "pre-existing canonical identity preservation"
+    ],
+    "catalog_migrations_executed": false,
+    "production_accessed": false
+  },
+  "db_verification": {
+    "command": "pnpm test:db",
+    "status": "blocked_deferred_to_protected_ci",
+    "exit_code": 1,
+    "observed_host": "127.0.0.1",
+    "observed_ref": "unidentified",
+    "required_staging_ref": "xskgrzbteyqdufktjrjx",
+    "database_test_started": false,
+    "production_accessed": false
+  },
+  "pending": [
+    "protected exact-head CI and staging receipt",
+    "outer-wrapper executor-result publication",
+    "PM merge approval",
+    "governed merge and post-merge lane finalization"
+  ]
+}

@@ -1,0 +1,53 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1973
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1973
+  objective: "Participant catalog: truthful data-seed CI refusal and reversibility proof"
+  acceptance_criteria:
+    - "PM scope amendment APPROVED on PR #1729, comment 6100422279,
+      https://github.com/griff843/Unit-Talk-v2/pull/1729#issuecomment-610042227\
+      9. Supersedes the initial three-file-only scope solely to allow
+      package.json: append scripts/ci/participant-catalog-seed-drill.test.ts to
+      existing test:ops. Preserve every existing entry; no dependencies,
+      lockfile changes, script renames, validator exemptions, unrelated package
+      edits or further scope expansion. Resume sanctioned closeout, obtain fresh
+      exact-head CI/staging proof, then return for PM merge review. No merge
+      approval."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      PM plan approved 2026-10-10 in Codex chat. Support slice must precede [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) and [UTV2-1972](https://linear.app/unit-talk-v2/issue/UTV2-1972/wnba-canonical-participants-and-manual-human-submission-support). Scope ONLY .github/workflows/migration-reversibility-gate.yml; new scripts/ci/participant-catalog-seed-drill.ts and participant-catalog-seed-drill.test.ts; issue-owned lane/proof metadata. No merge approval yet.
+
+      Acceptance criteria: route only recognized NCAAF/WNBA catalog migration basenames to meaningful disposable Postgres seed proof. Count only passing seed proof. All other migrations retain unchanged DDL refusal path/tests. No arbitrary marker/exemption/counter-only workaround/schema objects.
+      Seed proof captures baseline; conflicts refuse atomically; clean apply matches frozen identities; repeat no UUID/count/data churn; existing matching canonical ID preserved; paired rollback removes only inserted IDs and refuses referenced rows; exact baseline restored; reapply stable; no writes to teams/picks/provider/delivery/event data.
+      Only ephemeral or sanctioned staging DB. No production credentials or writes/deploy/Discord/delivery activation. NCAAF rollback separately approved exact path 20261010170000_ncaaf_participant_catalog.down.sql; WNBA one frozen matching down file in its later lane. Support slice does not implement catalogs.
+  source:
+    kind: local-description
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1973/participant-catalog-truthful-data-seed-ci-refusal-and-reversibility
+    title: "Participant catalog: truthful data-seed CI refusal and reversibility
+      proof"
+    description: |-
+      PM plan approved 2026-10-10 in Codex chat. Support slice must precede [UTV2-1971](https://linear.app/unit-talk-v2/issue/UTV2-1971/ncaaf-canonical-participants-additive-2026-division-i-football-catalog) and [UTV2-1972](https://linear.app/unit-talk-v2/issue/UTV2-1972/wnba-canonical-participants-and-manual-human-submission-support). Scope ONLY .github/workflows/migration-reversibility-gate.yml; new scripts/ci/participant-catalog-seed-drill.ts and participant-catalog-seed-drill.test.ts; issue-owned lane/proof metadata. No merge approval yet.
+
+      Acceptance criteria: route only recognized NCAAF/WNBA catalog migration basenames to meaningful disposable Postgres seed proof. Count only passing seed proof. All other migrations retain unchanged DDL refusal path/tests. No arbitrary marker/exemption/counter-only workaround/schema objects.
+      Seed proof captures baseline; conflicts refuse atomically; clean apply matches frozen identities; repeat no UUID/count/data churn; existing matching canonical ID preserved; paired rollback removes only inserted IDs and refuses referenced rows; exact baseline restored; reapply stable; no writes to teams/picks/provider/delivery/event data.
+      Only ephemeral or sanctioned staging DB. No production credentials or writes/deploy/Discord/delivery activation. NCAAF rollback separately approved exact path 20261010170000_ncaaf_participant_catalog.down.sql; WNBA one frozen matching down file in its later lane. Support slice does not implement catalogs.
+
+      ## Acceptance Criteria
+      - PM scope amendment APPROVED on PR #1729, comment 6100422279, https://github.com/griff843/Unit-Talk-v2/pull/1729#issuecomment-6100422279. Supersedes the initial three-file-only scope solely to allow package.json: append scripts/ci/participant-catalog-seed-drill.test.ts to existing test:ops. Preserve every existing entry; no dependencies, lockfile changes, script renames, validator exemptions, unrelated package edits or further scope expansion. Resume sanctioned closeout, obtain fresh exact-head CI/staging proof, then return for PM merge review. No merge approval.
+    captured_at: 2026-10-10T18:10:23.136Z
+    description_sha256: acefa5b46f6c48edea10b27bd41bdf320bffcd5f5c93b0454387d06e203b017e
+  contract_hash: b555e95a805e1d80b5e58f637ed3fa8fe603c7b941aa37a67a5855e9fdfefe62
