@@ -14,7 +14,7 @@ and statically verified. The focused runtime fixture passed locally against loop
 The required writable staging proof was attempted and refused before DB access because the local
 target was not the sanctioned staging project; protected exact-head CI must supply that receipt.
 
-## Assertions
+## ASSERTIONS:
 
 - [x] Only the two governed catalog migration paths enter the participant seed drill.
 - [x] Other migrations retain the existing DDL refusal path.
@@ -25,7 +25,7 @@ target was not the sanctioned staging project; protected exact-head CI must supp
 - [x] Existing matching canonical IDs remain byte-identical through apply, repeat, and rollback.
 - [x] Writes to unrelated tables, including teams, picks, provider, delivery, and event data, are rejected by full-table snapshots.
 
-## Evidence
+## EVIDENCE:
 
 Focused issue proof on disposable PostgreSQL 18.6:
 
