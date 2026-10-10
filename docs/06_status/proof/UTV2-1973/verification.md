@@ -76,5 +76,5 @@ writable staging verification remains explicitly deferred as recorded above.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending publication
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1729
 Execution SHA: `cd23bc28724e8378d39d0da5470346518d0603f5`

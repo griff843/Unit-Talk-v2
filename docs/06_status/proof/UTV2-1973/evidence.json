@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "UTV2-1973",
-  "pr_number": null,
+  "pr_number": 1729,
   "proof_profile": "static",
   "status": "draft_review_candidate_pending_protected_ci",
   "generated_at": "2026-10-10T17:29:42Z",
@@ -35,7 +35,7 @@
     {
       "gate": "protected-exact-head-ci",
       "verdict": "SKIP",
-      "detail": "Pending draft PR publication"
+      "detail": "Pending on draft PR #1729"
     }
   ],
   "reviewer_verdict": null,
