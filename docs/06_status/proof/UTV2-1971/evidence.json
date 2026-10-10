@@ -57,7 +57,7 @@
       "cases": [
         "baseline captured before participant seed",
         "identity conflict refused atomically",
-        "applies on an empty scratch database: 266 frozen identities; protected tables unchanged",
+        "applied to an empty candidate catalog in scratch after prerequisite schema initialization: 266 frozen identities; protected tables unchanged",
         "repeat application produced zero data, UUID, or count churn",
         "rollback refused a referenced identity, including an ON DELETE CASCADE foreign key",
         "rollback restored the exact baseline",
