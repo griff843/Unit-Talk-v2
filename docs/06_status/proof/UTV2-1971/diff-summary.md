@@ -16,5 +16,5 @@ rollback. It does not write `teams` or change runtime/provider/delivery behavior
 ## SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: #1730
 Execution SHA: `82106a80506cc6204c4fa958f684ae69017d48bf`

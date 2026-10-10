@@ -5,44 +5,136 @@
   "lane_type": "migration",
   "proof_profile": "migration",
   "title": "Additive 2026 NCAA Division I football participant catalog",
-  "status": "pre_merge_pending_exact_head_ci",
-  "generated_at": "2026-10-10T20:49:00Z",
+  "status": "evidence_complete_pending_pm_approval",
+  "generated_at": "2026-10-10T21:05:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "82106a80506cc6204c4fa958f684ae69017d48bf",
+    "verified_source_sha": "3fbf73356ea5b5d733a95ed7c8ca86ea41752229",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
-    "status": "IN_PROGRESS",
+    "status": "PASS",
     "commands": [
-      { "command": "pnpm type-check", "result": "PASS" },
-      { "command": "pnpm test", "result": "PASS" },
-      { "command": "pnpm exec tsx --test packages/db/src/canonical-reference-schema.test.ts", "tests": 26, "pass": 25, "fail": 0, "skipped": 1 },
-      { "command": "pnpm verify:commands", "result": "PASS" }
+      {
+        "command": "pnpm type-check",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm test",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm exec tsx --test packages/db/src/canonical-reference-schema.test.ts",
+        "tests": 26,
+        "pass": 25,
+        "fail": 0,
+        "skipped": 1
+      },
+      {
+        "command": "pnpm verify:commands",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm verify:static",
+        "result": "PASS locally and in exact-head CI run 38085390576 job 114312328917"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "result": "PASS; no R-level rules matched"
+      }
     ],
-    "note": "Final exact-tree verify:static and R-level receipts are pending."
+    "note": "Local static verification and exact-head hosted verify both passed."
   },
   "runtime_proof": {
-    "status": "DEFERRED_TO_CI",
-    "head": "82106a80506cc6204c4fa958f684ae69017d48bf",
-    "reason": "Local writable verification was refused before mutation because the target was not sanctioned staging xskgrzbteyqdufktjrjx. Exact-head scratch and staging receipts must come from hosted CI.",
-    "local_containment": "pnpm test:db refused host=127.0.0.1 ref=unidentified; no database mutation performed"
+    "status": "PASS",
+    "head": "3fbf73356ea5b5d733a95ed7c8ca86ea41752229",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 38085390622,
+      "job": 114310708332,
+      "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
+      "cases": [
+        "baseline captured before participant seed",
+        "identity conflict refused atomically",
+        "applies on an empty scratch database: 266 frozen identities; protected tables unchanged",
+        "repeat application produced zero data, UUID, or count churn",
+        "rollback refused a referenced identity, including an ON DELETE CASCADE foreign key",
+        "rollback restored the exact baseline",
+        "reapply preserved stable governed identities",
+        "matching pre-existing canonical UUID was preserved through apply, repeat, and rollback"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 38085390622,
+      "job": 114310708257,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
+      "detail": "pre-up equaled post-down and post-up equaled post-reapply for 20261010170000_ncaaf_participant_catalog"
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 38085390576,
+      "job": 114310785210,
+      "workflow": "CI / Writable DB proof (staging only)",
+      "target": "xskgrzbteyqdufktjrjx",
+      "detail": "sanctioned staging writable proof and all T1 live proof suites passed; same-run receipt uploaded"
+    },
+    "live_schema_parity": {
+      "result": "PASS",
+      "run": 38085390685,
+      "job": 114310737471,
+      "workflow": "Live Schema Parity / Live Schema Parity",
+      "detail": "repository schema and read-only live schema parity check passed; this is not a production data apply"
+    },
+    "verify": {
+      "result": "PASS",
+      "run": 38085390576,
+      "job": 114312328917,
+      "workflow": "CI / verify"
+    },
+    "local_containment": "pnpm test:db refused host=127.0.0.1 ref=unidentified before mutation; writable verification was correctly delegated to sanctioned staging CI"
   },
   "catalog": {
     "participants": 266,
     "fbs": 138,
     "fcs": 128,
-    "writes": ["public.participants"],
-    "forbidden_writes": ["public.teams"],
-    "membership_only_ncaa_org_ids": [470, 11740],
-    "excluded_standings_only": ["Saint Francis"]
+    "writes": [
+      "public.participants"
+    ],
+    "forbidden_writes": [
+      "public.teams"
+    ],
+    "membership_only_ncaa_org_ids": [
+      470,
+      11740
+    ],
+    "excluded_standings_only": [
+      "Saint Francis"
+    ]
   },
   "pending_evidence": [
-    "exact-head migration refusal drill",
-    "exact-head schema roundtrip drill",
-    "sanctioned staging writable DB proof",
-    "exact-head verify CI",
-    "PM exact-head merge approval"
-  ]
+    "PM exact-head merge approval",
+    "post-merge production apply and canonical closeout"
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1730",
+  "independent_executor_review": {
+    "contribution": "Frozen roster input and bounded rollback concurrency correction within approved paths",
+    "database": "Disposable PostgreSQL18.6 loopback only",
+    "focused_tests": {
+      "tests": 26,
+      "pass": 26,
+      "fail": 0,
+      "skipped": 0
+    },
+    "concurrency": [
+      "55P03 concurrent insertion refusal",
+      "P0001 committed-reference rollback refusal",
+      "exact participant and downstream snapshot preserved"
+    ],
+    "actual_seed_drill": "PASS, all eight reported phases after row-lock correction",
+    "lint": "PASS",
+    "type_check": "PASS",
+    "production_mutation": false
+  }
 }
