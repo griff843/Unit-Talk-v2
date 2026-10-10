@@ -37,7 +37,7 @@
       {
         "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
         "result": "pass",
-        "detail": "Verdict PASS; 9 changed files; no R-level rules matched"
+        "detail": "Verdict PASS; 8 changed files; no R-level rules matched"
       }
     ]
   },

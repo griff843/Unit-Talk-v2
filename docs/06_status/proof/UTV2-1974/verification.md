@@ -14,11 +14,18 @@ Execution SHA: ccb475ffabf42319b109fd83abd41153d347e246
 - [ ] Protected exact-head CI and outer-wrapper provenance remain pending after this proof commit.
 
 ## EVIDENCE:
+```text
+focused: 136 passed, 0 failed
+verify:static: PASS
+r-level: PASS (8 changed files; no rules matched)
+writable-db: BLOCKED/DEFERRED to protected staging CI
+```
+
 - Focused suite: `pnpm exec tsx --test scripts/ops/shared.test.ts` exited 0; 136 passed, 0 failed.
 - `pnpm type-check` exited 0.
 - `pnpm test` exited 0.
 - `pnpm verify:static` exited 0, including boundary, alignment, lint, type-check, build, full tests, Smart Form verification and command/migration checks.
-- R-level: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` returned PASS; 9 changed files; no rules matched.
+- R-level: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` returned PASS; 8 changed files; no rules matched.
 - Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 - Browser QA is not applicable to this tooling-only correction.
 
