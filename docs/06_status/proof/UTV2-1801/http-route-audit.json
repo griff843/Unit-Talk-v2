@@ -1,5 +1,5 @@
 {
-  "origin": "http://127.0.0.1:4400",
+  "origin": "http://127.0.0.1:4401",
   "routes": [
     {
       "route": "/",
@@ -173,5 +173,8 @@
   },
   "unrecognized_route": {
     "status": 404
-  }
+  },
+  "implementation_sha": "01e2c460173fd3f3e79e97d22f7aece1cc4c18be",
+  "production_preview": "Fresh standalone build of reviewed source; NEXT_PUBLIC_SITE_URL=https://unit-talk.com",
+  "social_artwork": "/brand/unit-talk-horizontal-white-2400.png"
 }
