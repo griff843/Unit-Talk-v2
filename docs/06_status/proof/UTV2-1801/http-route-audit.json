@@ -1,5 +1,5 @@
 {
-  "origin": "http://127.0.0.1:4401",
+  "origin": "http://127.0.0.1:4402",
   "routes": [
     {
       "route": "/",
@@ -164,6 +164,11 @@
       "name": "unit-talk-horizontal-white-2400.png",
       "status": 200,
       "canonical_bytes": true
+    },
+    {
+      "name": "unit-talk-icon-1024.png",
+      "status": 200,
+      "canonical_bytes": true
     }
   ],
   "canonical_inversion": {
@@ -174,7 +179,7 @@
   "unrecognized_route": {
     "status": 404
   },
-  "implementation_sha": "01e2c460173fd3f3e79e97d22f7aece1cc4c18be",
-  "production_preview": "Fresh standalone build of reviewed source; NEXT_PUBLIC_SITE_URL=https://unit-talk.com",
-  "social_artwork": "/brand/unit-talk-horizontal-white-2400.png"
+  "implementation_sha": "3a20740c9ded9b62aba72ec7408a0c766f220393",
+  "social_artwork": "/brand/unit-talk-icon-1024.png",
+  "production_preview": "Fresh standalone build of corrected final source; NEXT_PUBLIC_SITE_URL=https://unit-talk.com"
 }

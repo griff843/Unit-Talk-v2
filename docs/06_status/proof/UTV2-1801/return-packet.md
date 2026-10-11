@@ -35,3 +35,7 @@ Website PR: https://github.com/griff843/Unit-Talk-v2/pull/1732 (draft, tier:T2).
 - Corrected PR-only issue references and added the screenshot evidence README required by the nested proof auditor.
 - Executor attempt 1 reached its bounded 30-minute closeout limit; attempt 2 resumed the same epoch, skipped completed review/implementation/verification phases and returned SUCCESS.
 - No material product, pricing, billing, legal or backend decision was absorbed. All launch gaps remain explicit.
+
+## Final social-asset inspection correction
+
+Post-review visual inspection found the transparent white wordmark could disappear on light social-preview canvases. Social metadata now references the existing approved dark app icon, unit-talk-icon-1024.png, copied byte-identically with its original 1024×1024 proportions. Header/footer wordmarks and monogram geometry are unchanged. This ordinary in-scope QA correction is committed at 3a20740c9ded9b62aba72ec7408a0c766f220393. Final focused tests (7/7), production build, app type-check and scoped lint pass. Fresh HTTP audit of port 4402 proves all ten routes, fourteen internal links/anchors and nine canonical assets, final dark social artwork, placeholder failure and explicit 404. No artwork was redrawn, regenerated or composited. Prior wide-artwork review notes describe the superseded intermediate candidate.
