@@ -1,0 +1,36 @@
+{
+  "issue": "UTV2-1975",
+  "baseSha": "aa49eaa2993218fd471a82f4fb354f0b6e8b5c6b",
+  "branch": "codex/utv2-1975-compact-header",
+  "sourceFiles": [
+    "apps/web/src/components/PublicHeader.tsx"
+  ],
+  "sourceSha256": "7b535329d0bb57f0d80f0203d7309830e1b14340eed7502541e10e676b241b0e",
+  "asset": {
+    "path": "/brand/unit-talk-mark-white.svg",
+    "viewBox": "0 0 1000 800",
+    "sha256": "fb191f6fa93dbf8a820207e66025dc19e2ee1efa4a723f4b5f481ff0df09ea3c",
+    "byteEqualCanonical": true
+  },
+  "dimensions": {
+    "desktop": {
+      "box": [
+        75,
+        60
+      ],
+      "visibleHeight": 48
+    },
+    "mobile": {
+      "box": [
+        70,
+        56
+      ],
+      "visibleHeight": 44.8
+    }
+  },
+  "screenshots": "C:/Users/griff/.codex/visualizations/2026/10/10/01a12777-70cb-73b3-9a44-a8a1477c0557/current-main-review/header-correction",
+  "browserEvidence": "C:/Users/griff/.codex/visualizations/2026/10/10/01a12777-70cb-73b3-9a44-a8a1477c0557/current-main-review/header-correction/browser-verification.json",
+  "visualDisposition": "Matches canonical source; no clipping, transforms, unexpected lines or distortion. No overflow or menu overlap.",
+  "merge": "Not authorized",
+  "deployment": "Not authorized"
+}
