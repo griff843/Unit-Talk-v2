@@ -52,4 +52,4 @@ Implementation SHA: `01e2c460173fd3f3e79e97d22f7aece1cc4c18be`. source-snapshot.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1732
