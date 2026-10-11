@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1801",
+  "pr_number": 1732,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1732",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static-ui",
+  "status": "REVIEW_CANDIDATE_PENDING_PROTECTED_CI",
+  "generated_at": "2026-10-11T03:04:17Z",
+  "source_sha": "01e2c460173fd3f3e79e97d22f7aece1cc4c18be",
+  "gate_results": [
+    {
+      "gate": "focused-web-tests",
+      "verdict": "PASS",
+      "detail": "7 pass, 0 fail; includes URL inversion, social artwork, route/anchor resolution and whole-site claim safety"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "NEXT_PUBLIC_SITE_URL=https://unit-talk.com pnpm verify:static exited 0"
+    },
+    {
+      "gate": "canonical-url-inversion",
+      "verdict": "PASS",
+      "detail": "Production build exited 1 when NEXT_PUBLIC_SITE_URL was unset; placeholder origins throw in focused tests"
+    },
+    {
+      "gate": "responsive-browser-audit",
+      "verdict": "PASS",
+      "detail": "20 mobile/desktop route checks across 10 authorized routes; one h1, no heading jumps, no horizontal overflow, canonical URL per route"
+    },
+    {
+      "gate": "accessibility",
+      "verdict": "PASS",
+      "detail": "Keyboard menu/escape/focus, FAQ, table and skip-link checks pass; minimum declared text contrast 6.28:1"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Blocked/deferred: target identity host=unparseable; protected staging-ci requires xskgrzbteyqdufktjrjx"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PASS",
+      "detail": "78 changed files; no R-level rules matched"
+    },
+    {
+      "gate": "protected-exact-head-ci",
+      "verdict": "PENDING",
+      "detail": "Requires draft PR publication"
+    }
+  ],
+  "core_web_vitals": {
+    "context": "local production preview; lab/observed, not field CrUX",
+    "desktop": {
+      "lcp_ms": 208,
+      "cls": 0,
+      "inp_ms": null,
+      "ttfb_ms": 6
+    },
+    "mobile": {
+      "lcp_ms": 896,
+      "cls": 0,
+      "inp_ms": 85,
+      "ttfb_ms": 5,
+      "conditions": "Fast 4G, 4x CPU, 390x844"
+    }
+  },
+  "sha_binding": {
+    "verified_source_sha": "01e2c460173fd3f3e79e97d22f7aece1cc4c18be",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": "b65dac9184afdd5162e24740e64fe8d6a4e39746",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-11T13:23:40.695Z"
+  },
+  "pending": [
+    "draft PR and protected exact-head CI",
+    "outer-wrapper executor-result publication",
+    "PM approval, governed merge and post-merge lane finalization"
+  ]
+}
