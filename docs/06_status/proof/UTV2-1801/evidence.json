@@ -5,8 +5,8 @@
   "lane_type": "delivery-ui",
   "proof_profile": "static-ui",
   "status": "REVIEW_CANDIDATE_PENDING_PROTECTED_CI",
-  "generated_at": "2026-10-11T03:02:31Z",
-  "source_sha": null,
+  "generated_at": "2026-10-11T03:04:17Z",
+  "source_sha": "01e2c460173fd3f3e79e97d22f7aece1cc4c18be",
   "gate_results": [
     {
       "gate": "focused-web-tests",
@@ -40,8 +40,8 @@
     },
     {
       "gate": "r-level",
-      "verdict": "PENDING",
-      "detail": "Run against the committed implementation before PR publication"
+      "verdict": "PASS",
+      "detail": "78 changed files; no R-level rules matched"
     },
     {
       "gate": "protected-exact-head-ci",
@@ -66,13 +66,12 @@
     }
   },
   "sha_binding": {
-    "verified_source_sha": null,
+    "verified_source_sha": "01e2c460173fd3f3e79e97d22f7aece1cc4c18be",
     "evidence_commit_sha": null,
     "current_pr_head_sha": null,
     "merge_sha": null
   },
   "pending": [
-    "committed-source R-level check",
     "draft PR and protected exact-head CI",
     "outer-wrapper executor-result publication",
     "PM approval, governed merge and post-merge lane finalization"

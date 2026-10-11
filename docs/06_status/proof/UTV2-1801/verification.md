@@ -14,7 +14,8 @@ result: REVIEW_CANDIDATE_PENDING_PROTECTED_CI
 - [x] Responsive layout and keyboard interactions: browser-routes.json, browser-boundaries.json, ui-interactions.json and screenshots/.
 - [x] Production build, app type check, scoped lint and full static verification pass.
 - [x] URL inversion: an unset variable makes the production build exit 1 at page-data collection; placeholder origins are rejected by focused test.
-- [ ] Committed-source R-level gate and exact-head protected staging CI remain pending.
+- [x] Committed-source R-level gate passes with no matched rules.
+- [ ] Exact-head protected staging CI remains pending.
 
 ## EVIDENCE:
 
@@ -34,7 +35,7 @@ result: REVIEW_CANDIDATE_PENDING_PROTECTED_CI
 | Declared theme contrast pairs | PASS: 13 text pairs, minimum 6.28:1; secondary button border 3.46:1 |
 | Production preview desktop trace | LCP 208 ms, TTFB 6 ms, CLS 0; no INP sample |
 | Production preview mobile trace | LCP 896 ms, TTFB 5 ms, INP 85 ms, CLS 0; 4x CPU, Fast 4G |
-| Interim R-level check | PASS for existing metadata HEAD only; does not validate the uncommitted website. Must rerun after source commit. |
+| pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD | PASS: 78 changed files; no rules matched |
 
 Logs are copied to logs/. Browser/performance evidence describes the prepared source snapshot, not a production deployment. Local lab metrics are not field Core Web Vitals.
 
@@ -46,7 +47,7 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 Lane base: f9536812a1de8be8b79f92d7c0bcf72b36bd07f1.
 Current metadata HEAD: d087ae7861a17339f6d8fca77bf98bba6d2c67af.
-Website source is prepared and uncommitted. source-snapshot.json binds the prepared handoff bytes; this registered review adds the fail-closed URL correction, large-image metadata and final mechanical tests described above. Exact source commit and PR checks are bound after commit.
+Implementation SHA: `01e2c460173fd3f3e79e97d22f7aece1cc4c18be`. source-snapshot.json binds the prepared handoff bytes; this registered review adds the fail-closed URL correction, large-image metadata and final mechanical tests described above. Protected exact-head PR checks remain pending.
 
 ## Merge SHA Binding
 

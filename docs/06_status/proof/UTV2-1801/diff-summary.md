@@ -20,6 +20,6 @@ No API, worker, DB, contracts, domain, brand masters, mission, checkout, VIP+ ac
 ## SHA Binding
 
 Prepared source is bound by source-snapshot.json.
-Implementation SHA: pending first source commit
+Implementation SHA: `01e2c460173fd3f3e79e97d22f7aece1cc4c18be`
 Merge SHA: pending merge
 PR: pending
