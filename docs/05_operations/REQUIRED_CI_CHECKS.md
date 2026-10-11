@@ -140,6 +140,7 @@ The following workflows exist under `.github/workflows/` but are intentionally *
 - **Job:** `proof-coverage`
 - **Why excluded:** runs on pull requests but is advisory under current policy. Evidence bundles are enforced by `/t1-proof` and `ops:truth-check` at the tier level, not by a blanket required check.
 - **Status:** Planned — promote to required if/when proof-coverage gating is ratified as a universal merge gate. Tracked as exposed gap in §7.
+- **Bounded classification (WORK-2026101102):** the guard treats exactly one pairing as covered — the migration `supabase/migrations/20261010170000_ncaaf_participant_catalog.sql` together with `packages/db/src/canonical-reference-schema.test.ts` in the same change set. Both are fixed literals in the workflow, not derived from PR input. Every other migration and sensitive path keeps the accepted-proof patterns, which are unchanged (no generic `packages/db` test glob). This does not change the guard's advisory status or branch protection.
 
 ### 5.4 `CI Doctor` (`ci-doctor.yml`)
 
