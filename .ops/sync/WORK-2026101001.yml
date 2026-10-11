@@ -1,0 +1,148 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101001
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101001
+  objective: "Correct a contradiction between canonical authorities, per PM
+    direction on PR #1730 (PM_DECISION: BLOCKED, head 2ca2f0aeb):
+    `T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md` §2 rules 2 and 5 make
+    `teams` canonical for reference-data browsing, while shipped runtime
+    (`DatabaseReferenceDataRepository.searchTeams`, UTV2-1854/#1535,
+    UTV2-1856/#1536) reads `participants` and returns `participants.id`. Ratify
+    `participants` as canonical for this phase; `teams` stays untouched; a
+    future `teams` cutover stays separate."
+  acceptance_criteria:
+    - The contract carries one bounded amendment to §2 that supersedes rules 2
+      and 5 for the Smart Form / team-selection phase only, citing the shipped
+      runtime as evidence.
+    - The amendment states `participants` canonical for this phase,
+      `teams`/`players`/`player_team_assignments`/`provider_entity_aliases`
+      untouched, and the future `teams` cutover separate and unauthorized.
+    - "No other rule, file, code, migration, runtime setting or PR (including
+      #1730) is changed."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101001 — ratify participants as canonical for the Smart Form /
+      team-selection phase
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      ## Invariants
+
+
+      Documentation only. No schema, runtime, containment, delivery, provider,
+      migration, merge-authority or governance-mechanics change. #1730 is not
+      modified.
+
+
+      ## File Scope
+
+
+      - docs/05_operations/T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md
+
+      - .ops/work/WORK-2026101001.md
+
+      - .ops/sync/WORK-2026101001.yml
+
+      - docs/06_status/lanes/WORK-2026101001.json
+
+      - docs/06_status/proof/WORK-2026101001/**
+
+
+      ## Proof
+
+
+      Diff of the single contract edit plus a verification log; PM review of the
+      amendment.
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101001.md
+    title: WORK-2026101001 — ratify participants as canonical for the Smart Form /
+      team-selection phase
+    description: >-
+      # WORK-2026101001 — ratify participants as canonical for the Smart Form /
+      team-selection phase
+
+
+      Tier: T2
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      ## Objective
+
+
+      Correct a contradiction between canonical authorities, per PM direction on
+      PR #1730 (PM_DECISION: BLOCKED, head 2ca2f0aeb):
+      `T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md` §2 rules 2 and 5
+      make `teams` canonical for reference-data browsing, while shipped runtime
+      (`DatabaseReferenceDataRepository.searchTeams`, UTV2-1854/#1535,
+      UTV2-1856/#1536) reads `participants` and returns `participants.id`.
+      Ratify `participants` as canonical for this phase; `teams` stays
+      untouched; a future `teams` cutover stays separate.
+
+
+      ## Acceptance Criteria
+
+
+      - The contract carries one bounded amendment to §2 that supersedes rules 2
+      and 5 for the Smart Form / team-selection phase only, citing the shipped
+      runtime as evidence.
+
+      - The amendment states `participants` canonical for this phase,
+      `teams`/`players`/`player_team_assignments`/`provider_entity_aliases`
+      untouched, and the future `teams` cutover separate and unauthorized.
+
+      - No other rule, file, code, migration, runtime setting or PR (including
+      #1730) is changed.
+
+
+      ## Invariants
+
+
+      Documentation only. No schema, runtime, containment, delivery, provider,
+      migration, merge-authority or governance-mechanics change. #1730 is not
+      modified.
+
+
+      ## File Scope
+
+
+      - docs/05_operations/T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md
+
+      - .ops/work/WORK-2026101001.md
+
+      - .ops/sync/WORK-2026101001.yml
+
+      - docs/06_status/lanes/WORK-2026101001.json
+
+      - docs/06_status/proof/WORK-2026101001/**
+
+
+      ## Proof
+
+
+      Diff of the single contract edit plus a verification log; PM review of the
+      amendment.
+    captured_at: 2026-10-11T03:06:52.277Z
+    description_sha256: af321fe1bb728d70fa9a37d643c6fd8adc782af31415db36e58cee771bf07c29
+  contract_hash: 24b3a391d33dca7c07f0fd77f4c474bc48438c0604eeccbd3e9b148b895d65e2
