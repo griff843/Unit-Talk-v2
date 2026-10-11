@@ -9,7 +9,7 @@ result: documentation-only contract amendment; no runtime proof applicable
 ## ASSERTIONS:
 
 - [x] Contract §2 rules 2 and 5 contradict the shipped runtime: `DatabaseReferenceDataRepository.searchTeams()` (`packages/db/src/runtime-repositories.ts`) reads `participants` and returns `participants.id` (#1535, #1536).
-- [x] The diff is one additive Amendment A in `T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md` (+20 lines, 0 deletions) superseding rules 2 and 5 for the Smart Form / team-selection phase only.
+- [x] The diff is Amendment A in the migration contract §2 plus a matching Phase exception A in the seeding policy (additive; no historical rule deleted; precedence explicit). The runtime claim is narrowed: `participants.id` is the Smart Form identity; canonical `teams` / `player_team_assignments` relationship reads remain where shipped runtime does them.
 - [x] `participants` is canonical for the phase; `teams`, `players`, `player_team_assignments` and `provider_entity_aliases` are untouched; a future `teams` cutover stays separate and unauthorized.
 - [x] No code, schema, runtime, containment or #1730 change.
 
