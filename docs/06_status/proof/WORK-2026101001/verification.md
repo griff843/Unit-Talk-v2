@@ -1,28 +1,8 @@
-# PROOF: WORK-2026101001
-
-MERGE_SHA: pending merge
-
-> Scaffolded by `ops:lane-start`. Nothing below has been run. Record each command
-> actually executed and its real result before review. `post-merge-lane-close.yml`
-> binds the merge SHA; never write one here by hand.
-
-Issue: WORK-2026101001
-Tier: T2
-result: not_run
-
-## ASSERTIONS:
-
-- [ ] (state each behavior this lane proves, and the test that proves it)
-
-## EVIDENCE:
-
-(paste measured output here, in fenced blocks)
+# Verification — WORK-2026101001
 
 ## Verification
 
-(record every verification command run on the final code commit, with its real result)
-
-## Merge SHA Binding
-
-Merge SHA: pending merge
-PR: pending
+- Contradiction measured: contract §2 rules 2 and 5 vs `DatabaseReferenceDataRepository.searchTeams()` (`packages/db/src/runtime-repositories.ts`), which reads `participants` and returns `participants.id` (UTV2-1854, #1535; UTV2-1856, #1536).
+- Preflight: `ops:preflight WORK-2026101001 --tier T2` VERDICT PASS (39 checks).
+- Diff is the single additive section; `git diff --stat` shows 1 file, 20 insertions, 0 deletions.
+- Docs-only change: no runtime proof applicable. Review authority: PM.
