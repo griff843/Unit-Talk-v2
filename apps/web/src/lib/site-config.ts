@@ -1,194 +1,186 @@
-/**
- * Site-wide configuration for the Unit Talk public marketing site.
- *
- * Unit Talk is a premium sports-betting intelligence product delivered
- * through Discord. It is not a sportsbook — it does not accept or place
- * wagers, and it does not offer financial advice. All copy on the site must
- * stay consistent with that stance: qualitative, not quantitative; no
- * unverified performance claims (win rate, ROI, CLV, "guaranteed" outcomes).
- *
- * Several launch values below are intentionally undecided (domain, support
- * contact, Discord invite, final pricing amounts) — see UTV2-1482, the
- * public-website launch config decision packet. They are marked TODO and
- * must not be treated as binding until the PM sets real values there.
+/** Public membership copy follows MEMBERSHIP_PRODUCT_CONTRACT.md.
+ * Entitlements describe the product; no checkout or feature activation is inferred.
  */
-
-// TODO(domain-config): replace with the real production domain once provisioned (UTV2-1482).
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://unittalk.example.com';
-
+export function resolveSiteUrl(value?: string): string {
+  if (!value) {
+    throw new Error(
+      'NEXT_PUBLIC_SITE_URL is required and must be the public HTTPS origin.',
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(
+      'NEXT_PUBLIC_SITE_URL must be a valid public HTTPS origin.',
+    );
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== '/' ||
+    !url.hostname.includes('.') ||
+    !/[a-z]$/i.test(url.hostname) ||
+    /(^|\.)(example\.(com|org|net)|localhost|local|invalid|test)$/.test(
+      url.hostname,
+    )
+  ) {
+    throw new Error(
+      'NEXT_PUBLIC_SITE_URL must be a public HTTPS origin, not a placeholder.',
+    );
+  }
+  return url.origin;
+}
+export const SITE_URL = resolveSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 export const BRAND = {
   name: 'Unit Talk',
-  wordmark: 'UNIT TALK',
-  tagline: 'A disciplined intelligence desk for serious bettors.',
+  tagline: 'Sports betting intelligence',
   description:
-    'Unit Talk gives members structured picks, market context, alerts, and a premium Discord experience built around process, not promises.',
-  notASportsbook: 'Not a sportsbook. Unit Talk does not accept or place wagers.',
+    'Official capper picks through Discord. Complete settled results, transparent performance, and membership from Free through Trial and VIP.',
+  notASportsbook:
+    'Not a sportsbook. Unit Talk does not accept or place wagers.',
   responsibleLine:
-    'Sports betting involves risk. Unit Talk is an information and entertainment product, not financial advice. Only wager what you can afford to lose. Must be of legal wagering age in your jurisdiction.',
+    'Sports betting involves risk. Only wager what you can afford to lose. Set limits and never chase losses. Must be of legal wagering age in your jurisdiction.',
 } as const;
-
 export interface NavLink {
   label: string;
   href: string;
 }
-
 export const NAV_LINKS: NavLink[] = [
-  { label: 'How It Works', href: '/how-it-works' },
+  { label: 'Home', href: '/' },
   { label: 'Results', href: '/results' },
-  { label: 'Pricing', href: '/pricing' },
+  { label: 'Cappers', href: '/cappers' },
+  { label: 'Membership', href: '/pricing' },
+  { label: 'How It Works', href: '/how-it-works' },
   { label: 'FAQ', href: '/faq' },
 ];
-
 export const LEGAL_LINKS: NavLink[] = [
+  { label: 'Responsible Play', href: '/responsible-play' },
+  { label: 'Support', href: '/contact' },
   { label: 'Terms', href: '/terms' },
   { label: 'Privacy', href: '/privacy' },
-  { label: 'Responsible Play', href: '/responsible-play' },
-  { label: 'Contact', href: '/contact' },
 ];
-
-/** Trust-strip / ticker labels — qualitative only, no numbers or claims. */
-export const TICKER_ITEMS: string[] = [
-  'Structured picks',
-  'Market context on every call',
-  'Premium Discord desk',
-  'Transparent process',
-  'Responsible betting first',
-  'No guaranteed outcomes',
-];
-
 export interface Tier {
   id: string;
   name: string;
-  /**
-   * Display price. `null` means pricing is not yet approved for public
-   * release and the UI renders the placeholder token instead.
-   */
-  // TODO(pricing-config): replace with approved pricing once released by the PM (UTV2-1482).
-  price: string | null;
+  price: string;
   billing: string;
   summary: string;
   features: string[];
   highlighted: boolean;
-  comingSoon: boolean;
-  cta: string;
+  state: string;
+  cta: string | null;
+  href: string | null;
 }
-
 export const TIERS: Tier[] = [
   {
     id: 'free',
     name: 'Free',
-    price: null,
-    billing: 'Watchlist',
-    summary: 'Follow along in the public channels and see how the desk operates before you commit.',
+    price: 'Free',
+    billing: 'Community & settled history',
+    summary:
+      'Start with the record. Every settled official pick belongs in the Free membership.',
     features: [
-      'Public Discord channels',
-      'Community discussion',
-      'Educational and responsible-betting content',
-      'Product and transparency announcements',
+      'All settled official picks, recaps and corrections',
+      'Capper records, units and ROI where supported',
+      'Public community access',
+      'Active paid picks and premium alerts are excluded',
     ],
     highlighted: false,
-    comingSoon: false,
-    cta: 'Join Free',
+    state: 'Public archive unavailable on this site',
+    cta: 'Read the results policy',
+    href: '/results',
+  },
+  {
+    id: 'trial',
+    name: 'Trial',
+    price: '$1',
+    billing: '/ 7 days',
+    summary:
+      'Full VIP access for seven consecutive days. Trial does not include VIP+.',
+    features: [
+      'Every official capper pick',
+      'The complete VIP experience while active',
+      'VIP Discord feed, community and education',
+    ],
+    highlighted: false,
+    state: 'Website checkout unavailable',
+    cta: 'Read Trial details',
+    href: '/faq#trial',
   },
   {
     id: 'vip',
     name: 'VIP',
-    price: null,
-    billing: 'Membership',
-    summary: 'Structured expert picks with the context needed to understand each one.',
+    price: '$49.99',
+    billing: '/ month',
+    summary:
+      'Every official capper pick. The complete official-pick membership across supported sports.',
     features: [
-      'Everything in Free',
-      'Structured expert capper picks',
-      'Pick alerts delivered in Discord',
-      'Market context on every pick',
-      'Members-only discussion channels',
+      'All official capper picks',
+      'Official-pick Discord alerts upon activation',
+      'Capper Corner and private community',
+      'Recaps, supported performance breakdowns, education and support',
     ],
     highlighted: true,
-    comingSoon: false,
-    cta: 'Get VIP Access',
+    state: 'Website checkout unavailable',
+    cta: 'Understand VIP',
+    href: '/how-it-works',
   },
   {
     id: 'vip-plus',
     name: 'VIP+',
-    price: null,
-    billing: 'Membership',
-    summary: 'The full premium desk — deeper access, earlier alerts, richer context.',
+    price: 'Price not published',
+    billing: 'Advanced intelligence',
+    summary:
+      'VIP plus advanced market intelligence, analytics, personalization and premium access.',
     features: [
-      'Everything in VIP',
-      'Best Bet previews',
-      'Priority alert delivery',
-      'Expanded market context and analysis',
-      'VIP+ member channels',
+      'Adds to VIP; does not complete an incomplete pick feed',
+      'Individual capabilities require proven activation',
+      'Current availability is not established here',
     ],
     highlighted: false,
-    comingSoon: false,
-    cta: 'Get VIP+ Access',
+    state: 'Availability unconfirmed — not for sale here',
+    cta: 'Review capability status',
+    href: '/pricing#capabilities',
   },
   {
-    id: 'syndicate',
-    name: 'Syndicate',
-    price: null,
-    billing: 'Future tier',
-    summary: 'A future top tier built around the deepest level of picks intelligence Unit Talk produces.',
-    features: [
-      'Everything in VIP+',
-      'Syndicate-grade intelligence briefings',
-      'Details announced closer to launch',
-    ],
+    id: 'black-label',
+    name: 'Black Label',
+    price: 'Future tier',
+    billing: 'Not currently available',
+    summary: 'A future membership tier. Enrollment is closed.',
+    features: ['Not currently available', 'No price published'],
     highlighted: false,
-    comingSoon: true,
-    cta: 'Coming Soon',
+    state: 'Future tier — not currently available',
+    cta: null,
+    href: null,
   },
 ];
-
-export const PRICE_PLACEHOLDER = 'Announced at launch';
-
-/** Feature-comparison matrix for the pricing page. `true` = included. */
-export interface PricingTableRow {
-  feature: string;
-  free: boolean;
-  vip: boolean;
-  vipPlus: boolean;
-  syndicate: boolean;
-}
-
-export const PRICING_TABLE_ROWS: PricingTableRow[] = [
-  { feature: 'Public Discord channels', free: true, vip: true, vipPlus: true, syndicate: true },
-  { feature: 'Structured expert picks', free: false, vip: true, vipPlus: true, syndicate: true },
-  { feature: 'Market context on every pick', free: false, vip: true, vipPlus: true, syndicate: true },
-  { feature: 'Members-only discussion channels', free: false, vip: true, vipPlus: true, syndicate: true },
-  { feature: 'Best Bet previews', free: false, vip: false, vipPlus: true, syndicate: true },
-  { feature: 'Priority alert delivery', free: false, vip: false, vipPlus: true, syndicate: true },
-  { feature: 'Expanded market analysis', free: false, vip: false, vipPlus: true, syndicate: true },
-  { feature: 'Syndicate intelligence briefings', free: false, vip: false, vipPlus: false, syndicate: true },
+export const VIP_PLUS_CAPABILITIES = [
+  'Steam and line-movement alerts',
+  'Injury intelligence',
+  'Hedge and middle intelligence',
+  'Personal bet tracking and ROI analytics',
+  'Personalized hedge triggers',
+  'AI ticket analysis',
+  'Advanced analytics and trends',
+  'Personalized recaps',
+  'External notifications',
 ];
-
-export const CONTACT = {
-  // TODO(support-email): no approved public support email exists yet (UTV2-1482).
-  // Support is handled through Discord until one is provisioned.
-  supportEmail: null as string | null,
-  supportChannel: 'Support via Discord',
-  // TODO(discord-invite): replace with the real public invite once created (UTV2-1482).
-  discordInviteUrl: '#discord-invite-coming-soon',
-} as const;
-
-/**
- * Established, third-party responsible-gambling resources. These are real
- * public services (not Unit Talk claims) and are safe to publish as-is;
- * only Unit Talk's own launch values (domain/support/pricing) are
- * placeholders.
- */
 export interface HelpResource {
   name: string;
   detail: string;
   href?: string;
 }
-
 export const RESPONSIBLE_GAMBLING_RESOURCES: HelpResource[] = [
   {
     name: 'National Problem Gambling Helpline',
-    detail: 'Call or text 1-800-GAMBLER (1-800-426-2537), 24/7, free and confidential.',
-    href: 'tel:18004262537',
+    detail:
+      'Call or text 1-800-MY-RESET (1-800-697-3738), 24/7. Confidential support and local resources; message and data rates may apply.',
+    href: 'tel:18006973738',
   },
   {
     name: 'National Council on Problem Gambling',
@@ -201,12 +193,12 @@ export const RESPONSIBLE_GAMBLING_RESOURCES: HelpResource[] = [
     href: 'https://www.gamblersanonymous.org',
   },
 ];
-
 export const PAGE_TITLES = {
-  home: 'Unit Talk — A Disciplined Intelligence Desk for Serious Bettors',
-  pricing: 'Unit Talk Pricing',
+  home: 'Unit Talk — Official Picks. Every Settled Result.',
+  pricing: 'Unit Talk Membership — Free, Trial, VIP, VIP+ & Black Label',
   howItWorks: 'How Unit Talk Works',
   results: 'Unit Talk Results & Transparency',
+  cappers: 'Unit Talk Cappers',
   faq: 'Unit Talk FAQ',
   responsiblePlay: 'Responsible Play — Unit Talk',
   contact: 'Contact Unit Talk',

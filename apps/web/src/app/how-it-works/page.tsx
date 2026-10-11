@@ -1,100 +1,95 @@
+import { pageMetadata } from '@/lib/site-metadata';
 import type { Metadata } from 'next';
 import { CTAButton } from '@/components/CTAButton';
+import { DiscordPreview } from '@/components/DiscordPreview';
 import { PageHeader } from '@/components/PageHeader';
 import { ResponsiblePlayBanner } from '@/components/ResponsiblePlayBanner';
-import { SectionHeader } from '@/components/SectionHeader';
 import { PAGE_TITLES } from '@/lib/site-config';
-
 const description =
-  'How Unit Talk works: join, connect to Discord, choose an access level, and receive structured picks, market context, and alerts — with transparency and responsible betting built in.';
-
-export const metadata: Metadata = {
-  title: { absolute: PAGE_TITLES.howItWorks },
+  'Understand Unit Talk membership, the official capper-pick feed, Discord delivery and complete settled results. Public checkout and onboarding are unavailable here.';
+export const metadata: Metadata = pageMetadata(
+  PAGE_TITLES.howItWorks,
   description,
-  openGraph: { title: PAGE_TITLES.howItWorks, description, type: 'website', siteName: 'Unit Talk' },
-  twitter: { card: 'summary', title: PAGE_TITLES.howItWorks, description },
-};
-
-const STEPS = [
-  { title: 'Join Unit Talk', body: 'Create your membership. You can start on the free tier and upgrade at any time.' },
-  { title: 'Connect Discord', body: 'Link your Discord account. Your channels unlock based on your access level.' },
-  { title: 'Pick your access level', body: 'Free for the public channels, VIP for structured picks, VIP+ for the full premium experience.' },
-  { title: 'Get alerts and context', body: 'Structured picks arrive as Discord alerts with market context attached, so you understand each one.' },
-  { title: 'Track results and transparency updates', body: 'Unit Talk tracks its picks internally and publishes transparency updates as they are reviewed and approved.' },
-  { title: 'Bet responsibly', body: 'Every decision is yours. Set limits, only wager what you can afford to lose, and take breaks.' },
+  '/how-it-works',
+);
+const steps = [
+  [
+    'Inspect the record',
+    'Start with the complete settled history. Free includes every settled official pick, recap and correction. The public archive is not connected to this site yet.',
+  ],
+  [
+    'Choose your membership',
+    'The $1 Trial includes seven consecutive days of full VIP. VIP is $49.99/month and includes every official capper pick. Website checkout is unavailable.',
+  ],
+  [
+    'Connect Discord',
+    'Discord is the primary member delivery and community surface. A public onboarding link is unavailable here. Existing members should use their established Discord access.',
+  ],
+  [
+    'Receive membership access',
+    'Trial and VIP include the official-pick feed, Capper Corner, private community, recaps, education and support. Official-pick alerts depend on active delivery; automatic role or channel provisioning is not promised here.',
+  ],
+  [
+    'Review every settled result',
+    'Wins, losses, pushes, voids and correction history belong across all tiers. Supported metrics need a date range and sample size. Missing metrics stay unavailable.',
+  ],
+  [
+    'Upgrade when it adds value',
+    'VIP+ adds advanced capabilities only when their availability is proven. Its price is not published. Black Label is a future tier and is not currently available.',
+  ],
 ];
-
-const SECTIONS = [
-  {
-    title: 'Discord access',
-    body: 'Discord is where the product lives — delivery, discussion, education, and support. Once your account is connected, the channels for your tier open automatically. There is nothing to install beyond Discord itself.',
-  },
-  {
-    title: 'Pick alerts',
-    body: 'When a pick is published, members receive a structured alert: the selection, the market, the price context, and the reasoning. Alerts are designed to be readable in seconds and clear enough to act on your own terms.',
-  },
-  {
-    title: 'Market context',
-    body: 'A pick without context is just a shout. Every Unit Talk pick includes notes on price and line so members understand why the spot was selected — not just what to bet.',
-  },
-  {
-    title: 'Tier differences',
-    body: 'Free members follow along in public channels. VIP unlocks structured picks and alerts. VIP+ adds Best Bet previews, priority delivery, and expanded analysis. Syndicate, a future top tier, will be announced closer to launch.',
-  },
-  {
-    title: 'Education and community',
-    body: 'Unit Talk is also a place to get sharper: discussion channels, process-focused education, and a community of members who take the craft seriously.',
-  },
-  {
-    title: 'Responsible betting',
-    body: 'Responsible betting comes first. Unit Talk is an information and entertainment product — it never promises outcomes, and it actively encourages limits, breaks, and honest self-assessment.',
-  },
-  {
-    title: 'Support',
-    body: 'Questions and account issues are handled through the support channels in Discord. The team monitors them and responds as quickly as possible.',
-  },
-];
-
 export default function HowItWorksPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Walkthrough"
-        title="How Unit Talk works"
-        lead="From joining to your first structured alert — here is the full walkthrough."
+        eyebrow="How it works"
+        title="The picks in Discord. The record in full."
+        lead="Understand the product before choosing a membership. You decide whether to wager; Unit Talk does not accept or place bets."
       />
-
-      <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
-        {STEPS.map((step, i) => (
-          <div key={step.title} className="ut-index-row">
-            <span className="ut-index-num">{String(i + 1).padStart(2, '0')}</span>
-            <div>
-              <h2 className="text-base font-semibold">{step.title}</h2>
-              <p className="ut-text-secondary mt-2 max-w-xl text-sm leading-relaxed">{step.body}</p>
+      <section className="ut-wrap ut-section pt-0">
+        <div className="ut-notice">
+          <span className="ut-status-dot" aria-hidden="true" />
+          <p>
+            This describes the membership journey. Public checkout, Discord
+            onboarding and the results archive are unavailable on this website.
+          </p>
+        </div>
+        <ol className="ut-journey mt-8">
+          {steps.map(([title, copy], index) => (
+            <li key={title}>
+              <span className="ut-step-number" aria-hidden="true">
+                {String(index + 1).padStart(2, '0')}
+              </span>
+              <div>
+                <h2>{title}</h2>
+                <p>{copy}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+      <section className="ut-wrap ut-section ut-section-rule">
+        <div className="ut-split">
+          <div className="ut-section-heading">
+            <p className="ut-eyebrow">Discord is central</p>
+            <h2>A place for picks, context and community.</h2>
+            <p className="ut-text-secondary">
+              The official-pick feed and member conversations live in Discord.
+              Settled recaps and the complete history let members review
+              outcomes for themselves.
+            </p>
+            <div className="ut-actions mt-6">
+              <CTAButton href="/pricing">Explore membership</CTAButton>
+              <CTAButton href="/contact" variant="secondary">
+                Support information
+              </CTAButton>
             </div>
           </div>
-        ))}
-      </section>
-
-      <section className="border-t border-[var(--ut-border-subtle)] bg-[var(--ut-bg-surface)]">
-        <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-          <SectionHeader eyebrow="The details" title="Everything, spelled out" />
-          <div className="mt-10 space-y-5">
-            {SECTIONS.map((section) => (
-              <div key={section.title} className="ut-panel-elevated p-6">
-                <h2 className="text-base font-semibold">{section.title}</h2>
-                <p className="ut-text-secondary mt-2 text-sm leading-relaxed">{section.body}</p>
-              </div>
-            ))}
-          </div>
+          <DiscordPreview />
         </div>
       </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+      <section className="ut-wrap pb-16">
         <ResponsiblePlayBanner />
-        <div className="mt-10 text-center">
-          <CTAButton href="/pricing">Get Access</CTAButton>
-        </div>
       </section>
     </>
   );

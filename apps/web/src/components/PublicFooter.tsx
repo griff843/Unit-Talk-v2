@@ -1,69 +1,57 @@
 import Link from 'next/link';
-import { BRAND, LEGAL_LINKS, NAV_LINKS, RESPONSIBLE_GAMBLING_RESOURCES } from '@/lib/site-config';
-
+import { BrandLogo } from './BrandLogo';
+import { BRAND, LEGAL_LINKS, NAV_LINKS } from '@/lib/site-config';
 export function PublicFooter() {
   return (
-    <footer className="border-t border-[var(--ut-border-subtle)] bg-[var(--ut-bg-surface)]">
-      <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
-          <div>
-            <p className="ut-num text-sm font-bold tracking-[0.22em]">{BRAND.wordmark}</p>
-            <p className="ut-text-secondary mt-3 max-w-sm text-sm leading-relaxed">
-              A premium sports-betting intelligence desk delivered through Discord. Structured
-              picks, market context, and a transparent process.
+    <footer className="ut-rule bg-[var(--ut-bg-surface)]">
+      <div className="ut-wrap py-14">
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-[1.4fr_1fr_1fr]">
+          <div className="col-span-2 md:col-span-1">
+            <Link href="/" aria-label="Unit Talk home">
+              <BrandLogo className="ut-footer-logo" />
+            </Link>
+            <p className="ut-text-secondary mt-5 max-w-sm text-sm">
+              Official capper picks. A complete settled record. A community
+              built around the sport.
             </p>
-            <p className="ut-text-muted mt-4 text-xs font-medium uppercase tracking-wider">
+            <p className="ut-text-muted mt-4 max-w-sm text-xs">
               {BRAND.notASportsbook}
             </p>
           </div>
-
           <nav aria-label="Footer site">
-            <p className="ut-tag">Product</p>
-            <ul className="mt-4 space-y-2.5">
+            <p className="ut-eyebrow">Explore</p>
+            <ul className="mt-5 space-y-1">
               {NAV_LINKS.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="ut-link text-sm">
+                  <Link className="ut-link text-sm" href={link.href}>
                     {link.label}
                   </Link>
                 </li>
               ))}
             </ul>
           </nav>
-
           <nav aria-label="Footer legal">
-            <p className="ut-tag">Legal &amp; support</p>
-            <ul className="mt-4 space-y-2.5">
+            <p className="ut-eyebrow">Help & information</p>
+            <ul className="mt-5 space-y-1">
               {LEGAL_LINKS.map((link) => (
                 <li key={link.href}>
-                  <Link href={link.href} className="ut-link text-sm">
+                  <Link className="ut-link text-sm" href={link.href}>
                     {link.label}
                   </Link>
                 </li>
               ))}
             </ul>
+            <p className="ut-text-muted mt-5 text-xs">
+              Terms and Privacy are drafts pending legal review.
+            </p>
           </nav>
         </div>
-
-        <div className="mt-12 border-t border-[var(--ut-border-subtle)] pt-6">
-          <p className="ut-text-muted text-xs leading-relaxed">{BRAND.responsibleLine}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-            {RESPONSIBLE_GAMBLING_RESOURCES.map((resource, i) => (
-              <span key={resource.name} className="ut-text-muted text-xs">
-                {resource.href ? (
-                  <a href={resource.href} className="ut-link">
-                    {resource.name}
-                  </a>
-                ) : (
-                  resource.name
-                )}
-                {i < RESPONSIBLE_GAMBLING_RESOURCES.length - 1 ? (
-                  <span aria-hidden="true"> ·</span>
-                ) : null}
-              </span>
-            ))}
-          </div>
-          <p className="ut-text-muted mt-5 text-xs">
-            © {new Date().getFullYear()} {BRAND.name}. All rights reserved.
+        <div className="ut-rule mt-12 flex flex-col justify-between gap-4 pt-6 md:flex-row">
+          <p className="ut-text-muted max-w-3xl text-xs">
+            {BRAND.responsibleLine}
+          </p>
+          <p className="ut-text-muted shrink-0 text-xs">
+            © {new Date().getFullYear()} Unit Talk
           </p>
         </div>
       </div>

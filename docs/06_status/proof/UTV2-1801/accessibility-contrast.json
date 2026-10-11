@@ -1,0 +1,82 @@
+{
+  "theme": {
+    "--ut-bg-canvas": "#090a0a",
+    "--ut-bg-surface": "#111313",
+    "--ut-bg-surface-elevated": "#181a19",
+    "--ut-border-strong": "#62685f",
+    "--ut-signal": "#d8bc74",
+    "--ut-signal-ink": "#17180f",
+    "--ut-text-muted": "#969d92",
+    "--ut-text-primary": "#f4f4ec",
+    "--ut-text-secondary": "#b9bcb4"
+  },
+  "checks": [
+    {
+      "text": "--ut-text-primary",
+      "background": "--ut-bg-canvas",
+      "ratio": 17.93
+    },
+    {
+      "text": "--ut-text-primary",
+      "background": "--ut-bg-surface",
+      "ratio": 16.87
+    },
+    {
+      "text": "--ut-text-primary",
+      "background": "--ut-bg-surface-elevated",
+      "ratio": 15.82
+    },
+    {
+      "text": "--ut-text-secondary",
+      "background": "--ut-bg-canvas",
+      "ratio": 10.3
+    },
+    {
+      "text": "--ut-text-secondary",
+      "background": "--ut-bg-surface",
+      "ratio": 9.69
+    },
+    {
+      "text": "--ut-text-secondary",
+      "background": "--ut-bg-surface-elevated",
+      "ratio": 9.09
+    },
+    {
+      "text": "--ut-text-muted",
+      "background": "--ut-bg-canvas",
+      "ratio": 7.11
+    },
+    {
+      "text": "--ut-text-muted",
+      "background": "--ut-bg-surface",
+      "ratio": 6.69
+    },
+    {
+      "text": "--ut-text-muted",
+      "background": "--ut-bg-surface-elevated",
+      "ratio": 6.28
+    },
+    {
+      "text": "--ut-signal",
+      "background": "--ut-bg-canvas",
+      "ratio": 10.73
+    },
+    {
+      "text": "--ut-signal",
+      "background": "--ut-bg-surface",
+      "ratio": 10.09
+    },
+    {
+      "text": "--ut-signal",
+      "background": "--ut-bg-surface-elevated",
+      "ratio": 9.47
+    },
+    {
+      "text": "--ut-signal-ink",
+      "background": "--ut-signal",
+      "ratio": 9.68
+    }
+  ],
+  "minimumTextRatio": 6.28,
+  "secondaryButtonBorderRatio": 3.46
+}

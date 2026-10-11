@@ -1,0 +1,158 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1801
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1801
+  objective: Get the public-site application production-ready for deployment.
+    Scope is confined to `apps/web/**` **only**. This issue does not assert that
+    the site is currently live;
+    [UTV2-1795](https://linear.app/unit-talk-v2/issue/UTV2-1795/shared-nextjs-production-deployment-appsweb-and-appssmart-form-on)
+    owns deployment/DNS/secrets/live verification.
+  acceptance_criteria:
+    - A favicon and an OG image exist under `apps/web/public/` and are
+      referenced from metadata; the Twitter `summary_large_image` card resolves
+      to a real image.
+    - The site never publishes a placeholder domain. Either
+      `NEXT_PUBLIC_SITE_URL` is required and the build **fails closed** without
+      it, or the fallback is the real production domain. Silently emitting
+      `unittalk.example.com` to crawlers is the failure being fixed — do not
+      replace one silent default with another.
+    - All nine routes render correctly at mobile and desktop breakpoints,
+      evidenced by the `screenshot-mobile.png` and `screenshot-desktop.png`
+      proof artifacts that `delivery-ui` already requires.
+    - Every internal link and nav entry resolves — no 404s. Assert this
+      mechanically, not by clicking.
+    - "Accessibility: heading hierarchy is correct on every page, all
+      interactive elements are keyboard-reachable, and colour contrast meets
+      WCAG AA. The skip-link at `layout.tsx:29-34` already exists — verify it
+      works rather than re-adding it."
+    - Core Web Vitals measured and reported for the home page. Report the
+      measurement; do not assert a target that was not measured.
+    - "**Inversion (required):** whatever guard is added for criterion 2 must be
+      shown to **fail** when `NEXT_PUBLIC_SITE_URL` is unset or set to the
+      placeholder. A guard that is merely present and green proves nothing."
+    - No copy change introduces a performance number, ROI figure, win rate, or
+      guarantee. A test asserting the absence of such claims is preferred over a
+      reviewer's eye.
+  guardrails:
+    - Production stays parked. No backend, no DB, no provider contact, no
+      delivery unpark, no secret access. `apps/web/**` only — if the work
+      appears to need a file outside that tree, stop and raise it rather than
+      widening scope.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Created 2026-09-01 per PM factory decision #6. Fresh, bounded, current-main issue — **not** a resurrection of [UTV2-1481](https://linear.app/unit-talk-v2/issue/UTV2-1481/public-website-premium-design-pass) or [UTV2-1482](https://linear.app/unit-talk-v2/issue/UTV2-1482/public-website-launch-config-decision-packet). **PM-ratified for dispatch (2026-09-02): Ready for Codex / High / A Griffin.**
+    - >-
+      Current state, verified on `main` @ `e48106fc`
+
+      Nine routes exist and build: `/`, `/how-it-works`, `/results`, `/pricing`,
+      `/faq`, `/terms`, `/privacy`, `/responsible-play`, `/contact`. Eleven
+      components under `src/components/`. `src/app/sitemap.ts` and
+      `src/app/robots.ts` exist. The copy stance is already correct and must be
+      preserved — `src/lib/site-config.ts` documents it explicitly: qualitative
+      only, no win rate / ROI / CLV / "guaranteed" claims, not a sportsbook.
+
+
+      Three concrete defects found by inspection, each independently verifiable:
+
+
+      1. `apps/web/public/` **does not exist.** There is no favicon and no OG
+      image. `src/app/layout.tsx:20-24` declares `twitter: { card:
+      'summary_large_image', ... }` with **no image**, so every social share
+      renders a broken large-image card. A missing favicon shows the browser
+      default in the tab.
+
+      2. `SITE_URL` falls back to a placeholder domain.
+      `src/lib/site-config.ts:17` — `process.env.NEXT_PUBLIC_SITE_URL ??
+      'https://unittalk.example.com'`. That value feeds `metadataBase`
+      (`layout.tsx:8`), and therefore every canonical URL, every OG URL,
+      `sitemap.ts` and `robots.ts`. If the env var is unset in the deploy, the
+      live site publishes `unittalk.example.com` URLs to crawlers and social
+      scrapers.
+
+      3. `apps/web/package.json` **has no **`test` **script** — only `dev`,
+      `build`, `start`, `type-check`. Nothing in this app is covered by `pnpm
+      verify` beyond type-checking.
+    - >-
+      Scope
+
+      In scope: mobile and desktop QA across all nine routes; performance / Core
+      Web Vitals; SEO metadata, OG and favicon assets; accessibility; broken
+      routes and links; conversion hierarchy; visual polish.
+
+
+      **Explicitly out of scope** (PM decision #6): no pricing invention, no
+      checkout, no backend work, no Command Center work, and **no fabricated
+      performance claims** of any kind. The existing no-numbers copy stance in
+      `site-config.ts` is a hard constraint, not a starting point to negotiate
+      from.
+    - |-
+      Mechanical classification
+      * Tier: T2. `npx tsx scripts/ops/tier-classifier.ts --declared-tier T2 --files apps/web/src/app/page.tsx` → `mechanical_minimum: T3`, `derived_tier: T2`, `escalated: false`, no matches. Re-run at lane-start against the final file set; the classifier is authoritative over this line.
+      * **Lane type: **`delivery-ui`. `.lane/lanes/delivery-ui.yml:15` admits `apps/web/**` — this is the admission correction [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work) landed, and it is why this issue is dispatchable at all where earlier website work was not. Note `required_proof_artifacts` includes `screenshot-desktop.png` and `screenshot-mobile.png`; the lane must produce both.
+      * Concurrency: `delivery-ui` is capped at `max_per_app: 1`. `apps/web` and `apps/command-center` are different apps, so this does not contend with the Command Center lane. **Not Tier C** — dispatchable alongside [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board).
+      * **Executor: Codex CLI** — bounded, clear-scope UI work.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1801/public-site-production-readiness-metadata-assets-canonical-url
+    title: "Public site production readiness: metadata assets, canonical URL,
+      mobile/desktop QA and accessibility on apps/web"
+    description: |-
+      Created 2026-09-01 per PM factory decision #6. Fresh, bounded, current-main issue — **not** a resurrection of [UTV2-1481](https://linear.app/unit-talk-v2/issue/UTV2-1481/public-website-premium-design-pass) or [UTV2-1482](https://linear.app/unit-talk-v2/issue/UTV2-1482/public-website-launch-config-decision-packet). **PM-ratified for dispatch (2026-09-02): Ready for Codex / High / A Griffin.**
+
+      ## Objective
+
+      Get the public-site application production-ready for deployment. Scope is confined to `apps/web/**` **only**. This issue does not assert that the site is currently live; [UTV2-1795](https://linear.app/unit-talk-v2/issue/UTV2-1795/shared-nextjs-production-deployment-appsweb-and-appssmart-form-on) owns deployment/DNS/secrets/live verification.
+
+      ## Current state, verified on `main` @ `e48106fc`
+
+      Nine routes exist and build: `/`, `/how-it-works`, `/results`, `/pricing`, `/faq`, `/terms`, `/privacy`, `/responsible-play`, `/contact`. Eleven components under `src/components/`. `src/app/sitemap.ts` and `src/app/robots.ts` exist. The copy stance is already correct and must be preserved — `src/lib/site-config.ts` documents it explicitly: qualitative only, no win rate / ROI / CLV / "guaranteed" claims, not a sportsbook.
+
+      Three concrete defects found by inspection, each independently verifiable:
+
+      1. `apps/web/public/` **does not exist.** There is no favicon and no OG image. `src/app/layout.tsx:20-24` declares `twitter: { card: 'summary_large_image', ... }` with **no image**, so every social share renders a broken large-image card. A missing favicon shows the browser default in the tab.
+      2. `SITE_URL` falls back to a placeholder domain. `src/lib/site-config.ts:17` — `process.env.NEXT_PUBLIC_SITE_URL ?? 'https://unittalk.example.com'`. That value feeds `metadataBase` (`layout.tsx:8`), and therefore every canonical URL, every OG URL, `sitemap.ts` and `robots.ts`. If the env var is unset in the deploy, the live site publishes `unittalk.example.com` URLs to crawlers and social scrapers.
+      3. `apps/web/package.json` **has no **`test` **script** — only `dev`, `build`, `start`, `type-check`. Nothing in this app is covered by `pnpm verify` beyond type-checking.
+
+      ## Scope
+
+      In scope: mobile and desktop QA across all nine routes; performance / Core Web Vitals; SEO metadata, OG and favicon assets; accessibility; broken routes and links; conversion hierarchy; visual polish.
+
+      **Explicitly out of scope** (PM decision #6): no pricing invention, no checkout, no backend work, no Command Center work, and **no fabricated performance claims** of any kind. The existing no-numbers copy stance in `site-config.ts` is a hard constraint, not a starting point to negotiate from.
+
+      ## Acceptance criteria
+
+      1. A favicon and an OG image exist under `apps/web/public/` and are referenced from metadata; the Twitter `summary_large_image` card resolves to a real image.
+      2. The site never publishes a placeholder domain. Either `NEXT_PUBLIC_SITE_URL` is required and the build **fails closed** without it, or the fallback is the real production domain. Silently emitting `unittalk.example.com` to crawlers is the failure being fixed — do not replace one silent default with another.
+      3. All nine routes render correctly at mobile and desktop breakpoints, evidenced by the `screenshot-mobile.png` and `screenshot-desktop.png` proof artifacts that `delivery-ui` already requires.
+      4. Every internal link and nav entry resolves — no 404s. Assert this mechanically, not by clicking.
+      5. Accessibility: heading hierarchy is correct on every page, all interactive elements are keyboard-reachable, and colour contrast meets WCAG AA. The skip-link at `layout.tsx:29-34` already exists — verify it works rather than re-adding it.
+      6. Core Web Vitals measured and reported for the home page. Report the measurement; do not assert a target that was not measured.
+      7. **Inversion (required):** whatever guard is added for criterion 2 must be shown to **fail** when `NEXT_PUBLIC_SITE_URL` is unset or set to the placeholder. A guard that is merely present and green proves nothing.
+      8. No copy change introduces a performance number, ROI figure, win rate, or guarantee. A test asserting the absence of such claims is preferred over a reviewer's eye.
+
+      ## Mechanical classification
+
+      * Tier: T2. `npx tsx scripts/ops/tier-classifier.ts --declared-tier T2 --files apps/web/src/app/page.tsx` → `mechanical_minimum: T3`, `derived_tier: T2`, `escalated: false`, no matches. Re-run at lane-start against the final file set; the classifier is authoritative over this line.
+      * **Lane type: **`delivery-ui`. `.lane/lanes/delivery-ui.yml:15` admits `apps/web/**` — this is the admission correction [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work) landed, and it is why this issue is dispatchable at all where earlier website work was not. Note `required_proof_artifacts` includes `screenshot-desktop.png` and `screenshot-mobile.png`; the lane must produce both.
+      * Concurrency: `delivery-ui` is capped at `max_per_app: 1`. `apps/web` and `apps/command-center` are different apps, so this does not contend with the Command Center lane. **Not Tier C** — dispatchable alongside [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board).
+      * **Executor: Codex CLI** — bounded, clear-scope UI work.
+
+      ## Guardrails
+
+      Production stays parked. No backend, no DB, no provider contact, no delivery unpark, no secret access. `apps/web/**` only — if the work appears to need a file outside that tree, stop and raise it rather than widening scope.
+    captured_at: 2026-10-10T23:43:14.974Z
+    description_sha256: 855668cd2d430ea163fe4a7147097233e0e0c91a70a375733481c2e2d2e6669a
+  contract_hash: ad8b85cab59f60d291ce2a7fbf607de03e17d6d5b17a664a1b87dfdd0ad8512e
