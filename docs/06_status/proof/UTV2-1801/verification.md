@@ -1,6 +1,6 @@
 # PROOF: UTV2-1801
 
-MERGE_SHA: pending merge
+MERGE_SHA: b65dac9184afdd5162e24740e64fe8d6a4e39746
 
 Issue: UTV2-1801
 Tier: T2
@@ -61,9 +61,8 @@ Implementation SHA: `01e2c460173fd3f3e79e97d22f7aece1cc4c18be`. source-snapshot.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `b65dac9184afdd5162e24740e64fe8d6a4e39746`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1732
-
 ## Reviewed build refresh
 
 After the registered executor completed, the unchanged implementation commit 01e2c460173fd3f3e79e97d22f7aece1cc4c18be was built again with the required real origin (PASS), served as an isolated standalone production preview on port 4401, and mechanically audited: all ten routes, fourteen internal links/anchors, eight byte-identical approved assets and final wide social artwork passed. Placeholder inversion exited 1 as expected; unknown route returned 404. App type-check and diff whitespace passed after restoring the generated shim. The approved screenshot/layout evidence is retained; review corrections affect metadata, configuration and test coverage, not page geometry or brand assets.

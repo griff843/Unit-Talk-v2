@@ -21,7 +21,7 @@ No API, worker, DB, contracts, domain, brand masters, mission, checkout, VIP+ ac
 
 Prepared source is bound by source-snapshot.json.
 Implementation SHA: `01e2c460173fd3f3e79e97d22f7aece1cc4c18be`
-Merge SHA: pending merge
+Merge SHA: b65dac9184afdd5162e24740e64fe8d6a4e39746
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1732
 
 ## Final social-asset inspection correction

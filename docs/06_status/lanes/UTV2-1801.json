@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1801-public-website-conversion",
   "branch": "codex/utv2-1801-public-website-conversion",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "b65dac9184afdd5162e24740e64fe8d6a4e39746",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1732",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,22 @@
     "docs/06_status/proof/UTV2-1801/verification.md",
     "docs/06_status/proof/UTV2-1801/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-10-10T23:43:23.671Z",
-  "heartbeat_at": "2026-10-11T03:05:59.488Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-11T13:23:49.133Z",
+  "closed_at": "2026-10-11T13:23:49.133Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1801-public-website-conversion.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-11T13:23:46.521Z",
+      "verdict": "pass",
+      "merge_sha": "b65dac9184afdd5162e24740e64fe8d6a4e39746",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",

@@ -71,7 +71,9 @@
     "verified_source_sha": "01e2c460173fd3f3e79e97d22f7aece1cc4c18be",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "merge_sha": null
+    "merge_sha": "b65dac9184afdd5162e24740e64fe8d6a4e39746",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-11T13:23:40.695Z"
   },
   "pending": [
     "draft PR and protected exact-head CI",
