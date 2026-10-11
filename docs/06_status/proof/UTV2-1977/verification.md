@@ -70,7 +70,7 @@ Acceptance matrix measured by the focused tests:
 - [x] `pnpm exec tsx --test 'scripts/ops/shared.test.ts'`: PASS, 142 tests, 0 failures.
 - [x] `pnpm test:ops`: PASS, 3,683 passing tests, 0 failures, 10 skips.
 - [x] `pnpm verify:static`: PASS, including lint, type-check, build, full `pnpm test`, production-post-migration checks, Smart Form verification, and command/migration checks.
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 7 changed files, no R-level rules matched and no extra R-level artifacts required.
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 8 changed files, no R-level rules matched and no extra R-level artifacts required.
 - [ ] `pnpm verify`: the entire `verify:static` stage passed, then the writable DB stage was blocked by the staging identity guard. This is not represented as a green full gate.
 
 Literal writable-DB disposition required by the execution packet:
