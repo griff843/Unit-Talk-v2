@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -36,22 +36,26 @@ interface StepResult {
 
 function runStep(stepName: string, changed: string[], sensitiveOutput = ''): StepResult {
   const dir = mkdtempSync(path.join(tmpdir(), 'proof-guard-'));
-  const changedPath = path.join(dir, 'changed.txt');
-  const outputPath = path.join(dir, 'github-output');
-  writeFileSync(changedPath, changed.join('\n') + '\n');
-  writeFileSync(outputPath, '');
-  const script = stepRunBody(stepName)
-    .replaceAll('/tmp/changed.txt', changedPath)
-    .replaceAll('${{ steps.sensitive.outputs.sensitive }}', sensitiveOutput);
-  const result = spawnSync('bash', ['-e', '-c', script], {
-    env: { ...process.env, GITHUB_OUTPUT: outputPath },
-    encoding: 'utf8',
-  });
-  return {
-    status: result.status,
-    stdout: result.stdout + result.stderr,
-    outputs: readFileSync(outputPath, 'utf8'),
-  };
+  try {
+    const changedPath = path.join(dir, 'changed.txt');
+    const outputPath = path.join(dir, 'github-output');
+    writeFileSync(changedPath, changed.join('\n') + '\n');
+    writeFileSync(outputPath, '');
+    const script = stepRunBody(stepName)
+      .replaceAll('/tmp/changed.txt', changedPath)
+      .replaceAll('${{ steps.sensitive.outputs.sensitive }}', sensitiveOutput);
+    const result = spawnSync('bash', ['-e', '-c', script], {
+      env: { ...process.env, GITHUB_OUTPUT: outputPath },
+      encoding: 'utf8',
+    });
+    return {
+      status: result.status,
+      stdout: result.stdout + result.stderr,
+      outputs: readFileSync(outputPath, 'utf8'),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /** Runs sensitive-detection, then the proof check when detection requires it. */
