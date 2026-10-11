@@ -8,7 +8,7 @@ MERGE_SHA: pending merge
 
 Issue: UTV2-1975
 Tier: T2
-result: static/web/browser pass; final pnpm verify running
+result: static/web/browser PASS; writable DB deferred to protected staging-ci
 
 ## ASSERTIONS:
 
@@ -35,6 +35,7 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 Merge SHA: pending merge
 PR: pending
+Execution SHA: 0b0e72932e3b691775ae486088c01ad7da070e2e
 
 ## Current-branch browser verification
 
@@ -45,3 +46,10 @@ Production build served locally at http://localhost:4407; no deployment. Screens
 Real browser interactions: open menu => expanded true; Results navigation => /results and menu closed; Escape => menu closed and focus returned to Open menu button. Header matches standalone canonical SVG comparison.
 
 Final source-specific ESLint and apps/web type-check pass; final corrected production build passes.
+
+## SHA binding
+
+Verified source SHA: `0b0e72932e3b691775ae486088c01ad7da070e2e`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1735
+
+`pnpm verify`: static portion PASS; writable-DB stage REFUSED before connecting because local host 127.0.0.1 cannot identify approved staging project. Protected staging CI is pending.

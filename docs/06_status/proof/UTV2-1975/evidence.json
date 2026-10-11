@@ -1,36 +1,87 @@
 {
-  "issue": "UTV2-1975",
-  "baseSha": "aa49eaa2993218fd471a82f4fb354f0b6e8b5c6b",
-  "branch": "codex/utv2-1975-compact-header",
-  "sourceFiles": [
-    "apps/web/src/components/PublicHeader.tsx"
-  ],
-  "sourceSha256": "7b535329d0bb57f0d80f0203d7309830e1b14340eed7502541e10e676b241b0e",
-  "asset": {
-    "path": "/brand/unit-talk-mark-white.svg",
-    "viewBox": "0 0 1000 800",
-    "sha256": "fb191f6fa93dbf8a820207e66025dc19e2ee1efa4a723f4b5f481ff0df09ea3c",
-    "byteEqualCanonical": true
-  },
-  "dimensions": {
-    "desktop": {
-      "box": [
-        75,
-        60
-      ],
-      "visibleHeight": 48
+  "schema_version": 2,
+  "issue_id": "UTV2-1975",
+  "pr_number": 1735,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1735",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static-ui",
+  "status": "REVIEW_CANDIDATE_PENDING_PROTECTED_CI",
+  "source_sha": "0b0e72932e3b691775ae486088c01ad7da070e2e",
+  "generated_at": "2026-10-11T14:31:14.945Z",
+  "gate_results": [
+    {
+      "gate": "focused-web-tests",
+      "verdict": "PASS",
+      "detail": "7 pass, 0 fail"
     },
-    "mobile": {
-      "box": [
-        70,
-        56
-      ],
-      "visibleHeight": 44.8
+    {
+      "gate": "web-build-type-lint",
+      "verdict": "PASS",
+      "detail": "Final corrected production build, type-check and PublicHeader ESLint pass"
+    },
+    {
+      "gate": "responsive-browser-verification",
+      "verdict": "PASS",
+      "detail": "1440px desktop, 390px mobile; source fidelity, aspect, alignment, no overlap/clipping/transforms, open/navigation/Escape pass"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "Full pnpm verify completed static portion successfully"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "pnpm verify refused local host127.0.0.1; deferred to protected staging-ci, no DB connection attempted"
     }
+  ],
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "0b0e72932e3b691775ae486088c01ad7da070e2e",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "pre_merge_head"
   },
-  "screenshots": "C:/Users/griff/.codex/visualizations/2026/10/10/01a12777-70cb-73b3-9a44-a8a1477c0557/current-main-review/header-correction",
-  "browserEvidence": "C:/Users/griff/.codex/visualizations/2026/10/10/01a12777-70cb-73b3-9a44-a8a1477c0557/current-main-review/header-correction/browser-verification.json",
-  "visualDisposition": "Matches canonical source; no clipping, transforms, unexpected lines or distortion. No overflow or menu overlap.",
-  "merge": "Not authorized",
-  "deployment": "Not authorized"
+  "header_evidence": {
+    "issue": "UTV2-1975",
+    "baseSha": "aa49eaa2993218fd471a82f4fb354f0b6e8b5c6b",
+    "branch": "codex/utv2-1975-compact-header",
+    "sourceFiles": [
+      "apps/web/src/components/PublicHeader.tsx"
+    ],
+    "sourceSha256": "7b535329d0bb57f0d80f0203d7309830e1b14340eed7502541e10e676b241b0e",
+    "asset": {
+      "path": "/brand/unit-talk-mark-white.svg",
+      "viewBox": "0 0 1000 800",
+      "sha256": "fb191f6fa93dbf8a820207e66025dc19e2ee1efa4a723f4b5f481ff0df09ea3c",
+      "byteEqualCanonical": true
+    },
+    "dimensions": {
+      "desktop": {
+        "box": [
+          75,
+          60
+        ],
+        "visibleHeight": 48
+      },
+      "mobile": {
+        "box": [
+          70,
+          56
+        ],
+        "visibleHeight": 44.8
+      }
+    },
+    "screenshots": "C:/Users/griff/.codex/visualizations/2026/10/10/01a12777-70cb-73b3-9a44-a8a1477c0557/current-main-review/header-correction",
+    "browserEvidence": "C:/Users/griff/.codex/visualizations/2026/10/10/01a12777-70cb-73b3-9a44-a8a1477c0557/current-main-review/header-correction/browser-verification.json",
+    "visualDisposition": "Matches canonical source; no clipping, transforms, unexpected lines or distortion. No overflow or menu overlap.",
+    "merge": "Not authorized",
+    "deployment": "Not authorized"
+  },
+  "pending": [
+    "protected exact-head CI",
+    "outer-wrapper executor-result publication",
+    "PM review; merge and deploy not authorized"
+  ]
 }
