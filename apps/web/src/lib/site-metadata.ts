@@ -6,9 +6,9 @@ export function pageMetadata(
   path: string,
 ): Metadata {
   const image = {
-    url: '/brand/unit-talk-horizontal-white-2400.png',
-    width: 2400,
-    height: 738,
+    url: '/brand/unit-talk-icon-1024.png',
+    width: 1024,
+    height: 1024,
     alt: 'Unit Talk — sports betting intelligence',
   };
   return {

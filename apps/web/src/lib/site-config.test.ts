@@ -35,13 +35,13 @@ test('social metadata references real public artwork for large image cards', () 
   const metadata = pageMetadata('Unit Talk', BRAND.description, '/');
   const serialized = JSON.stringify(metadata);
   const imagePath = new URL(
-    '../../public/brand/unit-talk-horizontal-white-2400.png',
+    '../../public/brand/unit-talk-icon-1024.png',
     import.meta.url,
   );
 
   assert.ok(statSync(imagePath).size > 0);
   assert.match(serialized, /summary_large_image/);
-  assert.match(serialized, /unit-talk-horizontal-white-2400\.png/);
+  assert.match(serialized, /unit-talk-icon-1024\.png/);
 });
 
 test('every internal navigation target resolves to an application route or anchor', () => {
@@ -124,7 +124,7 @@ test('website brand assets are byte-identical copies of canonical masters', () =
     'unit-talk-icon-256.png',
     'favicon-32.png',
     'favicon-64.png',
-    'unit-talk-horizontal-white-2400.png',
+    'unit-talk-icon-1024.png',
   ]) {
     const master = readFileSync(
       new URL(
