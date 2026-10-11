@@ -1,0 +1,93 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1975
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1975
+  objective: Implement Griff's focused header brand-usage correction against main
+    aa49eaa2993218fd471a82f4fb354f0b6e8b5c6b. Replace the full horizontal header
+    lockup with the existing canonical compact monogram using BrandLogo compact.
+  acceptance_criteria:
+    - Desktop compact mark with approximately 44–52px visual height and clear
+      space; centered nav.
+    - Mobile same compact mark with approximately 40–48px visual height, no menu
+      overlap.
+    - No stretching, clipping, CSS transforms or geometry changes; match
+      canonical source.
+    - Mobile menu still opens, closes, navigates and supports Escape.
+    - apps/web build, type-check and relevant lint pass; required pnpm verify
+      and R-level checks run.
+    - "Current-branch screenshots: 1440px desktop, 390px mobile, close logo crop
+      and standalone canonical comparison, with before evidence."
+    - Return base SHA, branch, changed files, exact HEAD, dimensions, checks and
+      PR number. Governed PR only; no merge or activation authorization.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Authorized scope
+
+      apps/web/src/components/PublicHeader.tsx. Only adjust BrandLogo or website
+      styling if necessary for compact mark support. Use existing
+      /brand/unit-talk-mark-white.svg, preserve SVG paths and aspect ratio. No
+      typed UNIT TALK beside the header icon. Do not change canonical assets,
+      footer/hero, copy, pricing, membership, backend, redesign or deploy.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1975/public-website-header-use-canonical-compact-ut-monogram-at-navigation
+    title: "Public website header: use canonical compact UT monogram at navigation
+      scale"
+    description: >-
+      ## Objective
+
+
+      Implement Griff's focused header brand-usage correction against main
+      aa49eaa2993218fd471a82f4fb354f0b6e8b5c6b. Replace the full horizontal
+      header lockup with the existing canonical compact monogram using BrandLogo
+      compact.
+
+
+      ## Authorized scope
+
+
+      apps/web/src/components/PublicHeader.tsx. Only adjust BrandLogo or website
+      styling if necessary for compact mark support. Use existing
+      /brand/unit-talk-mark-white.svg, preserve SVG paths and aspect ratio. No
+      typed UNIT TALK beside the header icon. Do not change canonical assets,
+      footer/hero, copy, pricing, membership, backend, redesign or deploy.
+
+
+      ## Acceptance criteria
+
+
+      * Desktop compact mark with approximately 44–52px visual height and clear
+      space; centered nav.
+
+      * Mobile same compact mark with approximately 40–48px visual height, no
+      menu overlap.
+
+      * No stretching, clipping, CSS transforms or geometry changes; match
+      canonical source.
+
+      * Mobile menu still opens, closes, navigates and supports Escape.
+
+      * apps/web build, type-check and relevant lint pass; required pnpm verify
+      and R-level checks run.
+
+      * Current-branch screenshots: 1440px desktop, 390px mobile, close logo
+      crop and standalone canonical comparison, with before evidence.
+
+      * Return base SHA, branch, changed files, exact HEAD, dimensions, checks
+      and PR number. Governed PR only; no merge or activation authorization.
+    captured_at: 2026-10-11T14:14:12.028Z
+    description_sha256: c1b4b020988c269c88b52cb0a2535c871ae6092f11a58f560de4326d657192d1
+  contract_hash: 856a9ca108cd31931c2a9b509d71f7f0c475e015ed0f68ab3fd6b1bab44518b6
