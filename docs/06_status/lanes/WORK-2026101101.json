@@ -8,14 +8,14 @@
   "branch": "claude/work-2026101101-record-2101001-merge",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1734",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026101101.md",
     "docs/06_status/lanes/WORK-2026101001.json"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-11T14:12:08.049Z",
   "heartbeat_at": "2026-10-11T14:12:08.049Z",
   "closed_at": null,
