@@ -22,9 +22,9 @@
     "docs/06_status/proof/UTV2-1971/verification.md",
     "docs/06_status/proof/UTV2-1971/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-10-10T20:23:56.285Z",
-  "heartbeat_at": "2026-10-10T20:51:31.229Z",
+  "heartbeat_at": "2026-10-11T16:51:19.116Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1971-ncaaf-participant-catalog.json",
