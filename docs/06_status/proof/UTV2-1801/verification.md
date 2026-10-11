@@ -39,6 +39,14 @@ result: REVIEW_CANDIDATE_PENDING_PROTECTED_CI
 | Production preview mobile trace | LCP 896 ms, TTFB 5 ms, INP 85 ms, CLS 0; 4x CPU, Fast 4G |
 | pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD | PASS: 78 changed files; no rules matched |
 
+Executed final-diff R-level output (unchanged source; issue-owned proof annotations only):
+
+```text
+Verdict: PASS
+Changed files: 79
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
 Logs are copied to logs/. Browser/performance evidence describes the prepared source snapshot, not a production deployment. Local lab metrics are not field Core Web Vitals.
 
 The first static-verification attempt found that an earlier standalone Next build had regenerated the tracked `next-env.d.ts` shim. The generated shim was restored to the repository version, then the exact final source passed `pnpm verify:static`. No generated source artifact is included.
