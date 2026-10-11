@@ -86,6 +86,7 @@ import {
   handleKillSwitchSet,
   handleKillSwitchList,
 } from './routes/index.js';
+import { canSyncMemberTiers } from './routes/member-tiers.js';
 import { handleTracePickRoute } from './routes/picks.js';
 import {
   handleModelHealthAlerts,
@@ -620,6 +621,15 @@ export async function routeRequest(
   // service key may read it (`canReadMemberPicks`).
   const memberPicksRoute = method === 'GET' && url.pathname === '/api/member/picks';
 
+  // WORK-2026101104: the Discord bot syncs tier roles through
+  // `POST /api/member-tiers`, but ROUTE_ROLES (auth.ts, Tier C) admits only an
+  // operator, and the bot key is a `submitter`, so every sync was a 403. The
+  // route's role policy is stated here, by identity, exactly like the member
+  // pick list: an operator, or the bot's own service identity
+  // (`canSyncMemberTiers`). `ROUTE_ROLES` is unchanged, so a generic submitter
+  // key still gets 403.
+  const memberTiersRoute = method === 'POST' && url.pathname === '/api/member-tiers';
+
   if (
     method === 'POST' ||
     url.pathname === '/api/discord/kill-switch' ||
@@ -655,7 +665,9 @@ export async function routeRequest(
       ? auth.role === 'operator'
       : memberPicksRoute
         ? canReadMemberPicks(auth)
-        : authorizeRoute(auth, url.pathname);
+        : memberTiersRoute
+          ? canSyncMemberTiers(auth)
+          : authorizeRoute(auth, url.pathname);
     if (!routeAuthorized) {
       requestLogger.warn('api auth forbidden', {
         authOutcome: 'role_denied',
