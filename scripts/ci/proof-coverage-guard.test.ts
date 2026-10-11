@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { createTempWorkspace, releaseTempWorkspace } from '../ops/temp-workspace.js';
 
 const WORKFLOW_PATH = '.github/workflows/proof-coverage-guard.yml';
 
@@ -35,7 +35,7 @@ interface StepResult {
 }
 
 function runStep(stepName: string, changed: string[], sensitiveOutput = ''): StepResult {
-  const dir = mkdtempSync(path.join(tmpdir(), 'proof-guard-'));
+  const dir = createTempWorkspace('proof-guard-');
   try {
     const changedPath = path.join(dir, 'changed.txt');
     const outputPath = path.join(dir, 'github-output');
@@ -54,7 +54,7 @@ function runStep(stepName: string, changed: string[], sensitiveOutput = ''): Ste
       outputs: readFileSync(outputPath, 'utf8'),
     };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    releaseTempWorkspace(dir);
   }
 }
 
