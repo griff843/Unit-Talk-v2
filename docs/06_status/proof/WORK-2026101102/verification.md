@@ -43,3 +43,7 @@ VERDICT: PASS (42 checks)
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1737
+
+## Rebind note
+
+Head 1779bdbf failed the UTV2-1949 temp-workspace guard in `pnpm test` (raw mkdtemp with no release in scope). The test now uses createTempWorkspace/releaseTempWorkspace. Re-run locally: proof-coverage-guard.test.ts and temp-workspace-cleanup-guard.test.ts, 16/16 pass; eslint clean. Proof re-anchored to d55c16190ec8b39d9744c5b9ead3f38e2ab40c3b, the last non-proof commit. No workflow, migration, roster or runtime file changed by this rebind.

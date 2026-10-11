@@ -7,18 +7,18 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "9a199bd66eeab1e615c5c19b3fede78ee01579c7",
+    "verified_source_sha": "d55c16190ec8b39d9744c5b9ead3f38e2ab40c3b",
     "evidence_commit_sha": "pending proof commit",
-    "current_pr_head_sha": "9a199bd66eeab1e615c5c19b3fede78ee01579c7",
+    "current_pr_head_sha": "d55c16190ec8b39d9744c5b9ead3f38e2ab40c3b",
     "sha_type": "pending_merge",
-    "bound_at": "2026-10-11T15:33:10.000Z"
+    "bound_at": "2026-10-11T21:45:04.000Z"
   },
   "static_proof": {
     "status": "PASS",
     "verify_static": {
       "command": "pnpm verify",
       "status": "PASS",
-      "detail": "Required CI verify context runs pnpm type-check and pnpm test (test:ops includes scripts/ci/proof-coverage-guard.test.ts, 8 of 8 pass locally)."
+      "detail": "Required CI verify context runs pnpm type-check and pnpm test (test:ops includes scripts/ci/proof-coverage-guard.test.ts, 8 of 8 pass locally; the UTV2-1949 temp-workspace guard passes with it, 16/16 together)."
     },
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
