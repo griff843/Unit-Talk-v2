@@ -30,6 +30,42 @@ export interface ApiClient {
 
 export type FetchImpl = typeof fetch;
 
+export interface MemberTierSyncFailure {
+  event: 'member_tier_sync.failed';
+  status: number | null;
+  discordId: string;
+  tier: string;
+  action: 'activate' | 'deactivate';
+  /** Bounded, stable code: `http_<status>`, `network_error` or `unexpected_error`. */
+  code: string;
+}
+
+function memberTierSyncFailureCode(err: unknown): string {
+  if (err instanceof ApiClientError && typeof err.status === 'number') {
+    return `http_${err.status}`;
+  }
+  return err instanceof Error ? 'network_error' : 'unexpected_error';
+}
+
+/**
+ * The structured shape of a failed member-tier sync. It carries the HTTP
+ * status and a bounded code only: never the API key, and never the response
+ * body or the error message (`ApiClientError.message` embeds the body).
+ */
+export function buildMemberTierSyncFailure(
+  params: { discord_id: string; tier: string; action: 'activate' | 'deactivate' },
+  err: unknown,
+): MemberTierSyncFailure {
+  return {
+    event: 'member_tier_sync.failed',
+    status: err instanceof ApiClientError && typeof err.status === 'number' ? err.status : null,
+    discordId: params.discord_id,
+    tier: params.tier,
+    action: params.action,
+    code: memberTierSyncFailureCode(err),
+  };
+}
+
 export interface AlertsRecentResponse {
   detections: Array<{
     id: string;
@@ -197,9 +233,13 @@ export function createApiClient(baseUrl: string, apiKey?: string, fetchImpl: Fet
           body: JSON.stringify(params),
         });
       } catch (err) {
-        console.warn(
-          '[api-client] syncMemberTier failed (swallowed):',
-          err instanceof Error ? err.message : String(err),
+        // WORK-2026101104: a refused or failed sync must be visible. Emit one
+        // structured error line (status and bounded code only) and return, so one failed role sync cannot crash the bot or block the
+        // other role syncs in the same guildMemberUpdate.
+        console.error(
+          JSON.stringify(
+            buildMemberTierSyncFailure(params, err),
+          ),
         );
       }
     },

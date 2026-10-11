@@ -1,6 +1,6 @@
 import type { GuildMember, PartialGuildMember } from 'discord.js';
 import type { BotConfig } from '../config.js';
-import type { ApiClient } from '../api-client.js';
+import { buildMemberTierSyncFailure, type ApiClient } from '../api-client.js';
 
 /**
  * Builds a map of role ID → tier name from bot config.
@@ -22,7 +22,9 @@ function buildRoleTierMap(config: BotConfig): Map<string, string> {
  * Returns a guildMemberUpdate event handler that syncs member tier changes to the API
  * whenever tier-relevant roles are added or removed.
  *
- * All errors are swallowed — this must never crash the bot process.
+ * This must never crash the bot process, but no failure is silent: a failed sync
+ * is logged as a structured `member_tier_sync.failed` error, and one failed
+ * role never blocks the other roles in the same update.
  */
 export function createMemberTierSyncHandler(
   config: BotConfig,
@@ -42,10 +44,12 @@ export function createMemberTierSyncHandler(
       const removedRoleIds = [...oldRoleIds].filter((id) => !newRoleIds.has(id));
 
       const syncTasks: Array<Promise<void>> = [];
+      const syncParams: Array<{ discord_id: string; tier: string; action: 'activate' | 'deactivate' }> = [];
 
       for (const roleId of addedRoleIds) {
         const tier = roleTierMap.get(roleId);
         if (tier) {
+          syncParams.push({ discord_id: newMember.id, tier, action: 'activate' });
           syncTasks.push(
             apiClient.syncMemberTier?.({
               discord_id: newMember.id,
@@ -60,6 +64,7 @@ export function createMemberTierSyncHandler(
       for (const roleId of removedRoleIds) {
         const tier = roleTierMap.get(roleId);
         if (tier) {
+          syncParams.push({ discord_id: newMember.id, tier, action: 'deactivate' });
           syncTasks.push(
             apiClient.syncMemberTier?.({
               discord_id: newMember.id,
@@ -71,9 +76,20 @@ export function createMemberTierSyncHandler(
         }
       }
 
-      await Promise.allSettled(syncTasks);
+      const results = await Promise.allSettled(syncTasks);
+      results.forEach((result, index) => {
+        const params = syncParams[index];
+        if (result.status === 'rejected' && params) {
+          console.error(JSON.stringify(buildMemberTierSyncFailure(params, result.reason)));
+        }
+      });
     } catch (err) {
-      console.error('[member-tier-sync] unhandled handler error (swallowed):', err);
+      console.error(
+        JSON.stringify({
+          event: 'member_tier_sync.handler_error',
+          code: err instanceof Error ? 'handler_error' : 'unexpected_error',
+        }),
+      );
     }
   };
 }

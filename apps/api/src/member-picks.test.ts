@@ -16,6 +16,7 @@ import {
 import type { RepositoryBundle } from '@unit-talk/db';
 import { createApiServer } from './server.js';
 import { canReadMemberPicks } from './routes/member-picks.js';
+import { canSyncMemberTiers, handleMemberTiers } from './routes/member-tiers.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
 function authorization(decision: 'authorized' | 'refused') {
@@ -293,4 +294,243 @@ test('canReadMemberPicks admits only an operator or the Discord bot service iden
     canReadMemberPicks({ role: 'capper', identity: 'capper:griff843', capperId: 'griff843' }),
     false,
   );
+});
+
+// --- WORK-2026101104: bot-scoped member-tier sync authorization -------------
+//
+// Kept beside the member-picks access tests because they share the real
+// authenticateRequest + gate path and the same bot/submitter key shapes
+// (no mock of the gate). auth.test.ts:205 keeps asserting that
+// authorizeRoute refuses a submitter for /api/member-tiers; ROUTE_ROLES is
+// unchanged, and the bot is admitted by identity in the server gate.
+
+const BOT_IDENTITY = 'submitter:discord-bot:bot-memb';
+const BOT_USER = '123456789012345678';
+
+async function postMemberTier(base: string, token: string | undefined, body: Record<string, unknown>) {
+  const response = await fetch(`${base}/api/member-tiers`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  return { status: response.status, raw: await response.text() };
+}
+
+const SYNC_BODY = { discord_id: BOT_USER, tier: 'trial', action: 'activate', source: 'discord-role' };
+
+test('canSyncMemberTiers admits only an operator or the Discord bot service identity', () => {
+  assert.equal(canSyncMemberTiers({ role: 'operator', identity: 'operator:abcd1234' }), true);
+  assert.equal(canSyncMemberTiers({ role: 'submitter', identity: BOT_IDENTITY }), true);
+  assert.equal(canSyncMemberTiers({ role: 'submitter', identity: 'submitter:abcd1234' }), false);
+  assert.equal(canSyncMemberTiers({ role: 'submitter', identity: 'submitter:discord-bot' }), false);
+  assert.equal(canSyncMemberTiers({ role: 'submitter', identity: 'submitter:discord-botx:abcd1234' }), false);
+  assert.equal(canSyncMemberTiers({ role: 'submitter', identity: 'operator:discord-bot:abcd1234' }), false);
+  assert.equal(canSyncMemberTiers({ role: 'worker', identity: BOT_IDENTITY }), false);
+  assert.equal(canSyncMemberTiers({ role: 'settler', identity: BOT_IDENTITY }), false);
+  assert.equal(
+    canSyncMemberTiers({ role: 'capper', identity: 'capper:griff843', capperId: 'griff843' }),
+    false,
+  );
+});
+
+test('POST /api/member-tiers refuses anonymous with 401 and a generic submitter or worker key with 403, writing nothing', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      for (const token of [undefined, 'not-a-configured-key']) {
+        const { status } = await postMemberTier(base, token, SYNC_BODY);
+        assert.equal(status, 401, `token=${token ?? 'none'}`);
+      }
+      for (const token of [AUTH_KEYS.UNIT_TALK_API_KEY_SUBMITTER, AUTH_KEYS.UNIT_TALK_API_KEY_WORKER]) {
+        const { status, raw } = await postMemberTier(base, token, SYNC_BODY);
+        assert.equal(status, 403, token);
+        assert.equal((JSON.parse(raw) as Body).error?.code, 'FORBIDDEN');
+      }
+      assert.deepEqual(await repositories.tiers.getTierHistory(BOT_USER), []);
+      assert.deepEqual(
+        await repositories.audit.listRecentByEntityType('member_tiers', '2000-01-01T00:00:00.000Z', 'member_tier.synced'),
+        [],
+      );
+    });
+  });
+});
+
+test('the bot key syncs a tier: 200, source forced to discord-role, changed_by is the caller identity, one audit row', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      // The body asks for a different source; the server ignores it.
+      const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, {
+        ...SYNC_BODY,
+        source: 'manual',
+      });
+      assert.equal(status, 200);
+
+      const history = await repositories.tiers.getTierHistory(BOT_USER);
+      assert.equal(history.length, 1);
+      assert.equal(history[0]?.tier, 'trial');
+      assert.equal(history[0]?.source, 'discord-role');
+      assert.equal(history[0]?.changed_by, BOT_IDENTITY);
+
+      const audit = await repositories.audit.listRecentByEntityType(
+        'member_tiers',
+        '2000-01-01T00:00:00.000Z',
+        'member_tier.synced',
+      );
+      assert.equal(audit.length, 1);
+      assert.equal(audit[0]?.actor, BOT_IDENTITY);
+      assert.equal(audit[0]?.entity_id, history[0]?.id);
+      assert.equal((audit[0]?.payload as Record<string, unknown>).source, 'discord-role');
+
+      // Idempotent: the same activation returns the existing row, no duplicate.
+      const again = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, SYNC_BODY);
+      assert.equal(again.status, 200);
+      assert.equal((await repositories.tiers.getTierHistory(BOT_USER)).length, 1);
+
+      // Deactivation ends it and is audited.
+      const off = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, action: 'deactivate' });
+      assert.equal(off.status, 200);
+      assert.deepEqual(await repositories.tiers.getActiveTiers(BOT_USER), []);
+      // Deactivating a tier that is not active is a no-op 200.
+      const offAgain = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, action: 'deactivate' });
+      assert.equal(offAgain.status, 200);
+    });
+  });
+});
+
+test('the bot key cannot write capper, operator or free: refused with nothing written', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      for (const tier of ['capper', 'operator', 'free']) {
+        for (const action of ['activate', 'deactivate']) {
+          const { status, raw } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, {
+            ...SYNC_BODY,
+            tier,
+            action,
+          });
+          assert.equal(status, 403, `${tier}/${action}`);
+          assert.equal((JSON.parse(raw) as Body).error?.code, 'TIER_NOT_BOT_SYNCABLE');
+        }
+      }
+      assert.deepEqual(await repositories.tiers.getTierHistory(BOT_USER), []);
+      assert.deepEqual(
+        await repositories.audit.listRecentByEntityType('member_tiers', '2000-01-01T00:00:00.000Z', 'member_tier.synced'),
+        [],
+      );
+      // The member-facing tiers are still accepted.
+      for (const tier of ['trial', 'vip', 'vip-plus']) {
+        const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, tier });
+        assert.equal(status, 200, tier);
+      }
+    });
+  });
+});
+
+test('an operator key can still write capper and operator tiers', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      for (const tier of ['capper', 'operator']) {
+        const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_API_KEY_OPERATOR, { ...SYNC_BODY, tier });
+        assert.equal(status, 200, tier);
+      }
+    });
+  });
+});
+
+test('the bot key cannot write a malformed discord_id: 400 and nothing written', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      for (const id of ['', 'abc', 'user-123', '12345', '1234567890123456', '123456789012345678901', '12345678901234567 ', '१२३४५६७८९०१२३४५६७८९']) {
+        const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, discord_id: id });
+        assert.equal(status, 400, JSON.stringify(id));
+      }
+      const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, discord_id: 1234567890123 });
+      assert.equal(status, 400, 'a number is not a string id');
+      assert.deepEqual(
+        await repositories.audit.listRecentByEntityType('member_tiers', '2000-01-01T00:00:00.000Z', 'member_tier.synced'),
+        [],
+      );
+    });
+  });
+});
+
+test('KNOWN LIMITATION (B2 scope): if the audit write fails the tier write has already happened and the caller sees a 500', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    repositories.audit.record = async () => {
+      throw new Error('audit unavailable');
+    };
+    await withServer(repositories, async (base) => {
+      const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, SYNC_BODY);
+      assert.notEqual(status, 200, 'the failure is visible to the caller, never reported as success');
+      assert.ok(status >= 500, `status=${status}`);
+      // The two writes are not atomic: the tier row exists without its audit row.
+      // Fixing that needs the Tier C repository work owned by B2; this test
+      // pins today's behaviour so a change to it is deliberate.
+      assert.equal((await repositories.tiers.getTierHistory(BOT_USER)).length, 1);
+    });
+  });
+});
+
+test('the server gate alone refuses a generic submitter: its 403 comes from the gate, not the handler', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      const { status, raw } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_API_KEY_SUBMITTER, SYNC_BODY);
+      assert.equal(status, 403);
+      assert.match(
+        (JSON.parse(raw) as { error?: { message?: string } }).error?.message ?? '',
+        /is not authorized for \/api\/member-tiers/u,
+        'the gate (not the handler) must be what refuses a generic submitter',
+      );
+    });
+  });
+});
+
+test('the handler alone fails closed: no auth context, or a generic submitter context, is refused before any write', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  for (const auth of [undefined, { role: 'submitter' as const, identity: 'submitter:abcd1234' }]) {
+    let status = 0;
+    const request = { auth } as never;
+    const response = {
+      setHeader() {},
+      getHeader() { return undefined; },
+      end() {},
+      set statusCode(value: number) { status = value; },
+    } as never;
+    await handleMemberTiers(request, response, { repositories, bodyLimitBytes: 1024 } as never);
+    assert.equal(status, 403, JSON.stringify(auth));
+  }
+  assert.deepEqual(await repositories.tiers.getTierHistory(BOT_USER), []);
+});
+
+test('an operator key still syncs a tier, keeps its source, records its identity and is audited', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_API_KEY_OPERATOR, {
+        discord_id: 'discord-user-2',
+        tier: 'free',
+        action: 'activate',
+        source: 'manual',
+      });
+      assert.equal(status, 200);
+      const history = await repositories.tiers.getTierHistory('discord-user-2');
+      assert.equal(history[0]?.source, 'manual');
+      assert.equal(history[0]?.changed_by, 'operator:op-membe');
+      const audit = await repositories.audit.listRecentByEntityType(
+        'member_tiers',
+        '2000-01-01T00:00:00.000Z',
+        'member_tier.synced',
+      );
+      assert.equal(audit.length, 1);
+      assert.equal(audit[0]?.actor, 'operator:op-membe');
+    });
+  });
 });

@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101104",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101104-order/.out/worktrees/claude__work-2026101104-bot-tier-sync",
+  "branch": "claude/work-2026101104-bot-tier-sync",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026101104.md",
+    "apps/api/src/member-picks.test.ts",
+    "apps/api/src/routes/member-tiers.ts",
+    "apps/api/src/server.ts",
+    "apps/discord-bot/src/api-client.ts",
+    "apps/discord-bot/src/discord-bot-foundation.test.ts",
+    "apps/discord-bot/src/handlers/member-tier-sync-handler.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026101104/diff-summary.md",
+    "docs/06_status/proof/WORK-2026101104/evidence.json",
+    "docs/06_status/proof/WORK-2026101104/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-10-11T17:01:47.372Z",
+  "heartbeat_at": "2026-10-11T17:01:47.372Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/work-2026101104-bot-tier-sync.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101104-order/.out/worktrees/claude__work-2026101104-bot-tier-sync",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
