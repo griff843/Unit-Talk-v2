@@ -1,0 +1,26 @@
+{
+  "environment": "Built production preview localhost:4400",
+  "results": [
+    {
+      "check": "Mobile menu opens; Escape closes and returns focus to trigger",
+      "pass": true
+    },
+    {
+      "check": "Membership menu link navigates and closes menu",
+      "pass": true
+    },
+    {
+      "check": "Pricing comparison region keyboard ArrowRight scrolls horizontally",
+      "pass": true,
+      "observedScrollLeft": 32
+    },
+    {
+      "check": "Trial FAQ summary Enter toggles open and closed",
+      "pass": true
+    },
+    {
+      "check": "Skip link activates #main-content; next Tab enters main FAQ summary",
+      "pass": true
+    }
+  ]
+}

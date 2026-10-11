@@ -1,0 +1,177 @@
+{
+  "origin": "http://127.0.0.1:4400",
+  "routes": [
+    {
+      "route": "/",
+      "status": 200,
+      "canonical": "https://unit-talk.com"
+    },
+    {
+      "route": "/results",
+      "status": 200,
+      "canonical": "https://unit-talk.com/results"
+    },
+    {
+      "route": "/cappers",
+      "status": 200,
+      "canonical": "https://unit-talk.com/cappers"
+    },
+    {
+      "route": "/pricing",
+      "status": 200,
+      "canonical": "https://unit-talk.com/pricing"
+    },
+    {
+      "route": "/how-it-works",
+      "status": 200,
+      "canonical": "https://unit-talk.com/how-it-works"
+    },
+    {
+      "route": "/faq",
+      "status": 200,
+      "canonical": "https://unit-talk.com/faq"
+    },
+    {
+      "route": "/contact",
+      "status": 200,
+      "canonical": "https://unit-talk.com/contact"
+    },
+    {
+      "route": "/responsible-play",
+      "status": 200,
+      "canonical": "https://unit-talk.com/responsible-play"
+    },
+    {
+      "route": "/terms",
+      "status": 200,
+      "canonical": "https://unit-talk.com/terms"
+    },
+    {
+      "route": "/privacy",
+      "status": 200,
+      "canonical": "https://unit-talk.com/privacy"
+    }
+  ],
+  "internal_links": [
+    {
+      "href": "#main-content",
+      "status": 200,
+      "anchor_checked": true
+    },
+    {
+      "href": "/",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/results",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/cappers",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/pricing",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/how-it-works",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/faq",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/faq#trial",
+      "status": 200,
+      "anchor_checked": true
+    },
+    {
+      "href": "/responsible-play",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/contact",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/terms",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/privacy",
+      "status": 200,
+      "anchor_checked": false
+    },
+    {
+      "href": "/pricing#capabilities",
+      "status": 200,
+      "anchor_checked": true
+    },
+    {
+      "href": "/faq#billing",
+      "status": 200,
+      "anchor_checked": true
+    }
+  ],
+  "assets": [
+    {
+      "name": "unit-talk-horizontal-white.svg",
+      "status": 200,
+      "canonical_bytes": true
+    },
+    {
+      "name": "unit-talk-mark-white.svg",
+      "status": 200,
+      "canonical_bytes": true
+    },
+    {
+      "name": "unit-talk-discord.svg",
+      "status": 200,
+      "canonical_bytes": true
+    },
+    {
+      "name": "unit-talk-icon-512.png",
+      "status": 200,
+      "canonical_bytes": true
+    },
+    {
+      "name": "unit-talk-icon-256.png",
+      "status": 200,
+      "canonical_bytes": true
+    },
+    {
+      "name": "favicon-32.png",
+      "status": 200,
+      "canonical_bytes": true
+    },
+    {
+      "name": "favicon-64.png",
+      "status": 200,
+      "canonical_bytes": true
+    },
+    {
+      "name": "unit-talk-horizontal-white-2400.png",
+      "status": 200,
+      "canonical_bytes": true
+    }
+  ],
+  "canonical_inversion": {
+    "input": "https://unittalk.example.com",
+    "exit_code": 1,
+    "rejected": true
+  },
+  "unrecognized_route": {
+    "status": 404
+  }
+}

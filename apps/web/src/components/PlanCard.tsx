@@ -1,55 +1,34 @@
 import Link from 'next/link';
-import { PRICE_PLACEHOLDER, type Tier } from '@/lib/site-config';
-
+import type { Tier } from '@/lib/site-config';
 export function PlanCard({ tier }: { tier: Tier }) {
   return (
-    <div
-      className={`ut-panel ut-notch relative flex h-full flex-col p-6 pt-7 ${
-        tier.highlighted ? 'border-[var(--ut-signal)]' : ''
-      } ${tier.comingSoon ? 'opacity-80' : ''}`}
+    <article
+      id={tier.id}
+      className={`ut-plan ${tier.highlighted ? 'ut-plan-highlight' : ''} ${tier.id === 'vip-plus' || tier.id === 'black-label' ? 'ut-plan-reserved' : ''}`}
     >
-      <div
-        className="absolute inset-x-0 top-0 h-[3px]"
-        style={{
-          backgroundColor: tier.highlighted ? 'var(--ut-signal)' : 'var(--ut-border-strong)',
-        }}
-        aria-hidden="true"
-      />
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold">{tier.name}</h3>
-        {tier.highlighted ? <span className="ut-tag ut-tag-signal">Popular</span> : null}
-        {tier.comingSoon ? <span className="ut-tag">Soon</span> : null}
+      <div className="flex items-center justify-between gap-3">
+        <h3>{tier.name}</h3>
+        {tier.highlighted ? (
+          <span className="ut-tag ut-tag-signal">Official picks</span>
+        ) : null}
       </div>
-      <p className="ut-num mt-4 text-2xl font-bold">
-        {tier.price ?? PRICE_PLACEHOLDER}
-      </p>
-      <p className="ut-text-muted text-xs uppercase tracking-wider">{tier.billing}</p>
-      <p className="ut-text-secondary mt-4 text-sm leading-relaxed">{tier.summary}</p>
-      <ul className="mt-5 flex-1 space-y-2.5">
+      <p className="ut-plan-price">{tier.price}</p>
+      <p className="ut-text-muted mt-1 text-sm">{tier.billing}</p>
+      <p className="ut-plan-summary">{tier.summary}</p>
+      <ul>
         {tier.features.map((feature) => (
-          <li key={feature} className="ut-text-secondary flex items-start gap-2 text-sm">
-            <span aria-hidden="true" className="ut-num mt-0.5 text-[var(--ut-tick-pos)]">
-              +
-            </span>
-            {feature}
-          </li>
+          <li key={feature}>{feature}</li>
         ))}
       </ul>
-      {tier.comingSoon ? (
-        <span
-          className="ut-btn ut-btn-secondary ut-notch-sm mt-6 cursor-default opacity-60"
-          aria-disabled="true"
-        >
-          {tier.cta}
-        </span>
-      ) : (
+      <p className="ut-plan-state">{tier.state}</p>
+      {tier.href && tier.cta ? (
         <Link
-          href="/contact"
-          className={`ut-btn ut-notch-sm mt-6 ${tier.highlighted ? 'ut-btn-primary' : 'ut-btn-secondary'}`}
+          href={tier.href}
+          className={`ut-btn ${tier.highlighted ? 'ut-btn-primary' : 'ut-btn-secondary'}`}
         >
           {tier.cta}
         </Link>
-      )}
-    </div>
+      ) : null}
+    </article>
   );
 }

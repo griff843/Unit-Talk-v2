@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1801",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static-ui",
+  "status": "REVIEW_CANDIDATE_PENDING_PROTECTED_CI",
+  "generated_at": "2026-10-11T03:02:31Z",
+  "source_sha": null,
+  "gate_results": [
+    {
+      "gate": "focused-web-tests",
+      "verdict": "PASS",
+      "detail": "7 pass, 0 fail; includes URL inversion, social artwork, route/anchor resolution and whole-site claim safety"
+    },
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "NEXT_PUBLIC_SITE_URL=https://unit-talk.com pnpm verify:static exited 0"
+    },
+    {
+      "gate": "canonical-url-inversion",
+      "verdict": "PASS",
+      "detail": "Production build exited 1 when NEXT_PUBLIC_SITE_URL was unset; placeholder origins throw in focused tests"
+    },
+    {
+      "gate": "responsive-browser-audit",
+      "verdict": "PASS",
+      "detail": "20 mobile/desktop route checks across 10 authorized routes; one h1, no heading jumps, no horizontal overflow, canonical URL per route"
+    },
+    {
+      "gate": "accessibility",
+      "verdict": "PASS",
+      "detail": "Keyboard menu/escape/focus, FAQ, table and skip-link checks pass; minimum declared text contrast 6.28:1"
+    },
+    {
+      "gate": "writable-db",
+      "verdict": "SKIP",
+      "detail": "Blocked/deferred: target identity host=unparseable; protected staging-ci requires xskgrzbteyqdufktjrjx"
+    },
+    {
+      "gate": "r-level",
+      "verdict": "PENDING",
+      "detail": "Run against the committed implementation before PR publication"
+    },
+    {
+      "gate": "protected-exact-head-ci",
+      "verdict": "PENDING",
+      "detail": "Requires draft PR publication"
+    }
+  ],
+  "core_web_vitals": {
+    "context": "local production preview; lab/observed, not field CrUX",
+    "desktop": {
+      "lcp_ms": 208,
+      "cls": 0,
+      "inp_ms": null,
+      "ttfb_ms": 6
+    },
+    "mobile": {
+      "lcp_ms": 896,
+      "cls": 0,
+      "inp_ms": 85,
+      "ttfb_ms": 5,
+      "conditions": "Fast 4G, 4x CPU, 390x844"
+    }
+  },
+  "sha_binding": {
+    "verified_source_sha": null,
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null,
+    "merge_sha": null
+  },
+  "pending": [
+    "committed-source R-level check",
+    "draft PR and protected exact-head CI",
+    "outer-wrapper executor-result publication",
+    "PM approval, governed merge and post-merge lane finalization"
+  ]
+}

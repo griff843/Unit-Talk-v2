@@ -1,3 +1,4 @@
+import { pageMetadata } from '@/lib/site-metadata';
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/PageHeader';
 import { PAGE_TITLES, RESPONSIBLE_GAMBLING_RESOURCES } from '@/lib/site-config';
@@ -5,17 +6,16 @@ import { PAGE_TITLES, RESPONSIBLE_GAMBLING_RESOURCES } from '@/lib/site-config';
 const description =
   "Unit Talk's responsible play commitment: betting involves risk, only wager what you can afford to lose, and seek help if betting stops being entertainment.";
 
-export const metadata: Metadata = {
-  title: { absolute: PAGE_TITLES.responsiblePlay },
+export const metadata: Metadata = pageMetadata(
+  PAGE_TITLES.responsiblePlay,
   description,
-  openGraph: { title: PAGE_TITLES.responsiblePlay, description, type: 'website', siteName: 'Unit Talk' },
-  twitter: { card: 'summary', title: PAGE_TITLES.responsiblePlay, description },
-};
+  '/responsible-play',
+);
 
 const PRINCIPLES = [
   {
     title: 'Betting involves real risk',
-    body: 'Sports betting can result in losing money — sometimes quickly. Most bettors lose over time, and even disciplined bettors go through losing stretches. Acknowledge that risk before every wager.',
+    body: 'Sports betting can result in losing money — sometimes quickly. A winning period does not remove the chance of later losses. Acknowledge that risk before every wager.',
   },
   {
     title: 'Unit Talk is information and entertainment',
@@ -23,7 +23,7 @@ const PRINCIPLES = [
   },
   {
     title: 'No one can promise you profit',
-    body: 'There is no system, tier, or expert that removes risk from betting. Unit Talk will never claim otherwise, and you should be skeptical of anyone who does.',
+    body: 'There is no system or membership tier that removes risk from betting. Unit Talk will never claim otherwise, and you should be skeptical of anyone who does.',
   },
   {
     title: 'Only bet what you can afford to lose',
@@ -59,10 +59,14 @@ export default function ResponsiblePlayPage() {
       <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
         {PRINCIPLES.map((principle, i) => (
           <div key={principle.title} className="ut-index-row">
-            <span className="ut-index-num">{String(i + 1).padStart(2, '0')}</span>
+            <span className="ut-index-num">
+              {String(i + 1).padStart(2, '0')}
+            </span>
             <div>
               <h2 className="text-base font-semibold">{principle.title}</h2>
-              <p className="ut-text-secondary mt-2 max-w-xl text-sm leading-relaxed">{principle.body}</p>
+              <p className="ut-text-secondary mt-2 max-w-xl text-sm leading-relaxed">
+                {principle.body}
+              </p>
             </div>
           </div>
         ))}
@@ -73,12 +77,16 @@ export default function ResponsiblePlayPage() {
           <div className="ut-panel ut-notch border-l-2 border-l-[var(--ut-signal)] p-6">
             <p className="ut-eyebrow">Help resources</p>
             <p className="ut-text-secondary mt-3 text-sm leading-relaxed">
-              If betting is affecting your finances, relationships, work, or mental health, these
-              established, independent organizations can help — free and confidential.
+              If betting is affecting your finances, relationships, work, or
+              mental health, these established, independent organizations can
+              help — free and confidential.
             </p>
             <ul className="mt-5 space-y-4">
               {RESPONSIBLE_GAMBLING_RESOURCES.map((resource) => (
-                <li key={resource.name} className="border-t border-[var(--ut-border-subtle)] pt-4 first:border-t-0 first:pt-0">
+                <li
+                  key={resource.name}
+                  className="border-t border-[var(--ut-border-subtle)] pt-4 first:border-t-0 first:pt-0"
+                >
                   <p className="text-sm font-semibold">
                     {resource.href ? (
                       <a href={resource.href} className="ut-link">
@@ -88,21 +96,24 @@ export default function ResponsiblePlayPage() {
                       resource.name
                     )}
                   </p>
-                  <p className="ut-text-secondary mt-1 text-sm leading-relaxed">{resource.detail}</p>
+                  <p className="ut-text-secondary mt-1 text-sm leading-relaxed">
+                    {resource.detail}
+                  </p>
                 </li>
               ))}
             </ul>
             {/* TODO(responsible-play-resources): add jurisdiction-specific resources (state helplines, international lines) before launch. */}
             <p className="ut-text-muted mt-5 text-xs leading-relaxed">
-              Jurisdiction-specific resources (state and international helplines) will be added
-              here before launch. If your region isn&apos;t covered above, search for a local
-              problem-gambling support service.
+              Jurisdiction-specific resources (state and international
+              helplines) will be added here before launch. If your region
+              isn&apos;t covered above, search for a local problem-gambling
+              support service.
             </p>
           </div>
 
           <p className="ut-text-muted mt-6 text-xs leading-relaxed">
-            This page is informational only. Unit Talk does not provide medical, legal, or
-            financial advice.
+            This page is informational only. Unit Talk does not provide medical,
+            legal, or financial advice.
           </p>
         </div>
       </section>

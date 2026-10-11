@@ -1,0 +1,154 @@
+{
+  "metadataHead": "d087ae7861a17339f6d8fca77bf98bba6d2c67af",
+  "sourceState": "prepared-uncommitted",
+  "files": [
+    {
+      "path": "apps/web/next.config.mjs",
+      "sha256": "67a8c2106391bef581dd3a2cb0f5b1a29fef642c9d784217b7b261d1cd81923c"
+    },
+    {
+      "path": "apps/web/package.json",
+      "sha256": "3ba591f882ea8ed2b08b3b30577dfaed8e220b3d3e771ab43a85e4ec776314d2"
+    },
+    {
+      "path": "apps/web/public/brand/favicon-32.png",
+      "sha256": "55b1a33822a33143452774de9e19ce4a781cb75fe7a934265ab117c52c650eaf"
+    },
+    {
+      "path": "apps/web/public/brand/favicon-64.png",
+      "sha256": "35ddd00aa8ce260bf39f86e8c6523bc4b607169b50e18a877e97e1c3da9ed7a3"
+    },
+    {
+      "path": "apps/web/public/brand/unit-talk-discord.svg",
+      "sha256": "9c45ef6b154b7f4e5a03624b2794813aedb90268417a4a152146cd626d6acf65"
+    },
+    {
+      "path": "apps/web/public/brand/unit-talk-horizontal-white-2400.png",
+      "sha256": "72f3ef9c628af222be8a643f1f755495584eec3475acd4ad0a667d74dca9a75e"
+    },
+    {
+      "path": "apps/web/public/brand/unit-talk-horizontal-white.svg",
+      "sha256": "5a7bf8e6a13bed332948fd83a0a7eb84f511b5bd2150808188d30f1ef726d399"
+    },
+    {
+      "path": "apps/web/public/brand/unit-talk-icon-256.png",
+      "sha256": "cb490934f96dc9d82a725c3ad1ad872177a17ee00b8aaea1b326dcb9bf780271"
+    },
+    {
+      "path": "apps/web/public/brand/unit-talk-icon-512.png",
+      "sha256": "e14d060dd3cfca733c7dec5265fd1b6406d3a020dc6bfa52ca322d6ae7265a97"
+    },
+    {
+      "path": "apps/web/public/brand/unit-talk-mark-white.svg",
+      "sha256": "fb191f6fa93dbf8a820207e66025dc19e2ee1efa4a723f4b5f481ff0df09ea3c"
+    },
+    {
+      "path": "apps/web/src/app/cappers/page.tsx",
+      "sha256": "136b9a2010b4e42af95142952c758d26141f783931cd0d8e04db5e60be3af18b"
+    },
+    {
+      "path": "apps/web/src/app/contact/page.tsx",
+      "sha256": "20549bbd3c04bb7488707fdf9fb8c06d9d49e0ef29ea6a5c9117022f5e5fa7a9"
+    },
+    {
+      "path": "apps/web/src/app/faq/page.tsx",
+      "sha256": "6501c1deb540a6b3b14e925692f507779871e5e8525defc5a5911cd78940d0e8"
+    },
+    {
+      "path": "apps/web/src/app/globals.css",
+      "sha256": "5d37d94b9b92d864c69883fc26742f3e312f014bb352be7363d8b9b6c18348bc"
+    },
+    {
+      "path": "apps/web/src/app/how-it-works/page.tsx",
+      "sha256": "6572b2cd6c6f2e208b77a5b3c42c256afb46cf6663a648f19ea388de4d8d92ba"
+    },
+    {
+      "path": "apps/web/src/app/layout.tsx",
+      "sha256": "8f3f03b7388388493c75b2cc3aa904baa337061b054fa86c742a6bd06ace5768"
+    },
+    {
+      "path": "apps/web/src/app/page.tsx",
+      "sha256": "22e979cc430df24faa4caa8200b1726a8de109e0e7f5303bdd4ee2ca63a7575f"
+    },
+    {
+      "path": "apps/web/src/app/pricing/page.tsx",
+      "sha256": "b26ba76956bf8c608701dc7b29c068bcb47ab78e77ab92061e54e9a20c28ee79"
+    },
+    {
+      "path": "apps/web/src/app/privacy/page.tsx",
+      "sha256": "dc08938bd8a815945fdd51c7e395b83a51b5fe3dd85b57c25831337e6e854231"
+    },
+    {
+      "path": "apps/web/src/app/responsible-play/page.tsx",
+      "sha256": "3c932ffdfb3e70f665e49d0ae8f4b6e562b0b394e11aedd787f0a09f35ecbdb4"
+    },
+    {
+      "path": "apps/web/src/app/results/page.tsx",
+      "sha256": "34d7dca42d43f62d51ba45cc6ab1c8bf418b4b179e2e40b7f98fbf819efed86a"
+    },
+    {
+      "path": "apps/web/src/app/sitemap.ts",
+      "sha256": "11bf633092ad97544e72b990deeb230790e1b9f5ad5e36f289198011af2e3120"
+    },
+    {
+      "path": "apps/web/src/app/terms/page.tsx",
+      "sha256": "8aee13d734078bb0d61b4fa651d0db3531b9157a024df64547f1f464b0805594"
+    },
+    {
+      "path": "apps/web/src/components/BrandLogo.tsx",
+      "sha256": "a3e1ed29c59ca90a92637334ec19a88d5aac21ef722fd10da605e7b6dc1d39ba"
+    },
+    {
+      "path": "apps/web/src/components/DiscordPreview.tsx",
+      "sha256": "9246a762eb917085be5536297eaef9d5c759ca7e13d15db4baf1f944bf4bd76b"
+    },
+    {
+      "path": "apps/web/src/components/FAQAccordion.tsx",
+      "sha256": "371e52d9c7e7ab120b5516b0821588a8adba43b8ad419f674eb5cfb01e0602dd"
+    },
+    {
+      "path": "apps/web/src/components/PageHeader.tsx",
+      "sha256": "79a723c7a82de3c729d1b40ed7a02b282b74f8773370040f23695044a3a198cc"
+    },
+    {
+      "path": "apps/web/src/components/PlanCard.tsx",
+      "sha256": "aff42018c8eac775bdf56a6157111d1b5bf436cb4f708abc110a00a4d85a5d3d"
+    },
+    {
+      "path": "apps/web/src/components/PricingTable.tsx",
+      "sha256": "149ee778a552071bcd94f0dcf45a7f0e2f30ddea7bf1a2c59cc370a9943796f2"
+    },
+    {
+      "path": "apps/web/src/components/PublicFooter.tsx",
+      "sha256": "7bbfd376b40d5c9d62e2835ad1b50bc4195b61f3c48a2c176108e1c8bfc2a8f9"
+    },
+    {
+      "path": "apps/web/src/components/PublicHeader.tsx",
+      "sha256": "b9cbb565390d2926f18695feec5672513df7aa6262824442839f366d07193c7f"
+    },
+    {
+      "path": "apps/web/src/components/ResultsAvailability.tsx",
+      "sha256": "359ca735c16acd2fe1e0cf32bb158a041c0519c8b78a7ed41611c85513e12c7f"
+    },
+    {
+      "path": "apps/web/src/lib/faq.ts",
+      "sha256": "a9bfe68e9dc451ec93dd812b9917f2fc82a30fcd29d6064c6722bae8239d45b2"
+    },
+    {
+      "path": "apps/web/src/lib/site-config.test.ts",
+      "sha256": "2cdd69bae15dc9dfed885bf2766d0d491ad3b1fe46e709c0b76ec3289a8f99f7"
+    },
+    {
+      "path": "apps/web/src/lib/site-config.ts",
+      "sha256": "786a1b6d6cb474ef40a7332144d092be44296576894d202d25c20ac0240c1129"
+    },
+    {
+      "path": "apps/web/src/lib/site-metadata.ts",
+      "sha256": "bf2e3918d9b142c43019bbdb94fa9ce020f695ded85b02830c666dfcc49efdbd"
+    },
+    {
+      "path": "apps/web/tailwind.config.ts",
+      "sha256": "de1b164a5ba1a464337ead651bb7cbe6f6e3070f4455ace232ef133145f6f2ce"
+    }
+  ]
+}
