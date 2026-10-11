@@ -1,90 +1,89 @@
+import { pageMetadata } from '@/lib/site-metadata';
 import type { Metadata } from 'next';
-import { ComingSoonCard } from '@/components/ComingSoonCard';
+import { CTAButton } from '@/components/CTAButton';
 import { PageHeader } from '@/components/PageHeader';
+import { ResultsAvailability } from '@/components/ResultsAvailability';
 import { ResponsiblePlayBanner } from '@/components/ResponsiblePlayBanner';
-import { SectionHeader } from '@/components/SectionHeader';
 import { PAGE_TITLES } from '@/lib/site-config';
-
 const description =
-  'Unit Talk treats transparency as part of the product. Picks, prices, and outcomes are tracked internally; public results will only display metrics that are properly reviewed and approved.';
-
-export const metadata: Metadata = {
-  title: { absolute: PAGE_TITLES.results },
+  'The complete settled official-pick record: wins, losses, pushes, voids and correction history. No public results feed is connected yet; no performance figures are displayed.';
+export const metadata: Metadata = pageMetadata(
+  PAGE_TITLES.results,
   description,
-  openGraph: { title: PAGE_TITLES.results, description, type: 'website', siteName: 'Unit Talk' },
-  twitter: { card: 'summary', title: PAGE_TITLES.results, description },
-};
-
-const COMMITMENTS = [
-  {
-    title: 'Transparency is part of the product',
-    body: 'Most pick services show you their best week and hide the rest. Unit Talk is built the opposite way: tracking and review come first, and public claims come only after that work is done. Unit Talk will not publish performance claims unless the underlying data is tracked, reviewed, and approved for public release.',
-  },
-  {
-    title: 'What Unit Talk tracks',
-    body: 'Every published pick is recorded internally with its selection, the market it was made in, the price at publication, and the eventual outcome. This internal record is the foundation for everything that will eventually be public.',
-    list: ['Picks — what was published and when', 'Prices — the market price attached to each pick', 'Outcomes — how each pick settled'],
-  },
-  {
-    title: 'What will be public',
-    body: 'A public transparency layer is being built: a pick archive, verified results, a methodology report, and a transparency dashboard. Public results will only display metrics that are properly tracked, reviewed, and approved for release.',
-  },
-  {
-    title: 'What Unit Talk will not claim without verification',
-    body: 'If you see a number on this site in the future, it will be one that passed internal tracking and review first.',
-    list: [
-      'Win rates, return figures, or profit numbers',
-      'Closing-line or market-beating statistics',
-      'Streaks, records, or ranking claims',
-      'Testimonials presented as evidence of performance',
-    ],
-  },
-];
-
+  '/results',
+);
 export default function ResultsPage() {
   return (
     <>
       <PageHeader
         eyebrow="Results & transparency"
-        title="No invented numbers"
-        lead="No cherry-picked screenshots. No fabricated performance claims. Here is exactly how Unit Talk handles results."
+        title="We keep the losses too."
+        lead="Every settled official pick belongs in the record. Wins, losses, pushes, voids and corrections all stay visible. The complete settled history belongs across every membership."
       />
-
-      <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6">
-        {COMMITMENTS.map((item, i) => (
-          <div key={item.title} className="ut-index-row">
-            <span className="ut-index-num">{String(i + 1).padStart(2, '0')}</span>
-            <div>
-              <h2 className="text-base font-semibold">{item.title}</h2>
-              <p className="ut-text-secondary mt-2 max-w-xl text-sm leading-relaxed">{item.body}</p>
-              {item.list ? (
-                <ul className="ut-text-secondary mt-3 max-w-xl space-y-1.5 text-sm">
-                  {item.list.map((entry) => (
-                    <li key={entry} className="flex items-start gap-2">
-                      <span aria-hidden="true" className="ut-text-muted">—</span>
-                      {entry}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          </div>
-        ))}
+      <section className="ut-wrap ut-section pt-0">
+        <h2 className="sr-only">Public results availability</h2>
+        <ResultsAvailability />
       </section>
-
-      <section className="border-t border-[var(--ut-border-subtle)] bg-[var(--ut-bg-surface)]">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
-          <SectionHeader eyebrow="Coming soon" title="The transparency dashboard" align="center" />
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <ComingSoonCard title="Pick Archive" description="A reviewable archive of published picks and their recorded details." />
-            <ComingSoonCard title="Verified Results" description="Outcomes published only after internal tracking and review." />
-            <ComingSoonCard title="Methodology Report" description="How picks are produced, tracked, and evaluated." />
-            <ComingSoonCard title="Transparency Dashboard" description="A public view into what Unit Talk tracks and releases." />
+      <section className="ut-wrap ut-section ut-section-rule">
+        <div className="ut-section-heading">
+          <p className="ut-eyebrow">A record you can evaluate</p>
+          <h2>Context before claims.</h2>
+        </div>
+        <div className="ut-feature-grid">
+          <article className="ut-feature">
+            <span className="ut-step-number">01</span>
+            <h3>Every outcome</h3>
+            <p>
+              Losses are never hidden by default to make performance look
+              better. Every settled official pick is included, with its capper,
+              sport, event, market, selection, recorded odds and outcome.
+            </p>
+          </article>
+          <article className="ut-feature">
+            <span className="ut-step-number">02</span>
+            <h3>Measurable performance</h3>
+            <p>
+              Records, units and ROI need a settled sample and a date range.
+              Missing metrics remain unavailable. CLV is shown only when
+              supported by recorded closing-line evidence.
+            </p>
+          </article>
+          <article className="ut-feature">
+            <span className="ut-step-number">03</span>
+            <h3>History stays intact</h3>
+            <p>
+              Corrections disclose what changed and preserve the original result
+              and history. Simulations and backtests are kept separate from live
+              results.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section className="ut-wrap ut-section ut-section-rule">
+        <div className="ut-split">
+          <div>
+            <p className="ut-eyebrow">Free includes the settled record</p>
+            <h2 className="ut-subheading mt-3">
+              Inspect first. Decide for yourself.
+            </h2>
+          </div>
+          <div>
+            <p className="ut-text-secondary leading-relaxed">
+              Free includes settled official picks, recaps and corrections. It
+              does not include active paid official picks before settlement or
+              premium real-time alerts. Membership never guarantees a winning
+              result.
+            </p>
+            <div className="ut-actions mt-6">
+              <CTAButton href="/pricing">Explore membership</CTAButton>
+              <CTAButton href="/cappers" variant="secondary">
+                About the capper record
+              </CTAButton>
+            </div>
           </div>
         </div>
       </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+      <section className="ut-wrap pb-16">
         <ResponsiblePlayBanner />
       </section>
     </>

@@ -746,6 +746,19 @@ test('deriveDeliveryUiApp fails closed on empty scope', () => {
   assert.strictEqual(deriveDeliveryUiApp([]), null);
 });
 
+test('deriveDeliveryUiApp admits the public website without weakening scope isolation', () => {
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/**']), 'web');
+  assert.strictEqual(
+    deriveDeliveryUiApp(['apps/web/src/app/page.tsx', 'apps/web/src/components/PublicHeader.tsx']),
+    'web',
+  );
+  assert.strictEqual(
+    deriveDeliveryUiApp(['apps/web/src/app/page.tsx', 'apps/smart-form/src/flow.ts']),
+    null,
+  );
+  assert.strictEqual(deriveDeliveryUiApp(['apps/web/src/app/page.tsx', 'apps/unknown/page.tsx']), null);
+});
+
 test('deriveDeliveryUiApp fails closed when scope spans more than one app', () => {
   assert.strictEqual(
     deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'apps/discord-bot/src/formatter.ts']),

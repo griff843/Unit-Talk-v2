@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101001",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "62031b209115d435ad96d892b9f3b8e66247434f",
+    "evidence_commit_sha": "pending proof commit",
+    "current_pr_head_sha": "62031b209115d435ad96d892b9f3b8e66247434f",
+    "sha_type": "pending_merge",
+    "bound_at": "2026-10-11T03:26:32.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "verify_static": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "detail": "Required CI verify context passed on the lane head; the change is one additive documentation section."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "R-Level Compliance Check passed in CI on the lane head."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Documentation-only contract amendment: no runtime, schema or database change, so no live-DB proof applies."
+  },
+  "acceptance_criteria": {
+    "bounded_amendment_supersedes_rules_2_and_5_for_phase": "PASS",
+    "participants_canonical_teams_untouched_cutover_separate": "PASS",
+    "no_other_file_or_pr_changed": "PASS"
+  },
+  "verdict": "PASS"
+}

@@ -1,0 +1,48 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1974
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1974
+  objective: Restore apps/web delivery-ui admission in canonical app registry
+  acceptance_criteria:
+    - "Add web: apps/web/ to DELIVERY_UI_APP_ROOTS."
+    - Focused node:test proves web derives correctly, cross-app and unknown
+      scope remain refused.
+    - pnpm verify and R-level check pass; governed tier:T2 PR.
+    - Preserve existing caps and fail-closed checks.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Griff approved this narrow admission correction in the current Codex conversation on 2026-10-10. Existing .lane/lanes/delivery-ui.yml explicitly admits apps/web/\*\*, but scripts/ops/shared.ts DELIVERY_UI_APP_ROOTS omits web. Website lane-start [UTV2-1801](https://linear.app/unit-talk-v2/issue/UTV2-1801/public-site-production-readiness-metadata-assets-canonical-url) fails with delivery_ui_app_undetermined.
+
+      Scope: scripts/ops/shared.ts, scripts/ops/shared.test.ts, issue-owned lane/sync/proof artifacts only. Hygiene lane; T2 bounded alignment with existing admitted-app policy. No cap, tier, singleton, merge-authority, runtime, deployment or dependency changes.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1974/restore-appsweb-delivery-ui-admission-in-canonical-app-registry
+    title: Restore apps/web delivery-ui admission in canonical app registry
+    description: |-
+      Griff approved this narrow admission correction in the current Codex conversation on 2026-10-10. Existing .lane/lanes/delivery-ui.yml explicitly admits apps/web/\*\*, but scripts/ops/shared.ts DELIVERY_UI_APP_ROOTS omits web. Website lane-start [UTV2-1801](https://linear.app/unit-talk-v2/issue/UTV2-1801/public-site-production-readiness-metadata-assets-canonical-url) fails with delivery_ui_app_undetermined.
+
+      Scope: scripts/ops/shared.ts, scripts/ops/shared.test.ts, issue-owned lane/sync/proof artifacts only. Hygiene lane; T2 bounded alignment with existing admitted-app policy. No cap, tier, singleton, merge-authority, runtime, deployment or dependency changes.
+
+      ## Acceptance Criteria
+
+      * Add web: apps/web/ to DELIVERY_UI_APP_ROOTS.
+      * Focused node:test proves web derives correctly, cross-app and unknown scope remain refused.
+      * pnpm verify and R-level check pass; governed tier:T2 PR.
+      * Preserve existing caps and fail-closed checks.
+    captured_at: 2026-10-10T20:40:16.666Z
+    description_sha256: 71c112e3e76b2d6bf4829bb1df39f476ee9a2b1409978f774bb5ea40591344aa
+  contract_hash: 534741d20421e4888a1f95ad7747b0ec54499b0fd16edf50df300d37d01b736e

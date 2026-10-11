@@ -1,0 +1,44 @@
+[
+  {
+    "requestedWidth": 320,
+    "clientWidth": 305,
+    "documentWidth": 305,
+    "headerRight": 304.890625,
+    "path": "/"
+  },
+  {
+    "requestedWidth": 320,
+    "clientWidth": 305,
+    "documentWidth": 305,
+    "headerRight": 304.890625,
+    "path": "/pricing"
+  },
+  {
+    "requestedWidth": 768,
+    "clientWidth": 753,
+    "documentWidth": 753,
+    "headerRight": 729,
+    "path": "/"
+  },
+  {
+    "requestedWidth": 768,
+    "clientWidth": 753,
+    "documentWidth": 753,
+    "headerRight": 729,
+    "path": "/pricing"
+  },
+  {
+    "requestedWidth": 1024,
+    "clientWidth": 1009,
+    "documentWidth": 1009,
+    "headerRight": 0,
+    "path": "/"
+  },
+  {
+    "requestedWidth": 1024,
+    "clientWidth": 1009,
+    "documentWidth": 1009,
+    "headerRight": 0,
+    "path": "/pricing"
+  }
+]

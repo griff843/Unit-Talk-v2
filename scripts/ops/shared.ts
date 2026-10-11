@@ -935,6 +935,7 @@ export const DELIVERY_UI_APP_ROOTS: Readonly<Record<string, string>> = {
   'discord-bot': 'apps/discord-bot/',
   'smart-form': 'apps/smart-form/',
   'qa-agent': 'apps/qa-agent/',
+  web: 'apps/web/',
 };
 
 /**

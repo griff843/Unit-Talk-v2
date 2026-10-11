@@ -69,6 +69,17 @@ Every canonical row must record:
 
 3. **Market types:** Must have `id` (canonical key), `market_family_id` (FK), `display_name`, `selection_type_id`. Must be seeded by migration, not auto-created from provider market keys.
 
+### Phase exception A — participant-catalog seeds during the Smart Form / team-selection identity phase
+
+**Added 2026-10-10 (WORK-2026101001); PM-approved on PR #1733.** **Precedence:** for the phase named here, this exception governs over rule 1 above and over the "governed canonical seed" wording elsewhere in this policy. All historical and general rules remain in force outside it. It is the seeding counterpart of Amendment A in `T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md` §2.
+
+During the current Smart Form / team-selection participant-identity phase:
+
+- Governed participant-catalog seeds may add team participant rows without simultaneously creating `teams` rows.
+- This exception applies only to the current Smart Form / team-selection identity phase.
+- It does **not** authorize provider aliases, canonical-team backfill, player identity changes, or any global reference-data migration.
+- Future migration or cutover to canonical `teams` identity remains separately governed.
+
 ---
 
 ## 3. Refresh and Update Cadence

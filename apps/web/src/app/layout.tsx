@@ -1,30 +1,35 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { PublicFooter } from '@/components/PublicFooter';
 import { PublicHeader } from '@/components/PublicHeader';
 import { BRAND, PAGE_TITLES, SITE_URL } from '@/lib/site-config';
+import { pageMetadata } from '@/lib/site-metadata';
 import './globals.css';
-
 export const metadata: Metadata = {
+  ...pageMetadata(PAGE_TITLES.home, BRAND.description, '/'),
   metadataBase: new URL(SITE_URL),
-  title: {
-    default: PAGE_TITLES.home,
-    template: '%s | Unit Talk',
-  },
-  description: BRAND.description,
-  openGraph: {
-    title: PAGE_TITLES.home,
-    description: BRAND.description,
-    type: 'website',
-    siteName: BRAND.name,
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: PAGE_TITLES.home,
-    description: BRAND.description,
+  icons: {
+    icon: [
+      { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/brand/favicon-64.png', sizes: '64x64', type: 'image/png' },
+    ],
+    apple: [
+      {
+        url: '/brand/unit-talk-icon-256.png',
+        sizes: '256x256',
+        type: 'image/png',
+      },
+    ],
   },
 };
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const viewport: Viewport = {
+  colorScheme: 'dark',
+  themeColor: '#090a0a',
+};
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
       <body className="flex min-h-screen flex-col antialiased">

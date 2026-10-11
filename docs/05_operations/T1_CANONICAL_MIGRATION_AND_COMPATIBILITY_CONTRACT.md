@@ -93,6 +93,35 @@ The `participants` table stores teams, players, leagues, and events in a flat po
 
 **This future migration is explicitly NOT in scope for this contract.**
 
+### Amendment A — 2026-10-10 — participant identity for the Smart Form / team-selection phase
+
+**Issue:** WORK-2026101001. **Ratification:** PM decision on #1730 (2026-10-10) and PM verdict on #1733: `participants` identity for the current Smart Form / team-selection path, `teams` untouched.
+
+Rules 2 and 5 above were written 2026-04-02, before the Smart Form identity path existed, and conflict with shipped runtime. This amendment supersedes them **for the Smart Form / team-selection phase only**; every other rule in this section stands. Where rules 2 or 5 and this amendment disagree for that phase, **this amendment governs**.
+
+**Shipped runtime (evidence).** `DatabaseReferenceDataRepository` (`packages/db/src/runtime-repositories.ts`) answers `getCatalog`, `searchTeams` and `searchPlayers` from `participants` and returns `participants.id` (#1535, #1536). Event browse and player-suggestion paths still read canonical `teams` and `player_team_assignments` for team relationships where rows exist, and fall back to the participants edge where they do not. `handleSearchTeams` filters results against `event.participants[].participantId`.
+
+**Phase truth:**
+- `participants.id` is the authoritative identity returned and used for the current Smart Form and team-selection path.
+- Event, pick and team-selection identity remains participant-ID based in this phase.
+- Canonical `teams` / `player_team_assignments` relationship lookups may continue to be read where shipped runtime already does so.
+- Those relationship reads do not make `teams.id` the active Smart Form identity space.
+
+**Corrected rules for this phase:**
+
+2′. For Smart Form and team selection, the identity returned to and accepted from the operator is `participants.id`. Rule 2's statement that browse surfaces read canonical tables as the source of truth does not apply to identity in this phase.
+
+5′. A new team or player participant row added by a governed participant-catalog seed does not require a canonical `teams` / `players` row. The "both paths must stay in sync" requirement is suspended for this phase.
+
+**Unchanged:**
+- `teams` is untouched by this amendment and by UTV2-1971: no writes, no backfill, no removal. The same holds for `players`, `player_team_assignments` and `provider_entity_aliases`.
+- Rules 1, 3, 4 and 6 stand. Rule 4's "use canonical tables when available" does not apply to Smart Form / team-selection identity while this amendment is in force.
+- This amendment creates no provider aliases and makes no runtime, schema or migration change.
+
+**Future `teams` cutover remains separate.** Moving team identity from `participants` to canonical `teams` is not authorized here. It requires its own contract, with a migration plan for `event_participants`, `game_results` and `picks` references and a PM decision. Until then, rule 6 is the only recorded path.
+
+**Companion exception:** `T1_REFERENCE_DATA_SEEDING_AND_RECONCILIATION_POLICY.md` § "Phase exception A" carries the matching seeding exception.
+
 ---
 
 ## 3. Canonical Player Identity / Deduplication Policy
