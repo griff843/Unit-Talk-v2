@@ -1,5 +1,7 @@
 # UTV2-1801 website conversion: claims and launch gaps
 
+MERGE_SHA: pending merge
+
 Authority: docs/03_product/MEMBERSHIP_PRODUCT_CONTRACT.md and docs/03_product/brand/README.md audited at main c800234b77295265210cba9965e36e29a0673494 and retained on website lane base f9536812a1de8be8b79f92d7c0bcf72b36bd07f1, plus Griff's website work packet. The later direct brand instruction supersedes the packet's old logo conflict. No canonical contract or brand asset was changed.
 
 | Claim / old copy | Disposition | Authority / activation evidence |

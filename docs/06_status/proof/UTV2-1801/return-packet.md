@@ -1,5 +1,7 @@
 # Website return packet — UTV2-1801
 
+MERGE_SHA: pending merge
+
 ## 1. Starting truth
 Audit authority was main c800234b77295265210cba9965e36e29a0673494; website execution lane starts from f9536812a1de8be8b79f92d7c0bcf72b36bd07f1 after the separately approved admission fix merged as PR #1731. Website code and canonical brand authority were unchanged between these bases. Current metadata-only HEAD is d087ae7861a17339f6d8fca77bf98bba6d2c67af. Prepared website source is uncommitted and bound by source-snapshot.json. The later direct brand instruction resolves the packet's historical logo conflict.
 

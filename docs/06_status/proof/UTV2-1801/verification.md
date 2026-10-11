@@ -21,6 +21,8 @@ result: REVIEW_CANDIDATE_PENDING_PROTECTED_CI
 
 | Executed command/check | Actual result |
 |---|---|
+| NEXT_PUBLIC_SITE_URL=https://unit-talk.com pnpm type-check | PASS |
+| NEXT_PUBLIC_SITE_URL=https://unit-talk.com pnpm test | PASS |
 | NEXT_PUBLIC_SITE_URL=https://unit-talk.com pnpm exec tsx --test apps/web/src/lib/site-config.test.ts | PASS: 7 tests, 0 failures |
 | pnpm --filter @unit-talk/web test | PASS: 7 tests, 0 failures |
 | pnpm --filter @unit-talk/web build | PASS: 15 generated pages, shared first-load JS 102 kB |
