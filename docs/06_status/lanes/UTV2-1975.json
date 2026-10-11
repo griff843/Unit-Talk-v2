@@ -19,9 +19,9 @@
     "docs/06_status/proof/UTV2-1975/verification.md",
     "docs/06_status/proof/UTV2-1975/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "cancelled",
   "started_at": "2026-10-11T14:14:21.723Z",
-  "heartbeat_at": "2026-10-11T14:28:04.391Z",
+  "heartbeat_at": "2026-10-11T15:18:43.610Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1975-compact-header.json",
