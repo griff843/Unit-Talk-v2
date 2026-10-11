@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { loadLaneManifest, matchesAny } from '../lane-contract.js';
 import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
@@ -939,26 +940,36 @@ export const DELIVERY_UI_APP_ROOTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * Deterministically derives which Delivery/UI app a lane's file_scope_lock
- * belongs to (UTV2-1533 P2 fix). Deliberately does NOT infer from free-form
- * text (issue title, branch name, commit message) -- only from file_scope_lock,
- * which is validated, canonical, and immutable for lane life. Fails closed
- * (returns null) when the scope is empty, touches zero canonical app roots, or
- * spans more than one app -- callers must treat null as "cannot admit this
- * lane" rather than falling back to a guess.
+ * Derives exactly one canonical Delivery/UI app from the immutable file scope.
+ * Supporting paths do not identify an app: they must independently satisfy the
+ * delivery-ui lane's allowlist and denylist. Unknown paths, multiple apps, and
+ * supporting-only scopes fail closed, as does unavailable supporting-path policy.
  */
 export function deriveDeliveryUiApp(fileScopeLock: string[]): string | null {
   if (fileScopeLock.length === 0) return null;
-  const apps = new Set<string>();
-  for (const entry of fileScopeLock) {
-    const normalized = entry.replace(/^\.\//, '');
-    const match = Object.entries(DELIVERY_UI_APP_ROOTS).find(([, prefix]) =>
-      normalized.startsWith(prefix),
-    );
-    if (!match) return null;
-    apps.add(match[0]);
+  try {
+    const policy = loadLaneManifest('delivery-ui', ROOT);
+    const apps = new Set<string>();
+    const supportingPaths: string[] = [];
+    for (const entry of fileScopeLock) {
+      const normalized = normalizeRepoRelativePath(entry);
+      const match = Object.entries(DELIVERY_UI_APP_ROOTS).find(([, prefix]) =>
+        normalized.startsWith(prefix),
+      );
+      if (match) apps.add(match[0]);
+      else supportingPaths.push(normalized);
+    }
+    if (apps.size !== 1) return null;
+    if (supportingPaths.length > 0) {
+      if (supportingPaths.some((entry) =>
+        !matchesAny(entry, policy.allowed_path_globs) ||
+        matchesAny(entry, policy.forbidden_path_globs),
+      )) return null;
+    }
+    return [...apps][0]!;
+  } catch {
+    return null;
   }
-  return apps.size === 1 ? [...apps][0]! : null;
 }
 
 /**
