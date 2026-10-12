@@ -1069,7 +1069,7 @@ test('GET /api/reference-data/catalog returns full catalog', async () => {
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.ok(body.data);
-    assert.equal(body.data.sports.length, 9);
+    assert.equal(body.data.sports.length, 10);
     assert.equal(body.data.sportsbooks.length, 10);
     assert.ok(
       body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'fanatics'),
@@ -1088,6 +1088,12 @@ test('GET /api/reference-data/catalog returns full catalog', async () => {
     assert.ok(nba);
     assert.ok(nba.marketTypes.includes('player-prop'));
     assert.ok(nba.statTypes.includes('Points'));
+
+    const wnba = body.data.sports.find((sport) => sport.id === 'WNBA');
+    assert.ok(wnba);
+    assert.ok(wnba.marketTypes.includes('player-prop'));
+    assert.ok(wnba.statTypes.includes('Points'));
+    assert.deepEqual(wnba.teams, []);
     assert.ok(nba.statTypes.includes('Points + Rebounds + Assists'));
     assert.equal(nba.teams.length, 30);
   } finally {

@@ -112,7 +112,7 @@ const CONVICTION_PRESETS = [6, 7, 8, 9, 10] as const;
 const UNITS_PRESETS = [0.5, 1, 2, 3] as const;
 const SPORTSBOOK_SESSION_KEY = 'ut_last_sportsbook';
 const CAPPER_SESSION_KEY = 'ut_last_capper';
-const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'Soccer']);
+const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'WNBA', 'NCAAB', 'MLB', 'NHL', 'Soccer']);
 
 type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';

@@ -324,6 +324,35 @@ test('accepts a Soccer structured fallback backed by canonical team search', asy
   await validateSmartFormRelationships(soccer, repository);
 });
 
+test('accepts a WNBA structured fallback backed by canonical participant search', async () => {
+  const wnba = payload({
+    sport: 'WNBA',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'WNBA',
+      eventId: null,
+      eventName: 'Portland Fire @ Toronto Tempo',
+      away: { participantId: 'wnba-portland', displayName: 'Portland Fire', participantType: 'team' },
+      home: { participantId: 'wnba-toronto', displayName: 'Toronto Tempo', participantType: 'team' },
+      team: { participantId: 'wnba-portland', displayName: 'Portland Fire', participantType: 'team' },
+    },
+  });
+  wnba.eventName = 'Portland Fire @ Toronto Tempo';
+  wnba.selection = 'Portland Fire';
+  const repository = referenceData();
+  repository.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'WNBA');
+    return [{
+      participantId: query === 'Portland Fire' ? 'wnba-portland' : 'wnba-toronto',
+      displayName: query,
+      sport: 'WNBA',
+    }];
+  };
+
+  const outcome = await validateSmartFormRelationships(wnba, repository);
+  assert.equal(outcome.kind, 'structured-team-fallback');
+});
+
 /**
  * UTV2-1856: the structured no-event fallback used to refuse EVERY player selection, on the
  * premise that team membership needed a canonical event to be verifiable. That premise held

@@ -1001,6 +1001,87 @@ test('the NCAAF catalog migration is participants-only, additive, and conflict-r
   assert.doesNotMatch(rollback, /\b(?:CREATE|ALTER)\s+TABLE\b/i);
 });
 
+const wnbaFranchises = [
+  ['atlanta-dream', 'Atlanta Dream'],
+  ['chicago-sky', 'Chicago Sky'],
+  ['connecticut-sun', 'Connecticut Sun'],
+  ['indiana-fever', 'Indiana Fever'],
+  ['new-york-liberty', 'New York Liberty'],
+  ['toronto-tempo', 'Toronto Tempo'],
+  ['washington-mystics', 'Washington Mystics'],
+  ['dallas-wings', 'Dallas Wings'],
+  ['golden-state-valkyries', 'Golden State Valkyries'],
+  ['las-vegas-aces', 'Las Vegas Aces'],
+  ['los-angeles-sparks', 'Los Angeles Sparks'],
+  ['minnesota-lynx', 'Minnesota Lynx'],
+  ['phoenix-mercury', 'Phoenix Mercury'],
+  ['portland-fire', 'Portland Fire'],
+  ['seattle-storm', 'Seattle Storm'],
+] as const;
+
+function governedWnbaParticipantId(slug: string): string {
+  const namespace = Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex');
+  const bytes = createHash('sha1')
+    .update(namespace)
+    .update(`unit-talk:participant:wnba:franchise:${slug}`)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+test('the frozen 2026 WNBA catalog contains exactly the 15 active franchises', () => {
+  assert.equal(wnbaFranchises.length, 15);
+  const names = wnbaFranchises.map(([, name]) => name);
+  assert.ok(names.includes('Golden State Valkyries'));
+  assert.ok(names.includes('Portland Fire'));
+  assert.ok(names.includes('Toronto Tempo'));
+  assert.ok(!names.some((name) => name.includes('Cleveland')));
+  assert.equal(new Set(names).size, 15);
+});
+
+test('WNBA participant UUIDs are deterministic and provider-independent', () => {
+  const migration = readFileSync(
+    new URL('../../../supabase/migrations/20261010170100_wnba_participant_catalog.sql', import.meta.url),
+    'utf8',
+  );
+  for (const [slug, displayName] of wnbaFranchises) {
+    assert.match(migration, new RegExp(governedWnbaParticipantId(slug)));
+    assert.match(migration, new RegExp(`unit-talk:wnba:franchise:${slug}`));
+    assert.match(migration, new RegExp(displayName));
+  }
+  assert.doesNotMatch(migration, /provider_entity_aliases|provider[_-](?:id|key)/i);
+  assert.doesNotMatch(migration, /Cleveland Sirens/i);
+});
+
+test('the WNBA migration is additive, conflict-refusing, and never writes teams', () => {
+  const migration = readFileSync(
+    new URL('../../../supabase/migrations/20261010170100_wnba_participant_catalog.sql', import.meta.url),
+    'utf8',
+  );
+  const rollback = readFileSync(
+    new URL('../../../db/migrations-rollback/20261010170100_wnba_participant_catalog.down.sql', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(migration, /INSERT INTO public\.sports/);
+  assert.match(migration, /INSERT INTO public\.leagues/);
+  assert.match(migration, /INSERT INTO public\.sport_market_type_availability/);
+  assert.match(migration, /INSERT INTO public\.participants/);
+  assert.doesNotMatch(migration, /(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)?\s*public\.teams/i);
+  assert.doesNotMatch(migration, /ON\s+CONFLICT/i);
+  assert.match(migration, /canonical external identity conflict/);
+  assert.match(migration, /governed UUID conflict/);
+  assert.match(migration, /WHERE NOT EXISTS/);
+  assert.match(migration, /'seedIssue', 'UTV2-1972'/);
+  assert.match(rollback, /DELETE FROM public\.participants/);
+  assert.match(rollback, /metadata->>'seedIssue' = 'UTV2-1972'/);
+  assert.match(rollback, /rollback refused: seeded participant is referenced/);
+  assert.doesNotMatch(rollback, /\b(?:CREATE|ALTER)\s+TABLE\b/i);
+});
+
 
 const participantCatalogTestAdmin = process.env['PARTICIPANT_CATALOG_TEST_ADMIN_URL'];
 

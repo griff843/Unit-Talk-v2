@@ -2,6 +2,7 @@ import type { CanonicalPick } from '@unit-talk/contracts';
 
 const CANONICAL_SPORT_IDS = new Set([
   'NBA',
+  'WNBA',
   'NFL',
   'MLB',
   'NHL',
@@ -73,6 +74,7 @@ export function deriveSportId(pick: CanonicalPick): string | null {
   // and must run even when marketTypeId is null.
   const normalizedMarket = cleanString(pick.market)?.toLowerCase() ?? '';
   if (normalizedMarket.startsWith('nba')) return 'NBA';
+  if (normalizedMarket.startsWith('wnba')) return 'WNBA';
   if (normalizedMarket.startsWith('nfl')) return 'NFL';
   if (normalizedMarket.startsWith('mlb')) return 'MLB';
   if (normalizedMarket.startsWith('nhl')) return 'NHL';
@@ -182,6 +184,9 @@ const ALTERNATE_MARKET_TYPE_IDS: Record<string, string> = {
   'nba-spread': 'spread',
   'nba-ml': 'moneyline',
   'nba-total': 'game_total_ou',
+  'wnba-spread': 'spread',
+  'wnba-ml': 'moneyline',
+  'wnba-total': 'game_total_ou',
   'nfl-spread': 'spread',
   'nfl-ml': 'moneyline',
   'nfl-total': 'game_total_ou',

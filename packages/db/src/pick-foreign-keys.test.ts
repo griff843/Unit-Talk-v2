@@ -134,6 +134,24 @@ test('derives NBA from SGO market key nba-total', () => {
   assert.equal(deriveMarketTypeId(pick), 'game_total_ou');
 });
 
+test('normalizes WNBA metadata and manual market keys to canonical pick foreign keys', () => {
+  const metadataPick = buildPick(
+    { market: 'WNBA - Player Prop' },
+    { sport: 'wnba', marketType: 'player-prop', statType: 'Points' },
+  );
+  assert.equal(deriveSportId(metadataPick), 'WNBA');
+  assert.equal(deriveMarketTypeId(metadataPick), 'player_points_ou');
+
+  const marketPick = buildPick({ market: 'wnba-spread' }, {});
+  assert.equal(deriveSportId(marketPick), 'WNBA');
+  assert.equal(deriveMarketTypeId(marketPick), 'spread');
+});
+
+test('normalizes WNBA moneyline and total aliases without inventing market ids', () => {
+  assert.equal(deriveMarketTypeId(buildPick({ market: 'wnba-ml' }, {})), 'moneyline');
+  assert.equal(deriveMarketTypeId(buildPick({ market: 'wnba-total' }, {})), 'game_total_ou');
+});
+
 test('derives NFL from SGO market key nfl-spread when metadata.sport is absent', () => {
   const pick = buildPick({ market: 'nfl-spread' }, {});
   assert.equal(deriveSportId(pick), 'NFL');
