@@ -2748,30 +2748,79 @@ test('createApiClient.syncMemberTier calls POST /api/member-tiers with correct b
   });
 });
 
-test('createApiClient.syncMemberTier swallows errors and does not throw', async () => {
+function captureConsoleError(): { lines: string[]; restore: () => void } {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    lines.push(args.map(String).join(' '));
+  };
+  return { lines, restore: () => { console.error = original; } };
+}
+
+test('createApiClient.syncMemberTier does not throw but logs a structured member_tier_sync.failed error', async () => {
   const mockFetch: typeof fetch = async () => {
     return new Response('{"error":"server error"}', {
-      status: 500,
+      status: 403,
       headers: { 'Content-Type': 'application/json' },
     });
   };
 
+  const client = createApiClient('http://localhost:4000', 'super-secret-key', mockFetch);
+  const captured = captureConsoleError();
+  try {
+    await assert.doesNotReject(async () => {
+      await client.syncMemberTier?.({
+        discord_id: 'user-123',
+        tier: 'vip',
+        action: 'activate',
+        source: 'discord-role',
+      });
+    });
+  } finally {
+    captured.restore();
+  }
+
+  assert.equal(captured.lines.length, 1, 'a failed sync must not be silent');
+  const logged = JSON.parse(captured.lines[0] ?? '{}') as Record<string, unknown>;
+  assert.equal(logged.event, 'member_tier_sync.failed');
+  assert.equal(logged.status, 403);
+  assert.equal(logged.discordId, 'user-123');
+  assert.equal(logged.tier, 'vip');
+  assert.equal(logged.action, 'activate');
+  assert.equal(logged.code, 'http_403');
+  assert.ok(!captured.lines[0]?.includes('super-secret-key'), 'the API key must never be logged');
+  assert.ok(!captured.lines[0]?.includes('server error'), 'the response body must never be logged');
+});
+
+test('createApiClient.syncMemberTier logs a network failure with a null status', async () => {
+  const mockFetch: typeof fetch = async () => {
+    throw new Error('connect ECONNREFUSED');
+  };
   const client = createApiClient('http://localhost:4000', undefined, mockFetch);
-  await assert.doesNotReject(async () => {
+  const captured = captureConsoleError();
+  try {
     await client.syncMemberTier?.({
-      discord_id: 'user-123',
-      tier: 'vip',
-      action: 'activate',
+      discord_id: 'user-124',
+      tier: 'trial',
+      action: 'deactivate',
       source: 'discord-role',
     });
-  });
+  } finally {
+    captured.restore();
+  }
+  const logged = JSON.parse(captured.lines[0] ?? '{}') as Record<string, unknown>;
+  assert.equal(logged.event, 'member_tier_sync.failed');
+  assert.equal(logged.status, null);
+  assert.equal(logged.code, 'network_error');
+  assert.equal(logged.action, 'deactivate');
+  assert.ok(!('error' in logged), 'no free-text error field is logged');
 });
 
 // ---------------------------------------------------------------------------
 // createMemberTierSyncHandler tests
 // ---------------------------------------------------------------------------
 
-test('createMemberTierSyncHandler activates tier when a tier-relevant role is added', async () => {
+test('createMemberTierSyncHandler activates all five configured Discord-mapped tiers', async () => {
   const synced: Array<{ discord_id: string; tier: string; action: string }> =
     [];
   const mockApiClient: ApiClient = {
@@ -2795,15 +2844,23 @@ test('createMemberTierSyncHandler activates tier when a tier-relevant role is ad
   };
   const newMember = {
     id: 'user-999',
-    roles: { cache: { keys: () => ['role-vip'].values() } },
+    roles: {
+      cache: {
+        keys: () => ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator'].values(),
+      },
+    },
   };
 
   await handler(oldMember as never, newMember as never);
 
-  assert.equal(synced.length, 1);
-  assert.equal(synced[0]?.discord_id, 'user-999');
-  assert.equal(synced[0]?.tier, 'vip');
-  assert.equal(synced[0]?.action, 'activate');
+  assert.deepEqual(
+    synced.sort((left, right) => left.tier.localeCompare(right.tier)),
+    ['capper', 'operator', 'trial', 'vip', 'vip-plus'].map((tier) => ({
+      discord_id: 'user-999',
+      tier,
+      action: 'activate',
+    })),
+  );
 });
 
 test('createMemberTierSyncHandler deactivates tier when a tier-relevant role is removed', async () => {
@@ -2870,12 +2927,16 @@ test('createMemberTierSyncHandler ignores roles not in the tier map', async () =
   assert.equal(synced.length, 0, 'No syncs for unrecognized roles');
 });
 
-test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier', async () => {
+test('createMemberTierSyncHandler never crashes, logs a failed sync visibly, and still syncs the other roles', async () => {
+  const attempted: string[] = [];
   const mockApiClient: ApiClient = {
     get: async () => ({}) as never,
     post: async () => ({}) as never,
-    syncMemberTier: async () => {
-      throw new Error('network failure');
+    syncMemberTier: async (params) => {
+      attempted.push(params.tier);
+      if (params.tier === 'vip') {
+        throw new Error('network failure');
+      }
     },
   };
 
@@ -2888,13 +2949,24 @@ test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier'
   };
   const newMember = {
     id: 'user-555',
-    roles: { cache: { keys: () => ['role-vip'].values() } },
+    roles: { cache: { keys: () => ['role-vip', 'role-vip-plus'].values() } },
   };
 
-  // Must not throw — handler swallows all errors
-  await assert.doesNotReject(async () =>
-    handler(oldMember as never, newMember as never),
-  );
+  const captured = captureConsoleError();
+  try {
+    await assert.doesNotReject(async () =>
+      handler(oldMember as never, newMember as never),
+    );
+  } finally {
+    captured.restore();
+  }
+
+  assert.deepEqual(attempted.sort(), ['vip', 'vip-plus'], 'the failing role must not block the other');
+  assert.equal(captured.lines.length, 1);
+  const logged = JSON.parse(captured.lines[0] ?? '{}') as Record<string, unknown>;
+  assert.equal(logged.event, 'member_tier_sync.failed');
+  assert.equal(logged.discordId, 'user-555');
+  assert.equal(logged.tier, 'vip');
 });
 
 // ---------------------------------------------------------------------------

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101001-order/.out/worktrees/claude__work-2026101001-participants-canonical-ratification",
   "branch": "claude/work-2026101001-participants-canonical-ratification",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "aa49eaa2993218fd471a82f4fb354f0b6e8b5c6b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1733",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026101001.md",
@@ -19,9 +19,9 @@
     "docs/06_status/proof/WORK-2026101001/evidence.json",
     "docs/06_status/proof/WORK-2026101001/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-10-11T03:07:02.171Z",
-  "heartbeat_at": "2026-10-11T03:07:02.171Z",
+  "heartbeat_at": "2026-10-11T14:12:17.212Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026101001-participants-canonical-ratification.json",

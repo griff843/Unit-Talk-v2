@@ -1,0 +1,179 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101104
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101104
+  objective: A Discord role change made by the bot writes a `member_tiers` row
+    through `POST /api/member-tiers`, authorized by identity (operator, or the
+    Discord bot service identity `submitter:discord-bot:`), and any sync failure
+    becomes a visible structured error instead of a swallowed warning.
+  acceptance_criteria:
+    - Bot key identity writes a row; a generic submitter key still gets 403;
+      anonymous gets 401; other roles and prefixes get 403; operator still
+      works.
+    - A bot caller's source is forced to `discord-role`, its tier is restricted
+      to the Discord-mapped tiers, and `changed_by` records the caller identity.
+    - Every successful sync writes a `member_tier.synced` audit row with the
+      caller identity as actor.
+    - "`syncMemberTier` logs a structured `member_tier_sync.failed` error on any
+      failure and the handler continues for other roles."
+    - "Mutation test: loosening the identity-prefix check makes a test fail."
+  guardrails:
+    - No edit to `apps/api/src/auth.ts` or `ROUTE_ROLES`. No new secret, env
+      var, migration, route or role. No production write, DDL, deploy or
+      un-kill.
+    - Generic submitter authorization keeps failing with 403.
+    - "Bot-sourced free/trial grants after a consumed trial are a B2 concern (PM
+      ruling): not implemented here, not violated here."
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR open on green CI. Merge, deploy and any production role validation are
+      Griff's.
+  unmapped_sections:
+    - >-
+      WORK-2026101104 — Outcome Contract B1: bot-scoped member-tier sync
+      authorization with visible failure
+
+      Tier: T2
+
+      Lane type: runtime
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. PM (Griff) approved the
+      B1 plan in writing.
+
+
+      ## Why
+
+
+      - The bot key authenticates as `submitter`; `/api/member-tiers` requires
+      `operator`; every sync since UTV2-919 is a 403 swallowed by the bot.
+      `member_tiers` has 0 rows.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026101104.md
+
+      - apps/api/src/server.ts
+
+      - apps/api/src/routes/member-tiers.ts
+
+      - apps/api/src/member-picks.test.ts
+
+      - apps/discord-bot/src/api-client.ts
+
+      - apps/discord-bot/src/handlers/member-tier-sync-handler.ts
+
+      - apps/discord-bot/src/discord-bot-foundation.test.ts
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101104.md
+    title: "WORK-2026101104 — Outcome Contract B1: bot-scoped member-tier sync
+      authorization with visible failure"
+    description: >-
+      # WORK-2026101104 — Outcome Contract B1: bot-scoped member-tier sync
+      authorization with visible failure
+
+
+      Tier: T2
+
+      Lane type: runtime
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. PM (Griff) approved the
+      B1 plan in writing.
+
+
+      ## Objective
+
+
+      - A Discord role change made by the bot writes a `member_tiers` row
+      through `POST /api/member-tiers`, authorized by identity (operator, or the
+      Discord bot service identity `submitter:discord-bot:`), and any sync
+      failure becomes a visible structured error instead of a swallowed warning.
+
+
+      ## Why
+
+
+      - The bot key authenticates as `submitter`; `/api/member-tiers` requires
+      `operator`; every sync since UTV2-919 is a 403 swallowed by the bot.
+      `member_tiers` has 0 rows.
+
+
+      ## Acceptance Criteria
+
+
+      - Bot key identity writes a row; a generic submitter key still gets 403;
+      anonymous gets 401; other roles and prefixes get 403; operator still
+      works.
+
+      - A bot caller's source is forced to `discord-role`, its tier is
+      restricted to the Discord-mapped tiers, and `changed_by` records the
+      caller identity.
+
+      - Every successful sync writes a `member_tier.synced` audit row with the
+      caller identity as actor.
+
+      - `syncMemberTier` logs a structured `member_tier_sync.failed` error on
+      any failure and the handler continues for other roles.
+
+      - Mutation test: loosening the identity-prefix check makes a test fail.
+
+
+      ## Guardrails
+
+
+      - No edit to `apps/api/src/auth.ts` or `ROUTE_ROLES`. No new secret, env
+      var, migration, route or role. No production write, DDL, deploy or
+      un-kill.
+
+      - Generic submitter authorization keeps failing with 403.
+
+      - Bot-sourced free/trial grants after a consumed trial are a B2 concern
+      (PM ruling): not implemented here, not violated here.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026101104.md
+
+      - apps/api/src/server.ts
+
+      - apps/api/src/routes/member-tiers.ts
+
+      - apps/api/src/member-picks.test.ts
+
+      - apps/discord-bot/src/api-client.ts
+
+      - apps/discord-bot/src/handlers/member-tier-sync-handler.ts
+
+      - apps/discord-bot/src/discord-bot-foundation.test.ts
+
+
+      ## Exit Criteria
+
+
+      - PR open on green CI. Merge, deploy and any production role validation
+      are Griff's.
+    captured_at: 2026-10-11T17:01:35.732Z
+    description_sha256: 095e21c535ee4056df669afcef37d6b0f82a26787ec1d7ca92ece1c812c288df
+  contract_hash: 5ed1496288847b286d3d23a23ca49dc043e5ac5b02be9abcadd193510d272c5f

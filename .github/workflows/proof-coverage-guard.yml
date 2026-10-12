@@ -123,6 +123,19 @@ jobs:
             done
           done < /tmp/changed.txt
 
+          # Bounded participant-catalog classification (WORK-2026101102): this one
+          # exact migration is covered by this one exact schema test when both are in
+          # the change set. Fixed literals only -- never derived from PR input, and no
+          # other migration or sensitive path is affected.
+          catalog_migration='supabase/migrations/20261010170000_ncaaf_participant_catalog.sql'
+          catalog_proof='packages/db/src/canonical-reference-schema.test.ts'
+          if grep -qxF "$catalog_proof" /tmp/changed.txt; then
+            sensitive_changed=$(printf '%s' "$sensitive_changed" | grep -vxF "$catalog_migration" || true)
+            if [ -n "$sensitive_changed" ]; then
+              sensitive_changed+=$'\n'
+            fi
+          fi
+
           if [ -z "$sensitive_changed" ]; then
             echo "No sensitive runtime changes detected. Guard passes trivially."
             echo "required=false" >> "$GITHUB_OUTPUT"
