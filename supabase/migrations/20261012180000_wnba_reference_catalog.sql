@@ -50,18 +50,22 @@ BEGIN
     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'WORK-2026101203 WNBA market availability conflict';
   END IF;
 
+  -- A schema-only bootstrap has no reference-data rows, so it cannot materialize
+  -- availability yet. Any partially populated prerequisite catalog refuses;
+  -- initialized targets must carry the complete governed set.
   IF EXISTS (
     SELECT 1
+    FROM (SELECT count(*) AS present
     FROM (VALUES
       ('moneyline'), ('spread'), ('game_total_ou'), ('team_total_ou'),
       ('1h_moneyline'), ('1h_spread'), ('1h_total_ou'), ('2h_moneyline'), ('2h_spread'), ('2h_total_ou'),
       ('1q_moneyline'), ('1q_spread'), ('1q_total_ou'), ('2q_moneyline'), ('2q_spread'), ('2q_total_ou'),
       ('3q_moneyline'), ('3q_spread'), ('3q_total_ou'), ('4q_moneyline'), ('4q_spread'), ('4q_total_ou')
     ) AS required(id)
-    LEFT JOIN public.market_types AS market_type ON market_type.id = required.id
-    WHERE market_type.id IS NULL
+    JOIN public.market_types AS market_type ON market_type.id = required.id) AS prerequisite
+    WHERE prerequisite.present NOT IN (0, 22)
   ) THEN
-    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'WORK-2026101203 required market type is missing';
+    RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'WORK-2026101203 required market type catalog is partial';
   END IF;
 
   INSERT INTO public.sports (id, display_name, sort_order, active, metadata)
@@ -84,6 +88,7 @@ BEGIN
     ('3q_moneyline', 66), ('3q_spread', 67), ('3q_total_ou', 68),
     ('4q_moneyline', 69), ('4q_spread', 70), ('4q_total_ou', 71)
   ) AS expected(market_type_id, sort_order)
+  JOIN public.market_types AS market_type ON market_type.id = expected.market_type_id
   WHERE NOT EXISTS (
     SELECT 1 FROM public.sport_market_type_availability AS actual
     WHERE actual.sport_id = 'WNBA' AND actual.market_type_id = expected.market_type_id
