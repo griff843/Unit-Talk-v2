@@ -2,7 +2,6 @@ import type { CanonicalPick } from '@unit-talk/contracts';
 
 const CANONICAL_SPORT_IDS = new Set([
   'NBA',
-  'WNBA',
   'NFL',
   'MLB',
   'NHL',
@@ -61,12 +60,6 @@ export function deriveSportId(pick: CanonicalPick): string | null {
   const metadata = asRecord(pick.metadata);
   const directSport = normalizeSportId(readString(metadata, 'sport'));
   if (directSport) {
-    // UTV2-1972 adds WNBA for manual human submission only. Keep API/system
-    // submissions on the pre-existing unsupported-sport path until a separate
-    // provider/modeling activation is explicitly authorized.
-    if (directSport === 'WNBA' && !isManualHumanSource(pick.source)) {
-      return null;
-    }
     return directSport;
   }
 
@@ -80,7 +73,6 @@ export function deriveSportId(pick: CanonicalPick): string | null {
   // and must run even when marketTypeId is null.
   const normalizedMarket = cleanString(pick.market)?.toLowerCase() ?? '';
   if (normalizedMarket.startsWith('nba')) return 'NBA';
-  if (normalizedMarket.startsWith('wnba') && isManualHumanSource(pick.source)) return 'WNBA';
   if (normalizedMarket.startsWith('nfl')) return 'NFL';
   if (normalizedMarket.startsWith('mlb')) return 'MLB';
   if (normalizedMarket.startsWith('nhl')) return 'NHL';
@@ -88,10 +80,6 @@ export function deriveSportId(pick: CanonicalPick): string | null {
   if (normalizedMarket.startsWith('ncaaf')) return 'NCAAF';
 
   return null;
-}
-
-function isManualHumanSource(source: CanonicalPick['source']): boolean {
-  return source === 'smart-form' || source === 'alert-agent';
 }
 
 export function deriveMarketTypeId(pick: CanonicalPick): string | null {
@@ -194,9 +182,6 @@ const ALTERNATE_MARKET_TYPE_IDS: Record<string, string> = {
   'nba-spread': 'spread',
   'nba-ml': 'moneyline',
   'nba-total': 'game_total_ou',
-  'wnba-spread': 'spread',
-  'wnba-ml': 'moneyline',
-  'wnba-total': 'game_total_ou',
   'nfl-spread': 'spread',
   'nfl-ml': 'moneyline',
   'nfl-total': 'game_total_ou',
