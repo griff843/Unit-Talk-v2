@@ -1,0 +1,150 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101105
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101105
+  objective: "Land the manifest mutation computed by `pnpm ops:lane-manifest
+    record-merge WORK-2026101104 --pr
+    https://github.com/griff843/Unit-Talk-v2/pull/1740`. It sets `pr_url`, sets
+    `commit_sha` to the GitHub merge commit
+    `b15564ad546b069dacd8a35ec00263b1a610a4ad`, and sets `status: merged`."
+  acceptance_criteria:
+    - "`docs/06_status/lanes/WORK-2026101104.json` on `main` carries `pr_url`
+      #1740, the GitHub merge commit as `commit_sha`, and `status: merged`."
+    - The lane is NOT closed by this PR. Closing still goes through
+      `post-merge-lane-close.yml` and a passing `ops:truth-check`.
+  guardrails:
+    - No product code, and no proof content for WORK-2026101104 is changed.
+    - No weakening of closeout, truth-check or merge controls. No direct-main
+      write.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026101104` is dispatched and WORK-2026101104 is terminal on
+      `main`.
+  unmapped_sections:
+    - >-
+      WORK-2026101105 — Record the prior lane's PR binding from GitHub merge
+      state
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Same shape as the prior
+      record-merge repair lane.
+
+
+      ## Why
+
+
+      - PR #1740 merged, but its manifest on `main` carries `pr_url: null`,
+      because `lane-pr-binding` does not bind WORK-### ids and the lane PR never
+      set it.
+
+      - `post-merge-lane-close.yml` resolves the merge SHA only from
+      `manifest.pr_url`, and does so before the optional `pr` input is
+      consulted. The closeout dispatch therefore refused, and no dispatch can
+      close the lane until the binding exists on `main`.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026101105.md
+
+      - docs/06_status/lanes/WORK-2026101104.json
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101105.md
+    title: WORK-2026101105 — Record the prior lane's PR binding from GitHub merge
+      state
+    description: >-
+      # WORK-2026101105 — Record the prior lane's PR binding from GitHub merge
+      state
+
+
+      Tier: T3
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Same shape as the prior
+      record-merge repair lane.
+
+
+      ## Objective
+
+
+      - Land the manifest mutation computed by `pnpm ops:lane-manifest
+      record-merge WORK-2026101104 --pr
+      https://github.com/griff843/Unit-Talk-v2/pull/1740`. It sets `pr_url`,
+      sets `commit_sha` to the GitHub merge commit
+      `b15564ad546b069dacd8a35ec00263b1a610a4ad`, and sets `status: merged`.
+
+
+      ## Why
+
+
+      - PR #1740 merged, but its manifest on `main` carries `pr_url: null`,
+      because `lane-pr-binding` does not bind WORK-### ids and the lane PR never
+      set it.
+
+      - `post-merge-lane-close.yml` resolves the merge SHA only from
+      `manifest.pr_url`, and does so before the optional `pr` input is
+      consulted. The closeout dispatch therefore refused, and no dispatch can
+      close the lane until the binding exists on `main`.
+
+
+      ## Acceptance Criteria
+
+
+      - `docs/06_status/lanes/WORK-2026101104.json` on `main` carries `pr_url`
+      #1740, the GitHub merge commit as `commit_sha`, and `status: merged`.
+
+      - The lane is NOT closed by this PR. Closing still goes through
+      `post-merge-lane-close.yml` and a passing `ops:truth-check`.
+
+
+      ## Guardrails
+
+
+      - No product code, and no proof content for WORK-2026101104 is changed.
+
+      - No weakening of closeout, truth-check or merge controls. No direct-main
+      write.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026101105.md
+
+      - docs/06_status/lanes/WORK-2026101104.json
+
+
+      ## Exit Criteria
+
+
+      - PR merged on green CI. Then `post-merge-lane-close.yml -f
+      issue_id=WORK-2026101104` is dispatched and WORK-2026101104 is terminal on
+      `main`.
+    captured_at: 2026-10-11T22:13:19.019Z
+    description_sha256: aadfaa7e09a1a7398a9eba2d051ba8aba51ec6de7bb79b19a7223def2e297b2e
+  contract_hash: 5696b7603019b66b29880d324f75a07774dcba6fc39d91168d81c63c134ae8dc
