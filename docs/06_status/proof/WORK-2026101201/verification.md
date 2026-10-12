@@ -1,6 +1,6 @@
 # PROOF: WORK-2026101201
 
-MERGE_SHA: pending merge
+MERGE_SHA: cdbd8d654b4b96b595d6a4480cefaf1ba53ecd17
 
 Issue: WORK-2026101201
 Tier: T2
@@ -64,5 +64,5 @@ Writable live-DB proof remains blocked/deferred to the `staging-ci` GitHub envir
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `cdbd8d654b4b96b595d6a4480cefaf1ba53ecd17`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1742

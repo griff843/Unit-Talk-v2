@@ -4,13 +4,15 @@
   "tier": "T2",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "cdbd8d654b4b96b595d6a4480cefaf1ba53ecd17",
     "verified_source_sha": "a99855568c5416e115fe895f147655650d38dbab",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "note": "The verified source SHA is the implementation commit. Later lane commits are restricted to the required proof bundle and executor-generated routing provenance."
+    "note": "The verified source SHA is the implementation commit. Later lane commits are restricted to the required proof bundle and executor-generated routing provenance.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-12T13:53:08.396Z"
   },
   "what_this_lane_delivers": {
     "trial_expiry": "Bot-created Trial activation uses computeTrialEffectiveUntil, honoring the seven-day default and configured duration.",
@@ -75,10 +77,106 @@
     "generic_submitter_http_status": 403
   },
   "runtime_proof": {
-    "status": "blocked_deferred",
-    "required_environment": "GitHub staging-ci",
-    "required_project_ref": "xskgrzbteyqdufktjrjx",
-    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its local URL (host=127.0.0.1, ref=unidentified). Run it through staging-ci with CI_SUPABASE_* credentials."
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 9,
+    "pass": 9,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "ingestor health check canonical freshness SELECT executes against staging (ok 1, 1014.95ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "ingestor supervisor canonical freshness SELECT executes against staging (ok 2, 991.00ms)"
+      },
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 3, 4584.61ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 4, 2255.68ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 5, 1742.70ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 6, 1632.43ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 7, 112.37ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 8, 2026.12ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 9, 2016.26ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 8,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-10-12T07:18:42.610Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 38216954878, job 114703817411), which ran immediately before the smoke-test step in the same job, on head cdbd8d654b4b96b595d6a4480cefaf1ba53ecd17. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 38216954878,
+      "run_attempt": 1,
+      "job_id": 114703817411,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/38216954878/job/114703817411",
+      "target_head_sha": "cdbd8d654b4b96b595d6a4480cefaf1ba53ecd17",
+      "target_merge_sha": "cdbd8d654b4b96b595d6a4480cefaf1ba53ecd17",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
   },
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1742"
 }

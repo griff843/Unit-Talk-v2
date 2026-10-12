@@ -16,5 +16,5 @@ secret, deployment, or production state changed.
 ## SHA Binding
 
 Verified source SHA: `a99855568c5416e115fe895f147655650d38dbab`
-Merge SHA: pending merge
+Merge SHA: cdbd8d654b4b96b595d6a4480cefaf1ba53ecd17
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1742
