@@ -1049,7 +1049,7 @@ test('WNBA participant UUIDs are deterministic and provider-independent', () => 
   );
   for (const [slug, displayName] of wnbaFranchises) {
     assert.match(migration, new RegExp(governedWnbaParticipantId(slug)));
-    assert.match(migration, new RegExp(`unit-talk:wnba:franchise:${slug}`));
+    assert.match(migration, new RegExp(`unit-talk:wnba:${slug}`));
     assert.match(migration, new RegExp(displayName));
   }
   assert.doesNotMatch(migration, /provider_entity_aliases|provider[_-](?:id|key)/i);
