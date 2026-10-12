@@ -8,10 +8,12 @@
   "status": "evidence_complete_pending_pm_approval",
   "generated_at": "2026-10-10T21:05:00Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "b8650081606c7a07a432854bd898a93b3ffb4ddb",
     "verified_source_sha": "28272066eaadf0bcd331ca7ca386731460f0171a",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-12T13:52:15.802Z"
   },
   "static_proof": {
     "status": "PASS",

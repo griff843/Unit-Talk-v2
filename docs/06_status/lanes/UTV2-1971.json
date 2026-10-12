@@ -22,14 +22,22 @@
     "docs/06_status/proof/UTV2-1971/verification.md",
     "docs/06_status/proof/UTV2-1971/model-routing.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-10-10T20:23:56.285Z",
-  "heartbeat_at": "2026-10-12T13:10:46.672Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-12T13:52:19.488Z",
+  "closed_at": "2026-10-12T13:52:19.488Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1971-ncaaf-participant-catalog.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-12T13:52:15.851Z",
+      "verdict": "pass",
+      "merge_sha": "b8650081606c7a07a432854bd898a93b3ffb4ddb",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-medium",

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1971 — Verification
 
-MERGE_SHA: pending merge
+MERGE_SHA: b8650081606c7a07a432854bd898a93b3ffb4ddb
 
 > This is pre-merge evidence. The authorized post-merge path binds the merge SHA;
 > no merge, production apply, deployment, or provider/delivery activation is claimed.
@@ -73,7 +73,7 @@ with `CI_SUPABASE_*` credentials. No local guard was bypassed. Disposable loopba
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: b8650081606c7a07a432854bd898a93b3ffb4ddb
 PR: #1730
 Execution SHA: 82106a80506cc6204c4fa958f684ae69017d48bf
 
