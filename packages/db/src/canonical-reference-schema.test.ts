@@ -1072,3 +1072,334 @@ test('NCAAF rollback serializes concurrent references and refuses committed down
     query(admin.href, `DROP DATABASE ${database} WITH (FORCE)`);
   }
 });
+
+type WnbaRosterRow = {
+  id: string;
+  externalId: string;
+  stableKey: string;
+  displayName: string;
+  abbreviation: string;
+  conference: 'Eastern' | 'Western';
+  country: 'US' | 'CA';
+};
+
+type WnbaRoster = {
+  capturedAt: string;
+  season: number;
+  sources: Array<{ url: string; sha256: string; count: number }>;
+  reconciliation: {
+    currentTeamsMatched: number;
+    easternConference: number;
+    westernConference: number;
+    futureExpansionExcluded: Array<{ market: string; firstSeason: number }>;
+  };
+  participants: WnbaRosterRow[];
+};
+
+const wnbaRoster = JSON.parse(
+  readFileSync(
+    new URL('./wnba-participant-roster.json', import.meta.url),
+    'utf8',
+  ),
+) as WnbaRoster;
+
+function governedWnbaParticipantId(stableKey: string): string {
+  const namespace = Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex');
+  const bytes = createHash('sha1')
+    .update(namespace)
+    .update(`unit-talk:participant:wnba:${stableKey}`)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+test('the frozen 2026 WNBA roster reconciles all current and future expansion franchises', () => {
+  assert.equal(wnbaRoster.capturedAt, '2026-10-12');
+  assert.equal(wnbaRoster.season, 2026);
+  assert.equal(wnbaRoster.participants.length, 15);
+  assert.deepEqual(
+    wnbaRoster.sources.map(({ count }) => count),
+    [15, 3],
+  );
+  assert.ok(
+    wnbaRoster.sources.every(({ url }) =>
+      url.startsWith('https://www.wnba.com/'),
+    ),
+  );
+  assert.ok(
+    wnbaRoster.sources.every(({ sha256 }) => /^[a-f0-9]{64}$/.test(sha256)),
+  );
+  assert.equal(wnbaRoster.reconciliation.currentTeamsMatched, 15);
+  assert.equal(wnbaRoster.reconciliation.easternConference, 7);
+  assert.equal(wnbaRoster.reconciliation.westernConference, 8);
+  assert.deepEqual(wnbaRoster.reconciliation.futureExpansionExcluded, [
+    { market: 'Cleveland', firstSeason: 2028 },
+    { market: 'Detroit', firstSeason: 2029 },
+    { market: 'Philadelphia', firstSeason: 2030 },
+  ]);
+});
+
+test('WNBA participant identities are unique, deterministic, and franchise-qualified', () => {
+  const ids = new Set<string>();
+  const externalIds = new Set<string>();
+  const displayNames = new Set<string>();
+  for (const row of wnbaRoster.participants) {
+    assert.equal(row.id, governedWnbaParticipantId(row.stableKey));
+    assert.equal(row.externalId, `unit-talk:wnba:${row.stableKey}`);
+    assert.ok(!ids.has(row.id), `duplicate governed UUID: ${row.id}`);
+    assert.ok(
+      !externalIds.has(row.externalId),
+      `duplicate external id: ${row.externalId}`,
+    );
+    assert.ok(
+      !displayNames.has(row.displayName.toLowerCase()),
+      `duplicate franchise: ${row.displayName}`,
+    );
+    assert.match(row.abbreviation, /^[A-Z]{3}$/);
+    ids.add(row.id);
+    externalIds.add(row.externalId);
+    displayNames.add(row.displayName.toLowerCase());
+  }
+});
+
+test('the WNBA catalog migration covers the client team taxonomy and refuses identity conflicts', () => {
+  const migration = readFileSync(
+    new URL(
+      '../../../supabase/migrations/20261012180000_wnba_reference_catalog.sql',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const rollback = readFileSync(
+    new URL(
+      '../../../db/migrations-rollback/20261012180000_wnba_reference_catalog.down.sql',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  for (const table of [
+    'sports',
+    'leagues',
+    'sport_market_type_availability',
+    'participants',
+  ]) {
+    assert.match(migration, new RegExp(`INSERT INTO public\\.${table}`));
+  }
+  for (const marketType of [
+    'moneyline',
+    'spread',
+    'game_total_ou',
+    'team_total_ou',
+    '1h_moneyline',
+    '1h_spread',
+    '1h_total_ou',
+    '2h_moneyline',
+    '2h_spread',
+    '2h_total_ou',
+    '1q_moneyline',
+    '1q_spread',
+    '1q_total_ou',
+    '2q_moneyline',
+    '2q_spread',
+    '2q_total_ou',
+    '3q_moneyline',
+    '3q_spread',
+    '3q_total_ou',
+    '4q_moneyline',
+    '4q_spread',
+    '4q_total_ou',
+  ]) {
+    assert.match(migration, new RegExp(`'${marketType}'`));
+  }
+  assert.doesNotMatch(migration, /ON\s+CONFLICT/i);
+  assert.match(migration, /canonical external identity conflict/);
+  assert.match(migration, /governed UUID conflict/);
+  assert.match(migration, /ambiguous canonical participant identity/);
+  assert.match(rollback, /rollback refused: seeded participant is referenced/);
+  assert.match(rollback, /rollback refused: WNBA league is referenced/);
+  assert.match(rollback, /rollback refused: WNBA sport is referenced/);
+  assert.doesNotMatch(rollback, /\b(?:CREATE|ALTER)\s+TABLE\b/i);
+});
+
+test(
+  'WNBA catalog applies idempotently, refuses collisions, and round-trips on scratch Postgres',
+  {
+    skip: !participantCatalogTestAdmin,
+  },
+  () => {
+    assert.ok(participantCatalogTestAdmin);
+    const admin = new URL(participantCatalogTestAdmin);
+    assert.ok(['127.0.0.1', 'localhost', '::1'].includes(admin.hostname));
+    assert.equal(admin.pathname, '/postgres');
+    assert.equal(admin.search, '');
+    const database = `participant_catalog_drill_wnba_${randomUUID().replaceAll('-', '').slice(0, 24)}`;
+    const scratch = new URL(admin);
+    scratch.pathname = `/${database}`;
+    const query = (sql: string) =>
+      execFileSync(
+        'psql',
+        [
+          scratch.href,
+          '-X',
+          '-At',
+          '-v',
+          'ON_ERROR_STOP=1',
+          '-v',
+          'VERBOSITY=verbose',
+          '-c',
+          sql,
+        ],
+        { encoding: 'utf8', timeout: 15_000 },
+      ).trim();
+  const refuses = (sql: string, expected: RegExp) => {
+    try {
+      query(sql);
+      assert.fail(`expected refusal matching ${expected}`);
+    } catch (error) {
+      const stderr =
+        typeof error === 'object' && error !== null && 'stderr' in error
+          ? String((error as { stderr?: unknown }).stderr ?? '')
+          : String(error);
+      assert.match(stderr, expected);
+    }
+  };
+    const migration = readFileSync(
+      new URL(
+        '../../../supabase/migrations/20261012180000_wnba_reference_catalog.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const rollback = readFileSync(
+      new URL(
+        '../../../db/migrations-rollback/20261012180000_wnba_reference_catalog.down.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const first = wnbaRoster.participants[0];
+    assert.ok(first);
+    execFileSync('psql', [
+      admin.href,
+      '-X',
+      '-At',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      `CREATE DATABASE ${database}`,
+    ]);
+    try {
+      query(
+        "CREATE TABLE public.sports(id text PRIMARY KEY, display_name text NOT NULL, sort_order integer NOT NULL DEFAULT 0, active boolean NOT NULL DEFAULT true, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());",
+      );
+      query(
+        "CREATE TABLE public.leagues(id text PRIMARY KEY, sport_id text NOT NULL REFERENCES public.sports(id), display_name text NOT NULL, country text, active boolean NOT NULL DEFAULT true, sort_order integer NOT NULL DEFAULT 0, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());",
+      );
+      query('CREATE TABLE public.market_types(id text PRIMARY KEY);');
+      query(
+        "INSERT INTO public.market_types(id) VALUES ('moneyline'),('spread'),('game_total_ou'),('team_total_ou'),('1h_moneyline'),('1h_spread'),('1h_total_ou'),('2h_moneyline'),('2h_spread'),('2h_total_ou'),('1q_moneyline'),('1q_spread'),('1q_total_ou'),('2q_moneyline'),('2q_spread'),('2q_total_ou'),('3q_moneyline'),('3q_spread'),('3q_total_ou'),('4q_moneyline'),('4q_spread'),('4q_total_ou');",
+      );
+      query(
+        "CREATE TABLE public.sport_market_type_availability(sport_id text NOT NULL REFERENCES public.sports(id) ON DELETE CASCADE, market_type_id text NOT NULL REFERENCES public.market_types(id), active boolean NOT NULL DEFAULT true, sort_order integer NOT NULL DEFAULT 0, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now(), PRIMARY KEY(sport_id, market_type_id));",
+      );
+      query(
+        "CREATE TABLE public.participants(id uuid PRIMARY KEY, external_id text UNIQUE, participant_type text NOT NULL, sport text, league text, display_name text NOT NULL, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());",
+      );
+      query(migration);
+      assert.equal(
+        query(
+          "SELECT count(*) FROM public.participants WHERE sport='WNBA' AND participant_type='team';",
+        ),
+        '15',
+      );
+      assert.equal(
+        query(
+          "SELECT count(*) FROM public.sport_market_type_availability WHERE sport_id='WNBA';",
+        ),
+        '22',
+      );
+      const snapshot = query(
+        "SELECT jsonb_build_object('sports',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM public.sports s),'leagues',(SELECT jsonb_agg(to_jsonb(l) ORDER BY id) FROM public.leagues l),'availability',(SELECT jsonb_agg(to_jsonb(a) ORDER BY market_type_id) FROM public.sport_market_type_availability a),'participants',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM public.participants p));",
+      );
+      query(migration);
+      assert.equal(
+        query(
+          "SELECT jsonb_build_object('sports',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM public.sports s),'leagues',(SELECT jsonb_agg(to_jsonb(l) ORDER BY id) FROM public.leagues l),'availability',(SELECT jsonb_agg(to_jsonb(a) ORDER BY market_type_id) FROM public.sport_market_type_availability a),'participants',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM public.participants p));",
+        ),
+        snapshot,
+      );
+
+      query(
+        'CREATE TABLE public.wnba_reference(id uuid REFERENCES public.participants(id));',
+      );
+      query(`INSERT INTO public.wnba_reference VALUES ('${first.id}')`);
+    refuses(rollback, /rollback refused: seeded participant is referenced/);
+      assert.equal(
+        query("SELECT count(*) FROM public.participants WHERE sport='WNBA';"),
+        '15',
+      );
+      query('DELETE FROM public.wnba_reference;');
+      query(rollback);
+      assert.equal(
+        query("SELECT count(*) FROM public.sports WHERE id='WNBA';"),
+        '0',
+      );
+
+      query(
+        `INSERT INTO public.participants(id, external_id, participant_type, sport, display_name) VALUES (gen_random_uuid(), '${first.externalId}', 'team', 'NBA', '${first.displayName}')`,
+      );
+    refuses(migration, /canonical external identity conflict/);
+      query('DELETE FROM public.participants;');
+
+      query(
+        `INSERT INTO public.participants(id, external_id, participant_type, sport, display_name) VALUES ('${first.id}', 'unit-talk:wnba:wrong', 'team', 'WNBA', '${first.displayName}')`,
+      );
+    refuses(migration, /governed UUID conflict/);
+      query('DELETE FROM public.participants;');
+
+      query(
+        `INSERT INTO public.participants(id, external_id, participant_type, sport, display_name) VALUES (gen_random_uuid(), '${first.externalId}', 'team', 'WNBA', '${first.displayName}'), (gen_random_uuid(), 'unit-talk:wnba:duplicate', 'team', 'WNBA', '${first.displayName}')`,
+      );
+    refuses(migration, /ambiguous canonical participant identity/);
+      query('DELETE FROM public.participants;');
+
+      query(
+        `INSERT INTO public.participants(id, external_id, participant_type, sport, league, display_name, metadata) VALUES (gen_random_uuid(), '${first.externalId}', 'team', 'WNBA', 'wnba', '${first.displayName}', '{"source":"preexisting"}')`,
+      );
+      const preservedId = query(
+        `SELECT id FROM public.participants WHERE external_id='${first.externalId}'`,
+      );
+      query(migration);
+      assert.equal(
+        query(
+          `SELECT id FROM public.participants WHERE external_id='${first.externalId}'`,
+        ),
+        preservedId,
+      );
+      assert.equal(
+        query("SELECT count(*) FROM public.participants WHERE sport='WNBA';"),
+        '15',
+      );
+      query(rollback);
+      assert.equal(
+        query(
+          `SELECT id FROM public.participants WHERE external_id='${first.externalId}'`,
+        ),
+        preservedId,
+      );
+    } finally {
+      execFileSync('psql', [
+        admin.href,
+        '-X',
+        '-At',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-c',
+        `DROP DATABASE ${database} WITH (FORCE)`,
+      ]);
+    }
+  },
+);
