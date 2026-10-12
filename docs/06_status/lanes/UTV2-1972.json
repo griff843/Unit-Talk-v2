@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1972-wnba-participant-catalog",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1745",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/server.test.ts",
@@ -30,9 +30,9 @@
     "docs/06_status/proof/UTV2-1972/verification.md",
     "docs/06_status/proof/UTV2-1972/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-12T20:50:20.749Z",
-  "heartbeat_at": "2026-10-12T20:50:20.749Z",
+  "heartbeat_at": "2026-10-12T21:14:08.795Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1972-wnba-participant-catalog.json",
