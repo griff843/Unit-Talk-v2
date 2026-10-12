@@ -64,6 +64,45 @@ task_contract:
       containment, Capitals disposition, pick submission or delivery release
       changes. Do not retry old source to evade the defect. Production remains
       rollback SHA 1a27b8f6eb3a45d57714a5aaf4465f900eb4241f.
+    - >-
+      Where to look
+
+      * .github/workflows/deploy.yml: build-nextjs matrix, public API build
+      guard/build-args and existing UNIT_TALK_WEB_DOMAIN runtime binding.
+
+      * deploy/production/Dockerfile.nextjs: builder ARG/ENV input before pnpm
+      build.
+
+      * scripts/ci/nextjs-deploy-wiring.test.ts: existing API-origin wiring
+      tests and secret-leak/optional-surface safeguards.
+
+      * apps/web/src/lib/site-config.ts: strict website HTTPS-origin validation,
+      read-only; do not edit.
+
+      * .out/discord-completion-20261012/deployment-build-blocker-packet.md:
+      approved failure evidence and bounded plan.
+    - >-
+      Definition of Done
+
+      * Only the three approved substantive paths plus issue-owned
+      lane/sync/proof artifacts changed.
+
+      * Existing configured website origin reaches the actual production-shaped
+      public-web image build; missing web input refuses before build. No
+      placeholders or weakened app validation.
+
+      * Focused tests execute missing/present guard cases, preserve existing
+      Smart Form/Command Center/API-origin controls, and pass.
+
+      * pnpm verify and R-level pass; sanctioned staging T1 test:db proof and
+      required CI support the final exact HEAD.
+
+      * Actual local production-shaped web Docker image builds at final HEAD
+      without push, deployment or production secrets.
+
+      * Fresh executor result and PR exact HEAD returned for independent PM
+      review. No merge, new-SHA deployment, Discord mutation, pick change or
+      delivery release.
   source:
     kind: linear-issue-snapshot
     issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1978/supply-canonical-public-website-origin-to-production-nextjs-image
@@ -106,6 +145,23 @@ task_contract:
       Failed contained deployment run: [https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589](<https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589>)
       Approved local packet: .out/discord-completion-20261012/deployment-build-blocker-packet.md
       Frozen failed source tag release-discord-contained-20261012-695e22d must never move.
-    captured_at: 2026-10-12T22:37:03.562Z
-    description_sha256: 8b14e2f9fa16537e9655b99f283ede01d35696191e9bcaec1933eecc165322c6
-  contract_hash: f70fd59571a562bb3319feff0a96fccd123809a4bdf9a047112f7ad30d787c7e
+
+      ## Where to look
+
+      * .github/workflows/deploy.yml: build-nextjs matrix, public API build guard/build-args and existing UNIT_TALK_WEB_DOMAIN runtime binding.
+      * deploy/production/Dockerfile.nextjs: builder ARG/ENV input before pnpm build.
+      * scripts/ci/nextjs-deploy-wiring.test.ts: existing API-origin wiring tests and secret-leak/optional-surface safeguards.
+      * apps/web/src/lib/site-config.ts: strict website HTTPS-origin validation, read-only; do not edit.
+      * .out/discord-completion-20261012/deployment-build-blocker-packet.md: approved failure evidence and bounded plan.
+
+      ## Definition of Done
+
+      * Only the three approved substantive paths plus issue-owned lane/sync/proof artifacts changed.
+      * Existing configured website origin reaches the actual production-shaped public-web image build; missing web input refuses before build. No placeholders or weakened app validation.
+      * Focused tests execute missing/present guard cases, preserve existing Smart Form/Command Center/API-origin controls, and pass.
+      * pnpm verify and R-level pass; sanctioned staging T1 test:db proof and required CI support the final exact HEAD.
+      * Actual local production-shaped web Docker image builds at final HEAD without push, deployment or production secrets.
+      * Fresh executor result and PR exact HEAD returned for independent PM review. No merge, new-SHA deployment, Discord mutation, pick change or delivery release.
+    captured_at: 2026-10-12T22:38:40.518Z
+    description_sha256: 8c1da5854d0f362746c115cbf2b314d9fb109868a69544b824d01cdefb5d5a84
+  contract_hash: c336c8aeebb87b88e15a12c9fd45132a7ecb5014c1bb447e8b7166efd05ce23d

@@ -412,6 +412,61 @@ test('the public API origin is compiled into the browser bundle, not supplied at
   assert.match(guard, /exit 1/, 'a missing API hostname must fail the build job');
 });
 
+test('the canonical website origin is required and compiled before public-web page collection', () => {
+  const build = step('build-nextjs', 'Build and push image');
+  const buildArgs = String(field(build, 'with', 'build-args') ?? '');
+  assert.match(
+    buildArgs,
+    /NEXT_PUBLIC_SITE_URL=https:\/\/\$\{\{\s*secrets\.UNIT_TALK_WEB_DOMAIN\s*\}\}/,
+    'the build must receive the public HTTPS origin derived from the configured website hostname',
+  );
+  assert.doesNotMatch(
+    buildArgs,
+    /NEXT_PUBLIC_SITE_URL=.*(?:example\.(?:com|org|net)|localhost|127\.0\.0\.1)/,
+    'the production image must not compile a placeholder website origin',
+  );
+
+  const argIndex = dockerfile.indexOf('ARG NEXT_PUBLIC_SITE_URL');
+  const envIndex = dockerfile.indexOf('ENV NEXT_PUBLIC_SITE_URL=');
+  const buildIndex = dockerfile.indexOf('pnpm --filter');
+  assert.ok(argIndex >= 0 && envIndex > argIndex, 'the builder stage must declare and export the website origin');
+  assert.ok(envIndex < buildIndex, 'the website origin must be exported before `next build` runs');
+  assert.match(
+    dockerfile,
+    /test -n "\$\{NEXT_PUBLIC_SITE_URL\}"/,
+    'an empty website origin must fail the image build',
+  );
+
+  const guardStep = step('build-nextjs', 'Require a public API origin at build time');
+  assert.ok(
+    String(field(guardStep, 'env', 'WEB_DOMAIN') ?? '').includes('secrets.UNIT_TALK_WEB_DOMAIN'),
+    'the point-of-use guard must read the configured website hostname',
+  );
+  const guard = String(guardStep['run']);
+  assert.match(guard, /UNIT_TALK_WEB_DOMAIN/);
+
+  assert.throws(
+    () =>
+      execFileSync('bash', ['-c', guard], {
+        env: { ...process.env, CADDY_DOMAIN: 'api.unit-talk.test', WEB_DOMAIN: '' },
+        stdio: 'pipe',
+      }),
+    'the build guard must execute with a failure when the website hostname is absent',
+  );
+  assert.doesNotThrow(
+    () =>
+      execFileSync('bash', ['-c', guard], {
+        env: {
+          ...process.env,
+          CADDY_DOMAIN: 'api.unit-talk.test',
+          WEB_DOMAIN: 'www.unit-talk.test',
+        },
+        stdio: 'pipe',
+      }),
+    'the build guard must execute successfully when both public hostnames are present',
+  );
+});
+
 test('the API verifies exactly the capper token Smart Form signs', async () => {
   // apps/smart-form/auth.ts signs the session bearer with NEXTAUTH_SECRET;
   // apps/api/src/auth.ts verifies capper JWTs with UNIT_TALK_JWT_SECRET. If the

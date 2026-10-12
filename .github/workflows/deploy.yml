@@ -340,16 +340,22 @@ jobs:
       - name: Require a public API origin at build time
         env:
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          WEB_DOMAIN: ${{ secrets.UNIT_TALK_WEB_DOMAIN }}
         run: |
           set -euo pipefail
           # Next.js substitutes NEXT_PUBLIC_* while the image is built, so an
-          # absent value here is not a runtime problem to fix later -- it is
-          # permanently compiled into the browser bundle as the 127.0.0.1 fallback.
+          # absent value here is not a runtime problem to fix later. The API
+          # origin would be compiled as the 127.0.0.1 fallback, while the public
+          # website cannot collect /robots.txt page data without its site origin.
           if [ -z "${CADDY_DOMAIN:-}" ]; then
             echo "::error title=Missing API origin::CADDY_DOMAIN is required to build the Next.js images; without it the browser bundle would ship its http://127.0.0.1:4000 fallback." >&2
             exit 1
           fi
-          echo "API origin resolved for build."
+          if [ -z "${WEB_DOMAIN:-}" ]; then
+            echo "::error title=Missing website origin::UNIT_TALK_WEB_DOMAIN is required to build the Next.js images; without it the public website cannot collect page data." >&2
+            exit 1
+          fi
+          echo "Public origins resolved for build."
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -367,6 +373,7 @@ jobs:
             APP_PACKAGE=${{ matrix.app_package }}
             APP_PORT=${{ matrix.app_port }}
             NEXT_PUBLIC_API_BASE_URL=https://${{ secrets.CADDY_DOMAIN }}
+            NEXT_PUBLIC_SITE_URL=https://${{ secrets.UNIT_TALK_WEB_DOMAIN }}
             UNIT_TALK_GIT_SHA=${{ github.sha }}
             UNIT_TALK_BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
 

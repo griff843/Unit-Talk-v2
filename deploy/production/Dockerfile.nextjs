@@ -28,6 +28,10 @@ ARG APP_PACKAGE
 # credential -- no secret is ever passed as a build argument.
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+# apps/web resolves its canonical origin while collecting page data, including
+# /robots.txt. Runtime configuration arrives too late for that build step.
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 WORKDIR /repo
 RUN apk add --no-cache libc6-compat \
   && corepack enable \
@@ -38,6 +42,7 @@ COPY apps ./apps
 RUN pnpm install --frozen-lockfile
 RUN test -n "${APP_PACKAGE}" || (echo "APP_PACKAGE build arg is required" >&2; exit 1)
 RUN test -n "${NEXT_PUBLIC_API_BASE_URL}" || (echo "NEXT_PUBLIC_API_BASE_URL build arg is required; without it the browser bundle ships its localhost fallback" >&2; exit 1)
+RUN test -n "${NEXT_PUBLIC_SITE_URL}" || (echo "NEXT_PUBLIC_SITE_URL build arg is required; without it the public website cannot collect page data" >&2; exit 1)
 # apps/smart-form's Auth.js route is evaluated during `next build` page-data
 # collection, and apps/smart-form/lib/auth-config.ts throws when NODE_ENV is
 # production and no auth secret is set. The build therefore needs *a* value.
