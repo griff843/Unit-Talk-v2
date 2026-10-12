@@ -80,5 +80,5 @@
     "required_project_ref": "xskgrzbteyqdufktjrjx",
     "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its local URL (host=127.0.0.1, ref=unidentified). Run it through staging-ci with CI_SUPABASE_* credentials."
   },
-  "pr_url": null
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1742"
 }

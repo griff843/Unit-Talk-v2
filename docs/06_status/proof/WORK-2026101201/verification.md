@@ -65,4 +65,4 @@ Writable live-DB proof remains blocked/deferred to the `staging-ci` GitHub envir
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1742
