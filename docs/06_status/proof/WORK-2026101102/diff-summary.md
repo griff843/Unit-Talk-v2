@@ -6,5 +6,5 @@ Also: `docs/05_operations/REQUIRED_CI_CHECKS.md` documents the bounded classific
 
 ## SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: c30cdf96b7cb21577e7405d765c15ca615ee887a
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1737
