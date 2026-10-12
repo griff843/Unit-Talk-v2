@@ -10,7 +10,7 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 Execution SHA: `82106a80506cc6204c4fa958f684ae69017d48bf`
-Verified source SHA: `d859fec024e2601eba112c896467fde3b2c68f4a`
+Verified source SHA: `28272066eaadf0bcd331ca7ca386731460f0171a`
 result: pass_pending_pm_approval
 
 ## ASSERTIONS:
@@ -55,15 +55,15 @@ West Florida (`11740`); stale standings-only Saint Francis is excluded.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`:
   PASS; changed files 10, no R-level rules matched.
 
-Hosted exact-head receipts at `d859fec024e2601eba112c896467fde3b2c68f4a`:
+Hosted exact-head receipts at `28272066eaadf0bcd331ca7ca386731460f0171a`:
 
-- Participant fail-closed seed drill: PASS — run `38089100046`, job `114321669432`.
-- Schema apply/rollback/reapply round trip: PASS — run `38089100046`, job `114321669440`.
+- Participant fail-closed seed drill: PASS — run `38218000993`, job `114707176489`.
+- Schema apply/rollback/reapply round trip: PASS — run `38218000993`, job `114707176702`.
 - Sanctioned staging writable DB proof and T1 live suites: PASS — run
-  `38089100054`, job `114321782207`.
+  `38218000996`, job `114707177663`.
 - Required `verify`, including static verification and same-run DB receipt validation:
-  PASS — run `38089100054`, job `114323326879`.
-- Live schema parity: PASS — run `38089100058`, job `114321695360`; this proves
+  PASS — run `38218000996`, job `114710245321`.
+- Live schema parity: PASS — run `38218001007`, job `114707200322`; this proves
   schema parity and does not claim the participant data was applied to production.
 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved
