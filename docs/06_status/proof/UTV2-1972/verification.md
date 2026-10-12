@@ -11,8 +11,9 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1745
-Execution SHA: `ded43b88d695ed0a5aee6f81ae1a717366cf4885`
-result: review_candidate_pending_protected_ci
+Execution SHA: `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`
+Verified source SHA: `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`
+result: pass_pending_pm_approval
 
 ## ASSERTIONS:
 
@@ -24,18 +25,19 @@ result: review_candidate_pending_protected_ci
 - [x] The migration preserves matching existing identities, refuses canonical
       identity ambiguity, and adds no invented provider IDs.
 - [x] Franchise identities are written to `participants`; `teams` is untouched.
-- [x] WNBA exposes existing basketball markets/stats, and API/UI team-sport
-      validation agrees with DB basketball sport-FK normalization.
+- [x] WNBA exposes the existing basketball market registry; the runtime Smart
+      Form validation/FK changes were separated from this migration lane.
 - [x] The feature is limited to manual-human Smart Form submission support.
-- [ ] Protected exact-head CI, sanctioned staging DB proof, and independent PM
-      review remain required before governed merge.
+- [x] Protected exact-head CI, scratch migration drills, sanctioned staging DB
+      proof, and live schema parity passed.
+- [ ] Independent PM review remains required before governed merge.
 
 ## EVIDENCE:
 
 Measured local executor results:
 
 ```text
-Focused required suite: 161 pass, 0 fail, 1 skipped
+Focused required suite: 155 pass, 0 fail, 1 skipped
 API server suite: 66 pass, 0 fail
 pnpm type-check: PASS
 pnpm verify:commands: PASS (139 migration files; 138 linted without findings)
@@ -50,7 +52,7 @@ the absent approved admin URL. No DB-write test began locally.
 ## Verification
 
 - `pnpm exec tsx --test 'apps/api/src/smart-form-validation.test.ts' 'apps/smart-form/test/form-utils.test.ts' 'packages/db/src/canonical-reference-schema.test.ts' 'packages/db/src/pick-foreign-keys.test.ts'`:
-  PASS (161 pass, 0 fail, 1 skipped).
+  PASS (155 pass, 0 fail, 1 skipped).
 - `pnpm exec tsx --test apps/api/src/server.test.ts`: PASS (66 pass, 0 fail).
 - `pnpm type-check`: PASS.
 - `pnpm test`: PASS as part of `pnpm verify:static`.
@@ -68,9 +70,19 @@ from its URL (host=unparseable). Writable DB verification requires
 `xskgrzbteyqdufktjrjx`. Run it through the staging-ci GitHub environment with
 `CI_SUPABASE_*` credentials.
 
+Hosted exact-head receipts at `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`:
+
+- Fail-closed precondition drill: PASS — run `38321352399`, job `115049925448`.
+- Schema apply/rollback/reapply round trip: PASS — run `38321352399`, job
+  `115049925222`.
+- Sanctioned staging writable DB proof and T1 live suites: PASS — run
+  `38321352356`, job `115049925681`.
+- Required `verify`: PASS — run `38321352356`, job `115055657844`.
+- Live schema parity: PASS — run `38321352395`, job `115049951552`; this proves
+  schema parity and does not claim a production data apply.
+
 ## Pending governed evidence
 
-- Protected exact-head CI and its sanctioned staging-DB receipt.
 - Independent PM review and merge approval.
 - Governed merge, production migration through the normal post-merge path, lane
   finalization, and orchestration reconciliation.
@@ -79,4 +91,4 @@ from its URL (host=unparseable). Writable DB verification requires
 
 Merge SHA: pending merge
 PR: #1745
-Execution SHA: ded43b88d695ed0a5aee6f81ae1a717366cf4885
+Execution SHA: f99394febd9fff60c80044ae1f4ec688eeaf9d3d

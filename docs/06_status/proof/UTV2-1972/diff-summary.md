@@ -1,21 +1,17 @@
 # Diff summary: UTV2-1972
 
-This lane adds the 15 active 2026 WNBA franchises to the canonical
-`participants` table and enables manual-human WNBA Smart Form submissions. The
-catalog uses deterministic UUIDv5 identities, additive conflict refusal, and a
-reference-safe rollback. It does not write `teams`, invent provider IDs, ingest
-provider data, or activate modeling, grading, promotion, or delivery behavior.
+This migration lane adds the 15 active 2026 WNBA franchises to the canonical
+`participants` table. The catalog uses deterministic UUIDv5 identities,
+additive conflict refusal, and a reference-safe rollback. Runtime Smart Form
+validation/FK changes were separated from this lane after staging diagnosis.
+This lane does not write `teams`, invent provider IDs, ingest provider data, or
+activate modeling, grading, promotion, or delivery behavior.
 
 | File | Change |
 |---|---|
 | `supabase/migrations/20261010170100_wnba_participant_catalog.sql` | Adds the WNBA sport and league, mirrors existing NBA basketball availability, and idempotently seeds 15 canonical participants. |
 | `db/migrations-rollback/20261010170100_wnba_participant_catalog.down.sql` | Deletes only UTV2-1972-owned participants and refuses when any FK references them. |
-| `packages/contracts/src/reference-data.ts` | Publishes WNBA with existing basketball markets/stats and no legacy teams catalog. |
-| `apps/api/src/smart-form-validation.ts` | Treats WNBA as a team sport for API submission validation. |
-| `apps/smart-form/app/submit/components/BetForm.tsx` | Treats WNBA as a team sport in the manual submission UI. |
-| `apps/smart-form/lib/form-utils.ts` | Applies the client-side WNBA team requirement. |
-| `packages/db/src/pick-foreign-keys.ts` | Normalizes manual-human WNBA picks to the basketball sport FK while leaving generic API/system WNBA picks unsupported. |
-| Focused test files | Cover the catalog response, API/UI guards, canonical SQL invariants, and FK normalization. |
+| `packages/db/src/canonical-reference-schema.test.ts` | Covers the canonical WNBA SQL invariants and scratch migration behavior. |
 | `docs/06_status/proof/UTV2-1972/*` | Issue-owned governed review evidence. |
 
 ## Catalog containment
@@ -32,4 +28,4 @@ provider data, or activate modeling, grading, promotion, or delivery behavior.
 
 Merge SHA: pending merge
 PR: #1745
-Verified implementation SHA: `ded43b88d695ed0a5aee6f81ae1a717366cf4885`
+Verified implementation SHA: `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`
