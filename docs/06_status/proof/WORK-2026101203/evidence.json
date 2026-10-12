@@ -1,0 +1,115 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101203",
+  "pr_number": 1744,
+  "source_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
+  "reviewed_head_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
+  "evidence_commit_sha": null,
+  "current_head_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
+  "merge_sha": null,
+  "gate_results": [
+    {
+      "gate": "focused canonical-reference tests",
+      "verdict": "PASS",
+      "detail": "30 tests: 28 pass, 0 fail, 2 expected local scratch-Postgres skips"
+    },
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "Complete local static verification chain exited 0"
+    },
+    {
+      "gate": "R-level check",
+      "verdict": "PASS",
+      "detail": "No R-level rules matched the measured source diff"
+    },
+    {
+      "gate": "writable staging proof",
+      "verdict": "SKIP",
+      "detail": "Local target guard refused before DB access; protected staging-ci receipt is pending"
+    },
+    {
+      "gate": "exact-head protected CI",
+      "verdict": "SKIP",
+      "detail": "Pending on draft PR #1744"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-10-12T16:38:00-04:00",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "title": "Governed WNBA reference catalog",
+  "status": "pre_merge_pending_ci",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "commands": [
+      {
+        "command": "pnpm verify:static",
+        "result": "PASS"
+      },
+      {
+        "command": "pnpm exec tsx --test packages/db/src/canonical-reference-schema.test.ts",
+        "tests": 30,
+        "pass": 28,
+        "fail": 0,
+        "skipped": 2
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ci/participant-catalog-seed-drill.test.ts scripts/ci/migration-reversibility-gate.test.ts scripts/ci/proof-coverage-guard.test.ts",
+        "tests": 32,
+        "pass": 22,
+        "fail": 0,
+        "skipped": 10
+      },
+      {
+        "command": "pnpm --filter @unit-talk/db type-check",
+        "result": "PASS"
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "result": "PASS; no R-level rules matched"
+      },
+      {
+        "command": "pnpm verify",
+        "result": "refused_by_staging_isolation",
+        "note": "The static phase passed. ci:assert-staging then refused the local 127.0.0.1/unidentified target before mutation; the required authoritative result is the exact-head staging-ci verify context."
+      }
+    ],
+    "note": "The verified implementation tree is unchanged by the executor-wrapper model-routing commit. Exact-head hosted verification remains pending."
+  },
+  "runtime_proof": {
+    "status": "PENDING_CI_STAGING",
+    "command": "pnpm exec tsx packages/db/src/scripts/work-2026101203-wnba-reference-catalog-proof.ts",
+    "target": "xskgrzbteyqdufktjrjx",
+    "local_result": "REFUSED before DB client creation",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+  },
+  "catalog": {
+    "sports": 1,
+    "leagues": 1,
+    "market_availability": 22,
+    "participants": 15,
+    "current_eastern": 7,
+    "current_western": 8,
+    "future_expansion_excluded": [
+      "Cleveland (2028)",
+      "Detroit (2029)",
+      "Philadelphia (2030)"
+    ]
+  },
+  "pending_evidence": [
+    "exact-head migration reversibility and Proof Coverage Guard",
+    "sanctioned staging writable DB proof",
+    "exact-head verify",
+    "PM approval, governed merge, production-apply decision, and canonical post-merge closeout"
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1744"
+}

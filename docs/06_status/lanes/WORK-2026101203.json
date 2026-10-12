@@ -8,7 +8,7 @@
   "branch": "codex/work-2026101203-wnba-reference-catalog",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1744",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/work/WORK-2026101203.md",
@@ -23,9 +23,9 @@
     "docs/06_status/proof/WORK-2026101203/verification.md",
     "docs/06_status/proof/WORK-2026101203/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-10-12T15:55:34.121Z",
-  "heartbeat_at": "2026-10-12T15:55:34.121Z",
+  "heartbeat_at": "2026-10-12T16:36:55.088Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/work-2026101203-wnba-reference-catalog.json",
