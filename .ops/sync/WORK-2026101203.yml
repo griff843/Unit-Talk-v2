@@ -1,0 +1,277 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101203
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101203
+  objective: Add ONE additive, reversible migration that makes WNBA a first-class
+    reference sport, reusing the NCAAF machinery
+    (`supabase/migrations/20261010170000_ncaaf_participant_catalog.sql`, its
+    `db/migrations-rollback/*.down.sql`,
+    `packages/db/src/ncaaf-participant-roster.json`,
+    `packages/db/src/canonical-reference-schema.test.ts`). Do not invent another
+    reference-data path.
+  acceptance_criteria:
+    - One migration adds the WNBA `sports`, `leagues`,
+      `sport_market_type_availability` rows and every current WNBA franchise as
+      a governed team participant, with refusal semantics, a reversible rollback
+      and a frozen sourced roster.
+    - CI migration reversibility, the Proof Coverage Guard, the staging
+      writable-DB proof and `verify` pass at the exact head, with no CI or
+      merge-authority file edited.
+    - NCAAF migration, rollback, roster and tests are byte-identical to main.
+  guardrails:
+    - No production DDL, no migration apply, no staging/production data writes
+      outside the sanctioned CI proof, no deployment, no Discord, no provider
+      activation, no delivery or runtime-switch change.
+    - Do NOT touch `apps/smart-form` or `apps/api` (a parallel lane,
+      WORK-2026101204, owns the team-sport recognition change).
+    - Do not modify the NCAAF migration, rollback, roster or its tests.
+    - Migration filename timestamp must sort after `20261010170000`.
+  non_goals: []
+  required_evidence: []
+  exit_criteria:
+    - PR on green CI with an exact-head executor-result; migration
+      reversibility, Proof Coverage Guard, staging writable-DB proof and
+      `verify` pass. Return for PM review and a separate production-apply
+      decision.
+  unmapped_sections:
+    - >-
+      WORK-2026101203 — Governed WNBA reference catalog: sport, league, market
+      availability and team participants
+
+      Tier: T1
+
+      Lane type: migration
+
+      Executor: codex
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Product objective: WNBA
+      must be usable end-to-end in Smart Form as a contained Track Only sport,
+      preserving the working NCAAF path.
+
+
+      ## Verified live facts (production read-only, 2026-10-12)
+
+
+      - `public.sports` has NO `WNBA` row; `picks.sport_id` has an FK to
+      `sports(id)`, so a WNBA pick cannot persist until the row exists. The
+      Smart Form sport list is built from `sports` plus
+      `sport_market_type_availability`.
+
+      - `public.leagues` has one row per sport (`nba`, `ncaab`, ...), none for
+      WNBA. `sport_market_type_availability` has 39 rows for NBA, 23 for NCAAB,
+      18 for NCAAF, none for WNBA.
+
+      - `public.participants` has 0 rows with `sport = 'WNBA'`. NBA has 30
+      teams, NCAAF 266 (governed). The WNBA market taxonomy already exists in
+      the client (`apps/smart-form/lib/market-types.ts`, `WNBA:`) and market
+      types in the DB; reuse existing `market_types` ids, do not create new
+      ones.
+
+      - `sports.metadata` for NBA/NCAAB/NCAAF is `{}`.
+
+
+      ## Requirements
+
+
+      1. Insert `sports` (`WNBA`), `leagues` (`wnba`, same shape as sibling
+      rows), and `sport_market_type_availability` rows for WNBA covering at
+      least moneyline, spread and total, plus the other existing WNBA
+      team-market ids the client taxonomy already lists, matching the shape and
+      `sort_order` convention of NBA rows. Verify column shapes against
+      `packages/db/src/database.types.ts` and the sibling rows' definitions in
+      migrations; never guess.
+
+      2. Insert the CURRENT WNBA franchises as `participants`
+      (`participant_type='team'`, `sport='WNBA'`), with governed UUIDv5 ids,
+      `external_id = 'unit-talk:wnba:<stable key>'`, and the same
+      metadata/refusal semantics as NCAAF (external-id conflict, UUID conflict
+      and ambiguous-name refusals; existing rows preserved, never upserted).
+      Freeze the roster with sources and reconciliation in
+      `packages/db/src/wnba-participant-roster.json`, in the same shape as the
+      NCAAF fixture. Determine the current franchise list from authoritative
+      sources and record the evidence and capture date; do not rely on memory
+      (expansion franchises must be accounted for explicitly).
+
+      3. A `.down.sql` rollback that removes only what this migration created,
+      locking and checking references first, as NCAAF's does.
+
+      4. Extend `packages/db/src/canonical-reference-schema.test.ts` (or a
+      sibling test in `packages/db/src/`) with WNBA round-trip, refusal and
+      idempotency coverage in the same style as the NCAAF tests.
+
+      5. The Proof Coverage Guard (`.github/workflows/proof-coverage-guard.yml`)
+      exempts only the NCAAF migration. Do NOT edit that workflow or any
+      CI/merge-authority file in this lane. Satisfy the guard with genuine
+      live-DB proof in the diff. If that is impossible without a workflow
+      change, STOP and report exactly why.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026101203.md
+
+      - supabase/migrations/20261012180000_wnba_reference_catalog.sql
+
+      - db/migrations-rollback/20261012180000_wnba_reference_catalog.down.sql
+
+      - packages/db/src/wnba-participant-roster.json
+
+      - packages/db/src/canonical-reference-schema.test.ts
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101203.md
+    title: "WORK-2026101203 — Governed WNBA reference catalog: sport, league, market
+      availability and team participants"
+    description: >-
+      # WORK-2026101203 — Governed WNBA reference catalog: sport, league, market
+      availability and team participants
+
+
+      Tier: T1
+
+      Lane type: migration
+
+      Executor: codex
+
+
+      Repo-owned work order (tracker independence, ratified 2026-09-05). No
+      Linear issue exists for this identity by design. Product objective: WNBA
+      must be usable end-to-end in Smart Form as a contained Track Only sport,
+      preserving the working NCAAF path.
+
+
+      ## Objective
+
+
+      - Add ONE additive, reversible migration that makes WNBA a first-class
+      reference sport, reusing the NCAAF machinery
+      (`supabase/migrations/20261010170000_ncaaf_participant_catalog.sql`, its
+      `db/migrations-rollback/*.down.sql`,
+      `packages/db/src/ncaaf-participant-roster.json`,
+      `packages/db/src/canonical-reference-schema.test.ts`). Do not invent
+      another reference-data path.
+
+
+      ## Verified live facts (production read-only, 2026-10-12)
+
+
+      - `public.sports` has NO `WNBA` row; `picks.sport_id` has an FK to
+      `sports(id)`, so a WNBA pick cannot persist until the row exists. The
+      Smart Form sport list is built from `sports` plus
+      `sport_market_type_availability`.
+
+      - `public.leagues` has one row per sport (`nba`, `ncaab`, ...), none for
+      WNBA. `sport_market_type_availability` has 39 rows for NBA, 23 for NCAAB,
+      18 for NCAAF, none for WNBA.
+
+      - `public.participants` has 0 rows with `sport = 'WNBA'`. NBA has 30
+      teams, NCAAF 266 (governed). The WNBA market taxonomy already exists in
+      the client (`apps/smart-form/lib/market-types.ts`, `WNBA:`) and market
+      types in the DB; reuse existing `market_types` ids, do not create new
+      ones.
+
+      - `sports.metadata` for NBA/NCAAB/NCAAF is `{}`.
+
+
+      ## Requirements
+
+
+      1. Insert `sports` (`WNBA`), `leagues` (`wnba`, same shape as sibling
+      rows), and `sport_market_type_availability` rows for WNBA covering at
+      least moneyline, spread and total, plus the other existing WNBA
+      team-market ids the client taxonomy already lists, matching the shape and
+      `sort_order` convention of NBA rows. Verify column shapes against
+      `packages/db/src/database.types.ts` and the sibling rows' definitions in
+      migrations; never guess.
+
+      2. Insert the CURRENT WNBA franchises as `participants`
+      (`participant_type='team'`, `sport='WNBA'`), with governed UUIDv5 ids,
+      `external_id = 'unit-talk:wnba:<stable key>'`, and the same
+      metadata/refusal semantics as NCAAF (external-id conflict, UUID conflict
+      and ambiguous-name refusals; existing rows preserved, never upserted).
+      Freeze the roster with sources and reconciliation in
+      `packages/db/src/wnba-participant-roster.json`, in the same shape as the
+      NCAAF fixture. Determine the current franchise list from authoritative
+      sources and record the evidence and capture date; do not rely on memory
+      (expansion franchises must be accounted for explicitly).
+
+      3. A `.down.sql` rollback that removes only what this migration created,
+      locking and checking references first, as NCAAF's does.
+
+      4. Extend `packages/db/src/canonical-reference-schema.test.ts` (or a
+      sibling test in `packages/db/src/`) with WNBA round-trip, refusal and
+      idempotency coverage in the same style as the NCAAF tests.
+
+      5. The Proof Coverage Guard (`.github/workflows/proof-coverage-guard.yml`)
+      exempts only the NCAAF migration. Do NOT edit that workflow or any
+      CI/merge-authority file in this lane. Satisfy the guard with genuine
+      live-DB proof in the diff. If that is impossible without a workflow
+      change, STOP and report exactly why.
+
+
+      ## Acceptance Criteria
+
+
+      - One migration adds the WNBA `sports`, `leagues`,
+      `sport_market_type_availability` rows and every current WNBA franchise as
+      a governed team participant, with refusal semantics, a reversible rollback
+      and a frozen sourced roster.
+
+      - CI migration reversibility, the Proof Coverage Guard, the staging
+      writable-DB proof and `verify` pass at the exact head, with no CI or
+      merge-authority file edited.
+
+      - NCAAF migration, rollback, roster and tests are byte-identical to main.
+
+
+      ## Guardrails
+
+
+      - No production DDL, no migration apply, no staging/production data writes
+      outside the sanctioned CI proof, no deployment, no Discord, no provider
+      activation, no delivery or runtime-switch change.
+
+      - Do NOT touch `apps/smart-form` or `apps/api` (a parallel lane,
+      WORK-2026101204, owns the team-sport recognition change).
+
+      - Do not modify the NCAAF migration, rollback, roster or its tests.
+
+      - Migration filename timestamp must sort after `20261010170000`.
+
+
+      ## File Scope
+
+
+      - .ops/work/WORK-2026101203.md
+
+      - supabase/migrations/20261012180000_wnba_reference_catalog.sql
+
+      - db/migrations-rollback/20261012180000_wnba_reference_catalog.down.sql
+
+      - packages/db/src/wnba-participant-roster.json
+
+      - packages/db/src/canonical-reference-schema.test.ts
+
+
+      ## Exit Criteria
+
+
+      - PR on green CI with an exact-head executor-result; migration
+      reversibility, Proof Coverage Guard, staging writable-DB proof and
+      `verify` pass. Return for PM review and a separate production-apply
+      decision.
+    captured_at: 2026-10-12T15:55:24.884Z
+    description_sha256: 18eb361a36cb7fe41ab69ce4cbaf778bcef5ca8cdbf7d3b88a30925be60dfd77
+  contract_hash: 17a42578126e562b14fe075e63868847b440f6a95cd4cde2b7e2a1ebc8c0ae4b
