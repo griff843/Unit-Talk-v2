@@ -1,0 +1,111 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1978
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1978
+  objective: "Repair the contained deployment web build failure:
+    NEXT_PUBLIC_SITE_URL is required during /robots.txt page-data collection,
+    but production Docker build does not receive the existing configured website
+    origin."
+  acceptance_criteria:
+    - Pass existing UNIT_TALK_WEB_DOMAIN public HTTPS origin as
+      NEXT_PUBLIC_SITE_URL at image build time; fail closed when required input
+      is absent.
+    - Accept/export build input before Next.js build without placeholders,
+      credentials, or weakening site-config validation.
+    - Preserve Smart Form, Command Center, API-origin, canary and promotion
+      safeguards.
+    - Extend focused existing wiring tests; no package/dependency/lockfile
+      changes.
+    - Focused tests, pnpm verify, R-level artifacts, sanctioned staging T1 DB
+      proof, actual production-shaped web image build and exact-head CI support
+      the executor result.
+    - Return exact PR HEAD for independent PM review; do not merge or deploy.
+  guardrails: []
+  non_goals: []
+  required_evidence:
+    - "Failed contained deployment run:
+      [https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589](<http\
+      s://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589>) Approved
+      local packet:
+      .out/discord-completion-20261012/deployment-build-blocker-packet.md Frozen
+      failed source tag release-discord-contained-20261012-695e22d must never
+      move."
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      PM plan approval
+
+      Griff explicitly approved the bounded repair plan on 2026-10-12 in the
+      Discord completion task (reply: "Approve this bounded repair plan"). This
+      authorizes implementation and proof only; independent exact-head PM merge
+      review and new-SHA deployment authorization remain required.
+    - |-
+      Tier
+      T1
+    - |-
+      Authorized scope
+      * .github/workflows/deploy.yml
+      * deploy/production/Dockerfile.nextjs
+      * scripts/ci/nextjs-deploy-wiring.test.ts
+      * Normal issue-owned lane/sync/proof artifacts only.
+    - >-
+      Safety boundaries
+
+      No app/runtime behavior, migrations, routing, Discord configuration,
+      containment, Capitals disposition, pick submission or delivery release
+      changes. Do not retry old source to evade the defect. Production remains
+      rollback SHA 1a27b8f6eb3a45d57714a5aaf4465f900eb4241f.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1978/supply-canonical-public-website-origin-to-production-nextjs-image
+    title: Supply canonical public website origin to production Next.js image build
+    description: |-
+      ## Objective
+
+      Repair the contained deployment web build failure: NEXT_PUBLIC_SITE_URL is required during /robots.txt page-data collection, but production Docker build does not receive the existing configured website origin.
+
+      ## PM plan approval
+
+      Griff explicitly approved the bounded repair plan on 2026-10-12 in the Discord completion task (reply: "Approve this bounded repair plan"). This authorizes implementation and proof only; independent exact-head PM merge review and new-SHA deployment authorization remain required.
+
+      ## Tier
+
+      T1
+
+      ## Authorized scope
+
+      * .github/workflows/deploy.yml
+      * deploy/production/Dockerfile.nextjs
+      * scripts/ci/nextjs-deploy-wiring.test.ts
+      * Normal issue-owned lane/sync/proof artifacts only.
+
+      ## Acceptance Criteria
+
+      * Pass existing UNIT_TALK_WEB_DOMAIN public HTTPS origin as NEXT_PUBLIC_SITE_URL at image build time; fail closed when required input is absent.
+      * Accept/export build input before Next.js build without placeholders, credentials, or weakening site-config validation.
+      * Preserve Smart Form, Command Center, API-origin, canary and promotion safeguards.
+      * Extend focused existing wiring tests; no package/dependency/lockfile changes.
+      * Focused tests, pnpm verify, R-level artifacts, sanctioned staging T1 DB proof, actual production-shaped web image build and exact-head CI support the executor result.
+      * Return exact PR HEAD for independent PM review; do not merge or deploy.
+
+      ## Safety boundaries
+
+      No app/runtime behavior, migrations, routing, Discord configuration, containment, Capitals disposition, pick submission or delivery release changes. Do not retry old source to evade the defect. Production remains rollback SHA 1a27b8f6eb3a45d57714a5aaf4465f900eb4241f.
+
+      ## Evidence
+
+      Failed contained deployment run: [https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589](<https://github.com/griff843/Unit-Talk-v2/actions/runs/38313646589>)
+      Approved local packet: .out/discord-completion-20261012/deployment-build-blocker-packet.md
+      Frozen failed source tag release-discord-contained-20261012-695e22d must never move.
+    captured_at: 2026-10-12T22:37:03.562Z
+    description_sha256: 8b14e2f9fa16537e9655b99f283ede01d35696191e9bcaec1933eecc165322c6
+  contract_hash: f70fd59571a562bb3319feff0a96fccd123809a4bdf9a047112f7ad30d787c7e
