@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101201",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101201-order/.out/worktrees/codex__work-2026101201-member-tier-repair",
+  "branch": "codex/work-2026101201-member-tier-repair",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/work/WORK-2026101201.md",
+    "apps/api/src/member-picks.test.ts",
+    "apps/api/src/routes/member-tiers.ts",
+    "apps/discord-bot/src/api-client.ts",
+    "apps/discord-bot/src/discord-bot-foundation.test.ts",
+    "apps/discord-bot/src/handlers/member-tier-sync-handler.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/WORK-2026101201/diff-summary.md",
+    "docs/06_status/proof/WORK-2026101201/evidence.json",
+    "docs/06_status/proof/WORK-2026101201/verification.md",
+    "docs/06_status/proof/WORK-2026101201/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-10-12T05:11:07.470Z",
+  "heartbeat_at": "2026-10-12T05:11:07.470Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/work-2026101201-member-tier-repair.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-medium",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "2.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101201-order/.out/worktrees/codex__work-2026101201-member-tier-repair",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
