@@ -46,8 +46,12 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1737
 
 ## Rebind note
 
-Head 1779bdbf failed the UTV2-1949 temp-workspace guard in `pnpm test` (raw mkdtemp with no release in scope). The test now uses createTempWorkspace/releaseTempWorkspace. Re-run locally: proof-coverage-guard.test.ts and temp-workspace-cleanup-guard.test.ts, 16/16 pass; eslint clean. Proof re-anchored to 9cccfbd3711a6cf637b51d2892e0bde594a1c8e1, the last non-proof commit. No workflow, migration, roster or runtime file changed by this rebind.
+Head 1779bdbf failed the UTV2-1949 temp-workspace guard in `pnpm test` (raw mkdtemp with no release in scope). The test now uses createTempWorkspace/releaseTempWorkspace. Re-run locally: proof-coverage-guard.test.ts and temp-workspace-cleanup-guard.test.ts, 16/16 pass; eslint clean. Proof re-anchored to 1e344e0e4bb02e8eb197712c4e994a10452ad0a2, the last non-proof commit. No workflow, migration, roster or runtime file changed by this rebind.
 
 ## Resync note
 
-Resynced onto main (faef4df40) via ops:merge-wrapper pr-update-branch; the merge commit 9cccfbd3711a6cf637b51d2892e0bde594a1c8e1 brought in only other lanes' files. The guard workflow, REQUIRED_CI_CHECKS.md, the regression test and package.json are byte-identical to the prior head. Proof re-anchored to the merge commit.
+Resynced onto main (faef4df40) via ops:merge-wrapper pr-update-branch; the merge commit 1e344e0e4bb02e8eb197712c4e994a10452ad0a2 brought in only other lanes' files. The guard workflow, REQUIRED_CI_CHECKS.md, the regression test and package.json are byte-identical to the prior head. Proof re-anchored to the merge commit.
+
+## Second resync note
+
+Resynced again onto main (9aa369921, readiness-ledger refresh only) via ops:merge-wrapper pr-update-branch; merge commit 1e344e0e4bb02e8eb197712c4e994a10452ad0a2 changed only docs/06_status/readiness/readiness-score.json. Guard workflow, test, docs and package.json are byte-identical. Proof re-anchored to the merge commit.

@@ -7,11 +7,11 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "9cccfbd3711a6cf637b51d2892e0bde594a1c8e1",
+    "verified_source_sha": "1e344e0e4bb02e8eb197712c4e994a10452ad0a2",
     "evidence_commit_sha": "pending proof commit",
-    "current_pr_head_sha": "9cccfbd3711a6cf637b51d2892e0bde594a1c8e1",
+    "current_pr_head_sha": "1e344e0e4bb02e8eb197712c4e994a10452ad0a2",
     "sha_type": "pending_merge",
-    "bound_at": "2026-10-12T04:51:32.000Z"
+    "bound_at": "2026-10-12T05:17:17.000Z"
   },
   "static_proof": {
     "status": "PASS",
