@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { canonicalTables } from './index.js';
 import { canonicalSchema } from './schema.js';
 
@@ -852,5 +855,220 @@ test('the in-memory bundle carries no QA player fixtures unless the QA seed flag
     );
   } finally {
     if (previous !== undefined) process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
+  }
+});
+
+type NcaafRosterRow = {
+  id: string;
+  externalId: string;
+  displayName: string;
+  ncaaOrgId: number;
+  subdivision: 'FBS' | 'FCS';
+  abbreviation: string;
+  institutionConference: string;
+};
+
+type NcaafRoster = {
+  capturedAt: string;
+  season: number;
+  academicYear: number;
+  sources: Array<{ url: string; sha256: string; count: number }>;
+  reconciliation: {
+    standingsMatched: number;
+    membershipOnly: number[];
+    excludedStandingsOnly: string[];
+  };
+  participants: NcaafRosterRow[];
+};
+
+const ncaafRoster = JSON.parse(
+  readFileSync(
+    new URL('./ncaaf-participant-roster.json', import.meta.url),
+    'utf8',
+  ),
+) as NcaafRoster;
+
+function governedNcaafParticipantId(ncaaOrgId: number): string {
+  const namespace = Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex');
+  const bytes = createHash('sha1')
+    .update(namespace)
+    .update(`unit-talk:participant:ncaaf:ncaa:${ncaaOrgId}`)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+test('the frozen 2026 Division I football roster carries reviewed membership evidence', () => {
+  assert.equal(ncaafRoster.season, 2026);
+  assert.equal(ncaafRoster.academicYear, 2027);
+  assert.equal(ncaafRoster.participants.length, 266);
+  assert.equal(
+    ncaafRoster.participants.filter((row) => row.subdivision === 'FBS').length,
+    138,
+  );
+  assert.equal(
+    ncaafRoster.participants.filter((row) => row.subdivision === 'FCS').length,
+    128,
+  );
+  assert.deepEqual(
+    ncaafRoster.sources.map(({ count }) => count),
+    [138, 128],
+  );
+  assert.ok(
+    ncaafRoster.sources.every(({ url }) =>
+      url.startsWith('https://web3.ncaa.org/directory/api/'),
+    ),
+  );
+  assert.ok(
+    ncaafRoster.sources.every(({ sha256 }) => /^[a-f0-9]{64}$/.test(sha256)),
+  );
+  assert.equal(ncaafRoster.reconciliation.standingsMatched, 264);
+  assert.deepEqual(ncaafRoster.reconciliation.membershipOnly, [470, 11740]);
+  assert.deepEqual(ncaafRoster.reconciliation.excludedStandingsOnly, [
+    'Saint Francis',
+  ]);
+});
+
+test('NCAAF participant identities are unique, deterministic, and school-qualified', () => {
+  const ids = new Set<string>();
+  const externalIds = new Set<string>();
+  const displayNames = new Set<string>();
+  const mascotOnlyNames = new Set([
+    'bears',
+    'bulldogs',
+    'eagles',
+    'panthers',
+    'tigers',
+    'wildcats',
+  ]);
+
+  for (const row of ncaafRoster.participants) {
+    assert.equal(row.id, governedNcaafParticipantId(row.ncaaOrgId));
+    assert.equal(row.externalId, `unit-talk:ncaaf:ncaa:${row.ncaaOrgId}`);
+    assert.ok(!ids.has(row.id), `duplicate governed UUID: ${row.id}`);
+    assert.ok(
+      !externalIds.has(row.externalId),
+      `duplicate external id: ${row.externalId}`,
+    );
+    assert.ok(
+      !displayNames.has(row.displayName.toLowerCase()),
+      `duplicate school name: ${row.displayName}`,
+    );
+    assert.ok(
+      !mascotOnlyNames.has(row.displayName.toLowerCase()),
+      `mascot-only display name is not canonical: ${row.displayName}`,
+    );
+    assert.ok(row.abbreviation.trim().length > 0);
+    assert.ok(row.institutionConference.trim().length > 0);
+    ids.add(row.id);
+    externalIds.add(row.externalId);
+    displayNames.add(row.displayName.toLowerCase());
+  }
+});
+
+test('the NCAAF catalog migration is participants-only, additive, and conflict-refusing', () => {
+  const migration = readFileSync(
+    new URL(
+      '../../../supabase/migrations/20261010170000_ncaaf_participant_catalog.sql',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const rollback = readFileSync(
+    new URL(
+      '../../../db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+
+  assert.match(migration, /INSERT INTO public\.participants/);
+  assert.doesNotMatch(
+    migration,
+    /(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)?\s*public\.teams/i,
+  );
+  assert.doesNotMatch(migration, /ON\s+CONFLICT/i);
+  assert.match(migration, /canonical external identity conflict/);
+  assert.match(migration, /governed UUID conflict/);
+  assert.match(migration, /WHERE NOT EXISTS/);
+  assert.match(migration, /'seedIssue', 'UTV2-1971'/);
+  assert.match(rollback, /DELETE FROM public\.participants/);
+  assert.match(rollback, /metadata->>'seedIssue' = 'UTV2-1971'/);
+  assert.match(rollback, /rollback refused: seeded participant is referenced/);
+  assert.doesNotMatch(rollback, /\b(?:CREATE|ALTER)\s+TABLE\b/i);
+});
+
+
+const participantCatalogTestAdmin = process.env['PARTICIPANT_CATALOG_TEST_ADMIN_URL'];
+
+test('NCAAF rollback serializes concurrent references and refuses committed downstream use', {
+  skip: !participantCatalogTestAdmin,
+}, async () => {
+  assert.ok(participantCatalogTestAdmin);
+  const admin = new URL(participantCatalogTestAdmin);
+  assert.ok(['127.0.0.1', 'localhost', '::1'].includes(admin.hostname));
+  assert.equal(admin.pathname, '/postgres');
+  assert.equal(admin.search, '');
+  const database = `participant_catalog_drill_ncaaf_${randomUUID().replaceAll('-', '').slice(0, 24)}`;
+  const scratch = new URL(admin);
+  scratch.pathname = `/${database}`;
+  const query = (dsn: string, sql: string) => execFileSync('psql', [
+    dsn, '-X', '-At', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose', '-c', sql,
+  ], { encoding: 'utf8', timeout: 10_000 }).trim();
+  const execute = (sql: string) => {
+    const child = spawn('psql', [scratch.href, '-X', '-At', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose']);
+    let stderr = '';
+    child.stdout.resume();
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    const completed = new Promise<{ code: number | null; stderr: string }>((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', (code) => resolve({ code, stderr }));
+    });
+    child.stdin.end(sql);
+    return completed;
+  };
+  const waitForPause = async () => {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if (query(scratch.href, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='PgSleep');") === 't') return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.fail('controlled transaction did not reach its test-only pause');
+  };
+  const migration = readFileSync(new URL('../../../supabase/migrations/20261010170000_ncaaf_participant_catalog.sql', import.meta.url), 'utf8');
+  const rollback = readFileSync(new URL('../../../db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql', import.meta.url), 'utf8');
+  const participantId = ncaafRoster.participants[0]?.id;
+  assert.ok(participantId);
+  query(admin.href, `CREATE DATABASE ${database}`);
+  try {
+    query(scratch.href, "CREATE TABLE public.participants(id uuid PRIMARY KEY, external_id text UNIQUE, participant_type text NOT NULL, sport text, league text, display_name text NOT NULL, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());");
+    query(scratch.href, migration);
+    query(scratch.href, 'CREATE TABLE public.concurrent_reference(id uuid REFERENCES public.participants(id) ON DELETE CASCADE);');
+    // A test-only pause exposes the gap between the actual reference scan and DELETE.
+    const firstRollback = execute(rollback.replace('DELETE FROM public.participants', 'SELECT pg_sleep(2);\nDELETE FROM public.participants'));
+    await waitForPause();
+    const insert = await execute(`SET lock_timeout='200ms'; INSERT INTO public.concurrent_reference VALUES ('${participantId}');`);
+    assert.notEqual(insert.code, 0, 'concurrent reference slipped past the rollback scan');
+    assert.match(insert.stderr, /55P03/);
+    assert.equal((await firstRollback).code, 0);
+    assert.equal(query(scratch.href, 'SELECT count(*) FROM public.concurrent_reference;'), '0');
+
+    query(scratch.href, migration);
+    const snapshot = () => query(scratch.href, 'SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM public.participants p;');
+    const before = snapshot();
+    const writer = execute(`BEGIN; INSERT INTO public.concurrent_reference VALUES ('${participantId}'); SELECT pg_sleep(2); COMMIT;`);
+    await waitForPause();
+    const secondRollback = execute(rollback);
+    assert.equal((await writer).code, 0);
+    const refused = await secondRollback;
+    assert.notEqual(refused.code, 0);
+    assert.match(refused.stderr, /P0001/);
+    assert.match(refused.stderr, /seeded participant is referenced/);
+    assert.equal(snapshot(), before, 'rollback changed participant data despite a committed reference');
+    assert.equal(query(scratch.href, 'SELECT count(*) FROM public.concurrent_reference;'), '1');
+  } finally {
+    query(admin.href, `DROP DATABASE ${database} WITH (FORCE)`);
   }
 });
