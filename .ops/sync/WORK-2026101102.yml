@@ -1,0 +1,115 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - WORK-2026101102
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: WORK-2026101102
+  objective: "WORK-2026101102 — Proof Coverage Guard: bounded participant-catalog
+    proof classification"
+  acceptance_criteria:
+    - "`.github/workflows/proof-coverage-guard.yml` recognises exactly one
+      pairing as satisfied proof: the migration
+      `supabase/migrations/20261010170000_ncaaf_participant_catalog.sql` with
+      `packages/db/src/canonical-reference-schema.test.ts` in the same change
+      set."
+    - Every other sensitive path, including any other migration, keeps the
+      existing accepted-proof rules. No generic `packages/db` test glob is added
+      and the global proof pattern list is unchanged.
+    - "Regression tests prove: the recognised pairing passes; an unrelated
+      migration with the canonical-reference test still fails; existing accepted
+      proof paths still pass; no generic packages/db test glob."
+    - "`docs/05_operations/REQUIRED_CI_CHECKS.md` documents only the bounded
+      classification; the guard's advisory/required status and branch protection
+      are unchanged."
+    - The new test is registered in `package.json` `test:ops`.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      WORK-2026101102 — Proof Coverage Guard: bounded participant-catalog proof
+      classification
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      ## File Scope
+
+
+      - .github/workflows/proof-coverage-guard.yml
+
+      - docs/05_operations/REQUIRED_CI_CHECKS.md
+
+      - scripts/ci/proof-coverage-guard.test.ts
+
+      - package.json
+
+      - .ops/work/WORK-2026101102.md
+  source:
+    kind: local-description
+    issue_url: file:.ops/work/WORK-2026101102.md
+    title: "WORK-2026101102 — Proof Coverage Guard: bounded participant-catalog
+      proof classification"
+    description: >-
+      # WORK-2026101102 — Proof Coverage Guard: bounded participant-catalog
+      proof classification
+
+
+      Tier: T1
+
+      Lane type: governance
+
+      Executor: claude
+
+
+      ## Acceptance Criteria
+
+
+      - `.github/workflows/proof-coverage-guard.yml` recognises exactly one
+      pairing as satisfied proof: the migration
+      `supabase/migrations/20261010170000_ncaaf_participant_catalog.sql` with
+      `packages/db/src/canonical-reference-schema.test.ts` in the same change
+      set.
+
+      - Every other sensitive path, including any other migration, keeps the
+      existing accepted-proof rules. No generic `packages/db` test glob is added
+      and the global proof pattern list is unchanged.
+
+      - Regression tests prove: the recognised pairing passes; an unrelated
+      migration with the canonical-reference test still fails; existing accepted
+      proof paths still pass; no generic packages/db test glob.
+
+      - `docs/05_operations/REQUIRED_CI_CHECKS.md` documents only the bounded
+      classification; the guard's advisory/required status and branch protection
+      are unchanged.
+
+      - The new test is registered in `package.json` `test:ops`.
+
+
+      ## File Scope
+
+
+      - .github/workflows/proof-coverage-guard.yml
+
+      - docs/05_operations/REQUIRED_CI_CHECKS.md
+
+      - scripts/ci/proof-coverage-guard.test.ts
+
+      - package.json
+
+      - .ops/work/WORK-2026101102.md
+    captured_at: 2026-10-11T15:30:24.135Z
+    description_sha256: 7678bb13bf6146777ab8b066afc135c25edd2444e038fb52f70bab2c17f11d4d
+  contract_hash: 74f839be9d5ac609167e054ab8a0f6acd039ecb60625c28e2f216e0f2d674e5e
