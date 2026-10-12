@@ -111,10 +111,19 @@ task_contract:
       idempotency coverage in the same style as the NCAAF tests.
 
       5. The Proof Coverage Guard (`.github/workflows/proof-coverage-guard.yml`)
-      exempts only the NCAAF migration. Do NOT edit that workflow or any
-      CI/merge-authority file in this lane. Satisfy the guard with genuine
-      live-DB proof in the diff. If that is impossible without a workflow
-      change, STOP and report exactly why.
+      exempts only the NCAAF migration, and `canonical-reference-schema.test.ts`
+      is not an accepted proof path. Do NOT edit that workflow or any
+      CI/merge-authority file. Add a genuine writable-DB proof script at
+      `packages/db/src/scripts/work-2026101203-wnba-reference-catalog-proof.ts`
+      (accepted path `packages/*/src/scripts/*.ts`) that applies the migration
+      on the governed staging database, asserts the WNBA
+      sport/league/availability/participant rows and the refusal semantics, and
+      is refused against any non-staging target (`ci:assert-staging` pattern,
+      see sibling proof scripts). It is runnable on demand via `pnpm exec tsx
+      <path>`; do NOT edit `package.json` or any workflow to wire it (if you
+      believe wiring is required, STOP and report). The migration-reversibility
+      gate already executes `canonical-reference-schema.test.ts` against a
+      scratch Postgres.
 
 
       ## File Scope
@@ -129,6 +138,8 @@ task_contract:
       - packages/db/src/wnba-participant-roster.json
 
       - packages/db/src/canonical-reference-schema.test.ts
+
+      - packages/db/src/scripts/work-2026101203-wnba-reference-catalog-proof.ts
   source:
     kind: local-description
     issue_url: file:.ops/work/WORK-2026101203.md
@@ -215,10 +226,19 @@ task_contract:
       idempotency coverage in the same style as the NCAAF tests.
 
       5. The Proof Coverage Guard (`.github/workflows/proof-coverage-guard.yml`)
-      exempts only the NCAAF migration. Do NOT edit that workflow or any
-      CI/merge-authority file in this lane. Satisfy the guard with genuine
-      live-DB proof in the diff. If that is impossible without a workflow
-      change, STOP and report exactly why.
+      exempts only the NCAAF migration, and `canonical-reference-schema.test.ts`
+      is not an accepted proof path. Do NOT edit that workflow or any
+      CI/merge-authority file. Add a genuine writable-DB proof script at
+      `packages/db/src/scripts/work-2026101203-wnba-reference-catalog-proof.ts`
+      (accepted path `packages/*/src/scripts/*.ts`) that applies the migration
+      on the governed staging database, asserts the WNBA
+      sport/league/availability/participant rows and the refusal semantics, and
+      is refused against any non-staging target (`ci:assert-staging` pattern,
+      see sibling proof scripts). It is runnable on demand via `pnpm exec tsx
+      <path>`; do NOT edit `package.json` or any workflow to wire it (if you
+      believe wiring is required, STOP and report). The migration-reversibility
+      gate already executes `canonical-reference-schema.test.ts` against a
+      scratch Postgres.
 
 
       ## Acceptance Criteria
@@ -264,6 +284,8 @@ task_contract:
 
       - packages/db/src/canonical-reference-schema.test.ts
 
+      - packages/db/src/scripts/work-2026101203-wnba-reference-catalog-proof.ts
+
 
       ## Exit Criteria
 
@@ -272,6 +294,6 @@ task_contract:
       reversibility, Proof Coverage Guard, staging writable-DB proof and
       `verify` pass. Return for PM review and a separate production-apply
       decision.
-    captured_at: 2026-10-12T15:55:24.884Z
-    description_sha256: 18eb361a36cb7fe41ab69ce4cbaf778bcef5ca8cdbf7d3b88a30925be60dfd77
-  contract_hash: 17a42578126e562b14fe075e63868847b440f6a95cd4cde2b7e2a1ebc8c0ae4b
+    captured_at: 2026-10-12T16:10:33.835Z
+    description_sha256: 2e0303ac47bcde827f3062b02fa396598852e1c503c3f4fd974e50038ac3c348
+  contract_hash: eac1c1cff25700b177de3bcc40fca6848343bab06e73916ff3972bc61c34966e

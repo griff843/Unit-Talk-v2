@@ -14,6 +14,7 @@
     ".ops/work/WORK-2026101203.md",
     "db/migrations-rollback/20261012180000_wnba_reference_catalog.down.sql",
     "packages/db/src/canonical-reference-schema.test.ts",
+    "packages/db/src/scripts/work-2026101203-wnba-reference-catalog-proof.ts",
     "packages/db/src/wnba-participant-roster.json",
     "supabase/migrations/20261012180000_wnba_reference_catalog.sql"
   ],
