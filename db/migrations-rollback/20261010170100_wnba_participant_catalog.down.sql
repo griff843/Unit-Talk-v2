@@ -6,21 +6,21 @@ BEGIN;
 SELECT p.id
 FROM public.participants AS p
 WHERE p.id = ANY (ARRAY[
-  'c0fa5bc8-30d0-56a6-b265-1baa5778cd1f'::uuid,
-  '59f76962-c222-5e9c-bc30-67e7bbaaf524'::uuid,
-  '08e883a0-2f78-56c0-8ba0-6ddccdb1a615'::uuid,
-  'e548c6b6-44ad-5dae-8977-5ea0e23e7691'::uuid,
-  '194e5e5b-3b5f-5c11-82da-3afc662e8972'::uuid,
-  'ed9242cd-8188-5b7d-b187-4d9658dcade0'::uuid,
-  '99f4f632-a531-5d35-8410-ed30b0d82733'::uuid,
-  '73ac7b96-d082-5ab6-8b0a-7c792331a6be'::uuid,
-  '2235e78d-43fb-56ec-b68d-fc6e7ed910dd'::uuid,
-  '193e2297-4de0-5523-81dd-540acfa5ccc6'::uuid,
-  'c075c102-a873-5b6f-b2f3-dae2b70bc207'::uuid,
-  '1408d5a9-593f-5ab5-b606-5d527dbe6cfd'::uuid,
-  '364693b2-aa0d-587c-9024-1a6b7e6e0b5a'::uuid,
-  '0206969a-f1f9-5122-aadd-2af77c3e3b5e'::uuid,
-  '9785af36-9db6-507d-85c0-5f25907c949c'::uuid
+  '75907305-08cc-5d4d-8bc5-8f5555e82264'::uuid,
+  'd5feb346-6e14-56fd-8bc8-f376f40ac35a'::uuid,
+  '8db73de3-539f-5659-97b1-0f968bddd54b'::uuid,
+  'e26ce36a-2779-5ea2-91d5-ce09bf4f7af7'::uuid,
+  'f1b6b85c-504a-5946-aafe-47a24519fe06'::uuid,
+  '7a9165ab-e4c9-57d3-bb2b-bf54c7a30221'::uuid,
+  '7b7c5b93-35f0-53cf-b3cc-418cb29e799b'::uuid,
+  'f28cd7fb-83ff-535e-9456-912e11b53df8'::uuid,
+  '4197a406-7f4e-5566-a7c4-322ed9d7e11e'::uuid,
+  '173431fa-cae4-57a4-8708-163a1eafc34d'::uuid,
+  'f7e9621e-3e19-5aa4-a976-b2b33178f532'::uuid,
+  '18c9304f-fa49-56aa-abe4-358849d065a4'::uuid,
+  '9d7fdebb-15db-5bc2-a6e6-3c95a632f631'::uuid,
+  'd0877f5b-77b8-5657-b909-5ca06f69d3a9'::uuid,
+  '9f347912-95b7-53bd-8c2f-beaafdcd8766'::uuid
 ]::uuid[])
   AND p.metadata->>'seedIssue' = 'UTV2-1972'
 ORDER BY p.id
@@ -29,21 +29,21 @@ FOR UPDATE;
 DO $rollback$
 DECLARE
   governed_ids uuid[] := ARRAY[
-    'c0fa5bc8-30d0-56a6-b265-1baa5778cd1f'::uuid,
-    '59f76962-c222-5e9c-bc30-67e7bbaaf524'::uuid,
-    '08e883a0-2f78-56c0-8ba0-6ddccdb1a615'::uuid,
-    'e548c6b6-44ad-5dae-8977-5ea0e23e7691'::uuid,
-    '194e5e5b-3b5f-5c11-82da-3afc662e8972'::uuid,
-    'ed9242cd-8188-5b7d-b187-4d9658dcade0'::uuid,
-    '99f4f632-a531-5d35-8410-ed30b0d82733'::uuid,
-    '73ac7b96-d082-5ab6-8b0a-7c792331a6be'::uuid,
-    '2235e78d-43fb-56ec-b68d-fc6e7ed910dd'::uuid,
-    '193e2297-4de0-5523-81dd-540acfa5ccc6'::uuid,
-    'c075c102-a873-5b6f-b2f3-dae2b70bc207'::uuid,
-    '1408d5a9-593f-5ab5-b606-5d527dbe6cfd'::uuid,
-    '364693b2-aa0d-587c-9024-1a6b7e6e0b5a'::uuid,
-    '0206969a-f1f9-5122-aadd-2af77c3e3b5e'::uuid,
-    '9785af36-9db6-507d-85c0-5f25907c949c'::uuid
+    '75907305-08cc-5d4d-8bc5-8f5555e82264'::uuid,
+    'd5feb346-6e14-56fd-8bc8-f376f40ac35a'::uuid,
+    '8db73de3-539f-5659-97b1-0f968bddd54b'::uuid,
+    'e26ce36a-2779-5ea2-91d5-ce09bf4f7af7'::uuid,
+    'f1b6b85c-504a-5946-aafe-47a24519fe06'::uuid,
+    '7a9165ab-e4c9-57d3-bb2b-bf54c7a30221'::uuid,
+    '7b7c5b93-35f0-53cf-b3cc-418cb29e799b'::uuid,
+    'f28cd7fb-83ff-535e-9456-912e11b53df8'::uuid,
+    '4197a406-7f4e-5566-a7c4-322ed9d7e11e'::uuid,
+    '173431fa-cae4-57a4-8708-163a1eafc34d'::uuid,
+    'f7e9621e-3e19-5aa4-a976-b2b33178f532'::uuid,
+    '18c9304f-fa49-56aa-abe4-358849d065a4'::uuid,
+    '9d7fdebb-15db-5bc2-a6e6-3c95a632f631'::uuid,
+    'd0877f5b-77b8-5657-b909-5ca06f69d3a9'::uuid,
+    '9f347912-95b7-53bd-8c2f-beaafdcd8766'::uuid
   ];
   reference record;
   is_referenced boolean;
@@ -96,21 +96,21 @@ $rollback$;
 
 DELETE FROM public.participants AS p
 WHERE p.id = ANY (ARRAY[
-  'c0fa5bc8-30d0-56a6-b265-1baa5778cd1f'::uuid,
-  '59f76962-c222-5e9c-bc30-67e7bbaaf524'::uuid,
-  '08e883a0-2f78-56c0-8ba0-6ddccdb1a615'::uuid,
-  'e548c6b6-44ad-5dae-8977-5ea0e23e7691'::uuid,
-  '194e5e5b-3b5f-5c11-82da-3afc662e8972'::uuid,
-  'ed9242cd-8188-5b7d-b187-4d9658dcade0'::uuid,
-  '99f4f632-a531-5d35-8410-ed30b0d82733'::uuid,
-  '73ac7b96-d082-5ab6-8b0a-7c792331a6be'::uuid,
-  '2235e78d-43fb-56ec-b68d-fc6e7ed910dd'::uuid,
-  '193e2297-4de0-5523-81dd-540acfa5ccc6'::uuid,
-  'c075c102-a873-5b6f-b2f3-dae2b70bc207'::uuid,
-  '1408d5a9-593f-5ab5-b606-5d527dbe6cfd'::uuid,
-  '364693b2-aa0d-587c-9024-1a6b7e6e0b5a'::uuid,
-  '0206969a-f1f9-5122-aadd-2af77c3e3b5e'::uuid,
-  '9785af36-9db6-507d-85c0-5f25907c949c'::uuid
+  '75907305-08cc-5d4d-8bc5-8f5555e82264'::uuid,
+  'd5feb346-6e14-56fd-8bc8-f376f40ac35a'::uuid,
+  '8db73de3-539f-5659-97b1-0f968bddd54b'::uuid,
+  'e26ce36a-2779-5ea2-91d5-ce09bf4f7af7'::uuid,
+  'f1b6b85c-504a-5946-aafe-47a24519fe06'::uuid,
+  '7a9165ab-e4c9-57d3-bb2b-bf54c7a30221'::uuid,
+  '7b7c5b93-35f0-53cf-b3cc-418cb29e799b'::uuid,
+  'f28cd7fb-83ff-535e-9456-912e11b53df8'::uuid,
+  '4197a406-7f4e-5566-a7c4-322ed9d7e11e'::uuid,
+  '173431fa-cae4-57a4-8708-163a1eafc34d'::uuid,
+  'f7e9621e-3e19-5aa4-a976-b2b33178f532'::uuid,
+  '18c9304f-fa49-56aa-abe4-358849d065a4'::uuid,
+  '9d7fdebb-15db-5bc2-a6e6-3c95a632f631'::uuid,
+  'd0877f5b-77b8-5657-b909-5ca06f69d3a9'::uuid,
+  '9f347912-95b7-53bd-8c2f-beaafdcd8766'::uuid
 ]::uuid[])
   AND p.metadata->>'seedIssue' = 'UTV2-1972';
 

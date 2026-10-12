@@ -1023,7 +1023,7 @@ function governedWnbaParticipantId(slug: string): string {
   const namespace = Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex');
   const bytes = createHash('sha1')
     .update(namespace)
-    .update(`unit-talk:participant:wnba:franchise:${slug}`)
+    .update(`unit-talk:participant:wnba:${slug}`)
     .digest()
     .subarray(0, 16);
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
