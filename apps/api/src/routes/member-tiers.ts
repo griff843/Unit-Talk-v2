@@ -4,6 +4,7 @@ import type { ApiRuntimeDependencies } from '../server.js';
 import { readJsonBody } from '../server.js';
 import type { AuthContext } from '../auth.js';
 import { writeJson } from '../http-utils.js';
+import { computeTrialEffectiveUntil } from '../trial-expiry-service.js';
 
 /**
  * The Discord bot's service key authenticates as `submitter` with this
@@ -34,13 +35,8 @@ function isDiscordBotCaller(auth: AuthContext): boolean {
   return auth.role === 'submitter' && auth.identity.startsWith(DISCORD_BOT_IDENTITY_PREFIX);
 }
 
-/**
- * The member-facing tiers the bot may sync from Discord roles. `capper` and
- * `operator` are authority-bearing classifications and stay operator-only: the
- * bot's sync of those roles is refused (and logged by the bot as a structured
- * `member_tier_sync.failed`). `free` is not a role the bot maps.
- */
-const BOT_SYNCABLE_TIERS: readonly MemberTier[] = ['trial', 'vip', 'vip-plus'];
+/** Discord-mapped member state; this does not change the caller's auth role. */
+const BOT_SYNCABLE_TIERS: readonly MemberTier[] = ['trial', 'vip', 'vip-plus', 'capper', 'operator'];
 
 export async function handleMemberTiers(
   request: IncomingMessage,
@@ -108,6 +104,7 @@ export async function handleMemberTiers(
       tier: tier as MemberTier,
       source: validSource,
       changedBy: auth.identity,
+      ...(botCaller && tier === 'trial' ? { effectiveUntil: computeTrialEffectiveUntil() } : {}),
     });
     entityId = row.id;
   } else {

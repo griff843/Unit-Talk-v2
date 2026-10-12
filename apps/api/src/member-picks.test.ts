@@ -5,6 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { spawnSync } from 'node:child_process';
 import type { AddressInfo } from 'node:net';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
@@ -18,6 +19,7 @@ import { createApiServer } from './server.js';
 import { canReadMemberPicks } from './routes/member-picks.js';
 import { canSyncMemberTiers, handleMemberTiers } from './routes/member-tiers.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
+import { authenticateRequest, authorizeRoute, loadAuthConfig } from './auth.js';
 
 function authorization(decision: 'authorized' | 'refused') {
   return {
@@ -401,11 +403,11 @@ test('the bot key syncs a tier: 200, source forced to discord-role, changed_by i
   });
 });
 
-test('the bot key cannot write capper, operator or free: refused with nothing written', async () => {
+test('the bot key rejects free but accepts all five Discord-mapped tiers', async () => {
   await withAuthKeys(async () => {
     const repositories = createInMemoryRepositoryBundle();
     await withServer(repositories, async (base) => {
-      for (const tier of ['capper', 'operator', 'free']) {
+      for (const tier of ['free']) {
         for (const action of ['activate', 'deactivate']) {
           const { status, raw } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, {
             ...SYNC_BODY,
@@ -421,8 +423,8 @@ test('the bot key cannot write capper, operator or free: refused with nothing wr
         await repositories.audit.listRecentByEntityType('member_tiers', '2000-01-01T00:00:00.000Z', 'member_tier.synced'),
         [],
       );
-      // The member-facing tiers are still accepted.
-      for (const tier of ['trial', 'vip', 'vip-plus']) {
+      // All configured Discord-mapped tiers are accepted.
+      for (const tier of ['trial', 'vip', 'vip-plus', 'capper', 'operator']) {
         const { status } = await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, tier });
         assert.equal(status, 200, tier);
       }
@@ -531,6 +533,72 @@ test('an operator key still syncs a tier, keeps its source, records its identity
       );
       assert.equal(audit.length, 1);
       assert.equal(audit[0]?.actor, 'operator:op-membe');
+    });
+  });
+});
+
+test('bot Trial activation passes a bounded expiry to the existing repository API', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    const activate = repositories.tiers.activateTier.bind(repositories.tiers);
+    const inputs: Array<Parameters<typeof activate>[0]> = [];
+    repositories.tiers.activateTier = async (input) => {
+      inputs.push(input);
+      return activate(input);
+    };
+    await withServer(repositories, async (base) => {
+      const before = Date.now();
+      assert.equal((await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, SYNC_BODY)).status, 200);
+      const after = Date.now();
+      const raw = Number.parseInt(process.env.TRIAL_DURATION_DAYS ?? '', 10);
+      const days = Number.isFinite(raw) && raw > 0 ? raw : 7;
+      const expiry = inputs[0]?.effectiveUntil;
+      assert.ok(expiry instanceof Date, 'activateTier receives a non-null Date');
+      assert.ok(expiry.getTime() >= before + days * 86_400_000);
+      assert.ok(expiry.getTime() <= after + days * 86_400_000);
+      assert.equal((await repositories.tiers.getTierHistory(BOT_USER))[0]?.effective_until, expiry.toISOString());
+      for (const tier of ['vip', 'vip-plus']) {
+        assert.equal((await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, tier })).status, 200);
+        assert.equal(inputs.at(-1)?.effectiveUntil, undefined, tier);
+        assert.equal((await repositories.tiers.getTierHistory(BOT_USER)).find((row) => row.tier === tier)?.effective_until, null);
+      }
+    });
+  });
+});
+
+test('bot Trial expiry honors both the seven-day default and configured duration in fresh API processes', () => {
+  for (const duration of [undefined, '11']) {
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    if (duration === undefined) delete env.TRIAL_DURATION_DAYS;
+    else env.TRIAL_DURATION_DAYS = duration;
+    const result = spawnSync(process.execPath, [
+      '--import', 'tsx', '--test', '--test-reporter=tap',
+      '--test-name-pattern=bot Trial activation passes',
+      'apps/api/src/member-picks.test.ts',
+    ], { env, encoding: 'utf8', timeout: 30_000 });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /# pass 1/u);
+  }
+});
+
+test('Capper and Operator member-tier sync never elevates the bot caller or bypasses route authorization', async () => {
+  await withAuthKeys(async () => {
+    const repositories = createInMemoryRepositoryBundle();
+    await withServer(repositories, async (base) => {
+      for (const tier of ['capper', 'operator']) {
+        assert.equal((await postMemberTier(base, AUTH_KEYS.UNIT_TALK_BOT_API_KEY, { ...SYNC_BODY, tier })).status, 200);
+        const auth = await authenticateRequest({ headers: { authorization: `Bearer ${AUTH_KEYS.UNIT_TALK_BOT_API_KEY}` } } as Parameters<typeof authenticateRequest>[0], loadAuthConfig(process.env));
+        assert.ok(auth);
+        assert.equal(auth.role, 'submitter');
+        assert.equal(auth.identity, BOT_IDENTITY);
+        assert.equal(authorizeRoute(auth, '/api/member-tiers'), false);
+        const audit = await repositories.audit.listRecentByEntityType('member_tiers', '2000-01-01T00:00:00.000Z', 'member_tier.synced');
+        assert.ok(audit.every((row) => row.actor === BOT_IDENTITY && (row.payload as Record<string, unknown>).callerRole === 'submitter'));
+      }
+      const tiers = await repositories.tiers.getActiveTiers(BOT_USER);
+      assert.ok(tiers.some((row) => row.tier === 'capper'));
+      assert.ok(tiers.some((row) => row.tier === 'operator'));
     });
   });
 });

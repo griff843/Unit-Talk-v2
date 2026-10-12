@@ -2820,7 +2820,7 @@ test('createApiClient.syncMemberTier logs a network failure with a null status',
 // createMemberTierSyncHandler tests
 // ---------------------------------------------------------------------------
 
-test('createMemberTierSyncHandler activates tier when a tier-relevant role is added', async () => {
+test('createMemberTierSyncHandler activates all five configured Discord-mapped tiers', async () => {
   const synced: Array<{ discord_id: string; tier: string; action: string }> =
     [];
   const mockApiClient: ApiClient = {
@@ -2844,15 +2844,23 @@ test('createMemberTierSyncHandler activates tier when a tier-relevant role is ad
   };
   const newMember = {
     id: 'user-999',
-    roles: { cache: { keys: () => ['role-vip'].values() } },
+    roles: {
+      cache: {
+        keys: () => ['role-trial', 'role-vip', 'role-vip-plus', 'role-capper', 'role-operator'].values(),
+      },
+    },
   };
 
   await handler(oldMember as never, newMember as never);
 
-  assert.equal(synced.length, 1);
-  assert.equal(synced[0]?.discord_id, 'user-999');
-  assert.equal(synced[0]?.tier, 'vip');
-  assert.equal(synced[0]?.action, 'activate');
+  assert.deepEqual(
+    synced.sort((left, right) => left.tier.localeCompare(right.tier)),
+    ['capper', 'operator', 'trial', 'vip', 'vip-plus'].map((tier) => ({
+      discord_id: 'user-999',
+      tier,
+      action: 'activate',
+    })),
+  );
 });
 
 test('createMemberTierSyncHandler deactivates tier when a tier-relevant role is removed', async () => {
