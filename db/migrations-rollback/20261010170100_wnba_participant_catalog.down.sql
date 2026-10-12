@@ -1,6 +1,6 @@
--- UTV2-1972 rollback: remove only participant rows created and tagged by the
--- governed WNBA seed. Shared WNBA sport, league, and market-availability rows
--- are intentionally retained because they can predate and outlive this catalog.
+-- UTV2-1972 rollback: remove only rows created and tagged by the governed WNBA
+-- seed. Pre-existing WNBA sport, league, market-availability, and participant
+-- identities are preserved.
 BEGIN;
 
 SELECT p.id
@@ -113,5 +113,24 @@ WHERE p.id = ANY (ARRAY[
   '9f347912-95b7-53bd-8c2f-beaafdcd8766'::uuid
 ]::uuid[])
   AND p.metadata->>'seedIssue' = 'UTV2-1972';
+
+-- Availability rows have no metadata of their own. They can only have been
+-- created by this migration when the parent WNBA sport was also created and
+-- tagged by this migration; a pre-existing sport therefore protects all of its
+-- pre-existing availability rows.
+DELETE FROM public.sport_market_type_availability AS availability
+USING public.sports AS sport
+WHERE availability.sport_id = 'WNBA'
+  AND sport.id = 'WNBA'
+  AND sport.metadata->>'seedIssue' = 'UTV2-1972';
+
+DELETE FROM public.leagues AS league
+WHERE league.id = 'wnba'
+  AND league.sport_id = 'WNBA'
+  AND league.metadata->>'seedIssue' = 'UTV2-1972';
+
+DELETE FROM public.sports AS sport
+WHERE sport.id = 'WNBA'
+  AND sport.metadata->>'seedIssue' = 'UTV2-1972';
 
 COMMIT;
