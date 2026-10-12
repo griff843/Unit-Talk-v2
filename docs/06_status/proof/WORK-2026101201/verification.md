@@ -9,7 +9,7 @@ Branch: codex/work-2026101201-member-tier-repair
 Verified source SHA: `4e7c4a14445e9e1ff5d5a6f14de91845623e340a`
 result: static_pass_db_deferred
 
-## ASSERTIONS
+## ASSERTIONS:
 
 - [x] A bot-created Trial receives a bounded `effectiveUntil` from
       `computeTrialEffectiveUntil()`: seven days by default and the configured duration when
@@ -20,7 +20,7 @@ result: static_pass_db_deferred
       it remains `submitter`, and the existing generic submitter authorization test remains 403.
 - [x] The Discord sync handler activates every configured mapped role.
 
-## EVIDENCE
+## EVIDENCE:
 
 Focused issue suite:
 
