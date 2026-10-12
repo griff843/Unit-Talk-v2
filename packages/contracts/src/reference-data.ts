@@ -90,27 +90,6 @@ export const V1_REFERENCE_DATA: ReferenceDataCatalog = {
       ],
     },
     {
-      id: 'WNBA',
-      name: 'WNBA',
-      marketTypes: ALL_MARKET_TYPES,
-      statTypes: [
-        'Points',
-        'Rebounds',
-        'Assists',
-        'Threes',
-        'Steals',
-        'Blocks',
-        'Turnovers',
-        'Points + Rebounds + Assists',
-        'Points + Rebounds',
-        'Points + Assists',
-        'Rebounds + Assists',
-      ],
-      // Canonical WNBA franchises are read from participants, not duplicated
-      // in the static fallback catalog.
-      teams: [],
-    },
-    {
       id: 'NFL',
       name: 'NFL',
       marketTypes: ALL_MARKET_TYPES,

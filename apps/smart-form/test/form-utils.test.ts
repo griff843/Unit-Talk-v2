@@ -10,7 +10,6 @@ import {
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
   resolveSportsbookId,
-  isTeamSportId,
 } from '../lib/form-utils.ts';
 import type { BetFormValues } from '../lib/form-schema.ts';
 import type { CatalogData } from '../lib/catalog.ts';
@@ -48,13 +47,6 @@ const catalog: CatalogData = {
       name: 'MLB',
       marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
       statTypes: [],
-      teams: [],
-    },
-    {
-      id: 'WNBA',
-      name: 'WNBA',
-      marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
-      statTypes: ['Points', 'Rebounds', 'Assists'],
       teams: [],
     },
   ],
@@ -161,36 +153,6 @@ test('getMarketTypesForSport appends canonical period markets by sport', () => {
   );
 
   assert.ok(getMarketTypesForSport(catalog, 'MLB').includes('f5_total_ou'));
-  assert.ok(getMarketTypesForSport(catalog, 'WNBA').includes('4q_total_ou'));
-});
-
-test('WNBA uses the structured team-sport submission guard path', () => {
-  assert.equal(isTeamSportId('WNBA'), true);
-  assert.equal(
-    evaluateSubmissionGuards({
-      sportId: 'WNBA',
-      identityMode: 'structured-fallback',
-      awayParticipantName: 'Portland Fire',
-      homeParticipantName: 'Toronto Tempo',
-      canonicalEventId: null,
-    }),
-    null,
-  );
-});
-
-test('API, form component, and pure client guards agree that WNBA is a team sport', () => {
-  const sources = [
-    readFileSync(new URL('../../api/src/smart-form-validation.ts', import.meta.url), 'utf8'),
-    readFileSync(new URL('../app/submit/components/BetForm.tsx', import.meta.url), 'utf8'),
-    readFileSync(new URL('../lib/form-utils.ts', import.meta.url), 'utf8'),
-  ];
-
-  for (const source of sources) {
-    const teamSportSet = source.match(/(?:TEAM_SPORTS|CLIENT_TEAM_SPORT_IDS)[^=]*= new Set\(\[([^\]]+)\]\)/u);
-    assert.ok(teamSportSet, 'team-sport set was not found');
-    const sports = [...teamSportSet[1]!.matchAll(/['"]([^'"]+)['"]/gu)].map((match) => match[1]!.toUpperCase());
-    assert.ok(sports.includes('WNBA'), 'WNBA is missing from a team-sport validation layer');
-  }
 });
 
 test('mapOfferToFormMarketType preserves canonical period market ids', () => {

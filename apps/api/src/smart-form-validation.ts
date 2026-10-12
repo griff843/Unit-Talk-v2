@@ -7,7 +7,7 @@ import type {
 import type { EventBrowseResult, ReferenceDataRepository } from '@unit-talk/db';
 import { ApiError } from './errors.js';
 
-const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'WNBA', 'NCAAB', 'MLB', 'NHL', 'SOCCER']);
+const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'SOCCER']);
 
 // UTV2-1842 SMART_FORM_OUTCOME_START
 // The event-existence gate in submission-service.ts refuses any human-source pick whose
