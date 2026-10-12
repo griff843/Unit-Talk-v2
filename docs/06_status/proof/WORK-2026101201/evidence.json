@@ -1,0 +1,84 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101201",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4e7c4a14445e9e1ff5d5a6f14de91845623e340a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "note": "The verified source SHA is the implementation commit. Later lane commits are restricted to the required proof bundle and executor-generated routing provenance."
+  },
+  "what_this_lane_delivers": {
+    "trial_expiry": "Bot-created Trial activation uses computeTrialEffectiveUntil, honoring the seven-day default and configured duration.",
+    "mapped_tiers": [
+      "trial",
+      "vip",
+      "vip-plus",
+      "capper",
+      "operator"
+    ],
+    "rejected_tier": "free",
+    "authorization_boundary": "Persisting Capper or Operator membership does not elevate the API caller; the bot key remains a submitter and a generic submitter is still refused with HTTP 403.",
+    "production_writes_by_this_change": 0
+  },
+  "static_proof": {
+    "status": "pass",
+    "measured_at": "2026-10-12T01:29:08-04:00",
+    "measured_against_sha": "4e7c4a14445e9e1ff5d5a6f14de91845623e340a",
+    "focused_suite": {
+      "command": "pnpm exec tsx --test 'apps/api/src/member-picks.test.ts' 'apps/discord-bot/src/discord-bot-foundation.test.ts'",
+      "tests": 137,
+      "pass": 137,
+      "fail": 0
+    },
+    "commands": [
+      {
+        "command": "pnpm exec eslint apps/api/src/routes/member-tiers.ts apps/api/src/member-picks.test.ts apps/discord-bot/src/discord-bot-foundation.test.ts",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "Verdict PASS; matched discord-delivery. R4 and qa-experience are advisory and PM-gated."
+      },
+      {
+        "command": "pnpm verify",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "All static stages passed. ci:assert-staging refused host 127.0.0.1/ref unidentified because writable DB verification requires staging project xskgrzbteyqdufktjrjx."
+      }
+    ]
+  },
+  "behavior_proof": {
+    "trial_default_days": 7,
+    "configured_trial_days_tested": 11,
+    "vip_effective_until": null,
+    "vip_plus_effective_until": null,
+    "caller_role_after_capper_sync": "submitter",
+    "caller_role_after_operator_sync": "submitter",
+    "generic_submitter_http_status": 403
+  },
+  "runtime_proof": {
+    "status": "blocked_deferred",
+    "required_environment": "GitHub staging-ci",
+    "required_project_ref": "xskgrzbteyqdufktjrjx",
+    "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its local URL (host=127.0.0.1, ref=unidentified). Run it through staging-ci with CI_SUPABASE_* credentials."
+  },
+  "pr_url": null
+}
