@@ -7,7 +7,7 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "4e7c4a14445e9e1ff5d5a6f14de91845623e340a",
+    "verified_source_sha": "a99855568c5416e115fe895f147655650d38dbab",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "note": "The verified source SHA is the implementation commit. Later lane commits are restricted to the required proof bundle and executor-generated routing provenance."

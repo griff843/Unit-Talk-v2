@@ -6,7 +6,7 @@ Issue: WORK-2026101201
 Tier: T2
 Lane type: runtime
 Branch: codex/work-2026101201-member-tier-repair
-Verified source SHA: `4e7c4a14445e9e1ff5d5a6f14de91845623e340a`
+Verified source SHA: `a99855568c5416e115fe895f147655650d38dbab`
 result: static_pass_db_deferred
 
 ## ASSERTIONS:
