@@ -7,6 +7,7 @@
   "status": "review_pending_exact_head_ci",
   "sha_binding": {
     "merge_sha": null,
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1746",
     "verified_source_sha": "5e8598700065af2f30eef5ca1f5e5fcc71692eef",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
