@@ -152,6 +152,23 @@ test('normalizes WNBA moneyline and total aliases without inventing market ids',
   assert.equal(deriveMarketTypeId(buildPick({ market: 'wnba-total' }, {})), 'game_total_ou');
 });
 
+test('keeps WNBA sport FK normalization bounded to manual human sources', () => {
+  const apiPick = buildPick(
+    { source: 'api', market: 'moneyline' },
+    { sport: 'WNBA' },
+  );
+  assert.equal(deriveSportId(apiPick), null);
+
+  const prefixedApiPick = buildPick({ source: 'api', market: 'wnba-ml' }, {});
+  assert.equal(deriveSportId(prefixedApiPick), null);
+
+  const alertAgentPick = buildPick(
+    { source: 'alert-agent', market: 'moneyline' },
+    { sport: 'WNBA' },
+  );
+  assert.equal(deriveSportId(alertAgentPick), 'WNBA');
+});
+
 test('derives NFL from SGO market key nfl-spread when metadata.sport is absent', () => {
   const pick = buildPick({ market: 'nfl-spread' }, {});
   assert.equal(deriveSportId(pick), 'NFL');
