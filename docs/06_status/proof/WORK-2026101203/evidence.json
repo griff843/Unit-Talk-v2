@@ -2,10 +2,10 @@
   "schema_version": 2,
   "issue_id": "WORK-2026101203",
   "pr_number": 1744,
-  "source_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
-  "reviewed_head_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
+  "source_sha": "3ea15056b4b2cf768684c7042ffafb7e1b774b20",
+  "reviewed_head_sha": "3ea15056b4b2cf768684c7042ffafb7e1b774b20",
   "evidence_commit_sha": null,
-  "current_head_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
+  "current_head_sha": "3ea15056b4b2cf768684c7042ffafb7e1b774b20",
   "merge_sha": null,
   "gate_results": [
     {
@@ -36,7 +36,7 @@
   ],
   "reviewer_verdict": null,
   "pm_verdict": null,
-  "generated_at": "2026-10-12T16:38:00-04:00",
+  "generated_at": "2026-10-12T16:43:00-04:00",
   "tier": "T1",
   "lane_type": "migration",
   "proof_profile": "migration",
@@ -44,7 +44,7 @@
   "status": "pre_merge_pending_ci",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6",
+    "verified_source_sha": "3ea15056b4b2cf768684c7042ffafb7e1b774b20",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -83,7 +83,7 @@
         "note": "The static phase passed. ci:assert-staging then refused the local 127.0.0.1/unidentified target before mutation; the required authoritative result is the exact-head staging-ci verify context."
       }
     ],
-    "note": "The verified implementation tree is unchanged by the executor-wrapper model-routing commit. Exact-head hosted verification remains pending."
+    "note": "Focused tests, DB package type-check, and migration lint pass at the schema-only replay correction. Exact-head hosted verification remains pending."
   },
   "runtime_proof": {
     "status": "PENDING_CI_STAGING",

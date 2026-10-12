@@ -9,7 +9,7 @@ Issue: WORK-2026101203
 Tier: T1
 Lane type: migration
 Proof profile: migration
-Execution SHA: `7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6`
+Execution SHA: `3ea15056b4b2cf768684c7042ffafb7e1b774b20`
 result: static_pass_runtime_deferred_to_staging_ci
 
 ## ASSERTIONS:
@@ -61,12 +61,13 @@ from its URL (host=unparseable). Writable DB verification requires
 xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with
 CI_SUPABASE_* credentials.
 
-The implementation tree verified before the governance-only model-routing rebase
-is byte-identical to execution SHA `7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6`.
+The focused tests and migration lint pass at execution SHA
+`3ea15056b4b2cf768684c7042ffafb7e1b774b20`; exact-head hosted verification is
+pending after the schema-only replay correction.
 No production database or runtime target was mutated.
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: #1744
-Execution SHA: 7791bcbaf9e0fa8e6ea3df43726b6ed4cc733fd6
+Execution SHA: 3ea15056b4b2cf768684c7042ffafb7e1b774b20
