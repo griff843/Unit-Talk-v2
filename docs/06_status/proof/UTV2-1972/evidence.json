@@ -2,8 +2,8 @@
   "schema_version": 2,
   "issue_id": "UTV2-1972",
   "pr_number": 1745,
-  "source_sha": "e363932b76195d1f8beff71a777098af01bc2234",
-  "reviewed_head_sha": "e363932b76195d1f8beff71a777098af01bc2234",
+  "source_sha": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
+  "reviewed_head_sha": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "tier": "T1",
@@ -15,7 +15,7 @@
     {
       "gate": "focused issue tests",
       "verdict": "PASS",
-      "detail": "Required four-file tsx suite: 160 pass, 0 fail, 1 scratch-Postgres case skipped because the approved admin URL is absent. API server suite: 66 pass, 0 fail."
+      "detail": "Required four-file tsx suite: 161 pass, 0 fail, 1 scratch-Postgres case skipped because the approved admin URL is absent. API server suite: 66 pass, 0 fail."
     },
     {
       "gate": "pnpm verify:static",
@@ -42,7 +42,7 @@
   "pm_verdict": null,
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "e363932b76195d1f8beff71a777098af01bc2234",
+    "verified_source_sha": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -84,8 +84,8 @@
     "focused": {
       "command": "pnpm exec tsx --test apps/api/src/smart-form-validation.test.ts apps/smart-form/test/form-utils.test.ts packages/db/src/canonical-reference-schema.test.ts packages/db/src/pick-foreign-keys.test.ts",
       "exit_code": 0,
-      "tests": 161,
-      "pass": 160,
+      "tests": 162,
+      "pass": 161,
       "fail": 0,
       "skipped": 1
     },
@@ -111,7 +111,7 @@
   },
   "runtime_proof": {
     "status": "DEFERRED_TO_CI",
-    "head": "e363932b76195d1f8beff71a777098af01bc2234",
+    "head": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
     "command": "pnpm test:db",
     "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
     "local_result": "REFUSED before database tests or any write executed",

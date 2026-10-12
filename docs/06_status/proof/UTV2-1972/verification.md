@@ -11,7 +11,7 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1745
-Execution SHA: `e363932b76195d1f8beff71a777098af01bc2234`
+Execution SHA: `f9a6b538c6b2f76cde1f474ebfbb1075ab012a87`
 result: review_candidate_pending_protected_ci
 
 ## ASSERTIONS:
@@ -35,7 +35,7 @@ result: review_candidate_pending_protected_ci
 Measured local executor results:
 
 ```text
-Focused required suite: 160 pass, 0 fail, 1 skipped
+Focused required suite: 161 pass, 0 fail, 1 skipped
 API server suite: 66 pass, 0 fail
 pnpm type-check: PASS
 pnpm verify:commands: PASS (139 migration files; 138 linted without findings)
@@ -50,7 +50,7 @@ the absent approved admin URL. No DB-write test began locally.
 ## Verification
 
 - `pnpm exec tsx --test 'apps/api/src/smart-form-validation.test.ts' 'apps/smart-form/test/form-utils.test.ts' 'packages/db/src/canonical-reference-schema.test.ts' 'packages/db/src/pick-foreign-keys.test.ts'`:
-  PASS (160 pass, 0 fail, 1 skipped).
+  PASS (161 pass, 0 fail, 1 skipped).
 - `pnpm exec tsx --test apps/api/src/server.test.ts`: PASS (66 pass, 0 fail).
 - `pnpm type-check`: PASS.
 - `pnpm test`: PASS as part of `pnpm verify:static`.
@@ -79,4 +79,4 @@ from its URL (host=unparseable). Writable DB verification requires
 
 Merge SHA: pending merge
 PR: #1745
-Execution SHA: e363932b76195d1f8beff71a777098af01bc2234
+Execution SHA: f9a6b538c6b2f76cde1f474ebfbb1075ab012a87

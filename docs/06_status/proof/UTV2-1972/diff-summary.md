@@ -14,7 +14,7 @@ provider data, or activate modeling, grading, promotion, or delivery behavior.
 | `apps/api/src/smart-form-validation.ts` | Treats WNBA as a team sport for API submission validation. |
 | `apps/smart-form/app/submit/components/BetForm.tsx` | Treats WNBA as a team sport in the manual submission UI. |
 | `apps/smart-form/lib/form-utils.ts` | Applies the client-side WNBA team requirement. |
-| `packages/db/src/pick-foreign-keys.ts` | Normalizes WNBA picks to the basketball sport FK. |
+| `packages/db/src/pick-foreign-keys.ts` | Normalizes manual-human WNBA picks to the basketball sport FK while leaving generic API/system WNBA picks unsupported. |
 | Focused test files | Cover the catalog response, API/UI guards, canonical SQL invariants, and FK normalization. |
 | `docs/06_status/proof/UTV2-1972/*` | Issue-owned governed review evidence. |
 
@@ -32,4 +32,4 @@ provider data, or activate modeling, grading, promotion, or delivery behavior.
 
 Merge SHA: pending merge
 PR: #1745
-Verified implementation SHA: `e363932b76195d1f8beff71a777098af01bc2234`
+Verified implementation SHA: `f9a6b538c6b2f76cde1f474ebfbb1075ab012a87`
