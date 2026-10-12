@@ -339,6 +339,7 @@ jobs:
 
       - name: Require a public API origin at build time
         env:
+          APP_PACKAGE: ${{ matrix.app_package }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
           WEB_DOMAIN: ${{ secrets.UNIT_TALK_WEB_DOMAIN }}
         run: |
@@ -351,7 +352,7 @@ jobs:
             echo "::error title=Missing API origin::CADDY_DOMAIN is required to build the Next.js images; without it the browser bundle would ship its http://127.0.0.1:4000 fallback." >&2
             exit 1
           fi
-          if [ -z "${WEB_DOMAIN:-}" ]; then
+          if [ "${APP_PACKAGE}" = '@unit-talk/web' ] && [ -z "${WEB_DOMAIN:-}" ]; then
             echo "::error title=Missing website origin::UNIT_TALK_WEB_DOMAIN is required to build the Next.js images; without it the public website cannot collect page data." >&2
             exit 1
           fi

@@ -433,11 +433,15 @@ test('the canonical website origin is required and compiled before public-web pa
   assert.ok(envIndex < buildIndex, 'the website origin must be exported before `next build` runs');
   assert.match(
     dockerfile,
-    /test -n "\$\{NEXT_PUBLIC_SITE_URL\}"/,
-    'an empty website origin must fail the image build',
+    /if \[ "\$\{APP_PACKAGE\}" = '@unit-talk\/web' \]; then[\s\S]{0,200}?test -n "\$\{NEXT_PUBLIC_SITE_URL\}"/,
+    'an empty website origin must fail the public-web image build without blocking other surfaces',
   );
 
   const guardStep = step('build-nextjs', 'Require a public API origin at build time');
+  assert.ok(
+    String(field(guardStep, 'env', 'APP_PACKAGE') ?? '').includes('matrix.app_package'),
+    'the point-of-use guard must identify which app the matrix is building',
+  );
   assert.ok(
     String(field(guardStep, 'env', 'WEB_DOMAIN') ?? '').includes('secrets.UNIT_TALK_WEB_DOMAIN'),
     'the point-of-use guard must read the configured website hostname',
@@ -448,7 +452,12 @@ test('the canonical website origin is required and compiled before public-web pa
   assert.throws(
     () =>
       execFileSync('bash', ['-c', guard], {
-        env: { ...process.env, CADDY_DOMAIN: 'api.unit-talk.test', WEB_DOMAIN: '' },
+        env: {
+          ...process.env,
+          APP_PACKAGE: '@unit-talk/web',
+          CADDY_DOMAIN: 'api.unit-talk.test',
+          WEB_DOMAIN: '',
+        },
         stdio: 'pipe',
       }),
     'the build guard must execute with a failure when the website hostname is absent',
@@ -458,12 +467,39 @@ test('the canonical website origin is required and compiled before public-web pa
       execFileSync('bash', ['-c', guard], {
         env: {
           ...process.env,
+          APP_PACKAGE: '@unit-talk/web',
           CADDY_DOMAIN: 'api.unit-talk.test',
           WEB_DOMAIN: 'www.unit-talk.test',
         },
         stdio: 'pipe',
       }),
     'the build guard must execute successfully when both public hostnames are present',
+  );
+  assert.doesNotThrow(
+    () =>
+      execFileSync('bash', ['-c', guard], {
+        env: {
+          ...process.env,
+          APP_PACKAGE: '@unit-talk/smart-form',
+          CADDY_DOMAIN: 'api.unit-talk.test',
+          WEB_DOMAIN: '',
+        },
+        stdio: 'pipe',
+      }),
+    'a non-web image must not require the website origin it does not consume',
+  );
+  assert.throws(
+    () =>
+      execFileSync('bash', ['-c', guard], {
+        env: {
+          ...process.env,
+          APP_PACKAGE: '@unit-talk/smart-form',
+          CADDY_DOMAIN: '',
+          WEB_DOMAIN: '',
+        },
+        stdio: 'pipe',
+      }),
+    'a non-web image must still fail when the shared public API origin is absent',
   );
 });
 
