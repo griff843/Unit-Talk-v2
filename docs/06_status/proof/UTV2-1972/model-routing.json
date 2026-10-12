@@ -1,0 +1,15 @@
+{
+  "issue_id": "UTV2-1972",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-medium",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "medium",
+  "policy_version": "2.0.0",
+  "codex_cli_version": "codex-cli 0.162.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "execution_sha": "e363932b76195d1f8beff71a777098af01bc2234",
+  "generated_at": "2026-10-12T21:14:38Z"
+}
