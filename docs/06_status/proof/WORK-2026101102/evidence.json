@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "issue_id": "WORK-2026101102",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "1e344e0e4bb02e8eb197712c4e994a10452ad0a2",
+    "evidence_commit_sha": "pending proof commit",
+    "current_pr_head_sha": "1e344e0e4bb02e8eb197712c4e994a10452ad0a2",
+    "sha_type": "pending_merge",
+    "bound_at": "2026-10-12T05:17:17.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "verify_static": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "detail": "Required CI verify context runs pnpm type-check and pnpm test (test:ops includes scripts/ci/proof-coverage-guard.test.ts, 8 of 8 pass locally; the UTV2-1949 temp-workspace guard passes with it, 16/16 together)."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "No R-level artifacts required for this diff."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "CI guard amendment: no runtime, schema or database change. The regression test runs the real workflow step bodies in bash against synthetic change sets."
+  },
+  "acceptance_criteria": {
+    "exact_ncaaf_migration_with_canonical_reference_test_passes": "PASS",
+    "unrelated_migration_with_canonical_reference_test_fails": "PASS",
+    "existing_accepted_proof_paths_pass": "PASS",
+    "no_generic_packages_db_glob_or_caller_supplied_exemption": "PASS"
+  },
+  "verdict": "PASS"
+}
