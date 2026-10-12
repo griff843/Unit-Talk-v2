@@ -11,7 +11,7 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1745
-Execution SHA: `f9a6b538c6b2f76cde1f474ebfbb1075ab012a87`
+Execution SHA: `ded43b88d695ed0a5aee6f81ae1a717366cf4885`
 result: review_candidate_pending_protected_ci
 
 ## ASSERTIONS:
@@ -79,4 +79,4 @@ from its URL (host=unparseable). Writable DB verification requires
 
 Merge SHA: pending merge
 PR: #1745
-Execution SHA: f9a6b538c6b2f76cde1f474ebfbb1075ab012a87
+Execution SHA: ded43b88d695ed0a5aee6f81ae1a717366cf4885

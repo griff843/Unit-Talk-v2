@@ -2,8 +2,8 @@
   "schema_version": 2,
   "issue_id": "UTV2-1972",
   "pr_number": 1745,
-  "source_sha": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
-  "reviewed_head_sha": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
+  "source_sha": "ded43b88d695ed0a5aee6f81ae1a717366cf4885",
+  "reviewed_head_sha": "ded43b88d695ed0a5aee6f81ae1a717366cf4885",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "tier": "T1",
@@ -42,7 +42,7 @@
   "pm_verdict": null,
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
+    "verified_source_sha": "ded43b88d695ed0a5aee6f81ae1a717366cf4885",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -111,7 +111,7 @@
   },
   "runtime_proof": {
     "status": "DEFERRED_TO_CI",
-    "head": "f9a6b538c6b2f76cde1f474ebfbb1075ab012a87",
+    "head": "ded43b88d695ed0a5aee6f81ae1a717366cf4885",
     "command": "pnpm test:db",
     "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
     "local_result": "REFUSED before database tests or any write executed",
