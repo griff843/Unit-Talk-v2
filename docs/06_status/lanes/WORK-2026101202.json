@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__work-2026101202-order/.out/worktrees/claude__work-2026101202-record-merges",
   "branch": "claude/work-2026101202-record-merges",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "61a335cb753592787408b84128a5afe75ca205f4",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1743",
   "files_changed": [],
   "file_scope_lock": [
@@ -16,14 +16,22 @@
     "docs/06_status/lanes/WORK-2026101201.json"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-10-12T13:10:36.959Z",
-  "heartbeat_at": "2026-10-12T13:13:51.966Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-10-12T13:51:20.640Z",
+  "closed_at": "2026-10-12T13:51:20.640Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/work-2026101202-record-merges.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-10-12T13:51:18.550Z",
+      "verdict": "pass",
+      "merge_sha": "61a335cb753592787408b84128a5afe75ca205f4",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
