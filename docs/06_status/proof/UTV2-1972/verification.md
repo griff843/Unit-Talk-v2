@@ -11,9 +11,9 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1745
-Execution SHA: `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`
-Verified source SHA: `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`
-result: pass_pending_pm_approval
+Execution SHA: `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`
+Verified source SHA: `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`
+result: execution_pass_pending_governance
 
 ## ASSERTIONS:
 
@@ -70,20 +70,23 @@ from its URL (host=unparseable). Writable DB verification requires
 `xskgrzbteyqdufktjrjx`. Run it through the staging-ci GitHub environment with
 `CI_SUPABASE_*` credentials.
 
-Hosted exact-head receipts at `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`:
+Hosted exact-head receipts at `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`:
 
-- Fail-closed precondition drill: PASS — run `38321352399`, job `115049925448`.
-- Schema apply/rollback/reapply round trip: PASS — run `38321352399`, job
-  `115049925222`.
+- Fail-closed precondition drill: PASS — run `38328113187`, job `115071412828`.
+- Schema apply/rollback/reapply round trip: PASS — run `38328113187`, job
+  `115071412957`.
 - Sanctioned staging writable DB proof and T1 live suites: PASS — run
-  `38321352356`, job `115049925681`.
-- Required `verify`: PASS — run `38321352356`, job `115055657844`.
-- Live schema parity: PASS — run `38321352395`, job `115049951552`; this proves
+  `38328113271`, job `115071883344`.
+- Required `verify`: PASS — run `38328113271`, job `115075451460`; the same-run
+  staging receipt was downloaded and verified successfully.
+- Live schema parity: PASS — run `38328113076`, job `115071434784`; this proves
   schema parity and does not claim a production data apply.
 
 ## Pending governed evidence
 
 - Independent PM review and merge approval.
+- Proof Coverage Guard disposition without adding a proof source file outside
+  the packet's allowed scope; the sanctioned staging proof itself passed.
 - Governed merge, production migration through the normal post-merge path, lane
   finalization, and orchestration reconciliation.
 
@@ -91,4 +94,4 @@ Hosted exact-head receipts at `f99394febd9fff60c80044ae1f4ec688eeaf9d3d`:
 
 Merge SHA: pending merge
 PR: #1745
-Execution SHA: f99394febd9fff60c80044ae1f4ec688eeaf9d3d
+Execution SHA: 7328e5ea5abfac332705dc59a0c40cb5e83fdc67

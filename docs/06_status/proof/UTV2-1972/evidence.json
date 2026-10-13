@@ -2,15 +2,15 @@
   "schema_version": 2,
   "issue_id": "UTV2-1972",
   "pr_number": 1745,
-  "source_sha": "f99394febd9fff60c80044ae1f4ec688eeaf9d3d",
-  "reviewed_head_sha": "f99394febd9fff60c80044ae1f4ec688eeaf9d3d",
+  "source_sha": "7328e5ea5abfac332705dc59a0c40cb5e83fdc67",
+  "reviewed_head_sha": "7328e5ea5abfac332705dc59a0c40cb5e83fdc67",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "tier": "T1",
   "lane_type": "migration",
   "proof_profile": "migration",
-  "status": "evidence_complete_pending_pm_approval",
-  "generated_at": "2026-10-12T23:46:00Z",
+  "status": "execution_verified_pending_governance",
+  "generated_at": "2026-10-13T00:58:00Z",
   "gate_results": [
     {
       "gate": "focused issue tests",
@@ -35,21 +35,21 @@
     {
       "gate": "protected exact-head CI",
       "verdict": "PASS",
-      "detail": "Exact-head verify passed in run 38321352356 job 115055657844 after sanctioned staging proof passed in the same run."
+      "detail": "Exact-head verify passed in run 38328113271 job 115075451460 after sanctioned staging proof passed in the same run."
     }
   ],
   "reviewer_verdict": null,
   "pm_verdict": null,
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f99394febd9fff60c80044ae1f4ec688eeaf9d3d",
+    "verified_source_sha": "7328e5ea5abfac332705dc59a0c40cb5e83fdc67",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "verify": "required on the exact PR head",
       "writable_db_proof": "required in the staging-ci environment"
     },
-    "note": "Verified source is the implementation commit. The evidence commit and exact PR head remain CI-bound; no merge SHA is asserted."
+    "note": "Verified source is the refreshed exact head tested by hosted CI. The evidence commit and exact PR head remain CI-bound; no merge SHA is asserted."
   },
   "catalog": {
     "league": "WNBA",
@@ -111,15 +111,15 @@
   },
   "runtime_proof": {
     "status": "PASS",
-    "head": "f99394febd9fff60c80044ae1f4ec688eeaf9d3d",
+    "head": "7328e5ea5abfac332705dc59a0c40cb5e83fdc67",
     "command": "pnpm test:db",
     "target": "approved staging Supabase project xskgrzbteyqdufktjrjx",
     "local_result": "REFUSED before database tests or any write executed",
     "note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials. Measured local guard detail: host=127.0.0.1 ref=unidentified.",
     "precondition_drill": {
       "result": "PASS",
-      "run": 38321352399,
-      "job": 115049925448,
+      "run": 38328113187,
+      "job": 115071412828,
       "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
       "cases": [
         "migration applied successfully to an empty scratch candidate catalog after baseline schema initialization",
@@ -131,30 +131,30 @@
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
-      "run": 38321352399,
-      "job": 115049925222,
+      "run": 38328113187,
+      "job": 115071412957,
       "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
       "detail": "apply/rollback/reapply convergence passed for 20261010170100_wnba_participant_catalog"
     },
     "writable_db_proof_staging": {
       "result": "PASS",
-      "run": 38321352356,
-      "job": 115049925681,
+      "run": 38328113271,
+      "job": 115071883344,
       "workflow": "CI / Writable DB proof (staging only)",
       "target": "xskgrzbteyqdufktjrjx",
       "detail": "sanctioned staging writable proof and all T1 live proof suites passed; same-run receipt uploaded"
     },
     "live_schema_parity": {
       "result": "PASS",
-      "run": 38321352395,
-      "job": 115049951552,
+      "run": 38328113076,
+      "job": 115071434784,
       "workflow": "Live Schema Parity / Live Schema Parity",
       "detail": "repository schema and read-only live schema parity check passed; this is not a production data apply"
     },
     "verify": {
       "result": "PASS",
-      "run": 38321352356,
-      "job": 115055657844,
+      "run": 38328113271,
+      "job": 115075451460,
       "workflow": "CI / verify"
     },
     "row_counts": [
@@ -170,6 +170,7 @@
   },
   "pending": [
     "outer-wrapper executor-result publication",
+    "proof-coverage guard disposition without widening the packet's allowed file scope",
     "independent PM review and merge approval",
     "governed merge and canonical post-merge closeout"
   ],
