@@ -115,7 +115,7 @@ A migration lane is a singleton and is forbidden alongside a runtime lane, whate
 | A | WNBA vertical slice | Codex (migration), then Codex (T2 runtime) | #1745 in PM review; runtime lane queued behind it |
 | B | NCAAF live acceptance | **Griff** (submits), Claude (verifies read-only) | Waiting on Griff |
 | C | NCAAB participant catalog | Codex | SMALL; queued behind the migration singleton |
-| D | Command Center operator view | Codex (Delivery/UI, display only) | Startable now |
+| D | Command Center operator view | Codex (Delivery/UI, display only) | **Display gaps closed on `main`** (#1685, #1689, #1692); awaiting a deployed render. No lane to start. |
 | E | Mission refresh (this lane) | Claude | WORK-2026101301 |
 | F | Pre-SGO engineering completion | Codex, in bounded lanes | §5 |
 | G | Discord Waves 0–6 | **Independent Codex worker** | Not duplicated here |
@@ -136,7 +136,7 @@ Revalidate each item against current code before building on it — the list bel
 | Automated grading | Grading handles all supported markets from fixtures; skip reasons are observable | Staging proof; grading skips are classified, not silent |
 | CLV snapshot plumbing | Closing-line capture and CLV computation are wired and null-safe | Fixture proof; no CLV claim on a manual pick |
 | Models, feature contracts, scoring evaluation | Feature contracts, scoring and evaluation run on truthful persisted picks | Evaluation over the governed cohort with provenance retained |
-| Operator views | Command Center renders decision, mode, participant resolution, eventless-pick notes, voided banner, capper/units (display only) | Rendered in the deployed Command Center |
+| Operator views | Command Center renders decision, mode, participant resolution, eventless-pick notes, voided banner, capper/units (display only) | Implemented on `main`; **not yet observed in the deployed Command Center** until a deploy carries it (Griff dispatches) |
 | Security and recovery | Auth fail-closed, kill-switch release procedure, replay/double-post protection, dead-letter handling | Documented procedure plus proof |
 | Observability | Delivery freshness derived from receipts; `/health` fails closed; `governance.awaiting-approval-drift` failure classified | Proof per defect |
 | Commerce and entitlements | Tier sync authenticates with a scoped credential and surfaces refusal; trial expiry; tier-gated `/live` and `/today`; copy matches what is live | Proof per item; Whop setup remains Griff's |
@@ -170,8 +170,7 @@ outbox/receipt/intents, and Command Center visibility.
 the participant-catalog seed and reversibility machinery. `sports` and a league row already exist;
 team participants are 0. It waits for the migration singleton and never delays A or B.
 
-**D. Command Center operator view.** A Delivery/UI lane for Codex. Display only; no new reads. Scope
-per `docs/03_product/COMMAND_CENTER_PRODUCT_CONTRACT.md`.
+**D. Command Center operator view.** The 2026-09-28 gap list (delivery authorization decision and reason, requested vs persisted mode, participant resolution, edge fallback reason, eventless-pick note, voided banner, capper/units/Track Only badge on the list row, distribution-mode filter, kill-switch refusal reason) was re-verified against `origin/main` `59ea1ce32` on 2026-10-13 and is **already implemented** (`GovernedPickTruth.tsx`, `PicksExplorerClient.tsx`; #1685, #1689, #1692). No lane is needed. What remains is observation in the deployed app, which follows a deploy Griff dispatches; only a newly found gap starts a lane.
 
 **G. Discord.** The independent Codex worker owns Waves 0–6. Formal current program: Wave 1
 entitlement and access safety, not complete without live persona evidence (Free, Trial, VIP, VIP+,
