@@ -11,8 +11,8 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1745
-Execution SHA: `15ac03307f486075128df4430cde9b799792ff24`
-Verified source SHA: `15ac03307f486075128df4430cde9b799792ff24`
+Execution SHA: `b18134396ebf09ec9a4db87c44e299cd148061a6`
+Verified source SHA: `b18134396ebf09ec9a4db87c44e299cd148061a6`
 result: execution_pass_pending_governance
 
 ## ASSERTIONS:
@@ -35,7 +35,7 @@ result: execution_pass_pending_governance
 - [x] Local PostgreSQL 16 rollback, concurrency, and reversibility drills passed.
 - [x] Protected exact-head CI, scratch migration drills, sanctioned staging DB
       proof, and live schema parity passed on the proof-only PR head whose
-      substantive parent is `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`.
+      substantive repair commit remains `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`.
 - [ ] Independent PM review remains required before governed merge.
 
 ## EVIDENCE:
@@ -82,16 +82,16 @@ from its URL (host=unparseable). Writable DB verification requires
 `xskgrzbteyqdufktjrjx`. Run it through the staging-ci GitHub environment with
 `CI_SUPABASE_*` credentials.
 
-Hosted exact-head receipts at `15ac03307f486075128df4430cde9b799792ff24`:
+Hosted exact-head receipts at `b18134396ebf09ec9a4db87c44e299cd148061a6`:
 
-- Fail-closed precondition drill: PASS — run `38385696985`, job `115256811755`.
-- Schema apply/rollback/reapply round trip: PASS — run `38385696985`, job
-  `115256812137`.
+- Fail-closed precondition drill: PASS — run `38397436218`, job `115296144136`.
+- Schema apply/rollback/reapply round trip: PASS — run `38397436218`, job
+  `115296144106`.
 - Sanctioned staging writable DB proof and T1 live suites: PASS — run
-  `38385697125`, job `115256814402`.
-- Required `verify`: PASS — run `38385697125`, job `115262752385`; the same-run
+  `38397436273`, job `115299725869`.
+- Required `verify`: PASS — run `38397436273`, job `115304178664`; the same-run
   staging receipt was downloaded and verified successfully.
-- Live schema parity: PASS — run `38385697026`, job `115256846678`; this proves
+- Live schema parity: PASS — run `38397436097`, job `115296196835`; this proves
   schema parity and does not claim a production data apply.
 
 ## Pending governed evidence
@@ -106,4 +106,4 @@ Hosted exact-head receipts at `15ac03307f486075128df4430cde9b799792ff24`:
 
 Merge SHA: pending merge
 PR: #1745
-Execution SHA: 15ac03307f486075128df4430cde9b799792ff24
+Execution SHA: b18134396ebf09ec9a4db87c44e299cd148061a6
