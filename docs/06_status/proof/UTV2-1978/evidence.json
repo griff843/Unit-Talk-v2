@@ -8,7 +8,7 @@
   "sha_binding": {
     "merge_sha": null,
     "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1746",
-    "verified_source_sha": "5e8598700065af2f30eef5ca1f5e5fcc71692eef",
+    "verified_source_sha": "bbc5dc4de5d50d55adc87b1ac862515ba02d8141",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -83,5 +83,26 @@
   "known_gaps": [
     "Exact-head CI verify and Writable DB proof (staging only) remain required before independent PM review can authorize merge.",
     "Merge, deployment, lane finalization, and post-merge orchestration reconciliation remain pending and unauthorized in this executor closeout."
-  ]
+  ],
+  "resync_proof": {
+    "date": "2026-10-13",
+    "sanctioned_operation": "ops:merge-wrapper pr-update-branch",
+    "previous_reviewed_head": "418e148797c33478feed031d9e7e8c37419affb5",
+    "current_main": "4ba6fb32ad15563e7243f3d787f6e3955f986543",
+    "execution_sha": "bbc5dc4de5d50d55adc87b1ac862515ba02d8141",
+    "incoming_paths": [
+      "docs/06_status/readiness/readiness-score.json"
+    ],
+    "implementation_files_byte_identical": true,
+    "focused_tests": {
+      "fail": 0,
+      "skip": 0,
+      "pass": 44,
+      "tests": 44
+    },
+    "r_level": "PASS",
+    "historical_static_and_image_source": "5e8598700065af2f30eef5ca1f5e5fcc71692eef",
+    "fresh_exact_head_ci": "required",
+    "production_mutations": 0
+  }
 }

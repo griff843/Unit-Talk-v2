@@ -20,7 +20,7 @@ result: pending_exact_head_ci_and_independent_pm_review
 
 ## EVIDENCE:
 
-Execution SHA: `5e8598700065af2f30eef5ca1f5e5fcc71692eef`
+Execution SHA: `bbc5dc4de5d50d55adc87b1ac862515ba02d8141`
 
 Focused deployment wiring:
 
@@ -95,4 +95,34 @@ made; `verify:static` passed and the writable phase refused the non-staging targ
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1746
-Execution SHA: 5e8598700065af2f30eef5ca1f5e5fcc71692eef
+Execution SHA: bbc5dc4de5d50d55adc87b1ac862515ba02d8141
+
+## Current-main resync — 2026-10-13
+
+PM requested sanctioned update-branch and fresh exact-head proof in comment 6143393993.
+The merge wrapper updated PR #1746 onto main `4ba6fb32ad15563e7243f3d787f6e3955f986543`,
+producing execution SHA `bbc5dc4de5d50d55adc87b1ac862515ba02d8141`.
+
+The only incoming file versus reviewed head `418e148797c33478feed031d9e7e8c37419affb5`
+is `docs/06_status/readiness/readiness-score.json`. All three approved implementation
+files are byte-identical to that reviewed head. No implementation was edited.
+
+```text
+git diff --exit-code 418e148797c33478feed031d9e7e8c37419affb5 HEAD --
+  .github/workflows/deploy.yml deploy/production/Dockerfile.nextjs
+  scripts/ci/nextjs-deploy-wiring.test.ts
+exit 0
+pnpm exec tsx --test scripts/ci/nextjs-deploy-wiring.test.ts
+44 tests, 44 passed, 0 failed, 0 skipped
+pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+PASS; 9 changed files; no matching R-level artifact requirement
+git diff --check origin/main...HEAD
+exit 0
+```
+
+The static-gate and local-image evidence above was produced at original source
+`5e8598700065af2f30eef5ca1f5e5fcc71692eef`; it is retained as historical evidence,
+not represented as a rerun at the resynced SHA. Prior-head CI and executor comments
+are stale for this new binding. Fresh final-head CI (including sanctioned staging DB
+proof and verify) and a fresh executor result remain required. No merge, deployment,
+production/Discord mutation, pick change, delivery release or PM approval occurred.
