@@ -11,8 +11,8 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1745
-Execution SHA: `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`
-Verified source SHA: `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`
+Execution SHA: `15ac03307f486075128df4430cde9b799792ff24`
+Verified source SHA: `15ac03307f486075128df4430cde9b799792ff24`
 result: execution_pass_pending_governance
 
 ## ASSERTIONS:
@@ -33,7 +33,9 @@ result: execution_pass_pending_governance
       compatible pre-existing WNBA rows remain unchanged.
 - [x] The feature is limited to manual-human Smart Form submission support.
 - [x] Local PostgreSQL 16 rollback, concurrency, and reversibility drills passed.
-- [ ] Protected exact-head CI remains pending for the repaired head.
+- [x] Protected exact-head CI, scratch migration drills, sanctioned staging DB
+      proof, and live schema parity passed on the proof-only PR head whose
+      substantive parent is `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`.
 - [ ] Independent PM review remains required before governed merge.
 
 ## EVIDENCE:
@@ -80,13 +82,21 @@ from its URL (host=unparseable). Writable DB verification requires
 `xskgrzbteyqdufktjrjx`. Run it through the staging-ci GitHub environment with
 `CI_SUPABASE_*` credentials.
 
-Earlier hosted receipts are not reused for the repaired source. Protected CI
-must bind fresh receipts to the pushed exact PR head.
+Hosted exact-head receipts at `15ac03307f486075128df4430cde9b799792ff24`:
+
+- Fail-closed precondition drill: PASS — run `38385696985`, job `115256811755`.
+- Schema apply/rollback/reapply round trip: PASS — run `38385696985`, job
+  `115256812137`.
+- Sanctioned staging writable DB proof and T1 live suites: PASS — run
+  `38385697125`, job `115256814402`.
+- Required `verify`: PASS — run `38385697125`, job `115262752385`; the same-run
+  staging receipt was downloaded and verified successfully.
+- Live schema parity: PASS — run `38385697026`, job `115256846678`; this proves
+  schema parity and does not claim a production data apply.
 
 ## Pending governed evidence
 
 - Independent PM review and merge approval.
-- Protected exact-head CI for the repaired head.
 - Proof Coverage Guard disposition without adding a proof source file outside
   the packet's allowed scope; the sanctioned staging proof itself passed.
 - Governed merge, production migration through the normal post-merge path, lane
@@ -96,4 +106,4 @@ must bind fresh receipts to the pushed exact PR head.
 
 Merge SHA: pending merge
 PR: #1745
-Execution SHA: fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20
+Execution SHA: 15ac03307f486075128df4430cde9b799792ff24

@@ -28,4 +28,4 @@ activate modeling, grading, promotion, or delivery behavior.
 
 Merge SHA: pending merge
 PR: #1745
-Verified source SHA: `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`
+Verified source SHA: `15ac03307f486075128df4430cde9b799792ff24`
