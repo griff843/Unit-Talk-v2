@@ -11,8 +11,8 @@ Tier: T1
 Lane type: migration
 Proof profile: migration
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1745
-Execution SHA: `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`
-Verified source SHA: `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`
+Execution SHA: `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`
+Verified source SHA: `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`
 result: execution_pass_pending_governance
 
 ## ASSERTIONS:
@@ -27,9 +27,13 @@ result: execution_pass_pending_governance
 - [x] Franchise identities are written to `participants`; `teams` is untouched.
 - [x] WNBA exposes the existing basketball market registry; the runtime Smart
       Form validation/FK changes were separated from this migration lane.
+- [x] Rollback discovers every FK targeting the seed-owned sport and league,
+      locks the parent rows, and refuses before mutation when downstream state exists.
+- [x] Expected availability edges are removed only when the sport is seed-owned;
+      compatible pre-existing WNBA rows remain unchanged.
 - [x] The feature is limited to manual-human Smart Form submission support.
-- [x] Protected exact-head CI, scratch migration drills, sanctioned staging DB
-      proof, and live schema parity passed.
+- [x] Local PostgreSQL 16 rollback, concurrency, and reversibility drills passed.
+- [ ] Protected exact-head CI remains pending for the repaired head.
 - [ ] Independent PM review remains required before governed merge.
 
 ## EVIDENCE:
@@ -37,31 +41,37 @@ result: execution_pass_pending_governance
 Measured local executor results:
 
 ```text
-Focused required suite: 155 pass, 0 fail, 1 skipped
-API server suite: 66 pass, 0 fail
-pnpm type-check: PASS
+packages/db suite on scratch PostgreSQL 16: 298 pass, 0 fail, 0 skipped
+focused canonical-reference suite: 30 pass, 0 fail, 0 skipped
+migration reversibility adversarial suite: 10 pass, 0 fail
+participant seed lifecycle suite: 14 pass, 0 fail
+@unit-talk/db type-check: PASS
 pnpm verify:commands: PASS (139 migration files; 138 linted without findings)
 pnpm verify:static: PASS
-R-level: PASS; 18 changed files; operator-ui matched
+R-level: PASS; 9 changed files; no R-level rules matched
 pnpm test:db: REFUSED before mutation (host=127.0.0.1, ref=unidentified)
 ```
 
-The skipped focused case is the existing scratch-Postgres catalog test gated by
-the absent approved admin URL. No DB-write test began locally.
+No production or staging database was accessed. All applied migrations and data
+mutations occurred only in disposable local PostgreSQL 16 scratch databases.
 
 ## Verification
 
-- `pnpm exec tsx --test 'apps/api/src/smart-form-validation.test.ts' 'apps/smart-form/test/form-utils.test.ts' 'packages/db/src/canonical-reference-schema.test.ts' 'packages/db/src/pick-foreign-keys.test.ts'`:
-  PASS (155 pass, 0 fail, 1 skipped).
-- `pnpm exec tsx --test apps/api/src/server.test.ts`: PASS (66 pass, 0 fail).
-- `pnpm type-check`: PASS.
+- `PARTICIPANT_CATALOG_TEST_ADMIN_URL=<local-postgres-16> pnpm exec tsx --test packages/db/src/*.test.ts`:
+  PASS (298 pass, 0 fail, 0 skipped).
+- Focused `canonical-reference-schema.test.ts`: PASS (30/30), including clean
+  and pre-existing baselines, participant refusal, all named downstream FKs,
+  generic future FKs, atomic snapshots, and concurrent `picks` inserts.
+- Migration reversibility gate: PASS; down-script check and 10/10 adversarial tests.
+- Participant seed lifecycle drill: PASS (14/14) on local PostgreSQL 16.
+- `pnpm --filter @unit-talk/db type-check`: PASS.
 - `pnpm test`: PASS as part of `pnpm verify:static`.
 - `pnpm verify:commands`: PASS.
 - `pnpm verify:static`: PASS.
 - `pnpm verify`: all static stages PASS; the writable phase then correctly
   REFUSED before tests or mutation because the target was not sanctioned staging.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`:
-  PASS; `operator-ui` matched.
+  PASS; no R-level rules matched.
 - `pnpm test:db`: correctly REFUSED before mutation because the local target
   resolved to `127.0.0.1/unidentified`, not the sanctioned staging project.
 
@@ -70,21 +80,13 @@ from its URL (host=unparseable). Writable DB verification requires
 `xskgrzbteyqdufktjrjx`. Run it through the staging-ci GitHub environment with
 `CI_SUPABASE_*` credentials.
 
-Hosted exact-head receipts at `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`:
-
-- Fail-closed precondition drill: PASS — run `38328113187`, job `115071412828`.
-- Schema apply/rollback/reapply round trip: PASS — run `38328113187`, job
-  `115071412957`.
-- Sanctioned staging writable DB proof and T1 live suites: PASS — run
-  `38328113271`, job `115071883344`.
-- Required `verify`: PASS — run `38328113271`, job `115075451460`; the same-run
-  staging receipt was downloaded and verified successfully.
-- Live schema parity: PASS — run `38328113076`, job `115071434784`; this proves
-  schema parity and does not claim a production data apply.
+Earlier hosted receipts are not reused for the repaired source. Protected CI
+must bind fresh receipts to the pushed exact PR head.
 
 ## Pending governed evidence
 
 - Independent PM review and merge approval.
+- Protected exact-head CI for the repaired head.
 - Proof Coverage Guard disposition without adding a proof source file outside
   the packet's allowed scope; the sanctioned staging proof itself passed.
 - Governed merge, production migration through the normal post-merge path, lane
@@ -94,4 +96,4 @@ Hosted exact-head receipts at `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`:
 
 Merge SHA: pending merge
 PR: #1745
-Execution SHA: 7328e5ea5abfac332705dc59a0c40cb5e83fdc67
+Execution SHA: fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20

@@ -10,8 +10,8 @@ activate modeling, grading, promotion, or delivery behavior.
 | File | Change |
 |---|---|
 | `supabase/migrations/20261010170100_wnba_participant_catalog.sql` | Adds the WNBA sport and league, mirrors existing NBA basketball availability, and idempotently seeds 15 canonical participants. |
-| `db/migrations-rollback/20261010170100_wnba_participant_catalog.down.sql` | Deletes only UTV2-1972-owned participants and refuses when any FK references them. |
-| `packages/db/src/canonical-reference-schema.test.ts` | Covers the canonical WNBA SQL invariants and scratch migration behavior. |
+| `db/migrations-rollback/20261010170100_wnba_participant_catalog.down.sql` | Locks seed-owned WNBA parents, discovers sport/league dependencies through `pg_constraint`, and refuses before any delete when downstream state exists. Availability is removed only with a seed-owned sport. |
+| `packages/db/src/canonical-reference-schema.test.ts` | Covers exact baseline restoration, preservation of compatible pre-existing rows, participant and downstream-reference refusal, atomic snapshots, generic future FKs, and concurrent inserts on PostgreSQL 16. |
 | `docs/06_status/proof/UTV2-1972/*` | Issue-owned governed review evidence. |
 
 ## Catalog containment
@@ -28,4 +28,4 @@ activate modeling, grading, promotion, or delivery behavior.
 
 Merge SHA: pending merge
 PR: #1745
-Verified source SHA: `7328e5ea5abfac332705dc59a0c40cb5e83fdc67`
+Verified source SHA: `fdafdfbabf0dcdba4ced01cb72635d9d3d3a7e20`
