@@ -1,0 +1,110 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1978",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "review_pending_exact_head_ci",
+  "sha_binding": {
+    "merge_sha": "ed89569df229a98dfa31833fd821de3794359fb0",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1746",
+    "verified_source_sha": "bbc5dc4de5d50d55adc87b1ac862515ba02d8141",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-13T12:11:37.552Z"
+  },
+  "static_proof": {
+    "status": "pass_with_t1_live_db_deferred_to_ci",
+    "measured_against_sha": "5e8598700065af2f30eef5ca1f5e5fcc71692eef",
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test scripts/ci/nextjs-deploy-wiring.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 44,
+        "pass": 44,
+        "fail": 0
+      },
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass"
+      },
+      {
+        "command": "pnpm test:db",
+        "exit_code": 1,
+        "result": "refused_by_staging_isolation",
+        "note": "Target host 127.0.0.1 was unidentified rather than sanctioned staging project xskgrzbteyqdufktjrjx. Writable proof is delegated to exact-head staging-ci."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "note": "No R-level rules matched the changed paths."
+      },
+      {
+        "command": "git diff --check origin/main...HEAD",
+        "exit_code": 0,
+        "result": "pass"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "production_shaped_image_pass",
+    "environment": "contained lane worktree; local Docker daemon; no push or deploy",
+    "image": {
+      "tag": "unit-talk-web:utv2-1978-local",
+      "id": "sha256:73c59954c4e9e9186f77c7bb5650b4eb2b30de48789464b98db4df37539e8538",
+      "size_bytes": 1296292180,
+      "app_package": "@unit-talk/web",
+      "app_port": 4200,
+      "site_origin": "https://unit-talk.com",
+      "api_origin": "https://api.unit-talk.com",
+      "static_pages": 15,
+      "robots_txt_prerendered": true
+    },
+    "validation_control": "A build using the .test placeholder site origin reached page-data collection and was refused by unchanged strict site-config validation.",
+    "t1_database_proof": "deferred_to_exact_head_staging_ci"
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/deploy.yml",
+      "deploy/production/Dockerfile.nextjs",
+      "scripts/ci/nextjs-deploy-wiring.test.ts"
+    ],
+    "package_changes": 0,
+    "dependency_changes": 0,
+    "lockfile_changes": 0,
+    "production_deployments": 0,
+    "production_mutations": 0,
+    "discord_mutations": 0,
+    "pick_mutations": 0,
+    "delivery_releases": 0
+  },
+  "known_gaps": [
+    "Exact-head CI verify and Writable DB proof (staging only) remain required before independent PM review can authorize merge.",
+    "Merge, deployment, lane finalization, and post-merge orchestration reconciliation remain pending and unauthorized in this executor closeout."
+  ],
+  "resync_proof": {
+    "date": "2026-10-13",
+    "sanctioned_operation": "ops:merge-wrapper pr-update-branch",
+    "previous_reviewed_head": "418e148797c33478feed031d9e7e8c37419affb5",
+    "current_main": "4ba6fb32ad15563e7243f3d787f6e3955f986543",
+    "execution_sha": "bbc5dc4de5d50d55adc87b1ac862515ba02d8141",
+    "incoming_paths": [
+      "docs/06_status/readiness/readiness-score.json"
+    ],
+    "implementation_files_byte_identical": true,
+    "focused_tests": {
+      "fail": 0,
+      "skip": 0,
+      "pass": 44,
+      "tests": 44
+    },
+    "r_level": "PASS",
+    "historical_static_and_image_source": "5e8598700065af2f30eef5ca1f5e5fcc71692eef",
+    "fresh_exact_head_ci": "required",
+    "production_mutations": 0
+  }
+}
