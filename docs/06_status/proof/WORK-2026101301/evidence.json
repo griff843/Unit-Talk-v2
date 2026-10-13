@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": "pending merge",
+    "merge_sha": null,
     "verified_source_sha": "ba16df5bd575212ecbc5b5527121a8c81aaef853",
     "evidence_commit_sha": "pending proof commit",
     "current_pr_head_sha": "ba16df5bd575212ecbc5b5527121a8c81aaef853",
