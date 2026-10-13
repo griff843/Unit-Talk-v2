@@ -40,6 +40,46 @@ serialization of the whole board.
 This statement orders the work. It introduces no readiness threshold, and it authorizes no change
 to containment or to member-delivery activation — both remain reserved.
 
+### Current intent — quantity-first operating goal
+
+Ratified by Griff on 2026-10-13 (bounded correction; recorded here at his direction, issue #1747).
+The September 2026 ratifications above and below are preserved as historical decisions; where this
+section is more specific about the *current* goal, it governs.
+
+1. **Milestone 1 is historically complete** (2026-09-09; repeated 2026-09-28). It proved the path
+   works for a single pick. It is evidence, not the remaining finish line.
+2. **There is no calendar-based internal pilot.** Success is the *quantity, diversity, truthful
+   completion and reconciliation* of real pick lifecycles, regardless of whether it takes one, two,
+   seven or more days. Elapsed time may be reported as an observation, never used as an exit
+   condition.
+3. **First commercial-operating milestone.** Griff and authorized cappers submit **real Track Only
+   picks** through the deployed Smart Form; accurate authenticated capper, event, market, line,
+   units, odds and provenance persist; the picks are inspected in the governed Command Center;
+   authorized **real manual settlement and correction** are recorded; and capper history and
+   statistics reconcile — with **zero member delivery**. Manual fallback is acceptable where
+   canonical event data is unavailable, provided it is labeled and claims neither provider
+   verification nor CLV. Neither SGO nor an event feed is required to submit and manually settle a
+   Track Only pick.
+4. **A quantity-based evidence batch** is kept in `plan.md` as a *working pilot measurement*: it is
+   not a readiness threshold, not an automatic declaration of success and not a cap on picks
+   collected. Griff decides whether the evidence is satisfactory. The formal bar remains
+   `docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md`, unchanged, including its live time
+   windows and its 100+ automated graded-pick requirement.
+5. **Second milestone — pre-SGO engineering completion.** Complete and verify every meaningful
+   data-independent P0/P1 prerequisite for provider ingestion, event/result matching, automated
+   grading, CLV snapshot plumbing, models and feature contracts, scoring evaluation, operator views,
+   security, observability and recovery, and commerce/entitlements **before** requesting paid SGO
+   activation. Intentionally parked ingestion and stale grading are distinguished from
+   implementation defects; proof uses staging and fixtures, and live provider evidence is never
+   fabricated.
+6. **SGO purchase and activation is a separate Griff gate**, taken after an evidence-backed
+   minimal-provider usage, coverage, cost and rollback plan. Nothing here unparks providers, the
+   syndicate machine or member delivery by implication.
+7. **Claude coordinates the cross-product program** with parallel admitted Codex worktrees, within
+   the concurrency configuration, singleton file ownership, staging capacity, exact-HEAD review and
+   the reserved decisions above. The separate browser-capable Codex Discord Waves 0–6 program remains
+   independent and is not duplicated. No worktree count is authority.
+
 ## Source of truth
 
 Current live `griff843/Unit-Talk-v2` only: current `main`, live PRs, actual runtime and database

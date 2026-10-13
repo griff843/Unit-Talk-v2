@@ -15,6 +15,7 @@ Claude Code is the execution orchestrator: work the Linear backlog, merge on gre
 ## Where to Look First (read in this order)
 
 1. **`CLAUDE.md`** — root invariants, commands, tier policy, skill table. Read this first, every session.
+   Then the mission set it imports: `docs/mission/intent.md` (Griff-owned intent, including the 2026-10-13 quantity-first current intent), `docs/mission/spec.md`, and `docs/mission/plan.md` (live state, rebuilt from runtime evidence).
 2. **`docs/CODEBASE_GUIDE.md`** — monorepo structure, package DAG, tech stack, DB schema facts.
 3. **`docs/05_operations/EXECUTION_MAP.md`** — master phase map, what is shipped, what is next.
 4. **Relevant skill** — see Skills Quick-Reference below. Invoke before touching the relevant subsystem.
