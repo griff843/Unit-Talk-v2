@@ -38,4 +38,4 @@ clean - all changes within declared scope
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: https://github.com/griff843/Unit-Talk-v2/pull/PRNUM
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1748
