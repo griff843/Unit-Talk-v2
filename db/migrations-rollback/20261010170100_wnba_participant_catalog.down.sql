@@ -3,6 +3,22 @@
 -- identities are preserved.
 BEGIN;
 
+-- Lock the exact seed-owned parents before inspecting their inbound foreign
+-- keys. FK inserts require KEY SHARE on these rows and therefore cannot slip
+-- between the reference scan and the eventual DELETE.
+SELECT sport.id
+FROM public.sports AS sport
+WHERE sport.id = 'WNBA'
+  AND sport.metadata->>'seedIssue' = 'UTV2-1972'
+FOR UPDATE;
+
+SELECT league.id
+FROM public.leagues AS league
+WHERE league.id = 'wnba'
+  AND league.sport_id = 'WNBA'
+  AND league.metadata->>'seedIssue' = 'UTV2-1972'
+FOR UPDATE;
+
 SELECT p.id
 FROM public.participants AS p
 WHERE p.id = ANY (ARRAY[
@@ -47,9 +63,146 @@ DECLARE
   ];
   reference record;
   is_referenced boolean;
+  sport_is_seeded boolean;
+  league_is_seeded boolean;
 BEGIN
-  -- Refuse before DELETE even for cascading relationships. The row lock above
-  -- also prevents a concurrent FK insert from slipping between scan and delete.
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.sports AS sport
+    WHERE sport.id = 'WNBA'
+      AND sport.metadata->>'seedIssue' = 'UTV2-1972'
+  ) INTO sport_is_seeded;
+
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.leagues AS league
+    WHERE league.id = 'wnba'
+      AND league.sport_id = 'WNBA'
+      AND league.metadata->>'seedIssue' = 'UTV2-1972'
+  ) INTO league_is_seeded;
+
+  -- Refuse before any DELETE even when the FK action would otherwise cascade
+  -- or set the child column to NULL. Build each join from pg_constraint so a
+  -- newly added FK is protected without changing this rollback.
+  IF sport_is_seeded THEN
+    FOR reference IN
+      SELECT
+        constraint_row.conrelid AS relation_oid,
+        constraint_row.conrelid::regclass AS relation_name,
+        string_agg(
+          format('child.%I = parent.%I', source_attribute.attname, target_attribute.attname),
+          ' AND '
+          ORDER BY source_key.ordinality
+        ) AS join_predicate
+      FROM pg_constraint AS constraint_row
+      CROSS JOIN LATERAL unnest(constraint_row.conkey)
+        WITH ORDINALITY AS source_key(attribute_number, ordinality)
+      JOIN LATERAL unnest(constraint_row.confkey)
+        WITH ORDINALITY AS target_key(attribute_number, ordinality)
+        ON target_key.ordinality = source_key.ordinality
+      JOIN pg_attribute AS source_attribute
+        ON source_attribute.attrelid = constraint_row.conrelid
+       AND source_attribute.attnum = source_key.attribute_number
+      JOIN pg_attribute AS target_attribute
+        ON target_attribute.attrelid = constraint_row.confrelid
+       AND target_attribute.attnum = target_key.attribute_number
+      WHERE constraint_row.contype = 'f'
+        AND constraint_row.confrelid = 'public.sports'::regclass
+      GROUP BY constraint_row.oid, constraint_row.conrelid
+    LOOP
+      -- These availability edges are created by this migration when it creates
+      -- the sport and are the only expected child rows removed with that sport.
+      IF reference.relation_oid = 'public.sport_market_type_availability'::regclass THEN
+        CONTINUE;
+      END IF;
+
+      IF reference.relation_oid = 'public.leagues'::regclass AND league_is_seeded THEN
+        EXECUTE format(
+          'SELECT EXISTS (
+             SELECT 1
+             FROM %s AS child
+             JOIN public.sports AS parent ON %s
+             WHERE parent.id = $1
+               AND NOT (
+                 child.id = ''wnba''
+                 AND child.sport_id = ''WNBA''
+                 AND child.metadata->>''seedIssue'' = ''UTV2-1972''
+               )
+           )',
+          reference.relation_name,
+          reference.join_predicate
+        ) INTO is_referenced USING 'WNBA';
+      ELSE
+        EXECUTE format(
+          'SELECT EXISTS (
+             SELECT 1
+             FROM %s AS child
+             JOIN public.sports AS parent ON %s
+             WHERE parent.id = $1
+           )',
+          reference.relation_name,
+          reference.join_predicate
+        ) INTO is_referenced USING 'WNBA';
+      END IF;
+
+      IF is_referenced THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = format(
+            'UTV2-1972 rollback refused: migration-created sport is referenced by %s',
+            reference.relation_name
+          );
+      END IF;
+    END LOOP;
+  END IF;
+
+  IF league_is_seeded THEN
+    FOR reference IN
+      SELECT
+        constraint_row.conrelid::regclass AS relation_name,
+        string_agg(
+          format('child.%I = parent.%I', source_attribute.attname, target_attribute.attname),
+          ' AND '
+          ORDER BY source_key.ordinality
+        ) AS join_predicate
+      FROM pg_constraint AS constraint_row
+      CROSS JOIN LATERAL unnest(constraint_row.conkey)
+        WITH ORDINALITY AS source_key(attribute_number, ordinality)
+      JOIN LATERAL unnest(constraint_row.confkey)
+        WITH ORDINALITY AS target_key(attribute_number, ordinality)
+        ON target_key.ordinality = source_key.ordinality
+      JOIN pg_attribute AS source_attribute
+        ON source_attribute.attrelid = constraint_row.conrelid
+       AND source_attribute.attnum = source_key.attribute_number
+      JOIN pg_attribute AS target_attribute
+        ON target_attribute.attrelid = constraint_row.confrelid
+       AND target_attribute.attnum = target_key.attribute_number
+      WHERE constraint_row.contype = 'f'
+        AND constraint_row.confrelid = 'public.leagues'::regclass
+      GROUP BY constraint_row.oid, constraint_row.conrelid
+    LOOP
+      EXECUTE format(
+        'SELECT EXISTS (
+           SELECT 1
+           FROM %s AS child
+           JOIN public.leagues AS parent ON %s
+           WHERE parent.id = $1
+         )',
+        reference.relation_name,
+        reference.join_predicate
+      ) INTO is_referenced USING 'wnba';
+
+      IF is_referenced THEN
+        RAISE EXCEPTION USING
+          ERRCODE = 'P0001',
+          MESSAGE = format(
+            'UTV2-1972 rollback refused: migration-created league is referenced by %s',
+            reference.relation_name
+          );
+      END IF;
+    END LOOP;
+  END IF;
+
   FOR reference IN
     SELECT
       constraint_row.conrelid::regclass AS relation_name,

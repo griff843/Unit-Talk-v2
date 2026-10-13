@@ -7,8 +7,15 @@ import { canonicalTables } from './index.js';
 import { canonicalSchema } from './schema.js';
 
 test('canonical table registry includes canonical reference backbone tables', () => {
-  for (const table of ['leagues', 'teams', 'players', 'player_team_assignments']) {
-    assert.ok(canonicalTables.includes(table as (typeof canonicalTables)[number]));
+  for (const table of [
+    'leagues',
+    'teams',
+    'players',
+    'player_team_assignments',
+  ]) {
+    assert.ok(
+      canonicalTables.includes(table as (typeof canonicalTables)[number]),
+    );
   }
 });
 
@@ -16,7 +23,9 @@ test('canonical schema metadata includes expected owners for backbone tables', (
   const leagues = canonicalSchema.find((row) => row.name === 'leagues');
   const teams = canonicalSchema.find((row) => row.name === 'teams');
   const players = canonicalSchema.find((row) => row.name === 'players');
-  const assignments = canonicalSchema.find((row) => row.name === 'player_team_assignments');
+  const assignments = canonicalSchema.find(
+    (row) => row.name === 'player_team_assignments',
+  );
 
   assert.ok(leagues);
   assert.equal(leagues.owner, 'platform');
@@ -49,8 +58,16 @@ import { V1_REFERENCE_DATA } from '@unit-talk/contracts';
 
 type SearchHarness = {
   client: { from(table: string): unknown };
-  searchTeams(sportId: string, query: string, limit: number): Promise<unknown[]>;
-  searchPlayers(sportId: string, query: string, limit: number): Promise<unknown[]>;
+  searchTeams(
+    sportId: string,
+    query: string,
+    limit: number,
+  ): Promise<unknown[]>;
+  searchPlayers(
+    sportId: string,
+    query: string,
+    limit: number,
+  ): Promise<unknown[]>;
 };
 
 function harness(from: (table: string) => unknown): SearchHarness {
@@ -82,10 +99,22 @@ function recordingBuilder(
     then: (resolve: (value: ReturnType<typeof result>) => unknown) =>
       Promise.resolve(result()).then(resolve),
   };
-  for (const method of ['select', 'eq', 'ilike', 'order', 'in', 'is', 'limit']) {
+  for (const method of [
+    'select',
+    'eq',
+    'ilike',
+    'order',
+    'in',
+    'is',
+    'limit',
+  ]) {
     builder[method] = (...args: unknown[]) => {
       calls.push([method, args]);
-      if (method === 'is' && args[0] === 'metadata->>proofIssue' && args[1] === null) {
+      if (
+        method === 'is' &&
+        args[0] === 'metadata->>proofIssue' &&
+        args[1] === null
+      ) {
         current = current.filter((row) => {
           const metadata = row.metadata;
           if (typeof metadata !== 'object' || metadata === null) return true;
@@ -113,25 +142,43 @@ test('searchTeams reads participants scoped by sport and answers with participan
 
   assert.deepEqual(tables, ['participants']);
   assert.deepEqual(results, [
-    { participantId: 'participant-knicks', displayName: 'New York Knicks', sport: 'NBA' },
+    {
+      participantId: 'participant-knicks',
+      displayName: 'New York Knicks',
+      sport: 'NBA',
+    },
   ]);
   // The sport scope is a query predicate, so the read is bounded to one sport's
   // 30-32 team participants and nothing from another sport can reach the ranking.
-  assert.ok(calls.some(([m, a]) => m === 'eq' && a[0] === 'sport' && a[1] === 'NBA'));
-  assert.ok(calls.some(([m, a]) => m === 'eq' && a[0] === 'participant_type' && a[1] === 'team'));
+  assert.ok(
+    calls.some(([m, a]) => m === 'eq' && a[0] === 'sport' && a[1] === 'NBA'),
+  );
+  assert.ok(
+    calls.some(
+      ([m, a]) => m === 'eq' && a[0] === 'participant_type' && a[1] === 'team',
+    ),
+  );
   // The operator's text is deliberately NOT pushed into the query. It is matched
   // in process against nickname, city and abbreviation, so it never reaches
   // PostgREST's filter grammar and a `display_name`-only `ilike` cannot make
   // "milwaukee" or "mil" unfindable. Asserting the absence is the point: an
   // `ilike` reappearing here would silently reintroduce both problems.
-  assert.ok(!calls.some(([m]) => m === 'ilike'), 'the query must not filter on the raw operator text');
-  assert.ok(!calls.some(([m]) => m === 'limit'), 'the sport is bounded, so limit is applied after ranking');
+  assert.ok(
+    !calls.some(([m]) => m === 'ilike'),
+    'the query must not filter on the raw operator text',
+  );
+  assert.ok(
+    !calls.some(([m]) => m === 'limit'),
+    'the sport is bounded, so limit is applied after ranking',
+  );
 });
 
 test('searchTeams no longer reads the canonical teams or leagues tables', async () => {
   const forbidden: string[] = [];
   const repository = harness((table) => {
-    if (table !== 'participants') { forbidden.push(table); }
+    if (table !== 'participants') {
+      forbidden.push(table);
+    }
     return recordingBuilder([], []);
   });
 
@@ -148,7 +195,11 @@ test('searchPlayers scopes by sport in the query and never reads player_team_ass
   const repository = harness((table) => {
     tables.push(table);
     return recordingBuilder(calls, [
-      { id: 'participant-brunson', display_name: 'Jalen Brunson', metadata: {} },
+      {
+        id: 'participant-brunson',
+        display_name: 'Jalen Brunson',
+        metadata: {},
+      },
     ]);
   });
 
@@ -156,8 +207,15 @@ test('searchPlayers scopes by sport in the query and never reads player_team_ass
 
   assert.equal(tables.includes('player_team_assignments'), false);
   assert.equal(tables.includes('players'), false);
-  assert.ok(calls.some(([m, a]) => m === 'eq' && a[0] === 'sport' && a[1] === 'NBA'));
-  assert.ok(calls.some(([m, a]) => m === 'eq' && a[0] === 'participant_type' && a[1] === 'player'));
+  assert.ok(
+    calls.some(([m, a]) => m === 'eq' && a[0] === 'sport' && a[1] === 'NBA'),
+  );
+  assert.ok(
+    calls.some(
+      ([m, a]) =>
+        m === 'eq' && a[0] === 'participant_type' && a[1] === 'player',
+    ),
+  );
 });
 
 test('searchPlayers resolves teamId through participants.external_id and reports absence honestly', async () => {
@@ -171,8 +229,16 @@ test('searchPlayers resolves teamId through participants.external_id and reports
     builder.limit = () =>
       Promise.resolve({
         data: [
-          { id: 'p-brunson', display_name: 'Jalen Brunson', metadata: { team_external_id: 'NEW_YORK_KNICKS_NBA' } },
-          { id: 'p-unknown', display_name: 'Unmapped Player', metadata: { team_external_id: 'NOT_IN_DB' } },
+          {
+            id: 'p-brunson',
+            display_name: 'Jalen Brunson',
+            metadata: { team_external_id: 'NEW_YORK_KNICKS_NBA' },
+          },
+          {
+            id: 'p-unknown',
+            display_name: 'Unmapped Player',
+            metadata: { team_external_id: 'NOT_IN_DB' },
+          },
           { id: 'p-none', display_name: 'No Team Player', metadata: {} },
         ],
         error: null,
@@ -195,11 +261,14 @@ test('searchPlayers resolves teamId through participants.external_id and reports
   // One batched lookup for the whole page, not one per row.
   assert.equal(teamLookupArgs.length, 1);
   assert.equal(teamLookupArgs[0]?.[0], 'external_id');
-  assert.deepEqual(results.map((row) => [row.participantId, row.teamId]), [
-    ['p-brunson', 'p-knicks'],
-    ['p-unknown', null],
-    ['p-none', null],
-  ]);
+  assert.deepEqual(
+    results.map((row) => [row.participantId, row.teamId]),
+    [
+      ['p-brunson', 'p-knicks'],
+      ['p-unknown', null],
+      ['p-none', null],
+    ],
+  );
 });
 
 test('searchTeams treats an empty query as "what is available", not "nothing matches"', async () => {
@@ -208,16 +277,29 @@ test('searchTeams treats an empty query as "what is available", not "nothing mat
   // query must keep returning rows. A rewrite that short-circuits to [] reports
   // every sport as having no teams, and no test that passes a real query sees it.
   const repository = harness(() =>
-    recordingBuilder([], [
-      { id: 't-2', display_name: 'Bulls' },
-      { id: 't-1', display_name: 'Bucks' },
-    ]),
+    recordingBuilder(
+      [],
+      [
+        { id: 't-2', display_name: 'Bulls' },
+        { id: 't-1', display_name: 'Bucks' },
+      ],
+    ),
   );
 
-  const results = (await repository.searchTeams('NBA', '', 1)) as Array<{ displayName: string }>;
+  const results = (await repository.searchTeams('NBA', '', 1)) as Array<{
+    displayName: string;
+  }>;
 
-  assert.equal(results.length, 1, 'an empty query must still report availability');
-  assert.equal(results[0]!.displayName, 'Bucks', 'and must be ordered deterministically');
+  assert.equal(
+    results.length,
+    1,
+    'an empty query must still report availability',
+  );
+  assert.equal(
+    results[0]!.displayName,
+    'Bucks',
+    'and must be ordered deterministically',
+  );
 });
 
 test('searchTeams finds a team by its city and its abbreviation, not only its nickname', async () => {
@@ -249,7 +331,11 @@ test('searchTeams finds a team by its city and its abbreviation, not only its ni
     const results = (await repository.searchTeams('NBA', query, 25)) as Array<{
       participantId: string;
     }>;
-    assert.deepEqual(results.map((row) => row.participantId), expected, `query "${query}"`);
+    assert.deepEqual(
+      results.map((row) => row.participantId),
+      expected,
+      `query "${query}"`,
+    );
   }
 });
 
@@ -276,7 +362,9 @@ test('searchPlayers excludes confirmed proof fixtures as a query predicate, befo
 
   await repository.searchPlayers('NBA', 'a', 10);
 
-  const isCall = calls.find(([m, a]) => m === 'is' && a[0] === 'metadata->>proofIssue');
+  const isCall = calls.find(
+    ([m, a]) => m === 'is' && a[0] === 'metadata->>proofIssue',
+  );
   assert.ok(isCall, 'the fixture exclusion must be pushed into the query');
   assert.equal(isCall![1][1], null);
 
@@ -284,10 +372,15 @@ test('searchPlayers excludes confirmed proof fixtures as a query predicate, befo
   // `limit` in the query, so an exclusion applied after the rows come back would
   // let fixtures consume the page and displace real players -- a false negative
   // of the same class the UTV2-1672 sport-scope guard exists to prevent.
-  const isIndex = calls.findIndex(([m, a]) => m === 'is' && a[0] === 'metadata->>proofIssue');
+  const isIndex = calls.findIndex(
+    ([m, a]) => m === 'is' && a[0] === 'metadata->>proofIssue',
+  );
   const limitIndex = calls.findIndex(([m]) => m === 'limit');
   assert.ok(limitIndex >= 0, 'searchPlayers still bounds its read');
-  assert.ok(isIndex < limitIndex, 'the exclusion must be applied before the limit');
+  assert.ok(
+    isIndex < limitIndex,
+    'the exclusion must be applied before the limit',
+  );
 });
 
 test('searchTeams excludes confirmed proof fixtures without dropping ordinary teams', async () => {
@@ -296,22 +389,33 @@ test('searchTeams excludes confirmed proof fixtures without dropping ordinary te
   // would otherwise become selectable and set `teamsAvailable`, which is the same
   // defect the 26 player fixtures produce on the sibling path.
   const repository = harness(() =>
-    recordingBuilder([], [
-      { id: 't-real', display_name: 'Knicks', external_id: 'NEW_YORK_KNICKS_NBA', metadata: {} },
-      {
-        id: 't-fixture',
-        display_name: 'Knicks Proof',
-        external_id: 'PROOF_TEAM_NBA',
-        metadata: { proofIssue: 'UTV2-614' },
-      },
-    ]),
+    recordingBuilder(
+      [],
+      [
+        {
+          id: 't-real',
+          display_name: 'Knicks',
+          external_id: 'NEW_YORK_KNICKS_NBA',
+          metadata: {},
+        },
+        {
+          id: 't-fixture',
+          display_name: 'Knicks Proof',
+          external_id: 'PROOF_TEAM_NBA',
+          metadata: { proofIssue: 'UTV2-614' },
+        },
+      ],
+    ),
   );
 
   const results = (await repository.searchTeams('NBA', 'knick', 25)) as Array<{
     participantId: string;
   }>;
 
-  assert.deepEqual(results.map((row) => row.participantId), ['t-real']);
+  assert.deepEqual(
+    results.map((row) => row.participantId),
+    ['t-real'],
+  );
 });
 
 test('searchPlayers preserves a legitimate team-less player while excluding a fixture', async () => {
@@ -321,14 +425,22 @@ test('searchPlayers preserves a legitimate team-less player while excluding a fi
   // observation, which is precisely why this row is constructed.
   const rows = [
     { id: 'p-legit', display_name: 'Rookie Callup', metadata: {} },
-    { id: 'p-fixture', display_name: 'Rookie Proof', metadata: { proofIssue: 'UTV2-618' } },
+    {
+      id: 'p-fixture',
+      display_name: 'Rookie Proof',
+      metadata: { proofIssue: 'UTV2-618' },
+    },
   ];
   const repository = harness((table) =>
     // The batched team lookup finds nothing, because neither row names a team.
     recordingBuilder([], table === 'participants' ? rows : []),
   );
 
-  const results = (await repository.searchPlayers('NBA', 'rookie', 10)) as Array<{
+  const results = (await repository.searchPlayers(
+    'NBA',
+    'rookie',
+    10,
+  )) as Array<{
     participantId: string;
     teamId: string | null;
   }>;
@@ -338,7 +450,11 @@ test('searchPlayers preserves a legitimate team-less player while excluding a fi
     ['p-legit'],
     'the marked row is excluded and the unmarked one is kept',
   );
-  assert.equal(results[0]!.teamId, null, 'missing team coverage stays honest, not fabricated');
+  assert.equal(
+    results[0]!.teamId,
+    null,
+    'missing team coverage stays honest, not fabricated',
+  );
 });
 
 test('a proofIssue that names no issue is not a confirmed fixture', async () => {
@@ -350,16 +466,29 @@ test('a proofIssue that names no issue is not a confirmed fixture', async () => 
     recordingBuilder(
       [],
       table === 'participants'
-        ? [{ id: 'p-null-marker', display_name: 'Ambiguous Row', metadata: { proofIssue: null } }]
+        ? [
+            {
+              id: 'p-null-marker',
+              display_name: 'Ambiguous Row',
+              metadata: { proofIssue: null },
+            },
+          ]
         : [],
     ),
   );
 
-  const results = (await repository.searchPlayers('NBA', 'ambiguous', 10)) as Array<{
+  const results = (await repository.searchPlayers(
+    'NBA',
+    'ambiguous',
+    10,
+  )) as Array<{
     participantId: string;
   }>;
 
-  assert.deepEqual(results.map((row) => row.participantId), ['p-null-marker']);
+  assert.deepEqual(
+    results.map((row) => row.participantId),
+    ['p-null-marker'],
+  );
 });
 
 test('the in-memory repository applies the same proof-fixture exclusion, before its limit', async () => {
@@ -387,7 +516,9 @@ test('the in-memory repository applies the same proof-fixture exclusion, before 
     participants: [
       // Sorts first, so with a limit of 1 a post-filter implementation would
       // return nothing at all and the real player would be unreachable.
-      participant('p-fixture', 'Aaa Fixture Player', { proofIssue: 'UTV2-618' }),
+      participant('p-fixture', 'Aaa Fixture Player', {
+        proofIssue: 'UTV2-618',
+      }),
       participant('p-legit', 'Zzz Real Player', {}),
     ],
   });
@@ -398,7 +529,11 @@ test('the in-memory repository applies the same proof-fixture exclusion, before 
     ['p-legit'],
     'the marked row is excluded and the unmarked one kept',
   );
-  assert.equal(unlimited[0]!.teamId, null, 'a missing team is reported honestly');
+  assert.equal(
+    unlimited[0]!.teamId,
+    null,
+    'a missing team is reported honestly',
+  );
 
   const limited = await repository.searchPlayers('NBA', 'player', 1);
   assert.deepEqual(
@@ -448,7 +583,15 @@ function browseHarness(tables: BrowseTables): DatabaseReferenceDataRepository {
       maybeSingle: () =>
         Promise.resolve({ data: rows[0] ?? null, error: null }),
     };
-    for (const method of ['select', 'eq', 'in', 'is', 'order', 'limit', 'ilike']) {
+    for (const method of [
+      'select',
+      'eq',
+      'in',
+      'is',
+      'order',
+      'limit',
+      'ilike',
+    ]) {
       builder[method] = () => builder;
     }
     return builder;
@@ -482,8 +625,16 @@ test('getEventBrowse resolves a player team through the participants edge while 
   const repository = browseHarness({
     events: [BROWSE_EVENT],
     event_participants: [
-      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'competitor' },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-team-home',
+        role: 'home',
+      },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-player-1',
+        role: 'competitor',
+      },
     ],
     participants: [
       HOME_TEAM,
@@ -520,8 +671,16 @@ test('getEventBrowse reports an honest null for a player with no team key, and d
   const repository = browseHarness({
     events: [BROWSE_EVENT],
     event_participants: [
-      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-2', role: 'competitor' },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-team-home',
+        role: 'home',
+      },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-player-2',
+        role: 'competitor',
+      },
     ],
     participants: [
       HOME_TEAM,
@@ -545,8 +704,15 @@ test('getEventBrowse reports an honest null for a player with no team key, and d
     (participant) => participant.participantId === 'participant-player-2',
   );
 
-  assert.ok(player, 'a team-less player is still a legitimate participant and must be retained');
-  assert.equal(player.teamId, null, 'no team key means no team -- never the only team in the event');
+  assert.ok(
+    player,
+    'a team-less player is still a legitimate participant and must be retained',
+  );
+  assert.equal(
+    player.teamId,
+    null,
+    'no team key means no team -- never the only team in the event',
+  );
   assert.equal(player.teamName, null);
 });
 
@@ -554,8 +720,16 @@ test('getEventBrowse leaves a player whose team key names a team outside this ev
   const repository = browseHarness({
     events: [BROWSE_EVENT],
     event_participants: [
-      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-3', role: 'competitor' },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-team-home',
+        role: 'home',
+      },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-player-3',
+        role: 'competitor',
+      },
     ],
     participants: [
       HOME_TEAM,
@@ -591,9 +765,21 @@ test('getEventBrowse excludes a confirmed proof fixture attached to an event whi
   const repository = browseHarness({
     events: [BROWSE_EVENT],
     event_participants: [
-      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'competitor' },
-      { event_id: 'event-1', participant_id: 'participant-fixture', role: 'competitor' },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-team-home',
+        role: 'home',
+      },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-player-1',
+        role: 'competitor',
+      },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-fixture',
+        role: 'competitor',
+      },
     ],
     participants: [
       HOME_TEAM,
@@ -649,8 +835,16 @@ test('getEventBrowse keeps a row whose proofIssue is null: that names no issue a
   const repository = browseHarness({
     events: [BROWSE_EVENT],
     event_participants: [
-      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-4', role: 'competitor' },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-team-home',
+        role: 'home',
+      },
+      {
+        event_id: 'event-1',
+        participant_id: 'participant-player-4',
+        role: 'competitor',
+      },
     ],
     participants: [
       HOME_TEAM,
@@ -722,10 +916,16 @@ test('the in-memory repository resolves a player team through the participants e
     participants: [
       row('team-lakers', 'Lakers', 'team', 'nba:lakers', {}),
       row('team-other-sport', 'Lakers', 'team', 'nba:lakers', {}, 'NFL'),
-      row('p-linked', 'Linked Player', 'player', 'p1', { team_external_id: 'nba:lakers' }),
+      row('p-linked', 'Linked Player', 'player', 'p1', {
+        team_external_id: 'nba:lakers',
+      }),
       row('p-unlinked', 'Unlinked Player', 'player', 'p2', {}),
-      row('p-dangling', 'Dangling Player', 'player', 'p3', { team_external_id: 'nba:no-such-team' }),
-      row('p-cross-sport', 'Cross Sport Player', 'player', 'p4', { team_external_id: 'nfl:lakers' }),
+      row('p-dangling', 'Dangling Player', 'player', 'p3', {
+        team_external_id: 'nba:no-such-team',
+      }),
+      row('p-cross-sport', 'Cross Sport Player', 'player', 'p4', {
+        team_external_id: 'nfl:lakers',
+      }),
     ] as never,
   });
 
@@ -799,7 +999,8 @@ test('the in-memory bundle seeds one participant set both repositories agree on'
     try {
       return createInMemoryRepositoryBundle();
     } finally {
-      if (previous === undefined) delete process.env['UNIT_TALK_QA_SEED_ENABLED'];
+      if (previous === undefined)
+        delete process.env['UNIT_TALK_QA_SEED_ENABLED'];
       else process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
     }
   })();
@@ -821,8 +1022,15 @@ test('the in-memory bundle seeds one participant set both repositories agree on'
     'at least one seeded player resolves to exactly the team id searchTeams returned — the equality validateSearchBackedPlayer requires',
   );
 
-  const unaffiliated = await bundle.referenceData.searchPlayers('NBA', 'Unaffiliated', 5);
-  assert.ok(unaffiliated.length > 0, 'the honest-null case exists in the seeded data, not only in fixtures');
+  const unaffiliated = await bundle.referenceData.searchPlayers(
+    'NBA',
+    'Unaffiliated',
+    5,
+  );
+  assert.ok(
+    unaffiliated.length > 0,
+    'the honest-null case exists in the seeded data, not only in fixtures',
+  );
   assert.equal(
     unaffiliated[0]!.teamId,
     null,
@@ -839,8 +1047,16 @@ test('the in-memory bundle carries no QA player fixtures unless the QA seed flag
   delete process.env['UNIT_TALK_QA_SEED_ENABLED'];
   try {
     const bundle = createInMemoryRepositoryBundle();
-    const players = await bundle.referenceData.searchPlayers('NBA', 'Starter', 25);
-    assert.deepEqual(players, [], 'no QA player fixture exists without the flag');
+    const players = await bundle.referenceData.searchPlayers(
+      'NBA',
+      'Starter',
+      25,
+    );
+    assert.deepEqual(
+      players,
+      [],
+      'no QA player fixture exists without the flag',
+    );
 
     // Teams are a different case and deliberately so: the bundle has always
     // seeded team participants into the participant repository, so a real id
@@ -848,13 +1064,17 @@ test('the in-memory bundle carries no QA player fixtures unless the QA seed flag
     // player fixture, which never existed before this lane.
     const teams = await bundle.referenceData.searchTeams('NBA', 'Lakers', 5);
     const team = teams.find((row) => row.displayName === 'Lakers');
-    assert.ok(team, 'the catalog still answers a team search with the flag off');
+    assert.ok(
+      team,
+      'the catalog still answers a team search with the flag off',
+    );
     assert.ok(
       await bundle.participants.findById(team.participantId),
       'and it answers with an id the participant repository resolves, not a synthetic string',
     );
   } finally {
-    if (previous !== undefined) process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
+    if (previous !== undefined)
+      process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
   }
 });
 
@@ -1044,7 +1264,10 @@ test('the frozen 2026 WNBA catalog contains exactly the 15 active franchises', (
 
 test('WNBA participant UUIDs are deterministic and provider-independent', () => {
   const migration = readFileSync(
-    new URL('../../../supabase/migrations/20261010170100_wnba_participant_catalog.sql', import.meta.url),
+    new URL(
+      '../../../supabase/migrations/20261010170100_wnba_participant_catalog.sql',
+      import.meta.url,
+    ),
     'utf8',
   );
   for (const [slug, displayName] of wnbaFranchises) {
@@ -1052,17 +1275,26 @@ test('WNBA participant UUIDs are deterministic and provider-independent', () => 
     assert.match(migration, new RegExp(`unit-talk:wnba:${slug}`));
     assert.match(migration, new RegExp(displayName));
   }
-  assert.doesNotMatch(migration, /provider_entity_aliases|provider[_-](?:id|key)/i);
+  assert.doesNotMatch(
+    migration,
+    /provider_entity_aliases|provider[_-](?:id|key)/i,
+  );
   assert.doesNotMatch(migration, /Cleveland Sirens/i);
 });
 
 test('the WNBA migration is additive, conflict-refusing, and never writes teams', () => {
   const migration = readFileSync(
-    new URL('../../../supabase/migrations/20261010170100_wnba_participant_catalog.sql', import.meta.url),
+    new URL(
+      '../../../supabase/migrations/20261010170100_wnba_participant_catalog.sql',
+      import.meta.url,
+    ),
     'utf8',
   );
   const rollback = readFileSync(
-    new URL('../../../db/migrations-rollback/20261010170100_wnba_participant_catalog.down.sql', import.meta.url),
+    new URL(
+      '../../../db/migrations-rollback/20261010170100_wnba_participant_catalog.down.sql',
+      import.meta.url,
+    ),
     'utf8',
   );
 
@@ -1070,7 +1302,10 @@ test('the WNBA migration is additive, conflict-refusing, and never writes teams'
   assert.match(migration, /INSERT INTO public\.leagues/);
   assert.match(migration, /INSERT INTO public\.sport_market_type_availability/);
   assert.match(migration, /INSERT INTO public\.participants/);
-  assert.doesNotMatch(migration, /(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)?\s*public\.teams/i);
+  assert.doesNotMatch(
+    migration,
+    /(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)?\s*public\.teams/i,
+  );
   assert.doesNotMatch(migration, /ON\s+CONFLICT/i);
   assert.match(migration, /canonical external identity conflict/);
   assert.match(migration, /governed UUID conflict/);
@@ -1082,74 +1317,498 @@ test('the WNBA migration is additive, conflict-refusing, and never writes teams'
   assert.doesNotMatch(rollback, /\b(?:CREATE|ALTER)\s+TABLE\b/i);
 });
 
+const participantCatalogTestAdmin =
+  process.env['PARTICIPANT_CATALOG_TEST_ADMIN_URL'];
 
-const participantCatalogTestAdmin = process.env['PARTICIPANT_CATALOG_TEST_ADMIN_URL'];
+test(
+  'NCAAF rollback serializes concurrent references and refuses committed downstream use',
+  {
+    skip: !participantCatalogTestAdmin,
+  },
+  async () => {
+    assert.ok(participantCatalogTestAdmin);
+    const admin = new URL(participantCatalogTestAdmin);
+    assert.ok(['127.0.0.1', 'localhost', '::1'].includes(admin.hostname));
+    assert.equal(admin.pathname, '/postgres');
+    assert.equal(admin.search, '');
+    const database = `participant_catalog_drill_ncaaf_${randomUUID().replaceAll('-', '').slice(0, 24)}`;
+    const scratch = new URL(admin);
+    scratch.pathname = `/${database}`;
+    const query = (dsn: string, sql: string) =>
+      execFileSync(
+        'psql',
+        [
+          dsn,
+          '-X',
+          '-At',
+          '-v',
+          'ON_ERROR_STOP=1',
+          '-v',
+          'VERBOSITY=verbose',
+          '-c',
+          sql,
+        ],
+        { encoding: 'utf8', timeout: 10_000 },
+      ).trim();
+    const execute = (sql: string) => {
+      const child = spawn('psql', [
+        scratch.href,
+        '-X',
+        '-At',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-v',
+        'VERBOSITY=verbose',
+      ]);
+      let stderr = '';
+      child.stdout.resume();
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      const completed = new Promise<{ code: number | null; stderr: string }>(
+        (resolve, reject) => {
+          child.on('error', reject);
+          child.on('close', (code) => resolve({ code, stderr }));
+        },
+      );
+      child.stdin.end(sql);
+      return completed;
+    };
+    const waitForPause = async () => {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        if (
+          query(
+            scratch.href,
+            "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='PgSleep');",
+          ) === 't'
+        )
+          return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.fail('controlled transaction did not reach its test-only pause');
+    };
+    const migration = readFileSync(
+      new URL(
+        '../../../supabase/migrations/20261010170000_ncaaf_participant_catalog.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const rollback = readFileSync(
+      new URL(
+        '../../../db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const participantId = ncaafRoster.participants[0]?.id;
+    assert.ok(participantId);
+    query(admin.href, `CREATE DATABASE ${database}`);
+    try {
+      query(
+        scratch.href,
+        "CREATE TABLE public.participants(id uuid PRIMARY KEY, external_id text UNIQUE, participant_type text NOT NULL, sport text, league text, display_name text NOT NULL, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());",
+      );
+      query(scratch.href, migration);
+      query(
+        scratch.href,
+        'CREATE TABLE public.concurrent_reference(id uuid REFERENCES public.participants(id) ON DELETE CASCADE);',
+      );
+      // A test-only pause exposes the gap between the actual reference scan and DELETE.
+      const firstRollback = execute(
+        rollback.replace(
+          'DELETE FROM public.participants',
+          'SELECT pg_sleep(2);\nDELETE FROM public.participants',
+        ),
+      );
+      await waitForPause();
+      const insert = await execute(
+        `SET lock_timeout='200ms'; INSERT INTO public.concurrent_reference VALUES ('${participantId}');`,
+      );
+      assert.notEqual(
+        insert.code,
+        0,
+        'concurrent reference slipped past the rollback scan',
+      );
+      assert.match(insert.stderr, /55P03/);
+      assert.equal((await firstRollback).code, 0);
+      assert.equal(
+        query(
+          scratch.href,
+          'SELECT count(*) FROM public.concurrent_reference;',
+        ),
+        '0',
+      );
 
-test('NCAAF rollback serializes concurrent references and refuses committed downstream use', {
-  skip: !participantCatalogTestAdmin,
-}, async () => {
-  assert.ok(participantCatalogTestAdmin);
-  const admin = new URL(participantCatalogTestAdmin);
-  assert.ok(['127.0.0.1', 'localhost', '::1'].includes(admin.hostname));
-  assert.equal(admin.pathname, '/postgres');
-  assert.equal(admin.search, '');
-  const database = `participant_catalog_drill_ncaaf_${randomUUID().replaceAll('-', '').slice(0, 24)}`;
-  const scratch = new URL(admin);
-  scratch.pathname = `/${database}`;
-  const query = (dsn: string, sql: string) => execFileSync('psql', [
-    dsn, '-X', '-At', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose', '-c', sql,
-  ], { encoding: 'utf8', timeout: 10_000 }).trim();
-  const execute = (sql: string) => {
-    const child = spawn('psql', [scratch.href, '-X', '-At', '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose']);
-    let stderr = '';
-    child.stdout.resume();
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-    const completed = new Promise<{ code: number | null; stderr: string }>((resolve, reject) => {
-      child.on('error', reject);
-      child.on('close', (code) => resolve({ code, stderr }));
-    });
-    child.stdin.end(sql);
-    return completed;
-  };
-  const waitForPause = async () => {
-    for (let attempt = 0; attempt < 50; attempt++) {
-      if (query(scratch.href, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='PgSleep');") === 't') return;
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      query(scratch.href, migration);
+      const snapshot = () =>
+        query(
+          scratch.href,
+          'SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM public.participants p;',
+        );
+      const before = snapshot();
+      const writer = execute(
+        `BEGIN; INSERT INTO public.concurrent_reference VALUES ('${participantId}'); SELECT pg_sleep(2); COMMIT;`,
+      );
+      await waitForPause();
+      const secondRollback = execute(rollback);
+      assert.equal((await writer).code, 0);
+      const refused = await secondRollback;
+      assert.notEqual(refused.code, 0);
+      assert.match(refused.stderr, /P0001/);
+      assert.match(refused.stderr, /seeded participant is referenced/);
+      assert.equal(
+        snapshot(),
+        before,
+        'rollback changed participant data despite a committed reference',
+      );
+      assert.equal(
+        query(
+          scratch.href,
+          'SELECT count(*) FROM public.concurrent_reference;',
+        ),
+        '1',
+      );
+    } finally {
+      query(admin.href, `DROP DATABASE ${database} WITH (FORCE)`);
     }
-    assert.fail('controlled transaction did not reach its test-only pause');
-  };
-  const migration = readFileSync(new URL('../../../supabase/migrations/20261010170000_ncaaf_participant_catalog.sql', import.meta.url), 'utf8');
-  const rollback = readFileSync(new URL('../../../db/migrations-rollback/20261010170000_ncaaf_participant_catalog.down.sql', import.meta.url), 'utf8');
-  const participantId = ncaafRoster.participants[0]?.id;
-  assert.ok(participantId);
-  query(admin.href, `CREATE DATABASE ${database}`);
-  try {
-    query(scratch.href, "CREATE TABLE public.participants(id uuid PRIMARY KEY, external_id text UNIQUE, participant_type text NOT NULL, sport text, league text, display_name text NOT NULL, metadata jsonb NOT NULL DEFAULT '{}', created_at timestamptz DEFAULT now(), updated_at timestamptz DEFAULT now());");
-    query(scratch.href, migration);
-    query(scratch.href, 'CREATE TABLE public.concurrent_reference(id uuid REFERENCES public.participants(id) ON DELETE CASCADE);');
-    // A test-only pause exposes the gap between the actual reference scan and DELETE.
-    const firstRollback = execute(rollback.replace('DELETE FROM public.participants', 'SELECT pg_sleep(2);\nDELETE FROM public.participants'));
-    await waitForPause();
-    const insert = await execute(`SET lock_timeout='200ms'; INSERT INTO public.concurrent_reference VALUES ('${participantId}');`);
-    assert.notEqual(insert.code, 0, 'concurrent reference slipped past the rollback scan');
-    assert.match(insert.stderr, /55P03/);
-    assert.equal((await firstRollback).code, 0);
-    assert.equal(query(scratch.href, 'SELECT count(*) FROM public.concurrent_reference;'), '0');
+  },
+);
 
-    query(scratch.href, migration);
-    const snapshot = () => query(scratch.href, 'SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM public.participants p;');
-    const before = snapshot();
-    const writer = execute(`BEGIN; INSERT INTO public.concurrent_reference VALUES ('${participantId}'); SELECT pg_sleep(2); COMMIT;`);
-    await waitForPause();
-    const secondRollback = execute(rollback);
-    assert.equal((await writer).code, 0);
-    const refused = await secondRollback;
-    assert.notEqual(refused.code, 0);
-    assert.match(refused.stderr, /P0001/);
-    assert.match(refused.stderr, /seeded participant is referenced/);
-    assert.equal(snapshot(), before, 'rollback changed participant data despite a committed reference');
-    assert.equal(query(scratch.href, 'SELECT count(*) FROM public.concurrent_reference;'), '1');
-  } finally {
-    query(admin.href, `DROP DATABASE ${database} WITH (FORCE)`);
-  }
-});
+test(
+  'WNBA rollback restores baselines and refuses every discovered downstream reference',
+  {
+    skip: !participantCatalogTestAdmin,
+  },
+  async () => {
+    assert.ok(participantCatalogTestAdmin);
+    const admin = new URL(participantCatalogTestAdmin);
+    assert.ok(['127.0.0.1', 'localhost', '::1'].includes(admin.hostname));
+    assert.equal(admin.pathname, '/postgres');
+    assert.equal(admin.search, '');
+    const database = `participant_catalog_drill_wnba_${randomUUID().replaceAll('-', '').slice(0, 24)}`;
+    const scratch = new URL(admin);
+    scratch.pathname = `/${database}`;
+    const query = (dsn: string, sql: string) =>
+      execFileSync(
+        'psql',
+        [
+          dsn,
+          '-X',
+          '-At',
+          '-v',
+          'ON_ERROR_STOP=1',
+          '-v',
+          'VERBOSITY=verbose',
+          '-c',
+          sql,
+        ],
+        { encoding: 'utf8', timeout: 10_000 },
+      ).trim();
+    const execute = (sql: string) => {
+      const child = spawn('psql', [
+        scratch.href,
+        '-X',
+        '-At',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-v',
+        'VERBOSITY=verbose',
+      ]);
+      let stderr = '';
+      child.stdout.resume();
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      const completed = new Promise<{ code: number | null; stderr: string }>(
+        (resolve, reject) => {
+          child.on('error', reject);
+          child.on('close', (code) => resolve({ code, stderr }));
+        },
+      );
+      child.stdin.end(sql);
+      return completed;
+    };
+    const waitForPause = async () => {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        if (
+          query(
+            scratch.href,
+            "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event='PgSleep');",
+          ) === 't'
+        )
+          return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.fail('controlled transaction did not reach its test-only pause');
+    };
+    const migration = readFileSync(
+      new URL(
+        '../../../supabase/migrations/20261010170100_wnba_participant_catalog.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const rollback = readFileSync(
+      new URL(
+        '../../../db/migrations-rollback/20261010170100_wnba_participant_catalog.down.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const snapshotTables = [
+      'sports',
+      'leagues',
+      'sport_market_type_availability',
+      'participants',
+      'picks',
+      'events',
+      'stat_types',
+      'combo_stat_types',
+      'provider_market_aliases',
+      'teams',
+      'player_team_assignments',
+      'participant_reference',
+      'future_sport_reference',
+      'future_league_reference',
+    ];
+    const snapshot = () =>
+      snapshotTables.map((table) => [
+        table,
+        query(
+          scratch.href,
+          `SELECT coalesce(jsonb_agg(to_jsonb(row_value) ORDER BY to_jsonb(row_value)::text), '[]'::jsonb) FROM public.${table} AS row_value;`,
+        ),
+      ]);
+    const assertRefusedWithoutMutation = async (message: RegExp) => {
+      const before = snapshot();
+      const result = await execute(rollback);
+      assert.notEqual(result.code, 0);
+      assert.match(result.stderr, /P0001/);
+      assert.match(result.stderr, message);
+      assert.deepEqual(
+        snapshot(),
+        before,
+        'rollback mutated state before refusing',
+      );
+    };
+
+    query(admin.href, `CREATE DATABASE ${database}`);
+    try {
+      query(
+        scratch.href,
+        `
+      CREATE TABLE public.sports(
+        id text PRIMARY KEY,
+        display_name text NOT NULL,
+        sort_order integer NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'
+      );
+      CREATE TABLE public.leagues(
+        id text PRIMARY KEY,
+        sport_id text NOT NULL REFERENCES public.sports(id) ON DELETE RESTRICT,
+        display_name text NOT NULL,
+        country text,
+        sort_order integer NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}'
+      );
+      CREATE TABLE public.sport_market_type_availability(
+        sport_id text NOT NULL REFERENCES public.sports(id) ON DELETE CASCADE,
+        market_type_id text NOT NULL,
+        active boolean NOT NULL,
+        sort_order integer NOT NULL,
+        PRIMARY KEY (sport_id, market_type_id)
+      );
+      CREATE TABLE public.participants(
+        id uuid PRIMARY KEY,
+        external_id text UNIQUE,
+        participant_type text NOT NULL,
+        sport text,
+        league text,
+        display_name text NOT NULL,
+        metadata jsonb NOT NULL DEFAULT '{}',
+        created_at timestamptz DEFAULT now(),
+        updated_at timestamptz DEFAULT now()
+      );
+      CREATE TABLE public.picks(id text PRIMARY KEY, sport_id text REFERENCES public.sports(id) ON DELETE SET NULL);
+      CREATE TABLE public.events(id text PRIMARY KEY, sport_id text REFERENCES public.sports(id) ON DELETE CASCADE);
+      CREATE TABLE public.stat_types(id text PRIMARY KEY, sport_id text REFERENCES public.sports(id) ON DELETE CASCADE);
+      CREATE TABLE public.combo_stat_types(id text PRIMARY KEY, sport_id text REFERENCES public.sports(id) ON DELETE CASCADE);
+      CREATE TABLE public.provider_market_aliases(id text PRIMARY KEY, sport_id text REFERENCES public.sports(id) ON DELETE CASCADE);
+      CREATE TABLE public.teams(id text PRIMARY KEY, league_id text REFERENCES public.leagues(id) ON DELETE RESTRICT);
+      CREATE TABLE public.player_team_assignments(id text PRIMARY KEY, league_id text REFERENCES public.leagues(id) ON DELETE RESTRICT);
+      CREATE TABLE public.participant_reference(id text PRIMARY KEY, participant_id uuid REFERENCES public.participants(id) ON DELETE CASCADE);
+      CREATE TABLE public.future_sport_reference(id text PRIMARY KEY, catalog_sport text REFERENCES public.sports(id) ON DELETE CASCADE);
+      CREATE TABLE public.future_league_reference(id text PRIMARY KEY, catalog_league text REFERENCES public.leagues(id) ON DELETE CASCADE);
+      INSERT INTO public.sports VALUES ('NBA', 'NBA', 1, '{}');
+      INSERT INTO public.sport_market_type_availability VALUES ('NBA', 'player_points', true, 1);
+    `,
+      );
+
+      const cleanBaseline = snapshot();
+      query(scratch.href, migration);
+      query(scratch.href, rollback);
+      assert.deepEqual(
+        snapshot(),
+        cleanBaseline,
+        'clean apply/rollback did not restore baseline',
+      );
+
+      const preExistingParticipantId =
+        governedWnbaParticipantId('atlanta-dream');
+      query(
+        scratch.href,
+        `
+      INSERT INTO public.sports VALUES ('WNBA', 'WNBA', 50, '{"source":"pre-existing"}');
+      INSERT INTO public.leagues VALUES ('wnba', 'WNBA', 'WNBA', 'USA/Canada', 50, '{"source":"pre-existing"}');
+      INSERT INTO public.sport_market_type_availability VALUES ('WNBA', 'player_points', false, 50);
+      INSERT INTO public.participants(
+        id, external_id, participant_type, sport, league, display_name, metadata
+      ) VALUES (
+        '${preExistingParticipantId}', 'unit-talk:wnba:atlanta-dream', 'team',
+        'WNBA', 'wnba', 'Atlanta Dream', '{"source":"pre-existing"}'
+      );
+    `,
+      );
+      const preExistingBaseline = snapshot();
+      query(scratch.href, migration);
+      query(scratch.href, rollback);
+      assert.deepEqual(
+        snapshot(),
+        preExistingBaseline,
+        'rollback removed compatible pre-existing rows',
+      );
+      query(
+        scratch.href,
+        `
+      DELETE FROM public.sport_market_type_availability WHERE sport_id = 'WNBA';
+      DELETE FROM public.participants WHERE sport = 'WNBA';
+      DELETE FROM public.leagues WHERE id = 'wnba';
+      DELETE FROM public.sports WHERE id = 'WNBA';
+    `,
+      );
+
+      query(scratch.href, migration);
+      query(
+        scratch.href,
+        `INSERT INTO public.participant_reference VALUES ('used', '${preExistingParticipantId}');`,
+      );
+      await assertRefusedWithoutMutation(/seeded participant is referenced/);
+      query(scratch.href, 'DELETE FROM public.participant_reference;');
+      query(scratch.href, rollback);
+
+      const downstreamReferences = [
+        [
+          'picks',
+          "INSERT INTO public.picks VALUES ('used', 'WNBA')",
+          /migration-created sport is referenced by (?:public\.)?picks/,
+        ],
+        [
+          'events',
+          "INSERT INTO public.events VALUES ('used', 'WNBA')",
+          /migration-created sport is referenced by (?:public\.)?events/,
+        ],
+        [
+          'stat_types',
+          "INSERT INTO public.stat_types VALUES ('used', 'WNBA')",
+          /migration-created sport is referenced by (?:public\.)?stat_types/,
+        ],
+        [
+          'combo_stat_types',
+          "INSERT INTO public.combo_stat_types VALUES ('used', 'WNBA')",
+          /migration-created sport is referenced by (?:public\.)?combo_stat_types/,
+        ],
+        [
+          'provider_market_aliases',
+          "INSERT INTO public.provider_market_aliases VALUES ('used', 'WNBA')",
+          /migration-created sport is referenced by (?:public\.)?provider_market_aliases/,
+        ],
+        [
+          'teams',
+          "INSERT INTO public.teams VALUES ('used', 'wnba')",
+          /migration-created league is referenced by (?:public\.)?teams/,
+        ],
+        [
+          'player_team_assignments',
+          "INSERT INTO public.player_team_assignments VALUES ('used', 'wnba')",
+          /migration-created league is referenced by (?:public\.)?player_team_assignments/,
+        ],
+        [
+          'future_sport_reference',
+          "INSERT INTO public.future_sport_reference VALUES ('used', 'WNBA')",
+          /migration-created sport is referenced by (?:public\.)?future_sport_reference/,
+        ],
+        [
+          'future_league_reference',
+          "INSERT INTO public.future_league_reference VALUES ('used', 'wnba')",
+          /migration-created league is referenced by (?:public\.)?future_league_reference/,
+        ],
+      ] as const;
+
+      for (const [table, insert, refusal] of downstreamReferences) {
+        query(scratch.href, migration);
+        query(scratch.href, insert);
+        await assertRefusedWithoutMutation(refusal);
+        query(scratch.href, `DELETE FROM public.${table};`);
+        query(scratch.href, rollback);
+      }
+
+      query(scratch.href, migration);
+      const pausedRollback = execute(
+        rollback.replace(
+          'DELETE FROM public.participants AS p',
+          'SELECT pg_sleep(2);\nDELETE FROM public.participants AS p',
+        ),
+      );
+      await waitForPause();
+      const concurrentInsert = await execute(
+        "SET lock_timeout='200ms'; INSERT INTO public.picks VALUES ('concurrent', 'WNBA');",
+      );
+      assert.notEqual(
+        concurrentInsert.code,
+        0,
+        'concurrent sport reference slipped past rollback scan',
+      );
+      assert.match(concurrentInsert.stderr, /55P03/);
+      assert.equal((await pausedRollback).code, 0);
+      assert.equal(
+        query(scratch.href, 'SELECT count(*) FROM public.picks;'),
+        '0',
+      );
+
+      query(scratch.href, migration);
+      const beforeConcurrentCommit = snapshot();
+      const writer = execute(
+        "BEGIN; INSERT INTO public.picks VALUES ('committed', 'WNBA'); SELECT pg_sleep(2); COMMIT;",
+      );
+      await waitForPause();
+      const waitingRollback = execute(rollback);
+      assert.equal((await writer).code, 0);
+      const refused = await waitingRollback;
+      assert.notEqual(refused.code, 0);
+      assert.match(refused.stderr, /P0001/);
+      assert.match(
+        refused.stderr,
+        /migration-created sport is referenced by (?:public\.)?picks/,
+      );
+      const afterConcurrentCommit = snapshot();
+      assert.deepEqual(
+        afterConcurrentCommit.map(([table, rows]) => [
+          table,
+          table === 'picks' ? 'committed reference expected' : rows,
+        ]),
+        beforeConcurrentCommit.map(([table, rows]) => [
+          table,
+          table === 'picks' ? 'committed reference expected' : rows,
+        ]),
+        'rollback changed catalog state after waiting for a concurrent reference',
+      );
+      assert.equal(
+        query(scratch.href, 'SELECT count(*) FROM public.picks;'),
+        '1',
+      );
+    } finally {
+      query(admin.href, `DROP DATABASE ${database} WITH (FORCE)`);
+    }
+  },
+);
