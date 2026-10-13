@@ -6,11 +6,13 @@
   "proof_profile": "static",
   "status": "review_pending_exact_head_ci",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "ed89569df229a98dfa31833fd821de3794359fb0",
     "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1746",
     "verified_source_sha": "bbc5dc4de5d50d55adc87b1ac862515ba02d8141",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-10-13T12:11:37.552Z"
   },
   "static_proof": {
     "status": "pass_with_t1_live_db_deferred_to_ci",

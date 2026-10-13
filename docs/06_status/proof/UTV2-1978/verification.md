@@ -1,6 +1,6 @@
 # PROOF: UTV2-1978
 
-MERGE_SHA: pending merge
+MERGE_SHA: ed89569df229a98dfa31833fd821de3794359fb0
 
 Issue: UTV2-1978
 Tier: T1
@@ -93,7 +93,7 @@ made; `verify:static` passed and the writable phase refused the non-staging targ
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: ed89569df229a98dfa31833fd821de3794359fb0
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1746
 Execution SHA: bbc5dc4de5d50d55adc87b1ac862515ba02d8141
 
