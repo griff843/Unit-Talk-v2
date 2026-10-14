@@ -104,6 +104,6 @@ performed.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge<br>
+Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1755<br>
 Execution SHA: `3ede34fb4bb94b5642bf925aaa17c76f0b6c9992`
